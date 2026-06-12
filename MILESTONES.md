@@ -170,6 +170,7 @@ Deliverables:
 - Semantic `LocalAlias` facts for simple local aliases and assignments.
 - Semantic `FieldAlias` facts for simple field assignments, including constructor field initialization.
 - Semantic flow-boundary facts for DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, and branch conditions.
+- Semantic runtime-evidence facts for statically visible DI registrations, serializer contract members, reflection targets, dynamic dispatch candidates, collection element inputs, mutation semantics, and simple branch feasibility.
 - SQLite `call_edges` table for caller/callee queries.
 - SQLite `object_creations` table for created-type queries.
 - SQLite `argument_flows` table for parameter/argument provenance queries.
@@ -195,6 +196,7 @@ Acceptance:
 - A semantic repo emits Tier1 `LocalAlias` facts for `var alias = parameter` and simple assignment aliases.
 - A semantic repo emits Tier1 `FieldAlias` facts for field assignments such as `_cached = parameter`.
 - A semantic repo emits Tier1 flow-boundary facts for runtime-sensitive constructs without claiming execution or value provenance across them.
+- A semantic repo emits Tier1 runtime-evidence facts for statically resolvable registrations, contract member names, reflection targets, dynamic candidates, collection inputs, mutation semantics, and simple branch feasibility while documenting runtime limitations.
 - `index.sqlite` contains queryable `call_edges`.
 - `index.sqlite` contains queryable `object_creations`.
 - `index.sqlite` contains queryable `argument_flows`.
@@ -202,6 +204,6 @@ Acceptance:
 - `index.sqlite` contains queryable `field_aliases`.
 - `index.sqlite` contains queryable `parameter_forward_edges`.
 - `tracemap flow` emits a Markdown report that chains direct forwarding, same-method aliases, and unique constructor field initialization with rule IDs and evidence spans.
-- Scan reports include flow-boundary sections for review routing.
+- Scan reports include flow-boundary and runtime-evidence sections for review routing.
 - Calculation/retry logic is findable without storing raw source snippets.
 - Boilerplate/generated/DI glue files are labeled as review-routing signals, not omitted from inventory.

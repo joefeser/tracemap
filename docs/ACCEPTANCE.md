@@ -159,6 +159,7 @@ Each fixture should document:
 | semantic parameter forwarding | `parameter_forward_edges` row with source method/parameter, target method/parameter, rule ID, and evidence span |
 | parameter flow report | `tracemap flow` chains direct forwarding, same-method aliases, and unique constructor field initialization while labeling limitations |
 | flow boundary | Tier1 semantic boundary fact for DI, deserialization, reflection, dynamic invocation, mutation, or branch condition without claiming runtime flow |
+| runtime evidence | Tier1 semantic fact for statically visible DI registration, serializer contract member, reflection target, dynamic dispatch candidate, collection element input, mutation semantics, or simple branch feasibility |
 | calculation expression | `CalculationExpression` with operator, line span, and expression hash |
 | retry/backoff method | `RetryPolicyLogic` |
 | generated or DI glue file | `InfrastructureBoilerplate` |

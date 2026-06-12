@@ -1,5 +1,6 @@
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 
@@ -298,6 +299,7 @@ public static class CSharpSemanticExtractor
         AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts);
         AddFlowBoundaryFacts(projectPath, filePath, root, model, facts);
+        AddRuntimeEvidenceFacts(projectPath, filePath, root, model, facts);
         AddIntegrationFacts(projectPath, filePath, root, model, facts);
     }
 
@@ -1141,6 +1143,683 @@ public static class CSharpSemanticExtractor
             });
     }
 
+    private static void AddRuntimeEvidenceFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        AddDependencyRegistrationFacts(projectPath, filePath, root, model, facts);
+        AddSerializerContractMemberFacts(projectPath, filePath, root, model, facts);
+        AddReflectionTargetFacts(projectPath, filePath, root, model, facts);
+        AddDynamicDispatchCandidateFacts(projectPath, filePath, root, model, facts);
+        AddCollectionElementFlowFacts(projectPath, filePath, root, model, facts);
+        AddMutationSemanticsFacts(projectPath, filePath, root, model, facts);
+        AddBranchFeasibilityFacts(projectPath, filePath, root, model, facts);
+    }
+
+    private static void AddDependencyRegistrationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method
+                || !TryGetDependencyRegistration(method, invocation, model, out var registrationKind, out var serviceType, out var implementationType))
+            {
+                continue;
+            }
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.DependencyRegistered,
+                RuleIds.CSharpSemanticRuntimeEvidence,
+                projectPath,
+                filePath,
+                invocation,
+                sourceSymbol: GetEnclosingSymbol(model, invocation),
+                targetSymbol: serviceType,
+                contractElement: method.Name,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["evidenceKind"] = "DependencyRegistered",
+                        ["registrationKind"] = registrationKind,
+                        ["serviceType"] = serviceType,
+                        ["implementationType"] = implementationType,
+                        ["methodSymbol"] = method.ToDisplayString(SymbolFormat),
+                        ["argumentCount"] = invocation.ArgumentList.Arguments.Count.ToString()
+                    },
+                    model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
+                    method.ContainingAssembly)));
+        }
+    }
+
+    private static void AddSerializerContractMemberFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var member in root.DescendantNodes().OfType<MemberDeclarationSyntax>())
+        {
+            if (member is not PropertyDeclarationSyntax and not FieldDeclarationSyntax)
+            {
+                continue;
+            }
+
+            var symbol = model.GetDeclaredSymbol(member);
+            if (symbol is not (IPropertySymbol or IFieldSymbol))
+            {
+                continue;
+            }
+
+            foreach (var attributeList in member.AttributeLists)
+            {
+                foreach (var attribute in attributeList.Attributes)
+                {
+                    if (!TryGetSerializerContractAttribute(attribute, model, out var attributeName, out var contractName))
+                    {
+                        continue;
+                    }
+
+                    var memberType = symbol switch
+                    {
+                        IPropertySymbol property => property.Type,
+                        IFieldSymbol field => field.Type,
+                        _ => null
+                    };
+                    var containingType = symbol.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                    facts.Add(CreateSemanticFact(
+                        FactTypes.SerializerContractMember,
+                        RuleIds.CSharpSemanticRuntimeEvidence,
+                        projectPath,
+                        filePath,
+                        attribute,
+                        sourceSymbol: containingType,
+                        targetSymbol: symbol.ToDisplayString(SymbolFormat),
+                        contractElement: contractName,
+                        properties: AddAssemblyProperties(
+                            new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["evidenceKind"] = "SerializerContractMember",
+                                ["attributeName"] = attributeName,
+                                ["contractName"] = contractName,
+                                ["memberName"] = symbol.Name,
+                                ["memberSymbol"] = symbol.ToDisplayString(SymbolFormat),
+                                ["memberType"] = memberType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                                ["containingType"] = containingType
+                            },
+                            model.GetEnclosingSymbol(attribute.SpanStart)?.ContainingAssembly,
+                            symbol.ContainingAssembly)));
+                }
+            }
+        }
+    }
+
+    private static void AddReflectionTargetFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method
+                || !IsReflectionMethod(method)
+                || !TryGetReflectionTarget(invocation, method, model, out var reflectionKind, out var declaringType, out var memberName))
+            {
+                continue;
+            }
+
+            var targetSymbol = string.IsNullOrWhiteSpace(memberName) ? declaringType : $"{declaringType}.{memberName}";
+            facts.Add(CreateSemanticFact(
+                FactTypes.ReflectionTarget,
+                RuleIds.CSharpSemanticRuntimeEvidence,
+                projectPath,
+                filePath,
+                invocation,
+                sourceSymbol: GetEnclosingSymbol(model, invocation),
+                targetSymbol: targetSymbol,
+                contractElement: memberName ?? reflectionKind,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["evidenceKind"] = "ReflectionTarget",
+                        ["reflectionKind"] = reflectionKind,
+                        ["declaringType"] = declaringType,
+                        ["memberName"] = memberName ?? string.Empty,
+                        ["methodSymbol"] = method.ToDisplayString(SymbolFormat)
+                    },
+                    model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
+                    method.ContainingAssembly)));
+        }
+    }
+
+    private static void AddDynamicDispatchCandidateFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var symbolInfo = model.GetSymbolInfo(invocation);
+            if (symbolInfo.Symbol is not null)
+            {
+                continue;
+            }
+
+            var receiverExpression = GetInvocationReceiver(invocation.Expression);
+            var receiverType = receiverExpression is null ? null : model.GetTypeInfo(receiverExpression).Type;
+            if (receiverType?.TypeKind != TypeKind.Dynamic && model.GetTypeInfo(invocation.Expression).Type?.TypeKind != TypeKind.Dynamic)
+            {
+                continue;
+            }
+
+            var memberName = GetInvocationMemberName(invocation.Expression) ?? "dynamic";
+            facts.Add(CreateSemanticFact(
+                FactTypes.DynamicDispatchCandidate,
+                RuleIds.CSharpSemanticRuntimeEvidence,
+                projectPath,
+                filePath,
+                invocation,
+                sourceSymbol: GetEnclosingSymbol(model, invocation),
+                targetSymbol: memberName,
+                contractElement: memberName,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["evidenceKind"] = "DynamicDispatchCandidate",
+                    ["memberName"] = memberName,
+                    ["receiverType"] = receiverType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["typeArguments"] = GetInvocationTypeArguments(invocation.Expression),
+                    ["argumentCount"] = invocation.ArgumentList.Arguments.Count.ToString(),
+                    ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32)
+                }));
+        }
+    }
+
+    private static void AddCollectionElementFlowFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method
+                || !IsCollectionMutationMethod(method)
+                || !TryGetCollectionElementArgument(method, invocation, out var elementArgument, out var flowKind, out var elementOrdinal))
+            {
+                continue;
+            }
+
+            var receiverExpression = GetInvocationReceiver(invocation.Expression);
+            var receiverSymbol = receiverExpression is null ? null : model.GetSymbolInfo(receiverExpression).Symbol;
+            var receiverType = receiverExpression is null ? method.ContainingType : model.GetTypeInfo(receiverExpression).Type;
+            var elementSymbol = model.GetSymbolInfo(elementArgument.Expression).Symbol;
+            var elementType = model.GetTypeInfo(elementArgument.Expression).Type;
+            var target = receiverSymbol?.ToDisplayString(SymbolFormat)
+                ?? receiverType?.ToDisplayString(SymbolFormat)
+                ?? method.ContainingType?.ToDisplayString(SymbolFormat)
+                ?? method.Name;
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.CollectionElementFlow,
+                RuleIds.CSharpSemanticRuntimeEvidence,
+                projectPath,
+                filePath,
+                invocation,
+                sourceSymbol: GetEnclosingSymbol(model, invocation),
+                targetSymbol: target,
+                contractElement: method.Name,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["evidenceKind"] = "CollectionElementFlow",
+                        ["flowKind"] = flowKind,
+                        ["mutationMethod"] = method.Name,
+                        ["collectionSymbol"] = receiverSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["collectionType"] = receiverType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["elementArgumentOrdinal"] = elementOrdinal.ToString(),
+                        ["elementExpressionKind"] = GetExpressionKind(elementArgument.Expression),
+                        ["elementExpressionHash"] = FactFactory.Hash(elementArgument.Expression.ToString(), 32),
+                        ["elementSymbol"] = elementSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["elementType"] = elementType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["methodSymbol"] = method.ToDisplayString(SymbolFormat)
+                    },
+                    model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
+                    method.ContainingAssembly)));
+        }
+    }
+
+    private static void AddMutationSemanticsFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            var targetSymbol = model.GetSymbolInfo(assignment.Left).Symbol;
+            if (targetSymbol is not (IFieldSymbol or IPropertySymbol))
+            {
+                continue;
+            }
+
+            facts.Add(CreateMutationSemanticsFact(
+                projectPath,
+                filePath,
+                assignment,
+                assignment.Left,
+                assignment.Right,
+                model,
+                targetSymbol,
+                GetAssignmentSemantics(assignment)));
+        }
+
+        foreach (var unary in root.DescendantNodes().OfType<PrefixUnaryExpressionSyntax>())
+        {
+            AddUnaryMutationSemanticsFact(projectPath, filePath, unary, unary.Operand, model, facts);
+        }
+
+        foreach (var unary in root.DescendantNodes().OfType<PostfixUnaryExpressionSyntax>())
+        {
+            AddUnaryMutationSemanticsFact(projectPath, filePath, unary, unary.Operand, model, facts);
+        }
+    }
+
+    private static void AddBranchFeasibilityFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var statement in root.DescendantNodes().OfType<IfStatementSyntax>())
+        {
+            AddBranchFeasibilityFact(projectPath, filePath, statement, statement.Condition, model, "If", facts);
+        }
+
+        foreach (var expression in root.DescendantNodes().OfType<ConditionalExpressionSyntax>())
+        {
+            AddBranchFeasibilityFact(projectPath, filePath, expression, expression.Condition, model, "ConditionalExpression", facts);
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<SwitchStatementSyntax>())
+        {
+            AddBranchFeasibilityFact(projectPath, filePath, statement, statement.Expression, model, "Switch", facts);
+        }
+
+        foreach (var expression in root.DescendantNodes().OfType<SwitchExpressionSyntax>())
+        {
+            AddBranchFeasibilityFact(projectPath, filePath, expression, expression.GoverningExpression, model, "SwitchExpression", facts);
+        }
+    }
+
+    private static bool TryGetDependencyRegistration(
+        IMethodSymbol method,
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        out string registrationKind,
+        out string serviceType,
+        out string implementationType)
+    {
+        registrationKind = string.Empty;
+        serviceType = string.Empty;
+        implementationType = string.Empty;
+
+        var methodName = method.Name;
+        var isKnownRegistrationName = methodName is "AddSingleton" or "AddScoped" or "AddTransient"
+            or "AddKeyedSingleton" or "AddKeyedScoped" or "AddKeyedTransient"
+            or "Register" or "RegisterType" or "RegisterInstance";
+        if (!isKnownRegistrationName)
+        {
+            return false;
+        }
+
+        var typeArguments = method.TypeArguments
+            .Select(argument => argument.ToDisplayString(SymbolFormat))
+            .Where(argument => !string.IsNullOrWhiteSpace(argument))
+            .ToArray();
+        var typeOfArguments = invocation.ArgumentList.Arguments
+            .Select(argument => GetTypeOfExpressionDisplay(argument.Expression, model))
+            .Where(type => !string.IsNullOrWhiteSpace(type))
+            .ToArray();
+
+        if (typeArguments.Length > 0)
+        {
+            serviceType = typeArguments[0];
+            implementationType = typeArguments.Length > 1 ? typeArguments[1] : serviceType;
+        }
+        else if (typeOfArguments.Length > 0)
+        {
+            serviceType = typeOfArguments[0]!;
+            implementationType = typeOfArguments.Length > 1 ? typeOfArguments[1]! : serviceType;
+        }
+        else
+        {
+            return false;
+        }
+
+        registrationKind = methodName;
+        return true;
+    }
+
+    private static bool TryGetSerializerContractAttribute(
+        AttributeSyntax attribute,
+        SemanticModel model,
+        out string attributeName,
+        out string contractName)
+    {
+        attributeName = ((model.GetSymbolInfo(attribute).Symbol as IMethodSymbol)?.ContainingType?.ToDisplayString(SymbolFormat)
+            ?? attribute.Name.ToString()).Trim();
+        contractName = string.Empty;
+
+        var shortName = attributeName.Split('.').Last();
+        if (shortName.EndsWith("Attribute", StringComparison.Ordinal))
+        {
+            shortName = shortName[..^"Attribute".Length];
+        }
+
+        if (shortName is not ("JsonPropertyName" or "JsonProperty" or "DataMember"))
+        {
+            return false;
+        }
+
+        contractName = GetAttributeStringArgument(attribute, "Name")
+            ?? GetAttributeStringArgument(attribute, "PropertyName")
+            ?? GetAttributeStringArgument(attribute, null)
+            ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(contractName))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryGetReflectionTarget(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        SemanticModel model,
+        out string reflectionKind,
+        out string declaringType,
+        out string? memberName)
+    {
+        reflectionKind = method.Name;
+        declaringType = string.Empty;
+        memberName = null;
+
+        if (method.Name is "CreateInstance" or "CreateInstanceFrom")
+        {
+            declaringType = method.TypeArguments.Length > 0
+                ? method.TypeArguments[0].ToDisplayString(SymbolFormat)
+                : invocation.ArgumentList.Arguments
+                    .Select(argument => GetTypeOfExpressionDisplay(argument.Expression, model))
+                    .FirstOrDefault(type => !string.IsNullOrWhiteSpace(type)) ?? string.Empty;
+            return !string.IsNullOrWhiteSpace(declaringType);
+        }
+
+        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
+        {
+            return false;
+        }
+
+        declaringType = GetTypeOfExpressionDisplay(memberAccess.Expression, model) ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(declaringType))
+        {
+            return false;
+        }
+
+        if (invocation.ArgumentList.Arguments.Count > 0)
+        {
+            memberName = GetNameExpressionValue(invocation.ArgumentList.Arguments[0].Expression);
+        }
+
+        return true;
+    }
+
+    private static bool TryGetCollectionElementArgument(
+        IMethodSymbol method,
+        InvocationExpressionSyntax invocation,
+        out ArgumentSyntax elementArgument,
+        out string flowKind,
+        out int elementOrdinal)
+    {
+        elementArgument = default!;
+        flowKind = string.Empty;
+        elementOrdinal = 0;
+
+        if (method.Name is not ("Add" or "AddRange" or "Insert" or "InsertRange" or "Enqueue" or "Push" or "TryAdd"))
+        {
+            return false;
+        }
+
+        if (invocation.ArgumentList.Arguments.Count == 0)
+        {
+            return false;
+        }
+
+        elementOrdinal = method.Name is "Insert" or "InsertRange"
+            ? Math.Min(1, invocation.ArgumentList.Arguments.Count - 1)
+            : method.Name == "TryAdd" && invocation.ArgumentList.Arguments.Count > 1
+                ? 1
+                : 0;
+        elementArgument = invocation.ArgumentList.Arguments[elementOrdinal];
+        flowKind = method.Name is "AddRange" or "InsertRange" ? "CollectionRangeInput" : "CollectionElementInput";
+        return true;
+    }
+
+    private static void AddUnaryMutationSemanticsFact(
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        ExpressionSyntax operand,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        var targetSymbol = model.GetSymbolInfo(operand).Symbol;
+        if (targetSymbol is not (IFieldSymbol or IPropertySymbol))
+        {
+            return;
+        }
+
+        facts.Add(CreateMutationSemanticsFact(
+            projectPath,
+            filePath,
+            evidenceNode,
+            operand,
+            null,
+            model,
+            targetSymbol,
+            evidenceNode.Kind() is SyntaxKind.PreIncrementExpression or SyntaxKind.PostIncrementExpression ? "Increment" : "Decrement"));
+    }
+
+    private static SemanticFactCandidate CreateMutationSemanticsFact(
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        ExpressionSyntax targetExpression,
+        ExpressionSyntax? valueExpression,
+        SemanticModel model,
+        ISymbol targetSymbol,
+        string mutationSemantics)
+    {
+        var valueType = valueExpression is null ? null : model.GetTypeInfo(valueExpression).Type;
+        var targetType = targetSymbol switch
+        {
+            IPropertySymbol property => property.Type,
+            IFieldSymbol field => field.Type,
+            _ => null
+        };
+        return CreateSemanticFact(
+            FactTypes.MutationSemantics,
+            RuleIds.CSharpSemanticRuntimeEvidence,
+            projectPath,
+            filePath,
+            evidenceNode,
+            sourceSymbol: GetEnclosingSymbol(model, evidenceNode),
+            targetSymbol: targetSymbol.ToDisplayString(SymbolFormat),
+            contractElement: targetSymbol.Name,
+            properties: AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["evidenceKind"] = "MutationSemantics",
+                    ["mutationSemantics"] = mutationSemantics,
+                    ["targetSymbol"] = targetSymbol.ToDisplayString(SymbolFormat),
+                    ["targetSymbolKind"] = targetSymbol.Kind.ToString(),
+                    ["targetType"] = targetType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["targetExpressionKind"] = GetExpressionKind(targetExpression),
+                    ["valueExpressionKind"] = valueExpression is null ? string.Empty : GetExpressionKind(valueExpression),
+                    ["valueExpressionHash"] = valueExpression is null ? string.Empty : FactFactory.Hash(valueExpression.ToString(), 32),
+                    ["valueType"] = valueType?.ToDisplayString(SymbolFormat) ?? string.Empty
+                },
+                model.GetEnclosingSymbol(evidenceNode.SpanStart)?.ContainingAssembly,
+                targetSymbol.ContainingAssembly));
+    }
+
+    private static string GetAssignmentSemantics(AssignmentExpressionSyntax assignment)
+    {
+        return assignment.Kind() switch
+        {
+            SyntaxKind.SimpleAssignmentExpression => "Overwrite",
+            SyntaxKind.AddAssignmentExpression => "AdditiveUpdate",
+            SyntaxKind.SubtractAssignmentExpression => "SubtractiveUpdate",
+            SyntaxKind.MultiplyAssignmentExpression => "MultiplicativeUpdate",
+            SyntaxKind.DivideAssignmentExpression => "DivisiveUpdate",
+            SyntaxKind.ModuloAssignmentExpression => "ModuloUpdate",
+            SyntaxKind.AndAssignmentExpression or SyntaxKind.OrAssignmentExpression or SyntaxKind.ExclusiveOrAssignmentExpression => "BitwiseUpdate",
+            SyntaxKind.LeftShiftAssignmentExpression or SyntaxKind.RightShiftAssignmentExpression => "ShiftUpdate",
+            SyntaxKind.CoalesceAssignmentExpression => "NullCoalescingUpdate",
+            _ => "CompoundUpdate"
+        };
+    }
+
+    private static void AddBranchFeasibilityFact(
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        ExpressionSyntax condition,
+        SemanticModel model,
+        string branchKind,
+        List<SemanticFactCandidate> facts)
+    {
+        if (!TryClassifyBranchFeasibility(condition, model, out var feasibilityKind, out var checkedSymbol, out var comparisonOperator, out var constantValue))
+        {
+            return;
+        }
+
+        facts.Add(CreateSemanticFact(
+            FactTypes.BranchFeasibility,
+            RuleIds.CSharpSemanticRuntimeEvidence,
+            projectPath,
+            filePath,
+            evidenceNode,
+            sourceSymbol: GetEnclosingSymbol(model, evidenceNode),
+            targetSymbol: checkedSymbol ?? branchKind,
+            contractElement: branchKind,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["evidenceKind"] = "BranchFeasibility",
+                ["branchKind"] = branchKind,
+                ["feasibilityKind"] = feasibilityKind,
+                ["checkedSymbol"] = checkedSymbol ?? string.Empty,
+                ["comparisonOperator"] = comparisonOperator ?? string.Empty,
+                ["constantValue"] = constantValue ?? string.Empty,
+                ["conditionExpressionKind"] = GetExpressionKind(condition),
+                ["conditionExpressionHash"] = FactFactory.Hash(condition.ToString(), 32)
+            }));
+    }
+
+    private static bool TryClassifyBranchFeasibility(
+        ExpressionSyntax condition,
+        SemanticModel model,
+        out string feasibilityKind,
+        out string? checkedSymbol,
+        out string? comparisonOperator,
+        out string? constantValue)
+    {
+        feasibilityKind = string.Empty;
+        checkedSymbol = null;
+        comparisonOperator = null;
+        constantValue = null;
+
+        var constant = model.GetConstantValue(condition);
+        if (constant.HasValue && constant.Value is bool boolValue)
+        {
+            feasibilityKind = boolValue ? "ConstantTrue" : "ConstantFalse";
+            constantValue = boolValue.ToString();
+            return true;
+        }
+
+        if (condition is BinaryExpressionSyntax binary
+            && binary.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
+            && TryGetNullCheckSymbol(binary.Left, binary.Right, model, out checkedSymbol))
+        {
+            feasibilityKind = binary.IsKind(SyntaxKind.EqualsExpression) ? "NullCheckEquals" : "NullCheckNotEquals";
+            comparisonOperator = binary.OperatorToken.ValueText;
+            return true;
+        }
+
+        if (condition is IsPatternExpressionSyntax patternExpression
+            && TryGetNullPatternKind(patternExpression.Pattern, out feasibilityKind))
+        {
+            checkedSymbol = model.GetSymbolInfo(patternExpression.Expression).Symbol?.ToDisplayString(SymbolFormat)
+                ?? patternExpression.Expression.ToString();
+            comparisonOperator = "is";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetNullCheckSymbol(
+        ExpressionSyntax left,
+        ExpressionSyntax right,
+        SemanticModel model,
+        out string? checkedSymbol)
+    {
+        checkedSymbol = null;
+        var checkedExpression = IsNullLiteral(left) ? right : IsNullLiteral(right) ? left : null;
+        if (checkedExpression is null)
+        {
+            return false;
+        }
+
+        checkedSymbol = model.GetSymbolInfo(checkedExpression).Symbol?.ToDisplayString(SymbolFormat)
+            ?? checkedExpression.ToString();
+        return true;
+    }
+
+    private static bool TryGetNullPatternKind(PatternSyntax pattern, out string feasibilityKind)
+    {
+        feasibilityKind = string.Empty;
+        if (pattern is ConstantPatternSyntax { Expression: LiteralExpressionSyntax literal }
+            && literal.IsKind(SyntaxKind.NullLiteralExpression))
+        {
+            feasibilityKind = "NullPattern";
+            return true;
+        }
+
+        if (pattern is UnaryPatternSyntax { Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax unaryLiteral } }
+            && unaryLiteral.IsKind(SyntaxKind.NullLiteralExpression))
+        {
+            feasibilityKind = "NotNullPattern";
+            return true;
+        }
+
+        return false;
+    }
+
     private static void AddDbContextFacts(
         string? projectPath,
         string filePath,
@@ -1388,7 +2067,7 @@ public static class CSharpSemanticExtractor
     {
         return expression switch
         {
-            LiteralExpressionSyntax literal when literal.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.NullLiteralExpression) => "NullLiteral",
+            LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.NullLiteralExpression) => "NullLiteral",
             LiteralExpressionSyntax => "Literal",
             IdentifierNameSyntax => "Identifier",
             MemberAccessExpressionSyntax => "MemberAccess",
@@ -1398,6 +2077,98 @@ public static class CSharpSemanticExtractor
             AnonymousFunctionExpressionSyntax => "AnonymousFunction",
             _ => expression.Kind().ToString()
         };
+    }
+
+    private static string? GetTypeOfExpressionDisplay(ExpressionSyntax expression, SemanticModel model)
+    {
+        return expression is TypeOfExpressionSyntax typeOfExpression
+            ? model.GetTypeInfo(typeOfExpression.Type).Type?.ToDisplayString(SymbolFormat) ?? typeOfExpression.Type.ToString()
+            : null;
+    }
+
+    private static string? GetAttributeStringArgument(AttributeSyntax attribute, string? name)
+    {
+        var arguments = attribute.ArgumentList?.Arguments;
+        if (arguments is null)
+        {
+            return null;
+        }
+
+        foreach (var argument in arguments)
+        {
+            if (name is not null
+                && (argument.NameEquals?.Name.Identifier.ValueText.Equals(name, StringComparison.Ordinal) != true))
+            {
+                continue;
+            }
+
+            if (name is null && argument.NameEquals is not null)
+            {
+                continue;
+            }
+
+            if (argument.Expression is LiteralExpressionSyntax literal
+                && literal.IsKind(SyntaxKind.StringLiteralExpression)
+                && literal.Token.Value is string literalValue)
+            {
+                return literalValue;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? GetNameExpressionValue(ExpressionSyntax expression)
+    {
+        if (expression is LiteralExpressionSyntax literal
+            && literal.IsKind(SyntaxKind.StringLiteralExpression)
+            && literal.Token.Value is string literalValue)
+        {
+            return literalValue;
+        }
+
+        if (expression is InvocationExpressionSyntax invocation
+            && invocation.Expression is IdentifierNameSyntax identifier
+            && identifier.Identifier.ValueText == "nameof"
+            && invocation.ArgumentList.Arguments.Count > 0)
+        {
+            return invocation.ArgumentList.Arguments[0].Expression switch
+            {
+                IdentifierNameSyntax name => name.Identifier.ValueText,
+                MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+                _ => invocation.ArgumentList.Arguments[0].Expression.ToString()
+            };
+        }
+
+        return null;
+    }
+
+    private static string? GetInvocationMemberName(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
+            MemberAccessExpressionSyntax { Name: IdentifierNameSyntax identifier } => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } => generic.Identifier.ValueText,
+            _ => null
+        };
+    }
+
+    private static string GetInvocationTypeArguments(ExpressionSyntax expression)
+    {
+        var typeArguments = expression switch
+        {
+            GenericNameSyntax generic => generic.TypeArgumentList.Arguments.Select(argument => argument.ToString()),
+            MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } => generic.TypeArgumentList.Arguments.Select(argument => argument.ToString()),
+            _ => []
+        };
+        return string.Join(",", typeArguments);
+    }
+
+    private static bool IsNullLiteral(ExpressionSyntax expression)
+    {
+        return expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.NullLiteralExpression);
     }
 
     private static ExpressionSyntax? GetInvocationReceiver(ExpressionSyntax expression)

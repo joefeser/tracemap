@@ -32,7 +32,7 @@ The hard parts are:
 - No embeddings, vector databases, or prompt-based classification.
 - No claim that a repo is unaffected unless full semantic coverage supports that conclusion.
 - No raw source snippets by default.
-- No attempt to infer runtime-only behavior such as reflection, dynamic dispatch, or custom serializer aliases in the basic reducer.
+- No attempt to infer runtime-only behavior such as reflection, dynamic dispatch, DI container state, collection contents, branch reachability, or custom serializer aliases in the basic reducer; scanner facts may record statically visible runtime-adjacent evidence with explicit limitations.
 
 ## Users
 
@@ -153,6 +153,6 @@ Milestones 0 through 8 establish the current MVP:
 - The CLI can scan legacy or dependency-incomplete sample repos with reduced coverage and useful syntax facts.
 - The reducer emits evidence rows for matches and coverage evidence for no-match classifications.
 - The reducer emits warnings for generic or high fan-out name matches without suppressing evidence.
-- The scanner emits queryable call edges, object creation facts, argument-flow facts, local-alias facts, field-alias facts, parameter-forwarding edges, flow-boundary facts, assembly identity, and review-routing logic shape facts.
+- The scanner emits queryable call edges, object creation facts, argument-flow facts, local-alias facts, field-alias facts, parameter-forwarding edges, flow-boundary facts, runtime-evidence facts, assembly identity, and review-routing logic shape facts.
 - No reducer finding is emitted without a rule ID.
 - No no-evidence result hides reduced coverage.
