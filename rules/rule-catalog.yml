@@ -45,6 +45,30 @@ rules:
       - Does not prove the containing type or symbol identity.
       - May match unrelated properties with the same name.
 
+  - id: csharp.syntax.declarations.v1
+    name: C# syntax declarations
+    description: Finds type, method, property, enum, and attribute names from C# syntax without requiring project load or compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - PropertyDeclared
+      - EnumDeclared
+      - AttributeUsed
+      - AnalysisGap
+    limitations:
+      - Does not prove symbol identity, overload resolution, inheritance, or generated code behavior.
+      - Files with parse errors may still emit partial syntax facts, and parse errors are reported as AnalysisGap facts.
+
+  - id: csharp.syntax.invocation.v1
+    name: C# syntax invocation
+    description: Finds invocation expression names from C# syntax without requiring compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - InvocationName
+    limitations:
+      - Does not prove receiver type, overload target, extension method binding, or runtime dispatch.
+
   - id: csharp.semantic.propertyaccess.v1
     name: C# semantic property access
     description: Finds compiler-resolved property accesses using Roslyn semantic model.
