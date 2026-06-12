@@ -26,7 +26,20 @@ public sealed class CSharpSemanticExtractorTests
                 public string PrimaryEmail { get; init; } = "";
             }
 
-            public sealed class ProfileReporter
+            public interface IProfileReporter
+            {
+                int Measure(CustomerProfile profile);
+            }
+
+            public abstract class ReporterBase
+            {
+                public virtual int Score(CustomerProfile profile)
+                {
+                    return 0;
+                }
+            }
+
+            public sealed class ProfileReporter : ReporterBase, IProfileReporter
             {
                 private readonly CustomerProfile seed = new CustomerProfile();
                 private CustomerProfile cached = new CustomerProfile();
@@ -48,6 +61,11 @@ public sealed class CSharpSemanticExtractorTests
                 private int Count(string source)
                 {
                     return source.Length;
+                }
+
+                public override int Score(CustomerProfile profile)
+                {
+                    return profile.PrimaryEmail.Length;
                 }
             }
             """);
@@ -162,6 +180,32 @@ public sealed class CSharpSemanticExtractorTests
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(2, countCallTargetIds.Length);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.RuleId == RuleIds.CSharpSemanticSymbolRelationship
+            && fact.ContractElement == "InheritsFrom"
+            && fact.SourceSymbol == "global::ModernSample.ProfileReporter"
+            && fact.TargetSymbol == "global::ModernSample.ReporterBase"
+            && fact.Properties.ContainsKey("sourceSymbolId")
+            && fact.Properties.ContainsKey("targetSymbolId"));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.ContractElement == "ImplementsInterface"
+            && fact.TargetSymbol == "global::ModernSample.IProfileReporter");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.ContractElement == "Overrides"
+            && fact.SourceSymbol is not null
+            && fact.SourceSymbol.Contains("ProfileReporter.Score", StringComparison.Ordinal)
+            && fact.TargetSymbol is not null
+            && fact.TargetSymbol.Contains("ReporterBase.Score", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.ContractElement == "ImplementsInterfaceMember"
+            && fact.SourceSymbol is not null
+            && fact.SourceSymbol.Contains("ProfileReporter.Measure", StringComparison.Ordinal)
+            && fact.TargetSymbol is not null
+            && fact.TargetSymbol.Contains("IProfileReporter.Measure", StringComparison.Ordinal));
     }
 
     [Fact]

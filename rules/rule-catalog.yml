@@ -217,7 +217,22 @@ rules:
       - IDs include assembly identity, containing symbol, member name, arity, parameter types, and return/type information where available; local IDs include source location to disambiguate same-name locals.
       - IDs are deterministic for the same source, project load, target framework, and dependency graph, but may change when references, target frameworks, generated source, or compiler binding change.
       - These rows are derived indexes over facts, not independent conclusions; the originating fact rule ID and evidence span remain authoritative.
-      - Relationship rows are schema-ready but inheritance/interface/override extraction is a separate rule.
+      - Relationship rows for inheritance, interface implementation, and overrides are emitted by `csharp.semantic.symbolrelationship.v1`.
+
+  - id: csharp.semantic.symbolrelationship.v1
+    name: C# semantic symbol relationships
+    description: Records compiler-resolved relationships between C# symbols, including direct type inheritance, direct interface implementation or extension, member overrides, and interface member implementations.
+    evidenceTier: Tier1Semantic
+    emits:
+      - SymbolRelationship
+      - symbol_relationships table rows
+    limitations:
+      - Requires Roslyn semantic symbols; syntax fallback does not emit symbol relationships.
+      - Type relationships are limited to direct base-list declarations in source. Transitive inheritance and inherited interfaces can be queried by graph traversal, but are not emitted as direct evidence rows.
+      - Interface member implementation uses Roslyn `FindImplementationForInterfaceMember`; it records compiler-resolved implementations, not runtime dispatch targets.
+      - Override relationships record direct overridden members exposed by Roslyn; deeper override chains require graph traversal.
+      - Generic substitutions, default interface methods, explicit interface implementations, and partial types follow Roslyn binding for the loaded project/target framework and may differ when project references or target frameworks change.
+      - These relationships prove compiler binding, not runtime reachability, branch execution, object allocation, or dependency injection dispatch.
 
   - id: csharp.semantic.flowboundary.v1
     name: C# semantic flow boundary

@@ -166,6 +166,12 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Symbol Relationships",
+            result.Facts.Where(fact => fact.FactType == FactTypes.SymbolRelationship),
+            fact => $"- `{DisplaySource(fact)}` `{fact.Properties.GetValueOrDefault("relationshipKind") ?? DisplayFactName(fact)}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Boilerplate Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");

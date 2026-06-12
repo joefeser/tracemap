@@ -121,6 +121,7 @@ public static class FactTypes
     public const string CollectionElementFlow = nameof(CollectionElementFlow);
     public const string MutationSemantics = nameof(MutationSemantics);
     public const string BranchFeasibility = nameof(BranchFeasibility);
+    public const string SymbolRelationship = nameof(SymbolRelationship);
     public const string EnumDeclared = nameof(EnumDeclared);
     public const string AttributeUsed = nameof(AttributeUsed);
     public const string MemberAccessName = nameof(MemberAccessName);
@@ -168,6 +169,7 @@ public static class RuleIds
     public const string CSharpSemanticFieldAlias = "csharp.semantic.fieldalias.v1";
     public const string CSharpSemanticParameterForwarding = "csharp.semantic.parameterforwarding.v1";
     public const string CSharpSemanticSymbolIdentity = "csharp.semantic.symbolidentity.v1";
+    public const string CSharpSemanticSymbolRelationship = "csharp.semantic.symbolrelationship.v1";
     public const string CSharpSemanticFlowBoundary = "csharp.semantic.flowboundary.v1";
     public const string CSharpSemanticRuntimeEvidence = "csharp.semantic.runtimeevidence.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
@@ -181,13 +183,13 @@ public static class RuleIds
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone14";
+    public const string TraceMap = "tracemap-milestone15";
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.9.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.10.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
 }
