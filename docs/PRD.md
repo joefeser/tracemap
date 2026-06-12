@@ -67,6 +67,16 @@ Required output:
 
 - `impact-report.md`
 
+### Flow
+
+```bash
+tracemap flow --index <index.sqlite> --symbol <symbol-or-fragment> --out <flow-report.md>
+```
+
+Required output:
+
+- `flow-report.md`
+
 ### Contract Delta Shape
 
 ```json
@@ -143,6 +153,6 @@ Milestones 0 through 8 establish the current MVP:
 - The CLI can scan legacy or dependency-incomplete sample repos with reduced coverage and useful syntax facts.
 - The reducer emits evidence rows for matches and coverage evidence for no-match classifications.
 - The reducer emits warnings for generic or high fan-out name matches without suppressing evidence.
-- The scanner emits queryable call edges, object creation facts, argument-flow facts, assembly identity, and review-routing logic shape facts.
+- The scanner emits queryable call edges, object creation facts, argument-flow facts, parameter-forwarding edges, assembly identity, and review-routing logic shape facts.
 - No reducer finding is emitted without a rule ID.
 - No no-evidence result hides reduced coverage.

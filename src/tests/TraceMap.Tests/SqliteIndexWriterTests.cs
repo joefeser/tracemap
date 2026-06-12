@@ -144,6 +144,20 @@ public sealed class SqliteIndexWriterTests
         Assert.Contains("ix_argument_flows_parameter", argumentFlowIndexNames);
         Assert.Contains("ix_argument_flows_argument_symbol", argumentFlowIndexNames);
         Assert.Contains("ix_argument_flows_argument_source", argumentFlowIndexNames);
+
+        var parameterForwardIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var parameterForwardCommand = connection.CreateCommand();
+        parameterForwardCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'parameter_forward_edges';";
+        await using var parameterForwardReader = await parameterForwardCommand.ExecuteReaderAsync();
+        while (await parameterForwardReader.ReadAsync())
+        {
+            parameterForwardIndexNames.Add(parameterForwardReader.GetString(0));
+        }
+
+        Assert.Contains("ix_parameter_forward_edges_source", parameterForwardIndexNames);
+        Assert.Contains("ix_parameter_forward_edges_target", parameterForwardIndexNames);
+        Assert.Contains("ix_parameter_forward_edges_source_method", parameterForwardIndexNames);
+        Assert.Contains("ix_parameter_forward_edges_target_method", parameterForwardIndexNames);
     }
 
     private static async Task<T> ExecuteScalarAsync<T>(SqliteConnection connection, string sql)

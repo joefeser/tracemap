@@ -56,4 +56,91 @@ public sealed class CliTests
         Assert.Contains("\"analysisLevel\": \"Level1SemanticAnalysisReduced\"", await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-manifest.json")));
         Assert.Equal(string.Empty, error.ToString());
     }
+
+    [Fact]
+    public async Task Flow_traces_parameter_forwarding_paths()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var projectPath = Path.Combine(repo, "src", "FlowSample");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var flowReportPath = Path.Combine(temp.Path, "flow.md");
+        Directory.CreateDirectory(projectPath);
+        File.WriteAllText(Path.Combine(projectPath, "FlowSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(projectPath, "Flow.cs"), """
+            namespace FlowSample;
+
+            public sealed class RequestDto { }
+
+            public sealed class Controller
+            {
+                private readonly Service service = new();
+
+                public void Post(RequestDto request)
+                {
+                    service.Save(request);
+                }
+            }
+
+            public sealed class Service
+            {
+                private readonly Gateway gateway = new();
+
+                public void Save(RequestDto input)
+                {
+                    gateway.Send(input);
+                }
+            }
+
+            public sealed class Gateway
+            {
+                public void Send(RequestDto payload)
+                {
+                }
+            }
+            """);
+
+        using var scanOutput = new StringWriter();
+        using var scanError = new StringWriter();
+        var scanExitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], scanOutput, scanError);
+        Assert.Equal(0, scanExitCode);
+        Assert.Equal(string.Empty, scanError.ToString());
+
+        using var flowOutput = new StringWriter();
+        using var flowError = new StringWriter();
+        var flowExitCode = await TraceMapCommand.RunAsync(
+            [
+                "flow",
+                "--index",
+                Path.Combine(outputPath, "index.sqlite"),
+                "--symbol",
+                "request",
+                "--out",
+                flowReportPath,
+                "--max-depth",
+                "4"
+            ],
+            flowOutput,
+            flowError);
+
+        Assert.Equal(0, flowExitCode);
+        Assert.Equal(string.Empty, flowError.ToString());
+        Assert.Contains("Paths written: 1", flowOutput.ToString());
+
+        var report = await File.ReadAllTextAsync(flowReportPath);
+        Assert.Contains("TraceMap Flow Report", report);
+        Assert.Contains("FlowSample.Controller.Post", report);
+        Assert.Contains("FlowSample.Service.Save", report);
+        Assert.Contains("FlowSample.Gateway.Send", report);
+        Assert.Contains("csharp.semantic.parameterforwarding.v1", report);
+        Assert.DoesNotContain("RequestDto { }", report);
+    }
 }
