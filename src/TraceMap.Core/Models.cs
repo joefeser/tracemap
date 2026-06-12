@@ -59,6 +59,7 @@ public sealed record ScanResult(
 
 public static class EvidenceTiers
 {
+    public const string Tier1Semantic = nameof(Tier1Semantic);
     public const string Tier2Structural = nameof(Tier2Structural);
     public const string Tier3SyntaxOrTextual = nameof(Tier3SyntaxOrTextual);
     public const string Tier4Unknown = nameof(Tier4Unknown);
@@ -83,6 +84,8 @@ public static class FactTypes
     public const string AttributeUsed = nameof(AttributeUsed);
     public const string MemberAccessName = nameof(MemberAccessName);
     public const string InvocationName = nameof(InvocationName);
+    public const string PropertyAccessed = nameof(PropertyAccessed);
+    public const string MethodInvoked = nameof(MethodInvoked);
 }
 
 public static class RuleIds
@@ -93,13 +96,18 @@ public static class RuleIds
     public const string CSharpSyntaxDeclarations = "csharp.syntax.declarations.v1";
     public const string CSharpSyntaxMemberAccess = "csharp.syntax.memberaccess.v1";
     public const string CSharpSyntaxInvocation = "csharp.syntax.invocation.v1";
+    public const string CSharpSemanticDeclarations = "csharp.semantic.declarations.v1";
+    public const string CSharpSemanticPropertyAccess = "csharp.semantic.propertyaccess.v1";
+    public const string CSharpSemanticMethodInvocation = "csharp.semantic.methodinvocation.v1";
+    public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
 }
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone2";
+    public const string TraceMap = "tracemap-milestone4";
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.2.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.1.0";
 }
