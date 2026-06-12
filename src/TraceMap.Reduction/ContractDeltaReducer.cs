@@ -65,7 +65,8 @@ public static class ContractDeltaReducer
     private static readonly HashSet<string> DefiniteUsageFactTypes = new(StringComparer.Ordinal)
     {
         FactTypes.PropertyAccessed,
-        FactTypes.MethodInvoked
+        FactTypes.MethodInvoked,
+        FactTypes.TypeDeclared
     };
 
     private static readonly HashSet<string> ProbableSemanticFactTypes = new(StringComparer.Ordinal)
@@ -306,8 +307,33 @@ public static class ContractDeltaReducer
 
     private static MatchStrength MatchFact(ContractElementName element, IndexedFact fact)
     {
+        if (fact.FactType == FactTypes.AnalysisGap)
+        {
+            return MatchAnalysisGap(element, fact);
+        }
+
         var memberMatches = element.MemberName is not null && fact.MemberCandidates.Any(candidate => NamesMatch(element.MemberName, candidate));
         var typeMatches = element.TypeName is not null && fact.TypeCandidates.Any(candidate => NamesMatch(element.TypeName, candidate));
+
+        if (element.MemberName is not null)
+        {
+            if (memberMatches && typeMatches)
+            {
+                return MatchStrength.TypeAndMember;
+            }
+
+            return memberMatches ? MatchStrength.Member : MatchStrength.None;
+        }
+
+        return typeMatches ? MatchStrength.Type : MatchStrength.None;
+    }
+
+    private static MatchStrength MatchAnalysisGap(ContractElementName element, IndexedFact fact)
+    {
+        var memberMatches = element.MemberName is not null
+            && fact.SearchTextCandidates.Any(candidate => TextMentionsName(candidate, element.MemberName));
+        var typeMatches = element.TypeName is not null
+            && fact.SearchTextCandidates.Any(candidate => TextMentionsName(candidate, element.TypeName));
 
         if (element.MemberName is not null)
         {
@@ -325,6 +351,14 @@ public static class ContractDeltaReducer
     private static bool NamesMatch(string expected, string actual)
     {
         return string.Equals(NormalizeName(expected), NormalizeName(actual), StringComparison.Ordinal);
+    }
+
+    private static bool TextMentionsName(string text, string expected)
+    {
+        var normalizedText = NormalizeName(text);
+        var normalizedExpected = NormalizeName(expected);
+        return normalizedExpected.Length > 0
+            && normalizedText.Contains(normalizedExpected, StringComparison.Ordinal);
     }
 
     private static string NormalizeName(string value)
@@ -416,6 +450,35 @@ public static class ContractDeltaReducer
             }
         }
 
+        public IEnumerable<string> SearchTextCandidates
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(SourceSymbol))
+                {
+                    yield return SourceSymbol;
+                }
+
+                if (!string.IsNullOrWhiteSpace(TargetSymbol))
+                {
+                    yield return TargetSymbol;
+                }
+
+                if (!string.IsNullOrWhiteSpace(ContractElement))
+                {
+                    yield return ContractElement;
+                }
+
+                foreach (var value in Properties.Values)
+                {
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        yield return value;
+                    }
+                }
+            }
+        }
+
         private static string LastSymbolPart(string value)
         {
             var normalized = value
@@ -480,10 +543,12 @@ public static class ImpactMarkdownWriter
             }
             else
             {
+                lines.Add("| Fact type | Rule | Tier | Location | Target | Commit |");
+                lines.Add("| --- | --- | --- | --- | --- | --- |");
                 foreach (var evidence in finding.Evidence)
                 {
                     lines.Add(
-                        $"- `{evidence.FactType}` via `{evidence.RuleId}` ({evidence.EvidenceTier}) at `{evidence.FilePath}:{evidence.StartLine}-{evidence.EndLine}`, target `{evidence.TargetSymbol ?? evidence.ContractElement ?? "unknown"}`, commit `{evidence.CommitSha}`.");
+                        $"| `{EscapeTable(evidence.FactType)}` | `{EscapeTable(evidence.RuleId)}` | `{EscapeTable(evidence.EvidenceTier)}` | `{EscapeTable(evidence.FilePath)}:{evidence.StartLine}-{evidence.EndLine}` | `{EscapeTable(evidence.TargetSymbol ?? evidence.ContractElement ?? "unknown")}` | `{EscapeTable(evidence.CommitSha)}` |");
                 }
             }
 
@@ -491,5 +556,10 @@ public static class ImpactMarkdownWriter
         }
 
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string EscapeTable(string value)
+    {
+        return value.Replace("|", "\\|", StringComparison.Ordinal);
     }
 }

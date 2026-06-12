@@ -178,6 +178,7 @@ rules:
       - ImpactFinding
     limitations:
       - Name matching is deterministic and approximate; it does not infer serialization aliases, reflection usage, or runtime contract mapping.
-      - DefiniteImpact requires compiler-resolved usage evidence for the changed member.
+      - DefiniteImpact requires compiler-resolved type evidence or usage evidence for the changed member.
       - Syntax-only matches are classified as NeedsReview because symbol identity is not proven.
       - NoEvidenceFullCoverage depends on a successful full semantic scan at a known commit SHA; reduced scans only support NoEvidenceReducedCoverage.
+      - UnknownAnalysisGap is emitted only when analysis-gap evidence names the changed contract element; unrelated reduced coverage is reported as NoEvidenceReducedCoverage.

@@ -66,6 +66,64 @@ public sealed class ReducerTests
     }
 
     [Fact]
+    public async Task Reduce_changed_type_with_semantic_type_fact_reports_definite_impact()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteDelta(temp.Path, "CustomerProfileResponse");
+        var manifest = CreateManifest("Level1SemanticAnalysis", "Succeeded");
+        var fact = FactFactory.Create(
+            manifest,
+            FactTypes.TypeDeclared,
+            RuleIds.CSharpSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("src/CustomerProfileResponse.cs", 5, 12, null, "test", "test/1.0"),
+            targetSymbol: "global::Sample.CustomerProfileResponse",
+            contractElement: "CustomerProfileResponse",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["name"] = "CustomerProfileResponse",
+                ["namespace"] = "Sample",
+                ["typeKind"] = "Class"
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [fact]);
+
+        var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
+
+        Assert.Contains("Classification: `DefiniteImpact`", report);
+        Assert.Contains("`src/CustomerProfileResponse.cs:5-12`", report);
+    }
+
+    [Fact]
+    public async Task Reduce_matching_analysis_gap_reports_unknown_analysis_gap()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteDelta(temp.Path, "CustomerProfile.primaryEmail");
+        var manifest = CreateManifest("Level1SemanticAnalysisReduced", "FailedOrPartial", ["Compilation failed near PrimaryEmail."]);
+        var fact = FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpSemanticWorkspace,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("src/ProfileReader.cs", 8, 8, null, "test", "test/1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = "CompilationDiagnostic",
+                ["message"] = "Compilation diagnostic CS1061: CustomerProfile does not contain a definition for PrimaryEmail."
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [fact]);
+
+        var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
+
+        Assert.Contains("Classification: `UnknownAnalysisGap`", report);
+        Assert.Contains("`AnalysisGap`", report);
+        Assert.Contains("analysis-gap evidence", report);
+    }
+
+    [Fact]
     public async Task Reduce_no_match_with_full_semantic_coverage_reports_no_evidence_full_coverage()
     {
         using var temp = new TempDirectory();
