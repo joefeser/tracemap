@@ -297,6 +297,7 @@ public static class CSharpSemanticExtractor
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
         AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts);
+        AddFlowBoundaryFacts(projectPath, filePath, root, model, facts);
         AddIntegrationFacts(projectPath, filePath, root, model, facts);
     }
 
@@ -871,6 +872,275 @@ public static class CSharpSemanticExtractor
         AddSqlCommandFacts(projectPath, filePath, root, model, facts);
     }
 
+    private static void AddFlowBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        AddBranchConditionFacts(projectPath, filePath, root, model, facts);
+        AddMutationBoundaryFacts(projectPath, filePath, root, model, facts);
+        AddInvocationBoundaryFacts(projectPath, filePath, root, model, facts);
+    }
+
+    private static void AddBranchConditionFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var statement in root.DescendantNodes().OfType<IfStatementSyntax>())
+        {
+            facts.Add(CreateBranchConditionFact(projectPath, filePath, statement, statement.Condition, model, "If"));
+        }
+
+        foreach (var expression in root.DescendantNodes().OfType<ConditionalExpressionSyntax>())
+        {
+            facts.Add(CreateBranchConditionFact(projectPath, filePath, expression, expression.Condition, model, "ConditionalExpression"));
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<SwitchStatementSyntax>())
+        {
+            facts.Add(CreateBranchConditionFact(projectPath, filePath, statement, statement.Expression, model, "Switch"));
+        }
+
+        foreach (var expression in root.DescendantNodes().OfType<SwitchExpressionSyntax>())
+        {
+            facts.Add(CreateBranchConditionFact(projectPath, filePath, expression, expression.GoverningExpression, model, "SwitchExpression"));
+        }
+    }
+
+    private static SemanticFactCandidate CreateBranchConditionFact(
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        ExpressionSyntax condition,
+        SemanticModel model,
+        string branchKind)
+    {
+        var conditionType = model.GetTypeInfo(condition).Type;
+        return CreateSemanticFact(
+            FactTypes.BranchCondition,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            evidenceNode,
+            sourceSymbol: GetEnclosingSymbol(model, evidenceNode),
+            targetSymbol: branchKind,
+            contractElement: branchKind,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "BranchCondition",
+                ["branchKind"] = branchKind,
+                ["conditionExpressionKind"] = GetExpressionKind(condition),
+                ["conditionExpressionHash"] = FactFactory.Hash(condition.ToString(), 32),
+                ["conditionType"] = conditionType?.ToDisplayString(SymbolFormat) ?? string.Empty
+            });
+    }
+
+    private static void AddMutationBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            var targetSymbol = model.GetSymbolInfo(assignment.Left).Symbol;
+            if (targetSymbol is not (IFieldSymbol or IPropertySymbol))
+            {
+                continue;
+            }
+
+            var assignedType = model.GetTypeInfo(assignment.Right).Type;
+            facts.Add(CreateSemanticFact(
+                FactTypes.ObjectMutation,
+                RuleIds.CSharpSemanticFlowBoundary,
+                projectPath,
+                filePath,
+                assignment,
+                sourceSymbol: GetEnclosingSymbol(model, assignment),
+                targetSymbol: targetSymbol.ToDisplayString(SymbolFormat),
+                contractElement: targetSymbol.Name,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["boundaryKind"] = "ObjectMutation",
+                        ["mutationKind"] = assignment.Kind().ToString(),
+                        ["targetSymbol"] = targetSymbol.ToDisplayString(SymbolFormat),
+                        ["targetSymbolKind"] = targetSymbol.Kind.ToString(),
+                        ["assignedExpressionKind"] = GetExpressionKind(assignment.Right),
+                        ["assignedExpressionHash"] = FactFactory.Hash(assignment.Right.ToString(), 32),
+                        ["assignedType"] = assignedType?.ToDisplayString(SymbolFormat) ?? string.Empty
+                    },
+                    model.GetEnclosingSymbol(assignment.SpanStart)?.ContainingAssembly,
+                    targetSymbol.ContainingAssembly)));
+        }
+    }
+
+    private static void AddInvocationBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var symbolInfo = model.GetSymbolInfo(invocation);
+            var method = symbolInfo.Symbol as IMethodSymbol;
+            var expression = invocation.Expression;
+            var receiverExpression = GetInvocationReceiver(expression);
+            var receiverType = receiverExpression is null ? null : model.GetTypeInfo(receiverExpression).Type;
+
+            if (method is not null)
+            {
+                AddResolvedInvocationBoundaryFacts(projectPath, filePath, invocation, model, facts, method, receiverExpression, receiverType);
+            }
+            else if (receiverType?.TypeKind == TypeKind.Dynamic || model.GetTypeInfo(expression).Type?.TypeKind == TypeKind.Dynamic)
+            {
+                facts.Add(CreateDynamicInvocationFact(projectPath, filePath, invocation, model, expression.ToString(), receiverType));
+            }
+        }
+    }
+
+    private static void AddResolvedInvocationBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        IMethodSymbol method,
+        ExpressionSyntax? receiverExpression,
+        ITypeSymbol? receiverType)
+    {
+        if (IsDependencyResolutionMethod(method, invocation, out var dependencyType))
+        {
+            facts.Add(CreateInvocationBoundaryFact(
+                projectPath,
+                filePath,
+                invocation,
+                model,
+                method,
+                FactTypes.DependencyResolved,
+                "DependencyResolved",
+                dependencyType,
+                receiverExpression,
+                receiverType));
+        }
+
+        if (IsDeserializerMethod(method, invocation, out var deserializedType))
+        {
+            facts.Add(CreateInvocationBoundaryFact(
+                projectPath,
+                filePath,
+                invocation,
+                model,
+                method,
+                FactTypes.DeserializedObject,
+                "DeserializedObject",
+                deserializedType,
+                receiverExpression,
+                receiverType));
+        }
+
+        if (IsReflectionMethod(method))
+        {
+            facts.Add(CreateInvocationBoundaryFact(
+                projectPath,
+                filePath,
+                invocation,
+                model,
+                method,
+                FactTypes.ReflectionUsage,
+                "ReflectionUsage",
+                method.ReturnType.ToDisplayString(SymbolFormat),
+                receiverExpression,
+                receiverType));
+        }
+
+        if (IsCollectionMutationMethod(method))
+        {
+            facts.Add(CreateInvocationBoundaryFact(
+                projectPath,
+                filePath,
+                invocation,
+                model,
+                method,
+                FactTypes.CollectionMutation,
+                "CollectionMutation",
+                receiverType?.ToDisplayString(SymbolFormat) ?? method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                receiverExpression,
+                receiverType));
+        }
+    }
+
+    private static SemanticFactCandidate CreateInvocationBoundaryFact(
+        string? projectPath,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method,
+        string factType,
+        string boundaryKind,
+        string target,
+        ExpressionSyntax? receiverExpression,
+        ITypeSymbol? receiverType)
+    {
+        var receiverSymbol = receiverExpression is null ? null : model.GetSymbolInfo(receiverExpression).Symbol;
+        return CreateSemanticFact(
+            factType,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            invocation,
+            sourceSymbol: GetEnclosingSymbol(model, invocation),
+            targetSymbol: string.IsNullOrWhiteSpace(target) ? method.ToDisplayString(SymbolFormat) : target,
+            contractElement: method.Name,
+            properties: AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["boundaryKind"] = boundaryKind,
+                    ["methodSymbol"] = method.ToDisplayString(SymbolFormat),
+                    ["methodName"] = method.Name,
+                    ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["receiverSymbol"] = receiverSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["receiverType"] = receiverType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["targetType"] = target,
+                    ["argumentCount"] = invocation.ArgumentList.Arguments.Count.ToString()
+                },
+                model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
+                method.ContainingAssembly));
+    }
+
+    private static SemanticFactCandidate CreateDynamicInvocationFact(
+        string? projectPath,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        string expression,
+        ITypeSymbol? receiverType)
+    {
+        return CreateSemanticFact(
+            FactTypes.DynamicInvocation,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            invocation,
+            sourceSymbol: GetEnclosingSymbol(model, invocation),
+            targetSymbol: "dynamic",
+            contractElement: "dynamic",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "DynamicInvocation",
+                ["expressionHash"] = FactFactory.Hash(expression, 32),
+                ["receiverType"] = receiverType?.ToDisplayString(SymbolFormat) ?? string.Empty
+            });
+    }
+
     private static void AddDbContextFacts(
         string? projectPath,
         string filePath,
@@ -1128,6 +1398,118 @@ public static class CSharpSemanticExtractor
             AnonymousFunctionExpressionSyntax => "AnonymousFunction",
             _ => expression.Kind().ToString()
         };
+    }
+
+    private static ExpressionSyntax? GetInvocationReceiver(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Expression,
+            MemberBindingExpressionSyntax => null,
+            _ => null
+        };
+    }
+
+    private static bool IsDependencyResolutionMethod(
+        IMethodSymbol method,
+        InvocationExpressionSyntax invocation,
+        out string dependencyType)
+    {
+        dependencyType = GetGenericTypeArgument(method)
+            ?? GetTypeOfArgument(invocation)
+            ?? method.ReturnType.ToDisplayString(SymbolFormat);
+
+        var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+        return method.Name is "GetService" or "GetRequiredService" or "GetServices" or "GetRequiredKeyedService" or "GetKeyedService"
+            || (method.Name is "Resolve" or "ResolveOptional" or "ResolveNamed" or "ResolveKeyed"
+                && (containingType.Contains("Container", StringComparison.Ordinal)
+                    || containingType.Contains("Autofac", StringComparison.Ordinal)
+                    || containingType.Contains("Windsor", StringComparison.Ordinal)
+                    || containingType.Contains("Ninject", StringComparison.Ordinal)
+                    || containingType.Contains("Unity", StringComparison.Ordinal)
+                    || containingType.Contains("StructureMap", StringComparison.Ordinal)
+                    || containingType.Contains("IServiceProvider", StringComparison.Ordinal)));
+    }
+
+    private static bool IsDeserializerMethod(
+        IMethodSymbol method,
+        InvocationExpressionSyntax invocation,
+        out string deserializedType)
+    {
+        deserializedType = GetGenericTypeArgument(method)
+            ?? method.ReturnType.ToDisplayString(SymbolFormat);
+        var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+        var methodName = method.Name;
+        return methodName is "Deserialize" or "DeserializeAsync" or "DeserializeObject" or "ReadFromJsonAsync" or "GetFromJsonAsync"
+            || (methodName.Contains("Deserialize", StringComparison.Ordinal)
+                && (containingType.Contains("Json", StringComparison.Ordinal)
+                    || containingType.Contains("Xml", StringComparison.Ordinal)
+                    || containingType.Contains("Serializer", StringComparison.Ordinal)));
+    }
+
+    private static bool IsReflectionMethod(IMethodSymbol method)
+    {
+        var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+        return containingType.Contains("System.Reflection.", StringComparison.Ordinal)
+            || containingType.EndsWith("System.Type", StringComparison.Ordinal)
+            || containingType.EndsWith("System.Activator", StringComparison.Ordinal)
+            || containingType.EndsWith("System.Delegate", StringComparison.Ordinal);
+    }
+
+    private static bool IsCollectionMutationMethod(IMethodSymbol method)
+    {
+        if (method.Name is not ("Add" or "AddRange" or "Insert" or "InsertRange" or "Remove" or "RemoveAt" or "RemoveRange"
+            or "Clear" or "Enqueue" or "Dequeue" or "Push" or "Pop" or "TryAdd" or "TryRemove" or "TryTake"))
+        {
+            return false;
+        }
+
+        var type = method.ContainingType;
+        if (type is null || type.SpecialType == SpecialType.System_String)
+        {
+            return false;
+        }
+
+        return type.AllInterfaces.Any(IsCollectionLikeType)
+            || IsCollectionLikeType(type)
+            || type.Name.Contains("Collection", StringComparison.Ordinal)
+            || type.Name.Contains("Dictionary", StringComparison.Ordinal)
+            || type.Name.Contains("Queue", StringComparison.Ordinal)
+            || type.Name.Contains("Stack", StringComparison.Ordinal)
+            || type.Name.Contains("Set", StringComparison.Ordinal)
+            || type.Name.Contains("List", StringComparison.Ordinal);
+    }
+
+    private static bool IsCollectionLikeType(INamedTypeSymbol type)
+    {
+        var metadataName = type.ConstructedFrom.ToDisplayString(SymbolFormat);
+        return metadataName.StartsWith("global::System.Collections.", StringComparison.Ordinal)
+            || metadataName.StartsWith("System.Collections.", StringComparison.Ordinal)
+            || metadataName.Contains("ICollection", StringComparison.Ordinal)
+            || metadataName.Contains("IList", StringComparison.Ordinal)
+            || metadataName.Contains("IDictionary", StringComparison.Ordinal)
+            || metadataName.Contains("ISet", StringComparison.Ordinal)
+            || metadataName.Contains("IProducerConsumerCollection", StringComparison.Ordinal);
+    }
+
+    private static string? GetGenericTypeArgument(IMethodSymbol method)
+    {
+        return method.TypeArguments.Length == 0
+            ? null
+            : method.TypeArguments[0].ToDisplayString(SymbolFormat);
+    }
+
+    private static string? GetTypeOfArgument(InvocationExpressionSyntax invocation)
+    {
+        foreach (var argument in invocation.ArgumentList.Arguments)
+        {
+            if (argument.Expression is TypeOfExpressionSyntax typeOfExpression)
+            {
+                return typeOfExpression.Type.ToString();
+            }
+        }
+
+        return null;
     }
 
     private static (string? FilePath, int? StartLine, int? EndLine) GetSourceLocation(string repoPath, ISymbol? symbol)

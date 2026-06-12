@@ -178,4 +178,64 @@ public sealed class CSharpSemanticExtractorTests
             && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
             && fact.TargetSymbol == "Deliver");
     }
+
+    [Fact]
+    public void Scan_extracts_tier1_flow_boundary_facts()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "BoundarySample"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "BoundarySample", "BoundarySample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "BoundarySample", "Boundary.cs"), """
+            using System;
+            using System.Collections.Generic;
+            using System.Text.Json;
+
+            namespace BoundarySample;
+
+            public sealed class RequestDto
+            {
+                public string Name { get; set; } = "";
+            }
+
+            public sealed class FlowBoundaryDemo
+            {
+                private RequestDto? current;
+
+                public void Handle(IServiceProvider services, string json, dynamic connection)
+                {
+                    var request = JsonSerializer.Deserialize<RequestDto>(json);
+                    var demo = services.GetService(typeof(FlowBoundaryDemo));
+                    var list = new List<RequestDto>();
+                    if (request != null)
+                    {
+                        current = request;
+                        list.Add(request);
+                    }
+
+                    var method = typeof(FlowBoundaryDemo).GetMethod(nameof(Handle));
+                    method?.Invoke(this, new object[] { services, json, connection });
+                    connection.Query<RequestDto>("select * from Requests");
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DeserializedObject && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DependencyResolved && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.CollectionMutation && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ObjectMutation && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ReflectionUsage && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DynamicInvocation && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.BranchCondition && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
+    }
 }
