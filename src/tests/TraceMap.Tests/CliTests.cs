@@ -149,4 +149,84 @@ public sealed class CliTests
         Assert.Contains("csharp.semantic.parameterforwarding.v1", report);
         Assert.DoesNotContain("RequestDto { }", report);
     }
+
+    [Fact]
+    public async Task Flow_traces_unique_constructor_field_forwarding_path()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var projectPath = Path.Combine(repo, "src", "FlowSample");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var flowReportPath = Path.Combine(temp.Path, "flow.md");
+        Directory.CreateDirectory(projectPath);
+        File.WriteAllText(Path.Combine(projectPath, "FlowSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(projectPath, "Flow.cs"), """
+            namespace FlowSample;
+
+            public sealed class RequestDto { }
+
+            public sealed class SnapshotController
+            {
+                private readonly RequestDto snapshot;
+
+                public SnapshotController(RequestDto seed)
+                {
+                    snapshot = seed;
+                }
+
+                public void Replay(Gateway gateway)
+                {
+                    gateway.Send(snapshot);
+                }
+            }
+
+            public sealed class Gateway
+            {
+                public void Send(RequestDto payload)
+                {
+                }
+            }
+            """);
+
+        using var scanOutput = new StringWriter();
+        using var scanError = new StringWriter();
+        var scanExitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], scanOutput, scanError);
+        Assert.Equal(0, scanExitCode);
+        Assert.Equal(string.Empty, scanError.ToString());
+
+        using var flowOutput = new StringWriter();
+        using var flowError = new StringWriter();
+        var flowExitCode = await TraceMapCommand.RunAsync(
+            [
+                "flow",
+                "--index",
+                Path.Combine(outputPath, "index.sqlite"),
+                "--symbol",
+                "seed",
+                "--out",
+                flowReportPath,
+                "--max-depth",
+                "4"
+            ],
+            flowOutput,
+            flowError);
+
+        Assert.Equal(0, flowExitCode);
+        Assert.Equal(string.Empty, flowError.ToString());
+        Assert.Contains("Paths written: 1", flowOutput.ToString());
+
+        var report = await File.ReadAllTextAsync(flowReportPath);
+        Assert.Contains("SnapshotController.SnapshotController", report);
+        Assert.Contains("Gateway.Send", report);
+        Assert.Contains("RequestDto seed", report);
+        Assert.Contains("src/FlowSample/Flow.cs:16-16", report);
+    }
 }
