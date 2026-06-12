@@ -71,7 +71,7 @@ rules:
 
   - id: csharp.syntax.callgraph.v1
     name: C# syntax call graph
-    description: Emits syntax-only caller-to-callee edges from invocation expressions.
+    description: Emits syntax-only caller-to-callee edges from invocation and object creation expressions.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - CallEdge
@@ -79,6 +79,17 @@ rules:
       - Caller names are best-effort containing member names, not fully qualified symbols.
       - Callee names are invocation names only; overload resolution and receiver type are not proven.
       - Dynamic dispatch, reflection, delegates, and event flow are not modeled.
+
+  - id: csharp.syntax.objectcreation.v1
+    name: C# syntax object creation
+    description: Emits syntax-only object creation facts from new expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectCreated
+    limitations:
+      - Created type names are syntax text and may not be fully qualified.
+      - Assigned variable names are best-effort for direct variable declarations or assignments only.
+      - Constructor overload and assembly identity are not proven without semantic analysis.
 
   - id: csharp.syntax.logicshape.v1
     name: C# syntax logic shape
@@ -118,7 +129,7 @@ rules:
 
   - id: csharp.semantic.callgraph.v1
     name: C# semantic call graph
-    description: Emits compiler-resolved caller-to-callee method call edges using Roslyn semantic model.
+    description: Emits compiler-resolved caller-to-callee method and constructor call edges using Roslyn semantic model.
     evidenceTier: Tier1Semantic
     emits:
       - CallEdge
@@ -126,6 +137,17 @@ rules:
       - Requires project load and enough references to resolve method symbols.
       - Does not model runtime polymorphism, delegate invocation targets, event subscribers, reflection, or async continuation flow.
       - A call edge records a syntactic call site, not proof that the path executes at runtime.
+
+  - id: csharp.semantic.objectcreation.v1
+    name: C# semantic object creation
+    description: Emits compiler-resolved object creation facts with created type, constructor, caller, and assembly identity when available.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ObjectCreated
+    limitations:
+      - Requires project load and enough references to resolve created type symbols.
+      - Does not model dependency injection container activations, reflection, deserialization-created instances, or factory-returned runtime types.
+      - Assembly version is sourced from Roslyn assembly identity and may be 0.0.0.0 when a project does not set explicit version metadata.
 
   - id: csharp.semantic.declarations.v1
     name: C# semantic declarations

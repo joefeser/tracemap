@@ -85,6 +85,7 @@ public static class FactTypes
     public const string MemberAccessName = nameof(MemberAccessName);
     public const string InvocationName = nameof(InvocationName);
     public const string CallEdge = nameof(CallEdge);
+    public const string ObjectCreated = nameof(ObjectCreated);
     public const string CalculationExpression = nameof(CalculationExpression);
     public const string BranchingLogic = nameof(BranchingLogic);
     public const string RetryPolicyLogic = nameof(RetryPolicyLogic);
@@ -113,11 +114,13 @@ public static class RuleIds
     public const string CSharpSyntaxMemberAccess = "csharp.syntax.memberaccess.v1";
     public const string CSharpSyntaxInvocation = "csharp.syntax.invocation.v1";
     public const string CSharpSyntaxCallGraph = "csharp.syntax.callgraph.v1";
+    public const string CSharpSyntaxObjectCreation = "csharp.syntax.objectcreation.v1";
     public const string CSharpSyntaxLogicShape = "csharp.syntax.logicshape.v1";
     public const string CSharpSemanticDeclarations = "csharp.semantic.declarations.v1";
     public const string CSharpSemanticPropertyAccess = "csharp.semantic.propertyaccess.v1";
     public const string CSharpSemanticMethodInvocation = "csharp.semantic.methodinvocation.v1";
     public const string CSharpSemanticCallGraph = "csharp.semantic.callgraph.v1";
+    public const string CSharpSemanticObjectCreation = "csharp.semantic.objectcreation.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
     public const string HttpClientInvocation = "http.client.invocation.v1";
     public const string DatabaseEntityFramework = "database.ef.v1";

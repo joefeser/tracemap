@@ -60,6 +60,11 @@ public sealed class SqliteIndexWriterTests
             "select count(*) from call_edges where caller_symbol = 'Load' and callee_symbol = 'GetAsync' and file_path = 'Sample.cs';");
         Assert.Equal(1L, callEdgeCount);
 
+        var createdObjectCount = await ExecuteScalarAsync<long>(
+            connection,
+            "select count(*) from object_creations where caller_symbol = 'Load' and created_type = 'CustomerProfile' and assigned_to = 'profile' and file_path = 'Sample.cs';");
+        Assert.Equal(1L, createdObjectCount);
+
         var propertiesJson = await ExecuteScalarAsync<string>(
             connection,
             "select properties_json from facts where fact_type = 'PropertyDeclared' and target_symbol = 'PrimaryEmail';");
@@ -110,7 +115,21 @@ public sealed class SqliteIndexWriterTests
 
         Assert.Contains("ix_call_edges_caller", callEdgeIndexNames);
         Assert.Contains("ix_call_edges_callee", callEdgeIndexNames);
+        Assert.Contains("ix_call_edges_callee_assembly", callEdgeIndexNames);
         Assert.Contains("ix_call_edges_file", callEdgeIndexNames);
+
+        var objectCreationIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var objectCreationCommand = connection.CreateCommand();
+        objectCreationCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'object_creations';";
+        await using var objectCreationReader = await objectCreationCommand.ExecuteReaderAsync();
+        while (await objectCreationReader.ReadAsync())
+        {
+            objectCreationIndexNames.Add(objectCreationReader.GetString(0));
+        }
+
+        Assert.Contains("ix_object_creations_type", objectCreationIndexNames);
+        Assert.Contains("ix_object_creations_assembly", objectCreationIndexNames);
+        Assert.Contains("ix_object_creations_caller", objectCreationIndexNames);
     }
 
     private static async Task<T> ExecuteScalarAsync<T>(SqliteConnection connection, string sql)

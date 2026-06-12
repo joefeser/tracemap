@@ -292,6 +292,7 @@ public static class CSharpSemanticExtractor
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
         AddMethodInvocationFacts(projectPath, filePath, root, model, facts);
+        AddObjectCreationFacts(projectPath, filePath, root, model, facts);
         AddIntegrationFacts(projectPath, filePath, root, model, facts);
     }
 
@@ -388,7 +389,8 @@ public static class CSharpSemanticExtractor
                 continue;
             }
 
-            var enclosingSymbol = GetEnclosingSymbol(model, invocation);
+            var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+            var enclosingSymbol = enclosing?.ToDisplayString(SymbolFormat);
             facts.Add(CreateSemanticFact(
                 FactTypes.MethodInvoked,
                 RuleIds.CSharpSemanticMethodInvocation,
@@ -398,12 +400,15 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: enclosingSymbol,
                 targetSymbol: method.ToDisplayString(SymbolFormat),
                 contractElement: method.Name,
-                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                    ["methodName"] = method.Name,
-                    ["methodKind"] = method.MethodKind.ToString()
-                }));
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["methodName"] = method.Name,
+                        ["methodKind"] = method.MethodKind.ToString()
+                    },
+                    enclosing?.ContainingAssembly,
+                    method.ContainingAssembly)));
 
             facts.Add(CreateSemanticFact(
                 FactTypes.CallEdge,
@@ -414,14 +419,85 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: enclosingSymbol,
                 targetSymbol: method.ToDisplayString(SymbolFormat),
                 contractElement: method.Name,
-                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["callerSymbol"] = enclosingSymbol ?? string.Empty,
-                    ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
-                    ["calleeName"] = method.Name,
-                    ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                    ["callKind"] = "SemanticMethodInvocation"
-                }));
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["callerSymbol"] = enclosingSymbol ?? string.Empty,
+                        ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
+                        ["calleeName"] = method.Name,
+                        ["calleeContainingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["callKind"] = "SemanticMethodInvocation"
+                    },
+                    enclosing?.ContainingAssembly,
+                    method.ContainingAssembly)));
+        }
+    }
+
+    private static void AddObjectCreationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+        {
+            if (model.GetTypeInfo(creation).Type is not INamedTypeSymbol type)
+            {
+                continue;
+            }
+
+            var constructor = model.GetSymbolInfo(creation).Symbol as IMethodSymbol;
+            var enclosing = model.GetEnclosingSymbol(creation.SpanStart);
+            var enclosingSymbol = enclosing?.ToDisplayString(SymbolFormat);
+            var createdType = type.ToDisplayString(SymbolFormat);
+            var constructorSymbol = constructor?.ToDisplayString(SymbolFormat) ?? createdType;
+            var assignedTo = GetAssignedVariableName(creation);
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.ObjectCreated,
+                RuleIds.CSharpSemanticObjectCreation,
+                projectPath,
+                filePath,
+                creation,
+                sourceSymbol: enclosingSymbol,
+                targetSymbol: createdType,
+                contractElement: type.Name,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["callerSymbol"] = enclosingSymbol ?? string.Empty,
+                        ["createdType"] = createdType,
+                        ["createdTypeName"] = type.Name,
+                        ["constructorSymbol"] = constructorSymbol,
+                        ["assignedTo"] = assignedTo ?? string.Empty,
+                        ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+                        ["creationKind"] = "SemanticObjectCreation"
+                    },
+                    enclosing?.ContainingAssembly,
+                    type.ContainingAssembly)));
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.CallEdge,
+                RuleIds.CSharpSemanticCallGraph,
+                projectPath,
+                filePath,
+                creation,
+                sourceSymbol: enclosingSymbol,
+                targetSymbol: constructorSymbol,
+                contractElement: type.Name,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["callerSymbol"] = enclosingSymbol ?? string.Empty,
+                        ["calleeSymbol"] = constructorSymbol,
+                        ["calleeName"] = type.Name,
+                        ["calleeContainingType"] = createdType,
+                        ["callKind"] = "SemanticObjectCreation",
+                        ["assignedTo"] = assignedTo ?? string.Empty
+                    },
+                    enclosing?.ContainingAssembly,
+                    type.ContainingAssembly)));
         }
     }
 
@@ -633,6 +709,37 @@ public static class CSharpSemanticExtractor
     private static string? GetEnclosingSymbol(SemanticModel model, SyntaxNode node)
     {
         return model.GetEnclosingSymbol(node.SpanStart)?.ToDisplayString(SymbolFormat);
+    }
+
+    private static SortedDictionary<string, string> AddAssemblyProperties(
+        SortedDictionary<string, string> properties,
+        IAssemblySymbol? callerAssembly,
+        IAssemblySymbol? calleeAssembly)
+    {
+        AddAssemblyProperties(properties, "caller", callerAssembly);
+        AddAssemblyProperties(properties, "callee", calleeAssembly);
+        return properties;
+    }
+
+    private static void AddAssemblyProperties(SortedDictionary<string, string> properties, string prefix, IAssemblySymbol? assembly)
+    {
+        properties[$"{prefix}AssemblyName"] = assembly?.Identity.Name ?? string.Empty;
+        properties[$"{prefix}AssemblyVersion"] = assembly?.Identity.Version?.ToString() ?? string.Empty;
+    }
+
+    private static string? GetAssignedVariableName(ObjectCreationExpressionSyntax creation)
+    {
+        if (creation.Parent is EqualsValueClauseSyntax { Parent: VariableDeclaratorSyntax variable })
+        {
+            return variable.Identifier.ValueText;
+        }
+
+        if (creation.Parent is AssignmentExpressionSyntax assignment)
+        {
+            return assignment.Left.ToString();
+        }
+
+        return null;
     }
 
     private static bool IsHttpClientCall(IMethodSymbol method)

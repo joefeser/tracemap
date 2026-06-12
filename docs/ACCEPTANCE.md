@@ -30,6 +30,7 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - manifest includes repo name, commit SHA, scanner version, analysis level, and build status.
 - facts include rule IDs, evidence tiers, file paths, line spans, commit SHA, and extractor versions.
 - `index.sqlite` includes a `call_edges` table when call-edge facts are emitted.
+- `index.sqlite` includes an `object_creations` table when object-creation facts are emitted.
 
 ## Reducer Acceptance
 
@@ -146,6 +147,8 @@ Each fixture should document:
 | high fan-out match set | classification preserved plus fan-out warning |
 | syntax invocation | `CallEdge` with containing member and callee name |
 | semantic method invocation | Tier1 `CallEdge` with resolved caller and callee symbols |
+| syntax object creation | `ObjectCreated` with created type and assigned variable when obvious |
+| semantic object creation | Tier1 `ObjectCreated` with created type, constructor, caller, and assembly identity |
 | calculation expression | `CalculationExpression` with operator, line span, and expression hash |
 | retry/backoff method | `RetryPolicyLogic` |
 | generated or DI glue file | `InfrastructureBoilerplate` |
