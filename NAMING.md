@@ -13,17 +13,13 @@ Use these names consistently throughout the implementation.
 ## .NET solution and projects
 
 ```text
-TraceMap.sln
-src/TraceMap.Cli
-src/TraceMap.Core
-src/TraceMap.CSharp
-src/TraceMap.Extractors.Http
-src/TraceMap.Extractors.Database
-src/TraceMap.Extractors.Config
-src/TraceMap.Storage
-src/TraceMap.Reduce
-src/TraceMap.Reporting
-src/tests/TraceMap.Tests
+src/dotnet/TraceMap.sln
+src/dotnet/TraceMap.Cli
+src/dotnet/TraceMap.Core
+src/dotnet/TraceMap.Storage
+src/dotnet/TraceMap.Reduction
+src/dotnet/TraceMap.Reporting
+src/dotnet/tests/TraceMap.Tests
 ```
 
 ## Domain terms that should remain unchanged

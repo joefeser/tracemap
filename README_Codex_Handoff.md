@@ -33,18 +33,15 @@ tracemap reduce --index .tracemap/index.sqlite --contract-delta contract-delta.j
 ```text
 TraceMap/
   src/
-    TraceMap.Cli/
-    TraceMap.Core/
-    TraceMap.CSharp/
-    TraceMap.Extractors.Http/
-    TraceMap.Extractors.Database/
-    TraceMap.Extractors.Config/
-    TraceMap.Storage/
-    TraceMap.Reduce/
-    TraceMap.Reporting/
-  src/tests/
-    TraceMap.Tests/
-    SampleRepos/
+    dotnet/
+      TraceMap.sln
+      TraceMap.Cli/
+      TraceMap.Core/
+      TraceMap.Storage/
+      TraceMap.Reduction/
+      TraceMap.Reporting/
+      tests/
+        TraceMap.Tests/
   rules/
     rule-catalog.yml
   samples/
@@ -326,4 +323,3 @@ UnknownAnalysisGap
 5. The report has sections for repo summary, analysis coverage, facts by category, HTTP calls, DB calls, config keys, and known gaps.
 6. The tool does not use an LLM or embeddings.
 7. Generated snippets are not stored by default; store file/line and snippet hash. Add `--include-snippets` later if explicitly enabled.
-

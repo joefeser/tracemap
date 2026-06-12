@@ -5,19 +5,19 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Cli", "src\TraceMap.Cli\TraceMap.Cli.csproj", "{62C2A3DC-2D0E-41B0-AA10-03197359B716}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Cli", "TraceMap.Cli\TraceMap.Cli.csproj", "{62C2A3DC-2D0E-41B0-AA10-03197359B716}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Core", "src\TraceMap.Core\TraceMap.Core.csproj", "{47141F6F-DFCB-40AD-90E0-FF8D7B17DDF3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Core", "TraceMap.Core\TraceMap.Core.csproj", "{47141F6F-DFCB-40AD-90E0-FF8D7B17DDF3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Storage", "src\TraceMap.Storage\TraceMap.Storage.csproj", "{F9C124CE-53CE-46A1-802D-263DE1565B2D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Storage", "TraceMap.Storage\TraceMap.Storage.csproj", "{F9C124CE-53CE-46A1-802D-263DE1565B2D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Reporting", "src\TraceMap.Reporting\TraceMap.Reporting.csproj", "{08C50EBC-EF7C-4C24-977F-CE4BDDE22AF3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Reporting", "TraceMap.Reporting\TraceMap.Reporting.csproj", "{08C50EBC-EF7C-4C24-977F-CE4BDDE22AF3}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{CEA09484-30F6-4D44-02F6-822E06DBC57C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Tests", "src\tests\TraceMap.Tests\TraceMap.Tests.csproj", "{0536C579-7E43-4B03-A8EC-90AEDA468EB9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Tests", "tests\TraceMap.Tests\TraceMap.Tests.csproj", "{0536C579-7E43-4B03-A8EC-90AEDA468EB9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Reduction", "src\TraceMap.Reduction\TraceMap.Reduction.csproj", "{C96681DB-F6ED-4265-AEDC-64FD8B177A38}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Reduction", "TraceMap.Reduction\TraceMap.Reduction.csproj", "{C96681DB-F6ED-4265-AEDC-64FD8B177A38}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

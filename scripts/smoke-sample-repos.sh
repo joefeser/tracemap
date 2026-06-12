@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SAMPLE_ROOT="${1:-"${ROOT_DIR}/../c-sharp-sample-repos"}"
 OUT_ROOT="${2:-"$(mktemp -d)"}"
-CLI_PROJECT="${ROOT_DIR}/src/TraceMap.Cli"
+CLI_PROJECT="${ROOT_DIR}/src/dotnet/TraceMap.Cli"
 
 run_scan() {
   local repo_path="$1"
