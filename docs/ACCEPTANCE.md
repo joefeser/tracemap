@@ -29,6 +29,7 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `<out>/logs/analyzer.log` exists.
 - manifest includes repo name, commit SHA, scanner version, analysis level, and build status.
 - facts include rule IDs, evidence tiers, file paths, line spans, commit SHA, and extractor versions.
+- `index.sqlite` includes a `call_edges` table when call-edge facts are emitted.
 
 ## Reducer Acceptance
 
@@ -143,6 +144,11 @@ Each fixture should document:
 | unparsable contract element | `UnknownAnalysisGap` |
 | generic member with multiple matches | classification preserved plus generic-name warning |
 | high fan-out match set | classification preserved plus fan-out warning |
+| syntax invocation | `CallEdge` with containing member and callee name |
+| semantic method invocation | Tier1 `CallEdge` with resolved caller and callee symbols |
+| calculation expression | `CalculationExpression` with operator, line span, and expression hash |
+| retry/backoff method | `RetryPolicyLogic` |
+| generated or DI glue file | `InfrastructureBoilerplate` |
 
 ## Performance Smoke Targets
 

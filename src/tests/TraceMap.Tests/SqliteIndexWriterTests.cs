@@ -55,6 +55,11 @@ public sealed class SqliteIndexWriterTests
             "select count(*) from facts where fact_type = 'InvocationName' and target_symbol = 'GetAsync' and file_path = 'Sample.cs';");
         Assert.Equal(1L, invocationCount);
 
+        var callEdgeCount = await ExecuteScalarAsync<long>(
+            connection,
+            "select count(*) from call_edges where caller_symbol = 'Load' and callee_symbol = 'GetAsync' and file_path = 'Sample.cs';");
+        Assert.Equal(1L, callEdgeCount);
+
         var propertiesJson = await ExecuteScalarAsync<string>(
             connection,
             "select properties_json from facts where fact_type = 'PropertyDeclared' and target_symbol = 'PrimaryEmail';");
@@ -93,6 +98,19 @@ public sealed class SqliteIndexWriterTests
         Assert.Contains("ix_facts_target_symbol", indexNames);
         Assert.Contains("ix_facts_contract_element", indexNames);
         Assert.Contains("ix_facts_file", indexNames);
+
+        var callEdgeIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var callEdgeCommand = connection.CreateCommand();
+        callEdgeCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'call_edges';";
+        await using var callEdgeReader = await callEdgeCommand.ExecuteReaderAsync();
+        while (await callEdgeReader.ReadAsync())
+        {
+            callEdgeIndexNames.Add(callEdgeReader.GetString(0));
+        }
+
+        Assert.Contains("ix_call_edges_caller", callEdgeIndexNames);
+        Assert.Contains("ix_call_edges_callee", callEdgeIndexNames);
+        Assert.Contains("ix_call_edges_file", callEdgeIndexNames);
     }
 
     private static async Task<T> ExecuteScalarAsync<T>(SqliteConnection connection, string sql)

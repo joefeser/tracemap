@@ -69,6 +69,32 @@ rules:
     limitations:
       - Does not prove receiver type, overload target, extension method binding, or runtime dispatch.
 
+  - id: csharp.syntax.callgraph.v1
+    name: C# syntax call graph
+    description: Emits syntax-only caller-to-callee edges from invocation expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - CallEdge
+    limitations:
+      - Caller names are best-effort containing member names, not fully qualified symbols.
+      - Callee names are invocation names only; overload resolution and receiver type are not proven.
+      - Dynamic dispatch, reflection, delegates, and event flow are not modeled.
+
+  - id: csharp.syntax.logicshape.v1
+    name: C# syntax logic shape
+    description: Emits deterministic syntax signals for calculation, branching, retry, serialization, and boilerplate-like code.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - CalculationExpression
+      - BranchingLogic
+      - RetryPolicyLogic
+      - SerializationLogic
+      - InfrastructureBoilerplate
+    limitations:
+      - Logic shape facts are heuristics over syntax and file paths; they are review-routing signals, not proof of business intent.
+      - Calculation expressions store expression hashes, operators, and spans, not raw source snippets.
+      - Boilerplate classification is path/name based and can misclassify unconventional project layouts.
+
   - id: csharp.semantic.propertyaccess.v1
     name: C# semantic property access
     description: Finds compiler-resolved property accesses using Roslyn semantic model.
@@ -89,6 +115,17 @@ rules:
     limitations:
       - Requires project load and enough references to resolve symbols.
       - Dynamic dispatch, reflection, and unresolved overload candidates are not emitted by this rule.
+
+  - id: csharp.semantic.callgraph.v1
+    name: C# semantic call graph
+    description: Emits compiler-resolved caller-to-callee method call edges using Roslyn semantic model.
+    evidenceTier: Tier1Semantic
+    emits:
+      - CallEdge
+    limitations:
+      - Requires project load and enough references to resolve method symbols.
+      - Does not model runtime polymorphism, delegate invocation targets, event subscribers, reflection, or async continuation flow.
+      - A call edge records a syntactic call site, not proof that the path executes at runtime.
 
   - id: csharp.semantic.declarations.v1
     name: C# semantic declarations

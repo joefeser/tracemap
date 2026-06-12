@@ -1,0 +1,12 @@
+{
+  "contract": "StorageTransientErrorResponse",
+  "source": "c-sharp-sample-repos/ProjectExtensions.Azure.ServiceBus",
+  "changes": [
+    {
+      "element": "StorageTransientErrorResponse.status",
+      "changeType": "behavior_changed",
+      "oldType": "int",
+      "newType": "int"
+    }
+  ]
+}

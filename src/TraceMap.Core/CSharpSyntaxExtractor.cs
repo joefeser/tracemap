@@ -15,6 +15,11 @@ public static class CSharpSyntaxExtractor
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
             var fullPath = Path.Combine(repoPath, file.RelativePath);
+            if (TryGetBoilerplateCategory(file.RelativePath, out var boilerplateCategory))
+            {
+                facts.Add(CreateFileShapeFact(manifest, file.RelativePath, FactTypes.InfrastructureBoilerplate, boilerplateCategory));
+            }
+
             if (IsGeneratedSource(fullPath))
             {
                 continue;
@@ -35,6 +40,7 @@ public static class CSharpSyntaxExtractor
                 AddAttributeFacts(manifest, facts, file.RelativePath, root);
                 AddMemberAccessFacts(manifest, facts, file.RelativePath, root);
                 AddInvocationFacts(manifest, facts, file.RelativePath, root);
+                AddLogicShapeFacts(manifest, facts, file.RelativePath, root);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -172,6 +178,7 @@ public static class CSharpSyntaxExtractor
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var invocationName = GetInvocationName(invocation.Expression);
+            var containingMember = GetContainingMemberName(invocation);
             facts.Add(CreateSyntaxFact(
                 manifest,
                 FactTypes.InvocationName,
@@ -183,6 +190,94 @@ public static class CSharpSyntaxExtractor
                 {
                     ["expression"] = invocation.Expression.ToString(),
                     ["invocationName"] = invocationName
+                }));
+
+            facts.Add(CreateSyntaxFact(
+                manifest,
+                FactTypes.CallEdge,
+                RuleIds.CSharpSyntaxCallGraph,
+                filePath,
+                invocation,
+                sourceSymbol: containingMember,
+                targetSymbol: invocationName,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callerName"] = containingMember ?? string.Empty,
+                    ["calleeName"] = invocationName,
+                    ["callKind"] = "SyntaxInvocation"
+                }));
+
+            if (IsSerializationName(invocationName) || invocation.Expression.ToString().Contains("Serializer", StringComparison.Ordinal))
+            {
+                facts.Add(CreateSyntaxFact(
+                    manifest,
+                    FactTypes.SerializationLogic,
+                    RuleIds.CSharpSyntaxLogicShape,
+                    filePath,
+                    invocation,
+                    sourceSymbol: containingMember,
+                    targetSymbol: invocationName,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["callerName"] = containingMember ?? string.Empty,
+                        ["operationName"] = invocationName
+                    }));
+            }
+        }
+    }
+
+    private static void AddLogicShapeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    {
+        foreach (var binary in root.DescendantNodes().OfType<BinaryExpressionSyntax>().Where(IsCalculationExpression))
+        {
+            facts.Add(CreateSyntaxFact(
+                manifest,
+                FactTypes.CalculationExpression,
+                RuleIds.CSharpSyntaxLogicShape,
+                filePath,
+                binary,
+                sourceSymbol: GetContainingMemberName(binary),
+                targetSymbol: "calculation",
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["containingMember"] = GetContainingMemberName(binary) ?? string.Empty,
+                    ["operator"] = binary.OperatorToken.ValueText,
+                    ["expressionHash"] = FactFactory.Hash(binary.ToString(), 32)
+                }));
+        }
+
+        foreach (var branch in root.DescendantNodes().Where(IsBranchingNode))
+        {
+            facts.Add(CreateSyntaxFact(
+                manifest,
+                FactTypes.BranchingLogic,
+                RuleIds.CSharpSyntaxLogicShape,
+                filePath,
+                branch,
+                sourceSymbol: GetContainingMemberName(branch),
+                targetSymbol: branch.Kind().ToString(),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["branchKind"] = branch.Kind().ToString(),
+                    ["containingMember"] = GetContainingMemberName(branch) ?? string.Empty
+                }));
+        }
+
+        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method => LooksLikeRetryPolicyLogic(filePath, method)))
+        {
+            facts.Add(CreateSyntaxFact(
+                manifest,
+                FactTypes.RetryPolicyLogic,
+                RuleIds.CSharpSyntaxLogicShape,
+                filePath,
+                method,
+                sourceSymbol: method.Identifier.ValueText,
+                targetSymbol: method.Identifier.ValueText,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["methodName"] = method.Identifier.ValueText,
+                    ["className"] = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? string.Empty,
+                    ["matchedBy"] = "RetryBackoffNamingOrTimeSpan"
                 }));
         }
     }
@@ -199,6 +294,77 @@ public static class CSharpSyntaxExtractor
             MemberBindingExpressionSyntax memberBinding => memberBinding.Name.Identifier.ValueText,
             _ => expression.ToString()
         };
+    }
+
+    private static string? GetContainingMemberName(SyntaxNode node)
+    {
+        if (node.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault() is { } method)
+        {
+            return method.Identifier.ValueText;
+        }
+
+        if (node.Ancestors().OfType<ConstructorDeclarationSyntax>().FirstOrDefault() is { } constructor)
+        {
+            return constructor.Identifier.ValueText;
+        }
+
+        if (node.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault() is { } property)
+        {
+            return property.Identifier.ValueText;
+        }
+
+        return null;
+    }
+
+    private static bool IsCalculationExpression(BinaryExpressionSyntax binary)
+    {
+        return binary.IsKind(SyntaxKind.MultiplyExpression)
+            || binary.IsKind(SyntaxKind.DivideExpression)
+            || binary.IsKind(SyntaxKind.ModuloExpression)
+            || HasCalculationCall(binary)
+            || HasNumericLiteral(binary);
+    }
+
+    private static bool HasCalculationCall(SyntaxNode node)
+    {
+        return node.DescendantNodesAndSelf()
+            .OfType<MemberAccessExpressionSyntax>()
+            .Any(memberAccess => memberAccess.Expression.ToString().Equals("Math", StringComparison.Ordinal)
+                || memberAccess.Expression.ToString().Equals("TimeSpan", StringComparison.Ordinal));
+    }
+
+    private static bool HasNumericLiteral(SyntaxNode node)
+    {
+        return node.DescendantNodesAndSelf()
+            .OfType<LiteralExpressionSyntax>()
+            .Any(literal => literal.IsKind(SyntaxKind.NumericLiteralExpression));
+    }
+
+    private static bool IsBranchingNode(SyntaxNode node)
+    {
+        return node is IfStatementSyntax
+            or SwitchStatementSyntax
+            or ConditionalExpressionSyntax
+            or ForStatementSyntax
+            or ForEachStatementSyntax
+            or WhileStatementSyntax
+            or DoStatementSyntax;
+    }
+
+    private static bool LooksLikeRetryPolicyLogic(string filePath, MethodDeclarationSyntax method)
+    {
+        var className = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? string.Empty;
+        var signatureText = $"{filePath} {className} {method.Identifier.ValueText}";
+        return signatureText.Contains("Retry", StringComparison.OrdinalIgnoreCase)
+            || signatureText.Contains("Backoff", StringComparison.OrdinalIgnoreCase)
+            || method.Identifier.ValueText.Equals("GetShouldRetry", StringComparison.Ordinal)
+            || method.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Any(memberAccess => memberAccess.Expression.ToString().Equals("TimeSpan", StringComparison.Ordinal));
+    }
+
+    private static bool IsSerializationName(string name)
+    {
+        return name.Contains("Serialize", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Deserialize", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AddParseDiagnostics(ScanManifest manifest, List<CodeFact> facts, SyntaxTree tree)
@@ -248,7 +414,24 @@ public static class CSharpSyntaxExtractor
             ToEvidenceSpan(filePath, node),
             sourceSymbol: sourceSymbol,
             targetSymbol: targetSymbol,
+            contractElement: factType == FactTypes.CallEdge ? targetSymbol : null,
             properties: properties);
+    }
+
+    private static CodeFact CreateFileShapeFact(ScanManifest manifest, string filePath, string factType, string category)
+    {
+        return FactFactory.Create(
+            manifest,
+            factType,
+            RuleIds.CSharpSyntaxLogicShape,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(filePath, 1, 1, null, "CSharpSyntaxExtractor", ScannerVersions.CSharpSyntaxExtractor),
+            targetSymbol: category,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["category"] = category,
+                ["path"] = filePath
+            });
     }
 
     private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node)
@@ -270,6 +453,42 @@ public static class CSharpSyntaxExtractor
             || fileName.EndsWith(".g.i.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryGetBoilerplateCategory(string relativePath, out string category)
+    {
+        var fileName = Path.GetFileName(relativePath);
+        if (fileName.Equals("AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase))
+        {
+            category = "AssemblyMetadata";
+            return true;
+        }
+
+        if (fileName.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".g.i.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase))
+        {
+            category = "GeneratedSource";
+            return true;
+        }
+
+        if (relativePath.Contains("/obj/", StringComparison.OrdinalIgnoreCase)
+            || relativePath.Contains("\\obj\\", StringComparison.OrdinalIgnoreCase))
+        {
+            category = "BuildOutput";
+            return true;
+        }
+
+        if (relativePath.Contains("/Container/", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith("BuilderExtensions.cs", StringComparison.OrdinalIgnoreCase))
+        {
+            category = "DependencyInjectionGlue";
+            return true;
+        }
+
+        category = string.Empty;
+        return false;
     }
 
     private static bool HasAutoGeneratedHeader(string source)

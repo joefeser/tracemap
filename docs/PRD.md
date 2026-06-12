@@ -117,7 +117,7 @@ Evidence tiers:
 
 ## Current Product State
 
-Milestones 0 through 7 establish the MVP:
+Milestones 0 through 8 establish the current MVP:
 
 - CLI skeleton.
 - repo manifest and file inventory.
@@ -127,6 +127,7 @@ Milestones 0 through 7 establish the MVP:
 - HTTP, DB, config extractors.
 - Markdown scan report.
 - Basic contract reducer.
+- Call-flow facts and logic/boilerplate shape signals.
 
 ## Near-Term Roadmap
 
@@ -142,5 +143,6 @@ Milestones 0 through 7 establish the MVP:
 - The CLI can scan legacy or dependency-incomplete sample repos with reduced coverage and useful syntax facts.
 - The reducer emits evidence rows for matches and coverage evidence for no-match classifications.
 - The reducer emits warnings for generic or high fan-out name matches without suppressing evidence.
+- The scanner emits queryable call edges and review-routing logic shape facts.
 - No reducer finding is emitted without a rule ID.
 - No no-evidence result hides reduced coverage.

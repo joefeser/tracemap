@@ -57,6 +57,7 @@ public sealed class CSharpSyntaxExtractorTests
         AssertFact(result, FactTypes.AttributeUsed, "Obsolete", "src/Broken/CustomerProfile.cs", 6, 6);
         AssertFact(result, FactTypes.MemberAccessName, "PrimaryEmail", "src/Broken/CustomerProfile.cs", 14, 14);
         AssertFact(result, FactTypes.InvocationName, "GetAsync", "src/Broken/CustomerProfile.cs", 15, 15);
+        AssertFact(result, FactTypes.CallEdge, "GetAsync", "src/Broken/CustomerProfile.cs", 15, 15);
 
         Assert.All(
             result.Facts.Where(fact => fact.RuleId.StartsWith("csharp.syntax.", StringComparison.Ordinal)),
@@ -97,8 +98,53 @@ public sealed class CSharpSyntaxExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.FileInventoried && fact.Evidence.FilePath == "Generated.g.cs");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.InfrastructureBoilerplate
+            && fact.TargetSymbol == "GeneratedSource"
+            && fact.Evidence.FilePath == "Generated.g.cs");
         Assert.DoesNotContain(result.Facts, fact => fact.TargetSymbol == "GeneratedType");
         Assert.DoesNotContain(result.Facts, fact => fact.TargetSymbol == "GeneratedProperty");
+    }
+
+    [Fact]
+    public void Scan_extracts_logic_hotspots_from_syntax()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "Logic"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Logic", "RetryMath.cs"), """
+            using System;
+
+            public sealed class RetryMath
+            {
+                public TimeSpan GetShouldRetry(int currentRetryCount)
+                {
+                    if (currentRetryCount < 3)
+                    {
+                        var delay = TimeSpan.FromMilliseconds(100 + (50 * currentRetryCount));
+                        return delay;
+                    }
+
+                    return TimeSpan.Zero;
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CalculationExpression
+            && fact.Evidence.FilePath == "src/Logic/RetryMath.cs"
+            && fact.Properties.ContainsKey("expressionHash"));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.BranchingLogic
+            && fact.TargetSymbol == "IfStatement");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RetryPolicyLogic
+            && fact.TargetSymbol == "GetShouldRetry");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.SourceSymbol == "GetShouldRetry"
+            && fact.TargetSymbol == "FromMilliseconds");
     }
 
     private static void AssertFact(ScanResult result, string factType, string targetSymbol, string filePath, int startLine, int endLine)
