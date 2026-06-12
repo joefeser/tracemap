@@ -2,6 +2,8 @@
 
 TraceMap is a deterministic C# repository indexer and contract-change reducer. It scans repositories into evidence-backed facts, writes queryable artifacts, and reduces contract deltas into Markdown impact reports.
 
+The repository also includes an MVP deterministic TypeScript scanner under `src/typescript`. It emits the same TraceMap artifacts and writes an `index.sqlite` that the existing .NET reducer can read.
+
 Start here:
 
 - [Product requirements](docs/PRD.md)
@@ -19,6 +21,17 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sampl
 dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap/index.sqlite --contract-delta samples/contract-deltas/modern-sample.customer-profile.json --out .tracemap/impact-report.md
 dotnet run --project src/dotnet/TraceMap.Cli -- flow --index .tracemap/index.sqlite --symbol request --out .tracemap/flow-report.md
 scripts/smoke-sample-repos.sh
+```
+
+TypeScript scanner:
+
+```bash
+cd src/typescript
+npm install
+npm run build
+node dist/src/cli.js scan --repo ../../samples/typescript-modern-sample --out ../../.tracemap-ts
+cd ../..
+dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap-ts/index.sqlite --contract-delta samples/contract-deltas/typescript-modern.status.json --out .tracemap-ts/impact-report.md
 ```
 
 ## License
