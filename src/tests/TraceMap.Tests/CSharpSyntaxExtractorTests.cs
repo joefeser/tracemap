@@ -12,6 +12,8 @@ public sealed class CSharpSyntaxExtractorTests
         File.WriteAllText(Path.Combine(temp.Path, "src", "Broken", "Broken.csproj"), """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
                 <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
             </Project>
@@ -45,8 +47,9 @@ public sealed class CSharpSyntaxExtractorTests
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
 
-        Assert.Equal("Level3SyntaxAnalysis", result.Manifest.AnalysisLevel);
-        Assert.Contains(result.Manifest.KnownGaps, gap => gap.Contains("semantic analysis is not available", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+        Assert.Contains(result.Manifest.KnownGaps, gap => gap.Contains("Compilation diagnostic", StringComparison.OrdinalIgnoreCase));
         AssertFact(result, FactTypes.TypeDeclared, "CustomerProfile", "src/Broken/CustomerProfile.cs", 6, 18);
         AssertFact(result, FactTypes.PropertyDeclared, "PrimaryEmail", "src/Broken/CustomerProfile.cs", 9, 9);
         AssertFact(result, FactTypes.MethodDeclared, "LoadAsync", "src/Broken/CustomerProfile.cs", 11, 17);
@@ -56,13 +59,7 @@ public sealed class CSharpSyntaxExtractorTests
         AssertFact(result, FactTypes.InvocationName, "GetAsync", "src/Broken/CustomerProfile.cs", 15, 15);
 
         Assert.All(
-            result.Facts.Where(fact => fact.FactType is FactTypes.TypeDeclared
-                or FactTypes.PropertyDeclared
-                or FactTypes.MethodDeclared
-                or FactTypes.EnumDeclared
-                or FactTypes.AttributeUsed
-                or FactTypes.MemberAccessName
-                or FactTypes.InvocationName),
+            result.Facts.Where(fact => fact.RuleId.StartsWith("csharp.syntax.", StringComparison.Ordinal)),
             fact => Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier));
     }
 
@@ -109,7 +106,8 @@ public sealed class CSharpSyntaxExtractorTests
         var fact = Assert.Single(result.Facts, fact =>
             fact.FactType == factType
             && fact.TargetSymbol == targetSymbol
-            && fact.Evidence.FilePath == filePath);
+            && fact.Evidence.FilePath == filePath
+            && fact.RuleId.StartsWith("csharp.syntax.", StringComparison.Ordinal));
 
         Assert.Equal(startLine, fact.Evidence.StartLine);
         Assert.Equal(endLine, fact.Evidence.EndLine);

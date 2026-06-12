@@ -78,6 +78,7 @@ rules:
     limitations:
       - Requires project load and enough references to resolve symbols.
       - Does not detect reflection-only access.
+      - Member access syntax that does not bind to an IPropertySymbol is not emitted by this rule.
 
   - id: csharp.semantic.methodinvocation.v1
     name: C# semantic method invocation
@@ -87,6 +88,27 @@ rules:
       - MethodInvoked
     limitations:
       - Requires project load and enough references to resolve symbols.
+      - Dynamic dispatch, reflection, and unresolved overload candidates are not emitted by this rule.
+
+  - id: csharp.semantic.declarations.v1
+    name: C# semantic declarations
+    description: Finds compiler-resolved type declarations using Roslyn semantic model.
+    evidenceTier: Tier1Semantic
+    emits:
+      - TypeDeclared
+    limitations:
+      - Requires project load and enough references to create a Roslyn compilation.
+      - Generated source excluded from inventory is not reported.
+
+  - id: csharp.semantic.workspace.v1
+    name: C# semantic workspace gaps
+    description: Records MSBuildWorkspace load, MSBuild registration, syntax tree, and compilation gaps during semantic extraction.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Workspace diagnostics can be environment-specific because they depend on installed SDKs and available project references.
+      - Compilation gaps do not prevent syntax fallback facts from being emitted.
 
   - id: http.client.invocation.v1
     name: HTTP client invocation

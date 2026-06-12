@@ -29,11 +29,19 @@ public static class ScanEngine
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+        var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory);
 
         var knownGaps = git.KnownGaps
-            .Append("Build was not run in Milestone 2; semantic analysis is not available and C# evidence is syntax-only.")
+            .Concat(semanticResult.GapFacts.Select(GetGapMessage))
             .OrderBy(gap => gap, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var buildStatus = semanticResult.Attempted
+            ? semanticResult.ReducedCoverage ? "FailedOrPartial" : "Succeeded"
+            : "NotRun";
+        var analysisLevel = semanticResult.Attempted
+            ? semanticResult.ReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            : "Level3SyntaxAnalysis";
 
         var manifest = new ScanManifest(
             CreateScanId(repoPath, git.CommitSha, inventory),
@@ -43,14 +51,14 @@ public static class ScanEngine
             git.CommitSha,
             ScannerVersions.TraceMap,
             DateTimeOffset.UtcNow,
-            "Level3SyntaxAnalysis",
-            "NotRun",
+            analysisLevel,
+            buildStatus,
             solutions,
             projects,
             targetFrameworks,
             knownGaps);
 
-        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath);
+        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult);
         return new ScanResult(manifest, facts, inventory);
     }
 
@@ -66,7 +74,8 @@ public static class ScanEngine
         IReadOnlyList<TargetFrameworkInfo> targetFrameworks,
         IReadOnlyList<PackageReferenceInfo> packageReferences,
         IReadOnlyList<string> knownGaps,
-        string repoPath)
+        string repoPath,
+        SemanticExtractionResult semanticResult)
     {
         var facts = new List<CodeFact>
         {
@@ -91,7 +100,12 @@ public static class ScanEngine
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["status"] = manifest.BuildStatus,
-                    ["reason"] = "Build is outside Milestone 1 scope."
+                    ["reason"] = manifest.BuildStatus switch
+                    {
+                        "Succeeded" => "MSBuildWorkspace loaded projects and Roslyn compilation reported no errors.",
+                        "FailedOrPartial" => "MSBuildWorkspace project load or Roslyn compilation reported gaps; syntax fallback still ran.",
+                        _ => "No C# project was available for MSBuildWorkspace semantic analysis."
+                    }
                 })
         };
 
@@ -213,6 +227,8 @@ public static class ScanEngine
         }
 
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
+        facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
 
         return facts
             .GroupBy(fact => fact.FactId, StringComparer.Ordinal)
@@ -223,5 +239,12 @@ public static class ScanEngine
             .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static string GetGapMessage(SemanticFactCandidate gap)
+    {
+        return gap.Properties is not null && gap.Properties.TryGetValue("message", out var message)
+            ? message
+            : "Roslyn semantic analysis reported a gap.";
     }
 }
