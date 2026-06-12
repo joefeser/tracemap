@@ -35,9 +35,10 @@ public static class TraceMapCommand
                 "reduce" => ReduceHelp(),
                 "flow" => FlowHelp(),
                 "relate" => RelateHelp(),
+                "export" => ExportHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" ? 0 : 1;
         }
 
         try
@@ -49,6 +50,7 @@ public static class TraceMapCommand
                 "reduce" => await RunReduceAsync(rest, output, error, cancellationToken),
                 "flow" => await RunFlowAsync(rest, output, error, cancellationToken),
                 "relate" => await RunRelateAsync(rest, output, error, cancellationToken),
+                "export" => await RunExportAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -199,6 +201,34 @@ public static class TraceMapCommand
         return 0;
     }
 
+    private static async Task<int> RunExportAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: export requires --index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: export requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "json";
+        var report = await IndexExporter.WriteAsync(
+            new IndexExportOptions(indexPath, outputPath, format),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap export completed: {report.OutputPath}");
+        await output.WriteLineAsync($"Format: {report.Format}");
+        await output.WriteLineAsync($"Facts exported: {report.FactCount}");
+        await output.WriteLineAsync($"Relationships exported: {report.RelationshipCount}");
+        await output.WriteLineAsync($"Call edges exported: {report.CallEdgeCount}");
+        return 0;
+    }
+
     private static async Task WriteAnalyzerLogAsync(string path, ScanResult result, CancellationToken cancellationToken)
     {
         var lines = new List<string>
@@ -325,6 +355,7 @@ public static class TraceMapCommand
               tracemap reduce --index <path> --contract-delta <path> --out <path>
               tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>
               tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path>
+              tracemap export --index <path> --out <path> [--format <json|mermaid>]
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -332,6 +363,7 @@ public static class TraceMapCommand
               reduce    Reduce a contract delta against an index.
               flow      Trace deterministic parameter-forwarding paths.
               relate    Trace deterministic symbol relationship paths.
+              export    Export a deterministic JSON summary or Mermaid graph from an index.
             """;
     }
 
@@ -427,6 +459,24 @@ public static class TraceMapCommand
 
             Outputs:
               relationship-report.md
+            """;
+    }
+
+    private static string ExportHelp()
+    {
+        return """
+            Usage:
+              tracemap export --index <path> --out <path> [--format <json|mermaid>]
+
+            Required:
+              --index <path>             Existing TraceMap index.sqlite.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           json or mermaid. Default: json.
+
+            Outputs:
+              index-export.json or relationships.mmd
             """;
     }
 }
