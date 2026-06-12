@@ -78,7 +78,51 @@ public static class MarkdownReportWriter
         lines.Add("");
         lines.AddRange(manifest.Projects.Count == 0 ? ["- None found."] : manifest.Projects.Select(path => $"- `{path}`"));
 
+        AddFactSection(
+            lines,
+            "HTTP Calls",
+            result.Facts.Where(fact => fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpClientCreated),
+            fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "Database Calls",
+            result.Facts.Where(fact => fact.FactType is FactTypes.DbContextDeclared
+                or FactTypes.DbSetDeclared
+                or FactTypes.DbChangeSaved
+                or FactTypes.DapperCallDetected
+                or FactTypes.SqlCommandDetected
+                or FactTypes.SqlTextUsed),
+            fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "Config Keys",
+            result.Facts.Where(fact => fact.FactType is FactTypes.ConfigKeyDeclared or FactTypes.ConnectionStringDeclared),
+            fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
         lines.Add("");
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private static void AddFactSection(List<string> lines, string title, IEnumerable<CodeFact> facts, Func<CodeFact, string> format)
+    {
+        lines.Add("");
+        lines.Add($"## {title}");
+        lines.Add("");
+
+        var selectedFacts = facts
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => DisplayFactName(fact), StringComparer.Ordinal)
+            .Take(50)
+            .ToArray();
+
+        lines.AddRange(selectedFacts.Length == 0 ? ["- None found."] : selectedFacts.Select(format));
+    }
+
+    private static string DisplayFactName(CodeFact fact)
+    {
+        return fact.ContractElement ?? fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("keyPath") ?? "unknown";
     }
 }

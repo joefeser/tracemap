@@ -26,6 +26,37 @@ public static class CSharpSemanticExtractor
 {
     private static readonly object MSBuildRegistrationLock = new();
 
+    private static readonly HashSet<string> HttpClientMethods = new(StringComparer.Ordinal)
+    {
+        "GetAsync",
+        "PostAsync",
+        "PutAsync",
+        "DeleteAsync",
+        "SendAsync"
+    };
+
+    private static readonly HashSet<string> JsonHttpMethods = new(StringComparer.Ordinal)
+    {
+        "GetFromJsonAsync",
+        "ReadFromJsonAsync",
+        "PostAsJsonAsync",
+        "PutAsJsonAsync"
+    };
+
+    private static readonly HashSet<string> DbSaveMethods = new(StringComparer.Ordinal)
+    {
+        "SaveChanges",
+        "SaveChangesAsync"
+    };
+
+    private static readonly HashSet<string> DapperMethods = new(StringComparer.Ordinal)
+    {
+        "Query",
+        "QueryAsync",
+        "Execute",
+        "ExecuteAsync"
+    };
+
     private static readonly SymbolDisplayFormat SymbolFormat = new(
         globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
@@ -261,6 +292,7 @@ public static class CSharpSemanticExtractor
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
         AddMethodInvocationFacts(projectPath, filePath, root, model, facts);
+        AddIntegrationFacts(projectPath, filePath, root, model, facts);
     }
 
     private static void AddTypeDeclarationFacts(
@@ -374,9 +406,318 @@ public static class CSharpSemanticExtractor
         }
     }
 
+    private static void AddIntegrationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        AddDbContextFacts(projectPath, filePath, root, model, facts);
+        AddIntegrationInvocationFacts(projectPath, filePath, root, model, facts);
+        AddSqlCommandFacts(projectPath, filePath, root, model, facts);
+    }
+
+    private static void AddDbContextFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var declaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        {
+            if (model.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol || !DerivesFromDbContext(symbol))
+            {
+                continue;
+            }
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.DbContextDeclared,
+                RuleIds.DatabaseEntityFramework,
+                projectPath,
+                filePath,
+                declaration,
+                targetSymbol: symbol.ToDisplayString(SymbolFormat),
+                contractElement: symbol.Name,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["className"] = symbol.Name,
+                    ["namespace"] = symbol.ContainingNamespace?.IsGlobalNamespace == false ? symbol.ContainingNamespace.ToDisplayString() : string.Empty
+                }));
+        }
+
+        foreach (var propertyDeclaration in root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
+        {
+            if (model.GetDeclaredSymbol(propertyDeclaration) is not IPropertySymbol property || !IsDbSetType(property.Type))
+            {
+                continue;
+            }
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.DbSetDeclared,
+                RuleIds.DatabaseEntityFramework,
+                projectPath,
+                filePath,
+                propertyDeclaration,
+                sourceSymbol: property.ContainingType?.ToDisplayString(SymbolFormat),
+                targetSymbol: property.ToDisplayString(SymbolFormat),
+                contractElement: property.Name,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["propertyName"] = property.Name,
+                    ["propertyType"] = property.Type.ToDisplayString(SymbolFormat)
+                }));
+        }
+    }
+
+    private static void AddIntegrationInvocationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
+            {
+                continue;
+            }
+
+            var methodName = method.Name;
+            var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            if (IsHttpClientCall(method))
+            {
+                facts.Add(CreateSemanticFact(
+                    FactTypes.HttpCallDetected,
+                    RuleIds.HttpClientInvocation,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: GetEnclosingSymbol(model, invocation),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: methodName,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingType"] = containingType,
+                        ["methodFamily"] = "HttpClient",
+                        ["methodName"] = methodName
+                    }));
+            }
+            else if (IsJsonHttpCall(method))
+            {
+                facts.Add(CreateSemanticFact(
+                    FactTypes.HttpCallDetected,
+                    RuleIds.HttpClientInvocation,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: GetEnclosingSymbol(model, invocation),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: methodName,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingType"] = containingType,
+                        ["methodFamily"] = "JsonHttpExtension",
+                        ["methodName"] = methodName
+                    }));
+            }
+
+            if (IsHttpClientFactoryCreateClient(method) && TryGetLiteralArgument(invocation, 0, out var clientName))
+            {
+                facts.Add(CreateSemanticFact(
+                    FactTypes.HttpClientCreated,
+                    RuleIds.HttpClientInvocation,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: GetEnclosingSymbol(model, invocation),
+                    targetSymbol: clientName,
+                    contractElement: clientName,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientName"] = clientName,
+                        ["containingType"] = containingType,
+                        ["methodName"] = methodName
+                    }));
+            }
+
+            if (IsDbSaveCall(method))
+            {
+                facts.Add(CreateSemanticFact(
+                    FactTypes.DbChangeSaved,
+                    RuleIds.DatabaseEntityFramework,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: GetEnclosingSymbol(model, invocation),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: methodName,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingType"] = containingType,
+                        ["methodName"] = methodName
+                    }));
+            }
+
+            if (IsDapperCall(method))
+            {
+                facts.Add(CreateSemanticFact(
+                    FactTypes.DapperCallDetected,
+                    RuleIds.DatabaseDapperInvocation,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: GetEnclosingSymbol(model, invocation),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: methodName,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingType"] = containingType,
+                        ["methodName"] = methodName
+                    }));
+            }
+        }
+    }
+
+    private static void AddSqlCommandFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+        {
+            if (model.GetTypeInfo(creation).Type is not INamedTypeSymbol type || !IsSqlCommandType(type))
+            {
+                continue;
+            }
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.SqlCommandDetected,
+                RuleIds.DatabaseSqlText,
+                projectPath,
+                filePath,
+                creation,
+                sourceSymbol: GetEnclosingSymbol(model, creation),
+                targetSymbol: type.ToDisplayString(SymbolFormat),
+                contractElement: type.Name,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["typeName"] = type.ToDisplayString(SymbolFormat)
+                }));
+        }
+    }
+
     private static string? GetEnclosingSymbol(SemanticModel model, SyntaxNode node)
     {
         return model.GetEnclosingSymbol(node.SpanStart)?.ToDisplayString(SymbolFormat);
+    }
+
+    private static bool IsHttpClientCall(IMethodSymbol method)
+    {
+        return HttpClientMethods.Contains(method.Name)
+            && method.ContainingType is not null
+            && IsKnownType(method.ContainingType, "System.Net.Http.HttpClient");
+    }
+
+    private static bool IsJsonHttpCall(IMethodSymbol method)
+    {
+        return JsonHttpMethods.Contains(method.Name)
+            && method.ContainingType is not null
+            && GetNamespaceName(method.ContainingType).Equals("System.Net.Http.Json", StringComparison.Ordinal);
+    }
+
+    private static bool IsHttpClientFactoryCreateClient(IMethodSymbol method)
+    {
+        return method.Name == "CreateClient"
+            && method.ContainingType is not null
+            && method.ContainingType.Name == "IHttpClientFactory"
+            && (GetNamespaceName(method.ContainingType).Equals("System.Net.Http", StringComparison.Ordinal)
+                || GetNamespaceName(method.ContainingType).Equals("Microsoft.Extensions.Http", StringComparison.Ordinal));
+    }
+
+    private static bool IsDbSaveCall(IMethodSymbol method)
+    {
+        return DbSaveMethods.Contains(method.Name)
+            && method.ContainingType is not null
+            && DerivesFromDbContext(method.ContainingType);
+    }
+
+    private static bool IsDapperCall(IMethodSymbol method)
+    {
+        return DapperMethods.Contains(method.Name)
+            && method.ContainingType is not null
+            && (IsKnownType(method.ContainingType, "Dapper.SqlMapper")
+                || GetNamespaceName(method.ContainingType).Equals("Dapper", StringComparison.Ordinal));
+    }
+
+    private static bool DerivesFromDbContext(INamedTypeSymbol symbol)
+    {
+        for (INamedTypeSymbol? current = symbol; current is not null; current = current.BaseType)
+        {
+            if (IsKnownType(current, "Microsoft.EntityFrameworkCore.DbContext")
+                || IsKnownType(current, "System.Data.Entity.DbContext"))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsDbSetType(ITypeSymbol type)
+    {
+        return type is INamedTypeSymbol namedType
+            && (IsKnownType(namedType.OriginalDefinition, "Microsoft.EntityFrameworkCore.DbSet<T>")
+                || IsKnownType(namedType.OriginalDefinition, "System.Data.Entity.DbSet<T>")
+                || IsKnownType(namedType.OriginalDefinition, "System.Data.Entity.IDbSet<T>"));
+    }
+
+    private static bool IsSqlCommandType(INamedTypeSymbol type)
+    {
+        return IsKnownType(type, "System.Data.SqlClient.SqlCommand")
+            || IsKnownType(type, "Microsoft.Data.SqlClient.SqlCommand");
+    }
+
+    private static bool IsKnownType(INamedTypeSymbol symbol, string metadataName)
+    {
+        var displayName = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (displayName.StartsWith("global::", StringComparison.Ordinal))
+        {
+            displayName = displayName["global::".Length..];
+        }
+
+        return displayName.Equals(metadataName, StringComparison.Ordinal);
+    }
+
+    private static string GetNamespaceName(INamedTypeSymbol symbol)
+    {
+        return symbol.ContainingNamespace?.IsGlobalNamespace == false
+            ? symbol.ContainingNamespace.ToDisplayString()
+            : string.Empty;
+    }
+
+    private static bool TryGetLiteralArgument(InvocationExpressionSyntax invocation, int index, out string value)
+    {
+        value = string.Empty;
+        var arguments = invocation.ArgumentList.Arguments;
+        if (arguments.Count <= index)
+        {
+            return false;
+        }
+
+        if (arguments[index].Expression is LiteralExpressionSyntax literal
+            && literal.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.StringLiteralExpression)
+            && literal.Token.Value is string literalValue)
+        {
+            value = literalValue;
+            return true;
+        }
+
+        return false;
     }
 
     private static void AddCompilationDiagnostics(

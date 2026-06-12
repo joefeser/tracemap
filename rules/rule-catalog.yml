@@ -113,19 +113,59 @@ rules:
   - id: http.client.invocation.v1
     name: HTTP client invocation
     description: Finds outbound HTTP calls through common .NET HTTP APIs.
-    evidenceTier: Tier2Structural
+    evidenceTier: Tier1Semantic or Tier3SyntaxOrTextual
     emits:
       - HttpCallDetected
       - HttpClientCreated
     limitations:
+      - Tier1 requires Roslyn symbol binding to known HTTP APIs.
+      - Syntax fallback matches common method names and may include unrelated methods with the same name.
       - URL may not be fully resolvable if built dynamically or loaded from runtime configuration.
+
+  - id: database.ef.v1
+    name: Entity Framework style database surface
+    description: Finds DbContext-like classes, DbSet properties, and SaveChanges calls.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - DbContextDeclared
+      - DbSetDeclared
+      - DbChangeSaved
+    limitations:
+      - Tier1 requires Roslyn symbol binding to EF or EF Core types.
+      - Structural fallback uses class/base type/property type naming patterns and does not prove runtime EF usage.
+      - SaveChanges syntax fallback is name-only and may include unrelated methods.
+
+  - id: database.dapper.invocation.v1
+    name: Dapper invocation
+    description: Finds common Dapper Query and Execute calls.
+    evidenceTier: Tier1Semantic or Tier3SyntaxOrTextual
+    emits:
+      - DapperCallDetected
+    limitations:
+      - Tier1 requires Roslyn symbol binding to Dapper SqlMapper APIs.
+      - Syntax fallback is name-only for Query, QueryAsync, Execute, and ExecuteAsync and may include unrelated APIs.
 
   - id: database.sql.text.v1
     name: SQL text detection
-    description: Finds SQL-like files and string literals.
+    description: Finds ADO.NET SqlCommand construction, SQL-like files, and SQL-like string literals.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
+      - SqlCommandDetected
       - SqlTextUsed
     limitations:
       - SQL parsing is approximate in MVP.
       - Identifier matches are not proof of contract usage.
+      - Raw SQL text is not stored by default; hashes and spans are emitted instead.
+
+  - id: config.key.v1
+    name: Configuration key extraction
+    description: Parses appsettings*.json, Web.config, App.config, packages.config, and connection string entries.
+    evidenceTier: Tier2Structural
+    emits:
+      - ConfigKeyDeclared
+      - ConnectionStringDeclared
+      - AnalysisGap
+    limitations:
+      - JSON line spans are best-effort key locations.
+      - Runtime configuration providers, environment overrides, secrets stores, and transformed config files are not evaluated.
+      - Raw config values and connection strings are not stored by default; hashes are emitted for sensitive values.
