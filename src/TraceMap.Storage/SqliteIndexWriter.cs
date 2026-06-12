@@ -266,6 +266,7 @@ public static class SqliteIndexWriter
             create index ix_fact_symbols_symbol on fact_symbols(scan_id, symbol_id);
             create index ix_symbol_relationships_source on symbol_relationships(scan_id, source_symbol_id);
             create index ix_symbol_relationships_target on symbol_relationships(scan_id, target_symbol_id);
+            create index ix_symbol_relationships_kind on symbol_relationships(relationship_kind);
             create index ix_call_edges_caller on call_edges(caller_symbol);
             create index ix_call_edges_callee on call_edges(callee_symbol);
             create index ix_call_edges_callee_assembly on call_edges(callee_assembly_name, callee_symbol);
@@ -385,6 +386,11 @@ public static class SqliteIndexWriter
 
         InsertSymbolRows(connection, transaction, fact);
 
+        if (fact.FactType == FactTypes.SymbolRelationship)
+        {
+            InsertSymbolRelationship(connection, transaction, fact);
+        }
+
         if (fact.FactType == FactTypes.CallEdge && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
         {
             InsertCallEdge(connection, transaction, fact);
@@ -409,6 +415,58 @@ public static class SqliteIndexWriter
         {
             InsertArgumentFlow(connection, transaction, fact);
         }
+    }
+
+    private static void InsertSymbolRelationship(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    {
+        var sourceSymbolId = GetStringProperty(fact, "sourceSymbolId");
+        var targetSymbolId = GetStringProperty(fact, "targetSymbolId");
+        var relationshipKind = GetStringProperty(fact, "relationshipKind");
+        if (string.IsNullOrWhiteSpace(sourceSymbolId)
+            || string.IsNullOrWhiteSpace(targetSymbolId)
+            || string.IsNullOrWhiteSpace(relationshipKind))
+        {
+            return;
+        }
+
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert or ignore into symbol_relationships (
+              relationship_id,
+              scan_id,
+              source_symbol_id,
+              target_symbol_id,
+              relationship_kind,
+              rule_id,
+              evidence_tier,
+              file_path,
+              start_line,
+              end_line
+            ) values (
+              $relationship_id,
+              $scan_id,
+              $source_symbol_id,
+              $target_symbol_id,
+              $relationship_kind,
+              $rule_id,
+              $evidence_tier,
+              $file_path,
+              $start_line,
+              $end_line
+            );
+            """;
+        command.Parameters.AddWithValue("$relationship_id", fact.FactId);
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$source_symbol_id", sourceSymbolId);
+        command.Parameters.AddWithValue("$target_symbol_id", targetSymbolId);
+        command.Parameters.AddWithValue("$relationship_kind", relationshipKind);
+        command.Parameters.AddWithValue("$rule_id", fact.RuleId);
+        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
+        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
+        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
+        command.ExecuteNonQuery();
     }
 
     private static void InsertSymbolRows(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)

@@ -156,6 +156,7 @@ Each fixture should document:
 | semantic argument passed | Tier1 `ArgumentPassed` with parameter name/type and argument symbol/source location when available |
 | semantic symbol identity | resolved semantic facts include stable C# `sourceSymbolId`/`targetSymbolId` properties where Roslyn exposes symbols |
 | symbol index tables | `symbols`, `symbol_occurrences`, and `fact_symbols` rows link exact compiler-backed symbols to fact evidence |
+| symbol relationship | Tier1 `SymbolRelationship` fact and `symbol_relationships` row for direct inheritance, interface implementation, member override, or interface member implementation |
 | semantic local alias | Tier1 `LocalAlias` with alias symbol, origin symbol, rule ID, and evidence span |
 | semantic field alias | Tier1 `FieldAlias` with field symbol, origin symbol, rule ID, and evidence span |
 | semantic parameter forwarding | `parameter_forward_edges` row with source method/parameter, target method/parameter, rule ID, and evidence span |

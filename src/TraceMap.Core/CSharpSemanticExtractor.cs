@@ -291,6 +291,7 @@ public static class CSharpSemanticExtractor
 
         var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
+        AddSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
         AddLocalAliasFacts(repoPath, projectPath, filePath, root, model, facts);
@@ -333,6 +334,86 @@ public static class CSharpSemanticExtractor
                     },
                     "target",
                     symbol)));
+        }
+    }
+
+    private static void AddSymbolRelationshipFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        AddTypeSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
+        AddMemberSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
+    }
+
+    private static void AddTypeSymbolRelationshipFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var declaration in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+        {
+            if (declaration.BaseList is null || model.GetDeclaredSymbol(declaration) is not INamedTypeSymbol sourceType)
+            {
+                continue;
+            }
+
+            foreach (var baseTypeSyntax in declaration.BaseList.Types)
+            {
+                if (model.GetTypeInfo(baseTypeSyntax.Type).Type is not INamedTypeSymbol targetType)
+                {
+                    continue;
+                }
+
+                var relationshipKind = sourceType.TypeKind == TypeKind.Interface && targetType.TypeKind == TypeKind.Interface
+                    ? "ExtendsInterface"
+                    : targetType.TypeKind == TypeKind.Interface
+                        ? "ImplementsInterface"
+                        : "InheritsFrom";
+                facts.Add(CreateSymbolRelationshipFact(
+                    projectPath,
+                    filePath,
+                    baseTypeSyntax,
+                    model,
+                    sourceType,
+                    targetType,
+                    relationshipKind,
+                    "BaseList"));
+            }
+        }
+    }
+
+    private static void AddMemberSymbolRelationshipFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var declaration in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            if (model.GetDeclaredSymbol(declaration) is not IMethodSymbol method)
+            {
+                continue;
+            }
+
+            AddOverrideRelationshipFact(projectPath, filePath, declaration, model, facts, method, method.OverriddenMethod);
+            AddInterfaceMemberRelationshipFacts(projectPath, filePath, declaration, model, facts, method);
+        }
+
+        foreach (var declaration in root.DescendantNodes().OfType<BasePropertyDeclarationSyntax>())
+        {
+            if (model.GetDeclaredSymbol(declaration) is not IPropertySymbol property)
+            {
+                continue;
+            }
+
+            AddOverrideRelationshipFact(projectPath, filePath, declaration, model, facts, property, property.OverriddenProperty);
+            AddInterfaceMemberRelationshipFacts(projectPath, filePath, declaration, model, facts, property);
         }
     }
 
@@ -2075,6 +2156,110 @@ public static class CSharpSemanticExtractor
     {
         properties[$"{prefix}AssemblyName"] = assembly?.Identity.Name ?? string.Empty;
         properties[$"{prefix}AssemblyVersion"] = assembly?.Identity.Version?.ToString() ?? string.Empty;
+    }
+
+    private static void AddOverrideRelationshipFact(
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        ISymbol sourceMember,
+        ISymbol? targetMember)
+    {
+        if (targetMember is null)
+        {
+            return;
+        }
+
+        facts.Add(CreateSymbolRelationshipFact(
+            projectPath,
+            filePath,
+            evidenceNode,
+            model,
+            sourceMember,
+            targetMember,
+            "Overrides",
+            "Override"));
+    }
+
+    private static void AddInterfaceMemberRelationshipFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        ISymbol sourceMember)
+    {
+        var containingType = sourceMember.ContainingType;
+        if (containingType is null)
+        {
+            return;
+        }
+
+        var seenTargets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var interfaceType in containingType.AllInterfaces)
+        {
+            foreach (var interfaceMember in interfaceType.GetMembers())
+            {
+                var implementation = containingType.FindImplementationForInterfaceMember(interfaceMember);
+                if (!SymbolEqualityComparer.Default.Equals(implementation, sourceMember))
+                {
+                    continue;
+                }
+
+                var targetIdentity = CSharpSymbolIdentityProvider.TryCreate(interfaceMember);
+                if (targetIdentity is null || !seenTargets.Add(targetIdentity.SymbolId))
+                {
+                    continue;
+                }
+
+                facts.Add(CreateSymbolRelationshipFact(
+                    projectPath,
+                    filePath,
+                    evidenceNode,
+                    model,
+                    sourceMember,
+                    interfaceMember,
+                    "ImplementsInterfaceMember",
+                    "InterfaceImplementation"));
+            }
+        }
+    }
+
+    private static SemanticFactCandidate CreateSymbolRelationshipFact(
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        SemanticModel model,
+        ISymbol sourceSymbol,
+        ISymbol targetSymbol,
+        string relationshipKind,
+        string relationshipSource)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["relationshipKind"] = relationshipKind,
+            ["relationshipSource"] = relationshipSource,
+            ["sourceSymbol"] = sourceSymbol.ToDisplayString(SymbolFormat),
+            ["sourceSymbolKind"] = sourceSymbol.Kind.ToString(),
+            ["targetSymbol"] = targetSymbol.ToDisplayString(SymbolFormat),
+            ["targetSymbolKind"] = targetSymbol.Kind.ToString()
+        };
+        AddSymbolProperties(properties, "source", sourceSymbol);
+        AddSymbolProperties(properties, "target", targetSymbol);
+        AddAssemblyProperties(properties, model.GetEnclosingSymbol(evidenceNode.SpanStart)?.ContainingAssembly ?? sourceSymbol.ContainingAssembly, targetSymbol.ContainingAssembly);
+
+        return CreateSemanticFact(
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            projectPath,
+            filePath,
+            evidenceNode,
+            sourceSymbol: sourceSymbol.ToDisplayString(SymbolFormat),
+            targetSymbol: targetSymbol.ToDisplayString(SymbolFormat),
+            contractElement: relationshipKind,
+            properties: properties);
     }
 
     private static SortedDictionary<string, string> AddSymbolProperties(

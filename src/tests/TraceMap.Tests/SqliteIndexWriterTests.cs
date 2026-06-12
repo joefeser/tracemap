@@ -97,12 +97,28 @@ public sealed class SqliteIndexWriterTests
                 public string Name { get; set; } = "";
             }
 
-            public sealed class SymbolDemo
+            public interface ISymbolDemo
+            {
+                void Use(Dto dto);
+            }
+
+            public abstract class SymbolBase
+            {
+                public virtual void Track(Dto dto)
+                {
+                }
+            }
+
+            public sealed class SymbolDemo : SymbolBase, ISymbolDemo
             {
                 public void Use(Dto dto)
                 {
                     Overloaded(dto);
                     Overloaded(dto.Name);
+                }
+
+                public override void Track(Dto dto)
+                {
                 }
 
                 private void Overloaded(Dto dto)
@@ -142,6 +158,12 @@ public sealed class SqliteIndexWriterTests
             where f.fact_type = 'CallEdge' and fs.role = 'target';
             """);
         Assert.True(targetCallSymbolCount >= 2L);
+
+        Assert.Equal(1L, await ExecuteScalarAsync<long>(connection, "select count(*) from symbol_relationships where relationship_kind = 'InheritsFrom';"));
+        Assert.Equal(1L, await ExecuteScalarAsync<long>(connection, "select count(*) from symbol_relationships where relationship_kind = 'ImplementsInterface';"));
+        Assert.Equal(1L, await ExecuteScalarAsync<long>(connection, "select count(*) from symbol_relationships where relationship_kind = 'Overrides';"));
+        Assert.Equal(1L, await ExecuteScalarAsync<long>(connection, "select count(*) from symbol_relationships where relationship_kind = 'ImplementsInterfaceMember';"));
+        Assert.Equal(4L, await ExecuteScalarAsync<long>(connection, "select count(*) from facts where fact_type = 'SymbolRelationship';"));
     }
 
     [Fact]
@@ -223,6 +245,7 @@ public sealed class SqliteIndexWriterTests
 
         Assert.Contains("ix_symbol_relationships_source", symbolRelationshipIndexNames);
         Assert.Contains("ix_symbol_relationships_target", symbolRelationshipIndexNames);
+        Assert.Contains("ix_symbol_relationships_kind", symbolRelationshipIndexNames);
 
         var callEdgeIndexNames = new HashSet<string>(StringComparer.Ordinal);
         await using var callEdgeCommand = connection.CreateCommand();
