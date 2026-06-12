@@ -101,6 +101,27 @@ public static class MarkdownReportWriter
             result.Facts.Where(fact => fact.FactType is FactTypes.ConfigKeyDeclared or FactTypes.ConnectionStringDeclared),
             fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
 
+        AddFactSection(
+            lines,
+            "Call Flow",
+            result.Facts.Where(fact => fact.FactType == FactTypes.CallEdge),
+            fact => $"- `{DisplaySource(fact)}` -> `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "Logic Hotspots",
+            result.Facts.Where(fact => fact.FactType is FactTypes.CalculationExpression
+                or FactTypes.BranchingLogic
+                or FactTypes.RetryPolicyLogic
+                or FactTypes.SerializationLogic),
+            fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "Boilerplate Signals",
+            result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
+            fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
         lines.Add("");
         return string.Join(Environment.NewLine, lines);
     }
@@ -124,5 +145,10 @@ public static class MarkdownReportWriter
     private static string DisplayFactName(CodeFact fact)
     {
         return fact.ContractElement ?? fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("keyPath") ?? "unknown";
+    }
+
+    private static string DisplaySource(CodeFact fact)
+    {
+        return string.IsNullOrWhiteSpace(fact.SourceSymbol) ? "unknown" : fact.SourceSymbol;
     }
 }

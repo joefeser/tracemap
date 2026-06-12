@@ -62,11 +62,28 @@ public static class SqliteIndexWriter
               properties_json text not null
             );
 
+            create table call_edges (
+              fact_id text primary key,
+              scan_id text not null,
+              repo text not null,
+              commit_sha text not null,
+              evidence_tier text not null,
+              rule_id text not null,
+              caller_symbol text,
+              callee_symbol text not null,
+              file_path text not null,
+              start_line integer not null,
+              end_line integer not null
+            );
+
             create index ix_facts_type on facts(fact_type);
             create index ix_facts_rule on facts(rule_id);
             create index ix_facts_target_symbol on facts(target_symbol);
             create index ix_facts_contract_element on facts(contract_element);
             create index ix_facts_file on facts(file_path);
+            create index ix_call_edges_caller on call_edges(caller_symbol);
+            create index ix_call_edges_callee on call_edges(callee_symbol);
+            create index ix_call_edges_file on call_edges(file_path);
             """;
         command.ExecuteNonQuery();
     }
@@ -163,6 +180,56 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
         command.Parameters.AddWithValue("$snippet_hash", (object?)fact.Evidence.SnippetHash ?? DBNull.Value);
         command.Parameters.AddWithValue("$properties_json", JsonSerializer.Serialize(fact.Properties, JsonOptions.StableLine));
+        command.ExecuteNonQuery();
+
+        if (fact.FactType == FactTypes.CallEdge && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+        {
+            InsertCallEdge(connection, transaction, fact);
+        }
+    }
+
+    private static void InsertCallEdge(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert into call_edges (
+              fact_id,
+              scan_id,
+              repo,
+              commit_sha,
+              evidence_tier,
+              rule_id,
+              caller_symbol,
+              callee_symbol,
+              file_path,
+              start_line,
+              end_line
+            ) values (
+              $fact_id,
+              $scan_id,
+              $repo,
+              $commit_sha,
+              $evidence_tier,
+              $rule_id,
+              $caller_symbol,
+              $callee_symbol,
+              $file_path,
+              $start_line,
+              $end_line
+            );
+            """;
+        command.Parameters.AddWithValue("$fact_id", fact.FactId);
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$repo", fact.Repo);
+        command.Parameters.AddWithValue("$commit_sha", fact.CommitSha);
+        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$rule_id", fact.RuleId);
+        command.Parameters.AddWithValue("$caller_symbol", (object?)fact.SourceSymbol ?? DBNull.Value);
+        command.Parameters.AddWithValue("$callee_symbol", fact.TargetSymbol);
+        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
+        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
+        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
         command.ExecuteNonQuery();
     }
 }

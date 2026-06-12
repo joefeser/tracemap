@@ -155,3 +155,28 @@ Acceptance:
 - Removed property with syntax-only match -> NeedsReview.
 - No match with full semantic coverage -> NoEvidenceFullCoverage.
 - No match with reduced coverage -> NoEvidenceReducedCoverage.
+
+## Milestone 8 — Call flow and logic shape
+
+Goal: Make code flow and review-routing signals queryable without claiming runtime execution.
+
+Deliverables:
+
+- Syntax-level `CallEdge` facts for invocation expressions.
+- Semantic `CallEdge` facts when Roslyn resolves method symbols.
+- SQLite `call_edges` table for caller/callee queries.
+- Deterministic logic shape facts:
+  - `CalculationExpression`
+  - `BranchingLogic`
+  - `RetryPolicyLogic`
+  - `SerializationLogic`
+  - `InfrastructureBoilerplate`
+- Markdown report sections for call flow, logic hotspots, and boilerplate signals.
+
+Acceptance:
+
+- A syntax-only repo emits `CallEdge` facts with containing member and invocation name.
+- A semantic repo emits Tier1 `CallEdge` facts with fully resolved caller and callee symbols.
+- `index.sqlite` contains queryable `call_edges`.
+- Calculation/retry logic is findable without storing raw source snippets.
+- Boilerplate/generated/DI glue files are labeled as review-routing signals, not omitted from inventory.

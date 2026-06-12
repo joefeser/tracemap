@@ -57,6 +57,14 @@ public sealed class CSharpSemanticExtractorTests
             && fact.ContractElement == "Trim"
             && fact.TargetSymbol is not null
             && fact.TargetSymbol.Contains("string.Trim", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSemanticCallGraph
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.SourceSymbol is not null
+            && fact.SourceSymbol.Contains("ProfileReporter.Measure", StringComparison.Ordinal)
+            && fact.TargetSymbol is not null
+            && fact.TargetSymbol.Contains("string.Trim", StringComparison.Ordinal));
     }
 
     [Fact]

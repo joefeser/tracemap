@@ -388,13 +388,14 @@ public static class CSharpSemanticExtractor
                 continue;
             }
 
+            var enclosingSymbol = GetEnclosingSymbol(model, invocation);
             facts.Add(CreateSemanticFact(
                 FactTypes.MethodInvoked,
                 RuleIds.CSharpSemanticMethodInvocation,
                 projectPath,
                 filePath,
                 invocation,
-                sourceSymbol: GetEnclosingSymbol(model, invocation),
+                sourceSymbol: enclosingSymbol,
                 targetSymbol: method.ToDisplayString(SymbolFormat),
                 contractElement: method.Name,
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -402,6 +403,24 @@ public static class CSharpSemanticExtractor
                     ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
                     ["methodName"] = method.Name,
                     ["methodKind"] = method.MethodKind.ToString()
+                }));
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.CallEdge,
+                RuleIds.CSharpSemanticCallGraph,
+                projectPath,
+                filePath,
+                invocation,
+                sourceSymbol: enclosingSymbol,
+                targetSymbol: method.ToDisplayString(SymbolFormat),
+                contractElement: method.Name,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callerSymbol"] = enclosingSymbol ?? string.Empty,
+                    ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
+                    ["calleeName"] = method.Name,
+                    ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["callKind"] = "SemanticMethodInvocation"
                 }));
         }
     }

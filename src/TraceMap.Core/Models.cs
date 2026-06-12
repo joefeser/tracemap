@@ -84,6 +84,12 @@ public static class FactTypes
     public const string AttributeUsed = nameof(AttributeUsed);
     public const string MemberAccessName = nameof(MemberAccessName);
     public const string InvocationName = nameof(InvocationName);
+    public const string CallEdge = nameof(CallEdge);
+    public const string CalculationExpression = nameof(CalculationExpression);
+    public const string BranchingLogic = nameof(BranchingLogic);
+    public const string RetryPolicyLogic = nameof(RetryPolicyLogic);
+    public const string SerializationLogic = nameof(SerializationLogic);
+    public const string InfrastructureBoilerplate = nameof(InfrastructureBoilerplate);
     public const string PropertyAccessed = nameof(PropertyAccessed);
     public const string MethodInvoked = nameof(MethodInvoked);
     public const string HttpCallDetected = nameof(HttpCallDetected);
@@ -106,9 +112,12 @@ public static class RuleIds
     public const string CSharpSyntaxDeclarations = "csharp.syntax.declarations.v1";
     public const string CSharpSyntaxMemberAccess = "csharp.syntax.memberaccess.v1";
     public const string CSharpSyntaxInvocation = "csharp.syntax.invocation.v1";
+    public const string CSharpSyntaxCallGraph = "csharp.syntax.callgraph.v1";
+    public const string CSharpSyntaxLogicShape = "csharp.syntax.logicshape.v1";
     public const string CSharpSemanticDeclarations = "csharp.semantic.declarations.v1";
     public const string CSharpSemanticPropertyAccess = "csharp.semantic.propertyaccess.v1";
     public const string CSharpSemanticMethodInvocation = "csharp.semantic.methodinvocation.v1";
+    public const string CSharpSemanticCallGraph = "csharp.semantic.callgraph.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
     public const string HttpClientInvocation = "http.client.invocation.v1";
     public const string DatabaseEntityFramework = "database.ef.v1";
@@ -120,13 +129,13 @@ public static class RuleIds
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone7";
+    public const string TraceMap = "tracemap-milestone8";
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
-    public const string CSharpSyntaxExtractor = "csharp-syntax/0.2.0";
+    public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.2.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.3.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
 }
