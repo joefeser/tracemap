@@ -1,0 +1,17 @@
+{
+  "contract": "CustomerProfileResponse",
+  "source": "contracts/customer-profile-v2.json",
+  "changes": [
+    {
+      "element": "CustomerProfileResponse.primaryEmail",
+      "changeType": "removed",
+      "oldType": "string",
+      "newType": null
+    },
+    {
+      "element": "CustomerProfileResponse.status",
+      "changeType": "enum_value_added",
+      "value": "Suspended"
+    }
+  ]
+}

@@ -1,0 +1,386 @@
+rules:
+  - id: repo.manifest.v1
+    name: Repository manifest
+    description: Captures repo metadata, commit SHA, project inventory, scan status, and known gaps.
+    evidenceTier: Tier2Structural
+    emits:
+      - RepoScanned
+      - BuildStatus
+      - AnalysisGap
+    limitations:
+      - Git metadata may be unavailable outside a git checkout.
+
+  - id: file.inventory.v1
+    name: File inventory
+    description: Records deterministic inventory facts for supported solution, project, source, config, JSON, and SQL files.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+      - ConfigFileDeclared
+      - SqlFileDeclared
+    limitations:
+      - File presence is structural evidence only; it does not prove runtime usage.
+      - Generated, bin, obj, .git, and TraceMap output directories are excluded in the MVP.
+
+  - id: project.file.v1
+    name: Project file inventory
+    description: Reads solution and C# project declarations, target frameworks, and package references from project files and packages.config.
+    evidenceTier: Tier2Structural
+    emits:
+      - SolutionDeclared
+      - ProjectDeclared
+      - TargetFrameworkDeclared
+      - PackageReferenced
+    limitations:
+      - XML files that cannot be parsed are still inventoried but do not emit project metadata facts.
+      - Conditional MSBuild properties are not evaluated in Milestone 1.
+
+  - id: csharp.syntax.memberaccess.v1
+    name: C# syntax member access
+    description: Finds member access names from C# syntax without requiring compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MemberAccessName
+    limitations:
+      - Does not prove the containing type or symbol identity.
+      - May match unrelated properties with the same name.
+
+  - id: csharp.syntax.declarations.v1
+    name: C# syntax declarations
+    description: Finds type, method, property, enum, and attribute names from C# syntax without requiring project load or compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - PropertyDeclared
+      - EnumDeclared
+      - AttributeUsed
+      - AnalysisGap
+    limitations:
+      - Does not prove symbol identity, overload resolution, inheritance, or generated code behavior.
+      - Files with parse errors may still emit partial syntax facts, and parse errors are reported as AnalysisGap facts.
+
+  - id: csharp.syntax.invocation.v1
+    name: C# syntax invocation
+    description: Finds invocation expression names from C# syntax without requiring compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - InvocationName
+    limitations:
+      - Does not prove receiver type, overload target, extension method binding, or runtime dispatch.
+
+  - id: csharp.syntax.callgraph.v1
+    name: C# syntax call graph
+    description: Emits syntax-only caller-to-callee edges from invocation and object creation expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - CallEdge
+    limitations:
+      - Caller names are best-effort containing member names, not fully qualified symbols.
+      - Callee names are invocation names only; overload resolution and receiver type are not proven.
+      - Dynamic dispatch, reflection, delegates, and event flow are not modeled.
+
+  - id: csharp.syntax.objectcreation.v1
+    name: C# syntax object creation
+    description: Emits syntax-only object creation facts from new expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectCreated
+    limitations:
+      - Created type names are syntax text and may not be fully qualified.
+      - Assigned variable names are best-effort for direct variable declarations or assignments only.
+      - Constructor overload and assembly identity are not proven without semantic analysis.
+
+  - id: csharp.syntax.logicshape.v1
+    name: C# syntax logic shape
+    description: Emits deterministic syntax signals for calculation, branching, retry, serialization, and boilerplate-like code.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - CalculationExpression
+      - BranchingLogic
+      - RetryPolicyLogic
+      - SerializationLogic
+      - InfrastructureBoilerplate
+    limitations:
+      - Logic shape facts are heuristics over syntax and file paths; they are review-routing signals, not proof of business intent.
+      - Calculation expressions store expression hashes, operators, and spans, not raw source snippets.
+      - Boilerplate classification is path/name based and can misclassify unconventional project layouts.
+
+  - id: csharp.semantic.propertyaccess.v1
+    name: C# semantic property access
+    description: Finds compiler-resolved property accesses using Roslyn semantic model.
+    evidenceTier: Tier1Semantic
+    emits:
+      - PropertyAccessed
+    limitations:
+      - Requires project load and enough references to resolve symbols.
+      - Does not detect reflection-only access.
+      - Member access syntax that does not bind to an IPropertySymbol is not emitted by this rule.
+
+  - id: csharp.semantic.methodinvocation.v1
+    name: C# semantic method invocation
+    description: Finds compiler-resolved method invocations using Roslyn semantic model.
+    evidenceTier: Tier1Semantic
+    emits:
+      - MethodInvoked
+    limitations:
+      - Requires project load and enough references to resolve symbols.
+      - Dynamic dispatch, reflection, and unresolved overload candidates are not emitted by this rule.
+
+  - id: csharp.semantic.callgraph.v1
+    name: C# semantic call graph
+    description: Emits compiler-resolved caller-to-callee method and constructor call edges using Roslyn semantic model.
+    evidenceTier: Tier1Semantic
+    emits:
+      - CallEdge
+    limitations:
+      - Requires project load and enough references to resolve method symbols.
+      - Does not model runtime polymorphism, delegate invocation targets, event subscribers, reflection, or async continuation flow.
+      - A call edge records a syntactic call site, not proof that the path executes at runtime.
+
+  - id: csharp.semantic.objectcreation.v1
+    name: C# semantic object creation
+    description: Emits compiler-resolved object creation facts with created type, constructor, caller, and assembly identity when available.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ObjectCreated
+    limitations:
+      - Requires project load and enough references to resolve created type symbols.
+      - Does not model dependency injection container activations, reflection, deserialization-created instances, or factory-returned runtime types.
+      - Assembly version is sourced from Roslyn assembly identity and may be 0.0.0.0 when a project does not set explicit version metadata.
+
+  - id: csharp.semantic.valueflow.v1
+    name: C# semantic argument value flow
+    description: Maps resolved call-site arguments to callee parameters and records argument symbol/declaration evidence when available.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ArgumentPassed
+    limitations:
+      - Requires Roslyn semantic binding for the callee method or constructor.
+      - Tracks direct call-site argument expressions only; it does not perform interprocedural alias analysis, mutation tracking, or runtime branch feasibility.
+      - Raw argument expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
+      - Lambda bodies, delegates, reflection, dynamic dispatch, dependency injection, and serializer-created values require later specialized flow rules.
+
+  - id: csharp.semantic.localalias.v1
+    name: C# semantic local alias
+    description: Records simple local aliases and assignments where a local variable is assigned from another resolved symbol.
+    evidenceTier: Tier1Semantic
+    emits:
+      - LocalAlias
+    limitations:
+      - Requires Roslyn semantic binding for the alias local and origin expression.
+      - Tracks direct local declarations and simple assignments only, such as `var alias = value` and `alias = value`.
+      - Does not model mutation of object contents, collection membership, tuple/deconstruction flow, property aliases, ref/out effects, closures, runtime branches, or alias invalidation after complex control flow.
+      - Raw alias expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
+
+  - id: csharp.semantic.fieldalias.v1
+    name: C# semantic field alias
+    description: Records simple field assignments where a field is assigned from another resolved symbol.
+    evidenceTier: Tier1Semantic
+    emits:
+      - FieldAlias
+    limitations:
+      - Requires Roslyn semantic binding for the assigned field and origin expression.
+      - Tracks simple field assignments only, such as `_cached = value`.
+      - Parameter forwarding uses field aliases when the assignment and later argument usage are in the same containing method, or when exactly one constructor in the same containing type assigns the field from a parameter.
+      - Does not infer arbitrary cross-method field lifetime, ambiguous multiple-constructor field initialization, dependency injection state, object mutation, property aliases, collection membership, ref/out effects, closures, runtime branches, or alias invalidation after complex control flow.
+      - Raw assignment expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
+
+  - id: csharp.semantic.parameterforwarding.v1
+    name: C# semantic parameter forwarding
+    description: Derives parameter-to-parameter forwarding edges from semantic argument-flow evidence, resolving simple same-method aliases and unique constructor field initialization when available.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ParameterForwardEdge
+    limitations:
+      - Requires an `ArgumentPassed` fact where the argument is resolved as a method parameter, as a local/field with alias evidence back to a parameter in the same containing method, or as a field with exactly one constructor assignment from a parameter in the same containing type.
+      - Follows parameter forwarding, bounded same-method alias chains, and unique constructor field initialization only; it does not infer arbitrary cross-method field lifetime, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
+      - Path reports are bounded by max depth and max path count, so large or cyclic graphs can be intentionally truncated.
+      - Paths are evidence chains, not proof that a runtime request always reaches the terminal method.
+
+  - id: csharp.semantic.symbolidentity.v1
+    name: C# semantic symbol identity
+    description: Adds deterministic C# symbol IDs to resolved semantic facts and derives SQLite symbol, occurrence, and fact-symbol rows from those facts.
+    evidenceTier: Tier1Semantic
+    emits:
+      - sourceSymbolId property
+      - targetSymbolId property
+      - argumentSymbolId property
+      - parameterSymbolId property
+      - originSymbolId property
+      - constructorSymbolId property
+      - symbols table rows
+      - symbol_occurrences table rows
+      - fact_symbols table rows
+    limitations:
+      - Symbol IDs require Roslyn semantic symbols; syntax fallback facts do not receive compiler-backed IDs.
+      - IDs include assembly identity, containing symbol, member name, arity, parameter types, and return/type information where available; local IDs include source location to disambiguate same-name locals.
+      - IDs are deterministic for the same source, project load, target framework, and dependency graph, but may change when references, target frameworks, generated source, or compiler binding change.
+      - These rows are derived indexes over facts, not independent conclusions; the originating fact rule ID and evidence span remain authoritative.
+      - Relationship rows for inheritance, interface implementation, and overrides are emitted by `csharp.semantic.symbolrelationship.v1`.
+
+  - id: csharp.semantic.symbolrelationship.v1
+    name: C# semantic symbol relationships
+    description: Records compiler-resolved relationships between C# symbols, including direct type inheritance, direct interface implementation or extension, member overrides, and interface member implementations.
+    evidenceTier: Tier1Semantic
+    emits:
+      - SymbolRelationship
+      - symbol_relationships table rows
+    limitations:
+      - Requires Roslyn semantic symbols; syntax fallback does not emit symbol relationships.
+      - Type relationships are limited to direct base-list declarations in source. Transitive inheritance and inherited interfaces can be queried by graph traversal, but are not emitted as direct evidence rows.
+      - Interface member implementation uses Roslyn `FindImplementationForInterfaceMember`; it records compiler-resolved implementations, not runtime dispatch targets.
+      - Override relationships record direct overridden members exposed by Roslyn; deeper override chains require graph traversal.
+      - Generic substitutions, default interface methods, explicit interface implementations, and partial types follow Roslyn binding for the loaded project/target framework and may differ when project references or target frameworks change.
+      - These relationships prove compiler binding, not runtime reachability, branch execution, object allocation, or dependency injection dispatch.
+
+  - id: csharp.semantic.flowboundary.v1
+    name: C# semantic flow boundary
+    description: Records deterministic evidence for runtime-sensitive flow boundaries such as DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, and branch conditions.
+    evidenceTier: Tier1Semantic
+    emits:
+      - DependencyResolved
+      - DeserializedObject
+      - ReflectionUsage
+      - DynamicInvocation
+      - CollectionMutation
+      - ObjectMutation
+      - BranchCondition
+    limitations:
+      - Requires Roslyn semantic binding except for dynamic invocations where Roslyn intentionally cannot bind a static callee.
+      - These facts mark review-routing boundaries and do not prove runtime execution, concrete runtime types, branch feasibility, collection contents, object identity, dependency injection registrations, reflection targets, or serializer contract mappings.
+      - Use `csharp.semantic.runtimeevidence.v1` facts for statically visible registrations, reflection targets, serializer member names, collection element inputs, mutation semantics, and simple branch feasibility evidence.
+      - Raw expressions are not stored; expression hashes, expression kinds, resolved symbols, and line spans are emitted.
+      - Specialized flow rules are still required before TraceMap can carry value provenance across these boundaries.
+
+  - id: csharp.semantic.runtimeevidence.v1
+    name: C# semantic runtime evidence
+    description: Records statically provable runtime-adjacent evidence for DI registrations, serializer contract members, reflection targets, dynamic dispatch candidates, collection element inputs, mutation semantics, and simple branch feasibility.
+    evidenceTier: Tier1Semantic
+    emits:
+      - DependencyRegistered
+      - SerializerContractMember
+      - ReflectionTarget
+      - DynamicDispatchCandidate
+      - CollectionElementFlow
+      - MutationSemantics
+      - BranchFeasibility
+    limitations:
+      - Requires Roslyn semantic analysis; when project load or binding is reduced, absence of these facts is not absence of runtime behavior.
+      - Dependency registrations are limited to statically visible generic or `typeof(...)` registrations on common registration method names; container modules, scanning conventions, factories, configuration-driven registrations, and runtime conditional registrations are not expanded.
+      - Serializer contract member facts cover common attribute-declared member names such as `JsonPropertyName`, Newtonsoft `JsonProperty`, and `DataMember`; naming policies, custom converters, serializer options, and reflection-based serializers are not resolved.
+      - Reflection targets are emitted only for direct `typeof(T)` or direct `typeof(T)` arguments with literal or `nameof(...)` member names; string construction, variables, binding flags, overload resolution, and reflective invocation reachability are not inferred.
+      - Dynamic dispatch candidates record the invoked member name and generic syntax when the receiver is `dynamic`; they do not resolve concrete runtime targets.
+      - Collection element flow records syntactic inputs to add/insert/enqueue/push-like mutations; it does not model collection contents after removals, aliases, loops, branches, object identity, or mutation order.
+      - Mutation semantics classify direct property/field assignments and increment/decrement operations; they do not model aliasing, thread interleavings, setter side effects, or downstream object state.
+      - Branch feasibility is limited to compiler constant boolean expressions, direct null equality checks, and direct null patterns; it does not perform symbolic execution, path feasibility, range analysis, or branch probability.
+      - Raw expressions are not stored; expression hashes, expression kinds, resolved symbols, and line spans are emitted.
+
+  - id: csharp.semantic.contractmapping.v1
+    name: C# semantic contract mapping
+    description: Records deterministic contract-adjacent mapping evidence for HTTP route/action bindings, database table/column attributes, and configuration section binding calls.
+    evidenceTier: Tier1Semantic
+    emits:
+      - HttpRouteBinding
+      - DatabaseColumnMapping
+      - ConfigBinding
+    limitations:
+      - Requires Roslyn semantic analysis; syntax fallback does not emit these mapping facts.
+      - HTTP route binding is limited to attribute-declared route/http method metadata and parameter symbols visible in source. Route conventions, endpoint builders, middleware, filters, and runtime route transforms are not expanded.
+      - Database mapping is limited to attribute-declared `Table` and `Column` mappings. EF fluent configuration, conventions, migrations, provider-specific naming policies, and runtime model mutation are not resolved.
+      - Config binding is limited to direct `GetSection(\"...\").Bind(...)` and `GetSection(\"...\").Get<T>()` call chains with literal section names. Options registration, named options, validation, reload behavior, and provider precedence are not inferred.
+      - These facts prove source mapping declarations or calls, not runtime request routing, database schema existence, config availability, or branch reachability.
+
+  - id: csharp.semantic.declarations.v1
+    name: C# semantic declarations
+    description: Finds compiler-resolved type declarations using Roslyn semantic model.
+    evidenceTier: Tier1Semantic
+    emits:
+      - TypeDeclared
+    limitations:
+      - Requires project load and enough references to create a Roslyn compilation.
+      - Generated source excluded from inventory is not reported.
+
+  - id: csharp.semantic.workspace.v1
+    name: C# semantic workspace gaps
+    description: Records MSBuildWorkspace load, MSBuild registration, syntax tree, and compilation gaps during semantic extraction.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Workspace diagnostics can be environment-specific because they depend on installed SDKs and available project references.
+      - Compilation gaps do not prevent syntax fallback facts from being emitted.
+
+  - id: http.client.invocation.v1
+    name: HTTP client invocation
+    description: Finds outbound HTTP calls through common .NET HTTP APIs.
+    evidenceTier: Tier1Semantic or Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+      - HttpClientCreated
+    limitations:
+      - Tier1 requires Roslyn symbol binding to known HTTP APIs.
+      - Syntax fallback matches common method names and may include unrelated methods with the same name.
+      - URL may not be fully resolvable if built dynamically or loaded from runtime configuration.
+
+  - id: database.ef.v1
+    name: Entity Framework style database surface
+    description: Finds DbContext-like classes, DbSet properties, and SaveChanges calls.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - DbContextDeclared
+      - DbSetDeclared
+      - DbChangeSaved
+    limitations:
+      - Tier1 requires Roslyn symbol binding to EF or EF Core types.
+      - Structural fallback uses class/base type/property type naming patterns and does not prove runtime EF usage.
+      - SaveChanges syntax fallback is name-only and may include unrelated methods.
+
+  - id: database.dapper.invocation.v1
+    name: Dapper invocation
+    description: Finds common Dapper Query and Execute calls.
+    evidenceTier: Tier1Semantic or Tier3SyntaxOrTextual
+    emits:
+      - DapperCallDetected
+    limitations:
+      - Tier1 requires Roslyn symbol binding to Dapper SqlMapper APIs.
+      - Syntax fallback is name-only for Query, QueryAsync, Execute, and ExecuteAsync and may include unrelated APIs.
+
+  - id: database.sql.text.v1
+    name: SQL text detection
+    description: Finds ADO.NET SqlCommand construction, SQL-like files, and SQL-like string literals.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SqlCommandDetected
+      - SqlTextUsed
+    limitations:
+      - SQL parsing is approximate in MVP.
+      - Identifier matches are not proof of contract usage.
+      - Raw SQL text is not stored by default; hashes and spans are emitted instead.
+
+  - id: config.key.v1
+    name: Configuration key extraction
+    description: Parses appsettings*.json, Web.config, App.config, packages.config, and connection string entries.
+    evidenceTier: Tier2Structural
+    emits:
+      - ConfigKeyDeclared
+      - ConnectionStringDeclared
+      - AnalysisGap
+    limitations:
+      - JSON line spans are best-effort key locations.
+      - Runtime configuration providers, environment overrides, secrets stores, and transformed config files are not evaluated.
+      - Raw config values and connection strings are not stored by default; hashes are emitted for sensitive values.
+
+  - id: contract.delta.reduce.v1
+    name: Contract delta reduction
+    description: Matches changed contract type, property, and field names against indexed facts and classifies evidence-backed impact findings.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - ImpactFinding
+    limitations:
+      - Name matching is deterministic and approximate; it does not infer serialization aliases, reflection usage, or runtime contract mapping.
+      - DefiniteImpact requires compiler-resolved type evidence or usage evidence for the changed member.
+      - Syntax-only matches are classified as NeedsReview because symbol identity is not proven.
+      - NoEvidenceFullCoverage depends on a successful full semantic scan at a known commit SHA; reduced scans only support NoEvidenceReducedCoverage.
+      - UnknownAnalysisGap is emitted only when analysis-gap evidence names the changed contract element; unrelated reduced coverage is reported as NoEvidenceReducedCoverage.
+      - Generic or high fan-out name matches are still reported when evidence exists, but warnings mark them as review-sensitive.
