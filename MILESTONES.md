@@ -6,12 +6,12 @@ Goal: Create the solution, project layout, test project, and basic CLI skeleton.
 
 Deliverables:
 
-- `TraceMap.sln`
-- `src/TraceMap.Cli`
-- `src/TraceMap.Core`
-- `src/TraceMap.Storage`
-- `src/TraceMap.Reporting`
-- `src/tests/TraceMap.Tests`
+- `src/dotnet/TraceMap.sln`
+- `src/dotnet/TraceMap.Cli`
+- `src/dotnet/TraceMap.Core`
+- `src/dotnet/TraceMap.Storage`
+- `src/dotnet/TraceMap.Reporting`
+- `src/dotnet/tests/TraceMap.Tests`
 - `tracemap scan`, `tracemap report`, `tracemap reduce` commands with help output
 - Unit test proving command parsing or command dispatch works
 

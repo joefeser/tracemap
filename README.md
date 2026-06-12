@@ -15,9 +15,9 @@ TraceMap is not an AI impact-analysis tool. The scanner and reducer do not use L
 ## Commands
 
 ```bash
-dotnet run --project src/TraceMap.Cli -- scan --repo samples/modern-sample --out .tracemap
-dotnet run --project src/TraceMap.Cli -- reduce --index .tracemap/index.sqlite --contract-delta samples/contract-deltas/modern-sample.customer-profile.json --out .tracemap/impact-report.md
-dotnet run --project src/TraceMap.Cli -- flow --index .tracemap/index.sqlite --symbol request --out .tracemap/flow-report.md
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out .tracemap
+dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap/index.sqlite --contract-delta samples/contract-deltas/modern-sample.customer-profile.json --out .tracemap/impact-report.md
+dotnet run --project src/dotnet/TraceMap.Cli -- flow --index .tracemap/index.sqlite --symbol request --out .tracemap/flow-report.md
 scripts/smoke-sample-repos.sh
 ```
 
