@@ -50,7 +50,7 @@ Command:
 
 ```bash
 tracemap scan --repo samples/modern-sample --out <tmp>/modern-sample
-tracemap reduce --index <tmp>/modern-sample/index.sqlite --contract-delta samples/contract-delta.example.json --out <tmp>/modern-impact.md
+tracemap reduce --index <tmp>/modern-sample/index.sqlite --contract-delta samples/contract-deltas/modern-sample.customer-profile.json --out <tmp>/modern-impact.md
 ```
 
 Expected:
@@ -94,14 +94,10 @@ Recommended first-pass repos:
 - `ProjectExtensions.Azure.ServiceBus`
 - `fluentjdf`
 
-Example commands:
+Example command:
 
 ```bash
-tracemap scan --repo /Users/josephfeser/src/gh-joe/c-sharp-sample-repos/ProjectExtensions.Azure.ServiceBus --out <tmp>/servicebus
-tracemap reduce --index <tmp>/servicebus/index.sqlite --contract-delta samples/contract-delta.example.json --out <tmp>/servicebus-impact.md
-
-tracemap scan --repo /Users/josephfeser/src/gh-joe/c-sharp-sample-repos/fluentjdf --out <tmp>/fluentjdf
-tracemap reduce --index <tmp>/fluentjdf/index.sqlite --contract-delta samples/contract-delta.example.json --out <tmp>/fluentjdf-impact.md
+scripts/smoke-sample-repos.sh /Users/josephfeser/src/gh-joe/c-sharp-sample-repos <tmp>/sample-smoke
 ```
 
 Expected:
@@ -109,17 +105,17 @@ Expected:
 - scan commands complete.
 - scans may report `Level1SemanticAnalysisReduced`.
 - reduced scans must label no-evidence findings as `NoEvidenceReducedCoverage`.
-- generic member names such as `status` may match unrelated code and should be treated as deterministic but potentially noisy evidence.
+- generic member names such as `status` may match unrelated code and should emit warnings when they match multiple facts or a high-fan-out set.
 
-## Future Repo-Specific Delta Fixtures
+## Repo-Specific Delta Fixtures
 
-Add repo-specific deltas under:
+Repo-specific deltas live under:
 
 ```text
 samples/contract-deltas/
 ```
 
-Recommended files:
+Current files:
 
 - `modern-sample.customer-profile.json`
 - `servicebus.transient-status.json`
@@ -145,6 +141,8 @@ Each fixture should document:
 | no match with reduced coverage | `NoEvidenceReducedCoverage` |
 | analysis-gap evidence names changed element | `UnknownAnalysisGap` |
 | unparsable contract element | `UnknownAnalysisGap` |
+| generic member with multiple matches | classification preserved plus generic-name warning |
+| high fan-out match set | classification preserved plus fan-out warning |
 
 ## Performance Smoke Targets
 

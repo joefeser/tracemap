@@ -29,6 +29,7 @@ public sealed record ImpactFinding(
     string Classification,
     string RuleId,
     string Reason,
+    IReadOnlyList<string> Warnings,
     IReadOnlyList<ImpactEvidence> Evidence);
 
 public sealed record ImpactEvidence(
@@ -55,6 +56,20 @@ public static class ImpactClassifications
 
 public static class ContractDeltaReducer
 {
+    private const int HighFanOutMatchThreshold = 10;
+
+    private static readonly HashSet<string> GenericMemberNames = new(StringComparer.Ordinal)
+    {
+        "id",
+        "name",
+        "type",
+        "status",
+        "state",
+        "value",
+        "code",
+        "key"
+    };
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -208,16 +223,19 @@ public static class ContractDeltaReducer
                 ImpactClassifications.UnknownAnalysisGap,
                 RuleIds.ContractDeltaReduction,
                 "The contract delta element could not be parsed into a type, property, or field name.",
+                [],
                 []);
         }
 
-        var matches = facts
+        var matchedItems = facts
             .Select(fact => (Fact: fact, Match: MatchFact(parsed, fact)))
             .Where(item => item.Match != MatchStrength.None)
             .OrderByDescending(item => item.Match)
             .ThenBy(item => item.Fact.EvidenceTier, StringComparer.Ordinal)
             .ThenBy(item => item.Fact.FilePath, StringComparer.Ordinal)
             .ThenBy(item => item.Fact.StartLine)
+            .ToArray();
+        var matches = matchedItems
             .Select(item => item.Fact)
             .Take(25)
             .ToArray();
@@ -233,6 +251,7 @@ public static class ContractDeltaReducer
                 fullCoverage
                     ? "No matching facts were found and the index reports full semantic coverage."
                     : "No matching facts were found, but the index reports reduced or syntax-only coverage.",
+                [],
                 []);
         }
 
@@ -242,7 +261,32 @@ public static class ContractDeltaReducer
             Classify(matches),
             RuleIds.ContractDeltaReduction,
             BuildReason(matches),
+            BuildWarnings(parsed, matchedItems),
             matches.Select(ToEvidence).ToArray());
+    }
+
+    private static IReadOnlyList<string> BuildWarnings(
+        ContractElementName element,
+        IReadOnlyList<(IndexedFact Fact, MatchStrength Match)> matchedItems)
+    {
+        var warnings = new List<string>();
+        if (element.MemberName is not null
+            && GenericMemberNames.Contains(NormalizeName(element.MemberName))
+            && matchedItems.Count > 1)
+        {
+            warnings.Add($"Generic member name `{element.MemberName}` matched {matchedItems.Count} facts; review target identity before treating this as contract-specific.");
+        }
+
+        if (matchedItems.Count > HighFanOutMatchThreshold)
+        {
+            var fileCount = matchedItems
+                .Select(item => item.Fact.FilePath)
+                .Distinct(StringComparer.Ordinal)
+                .Count();
+            warnings.Add($"High fan-out match set: {matchedItems.Count} facts across {fileCount} files; prioritize Tier1 evidence and exact type/member matches.");
+        }
+
+        return warnings;
     }
 
     private static bool HasFullSemanticCoverage(ScanManifest manifest)
@@ -533,6 +577,15 @@ public static class ImpactMarkdownWriter
             lines.Add($"- Classification: `{finding.Classification}`");
             lines.Add($"- Reducer rule: `{finding.RuleId}`");
             lines.Add($"- Reason: {finding.Reason}");
+            if (finding.Warnings.Count > 0)
+            {
+                lines.Add("- Warnings:");
+                foreach (var warning in finding.Warnings)
+                {
+                    lines.Add($"  - {warning}");
+                }
+            }
+
             lines.Add("");
             lines.Add("Evidence:");
             lines.Add("");

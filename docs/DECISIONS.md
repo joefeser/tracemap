@@ -28,11 +28,11 @@ Consequence: generic names such as `status`, `id`, `name`, and `type` can produc
 
 ## 2026-06-12: Generic match noise should be reported, not hidden
 
-Decision: future reducer work should add warnings or match fan-out summaries for generic contract element names instead of suppressing matches silently.
+Decision: reducer reports add warnings or match fan-out summaries for generic contract element names instead of suppressing matches silently.
 
 Why: hiding deterministic matches would make the reducer less auditable. Warnings preserve evidence while signaling review risk.
 
-Consequence: acceptance fixtures should include generic-name examples so future rule tuning is deliberate.
+Consequence: acceptance fixtures include generic-name examples so future rule tuning is deliberate.
 
 ## 2026-06-12: External sample repos are opt-in smoke fixtures
 
@@ -40,7 +40,7 @@ Decision: repositories under `/Users/josephfeser/src/gh-joe/c-sharp-sample-repos
 
 Why: they are larger, machine-local, and may depend on SDKs or packages unavailable in every environment.
 
-Consequence: normal `dotnet test` remains fast and portable. External smoke scripts can provide broader confidence when the fixture folder exists.
+Consequence: normal `dotnet test` remains fast and portable. `scripts/smoke-sample-repos.sh` provides broader confidence when the fixture folder exists.
 
 ## 2026-06-12: Rule catalog limitations must track behavior
 
