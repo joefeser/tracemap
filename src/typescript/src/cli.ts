@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import path from "node:path";
 import { scan } from "./scan/ScanEngine";
+import { exportIndex } from "./export/IndexExporter";
 import { parseHumanByteSize } from "./util/Paths";
 import { ScanOptions } from "./facts/Models";
 
@@ -11,12 +12,49 @@ async function main(): Promise<void> {
     process.exit(0);
   }
   const command = args.shift();
+  if (command === "export") {
+    const result = await exportIndex(parseExportOptions(args));
+    process.stdout.write(`TraceMap TypeScript export wrote ${result.format} to ${result.outputPath}\n`);
+    process.stdout.write(`Facts exported: ${result.factCount}\n`);
+    return;
+  }
   if (command !== "scan") {
     throw new Error(`Unknown command: ${command ?? ""}`);
   }
   const options = parseScanOptions(args);
   const result = await scan(options);
   process.stdout.write(`TraceMap TypeScript scan wrote ${result.facts.length} facts to ${path.resolve(options.outputPath)}\n`);
+}
+
+function parseExportOptions(args: string[]) {
+  let indexPath = "";
+  let outputPath = "";
+  let format: "json" | "mermaid" = "json";
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    switch (arg) {
+      case "--index":
+        indexPath = path.resolve(requireValue(args, ++index, arg));
+        break;
+      case "--out":
+        outputPath = path.resolve(requireValue(args, ++index, arg));
+        break;
+      case "--format": {
+        const value = requireValue(args, ++index, arg).toLowerCase();
+        format = value === "mermaid" || value === "mmd" ? "mermaid" : "json";
+        if (value !== "json" && value !== "mermaid" && value !== "mmd") {
+          throw new Error("export --format must be json or mermaid");
+        }
+        break;
+      }
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+  if (!indexPath || !outputPath) {
+    throw new Error("export requires --index <path> and --out <path>");
+  }
+  return { indexPath, outputPath, format };
 }
 
 function parseScanOptions(args: string[]): ScanOptions {
@@ -83,6 +121,7 @@ function printHelp(): void {
 
 Usage:
   tracemap-ts scan --repo <path> --out <path> [options]
+  tracemap-ts export --index <path> --out <path> [--format <json|mermaid>]
 
 Options:
   --project <path>              Explicit tsconfig.json or project directory. Repeatable.

@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
 import { FactTypes } from "../src/facts/Models";
+import { exportIndex } from "../src/export/IndexExporter";
 
 const packageRoot = process.cwd();
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -88,6 +89,33 @@ describe("ScanEngine", () => {
     const markdown = await fsp.readFile(report, "utf8");
     expect(markdown).toContain("DefiniteImpact");
     expect(markdown).toContain("PropertyAccessed");
+  });
+
+  it("exports deterministic JSON and Mermaid from a TypeScript index", async () => {
+    const out = await tempDir();
+    await scan({
+      repoPath: path.join(repoRoot, "samples/typescript-modern-sample"),
+      outputPath: out,
+      projectPaths: [],
+      includeGlobs: [],
+      excludeGlobs: [],
+      maxFileByteSize: 1024 * 1024,
+      semantic: true
+    });
+
+    const jsonPath = path.join(out, "index-export.json");
+    const mermaidPath = path.join(out, "relationships.mmd");
+    const jsonResult = await exportIndex({ indexPath: path.join(out, "index.sqlite"), outputPath: jsonPath, format: "json" });
+    const mermaidResult = await exportIndex({ indexPath: path.join(out, "index.sqlite"), outputPath: mermaidPath, format: "mermaid" });
+
+    expect(jsonResult.factCount).toBeGreaterThan(0);
+    expect(mermaidResult.callEdgeCount).toBeGreaterThan(0);
+    const json = await fsp.readFile(jsonPath, "utf8");
+    expect(json).toContain('"factsByType"');
+    expect(json).toContain('"relationships"');
+    expect(json).not.toContain("export class CustomerHandler");
+    const mermaid = await fsp.readFile(mermaidPath, "utf8");
+    expect(mermaid.startsWith("flowchart TD")).toBe(true);
   });
 });
 

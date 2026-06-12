@@ -54,6 +54,24 @@ For every successful `tracemap reduce --index <index> --contract-delta <delta> -
 - no-match findings include manifest coverage evidence.
 - reduced coverage never produces `NoEvidenceFullCoverage`.
 
+## Export Acceptance
+
+For every successful `tracemap export --index <index> --out <out> --format json` run, verify:
+
+- export JSON exists.
+- export JSON includes scan manifest metadata, fact counts by type/tier/rule, relationship rows, call-edge rows, and object-creation rows when those tables exist.
+- export JSON does not include raw source snippets.
+- rows are ordered deterministically.
+
+For every successful `tracemap export --index <index> --out <out> --format mermaid` run, verify:
+
+- Mermaid output exists.
+- output starts with `flowchart TD`.
+- relationship edges use direct `symbol_relationships` evidence.
+- call edges use indexed call-edge facts and are bounded.
+
+For TypeScript indexes, `tracemap-ts export --index <index> --out <out> --format <json|mermaid>` should produce equivalent export shapes from the same SQLite tables.
+
 ## Included Sample Repos
 
 ### `samples/modern-sample`
