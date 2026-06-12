@@ -28,10 +28,17 @@ public sealed class CSharpSemanticExtractorTests
 
             public sealed class ProfileReporter
             {
+                private readonly CustomerProfile seed = new CustomerProfile();
+
                 public int Measure(CustomerProfile profile)
                 {
                     var copy = new CustomerProfile();
-                    return profile.PrimaryEmail.Trim().Length + copy.PrimaryEmail.Length;
+                    return Count(profile, copy);
+                }
+
+                private int Count(CustomerProfile source, CustomerProfile other)
+                {
+                    return source.PrimaryEmail.Trim().Length + other.PrimaryEmail.Length + seed.PrimaryEmail.Length;
                 }
             }
             """);
@@ -52,6 +59,20 @@ public sealed class CSharpSemanticExtractorTests
             && fact.TargetSymbol == "global::ModernSample.CustomerProfile.PrimaryEmail"
             && fact.ContractElement == "PrimaryEmail");
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.FieldDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.ContractElement == "seed"
+            && fact.TargetSymbol is not null
+            && fact.TargetSymbol.Contains("ProfileReporter.seed", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ParameterDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.ContractElement == "profile"
+            && fact.SourceSymbol is not null
+            && fact.SourceSymbol.Contains("ProfileReporter.Measure", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MethodInvoked
             && fact.RuleId == RuleIds.CSharpSemanticMethodInvocation
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
@@ -63,7 +84,7 @@ public sealed class CSharpSemanticExtractorTests
             && fact.RuleId == RuleIds.CSharpSemanticCallGraph
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
             && fact.SourceSymbol is not null
-            && fact.SourceSymbol.Contains("ProfileReporter.Measure", StringComparison.Ordinal)
+            && fact.SourceSymbol.Contains("ProfileReporter.Count", StringComparison.Ordinal)
             && fact.TargetSymbol is not null
             && fact.TargetSymbol.Contains("string.Trim", StringComparison.Ordinal));
         Assert.Contains(result.Facts, fact =>
@@ -77,6 +98,20 @@ public sealed class CSharpSemanticExtractorTests
             && calleeAssembly == "ModernSample"
             && fact.Properties.TryGetValue("assignedTo", out var assignedTo)
             && assignedTo == "copy");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ArgumentPassed
+            && fact.RuleId == RuleIds.CSharpSemanticValueFlow
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.TargetSymbol is not null
+            && fact.TargetSymbol.Contains("ProfileReporter.Count", StringComparison.Ordinal)
+            && fact.Properties.TryGetValue("parameterName", out var parameterName)
+            && parameterName == "source"
+            && fact.Properties.TryGetValue("parameterType", out var parameterType)
+            && parameterType == "global::ModernSample.CustomerProfile"
+            && fact.Properties.TryGetValue("argumentSymbolKind", out var argumentSymbolKind)
+            && argumentSymbolKind == "Parameter"
+            && fact.Properties.TryGetValue("argumentSourceFile", out var argumentSourceFile)
+            && argumentSourceFile == "src/ModernSample/CustomerProfile.cs");
     }
 
     [Fact]

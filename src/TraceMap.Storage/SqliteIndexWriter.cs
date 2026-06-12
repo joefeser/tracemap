@@ -102,6 +102,39 @@ public static class SqliteIndexWriter
               end_line integer not null
             );
 
+            create table argument_flows (
+              fact_id text primary key,
+              scan_id text not null,
+              repo text not null,
+              commit_sha text not null,
+              evidence_tier text not null,
+              rule_id text not null,
+              caller_symbol text,
+              caller_assembly_name text,
+              caller_assembly_version text,
+              callee_symbol text not null,
+              callee_assembly_name text,
+              callee_assembly_version text,
+              call_kind text,
+              parameter_ordinal integer not null,
+              parameter_name text not null,
+              parameter_type text,
+              argument_ordinal integer not null,
+              argument_expression_kind text,
+              argument_expression_hash text,
+              argument_symbol text,
+              argument_symbol_kind text,
+              argument_type text,
+              argument_assembly_name text,
+              argument_assembly_version text,
+              argument_source_file text,
+              argument_source_start_line integer,
+              argument_source_end_line integer,
+              file_path text not null,
+              start_line integer not null,
+              end_line integer not null
+            );
+
             create index ix_facts_type on facts(fact_type);
             create index ix_facts_rule on facts(rule_id);
             create index ix_facts_target_symbol on facts(target_symbol);
@@ -114,6 +147,10 @@ public static class SqliteIndexWriter
             create index ix_object_creations_type on object_creations(created_type);
             create index ix_object_creations_assembly on object_creations(created_type_assembly_name, created_type);
             create index ix_object_creations_caller on object_creations(caller_symbol);
+            create index ix_argument_flows_callee on argument_flows(callee_symbol);
+            create index ix_argument_flows_parameter on argument_flows(parameter_name, parameter_type);
+            create index ix_argument_flows_argument_symbol on argument_flows(argument_symbol);
+            create index ix_argument_flows_argument_source on argument_flows(argument_source_file, argument_source_start_line);
             """;
         command.ExecuteNonQuery();
     }
@@ -221,6 +258,11 @@ public static class SqliteIndexWriter
         {
             InsertObjectCreation(connection, transaction, fact);
         }
+
+        if (fact.FactType == FactTypes.ArgumentPassed && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+        {
+            InsertArgumentFlow(connection, transaction, fact);
+        }
     }
 
     private static void InsertCallEdge(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
@@ -280,6 +322,108 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$callee_assembly_version", GetOptionalProperty(fact, "calleeAssemblyVersion"));
         command.Parameters.AddWithValue("$callee_containing_type", GetOptionalProperty(fact, "calleeContainingType"));
         command.Parameters.AddWithValue("$call_kind", GetOptionalProperty(fact, "callKind"));
+        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
+        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
+        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
+        command.ExecuteNonQuery();
+    }
+
+    private static void InsertArgumentFlow(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert into argument_flows (
+              fact_id,
+              scan_id,
+              repo,
+              commit_sha,
+              evidence_tier,
+              rule_id,
+              caller_symbol,
+              caller_assembly_name,
+              caller_assembly_version,
+              callee_symbol,
+              callee_assembly_name,
+              callee_assembly_version,
+              call_kind,
+              parameter_ordinal,
+              parameter_name,
+              parameter_type,
+              argument_ordinal,
+              argument_expression_kind,
+              argument_expression_hash,
+              argument_symbol,
+              argument_symbol_kind,
+              argument_type,
+              argument_assembly_name,
+              argument_assembly_version,
+              argument_source_file,
+              argument_source_start_line,
+              argument_source_end_line,
+              file_path,
+              start_line,
+              end_line
+            ) values (
+              $fact_id,
+              $scan_id,
+              $repo,
+              $commit_sha,
+              $evidence_tier,
+              $rule_id,
+              $caller_symbol,
+              $caller_assembly_name,
+              $caller_assembly_version,
+              $callee_symbol,
+              $callee_assembly_name,
+              $callee_assembly_version,
+              $call_kind,
+              $parameter_ordinal,
+              $parameter_name,
+              $parameter_type,
+              $argument_ordinal,
+              $argument_expression_kind,
+              $argument_expression_hash,
+              $argument_symbol,
+              $argument_symbol_kind,
+              $argument_type,
+              $argument_assembly_name,
+              $argument_assembly_version,
+              $argument_source_file,
+              $argument_source_start_line,
+              $argument_source_end_line,
+              $file_path,
+              $start_line,
+              $end_line
+            );
+            """;
+        command.Parameters.AddWithValue("$fact_id", fact.FactId);
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$repo", fact.Repo);
+        command.Parameters.AddWithValue("$commit_sha", fact.CommitSha);
+        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$rule_id", fact.RuleId);
+        command.Parameters.AddWithValue("$caller_symbol", (object?)fact.SourceSymbol ?? DBNull.Value);
+        command.Parameters.AddWithValue("$caller_assembly_name", GetOptionalProperty(fact, "callerAssemblyName"));
+        command.Parameters.AddWithValue("$caller_assembly_version", GetOptionalProperty(fact, "callerAssemblyVersion"));
+        command.Parameters.AddWithValue("$callee_symbol", fact.TargetSymbol);
+        command.Parameters.AddWithValue("$callee_assembly_name", GetOptionalProperty(fact, "calleeAssemblyName"));
+        command.Parameters.AddWithValue("$callee_assembly_version", GetOptionalProperty(fact, "calleeAssemblyVersion"));
+        command.Parameters.AddWithValue("$call_kind", GetOptionalProperty(fact, "callKind"));
+        command.Parameters.AddWithValue("$parameter_ordinal", GetRequiredIntProperty(fact, "parameterOrdinal"));
+        command.Parameters.AddWithValue("$parameter_name", GetRequiredProperty(fact, "parameterName"));
+        command.Parameters.AddWithValue("$parameter_type", GetOptionalProperty(fact, "parameterType"));
+        command.Parameters.AddWithValue("$argument_ordinal", GetRequiredIntProperty(fact, "argumentOrdinal"));
+        command.Parameters.AddWithValue("$argument_expression_kind", GetOptionalProperty(fact, "argumentExpressionKind"));
+        command.Parameters.AddWithValue("$argument_expression_hash", GetOptionalProperty(fact, "argumentExpressionHash"));
+        command.Parameters.AddWithValue("$argument_symbol", GetOptionalProperty(fact, "argumentSymbol"));
+        command.Parameters.AddWithValue("$argument_symbol_kind", GetOptionalProperty(fact, "argumentSymbolKind"));
+        command.Parameters.AddWithValue("$argument_type", GetOptionalProperty(fact, "argumentType"));
+        command.Parameters.AddWithValue("$argument_assembly_name", GetOptionalProperty(fact, "argumentAssemblyName"));
+        command.Parameters.AddWithValue("$argument_assembly_version", GetOptionalProperty(fact, "argumentAssemblyVersion"));
+        command.Parameters.AddWithValue("$argument_source_file", GetOptionalProperty(fact, "argumentSourceFile"));
+        command.Parameters.AddWithValue("$argument_source_start_line", GetOptionalIntProperty(fact, "argumentSourceStartLine"));
+        command.Parameters.AddWithValue("$argument_source_end_line", GetOptionalIntProperty(fact, "argumentSourceEndLine"));
         command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
         command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
         command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
@@ -354,5 +498,26 @@ public static class SqliteIndexWriter
         return fact.Properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
             : DBNull.Value;
+    }
+
+    private static object GetOptionalIntProperty(CodeFact fact, string key)
+    {
+        return fact.Properties.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
+            ? parsed
+            : DBNull.Value;
+    }
+
+    private static string GetRequiredProperty(CodeFact fact, string key)
+    {
+        return fact.Properties.TryGetValue(key, out var value)
+            ? value
+            : string.Empty;
+    }
+
+    private static int GetRequiredIntProperty(CodeFact fact, string key)
+    {
+        return fact.Properties.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
+            ? parsed
+            : 0;
     }
 }
