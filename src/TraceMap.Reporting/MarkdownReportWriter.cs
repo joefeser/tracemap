@@ -115,6 +115,12 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Argument Flow",
+            result.Facts.Where(fact => fact.FactType == FactTypes.ArgumentPassed),
+            fact => $"- `{DisplaySource(fact)}` passes argument `{fact.Properties.GetValueOrDefault("argumentOrdinal") ?? "?"}` to `{fact.Properties.GetValueOrDefault("parameterName") ?? "unknown"}` on `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Logic Hotspots",
             result.Facts.Where(fact => fact.FactType is FactTypes.CalculationExpression
                 or FactTypes.BranchingLogic

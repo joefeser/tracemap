@@ -290,9 +290,11 @@ public static class CSharpSemanticExtractor
 
         var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
+        AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
+        AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
-        AddMethodInvocationFacts(projectPath, filePath, root, model, facts);
-        AddObjectCreationFacts(projectPath, filePath, root, model, facts);
+        AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts);
+        AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts);
         AddIntegrationFacts(projectPath, filePath, root, model, facts);
     }
 
@@ -323,6 +325,81 @@ public static class CSharpSemanticExtractor
                     ["namespace"] = symbol.ContainingNamespace?.IsGlobalNamespace == false ? symbol.ContainingNamespace.ToDisplayString() : string.Empty,
                     ["typeKind"] = symbol.TypeKind.ToString()
                 }));
+        }
+    }
+
+    private static void AddFieldDeclarationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var variable in root.DescendantNodes().OfType<VariableDeclaratorSyntax>())
+        {
+            if (variable.Parent?.Parent is not FieldDeclarationSyntax || model.GetDeclaredSymbol(variable) is not IFieldSymbol field)
+            {
+                continue;
+            }
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.FieldDeclared,
+                RuleIds.CSharpSemanticDeclarations,
+                projectPath,
+                filePath,
+                variable,
+                sourceSymbol: field.ContainingType?.ToDisplayString(SymbolFormat),
+                targetSymbol: field.ToDisplayString(SymbolFormat),
+                contractElement: field.Name,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["fieldName"] = field.Name,
+                        ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
+                        ["containingType"] = field.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["declaredAccessibility"] = field.DeclaredAccessibility.ToString(),
+                        ["isStatic"] = field.IsStatic.ToString()
+                    },
+                    field.ContainingAssembly,
+                    field.Type.ContainingAssembly)));
+        }
+    }
+
+    private static void AddParameterDeclarationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var parameterSyntax in root.DescendantNodes().OfType<ParameterSyntax>())
+        {
+            if (model.GetDeclaredSymbol(parameterSyntax) is not IParameterSymbol parameter)
+            {
+                continue;
+            }
+
+            var containingSymbol = parameter.ContainingSymbol;
+            facts.Add(CreateSemanticFact(
+                FactTypes.ParameterDeclared,
+                RuleIds.CSharpSemanticDeclarations,
+                projectPath,
+                filePath,
+                parameterSyntax,
+                sourceSymbol: containingSymbol?.ToDisplayString(SymbolFormat),
+                targetSymbol: parameter.ToDisplayString(SymbolFormat),
+                contractElement: parameter.Name,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["parameterName"] = parameter.Name,
+                        ["parameterType"] = parameter.Type.ToDisplayString(SymbolFormat),
+                        ["parameterOrdinal"] = parameter.Ordinal.ToString(),
+                        ["containingSymbol"] = containingSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["isOptional"] = parameter.IsOptional.ToString()
+                    },
+                    containingSymbol?.ContainingAssembly,
+                    parameter.Type.ContainingAssembly)));
         }
     }
 
@@ -376,6 +453,7 @@ public static class CSharpSemanticExtractor
     }
 
     private static void AddMethodInvocationFacts(
+        string repoPath,
         string? projectPath,
         string filePath,
         SyntaxNode root,
@@ -430,10 +508,25 @@ public static class CSharpSemanticExtractor
                     },
                     enclosing?.ContainingAssembly,
                     method.ContainingAssembly)));
+
+            AddArgumentPassedFacts(
+                repoPath,
+                projectPath,
+                filePath,
+                model,
+                facts,
+                invocation.ArgumentList.Arguments,
+                method,
+                invocation,
+                enclosing,
+                enclosingSymbol,
+                method.ToDisplayString(SymbolFormat),
+                "SemanticMethodInvocation");
         }
     }
 
     private static void AddObjectCreationFacts(
+        string repoPath,
         string? projectPath,
         string filePath,
         SyntaxNode root,
@@ -498,6 +591,85 @@ public static class CSharpSemanticExtractor
                     },
                     enclosing?.ContainingAssembly,
                     type.ContainingAssembly)));
+
+            if (constructor is not null && creation.ArgumentList is not null)
+            {
+                AddArgumentPassedFacts(
+                    repoPath,
+                    projectPath,
+                    filePath,
+                    model,
+                    facts,
+                    creation.ArgumentList.Arguments,
+                    constructor,
+                    creation,
+                    enclosing,
+                    enclosingSymbol,
+                    constructorSymbol,
+                    "SemanticObjectCreation");
+            }
+        }
+    }
+
+    private static void AddArgumentPassedFacts(
+        string repoPath,
+        string? projectPath,
+        string filePath,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        SeparatedSyntaxList<ArgumentSyntax> arguments,
+        IMethodSymbol callee,
+        SyntaxNode callSite,
+        ISymbol? caller,
+        string? callerSymbol,
+        string calleeSymbol,
+        string callKind)
+    {
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            var argument = arguments[index];
+            var parameter = ResolveParameter(callee, argument, index);
+            if (parameter is null)
+            {
+                continue;
+            }
+
+            var argumentSymbol = model.GetSymbolInfo(argument.Expression).Symbol;
+            var argumentType = model.GetTypeInfo(argument.Expression).Type;
+            var sourceLocation = GetSourceLocation(repoPath, argumentSymbol);
+            var properties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callerSymbol"] = callerSymbol ?? string.Empty,
+                    ["calleeSymbol"] = calleeSymbol,
+                    ["callKind"] = callKind,
+                    ["parameterOrdinal"] = parameter.Ordinal.ToString(),
+                    ["parameterName"] = parameter.Name,
+                    ["parameterType"] = parameter.Type.ToDisplayString(SymbolFormat),
+                    ["argumentOrdinal"] = index.ToString(),
+                    ["argumentExpressionKind"] = GetExpressionKind(argument.Expression),
+                    ["argumentExpressionHash"] = FactFactory.Hash(argument.Expression.ToString(), 32),
+                    ["argumentSymbol"] = argumentSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["argumentSymbolKind"] = argumentSymbol?.Kind.ToString() ?? string.Empty,
+                    ["argumentType"] = argumentType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["argumentSourceFile"] = sourceLocation.FilePath ?? string.Empty,
+                    ["argumentSourceStartLine"] = sourceLocation.StartLine?.ToString() ?? string.Empty,
+                    ["argumentSourceEndLine"] = sourceLocation.EndLine?.ToString() ?? string.Empty
+                },
+                caller?.ContainingAssembly,
+                callee.ContainingAssembly);
+            AddArgumentAssemblyProperties(properties, argumentSymbol, argumentType);
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.ArgumentPassed,
+                RuleIds.CSharpSemanticValueFlow,
+                projectPath,
+                filePath,
+                argument,
+                sourceSymbol: callerSymbol,
+                targetSymbol: calleeSymbol,
+                contractElement: parameter.Name,
+                properties: properties));
         }
     }
 
@@ -725,6 +897,66 @@ public static class CSharpSemanticExtractor
     {
         properties[$"{prefix}AssemblyName"] = assembly?.Identity.Name ?? string.Empty;
         properties[$"{prefix}AssemblyVersion"] = assembly?.Identity.Version?.ToString() ?? string.Empty;
+    }
+
+    private static void AddArgumentAssemblyProperties(
+        SortedDictionary<string, string> properties,
+        ISymbol? argumentSymbol,
+        ITypeSymbol? argumentType)
+    {
+        properties["argumentAssemblyName"] = argumentSymbol?.ContainingAssembly?.Identity.Name
+            ?? argumentType?.ContainingAssembly?.Identity.Name
+            ?? string.Empty;
+        properties["argumentAssemblyVersion"] = argumentSymbol?.ContainingAssembly?.Identity.Version?.ToString()
+            ?? argumentType?.ContainingAssembly?.Identity.Version?.ToString()
+            ?? string.Empty;
+    }
+
+    private static IParameterSymbol? ResolveParameter(IMethodSymbol method, ArgumentSyntax argument, int ordinal)
+    {
+        if (argument.NameColon is not null)
+        {
+            var name = argument.NameColon.Name.Identifier.ValueText;
+            return method.Parameters.FirstOrDefault(parameter => parameter.Name.Equals(name, StringComparison.Ordinal));
+        }
+
+        if (ordinal < method.Parameters.Length)
+        {
+            return method.Parameters[ordinal];
+        }
+
+        return method.Parameters.LastOrDefault(parameter => parameter.IsParams);
+    }
+
+    private static string GetExpressionKind(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            LiteralExpressionSyntax literal when literal.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.NullLiteralExpression) => "NullLiteral",
+            LiteralExpressionSyntax => "Literal",
+            IdentifierNameSyntax => "Identifier",
+            MemberAccessExpressionSyntax => "MemberAccess",
+            InvocationExpressionSyntax => "Invocation",
+            ObjectCreationExpressionSyntax => "ObjectCreation",
+            LambdaExpressionSyntax => "Lambda",
+            AnonymousFunctionExpressionSyntax => "AnonymousFunction",
+            _ => expression.Kind().ToString()
+        };
+    }
+
+    private static (string? FilePath, int? StartLine, int? EndLine) GetSourceLocation(string repoPath, ISymbol? symbol)
+    {
+        var location = symbol?.Locations.FirstOrDefault(location => location.IsInSource);
+        if (location is null)
+        {
+            return (null, null, null);
+        }
+
+        var span = location.GetLineSpan();
+        return (
+            ToRelativePath(repoPath, span.Path),
+            span.StartLinePosition.Line + 1,
+            Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1));
     }
 
     private static string? GetAssignedVariableName(ObjectCreationExpressionSyntax creation)

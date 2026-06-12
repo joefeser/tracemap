@@ -149,6 +149,18 @@ rules:
       - Does not model dependency injection container activations, reflection, deserialization-created instances, or factory-returned runtime types.
       - Assembly version is sourced from Roslyn assembly identity and may be 0.0.0.0 when a project does not set explicit version metadata.
 
+  - id: csharp.semantic.valueflow.v1
+    name: C# semantic argument value flow
+    description: Maps resolved call-site arguments to callee parameters and records argument symbol/declaration evidence when available.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ArgumentPassed
+    limitations:
+      - Requires Roslyn semantic binding for the callee method or constructor.
+      - Tracks direct call-site argument expressions only; it does not perform interprocedural alias analysis, mutation tracking, or runtime branch feasibility.
+      - Raw argument expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
+      - Lambda bodies, delegates, reflection, dynamic dispatch, dependency injection, and serializer-created values require later specialized flow rules.
+
   - id: csharp.semantic.declarations.v1
     name: C# semantic declarations
     description: Finds compiler-resolved type declarations using Roslyn semantic model.

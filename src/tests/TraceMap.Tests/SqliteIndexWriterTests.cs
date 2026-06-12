@@ -130,6 +130,20 @@ public sealed class SqliteIndexWriterTests
         Assert.Contains("ix_object_creations_type", objectCreationIndexNames);
         Assert.Contains("ix_object_creations_assembly", objectCreationIndexNames);
         Assert.Contains("ix_object_creations_caller", objectCreationIndexNames);
+
+        var argumentFlowIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var argumentFlowCommand = connection.CreateCommand();
+        argumentFlowCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'argument_flows';";
+        await using var argumentFlowReader = await argumentFlowCommand.ExecuteReaderAsync();
+        while (await argumentFlowReader.ReadAsync())
+        {
+            argumentFlowIndexNames.Add(argumentFlowReader.GetString(0));
+        }
+
+        Assert.Contains("ix_argument_flows_callee", argumentFlowIndexNames);
+        Assert.Contains("ix_argument_flows_parameter", argumentFlowIndexNames);
+        Assert.Contains("ix_argument_flows_argument_symbol", argumentFlowIndexNames);
+        Assert.Contains("ix_argument_flows_argument_source", argumentFlowIndexNames);
     }
 
     private static async Task<T> ExecuteScalarAsync<T>(SqliteConnection connection, string sql)

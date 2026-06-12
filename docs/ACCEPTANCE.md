@@ -31,6 +31,7 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - facts include rule IDs, evidence tiers, file paths, line spans, commit SHA, and extractor versions.
 - `index.sqlite` includes a `call_edges` table when call-edge facts are emitted.
 - `index.sqlite` includes an `object_creations` table when object-creation facts are emitted.
+- `index.sqlite` includes an `argument_flows` table when argument-flow facts are emitted.
 
 ## Reducer Acceptance
 
@@ -149,6 +150,7 @@ Each fixture should document:
 | semantic method invocation | Tier1 `CallEdge` with resolved caller and callee symbols |
 | syntax object creation | `ObjectCreated` with created type and assigned variable when obvious |
 | semantic object creation | Tier1 `ObjectCreated` with created type, constructor, caller, and assembly identity |
+| semantic argument passed | Tier1 `ArgumentPassed` with parameter name/type and argument symbol/source location when available |
 | calculation expression | `CalculationExpression` with operator, line span, and expression hash |
 | retry/backoff method | `RetryPolicyLogic` |
 | generated or DI glue file | `InfrastructureBoilerplate` |
