@@ -1,21 +1,21 @@
-# Codex Handoff: Impact Index Tool for C# Contract-Change Analysis
+# Codex Handoff: TraceMap Tool for C# Contract-Change Analysis
 
 ## Purpose
 
-Build an internal deterministic CLI tool that indexes C# repositories into a reusable evidence-backed impact index. The tool is not an AI impact guesser. It emits normalized code facts with repo, commit SHA, project, file, line span, rule ID, extractor version, and evidence tier. Later, a reducer compares a contract delta against the index to classify likely impact.
+Build an internal deterministic CLI tool named **TraceMap** that indexes C# repositories into a reusable evidence-backed code map. TraceMap is not an AI impact guesser. It emits normalized code facts with repo, commit SHA, project, file, line span, rule ID, extractor version, and evidence tier. Later, a reducer compares a contract delta against the index to classify likely impact.
 
 Core statement:
 
-> Map emits evidence. Reduce computes blast radius. AI may summarize evidence, but AI must not invent findings.
+> TraceMap maps evidence. Reduce computes blast radius. AI may summarize evidence, but AI must not invent findings.
 
 ## First product target
 
-A .NET CLI tool that can be run in any current repository:
+A .NET CLI tool named `tracemap` that can be run in any current repository:
 
 ```bash
-impact scan --repo . --out .impact-index
-impact report --index .impact-index/index.sqlite --out .impact-index/report.md
-impact reduce --index .impact-index/index.sqlite --contract-delta contract-delta.json --out .impact-index/impact-report.md
+tracemap scan --repo . --out .tracemap
+tracemap report --index .tracemap/index.sqlite --out .tracemap/report.md
+tracemap reduce --index .tracemap/index.sqlite --contract-delta contract-delta.json --out .tracemap/impact-report.md
 ```
 
 ## Core principles
@@ -31,24 +31,24 @@ impact reduce --index .impact-index/index.sqlite --contract-delta contract-delta
 ## Architecture
 
 ```text
-ImpactIndex/
+TraceMap/
   src/
-    Impact.Cli/
-    Impact.Core/
-    Impact.CSharp/
-    Impact.Extractors.Http/
-    Impact.Extractors.Database/
-    Impact.Extractors.Config/
-    Impact.Storage/
-    Impact.Reduce/
-    Impact.Reporting/
+    TraceMap.Cli/
+    TraceMap.Core/
+    TraceMap.CSharp/
+    TraceMap.Extractors.Http/
+    TraceMap.Extractors.Database/
+    TraceMap.Extractors.Config/
+    TraceMap.Storage/
+    TraceMap.Reduce/
+    TraceMap.Reporting/
   tests/
-    Impact.Tests/
+    TraceMap.Tests/
     SampleRepos/
   rules/
     rule-catalog.yml
   samples/
-    impact.yml
+    tracemap.yml
     contract-delta.example.json
 ```
 
@@ -57,13 +57,13 @@ ImpactIndex/
 ### scan
 
 ```bash
-impact scan --repo <path> --out <path> [--config impact.yml] [--no-build] [--include-generated] [--include-snippets]
+tracemap scan --repo <path> --out <path> [--config tracemap.yml] [--no-build] [--include-generated] [--include-snippets]
 ```
 
 Outputs:
 
 ```text
-.impact-index/
+.tracemap/
   scan-manifest.json
   facts.ndjson
   index.sqlite
@@ -77,13 +77,13 @@ Outputs:
 ### report
 
 ```bash
-impact report --index .impact-index/index.sqlite --out .impact-index/report.md
+tracemap report --index .tracemap/index.sqlite --out .tracemap/report.md
 ```
 
 ### reduce
 
 ```bash
-impact reduce --index .impact-index/index.sqlite --contract-delta contract-delta.json --out impact-report.md
+tracemap reduce --index .tracemap/index.sqlite --contract-delta contract-delta.json --out impact-report.md
 ```
 
 ## Analysis levels
@@ -320,7 +320,7 @@ UnknownAnalysisGap
 ## Initial acceptance criteria
 
 1. `dotnet test` passes.
-2. `impact scan --repo <sample-modern> --out <tmp>` produces `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, and `report.md`.
+2. `tracemap scan --repo <sample-modern> --out <tmp>` produces `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, and `report.md`.
 3. A sample project with `profile.PrimaryEmail` emits a Tier1 semantic `PropertyAccessed` fact if semantic analysis works.
 4. A broken sample project still emits syntax-level `MemberAccessName` facts and an `AnalysisGap` fact.
 5. The report has sections for repo summary, analysis coverage, facts by category, HTTP calls, DB calls, config keys, and known gaps.

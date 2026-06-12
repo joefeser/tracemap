@@ -6,24 +6,24 @@ Goal: Create the solution, project layout, test project, and basic CLI skeleton.
 
 Deliverables:
 
-- `ImpactIndex.sln`
-- `src/Impact.Cli`
-- `src/Impact.Core`
-- `src/Impact.Storage`
-- `src/Impact.Reporting`
-- `tests/Impact.Tests`
-- `impact scan`, `impact report`, `impact reduce` commands with help output
+- `TraceMap.sln`
+- `src/TraceMap.Cli`
+- `src/TraceMap.Core`
+- `src/TraceMap.Storage`
+- `src/TraceMap.Reporting`
+- `tests/TraceMap.Tests`
+- `tracemap scan`, `tracemap report`, `tracemap reduce` commands with help output
 - Unit test proving command parsing or command dispatch works
 
 Acceptance:
 
 - `dotnet build` succeeds.
 - `dotnet test` succeeds.
-- `impact scan --help` works.
+- `tracemap scan --help` works.
 
 ## Milestone 1 — Manifest, file inventory, JSONL facts
 
-Goal: Make `impact scan` useful without Roslyn.
+Goal: Make `tracemap scan` useful without Roslyn.
 
 Deliverables:
 
