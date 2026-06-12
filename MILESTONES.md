@@ -11,7 +11,7 @@ Deliverables:
 - `src/TraceMap.Core`
 - `src/TraceMap.Storage`
 - `src/TraceMap.Reporting`
-- `tests/TraceMap.Tests`
+- `src/tests/TraceMap.Tests`
 - `tracemap scan`, `tracemap report`, `tracemap reduce` commands with help output
 - Unit test proving command parsing or command dispatch works
 

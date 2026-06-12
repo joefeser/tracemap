@@ -42,7 +42,7 @@ TraceMap/
     TraceMap.Storage/
     TraceMap.Reduce/
     TraceMap.Reporting/
-  tests/
+  src/tests/
     TraceMap.Tests/
     SampleRepos/
   rules/

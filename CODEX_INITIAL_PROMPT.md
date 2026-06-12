@@ -12,7 +12,7 @@ src/TraceMap.Cli
 src/TraceMap.Core
 src/TraceMap.Storage
 src/TraceMap.Reporting
-tests/TraceMap.Tests
+src/tests/TraceMap.Tests
 rules/rule-catalog.yml
 samples/tracemap.yml
 samples/contract-delta.example.json

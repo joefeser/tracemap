@@ -23,7 +23,7 @@ src/TraceMap.Extractors.Config
 src/TraceMap.Storage
 src/TraceMap.Reduce
 src/TraceMap.Reporting
-tests/TraceMap.Tests
+src/tests/TraceMap.Tests
 ```
 
 ## Domain terms that should remain unchanged
