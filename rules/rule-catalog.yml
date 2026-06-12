@@ -10,6 +10,31 @@ rules:
     limitations:
       - Git metadata may be unavailable outside a git checkout.
 
+  - id: file.inventory.v1
+    name: File inventory
+    description: Records deterministic inventory facts for supported solution, project, source, config, JSON, and SQL files.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+      - ConfigFileDeclared
+      - SqlFileDeclared
+    limitations:
+      - File presence is structural evidence only; it does not prove runtime usage.
+      - Generated, bin, obj, .git, and TraceMap output directories are excluded in the MVP.
+
+  - id: project.file.v1
+    name: Project file inventory
+    description: Reads solution and C# project declarations, target frameworks, and package references from project files and packages.config.
+    evidenceTier: Tier2Structural
+    emits:
+      - SolutionDeclared
+      - ProjectDeclared
+      - TargetFrameworkDeclared
+      - PackageReferenced
+    limitations:
+      - XML files that cannot be parsed are still inventoried but do not emit project metadata facts.
+      - Conditional MSBuild properties are not evaluated in Milestone 1.
+
   - id: csharp.syntax.memberaccess.v1
     name: C# syntax member access
     description: Finds member access names from C# syntax without requiring compilation.
