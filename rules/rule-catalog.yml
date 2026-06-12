@@ -213,8 +213,32 @@ rules:
     limitations:
       - Requires Roslyn semantic binding except for dynamic invocations where Roslyn intentionally cannot bind a static callee.
       - These facts mark review-routing boundaries and do not prove runtime execution, concrete runtime types, branch feasibility, collection contents, object identity, dependency injection registrations, reflection targets, or serializer contract mappings.
+      - Use `csharp.semantic.runtimeevidence.v1` facts for statically visible registrations, reflection targets, serializer member names, collection element inputs, mutation semantics, and simple branch feasibility evidence.
       - Raw expressions are not stored; expression hashes, expression kinds, resolved symbols, and line spans are emitted.
       - Specialized flow rules are still required before TraceMap can carry value provenance across these boundaries.
+
+  - id: csharp.semantic.runtimeevidence.v1
+    name: C# semantic runtime evidence
+    description: Records statically provable runtime-adjacent evidence for DI registrations, serializer contract members, reflection targets, dynamic dispatch candidates, collection element inputs, mutation semantics, and simple branch feasibility.
+    evidenceTier: Tier1Semantic
+    emits:
+      - DependencyRegistered
+      - SerializerContractMember
+      - ReflectionTarget
+      - DynamicDispatchCandidate
+      - CollectionElementFlow
+      - MutationSemantics
+      - BranchFeasibility
+    limitations:
+      - Requires Roslyn semantic analysis; when project load or binding is reduced, absence of these facts is not absence of runtime behavior.
+      - Dependency registrations are limited to statically visible generic or `typeof(...)` registrations on common registration method names; container modules, scanning conventions, factories, configuration-driven registrations, and runtime conditional registrations are not expanded.
+      - Serializer contract member facts cover common attribute-declared member names such as `JsonPropertyName`, Newtonsoft `JsonProperty`, and `DataMember`; naming policies, custom converters, serializer options, and reflection-based serializers are not resolved.
+      - Reflection targets are emitted only for direct `typeof(T)` or direct `typeof(T)` arguments with literal or `nameof(...)` member names; string construction, variables, binding flags, overload resolution, and reflective invocation reachability are not inferred.
+      - Dynamic dispatch candidates record the invoked member name and generic syntax when the receiver is `dynamic`; they do not resolve concrete runtime targets.
+      - Collection element flow records syntactic inputs to add/insert/enqueue/push-like mutations; it does not model collection contents after removals, aliases, loops, branches, object identity, or mutation order.
+      - Mutation semantics classify direct property/field assignments and increment/decrement operations; they do not model aliasing, thread interleavings, setter side effects, or downstream object state.
+      - Branch feasibility is limited to compiler constant boolean expressions, direct null equality checks, and direct null patterns; it does not perform symbolic execution, path feasibility, range analysis, or branch probability.
+      - Raw expressions are not stored; expression hashes, expression kinds, resolved symbols, and line spans are emitted.
 
   - id: csharp.semantic.declarations.v1
     name: C# semantic declarations

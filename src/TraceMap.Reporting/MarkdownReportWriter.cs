@@ -154,6 +154,18 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Runtime Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.DependencyRegistered
+                or FactTypes.SerializerContractMember
+                or FactTypes.ReflectionTarget
+                or FactTypes.DynamicDispatchCandidate
+                or FactTypes.CollectionElementFlow
+                or FactTypes.MutationSemantics
+                or FactTypes.BranchFeasibility),
+            fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Boilerplate Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");

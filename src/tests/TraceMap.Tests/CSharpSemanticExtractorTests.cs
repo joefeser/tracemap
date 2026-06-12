@@ -196,13 +196,38 @@ public sealed class CSharpSemanticExtractorTests
         File.WriteAllText(Path.Combine(temp.Path, "src", "BoundarySample", "Boundary.cs"), """
             using System;
             using System.Collections.Generic;
+            using System.Runtime.Serialization;
             using System.Text.Json;
+            using System.Text.Json.Serialization;
 
             namespace BoundarySample;
 
+            public interface IWorker
+            {
+            }
+
+            public sealed class Worker : IWorker
+            {
+            }
+
+            public sealed class ServiceCollection
+            {
+                public void AddSingleton<TService, TImplementation>()
+                {
+                }
+
+                public void AddTransient(Type serviceType, Type implementationType)
+                {
+                }
+            }
+
             public sealed class RequestDto
             {
+                [JsonPropertyName("customer_name")]
                 public string Name { get; set; } = "";
+
+                [DataMember(Name = "customer_age")]
+                public int Age { get; set; }
             }
 
             public sealed class FlowBoundaryDemo
@@ -213,10 +238,19 @@ public sealed class CSharpSemanticExtractorTests
                 {
                     var request = JsonSerializer.Deserialize<RequestDto>(json);
                     var demo = services.GetService(typeof(FlowBoundaryDemo));
+                    var registrations = new ServiceCollection();
+                    registrations.AddSingleton<IWorker, Worker>();
+                    registrations.AddTransient(typeof(FlowBoundaryDemo), typeof(FlowBoundaryDemo));
                     var list = new List<RequestDto>();
+                    if (true)
+                    {
+                        current = current;
+                    }
+
                     if (request != null)
                     {
                         current = request;
+                        request.Age += 1;
                         list.Add(request);
                     }
 
@@ -237,5 +271,12 @@ public sealed class CSharpSemanticExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ReflectionUsage && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DynamicInvocation && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.BranchCondition && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DependencyRegistered && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SerializerContractMember && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence && fact.ContractElement == "customer_name");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ReflectionTarget && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence && fact.ContractElement == "Handle");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DynamicDispatchCandidate && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence && fact.ContractElement == "Query");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.CollectionElementFlow && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.MutationSemantics && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.BranchFeasibility && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
     }
 }
