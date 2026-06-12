@@ -83,22 +83,26 @@ public sealed class CliTests
             public sealed class Controller
             {
                 private readonly Service service = new();
+                private RequestDto? cached;
 
                 public void Post(RequestDto request)
                 {
                     var outbound = request;
-                    service.Save(outbound);
+                    cached = outbound;
+                    service.Save(cached);
                 }
             }
 
             public sealed class Service
             {
                 private readonly Gateway gateway = new();
+                private RequestDto? relay;
 
                 public void Save(RequestDto input)
                 {
                     var next = input;
-                    gateway.Send(next);
+                    relay = next;
+                    gateway.Send(relay);
                 }
             }
 

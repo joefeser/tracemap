@@ -127,6 +127,12 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Field Aliases",
+            result.Facts.Where(fact => fact.FactType == FactTypes.FieldAlias),
+            fact => $"- `{fact.Properties.GetValueOrDefault("fieldSymbol") ?? DisplayFactName(fact)}` aliases `{fact.Properties.GetValueOrDefault("originSymbol") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Logic Hotspots",
             result.Facts.Where(fact => fact.FactType is FactTypes.CalculationExpression
                 or FactTypes.BranchingLogic
