@@ -97,7 +97,14 @@ public static class ContractDeltaReducer
         FactTypes.SqlCommandDetected,
         FactTypes.SqlTextUsed,
         FactTypes.ConfigKeyDeclared,
-        FactTypes.ConnectionStringDeclared
+        FactTypes.ConnectionStringDeclared,
+        FactTypes.SymbolRelationship,
+        FactTypes.SerializerContractMember,
+        FactTypes.DependencyRegistered,
+        FactTypes.ReflectionTarget,
+        FactTypes.HttpRouteBinding,
+        FactTypes.DatabaseColumnMapping,
+        FactTypes.ConfigBinding
     };
 
     public static async Task<ImpactReport> ReduceAsync(ReduceOptions options, CancellationToken cancellationToken = default)
@@ -286,6 +293,17 @@ public static class ContractDeltaReducer
             warnings.Add($"High fan-out match set: {matchedItems.Count} facts across {fileCount} files; prioritize Tier1 evidence and exact type/member matches.");
         }
 
+        if (matchedItems.Any(item => item.Fact.HasSymbolIdentity)
+            && matchedItems.Any(item => !item.Fact.HasSymbolIdentity))
+        {
+            warnings.Add("Mixed symbol-backed and name-only matches were found; prioritize rows with symbol identity and Tier1 evidence.");
+        }
+
+        if (matchedItems.Any(item => item.Fact.FactType == FactTypes.SymbolRelationship))
+        {
+            warnings.Add("Symbol relationship evidence is compiler-resolved but direct; transitive inheritance/interface implications require graph traversal.");
+        }
+
         return warnings;
     }
 
@@ -328,7 +346,7 @@ public static class ContractDeltaReducer
         return classification switch
         {
             ImpactClassifications.DefiniteImpact => "A changed contract element matched compiler-resolved usage evidence.",
-            ImpactClassifications.ProbableImpact => "A changed contract element matched semantic or structural evidence, but not a compiler-resolved member usage.",
+            ImpactClassifications.ProbableImpact => "A changed contract element matched semantic, structural, symbol-relationship, or contract-mapping evidence, but not a compiler-resolved member usage.",
             ImpactClassifications.NeedsReview => "A changed contract element matched syntax-only or textual evidence; symbol identity is not proven.",
             _ => "A changed contract element matched analysis-gap evidence only."
         };
@@ -459,12 +477,30 @@ public static class ContractDeltaReducer
                     yield return ContractElement;
                 }
 
-                foreach (var key in new[] { "propertyName", "memberName", "fieldName", "methodName", "keyPath", "name" })
+                foreach (var key in new[]
+                {
+                    "propertyName",
+                    "memberName",
+                    "fieldName",
+                    "methodName",
+                    "keyPath",
+                    "name",
+                    "sourceSymbol",
+                    "targetSymbol",
+                    "sourceSymbolDisplayName",
+                    "targetSymbolDisplayName",
+                    "contractName"
+                })
                 {
                     if (Properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
                     {
                         yield return LastSymbolPart(value);
                     }
+                }
+
+                if (!string.IsNullOrWhiteSpace(SourceSymbol))
+                {
+                    yield return LastSymbolPart(SourceSymbol);
                 }
 
                 if (!string.IsNullOrWhiteSpace(TargetSymbol))
@@ -478,21 +514,57 @@ public static class ContractDeltaReducer
         {
             get
             {
-                foreach (var key in new[] { "containingType", "className", "typeName", "namespace", "name" })
+                foreach (var key in new[]
+                {
+                    "containingType",
+                    "className",
+                    "typeName",
+                    "namespace",
+                    "name",
+                    "serviceType",
+                    "implementationType",
+                    "declaringType",
+                    "sourceSymbol",
+                    "targetSymbol",
+                    "sourceSymbolDisplayName",
+                    "targetSymbolDisplayName"
+                })
                 {
                     if (Properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
                     {
-                        yield return LastSymbolPart(value);
+                        foreach (var candidate in TypeCandidatesFromSymbol(value))
+                        {
+                            yield return candidate;
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(SourceSymbol))
+                {
+                    foreach (var candidate in TypeCandidatesFromSymbol(SourceSymbol))
+                    {
+                        yield return candidate;
                     }
                 }
 
                 if (!string.IsNullOrWhiteSpace(TargetSymbol)
-                    && FactType is FactTypes.TypeDeclared or FactTypes.DbContextDeclared)
+                    && FactType is FactTypes.TypeDeclared or FactTypes.DbContextDeclared or FactTypes.SymbolRelationship)
                 {
-                    yield return LastSymbolPart(TargetSymbol);
+                    foreach (var candidate in TypeCandidatesFromSymbol(TargetSymbol))
+                    {
+                        yield return candidate;
+                    }
                 }
             }
         }
+
+        public bool HasSymbolIdentity =>
+            Properties.ContainsKey("sourceSymbolId")
+            || Properties.ContainsKey("targetSymbolId")
+            || Properties.ContainsKey("argumentSymbolId")
+            || Properties.ContainsKey("parameterSymbolId")
+            || Properties.ContainsKey("originSymbolId")
+            || Properties.ContainsKey("constructorSymbolId");
 
         public IEnumerable<string> SearchTextCandidates
         {
@@ -533,6 +605,30 @@ public static class ContractDeltaReducer
             return separator >= 0 && separator + 1 < normalized.Length
                 ? normalized[(separator + 1)..]
                 : normalized;
+        }
+
+        private static IEnumerable<string> TypeCandidatesFromSymbol(string value)
+        {
+            var normalized = value
+                .Replace("global::", string.Empty, StringComparison.Ordinal)
+                .Split('(', StringSplitOptions.TrimEntries)[0]
+                .Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                yield break;
+            }
+
+            yield return LastSymbolPart(normalized);
+
+            var lastDot = normalized.LastIndexOf('.');
+            if (lastDot <= 0)
+            {
+                yield break;
+            }
+
+            var containing = normalized[..lastDot];
+            var containingLastDot = containing.LastIndexOf('.');
+            yield return containingLastDot >= 0 ? containing[(containingLastDot + 1)..] : containing;
         }
     }
 }

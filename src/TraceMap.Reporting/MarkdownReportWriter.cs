@@ -166,6 +166,15 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Contract Mappings",
+            result.Facts.Where(fact => fact.FactType is FactTypes.HttpRouteBinding
+                or FactTypes.DatabaseColumnMapping
+                or FactTypes.ConfigBinding
+                or FactTypes.SerializerContractMember),
+            fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Symbol Relationships",
             result.Facts.Where(fact => fact.FactType == FactTypes.SymbolRelationship),
             fact => $"- `{DisplaySource(fact)}` `{fact.Properties.GetValueOrDefault("relationshipKind") ?? DisplayFactName(fact)}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");

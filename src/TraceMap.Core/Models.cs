@@ -61,7 +61,15 @@ public sealed record SymbolRelationship(
     string RuleId,
     EvidenceSpan Evidence);
 
-public sealed record ScanOptions(string RepoPath, string OutputPath);
+public sealed record ScanOptions(
+    string RepoPath,
+    string OutputPath,
+    IReadOnlyList<string>? SolutionPaths = null,
+    IReadOnlyList<string>? ProjectPaths = null,
+    IReadOnlyList<string>? IncludeGlobs = null,
+    IReadOnlyList<string>? ExcludeGlobs = null,
+    string? TargetFramework = null,
+    bool Restore = false);
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -122,6 +130,9 @@ public static class FactTypes
     public const string MutationSemantics = nameof(MutationSemantics);
     public const string BranchFeasibility = nameof(BranchFeasibility);
     public const string SymbolRelationship = nameof(SymbolRelationship);
+    public const string HttpRouteBinding = nameof(HttpRouteBinding);
+    public const string DatabaseColumnMapping = nameof(DatabaseColumnMapping);
+    public const string ConfigBinding = nameof(ConfigBinding);
     public const string EnumDeclared = nameof(EnumDeclared);
     public const string AttributeUsed = nameof(AttributeUsed);
     public const string MemberAccessName = nameof(MemberAccessName);
@@ -170,6 +181,7 @@ public static class RuleIds
     public const string CSharpSemanticParameterForwarding = "csharp.semantic.parameterforwarding.v1";
     public const string CSharpSemanticSymbolIdentity = "csharp.semantic.symbolidentity.v1";
     public const string CSharpSemanticSymbolRelationship = "csharp.semantic.symbolrelationship.v1";
+    public const string CSharpSemanticContractMapping = "csharp.semantic.contractmapping.v1";
     public const string CSharpSemanticFlowBoundary = "csharp.semantic.flowboundary.v1";
     public const string CSharpSemanticRuntimeEvidence = "csharp.semantic.runtimeevidence.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";

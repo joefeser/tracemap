@@ -34,9 +34,10 @@ public static class TraceMapCommand
                 "report" => ReportHelp(),
                 "reduce" => ReduceHelp(),
                 "flow" => FlowHelp(),
+                "relate" => RelateHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" ? 0 : 1;
         }
 
         try
@@ -47,6 +48,7 @@ public static class TraceMapCommand
                 "report" => await NotImplementedYetAsync("report", error),
                 "reduce" => await RunReduceAsync(rest, output, error, cancellationToken),
                 "flow" => await RunFlowAsync(rest, output, error, cancellationToken),
+                "relate" => await RunRelateAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -105,7 +107,15 @@ public static class TraceMapCommand
             return 1;
         }
 
-        var result = ScanEngine.Scan(new ScanOptions(repoPath, outputPath));
+        var result = ScanEngine.Scan(new ScanOptions(
+            repoPath,
+            outputPath,
+            SolutionPaths: values.GetMany("--solution"),
+            ProjectPaths: values.GetMany("--project"),
+            IncludeGlobs: values.GetMany("--include"),
+            ExcludeGlobs: values.GetMany("--exclude"),
+            TargetFramework: values.GetValueOrDefault("--target-framework"),
+            Restore: values.HasFlag("--restore")));
         var fullOutputPath = Path.GetFullPath(outputPath);
         var logsPath = Path.Combine(fullOutputPath, "logs");
         Directory.CreateDirectory(logsPath);
@@ -155,6 +165,40 @@ public static class TraceMapCommand
         return 0;
     }
 
+    private static async Task<int> RunRelateAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: relate requires --index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--symbol", out var symbol) || string.IsNullOrWhiteSpace(symbol))
+        {
+            await error.WriteLineAsync("error: relate requires --symbol <symbol-or-fragment>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: relate requires --out <path>.");
+            return 1;
+        }
+
+        var maxDepth = ParsePositiveInt(values, "--max-depth", 5);
+        var maxPaths = ParsePositiveInt(values, "--max-paths", 100);
+        var direction = values.GetValueOrDefault("--direction") ?? "both";
+        var report = await SymbolRelationshipReporter.WriteAsync(
+            new RelationshipOptions(indexPath, symbol, outputPath, direction, maxDepth, maxPaths),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap relate completed: {report.ReportPath}");
+        await output.WriteLineAsync($"Symbol relationships indexed: {report.RelationshipCount}");
+        await output.WriteLineAsync($"Paths written: {report.PathCount}");
+        return 0;
+    }
+
     private static async Task WriteAnalyzerLogAsync(string path, ScanResult result, CancellationToken cancellationToken)
     {
         var lines = new List<string>
@@ -170,9 +214,10 @@ public static class TraceMapCommand
         await File.WriteAllLinesAsync(path, lines, cancellationToken);
     }
 
-    private static Dictionary<string, string> ParseOptions(string[] args)
+    private static ParsedOptions ParseOptions(string[] args)
     {
-        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var values = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var flags = new HashSet<string>(StringComparer.Ordinal);
         for (var index = 0; index < args.Length; index++)
         {
             var arg = args[index];
@@ -181,18 +226,31 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
+            if (arg is "--restore")
+            {
+                flags.Add(arg);
+                continue;
+            }
+
             if (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
             {
                 throw new ArgumentException($"Missing value for {arg}.");
             }
 
-            values[arg] = args[++index];
+            if (!values.TryGetValue(arg, out var list))
+            {
+                list = [];
+                values[arg] = list;
+            }
+
+            list.AddRange(args[++index]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
-        return values;
+        return new ParsedOptions(values, flags);
     }
 
-    private static int ParsePositiveInt(IReadOnlyDictionary<string, string> values, string key, int defaultValue)
+    private static int ParsePositiveInt(ParsedOptions values, string key, int defaultValue)
     {
         if (!values.TryGetValue(key, out var value))
         {
@@ -210,6 +268,38 @@ public static class TraceMapCommand
     private static bool IsHelp(string arg)
     {
         return arg is "-h" or "--help" or "help";
+    }
+
+    private sealed class ParsedOptions(
+        Dictionary<string, List<string>> values,
+        HashSet<string> flags)
+    {
+        public bool TryGetValue(string key, out string? value)
+        {
+            if (values.TryGetValue(key, out var list) && list.Count > 0)
+            {
+                value = list[^1];
+                return true;
+            }
+
+            value = null;
+            return false;
+        }
+
+        public string? GetValueOrDefault(string key)
+        {
+            return TryGetValue(key, out var value) ? value : null;
+        }
+
+        public IReadOnlyList<string> GetMany(string key)
+        {
+            return values.TryGetValue(key, out var list) ? list : [];
+        }
+
+        public bool HasFlag(string key)
+        {
+            return flags.Contains(key);
+        }
     }
 
     private static async Task<int> NotImplementedYetAsync(string command, TextWriter error)
@@ -234,12 +324,14 @@ public static class TraceMapCommand
               tracemap report --index <path> --out <path>
               tracemap reduce --index <path> --contract-delta <path> --out <path>
               tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>
+              tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a report from an index. Skeleton in Milestone 0.
               reduce    Reduce a contract delta against an index.
               flow      Trace deterministic parameter-forwarding paths.
+              relate    Trace deterministic symbol relationship paths.
             """;
     }
 
@@ -247,11 +339,19 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap scan --repo <path> --out <path>
+              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore]
 
             Required:
               --repo <path>   Repository or folder to scan.
               --out <path>    Output directory for TraceMap artifacts.
+
+            Optional:
+              --solution <path>        Solution to load. Repeat or comma-separate for multiple.
+              --project <path>         Project to load. Repeat or comma-separate for multiple.
+              --include <glob>         Include only matching inventoried paths. Repeatable.
+              --exclude <glob>         Exclude matching inventoried paths. Repeatable.
+              --target-framework <tfm> MSBuild TargetFramework property for semantic load.
+              --restore                Run dotnet restore for selected solution/project targets before semantic load.
 
             Outputs:
               scan-manifest.json
@@ -306,6 +406,27 @@ public static class TraceMapCommand
 
             Outputs:
               flow-report.md
+            """;
+    }
+
+    private static string RelateHelp()
+    {
+        return """
+            Usage:
+              tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path> [--direction <incoming|outgoing|both>] [--max-depth <n>] [--max-paths <n>]
+
+            Required:
+              --index <path>             Existing TraceMap index.sqlite.
+              --symbol <symbol>          Symbol ID/display name fragment to trace.
+              --out <path>               Output directory or relationship-report.md path.
+
+            Optional:
+              --direction <value>        incoming, outgoing, or both. Default: both.
+              --max-depth <n>            Maximum relationship edges per path. Default: 5.
+              --max-paths <n>            Maximum paths to write. Default: 100.
+
+            Outputs:
+              relationship-report.md
             """;
     }
 }

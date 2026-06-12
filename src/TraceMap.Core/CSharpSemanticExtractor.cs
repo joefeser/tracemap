@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
+using System.Diagnostics;
 
 namespace TraceMap.Core;
 
@@ -75,8 +76,9 @@ public static class CSharpSemanticExtractor
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers
             | SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
 
-    public static SemanticExtractionResult Extract(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
+    public static SemanticExtractionResult Extract(string repoPath, IReadOnlyList<FileInventoryItem> inventory, ScanOptions? options = null)
     {
+        options ??= new ScanOptions(repoPath, ".");
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var projects = inventory.Where(item => item.Kind == "Project").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
@@ -102,7 +104,17 @@ public static class CSharpSemanticExtractor
             return new SemanticExtractionResult(facts, gaps, Attempted: true, ReducedCoverage: true);
         }
 
-        using var workspace = MSBuildWorkspace.Create();
+        RunRestoreIfRequested(repoPath, projects, solutions, options, gaps);
+
+        var workspaceProperties = string.IsNullOrWhiteSpace(options.TargetFramework)
+            ? null
+            : new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["TargetFramework"] = options.TargetFramework
+            };
+        using var workspace = workspaceProperties is null
+            ? MSBuildWorkspace.Create()
+            : MSBuildWorkspace.Create(workspaceProperties);
         workspace.RegisterWorkspaceFailedHandler(args =>
         {
             gaps.Add(CreateGap(
@@ -203,6 +215,63 @@ public static class CSharpSemanticExtractor
         }
     }
 
+    private static void RunRestoreIfRequested(
+        string repoPath,
+        IReadOnlyList<FileInventoryItem> projects,
+        IReadOnlyList<FileInventoryItem> solutions,
+        ScanOptions options,
+        List<SemanticFactCandidate> gaps)
+    {
+        if (!options.Restore)
+        {
+            return;
+        }
+
+        var targets = solutions.Count > 0
+            ? solutions.Select(item => item.RelativePath)
+            : projects.Select(item => item.RelativePath);
+        foreach (var target in targets.OrderBy(path => path, StringComparer.Ordinal))
+        {
+            var exitCode = RunDotnetRestore(repoPath, target, out var message);
+            if (exitCode != 0)
+            {
+                gaps.Add(CreateGap(
+                    target,
+                    $"dotnet restore failed with exit code {exitCode}: {message}",
+                    "RestoreFailed",
+                    target.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ? target : null));
+            }
+        }
+    }
+
+    private static int RunDotnetRestore(string repoPath, string relativeTargetPath, out string message)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = $"restore \"{relativeTargetPath.Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
+            WorkingDirectory = repoPath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        process.Start();
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        message = string.Join(" ", new[] { LastNonEmptyLine(output), LastNonEmptyLine(error) }
+            .Where(line => !string.IsNullOrWhiteSpace(line)));
+        return process.ExitCode;
+    }
+
+    private static string LastNonEmptyLine(string value)
+    {
+        return value
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault() ?? string.Empty;
+    }
+
     private static void ExtractSolution(
         string repoPath,
         Solution solution,
@@ -301,6 +370,7 @@ public static class CSharpSemanticExtractor
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts);
         AddFlowBoundaryFacts(projectPath, filePath, root, model, facts);
         AddRuntimeEvidenceFacts(projectPath, filePath, root, model, facts);
+        AddContractMappingFacts(projectPath, filePath, root, model, facts);
         AddIntegrationFacts(projectPath, filePath, root, model, facts);
     }
 
@@ -1283,6 +1353,177 @@ public static class CSharpSemanticExtractor
         AddBranchFeasibilityFacts(projectPath, filePath, root, model, facts);
     }
 
+    private static void AddContractMappingFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        AddHttpRouteBindingFacts(projectPath, filePath, root, model, facts);
+        AddDatabaseColumnMappingFacts(projectPath, filePath, root, model, facts);
+        AddConfigBindingFacts(projectPath, filePath, root, model, facts);
+    }
+
+    private static void AddHttpRouteBindingFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var methodDeclaration in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            if (model.GetDeclaredSymbol(methodDeclaration) is not IMethodSymbol method)
+            {
+                continue;
+            }
+
+            var methodAttributes = methodDeclaration.AttributeLists.SelectMany(list => list.Attributes).ToArray();
+            var classAttributes = methodDeclaration.FirstAncestorOrSelf<ClassDeclarationSyntax>()?.AttributeLists.SelectMany(list => list.Attributes).ToArray() ?? [];
+            var routeTemplates = classAttributes.Concat(methodAttributes)
+                .Select(attribute => TryGetHttpRouteAttribute(attribute, model, out _, out var routeTemplate) ? routeTemplate : null)
+                .Where(template => !string.IsNullOrWhiteSpace(template))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var httpMethods = methodAttributes
+                .Select(attribute => TryGetHttpRouteAttribute(attribute, model, out var httpMethod, out _) ? httpMethod : null)
+                .Where(methodName => !string.IsNullOrWhiteSpace(methodName))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (routeTemplates.Length == 0 && httpMethods.Length == 0)
+            {
+                continue;
+            }
+
+            var bodyParameters = methodDeclaration.ParameterList.Parameters
+                .Select(parameter => (Syntax: parameter, Symbol: model.GetDeclaredSymbol(parameter) as IParameterSymbol))
+                .Where(item => item.Symbol is not null && IsHttpBodyParameter(item.Syntax, item.Symbol, model))
+                .Select(item => item.Symbol!)
+                .ToArray();
+            var properties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["mappingKind"] = "HttpRouteBinding",
+                    ["httpMethods"] = string.Join(",", httpMethods),
+                    ["routeTemplates"] = string.Join(",", routeTemplates),
+                    ["bodyParameterTypes"] = string.Join(",", bodyParameters.Select(parameter => parameter.Type.ToDisplayString(SymbolFormat))),
+                    ["bodyParameterNames"] = string.Join(",", bodyParameters.Select(parameter => parameter.Name)),
+                    ["methodSymbol"] = method.ToDisplayString(SymbolFormat),
+                    ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty
+                },
+                method.ContainingAssembly,
+                method.ContainingAssembly);
+            AddSymbolProperties(properties, "target", method);
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.HttpRouteBinding,
+                RuleIds.CSharpSemanticContractMapping,
+                projectPath,
+                filePath,
+                methodDeclaration,
+                sourceSymbol: method.ContainingType?.ToDisplayString(SymbolFormat),
+                targetSymbol: method.ToDisplayString(SymbolFormat),
+                contractElement: method.Name,
+                properties: properties));
+        }
+    }
+
+    private static void AddDatabaseColumnMappingFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var classDeclaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        {
+            if (model.GetDeclaredSymbol(classDeclaration) is not INamedTypeSymbol type)
+            {
+                continue;
+            }
+
+            foreach (var attribute in classDeclaration.AttributeLists.SelectMany(list => list.Attributes))
+            {
+                if (!TryGetDatabaseMappingAttribute(attribute, model, out var mappingKind, out var mappedName))
+                {
+                    continue;
+                }
+
+                facts.Add(CreateDatabaseMappingFact(projectPath, filePath, attribute, model, type, type, mappingKind, mappedName));
+            }
+        }
+
+        foreach (var member in root.DescendantNodes().OfType<MemberDeclarationSyntax>())
+        {
+            if (member is not PropertyDeclarationSyntax and not FieldDeclarationSyntax)
+            {
+                continue;
+            }
+
+            var symbol = model.GetDeclaredSymbol(member);
+            if (symbol is not (IPropertySymbol or IFieldSymbol))
+            {
+                continue;
+            }
+
+            foreach (var attribute in member.AttributeLists.SelectMany(list => list.Attributes))
+            {
+                if (!TryGetDatabaseMappingAttribute(attribute, model, out var mappingKind, out var mappedName))
+                {
+                    continue;
+                }
+
+                facts.Add(CreateDatabaseMappingFact(projectPath, filePath, attribute, model, symbol.ContainingType, symbol, mappingKind, mappedName));
+            }
+        }
+    }
+
+    private static void AddConfigBindingFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method
+                || method.Name is not ("Bind" or "Get"))
+            {
+                continue;
+            }
+
+            if (!TryGetConfigurationSection(invocation, out var sectionName))
+            {
+                continue;
+            }
+
+            var boundType = method.TypeArguments.Length > 0
+                ? method.TypeArguments[0].ToDisplayString(SymbolFormat)
+                : invocation.ArgumentList.Arguments.Select(argument => model.GetTypeInfo(argument.Expression).Type?.ToDisplayString(SymbolFormat)).FirstOrDefault(type => !string.IsNullOrWhiteSpace(type)) ?? string.Empty;
+            facts.Add(CreateSemanticFact(
+                FactTypes.ConfigBinding,
+                RuleIds.CSharpSemanticContractMapping,
+                projectPath,
+                filePath,
+                invocation,
+                sourceSymbol: GetEnclosingSymbol(model, invocation),
+                targetSymbol: boundType,
+                contractElement: sectionName,
+                properties: AddAssemblyProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["mappingKind"] = "ConfigBinding",
+                        ["sectionName"] = sectionName,
+                        ["boundType"] = boundType,
+                        ["methodSymbol"] = method.ToDisplayString(SymbolFormat)
+                    },
+                    model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
+                    method.ContainingAssembly)));
+        }
+    }
+
     private static void AddDependencyRegistrationFacts(
         string? projectPath,
         string filePath,
@@ -1669,6 +1910,146 @@ public static class CSharpSemanticExtractor
         }
 
         return true;
+    }
+
+    private static bool TryGetHttpRouteAttribute(
+        AttributeSyntax attribute,
+        SemanticModel model,
+        out string httpMethod,
+        out string routeTemplate)
+    {
+        httpMethod = string.Empty;
+        routeTemplate = GetAttributeStringArgument(attribute, null) ?? string.Empty;
+        var attributeName = ((model.GetSymbolInfo(attribute).Symbol as IMethodSymbol)?.ContainingType?.ToDisplayString(SymbolFormat)
+            ?? attribute.Name.ToString()).Trim();
+        var shortName = attributeName.Split('.').Last();
+        if (shortName.EndsWith("Attribute", StringComparison.Ordinal))
+        {
+            shortName = shortName[..^"Attribute".Length];
+        }
+
+        httpMethod = shortName switch
+        {
+            "HttpGet" => "GET",
+            "HttpPost" => "POST",
+            "HttpPut" => "PUT",
+            "HttpDelete" => "DELETE",
+            "HttpPatch" => "PATCH",
+            "HttpHead" => "HEAD",
+            "HttpOptions" => "OPTIONS",
+            _ => string.Empty
+        };
+
+        return shortName == "Route" || !string.IsNullOrWhiteSpace(httpMethod);
+    }
+
+    private static bool IsHttpBodyParameter(ParameterSyntax parameterSyntax, IParameterSymbol parameter, SemanticModel model)
+    {
+        if (parameterSyntax.AttributeLists
+            .SelectMany(list => list.Attributes)
+            .Any(attribute => AttributeShortName(attribute, model) == "FromBody"))
+        {
+            return true;
+        }
+
+        var type = parameter.Type;
+        return type.TypeKind is TypeKind.Class or TypeKind.Struct
+            && type.SpecialType == SpecialType.None
+            && !IsKnownTypeLike(type, "String")
+            && !IsKnownTypeLike(type, "CancellationToken");
+    }
+
+    private static bool TryGetDatabaseMappingAttribute(
+        AttributeSyntax attribute,
+        SemanticModel model,
+        out string mappingKind,
+        out string mappedName)
+    {
+        mappingKind = string.Empty;
+        mappedName = string.Empty;
+        var shortName = AttributeShortName(attribute, model);
+        if (shortName is not ("Table" or "Column"))
+        {
+            return false;
+        }
+
+        mappingKind = shortName == "Table" ? "DatabaseTableMapping" : "DatabaseColumnMapping";
+        mappedName = GetAttributeStringArgument(attribute, "Name")
+            ?? GetAttributeStringArgument(attribute, null)
+            ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(mappedName);
+    }
+
+    private static SemanticFactCandidate CreateDatabaseMappingFact(
+        string? projectPath,
+        string filePath,
+        AttributeSyntax attribute,
+        SemanticModel model,
+        INamedTypeSymbol? containingType,
+        ISymbol mappedSymbol,
+        string mappingKind,
+        string mappedName)
+    {
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["mappingKind"] = mappingKind,
+                ["mappedName"] = mappedName,
+                ["mappedSymbol"] = mappedSymbol.ToDisplayString(SymbolFormat),
+                ["mappedSymbolKind"] = mappedSymbol.Kind.ToString(),
+                ["containingType"] = containingType?.ToDisplayString(SymbolFormat) ?? string.Empty
+            },
+            mappedSymbol.ContainingAssembly,
+            mappedSymbol.ContainingAssembly);
+        AddSymbolProperties(properties, "target", mappedSymbol);
+
+        return CreateSemanticFact(
+            FactTypes.DatabaseColumnMapping,
+            RuleIds.CSharpSemanticContractMapping,
+            projectPath,
+            filePath,
+            attribute,
+            sourceSymbol: containingType?.ToDisplayString(SymbolFormat),
+            targetSymbol: mappedSymbol.ToDisplayString(SymbolFormat),
+            contractElement: mappedName,
+            properties: properties);
+    }
+
+    private static bool TryGetConfigurationSection(InvocationExpressionSyntax invocation, out string sectionName)
+    {
+        sectionName = string.Empty;
+        var expression = invocation.Expression;
+        var receiver = GetInvocationReceiver(expression);
+        while (receiver is InvocationExpressionSyntax receiverInvocation)
+        {
+            if (GetInvocationMemberName(receiverInvocation.Expression) == "GetSection"
+                && receiverInvocation.ArgumentList.Arguments.Count > 0
+                && GetNameExpressionValue(receiverInvocation.ArgumentList.Arguments[0].Expression) is { Length: > 0 } literalSection)
+            {
+                sectionName = literalSection;
+                return true;
+            }
+
+            receiver = GetInvocationReceiver(receiverInvocation.Expression);
+        }
+
+        return false;
+    }
+
+    private static string AttributeShortName(AttributeSyntax attribute, SemanticModel model)
+    {
+        var attributeName = ((model.GetSymbolInfo(attribute).Symbol as IMethodSymbol)?.ContainingType?.ToDisplayString(SymbolFormat)
+            ?? attribute.Name.ToString()).Trim();
+        var shortName = attributeName.Split('.').Last();
+        return shortName.EndsWith("Attribute", StringComparison.Ordinal)
+            ? shortName[..^"Attribute".Length]
+            : shortName;
+    }
+
+    private static bool IsKnownTypeLike(ITypeSymbol type, string name)
+    {
+        return type.Name.Equals(name, StringComparison.Ordinal)
+            || type.ToDisplayString(SymbolFormat).EndsWith("." + name, StringComparison.Ordinal);
     }
 
     private static bool TryGetReflectionTarget(

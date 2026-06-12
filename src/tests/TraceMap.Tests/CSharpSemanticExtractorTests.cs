@@ -352,4 +352,92 @@ public sealed class CSharpSemanticExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.MutationSemantics && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.BranchFeasibility && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
     }
+
+    [Fact]
+    public void Scan_extracts_tier1_contract_mapping_facts()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "MappingSample"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "MappingSample", "MappingSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "MappingSample", "Mappings.cs"), """
+            using System;
+
+            namespace MappingSample;
+
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+            public sealed class RouteAttribute(string template) : Attribute { }
+            public sealed class HttpPostAttribute(string template) : Attribute { }
+            public sealed class FromBodyAttribute : Attribute { }
+            public sealed class TableAttribute(string name) : Attribute { }
+            public sealed class ColumnAttribute(string name) : Attribute { }
+
+            public sealed class Configuration
+            {
+                public Configuration GetSection(string name) => this;
+            }
+
+            public static class ConfigurationExtensions
+            {
+                public static T? Get<T>(this Configuration configuration) => default;
+                public static void Bind(this Configuration configuration, object target) { }
+            }
+
+            public sealed class CustomerOptions { }
+
+            [Table("customer_profiles")]
+            public sealed class CustomerProfile
+            {
+                [Column("primary_email")]
+                public string PrimaryEmail { get; set; } = "";
+            }
+
+            [Route("api/customers")]
+            public sealed class CustomerController
+            {
+                [HttpPost("{id}")]
+                public void Update([FromBody] CustomerProfile profile)
+                {
+                    var options = new CustomerOptions();
+                    new Configuration().GetSection("Customers").Bind(options);
+                    _ = new Configuration().GetSection("CustomerDefaults").Get<CustomerOptions>();
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.HttpRouteBinding
+            && fact.RuleId == RuleIds.CSharpSemanticContractMapping
+            && fact.Properties.TryGetValue("routeTemplates", out var routes)
+            && routes.Contains("api/customers", StringComparison.Ordinal)
+            && routes.Contains("{id}", StringComparison.Ordinal)
+            && fact.Properties.TryGetValue("bodyParameterTypes", out var bodyTypes)
+            && bodyTypes.Contains("CustomerProfile", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseColumnMapping
+            && fact.ContractElement == "primary_email"
+            && fact.RuleId == RuleIds.CSharpSemanticContractMapping);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseColumnMapping
+            && fact.ContractElement == "customer_profiles"
+            && fact.RuleId == RuleIds.CSharpSemanticContractMapping);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ConfigBinding
+            && fact.ContractElement == "Customers"
+            && fact.RuleId == RuleIds.CSharpSemanticContractMapping);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ConfigBinding
+            && fact.ContractElement == "CustomerDefaults"
+            && fact.RuleId == RuleIds.CSharpSemanticContractMapping);
+    }
 }

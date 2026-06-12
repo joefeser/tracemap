@@ -57,6 +57,8 @@ Required outputs:
 - `report.md`
 - `logs/analyzer.log`
 
+Scoped scans may add `--solution`, `--project`, `--include`, `--exclude`, `--target-framework`, and explicit `--restore`. Restore is never implied.
+
 ### Reduce
 
 ```bash
@@ -76,6 +78,14 @@ tracemap flow --index <index.sqlite> --symbol <symbol-or-fragment> --out <flow-r
 Required output:
 
 - `flow-report.md`
+
+```text
+tracemap relate --index <index.sqlite> --symbol <symbol-or-fragment> --out <relationship-report.md>
+```
+
+Outputs:
+
+- `relationship-report.md`
 
 ### Contract Delta Shape
 
@@ -153,6 +163,6 @@ Milestones 0 through 8 establish the current MVP:
 - The CLI can scan legacy or dependency-incomplete sample repos with reduced coverage and useful syntax facts.
 - The reducer emits evidence rows for matches and coverage evidence for no-match classifications.
 - The reducer emits warnings for generic or high fan-out name matches without suppressing evidence.
-- The scanner emits queryable call edges, object creation facts, argument-flow facts, local-alias facts, field-alias facts, parameter-forwarding edges, exact symbol identity and relationship tables, flow-boundary facts, runtime-evidence facts, assembly identity, and review-routing logic shape facts.
+- The scanner emits queryable call edges, object creation facts, argument-flow facts, local-alias facts, field-alias facts, parameter-forwarding edges, exact symbol identity and relationship tables, scoped scan metadata, flow-boundary facts, runtime-evidence facts, contract-mapping facts, assembly identity, and review-routing logic shape facts.
 - No reducer finding is emitted without a rule ID.
 - No no-evidence result hides reduced coverage.

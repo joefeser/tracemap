@@ -127,6 +127,42 @@ public sealed class ReducerTests
     }
 
     [Fact]
+    public async Task Reduce_changed_member_with_symbol_relationship_reports_probable_impact()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteDelta(temp.Path, "IProfileReporter.measure");
+        var manifest = CreateManifest("Level1SemanticAnalysis", "Succeeded");
+        var fact = FactFactory.Create(
+            manifest,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("src/ProfileReporter.cs", 14, 14, null, "test", "test/1.0"),
+            sourceSymbol: "global::Sample.ProfileReporter.Measure(global::Sample.CustomerProfile profile)",
+            targetSymbol: "global::Sample.IProfileReporter.Measure(global::Sample.CustomerProfile profile)",
+            contractElement: "ImplementsInterfaceMember",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["relationshipKind"] = "ImplementsInterfaceMember",
+                ["sourceSymbol"] = "global::Sample.ProfileReporter.Measure(global::Sample.CustomerProfile profile)",
+                ["targetSymbol"] = "global::Sample.IProfileReporter.Measure(global::Sample.CustomerProfile profile)",
+                ["sourceSymbolId"] = "csharp method source",
+                ["targetSymbolId"] = "csharp method target",
+                ["sourceSymbolDisplayName"] = "Sample.ProfileReporter.Measure(Sample.CustomerProfile profile)",
+                ["targetSymbolDisplayName"] = "Sample.IProfileReporter.Measure(Sample.CustomerProfile profile)"
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [fact]);
+
+        var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
+
+        Assert.Contains("Classification: `ProbableImpact`", report);
+        Assert.Contains("`SymbolRelationship`", report);
+        Assert.Contains("Symbol relationship evidence is compiler-resolved but direct", report);
+    }
+
+    [Fact]
     public async Task Reduce_matching_analysis_gap_reports_unknown_analysis_gap()
     {
         using var temp = new TempDirectory();
