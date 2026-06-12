@@ -33,6 +33,7 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `index.sqlite` includes an `object_creations` table when object-creation facts are emitted.
 - `index.sqlite` includes an `argument_flows` table when argument-flow facts are emitted.
 - `index.sqlite` includes a `local_aliases` table when local-alias facts are emitted.
+- `index.sqlite` includes a `field_aliases` table when field-alias facts are emitted.
 - `index.sqlite` includes a `parameter_forward_edges` table derived from parameter-to-parameter argument-flow facts.
 
 ## Reducer Acceptance
@@ -154,8 +155,9 @@ Each fixture should document:
 | semantic object creation | Tier1 `ObjectCreated` with created type, constructor, caller, and assembly identity |
 | semantic argument passed | Tier1 `ArgumentPassed` with parameter name/type and argument symbol/source location when available |
 | semantic local alias | Tier1 `LocalAlias` with alias symbol, origin symbol, rule ID, and evidence span |
+| semantic field alias | Tier1 `FieldAlias` with field symbol, origin symbol, rule ID, and evidence span |
 | semantic parameter forwarding | `parameter_forward_edges` row with source method/parameter, target method/parameter, rule ID, and evidence span |
-| parameter flow report | `tracemap flow` chains direct and local-alias-resolved parameter-forwarding edges and labels limitations |
+| parameter flow report | `tracemap flow` chains direct and same-method alias-resolved parameter-forwarding edges and labels limitations |
 | calculation expression | `CalculationExpression` with operator, line span, and expression hash |
 | retry/backoff method | `RetryPolicyLogic` |
 | generated or DI glue file | `InfrastructureBoilerplate` |

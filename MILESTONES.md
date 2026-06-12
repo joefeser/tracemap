@@ -168,10 +168,12 @@ Deliverables:
 - Semantic `ObjectCreated` facts with assembly identity when Roslyn resolves created type symbols.
 - Semantic `ArgumentPassed` facts that map call-site arguments to callee parameters.
 - Semantic `LocalAlias` facts for simple local aliases and assignments.
+- Semantic `FieldAlias` facts for simple same-method field assignments.
 - SQLite `call_edges` table for caller/callee queries.
 - SQLite `object_creations` table for created-type queries.
 - SQLite `argument_flows` table for parameter/argument provenance queries.
 - SQLite `local_aliases` table for local alias provenance queries.
+- SQLite `field_aliases` table for field alias provenance queries.
 - SQLite `parameter_forward_edges` table for direct parameter-to-parameter forwarding queries.
 - `tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>` for bounded parameter-forwarding path reports.
 - Deterministic logic shape facts:
@@ -190,11 +192,13 @@ Acceptance:
 - A semantic repo emits Tier1 `ObjectCreated` facts with caller/created assembly name and version when available.
 - A semantic repo emits Tier1 `ArgumentPassed` facts with parameter name/type, argument symbol, and source declaration span when available.
 - A semantic repo emits Tier1 `LocalAlias` facts for `var alias = parameter` and simple assignment aliases.
+- A semantic repo emits Tier1 `FieldAlias` facts for same-method field assignments such as `_cached = parameter`.
 - `index.sqlite` contains queryable `call_edges`.
 - `index.sqlite` contains queryable `object_creations`.
 - `index.sqlite` contains queryable `argument_flows`.
 - `index.sqlite` contains queryable `local_aliases`.
+- `index.sqlite` contains queryable `field_aliases`.
 - `index.sqlite` contains queryable `parameter_forward_edges`.
-- `tracemap flow` emits a Markdown report that chains direct and local-alias-resolved parameter-forwarding edges with rule IDs and evidence spans.
+- `tracemap flow` emits a Markdown report that chains direct and same-method alias-resolved parameter-forwarding edges with rule IDs and evidence spans.
 - Calculation/retry logic is findable without storing raw source snippets.
 - Boilerplate/generated/DI glue files are labeled as review-routing signals, not omitted from inventory.

@@ -173,15 +173,27 @@ rules:
       - Does not model mutation of object contents, collection membership, tuple/deconstruction flow, property aliases, ref/out effects, closures, runtime branches, or alias invalidation after complex control flow.
       - Raw alias expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
 
+  - id: csharp.semantic.fieldalias.v1
+    name: C# semantic field alias
+    description: Records simple same-method field assignments where a field is assigned from another resolved symbol.
+    evidenceTier: Tier1Semantic
+    emits:
+      - FieldAlias
+    limitations:
+      - Requires Roslyn semantic binding for the assigned field and origin expression.
+      - Tracks simple field assignments only, such as `_cached = value`, and only uses them for parameter forwarding when the assignment and later argument usage are in the same containing method.
+      - Does not infer constructor-to-method field lifetime, dependency injection state, object mutation, property aliases, collection membership, ref/out effects, closures, runtime branches, or alias invalidation after complex control flow.
+      - Raw assignment expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
+
   - id: csharp.semantic.parameterforwarding.v1
     name: C# semantic parameter forwarding
-    description: Derives parameter-to-parameter forwarding edges from semantic argument-flow evidence, resolving simple local aliases when available.
+    description: Derives parameter-to-parameter forwarding edges from semantic argument-flow evidence, resolving simple same-method local and field aliases when available.
     evidenceTier: Tier1Semantic
     emits:
       - ParameterForwardEdge
     limitations:
-      - Requires an `ArgumentPassed` fact where the argument is resolved as a method parameter or as a local with `LocalAlias` evidence back to a parameter in the same containing method.
-      - Follows parameter forwarding and bounded local alias chains only; it does not infer field aliases, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
+      - Requires an `ArgumentPassed` fact where the argument is resolved as a method parameter, or as a local/field with alias evidence back to a parameter in the same containing method.
+      - Follows parameter forwarding and bounded same-method alias chains only; it does not infer cross-method field lifetime, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
       - Path reports are bounded by max depth and max path count, so large or cyclic graphs can be intentionally truncated.
       - Paths are evidence chains, not proof that a runtime request always reaches the terminal method.
 

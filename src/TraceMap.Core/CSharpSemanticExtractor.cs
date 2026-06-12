@@ -293,6 +293,7 @@ public static class CSharpSemanticExtractor
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
         AddLocalAliasFacts(repoPath, projectPath, filePath, root, model, facts);
+        AddFieldAliasFacts(repoPath, projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
         AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts);
@@ -503,6 +504,88 @@ public static class CSharpSemanticExtractor
             sourceSymbol: containingSymbol,
             targetSymbol: local.ToDisplayString(SymbolFormat),
             contractElement: local.Name,
+            properties: properties));
+    }
+
+    private static void AddFieldAliasFacts(
+        string repoPath,
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            if (!assignment.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SimpleAssignmentExpression)
+                || model.GetSymbolInfo(assignment.Left).Symbol is not IFieldSymbol field)
+            {
+                continue;
+            }
+
+            AddFieldAliasFact(
+                repoPath,
+                projectPath,
+                filePath,
+                assignment,
+                assignment.Right,
+                model,
+                facts,
+                field);
+        }
+    }
+
+    private static void AddFieldAliasFact(
+        string repoPath,
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        ExpressionSyntax originExpression,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        IFieldSymbol field)
+    {
+        var originSymbol = model.GetSymbolInfo(originExpression).Symbol;
+        if (originSymbol is null || SymbolEqualityComparer.Default.Equals(originSymbol, field))
+        {
+            return;
+        }
+
+        var containingSymbol = model.GetEnclosingSymbol(evidenceNode.SpanStart)?.ToDisplayString(SymbolFormat);
+        var originType = model.GetTypeInfo(originExpression).Type;
+        var fieldSourceLocation = GetSourceLocation(repoPath, field);
+        var originSourceLocation = GetSourceLocation(repoPath, originSymbol);
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingSymbol"] = containingSymbol ?? string.Empty,
+                ["fieldSymbol"] = field.ToDisplayString(SymbolFormat),
+                ["fieldSymbolKind"] = field.Kind.ToString(),
+                ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
+                ["fieldSourceFile"] = fieldSourceLocation.FilePath ?? string.Empty,
+                ["fieldSourceStartLine"] = fieldSourceLocation.StartLine?.ToString() ?? string.Empty,
+                ["fieldSourceEndLine"] = fieldSourceLocation.EndLine?.ToString() ?? string.Empty,
+                ["originExpressionKind"] = GetExpressionKind(originExpression),
+                ["originExpressionHash"] = FactFactory.Hash(originExpression.ToString(), 32),
+                ["originSymbol"] = originSymbol.ToDisplayString(SymbolFormat),
+                ["originSymbolKind"] = originSymbol.Kind.ToString(),
+                ["originType"] = originType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                ["originSourceFile"] = originSourceLocation.FilePath ?? string.Empty,
+                ["originSourceStartLine"] = originSourceLocation.StartLine?.ToString() ?? string.Empty,
+                ["originSourceEndLine"] = originSourceLocation.EndLine?.ToString() ?? string.Empty
+            },
+            field.ContainingAssembly,
+            originSymbol.ContainingAssembly ?? originType?.ContainingAssembly);
+
+        facts.Add(CreateSemanticFact(
+            FactTypes.FieldAlias,
+            RuleIds.CSharpSemanticFieldAlias,
+            projectPath,
+            filePath,
+            evidenceNode,
+            sourceSymbol: containingSymbol,
+            targetSymbol: field.ToDisplayString(SymbolFormat),
+            contractElement: field.Name,
             properties: properties));
     }
 

@@ -310,7 +310,7 @@ public static class FlowPathReporter
         builder.AppendLine($"- Indexed parameter-forward edges: `{edgeCount}`");
         builder.AppendLine($"- Rule ID: `{RuleIds.CSharpSemanticParameterForwarding}`");
         builder.AppendLine();
-        builder.AppendLine("This report follows parameter-to-parameter forwarding evidence and bounded local-alias chains. It does not infer runtime execution, field aliases, mutations, dependency injection, reflection, dynamic dispatch, or serializer-created values.");
+        builder.AppendLine("This report follows parameter-to-parameter forwarding evidence plus bounded same-method local and field alias chains. It does not infer runtime execution, cross-method field lifetime, mutations, dependency injection, reflection, dynamic dispatch, or serializer-created values.");
         builder.AppendLine();
         builder.AppendLine("## Parameter Forwarding Paths");
         builder.AppendLine();

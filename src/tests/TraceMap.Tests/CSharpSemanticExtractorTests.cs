@@ -29,12 +29,14 @@ public sealed class CSharpSemanticExtractorTests
             public sealed class ProfileReporter
             {
                 private readonly CustomerProfile seed = new CustomerProfile();
+                private CustomerProfile cached = new CustomerProfile();
 
                 public int Measure(CustomerProfile profile)
                 {
                     var observed = profile;
+                    cached = observed;
                     var copy = new CustomerProfile();
-                    return Count(observed, copy);
+                    return Count(cached, copy);
                 }
 
                 private int Count(CustomerProfile source, CustomerProfile other)
@@ -83,6 +85,15 @@ public sealed class CSharpSemanticExtractorTests
             && fact.Properties.TryGetValue("originSymbol", out var originSymbol)
             && originSymbol.Contains("CustomerProfile profile", StringComparison.Ordinal));
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.FieldAlias
+            && fact.RuleId == RuleIds.CSharpSemanticFieldAlias
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.ContractElement == "cached"
+            && fact.Properties.TryGetValue("originSymbolKind", out var fieldOriginSymbolKind)
+            && fieldOriginSymbolKind == "Local"
+            && fact.Properties.TryGetValue("originSymbol", out var fieldOriginSymbol)
+            && fieldOriginSymbol == "observed");
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MethodInvoked
             && fact.RuleId == RuleIds.CSharpSemanticMethodInvocation
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
@@ -119,7 +130,7 @@ public sealed class CSharpSemanticExtractorTests
             && fact.Properties.TryGetValue("parameterType", out var parameterType)
             && parameterType == "global::ModernSample.CustomerProfile"
             && fact.Properties.TryGetValue("argumentSymbolKind", out var argumentSymbolKind)
-            && argumentSymbolKind == "Local"
+            && argumentSymbolKind == "Field"
             && fact.Properties.TryGetValue("argumentSourceFile", out var argumentSourceFile)
             && argumentSourceFile == "src/ModernSample/CustomerProfile.cs");
     }

@@ -155,6 +155,25 @@ public static class SqliteIndexWriter
               end_line integer not null
             );
 
+            create table field_aliases (
+              fact_id text primary key,
+              scan_id text not null,
+              repo text not null,
+              commit_sha text not null,
+              evidence_tier text not null,
+              rule_id text not null,
+              containing_symbol text,
+              field_symbol text not null,
+              field_symbol_kind text,
+              field_type text,
+              origin_symbol text not null,
+              origin_symbol_kind text,
+              origin_type text,
+              file_path text not null,
+              start_line integer not null,
+              end_line integer not null
+            );
+
             create table parameter_forward_edges (
               fact_id text primary key,
               scan_id text not null,
@@ -195,6 +214,8 @@ public static class SqliteIndexWriter
             create index ix_argument_flows_argument_source on argument_flows(argument_source_file, argument_source_start_line);
             create index ix_local_aliases_alias on local_aliases(containing_symbol, alias_symbol, start_line);
             create index ix_local_aliases_origin on local_aliases(origin_symbol);
+            create index ix_field_aliases_field on field_aliases(containing_symbol, field_symbol, start_line);
+            create index ix_field_aliases_origin on field_aliases(origin_symbol);
             create index ix_parameter_forward_edges_source on parameter_forward_edges(source_node_key);
             create index ix_parameter_forward_edges_target on parameter_forward_edges(target_node_key);
             create index ix_parameter_forward_edges_source_method on parameter_forward_edges(source_method_symbol);
@@ -310,6 +331,11 @@ public static class SqliteIndexWriter
         if (fact.FactType == FactTypes.LocalAlias && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
         {
             InsertLocalAlias(connection, transaction, fact);
+        }
+
+        if (fact.FactType == FactTypes.FieldAlias && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+        {
+            InsertFieldAlias(connection, transaction, fact);
         }
 
         if (fact.FactType == FactTypes.ArgumentPassed && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
@@ -567,17 +593,21 @@ public static class SqliteIndexWriter
         }
 
         if (!string.Equals(argumentSymbolKind, "Local", StringComparison.Ordinal)
+            && !string.Equals(argumentSymbolKind, "Field", StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(callerSymbol)
             || string.IsNullOrWhiteSpace(argumentSymbol))
         {
             return null;
         }
 
-        var aliasSymbol = argumentSymbol;
-        var seen = new HashSet<string>(StringComparer.Ordinal) { aliasSymbol };
+        var currentSymbol = argumentSymbol;
+        var currentKind = argumentSymbolKind;
+        var seen = new HashSet<string>(StringComparer.Ordinal) { $"{currentKind}:{currentSymbol}" };
         for (var depth = 0; depth < 8; depth++)
         {
-            var origin = ReadNearestAliasOrigin(connection, transaction, callerSymbol, aliasSymbol, callStartLine);
+            var origin = string.Equals(currentKind, "Field", StringComparison.Ordinal)
+                ? ReadNearestFieldAliasOrigin(connection, transaction, callerSymbol, currentSymbol, callStartLine)
+                : ReadNearestLocalAliasOrigin(connection, transaction, callerSymbol, currentSymbol, callStartLine);
             if (origin is null)
             {
                 return null;
@@ -594,18 +624,26 @@ public static class SqliteIndexWriter
                 return originSymbol;
             }
 
-            if (!string.Equals(origin.Value.Kind, "Local", StringComparison.Ordinal) || !seen.Add(originSymbol))
+            if (!string.Equals(origin.Value.Kind, "Local", StringComparison.Ordinal)
+                && !string.Equals(origin.Value.Kind, "Field", StringComparison.Ordinal))
             {
                 return null;
             }
 
-            aliasSymbol = originSymbol;
+            var seenKey = $"{origin.Value.Kind}:{originSymbol}";
+            if (!seen.Add(seenKey))
+            {
+                return null;
+            }
+
+            currentSymbol = originSymbol;
+            currentKind = origin.Value.Kind;
         }
 
         return null;
     }
 
-    private static (string Symbol, string? Kind)? ReadNearestAliasOrigin(
+    private static (string Symbol, string? Kind)? ReadNearestLocalAliasOrigin(
         SqliteConnection connection,
         SqliteTransaction transaction,
         string containingSymbol,
@@ -625,6 +663,36 @@ public static class SqliteIndexWriter
             """;
         command.Parameters.AddWithValue("$containing_symbol", containingSymbol);
         command.Parameters.AddWithValue("$alias_symbol", aliasSymbol);
+        command.Parameters.AddWithValue("$call_start_line", callStartLine);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+        {
+            return null;
+        }
+
+        return (reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1));
+    }
+
+    private static (string Symbol, string? Kind)? ReadNearestFieldAliasOrigin(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string containingSymbol,
+        string fieldSymbol,
+        int callStartLine)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            select origin_symbol, origin_symbol_kind
+            from field_aliases
+            where containing_symbol = $containing_symbol
+              and field_symbol = $field_symbol
+              and start_line <= $call_start_line
+            order by start_line desc, fact_id desc
+            limit 1;
+            """;
+        command.Parameters.AddWithValue("$containing_symbol", containingSymbol);
+        command.Parameters.AddWithValue("$field_symbol", fieldSymbol);
         command.Parameters.AddWithValue("$call_start_line", callStartLine);
         using var reader = command.ExecuteReader();
         if (!reader.Read())
@@ -788,6 +856,66 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$alias_symbol", GetRequiredProperty(fact, "aliasSymbol"));
         command.Parameters.AddWithValue("$alias_symbol_kind", GetOptionalProperty(fact, "aliasSymbolKind"));
         command.Parameters.AddWithValue("$alias_type", GetOptionalProperty(fact, "aliasType"));
+        command.Parameters.AddWithValue("$origin_symbol", GetRequiredProperty(fact, "originSymbol"));
+        command.Parameters.AddWithValue("$origin_symbol_kind", GetOptionalProperty(fact, "originSymbolKind"));
+        command.Parameters.AddWithValue("$origin_type", GetOptionalProperty(fact, "originType"));
+        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
+        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
+        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
+        command.ExecuteNonQuery();
+    }
+
+    private static void InsertFieldAlias(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert into field_aliases (
+              fact_id,
+              scan_id,
+              repo,
+              commit_sha,
+              evidence_tier,
+              rule_id,
+              containing_symbol,
+              field_symbol,
+              field_symbol_kind,
+              field_type,
+              origin_symbol,
+              origin_symbol_kind,
+              origin_type,
+              file_path,
+              start_line,
+              end_line
+            ) values (
+              $fact_id,
+              $scan_id,
+              $repo,
+              $commit_sha,
+              $evidence_tier,
+              $rule_id,
+              $containing_symbol,
+              $field_symbol,
+              $field_symbol_kind,
+              $field_type,
+              $origin_symbol,
+              $origin_symbol_kind,
+              $origin_type,
+              $file_path,
+              $start_line,
+              $end_line
+            );
+            """;
+        command.Parameters.AddWithValue("$fact_id", fact.FactId);
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$repo", fact.Repo);
+        command.Parameters.AddWithValue("$commit_sha", fact.CommitSha);
+        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$rule_id", fact.RuleId);
+        command.Parameters.AddWithValue("$containing_symbol", (object?)fact.SourceSymbol ?? DBNull.Value);
+        command.Parameters.AddWithValue("$field_symbol", GetRequiredProperty(fact, "fieldSymbol"));
+        command.Parameters.AddWithValue("$field_symbol_kind", GetOptionalProperty(fact, "fieldSymbolKind"));
+        command.Parameters.AddWithValue("$field_type", GetOptionalProperty(fact, "fieldType"));
         command.Parameters.AddWithValue("$origin_symbol", GetRequiredProperty(fact, "originSymbol"));
         command.Parameters.AddWithValue("$origin_symbol_kind", GetOptionalProperty(fact, "originSymbolKind"));
         command.Parameters.AddWithValue("$origin_type", GetOptionalProperty(fact, "originType"));
