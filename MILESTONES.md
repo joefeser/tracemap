@@ -181,6 +181,12 @@ Deliverables:
 - SQLite `field_aliases` table for field alias provenance queries.
 - SQLite `parameter_forward_edges` table for direct parameter-to-parameter forwarding queries.
 - `tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>` for bounded parameter-forwarding path reports.
+- `tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path>` for bounded symbol relationship path reports.
+- `tracemap scan` scoping controls for `--solution`, `--project`, `--include`, `--exclude`, `--target-framework`, and explicit `--restore`.
+- Deterministic contract mapping facts:
+  - `HttpRouteBinding`
+  - `DatabaseColumnMapping`
+  - `ConfigBinding`
 - Deterministic logic shape facts:
   - `CalculationExpression`
   - `BranchingLogic`
@@ -210,6 +216,9 @@ Acceptance:
 - `index.sqlite` contains queryable `field_aliases`.
 - `index.sqlite` contains queryable `parameter_forward_edges`.
 - `tracemap flow` emits a Markdown report that chains direct forwarding, same-method aliases, and unique constructor field initialization with rule IDs and evidence spans.
+- `tracemap relate` emits a Markdown report that chains direct symbol relationships with rule IDs and evidence spans.
+- Scoped scans limit inventoried files and semantic project/solution loads according to requested scan flags.
+- HTTP route, database mapping, and config binding declarations are findable without storing raw source snippets.
 - Scan reports include flow-boundary and runtime-evidence sections for review routing.
 - Calculation/retry logic is findable without storing raw source snippets.
 - Boilerplate/generated/DI glue files are labeled as review-routing signals, not omitted from inventory.

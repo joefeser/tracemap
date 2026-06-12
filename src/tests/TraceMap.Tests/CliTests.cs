@@ -58,6 +58,50 @@ public sealed class CliTests
     }
 
     [Fact]
+    public async Task Scan_project_scope_limits_inventory_to_selected_project_tree()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var keepProject = Path.Combine(repo, "src", "Keep");
+        var skipProject = Path.Combine(repo, "src", "Skip");
+        Directory.CreateDirectory(keepProject);
+        Directory.CreateDirectory(skipProject);
+        File.WriteAllText(Path.Combine(keepProject, "Keep.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(keepProject, "Keep.cs"), "namespace Keep; public sealed class Kept { }");
+        File.WriteAllText(Path.Combine(skipProject, "Skip.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(skipProject, "Skip.cs"), "namespace Skip; public sealed class Skipped { }");
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["scan", "--repo", repo, "--out", outputPath, "--project", "src/Keep/Keep.csproj"],
+            output,
+            error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, error.ToString());
+        var facts = await File.ReadAllTextAsync(Path.Combine(outputPath, "facts.ndjson"));
+        Assert.Contains("src/Keep/Keep.cs", facts);
+        Assert.DoesNotContain("src/Skip/Skip.cs", facts);
+        var manifest = await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-manifest.json"));
+        Assert.Contains("src/Keep/Keep.csproj", manifest);
+        Assert.DoesNotContain("src/Skip/Skip.csproj", manifest);
+    }
+
+    [Fact]
     public async Task Flow_traces_parameter_forwarding_paths()
     {
         using var temp = new TempDirectory();
@@ -228,5 +272,82 @@ public sealed class CliTests
         Assert.Contains("Gateway.Send", report);
         Assert.Contains("RequestDto seed", report);
         Assert.Contains("src/FlowSample/Flow.cs:16-16", report);
+    }
+
+    [Fact]
+    public async Task Relate_traces_symbol_relationship_paths()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var projectPath = Path.Combine(repo, "src", "RelateSample");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var relationshipReportPath = Path.Combine(temp.Path, "relationships.md");
+        Directory.CreateDirectory(projectPath);
+        File.WriteAllText(Path.Combine(projectPath, "RelateSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(projectPath, "Relationships.cs"), """
+            namespace RelateSample;
+
+            public interface IRequestHandler
+            {
+                void Handle();
+            }
+
+            public abstract class HandlerBase
+            {
+                public virtual void Handle()
+                {
+                }
+            }
+
+            public sealed class ConcreteHandler : HandlerBase, IRequestHandler
+            {
+                public override void Handle()
+                {
+                }
+            }
+            """);
+
+        using var scanOutput = new StringWriter();
+        using var scanError = new StringWriter();
+        var scanExitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], scanOutput, scanError);
+        Assert.Equal(0, scanExitCode);
+        Assert.Equal(string.Empty, scanError.ToString());
+
+        using var relateOutput = new StringWriter();
+        using var relateError = new StringWriter();
+        var relateExitCode = await TraceMapCommand.RunAsync(
+            [
+                "relate",
+                "--index",
+                Path.Combine(outputPath, "index.sqlite"),
+                "--symbol",
+                "ConcreteHandler",
+                "--out",
+                relationshipReportPath,
+                "--direction",
+                "outgoing",
+                "--max-depth",
+                "3"
+            ],
+            relateOutput,
+            relateError);
+
+        Assert.Equal(0, relateExitCode);
+        Assert.Equal(string.Empty, relateError.ToString());
+        Assert.Contains("Symbol relationships indexed:", relateOutput.ToString());
+        var report = await File.ReadAllTextAsync(relationshipReportPath);
+        Assert.Contains("TraceMap Relationship Report", report);
+        Assert.Contains("ConcreteHandler", report);
+        Assert.Contains("InheritsFrom", report);
+        Assert.Contains("ImplementsInterface", report);
+        Assert.Contains("csharp.semantic.symbolrelationship.v1", report);
     }
 }

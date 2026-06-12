@@ -12,7 +12,7 @@ public static class ScanEngine
         }
 
         var git = GitMetadataProvider.Detect(repoPath);
-        var inventory = FileInventory.Collect(repoPath, outputPath);
+        var inventory = ApplyScope(FileInventory.Collect(repoPath, outputPath), repoPath, options);
         var solutions = inventory
             .Where(item => item.Kind == "Solution")
             .Select(item => item.RelativePath)
@@ -29,7 +29,7 @@ public static class ScanEngine
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
-        var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory);
+        var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options);
 
         var knownGaps = git.KnownGaps
             .Concat(semanticResult.GapFacts.Select(GetGapMessage))
@@ -58,7 +58,7 @@ public static class ScanEngine
             targetFrameworks,
             knownGaps);
 
-        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult);
+        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options);
         return new ScanResult(manifest, facts, inventory);
     }
 
@@ -75,7 +75,8 @@ public static class ScanEngine
         IReadOnlyList<PackageReferenceInfo> packageReferences,
         IReadOnlyList<string> knownGaps,
         string repoPath,
-        SemanticExtractionResult semanticResult)
+        SemanticExtractionResult semanticResult,
+        ScanOptions options)
     {
         var facts = new List<CodeFact>
         {
@@ -89,7 +90,13 @@ public static class ScanEngine
                 {
                     ["fileCount"] = inventory.Count.ToString(),
                     ["projectCount"] = manifest.Projects.Count.ToString(),
-                    ["solutionCount"] = manifest.Solutions.Count.ToString()
+                    ["solutionCount"] = manifest.Solutions.Count.ToString(),
+                    ["scanScopeSolutions"] = string.Join(",", options.SolutionPaths ?? []),
+                    ["scanScopeProjects"] = string.Join(",", options.ProjectPaths ?? []),
+                    ["scanScopeIncludes"] = string.Join(",", options.IncludeGlobs ?? []),
+                    ["scanScopeExcludes"] = string.Join(",", options.ExcludeGlobs ?? []),
+                    ["targetFramework"] = options.TargetFramework ?? string.Empty,
+                    ["restoreRequested"] = options.Restore.ToString()
                 }),
             FactFactory.Create(
                 manifest,
@@ -249,5 +256,81 @@ public static class ScanEngine
         return gap.Properties is not null && gap.Properties.TryGetValue("message", out var message)
             ? message
             : "Roslyn semantic analysis reported a gap.";
+    }
+
+    private static IReadOnlyList<FileInventoryItem> ApplyScope(
+        IReadOnlyList<FileInventoryItem> inventory,
+        string repoPath,
+        ScanOptions options)
+    {
+        var solutionPaths = NormalizeOptionPaths(repoPath, options.SolutionPaths);
+        var projectPaths = NormalizeOptionPaths(repoPath, options.ProjectPaths);
+        var includeGlobs = (options.IncludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+        var excludeGlobs = (options.ExcludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+        var projectDirectories = projectPaths
+            .Select(path => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(path) ?? "."))
+            .ToArray();
+
+        return inventory
+            .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
+            .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
+            .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
+            .Where(item => projectPaths.Count == 0 || item.Kind != "Project" || projectPaths.Contains(item.RelativePath))
+            .Where(item => projectDirectories.Length == 0
+                || item.Kind is "Solution"
+                || projectPaths.Contains(item.RelativePath)
+                || projectDirectories.Any(directory => IsUnderScopedDirectory(item.RelativePath, directory)))
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static HashSet<string> NormalizeOptionPaths(string repoPath, IReadOnlyList<string>? paths)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var path in paths ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            var normalized = Path.IsPathRooted(path)
+                ? Path.GetRelativePath(repoPath, Path.GetFullPath(path))
+                : path;
+            result.Add(FileInventory.NormalizeRelativePath(normalized));
+        }
+
+        return result;
+    }
+
+    private static bool IsUnderScopedDirectory(string relativePath, string directory)
+    {
+        if (directory is "." or "")
+        {
+            return true;
+        }
+
+        var normalizedDirectory = directory.TrimEnd('/') + "/";
+        return relativePath.StartsWith(normalizedDirectory, StringComparison.Ordinal);
+    }
+
+    private static bool GlobMatches(string relativePath, string glob)
+    {
+        var normalizedGlob = FileInventory.NormalizeRelativePath(glob.Trim());
+        if (string.IsNullOrWhiteSpace(normalizedGlob))
+        {
+            return false;
+        }
+
+        if (!normalizedGlob.Contains('*', StringComparison.Ordinal))
+        {
+            return relativePath.Equals(normalizedGlob, StringComparison.Ordinal)
+                || relativePath.StartsWith(normalizedGlob.TrimEnd('/') + "/", StringComparison.Ordinal);
+        }
+
+        var regex = "^" + System.Text.RegularExpressions.Regex.Escape(normalizedGlob)
+            .Replace("\\*\\*", ".*", StringComparison.Ordinal)
+            .Replace("\\*", "[^/]*", StringComparison.Ordinal) + "$";
+        return System.Text.RegularExpressions.Regex.IsMatch(relativePath, regex);
     }
 }
