@@ -145,6 +145,18 @@ public sealed class SqliteIndexWriterTests
         Assert.Contains("ix_argument_flows_argument_symbol", argumentFlowIndexNames);
         Assert.Contains("ix_argument_flows_argument_source", argumentFlowIndexNames);
 
+        var localAliasIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var localAliasCommand = connection.CreateCommand();
+        localAliasCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'local_aliases';";
+        await using var localAliasReader = await localAliasCommand.ExecuteReaderAsync();
+        while (await localAliasReader.ReadAsync())
+        {
+            localAliasIndexNames.Add(localAliasReader.GetString(0));
+        }
+
+        Assert.Contains("ix_local_aliases_alias", localAliasIndexNames);
+        Assert.Contains("ix_local_aliases_origin", localAliasIndexNames);
+
         var parameterForwardIndexNames = new HashSet<string>(StringComparer.Ordinal);
         await using var parameterForwardCommand = connection.CreateCommand();
         parameterForwardCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'parameter_forward_edges';";

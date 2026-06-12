@@ -86,7 +86,8 @@ public sealed class CliTests
 
                 public void Post(RequestDto request)
                 {
-                    service.Save(request);
+                    var outbound = request;
+                    service.Save(outbound);
                 }
             }
 
@@ -96,7 +97,8 @@ public sealed class CliTests
 
                 public void Save(RequestDto input)
                 {
-                    gateway.Send(input);
+                    var next = input;
+                    gateway.Send(next);
                 }
             }
 

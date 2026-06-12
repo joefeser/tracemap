@@ -292,6 +292,7 @@ public static class CSharpSemanticExtractor
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
+        AddLocalAliasFacts(repoPath, projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
         AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts);
@@ -401,6 +402,108 @@ public static class CSharpSemanticExtractor
                     containingSymbol?.ContainingAssembly,
                     parameter.Type.ContainingAssembly)));
         }
+    }
+
+    private static void AddLocalAliasFacts(
+        string repoPath,
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var variable in root.DescendantNodes().OfType<VariableDeclaratorSyntax>())
+        {
+            if (variable.Parent?.Parent is FieldDeclarationSyntax
+                || variable.Initializer is null
+                || model.GetDeclaredSymbol(variable) is not ILocalSymbol local)
+            {
+                continue;
+            }
+
+            AddLocalAliasFact(
+                repoPath,
+                projectPath,
+                filePath,
+                variable,
+                variable.Initializer.Value,
+                model,
+                facts,
+                local);
+        }
+
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            if (!assignment.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SimpleAssignmentExpression)
+                || model.GetSymbolInfo(assignment.Left).Symbol is not ILocalSymbol local)
+            {
+                continue;
+            }
+
+            AddLocalAliasFact(
+                repoPath,
+                projectPath,
+                filePath,
+                assignment,
+                assignment.Right,
+                model,
+                facts,
+                local);
+        }
+    }
+
+    private static void AddLocalAliasFact(
+        string repoPath,
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        ExpressionSyntax originExpression,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        ILocalSymbol local)
+    {
+        var originSymbol = model.GetSymbolInfo(originExpression).Symbol;
+        if (originSymbol is null || SymbolEqualityComparer.Default.Equals(originSymbol, local))
+        {
+            return;
+        }
+
+        var containingSymbol = local.ContainingSymbol?.ToDisplayString(SymbolFormat);
+        var originType = model.GetTypeInfo(originExpression).Type;
+        var aliasSourceLocation = GetSourceLocation(repoPath, local);
+        var originSourceLocation = GetSourceLocation(repoPath, originSymbol);
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["aliasSymbol"] = local.ToDisplayString(SymbolFormat),
+                ["aliasSymbolKind"] = local.Kind.ToString(),
+                ["aliasType"] = local.Type.ToDisplayString(SymbolFormat),
+                ["aliasSourceFile"] = aliasSourceLocation.FilePath ?? string.Empty,
+                ["aliasSourceStartLine"] = aliasSourceLocation.StartLine?.ToString() ?? string.Empty,
+                ["aliasSourceEndLine"] = aliasSourceLocation.EndLine?.ToString() ?? string.Empty,
+                ["containingSymbol"] = containingSymbol ?? string.Empty,
+                ["originExpressionKind"] = GetExpressionKind(originExpression),
+                ["originExpressionHash"] = FactFactory.Hash(originExpression.ToString(), 32),
+                ["originSymbol"] = originSymbol.ToDisplayString(SymbolFormat),
+                ["originSymbolKind"] = originSymbol.Kind.ToString(),
+                ["originType"] = originType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                ["originSourceFile"] = originSourceLocation.FilePath ?? string.Empty,
+                ["originSourceStartLine"] = originSourceLocation.StartLine?.ToString() ?? string.Empty,
+                ["originSourceEndLine"] = originSourceLocation.EndLine?.ToString() ?? string.Empty
+            },
+            local.ContainingAssembly,
+            originSymbol.ContainingAssembly ?? originType?.ContainingAssembly);
+
+        facts.Add(CreateSemanticFact(
+            FactTypes.LocalAlias,
+            RuleIds.CSharpSemanticLocalAlias,
+            projectPath,
+            filePath,
+            evidenceNode,
+            sourceSymbol: containingSymbol,
+            targetSymbol: local.ToDisplayString(SymbolFormat),
+            contractElement: local.Name,
+            properties: properties));
     }
 
     private static void AddPropertyAccessFacts(

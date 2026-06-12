@@ -161,15 +161,27 @@ rules:
       - Raw argument expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
       - Lambda bodies, delegates, reflection, dynamic dispatch, dependency injection, and serializer-created values require later specialized flow rules.
 
+  - id: csharp.semantic.localalias.v1
+    name: C# semantic local alias
+    description: Records simple local aliases and assignments where a local variable is assigned from another resolved symbol.
+    evidenceTier: Tier1Semantic
+    emits:
+      - LocalAlias
+    limitations:
+      - Requires Roslyn semantic binding for the alias local and origin expression.
+      - Tracks direct local declarations and simple assignments only, such as `var alias = value` and `alias = value`.
+      - Does not model mutation of object contents, collection membership, tuple/deconstruction flow, property aliases, ref/out effects, closures, runtime branches, or alias invalidation after complex control flow.
+      - Raw alias expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
+
   - id: csharp.semantic.parameterforwarding.v1
     name: C# semantic parameter forwarding
-    description: Derives direct parameter-to-parameter forwarding edges from semantic argument-flow evidence.
+    description: Derives parameter-to-parameter forwarding edges from semantic argument-flow evidence, resolving simple local aliases when available.
     evidenceTier: Tier1Semantic
     emits:
       - ParameterForwardEdge
     limitations:
-      - Requires an `ArgumentPassed` fact where the argument is resolved as a method parameter.
-      - Follows direct parameter forwarding only; it does not infer field aliases, local variable aliases, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
+      - Requires an `ArgumentPassed` fact where the argument is resolved as a method parameter or as a local with `LocalAlias` evidence back to a parameter in the same containing method.
+      - Follows parameter forwarding and bounded local alias chains only; it does not infer field aliases, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
       - Path reports are bounded by max depth and max path count, so large or cyclic graphs can be intentionally truncated.
       - Paths are evidence chains, not proof that a runtime request always reaches the terminal method.
 
