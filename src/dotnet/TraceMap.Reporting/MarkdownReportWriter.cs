@@ -142,6 +142,18 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Query Patterns",
+            result.Facts.Where(fact => fact.FactType == FactTypes.QueryPatternDetected),
+            fact => $"- `{fact.Properties.GetValueOrDefault("operationName") ?? DisplayFactName(fact)}` fields `{DisplayFields(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "Object Shapes",
+            result.Facts.Where(fact => fact.FactType == FactTypes.ObjectShapeInferred),
+            fact => $"- `{fact.Properties.GetValueOrDefault("objectKind") ?? DisplayFactName(fact)}` fields `{fact.Properties.GetValueOrDefault("fieldNames") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Flow Boundaries",
             result.Facts.Where(fact => fact.FactType is FactTypes.DependencyResolved
                 or FactTypes.DeserializedObject
@@ -213,5 +225,22 @@ public static class MarkdownReportWriter
     private static string DisplaySource(CodeFact fact)
     {
         return string.IsNullOrWhiteSpace(fact.SourceSymbol) ? "unknown" : fact.SourceSymbol;
+    }
+
+    private static string DisplayFields(CodeFact fact)
+    {
+        var fields = new[]
+            {
+                fact.Properties.GetValueOrDefault("filterFields"),
+                fact.Properties.GetValueOrDefault("sortFields"),
+                fact.Properties.GetValueOrDefault("selectFields"),
+                fact.Properties.GetValueOrDefault("includeFields"),
+                fact.Properties.GetValueOrDefault("mutationFields")
+            }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal);
+
+        var joined = string.Join(";", fields);
+        return string.IsNullOrWhiteSpace(joined) ? "none" : joined;
     }
 }

@@ -35,6 +35,15 @@ describe("ScanEngine", () => {
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.MethodInvoked, evidenceTier: "Tier1Semantic" }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.HttpRouteBinding }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ConfigKeyDeclared, targetSymbol: "CUSTOMER_ENDPOINT" }));
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.QueryPatternDetected }));
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ObjectShapeInferred }));
+    const prismaPattern = result.facts.find((fact) => fact.factType === FactTypes.QueryPatternDetected && fact.properties.orm === "prisma");
+    expect(prismaPattern?.properties.filterFields).toContain("status");
+    const entityPattern = result.facts.find((fact) => fact.factType === FactTypes.QueryPatternDetected && fact.properties.integration === "base44-entity");
+    expect(entityPattern?.properties.entityName).toBe("Customer");
+    expect(entityPattern?.properties.filterFields).toContain("organization_id");
+    expect(entityPattern?.properties.sortFields).toContain("updated_at");
+    expect(JSON.stringify(result.facts)).not.toContain("organization_id: \"org_1\"");
   });
 
   it("runs syntax fallback for a repo with no tsconfig and broken syntax", async () => {

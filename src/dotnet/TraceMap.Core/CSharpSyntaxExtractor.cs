@@ -42,6 +42,8 @@ public static class CSharpSyntaxExtractor
                 AddInvocationFacts(manifest, facts, file.RelativePath, root);
                 AddObjectCreationFacts(manifest, facts, file.RelativePath, root);
                 AddLogicShapeFacts(manifest, facts, file.RelativePath, root);
+                AddQueryPatternFacts(manifest, facts, file.RelativePath, root);
+                AddObjectShapeFacts(manifest, facts, file.RelativePath, root);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -331,6 +333,109 @@ public static class CSharpSyntaxExtractor
         }
     }
 
+    private static void AddQueryPatternFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
+            {
+                continue;
+            }
+
+            var operationName = memberAccess.Name.Identifier.ValueText;
+            if (!IsQueryOperation(operationName))
+            {
+                continue;
+            }
+
+            var fields = ExtractMemberNames(invocation.ArgumentList.Arguments.Select(argument => argument.Expression));
+            var receiverName = GetSafeExpressionName(memberAccess.Expression) ?? string.Empty;
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.QueryPatternDetected,
+                RuleIds.CSharpSyntaxQueryPattern,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                ToEvidenceSpan(filePath, invocation),
+                sourceSymbol: GetContainingMemberName(invocation),
+                targetSymbol: operationName,
+                contractElement: operationName,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["operationName"] = operationName,
+                    ["receiverName"] = receiverName,
+                    ["filterFields"] = IsFilterOperation(operationName) ? string.Join(";", fields) : string.Empty,
+                    ["sortFields"] = IsSortOperation(operationName) ? string.Join(";", fields) : string.Empty,
+                    ["selectFields"] = operationName == "Select" ? string.Join(";", fields) : string.Empty,
+                    ["includeFields"] = operationName == "Include" ? string.Join(";", fields) : string.Empty,
+                    ["fieldCount"] = fields.Count.ToString(),
+                    ["patternHash"] = FactFactory.Hash(invocation.ToString(), 32)
+                }));
+        }
+    }
+
+    private static void AddObjectShapeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    {
+        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+        {
+            if (creation.Initializer is null)
+            {
+                continue;
+            }
+
+            var fields = ExtractInitializerFields(creation.Initializer);
+            if (fields.Count == 0)
+            {
+                continue;
+            }
+
+            facts.Add(CreateObjectShapeFact(manifest, filePath, creation, creation.Type.ToString(), fields));
+        }
+
+        foreach (var anonymous in root.DescendantNodes().OfType<AnonymousObjectCreationExpressionSyntax>())
+        {
+            var fields = anonymous.Initializers
+                .Select(initializer => initializer.NameEquals?.Name.Identifier.ValueText
+                    ?? initializer.Expression switch
+                    {
+                        IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+                        MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+                        _ => null
+                    })
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            if (fields.Length == 0)
+            {
+                continue;
+            }
+
+            facts.Add(CreateObjectShapeFact(manifest, filePath, anonymous, "anonymous", fields));
+        }
+    }
+
+    private static CodeFact CreateObjectShapeFact(ScanManifest manifest, string filePath, SyntaxNode node, string objectKind, IReadOnlyList<string> fields)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ObjectShapeInferred,
+            RuleIds.CSharpSyntaxObjectShape,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            ToEvidenceSpan(filePath, node),
+            sourceSymbol: GetContainingMemberName(node),
+            targetSymbol: objectKind,
+            contractElement: objectKind,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["objectKind"] = objectKind,
+                ["fieldNames"] = string.Join(";", fields),
+                ["fieldCount"] = fields.Count.ToString(),
+                ["shapeHash"] = FactFactory.Hash(string.Join("|", fields), 32),
+                ["expressionHash"] = FactFactory.Hash(node.ToString(), 32)
+            });
+    }
+
     private static string GetInvocationName(ExpressionSyntax expression)
     {
         return expression switch
@@ -369,6 +474,52 @@ public static class CSharpSyntaxExtractor
             ConditionalAccessExpressionSyntax => "conditional-access",
             _ => null
         };
+    }
+
+    private static IReadOnlyList<string> ExtractMemberNames(IEnumerable<ExpressionSyntax> expressions)
+    {
+        return expressions
+            .SelectMany(expression => expression.DescendantNodesAndSelf().OfType<MemberAccessExpressionSyntax>())
+            .Select(member => member.Name.Identifier.ValueText)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ExtractInitializerFields(InitializerExpressionSyntax initializer)
+    {
+        return initializer.Expressions
+            .Select(expression => expression switch
+            {
+                AssignmentExpressionSyntax assignment => assignment.Left switch
+                {
+                    IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+                    MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+                    _ => null
+                },
+                _ => null
+            })
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsQueryOperation(string operationName)
+    {
+        return operationName is "Where" or "OrderBy" or "OrderByDescending" or "ThenBy" or "ThenByDescending" or "Select" or "Include";
+    }
+
+    private static bool IsFilterOperation(string operationName)
+    {
+        return operationName is "Where";
+    }
+
+    private static bool IsSortOperation(string operationName)
+    {
+        return operationName is "OrderBy" or "OrderByDescending" or "ThenBy" or "ThenByDescending";
     }
 
     private static string? GetSimpleName(SimpleNameSyntax name)

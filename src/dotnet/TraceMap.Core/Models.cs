@@ -145,6 +145,8 @@ public static class FactTypes
     public const string RetryPolicyLogic = nameof(RetryPolicyLogic);
     public const string SerializationLogic = nameof(SerializationLogic);
     public const string InfrastructureBoilerplate = nameof(InfrastructureBoilerplate);
+    public const string QueryPatternDetected = nameof(QueryPatternDetected);
+    public const string ObjectShapeInferred = nameof(ObjectShapeInferred);
     public const string PropertyAccessed = nameof(PropertyAccessed);
     public const string MethodInvoked = nameof(MethodInvoked);
     public const string HttpCallDetected = nameof(HttpCallDetected);
@@ -170,6 +172,8 @@ public static class RuleIds
     public const string CSharpSyntaxCallGraph = "csharp.syntax.callgraph.v1";
     public const string CSharpSyntaxObjectCreation = "csharp.syntax.objectcreation.v1";
     public const string CSharpSyntaxLogicShape = "csharp.syntax.logicshape.v1";
+    public const string CSharpSyntaxQueryPattern = "csharp.syntax.querypattern.v1";
+    public const string CSharpSyntaxObjectShape = "csharp.syntax.objectshape.v1";
     public const string CSharpSemanticDeclarations = "csharp.semantic.declarations.v1";
     public const string CSharpSemanticPropertyAccess = "csharp.semantic.propertyaccess.v1";
     public const string CSharpSemanticMethodInvocation = "csharp.semantic.methodinvocation.v1";

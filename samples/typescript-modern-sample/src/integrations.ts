@@ -5,7 +5,16 @@ declare const z: {
 
 declare const prisma: {
   customer: {
-    findMany(): Promise<unknown[]>;
+    findMany(args?: unknown): Promise<unknown[]>;
+  };
+};
+
+declare const base44: {
+  entities: {
+    Customer: {
+      filter(where: unknown, orderBy?: string): Promise<unknown[]>;
+      create(data: unknown): Promise<unknown>;
+    };
   };
 };
 
@@ -22,7 +31,19 @@ export async function callBilling(status: string): Promise<void> {
 }
 
 export async function loadCustomers(): Promise<unknown[]> {
-  return prisma.customer.findMany();
+  return prisma.customer.findMany({
+    where: { status: "active", organization_id: "org_1" },
+    orderBy: { updated_at: "desc" },
+    select: { status: true, total: true }
+  });
+}
+
+export async function loadBase44Customers(): Promise<unknown[]> {
+  return base44.entities.Customer.filter({ status: "active", organization_id: "org_1" }, "-updated_at");
+}
+
+export async function createBase44Customer(status: string, total: number): Promise<unknown> {
+  return base44.entities.Customer.create({ status, total });
 }
 
 app.get("/customers/:id", (_request: unknown) => {
