@@ -25,6 +25,7 @@ public static class SqliteIndexWriter
             InsertFact(connection, transaction, fact);
         }
 
+        InsertParameterForwardEdges(connection, transaction);
         transaction.Commit();
     }
 
@@ -135,6 +136,25 @@ public static class SqliteIndexWriter
               end_line integer not null
             );
 
+            create table local_aliases (
+              fact_id text primary key,
+              scan_id text not null,
+              repo text not null,
+              commit_sha text not null,
+              evidence_tier text not null,
+              rule_id text not null,
+              containing_symbol text,
+              alias_symbol text not null,
+              alias_symbol_kind text,
+              alias_type text,
+              origin_symbol text not null,
+              origin_symbol_kind text,
+              origin_type text,
+              file_path text not null,
+              start_line integer not null,
+              end_line integer not null
+            );
+
             create table parameter_forward_edges (
               fact_id text primary key,
               scan_id text not null,
@@ -173,6 +193,8 @@ public static class SqliteIndexWriter
             create index ix_argument_flows_parameter on argument_flows(parameter_name, parameter_type);
             create index ix_argument_flows_argument_symbol on argument_flows(argument_symbol);
             create index ix_argument_flows_argument_source on argument_flows(argument_source_file, argument_source_start_line);
+            create index ix_local_aliases_alias on local_aliases(containing_symbol, alias_symbol, start_line);
+            create index ix_local_aliases_origin on local_aliases(origin_symbol);
             create index ix_parameter_forward_edges_source on parameter_forward_edges(source_node_key);
             create index ix_parameter_forward_edges_target on parameter_forward_edges(target_node_key);
             create index ix_parameter_forward_edges_source_method on parameter_forward_edges(source_method_symbol);
@@ -285,6 +307,11 @@ public static class SqliteIndexWriter
             InsertObjectCreation(connection, transaction, fact);
         }
 
+        if (fact.FactType == FactTypes.LocalAlias && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+        {
+            InsertLocalAlias(connection, transaction, fact);
+        }
+
         if (fact.FactType == FactTypes.ArgumentPassed && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
         {
             InsertArgumentFlow(connection, transaction, fact);
@@ -354,18 +381,96 @@ public static class SqliteIndexWriter
         command.ExecuteNonQuery();
     }
 
-    private static void InsertParameterForwardEdge(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    private sealed record ArgumentFlowRow(
+        string FactId,
+        string ScanId,
+        string Repo,
+        string CommitSha,
+        string EvidenceTier,
+        string? CallerSymbol,
+        string CalleeSymbol,
+        string? CalleeAssemblyName,
+        string? CalleeAssemblyVersion,
+        string ParameterName,
+        string? ParameterType,
+        string? ArgumentSymbol,
+        string? ArgumentSymbolKind,
+        string FilePath,
+        int StartLine,
+        int EndLine);
+
+    private static void InsertParameterForwardEdges(SqliteConnection connection, SqliteTransaction transaction)
     {
-        if (!string.Equals(GetOptionalStringProperty(fact, "argumentSymbolKind"), "Parameter", StringComparison.Ordinal))
+        foreach (var argumentFlow in ReadArgumentFlows(connection, transaction))
         {
-            return;
+            InsertParameterForwardEdge(connection, transaction, argumentFlow);
+        }
+    }
+
+    private static IReadOnlyList<ArgumentFlowRow> ReadArgumentFlows(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        var rows = new List<ArgumentFlowRow>();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            select
+              fact_id,
+              scan_id,
+              repo,
+              commit_sha,
+              evidence_tier,
+              caller_symbol,
+              callee_symbol,
+              callee_assembly_name,
+              callee_assembly_version,
+              parameter_name,
+              parameter_type,
+              argument_symbol,
+              argument_symbol_kind,
+              file_path,
+              start_line,
+              end_line
+            from argument_flows
+            order by fact_id;
+            """;
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add(new ArgumentFlowRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.GetString(9),
+                reader.IsDBNull(10) ? null : reader.GetString(10),
+                reader.IsDBNull(11) ? null : reader.GetString(11),
+                reader.IsDBNull(12) ? null : reader.GetString(12),
+                reader.GetString(13),
+                reader.GetInt32(14),
+                reader.GetInt32(15)));
         }
 
-        var sourceMethodSymbol = fact.SourceSymbol;
-        var sourceParameterSymbol = NormalizeParameterSymbol(GetOptionalStringProperty(fact, "argumentSymbol"));
-        var targetMethodSymbol = fact.TargetSymbol;
-        var targetParameterName = GetRequiredProperty(fact, "parameterName");
-        var targetParameterType = GetOptionalStringProperty(fact, "parameterType");
+        return rows;
+    }
+
+    private static void InsertParameterForwardEdge(SqliteConnection connection, SqliteTransaction transaction, ArgumentFlowRow argumentFlow)
+    {
+        var sourceMethodSymbol = argumentFlow.CallerSymbol;
+        var sourceParameterSymbol = ResolveForwardedSourceParameterSymbol(
+            connection,
+            transaction,
+            argumentFlow.CallerSymbol,
+            argumentFlow.ArgumentSymbolKind,
+            argumentFlow.ArgumentSymbol,
+            argumentFlow.StartLine);
+        var targetMethodSymbol = argumentFlow.CalleeSymbol;
+        var targetParameterName = argumentFlow.ParameterName;
+        var targetParameterType = argumentFlow.ParameterType;
         if (string.IsNullOrWhiteSpace(sourceMethodSymbol)
             || string.IsNullOrWhiteSpace(sourceParameterSymbol)
             || string.IsNullOrWhiteSpace(targetMethodSymbol)
@@ -425,11 +530,11 @@ public static class SqliteIndexWriter
               $end_line
             );
             """;
-        command.Parameters.AddWithValue("$fact_id", fact.FactId);
-        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
-        command.Parameters.AddWithValue("$repo", fact.Repo);
-        command.Parameters.AddWithValue("$commit_sha", fact.CommitSha);
-        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$fact_id", argumentFlow.FactId);
+        command.Parameters.AddWithValue("$scan_id", argumentFlow.ScanId);
+        command.Parameters.AddWithValue("$repo", argumentFlow.Repo);
+        command.Parameters.AddWithValue("$commit_sha", argumentFlow.CommitSha);
+        command.Parameters.AddWithValue("$evidence_tier", argumentFlow.EvidenceTier);
         command.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSemanticParameterForwarding);
         command.Parameters.AddWithValue("$source_method_symbol", sourceMethodSymbol);
         command.Parameters.AddWithValue("$source_parameter_symbol", sourceParameterSymbol);
@@ -439,12 +544,95 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$target_parameter_type", (object?)targetParameterType ?? DBNull.Value);
         command.Parameters.AddWithValue("$target_parameter_symbol", targetParameterSymbol);
         command.Parameters.AddWithValue("$target_node_key", CreateNodeKey(targetMethodSymbol, targetParameterSymbol));
-        command.Parameters.AddWithValue("$target_assembly_name", GetOptionalProperty(fact, "calleeAssemblyName"));
-        command.Parameters.AddWithValue("$target_assembly_version", GetOptionalProperty(fact, "calleeAssemblyVersion"));
-        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
-        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
-        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
+        command.Parameters.AddWithValue("$target_assembly_name", (object?)argumentFlow.CalleeAssemblyName ?? DBNull.Value);
+        command.Parameters.AddWithValue("$target_assembly_version", (object?)argumentFlow.CalleeAssemblyVersion ?? DBNull.Value);
+        command.Parameters.AddWithValue("$file_path", argumentFlow.FilePath);
+        command.Parameters.AddWithValue("$start_line", argumentFlow.StartLine);
+        command.Parameters.AddWithValue("$end_line", argumentFlow.EndLine);
         command.ExecuteNonQuery();
+    }
+
+    private static string? ResolveForwardedSourceParameterSymbol(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string? callerSymbol,
+        string? argumentSymbolKind,
+        string? rawArgumentSymbol,
+        int callStartLine)
+    {
+        var argumentSymbol = NormalizeParameterSymbol(rawArgumentSymbol);
+        if (string.Equals(argumentSymbolKind, "Parameter", StringComparison.Ordinal))
+        {
+            return argumentSymbol;
+        }
+
+        if (!string.Equals(argumentSymbolKind, "Local", StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(callerSymbol)
+            || string.IsNullOrWhiteSpace(argumentSymbol))
+        {
+            return null;
+        }
+
+        var aliasSymbol = argumentSymbol;
+        var seen = new HashSet<string>(StringComparer.Ordinal) { aliasSymbol };
+        for (var depth = 0; depth < 8; depth++)
+        {
+            var origin = ReadNearestAliasOrigin(connection, transaction, callerSymbol, aliasSymbol, callStartLine);
+            if (origin is null)
+            {
+                return null;
+            }
+
+            var originSymbol = NormalizeParameterSymbol(origin.Value.Symbol);
+            if (string.IsNullOrWhiteSpace(originSymbol))
+            {
+                return null;
+            }
+
+            if (string.Equals(origin.Value.Kind, "Parameter", StringComparison.Ordinal))
+            {
+                return originSymbol;
+            }
+
+            if (!string.Equals(origin.Value.Kind, "Local", StringComparison.Ordinal) || !seen.Add(originSymbol))
+            {
+                return null;
+            }
+
+            aliasSymbol = originSymbol;
+        }
+
+        return null;
+    }
+
+    private static (string Symbol, string? Kind)? ReadNearestAliasOrigin(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string containingSymbol,
+        string aliasSymbol,
+        int callStartLine)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            select origin_symbol, origin_symbol_kind
+            from local_aliases
+            where containing_symbol = $containing_symbol
+              and alias_symbol = $alias_symbol
+              and start_line <= $call_start_line
+            order by start_line desc, fact_id desc
+            limit 1;
+            """;
+        command.Parameters.AddWithValue("$containing_symbol", containingSymbol);
+        command.Parameters.AddWithValue("$alias_symbol", aliasSymbol);
+        command.Parameters.AddWithValue("$call_start_line", callStartLine);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+        {
+            return null;
+        }
+
+        return (reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1));
     }
 
     private static void InsertArgumentFlow(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
@@ -547,8 +735,66 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
         command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
         command.ExecuteNonQuery();
+    }
 
-        InsertParameterForwardEdge(connection, transaction, fact);
+    private static void InsertLocalAlias(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert into local_aliases (
+              fact_id,
+              scan_id,
+              repo,
+              commit_sha,
+              evidence_tier,
+              rule_id,
+              containing_symbol,
+              alias_symbol,
+              alias_symbol_kind,
+              alias_type,
+              origin_symbol,
+              origin_symbol_kind,
+              origin_type,
+              file_path,
+              start_line,
+              end_line
+            ) values (
+              $fact_id,
+              $scan_id,
+              $repo,
+              $commit_sha,
+              $evidence_tier,
+              $rule_id,
+              $containing_symbol,
+              $alias_symbol,
+              $alias_symbol_kind,
+              $alias_type,
+              $origin_symbol,
+              $origin_symbol_kind,
+              $origin_type,
+              $file_path,
+              $start_line,
+              $end_line
+            );
+            """;
+        command.Parameters.AddWithValue("$fact_id", fact.FactId);
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$repo", fact.Repo);
+        command.Parameters.AddWithValue("$commit_sha", fact.CommitSha);
+        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$rule_id", fact.RuleId);
+        command.Parameters.AddWithValue("$containing_symbol", (object?)fact.SourceSymbol ?? DBNull.Value);
+        command.Parameters.AddWithValue("$alias_symbol", GetRequiredProperty(fact, "aliasSymbol"));
+        command.Parameters.AddWithValue("$alias_symbol_kind", GetOptionalProperty(fact, "aliasSymbolKind"));
+        command.Parameters.AddWithValue("$alias_type", GetOptionalProperty(fact, "aliasType"));
+        command.Parameters.AddWithValue("$origin_symbol", GetRequiredProperty(fact, "originSymbol"));
+        command.Parameters.AddWithValue("$origin_symbol_kind", GetOptionalProperty(fact, "originSymbolKind"));
+        command.Parameters.AddWithValue("$origin_type", GetOptionalProperty(fact, "originType"));
+        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
+        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
+        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
+        command.ExecuteNonQuery();
     }
 
     private static void InsertObjectCreation(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)

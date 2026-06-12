@@ -32,8 +32,9 @@ public sealed class CSharpSemanticExtractorTests
 
                 public int Measure(CustomerProfile profile)
                 {
+                    var observed = profile;
                     var copy = new CustomerProfile();
-                    return Count(profile, copy);
+                    return Count(observed, copy);
                 }
 
                 private int Count(CustomerProfile source, CustomerProfile other)
@@ -73,6 +74,15 @@ public sealed class CSharpSemanticExtractorTests
             && fact.SourceSymbol is not null
             && fact.SourceSymbol.Contains("ProfileReporter.Measure", StringComparison.Ordinal));
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.LocalAlias
+            && fact.RuleId == RuleIds.CSharpSemanticLocalAlias
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.ContractElement == "observed"
+            && fact.Properties.TryGetValue("originSymbolKind", out var originSymbolKind)
+            && originSymbolKind == "Parameter"
+            && fact.Properties.TryGetValue("originSymbol", out var originSymbol)
+            && originSymbol.Contains("CustomerProfile profile", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MethodInvoked
             && fact.RuleId == RuleIds.CSharpSemanticMethodInvocation
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
@@ -109,7 +119,7 @@ public sealed class CSharpSemanticExtractorTests
             && fact.Properties.TryGetValue("parameterType", out var parameterType)
             && parameterType == "global::ModernSample.CustomerProfile"
             && fact.Properties.TryGetValue("argumentSymbolKind", out var argumentSymbolKind)
-            && argumentSymbolKind == "Parameter"
+            && argumentSymbolKind == "Local"
             && fact.Properties.TryGetValue("argumentSourceFile", out var argumentSourceFile)
             && argumentSourceFile == "src/ModernSample/CustomerProfile.cs");
     }
