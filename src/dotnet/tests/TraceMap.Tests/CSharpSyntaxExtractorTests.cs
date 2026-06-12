@@ -154,6 +154,45 @@ public sealed class CSharpSyntaxExtractorTests
             && fact.TargetSymbol == "FromMilliseconds");
     }
 
+    [Fact]
+    public void Syntax_expression_facts_store_hashes_and_safe_names_not_raw_expressions()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Sample.cs"), """
+            public sealed class Sample
+            {
+                public void Run(dynamic logger)
+                {
+                    logger.Info(BuildMessage());
+                }
+
+                private string BuildMessage()
+                {
+                    return "ok";
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        var invocation = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.InvocationName
+            && fact.TargetSymbol == "Info"
+            && fact.RuleId == RuleIds.CSharpSyntaxInvocation);
+        Assert.DoesNotContain("expression", invocation.Properties.Keys);
+        Assert.Equal("SimpleMemberAccessExpression", invocation.Properties["expressionKind"]);
+        Assert.Equal("logger", invocation.Properties["receiverName"]);
+        Assert.True(invocation.Properties["expressionHash"].Length > 0);
+
+        var memberAccess = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.MemberAccessName
+            && fact.TargetSymbol == "Info"
+            && fact.RuleId == RuleIds.CSharpSyntaxMemberAccess);
+        Assert.DoesNotContain("expression", memberAccess.Properties.Keys);
+        Assert.Equal("IdentifierName", memberAccess.Properties["expressionKind"]);
+        Assert.Equal("logger", memberAccess.SourceSymbol);
+    }
+
     private static void AssertFact(ScanResult result, string factType, string targetSymbol, string filePath, int startLine, int endLine)
     {
         var fact = Assert.Single(result.Facts, fact =>

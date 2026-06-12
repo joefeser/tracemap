@@ -164,11 +164,12 @@ public static class CSharpSyntaxExtractor
                 RuleIds.CSharpSyntaxMemberAccess,
                 filePath,
                 memberAccess,
-                sourceSymbol: memberAccess.Expression.ToString(),
+                sourceSymbol: GetSafeExpressionName(memberAccess.Expression),
                 targetSymbol: memberName,
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["expression"] = memberAccess.Expression.ToString(),
+                    ["expressionHash"] = FactFactory.Hash(memberAccess.Expression.ToString(), 32),
+                    ["expressionKind"] = memberAccess.Expression.Kind().ToString(),
                     ["memberName"] = memberName
                 }));
         }
@@ -180,6 +181,7 @@ public static class CSharpSyntaxExtractor
         {
             var invocationName = GetInvocationName(invocation.Expression);
             var containingMember = GetContainingMemberName(invocation);
+            var receiverName = GetInvocationReceiverName(invocation.Expression);
             facts.Add(CreateSyntaxFact(
                 manifest,
                 FactTypes.InvocationName,
@@ -189,8 +191,10 @@ public static class CSharpSyntaxExtractor
                 targetSymbol: invocationName,
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["expression"] = invocation.Expression.ToString(),
-                    ["invocationName"] = invocationName
+                    ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
+                    ["expressionKind"] = invocation.Expression.Kind().ToString(),
+                    ["invocationName"] = invocationName,
+                    ["receiverName"] = receiverName ?? string.Empty
                 }));
 
             facts.Add(CreateSyntaxFact(
@@ -208,7 +212,7 @@ public static class CSharpSyntaxExtractor
                     ["callKind"] = "SyntaxInvocation"
                 }));
 
-            if (IsSerializationName(invocationName) || invocation.Expression.ToString().Contains("Serializer", StringComparison.Ordinal))
+            if (IsSerializationName(invocationName) || (receiverName?.Contains("Serializer", StringComparison.Ordinal) ?? false))
             {
                 facts.Add(CreateSyntaxFact(
                     manifest,
@@ -337,7 +341,43 @@ public static class CSharpSyntaxExtractor
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             GenericNameSyntax genericName => genericName.Identifier.ValueText,
             MemberBindingExpressionSyntax memberBinding => memberBinding.Name.Identifier.ValueText,
-            _ => expression.ToString()
+            _ => expression.Kind().ToString()
+        };
+    }
+
+    private static string? GetInvocationReceiverName(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            MemberAccessExpressionSyntax memberAccess => GetSafeExpressionName(memberAccess.Expression),
+            MemberBindingExpressionSyntax => "conditional-access",
+            _ => null
+        };
+    }
+
+    private static string? GetSafeExpressionName(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
+            ThisExpressionSyntax => "this",
+            BaseExpressionSyntax => "base",
+            MemberAccessExpressionSyntax memberAccess when GetSafeExpressionName(memberAccess.Expression) is { Length: > 0 } receiver
+                && GetSimpleName(memberAccess.Name) is { Length: > 0 } memberName => $"{receiver}.{memberName}",
+            InvocationExpressionSyntax invocation => GetInvocationName(invocation.Expression),
+            ConditionalAccessExpressionSyntax => "conditional-access",
+            _ => null
+        };
+    }
+
+    private static string? GetSimpleName(SimpleNameSyntax name)
+    {
+        return name switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
+            _ => null
         };
     }
 
@@ -370,7 +410,7 @@ public static class CSharpSyntaxExtractor
 
         if (creation.Parent is AssignmentExpressionSyntax assignment)
         {
-            return assignment.Left.ToString();
+            return GetSafeExpressionName(assignment.Left);
         }
 
         return null;

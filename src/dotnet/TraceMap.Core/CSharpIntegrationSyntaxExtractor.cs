@@ -139,6 +139,7 @@ public static class CSharpIntegrationSyntaxExtractor
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var invocationName = GetInvocationName(invocation.Expression);
+            var receiverName = GetReceiver(invocation.Expression);
             if (HttpClientMethods.Contains(invocationName) || JsonHttpMethods.Contains(invocationName))
             {
                 facts.Add(FactFactory.Create(
@@ -147,14 +148,14 @@ public static class CSharpIntegrationSyntaxExtractor
                     RuleIds.HttpClientInvocation,
                     EvidenceTiers.Tier3SyntaxOrTextual,
                     ToEvidenceSpan(filePath, invocation),
-                    sourceSymbol: GetReceiver(invocation.Expression),
+                    sourceSymbol: receiverName,
                     targetSymbol: invocationName,
                     contractElement: invocationName,
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["methodName"] = invocationName,
                         ["methodFamily"] = HttpClientMethods.Contains(invocationName) ? "HttpClient" : "JsonHttpExtension",
-                        ["receiverExpression"] = GetReceiver(invocation.Expression) ?? string.Empty
+                        ["receiverName"] = receiverName ?? string.Empty
                     }));
             }
 
@@ -166,14 +167,14 @@ public static class CSharpIntegrationSyntaxExtractor
                     RuleIds.HttpClientInvocation,
                     EvidenceTiers.Tier3SyntaxOrTextual,
                     ToEvidenceSpan(filePath, invocation),
-                    sourceSymbol: GetReceiver(invocation.Expression),
+                    sourceSymbol: receiverName,
                     targetSymbol: clientName,
                     contractElement: clientName,
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["clientName"] = clientName,
                         ["methodName"] = invocationName,
-                        ["receiverExpression"] = GetReceiver(invocation.Expression) ?? string.Empty
+                        ["receiverName"] = receiverName ?? string.Empty
                     }));
             }
 
@@ -185,13 +186,13 @@ public static class CSharpIntegrationSyntaxExtractor
                     RuleIds.DatabaseEntityFramework,
                     EvidenceTiers.Tier3SyntaxOrTextual,
                     ToEvidenceSpan(filePath, invocation),
-                    sourceSymbol: GetReceiver(invocation.Expression),
+                    sourceSymbol: receiverName,
                     targetSymbol: invocationName,
                     contractElement: invocationName,
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["methodName"] = invocationName,
-                        ["receiverExpression"] = GetReceiver(invocation.Expression) ?? string.Empty
+                        ["receiverName"] = receiverName ?? string.Empty
                     }));
             }
 
@@ -203,13 +204,13 @@ public static class CSharpIntegrationSyntaxExtractor
                     RuleIds.DatabaseDapperInvocation,
                     EvidenceTiers.Tier3SyntaxOrTextual,
                     ToEvidenceSpan(filePath, invocation),
-                    sourceSymbol: GetReceiver(invocation.Expression),
+                    sourceSymbol: receiverName,
                     targetSymbol: invocationName,
                     contractElement: invocationName,
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["methodName"] = invocationName,
-                        ["receiverExpression"] = GetReceiver(invocation.Expression) ?? string.Empty
+                        ["receiverName"] = receiverName ?? string.Empty
                     }));
             }
         }
@@ -242,7 +243,7 @@ public static class CSharpIntegrationSyntaxExtractor
     private static void AddSqlStringFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
     {
         foreach (var literal in root.DescendantNodes().OfType<LiteralExpressionSyntax>()
-            .Where(literal => literal.IsKind(SyntaxKind.StringLiteralExpression)))
+            .Where(IsStringLiteral))
         {
             var value = literal.Token.ValueText;
             if (!SqlTextDetector.IsSqlLike(value))
@@ -275,7 +276,7 @@ public static class CSharpIntegrationSyntaxExtractor
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             GenericNameSyntax genericName => genericName.Identifier.ValueText,
             MemberBindingExpressionSyntax memberBinding => memberBinding.Name.Identifier.ValueText,
-            _ => expression.ToString()
+            _ => expression.Kind().ToString()
         };
     }
 
@@ -283,8 +284,34 @@ public static class CSharpIntegrationSyntaxExtractor
     {
         return expression switch
         {
-            MemberAccessExpressionSyntax memberAccess => memberAccess.Expression.ToString(),
+            MemberAccessExpressionSyntax memberAccess => GetSafeExpressionName(memberAccess.Expression),
             MemberBindingExpressionSyntax => "conditional-access",
+            _ => null
+        };
+    }
+
+    private static string? GetSafeExpressionName(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
+            ThisExpressionSyntax => "this",
+            BaseExpressionSyntax => "base",
+            MemberAccessExpressionSyntax memberAccess when GetSafeExpressionName(memberAccess.Expression) is { Length: > 0 } receiver
+                && GetSimpleName(memberAccess.Name) is { Length: > 0 } memberName => $"{receiver}.{memberName}",
+            InvocationExpressionSyntax invocation => GetInvocationName(invocation.Expression),
+            ConditionalAccessExpressionSyntax => "conditional-access",
+            _ => null
+        };
+    }
+
+    private static string? GetSimpleName(SimpleNameSyntax name)
+    {
+        return name switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
             _ => null
         };
     }
@@ -299,14 +326,19 @@ public static class CSharpIntegrationSyntaxExtractor
         }
 
         if (arguments[index].Expression is LiteralExpressionSyntax literal
-            && literal.IsKind(SyntaxKind.StringLiteralExpression)
-            && literal.Token.Value is string literalValue)
+            && IsStringLiteral(literal)
+            && literal.Token.ValueText is { Length: >= 0 } literalValue)
         {
             value = literalValue;
             return true;
         }
 
         return false;
+    }
+
+    private static bool IsStringLiteral(LiteralExpressionSyntax literal)
+    {
+        return literal.IsKind(SyntaxKind.StringLiteralExpression);
     }
 
     private static bool IsDbContextTypeName(string typeName)

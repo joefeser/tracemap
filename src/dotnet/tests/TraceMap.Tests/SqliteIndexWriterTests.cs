@@ -1,6 +1,8 @@
 using System.Text.Json;
+using System.Reflection;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
@@ -325,6 +327,18 @@ public sealed class SqliteIndexWriterTests
         Assert.Contains("ix_parameter_forward_edges_target", parameterForwardIndexNames);
         Assert.Contains("ix_parameter_forward_edges_source_method", parameterForwardIndexNames);
         Assert.Contains("ix_parameter_forward_edges_target_method", parameterForwardIndexNames);
+    }
+
+    [Fact]
+    public void Constructor_symbol_detection_accepts_metadata_ctor_names()
+    {
+        var method = typeof(SqliteIndexWriter).GetMethod("IsConstructorSymbol", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        Assert.True((bool)method.Invoke(null, ["global::Demo.Service..ctor(global::Demo.Dependency dependency)"])!);
+        Assert.True((bool)method.Invoke(null, ["global::Demo.Service.#ctor(global::Demo.Dependency dependency)"])!);
+        Assert.True((bool)method.Invoke(null, ["global::Demo.Service.Service(global::Demo.Dependency dependency)"])!);
+        Assert.False((bool)method.Invoke(null, ["global::Demo.Service.Run()"])!);
     }
 
     private static async Task<T> ExecuteScalarAsync<T>(SqliteConnection connection, string sql)

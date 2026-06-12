@@ -44,7 +44,7 @@ public static class ScanEngine
             : "Level3SyntaxAnalysis";
 
         var manifest = new ScanManifest(
-            CreateScanId(repoPath, git.CommitSha, inventory),
+            CreateScanId(git, inventory),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -62,10 +62,11 @@ public static class ScanEngine
         return new ScanResult(manifest, facts, inventory);
     }
 
-    private static string CreateScanId(string repoPath, string commitSha, IReadOnlyList<FileInventoryItem> inventory)
+    private static string CreateScanId(GitMetadata git, IReadOnlyList<FileInventoryItem> inventory)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
-        return "scan-" + FactFactory.Hash($"{repoPath}|{commitSha}|{signature}", 20);
+        var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
+        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{signature}", 20);
     }
 
     private static IReadOnlyList<CodeFact> CreateFacts(

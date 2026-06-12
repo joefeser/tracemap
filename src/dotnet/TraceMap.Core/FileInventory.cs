@@ -34,20 +34,37 @@ public static class FileInventory
             ? null
             : Path.GetFullPath(outputPath);
 
-        var items = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true
+        };
+
+        var items = Directory.EnumerateFiles(root, "*", options)
             .Where(path => ShouldInclude(root, path, outputFullPath))
-            .Select(path =>
-            {
-                var info = new FileInfo(path);
-                return new FileInventoryItem(
-                    NormalizeRelativePath(Path.GetRelativePath(root, path)),
-                    GetKind(path),
-                    info.Length);
-            })
+            .Select(path => TryCreateItem(root, path))
+            .Where(item => item is not null)
+            .Select(item => item!)
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
 
         return items;
+    }
+
+    private static FileInventoryItem? TryCreateItem(string root, string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return new FileInventoryItem(
+                NormalizeRelativePath(Path.GetRelativePath(root, path)),
+                GetKind(path),
+                info.Length);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private static bool ShouldInclude(string root, string path, string? outputFullPath)

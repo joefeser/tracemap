@@ -102,6 +102,64 @@ public sealed class CliTests
     }
 
     [Fact]
+    public async Task Scan_solution_scope_does_not_load_standalone_projects_for_semantic_facts()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var keepProject = Path.Combine(repo, "src", "Keep");
+        var skipProject = Path.Combine(repo, "src", "Skip");
+        Directory.CreateDirectory(keepProject);
+        Directory.CreateDirectory(skipProject);
+        File.WriteAllText(Path.Combine(repo, "Scoped.sln"), """
+            Microsoft Visual Studio Solution File, Format Version 12.00
+            # Visual Studio Version 17
+            VisualStudioVersion = 17.0.31903.59
+            MinimumVisualStudioVersion = 10.0.40219.1
+            Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Keep", "src\Keep\Keep.csproj", "{11111111-1111-1111-1111-111111111111}"
+            EndProject
+            Global
+                GlobalSection(SolutionConfigurationPlatforms) = preSolution
+                    Debug|Any CPU = Debug|Any CPU
+                EndGlobalSection
+                GlobalSection(ProjectConfigurationPlatforms) = postSolution
+                    {11111111-1111-1111-1111-111111111111}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                    {11111111-1111-1111-1111-111111111111}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                EndGlobalSection
+            EndGlobal
+            """);
+        File.WriteAllText(Path.Combine(keepProject, "Keep.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(keepProject, "Keep.cs"), "namespace Keep; public sealed class Kept { }");
+        File.WriteAllText(Path.Combine(skipProject, "Skip.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(skipProject, "Skip.cs"), "namespace Skip; public sealed class Skipped { }");
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["scan", "--repo", repo, "--out", outputPath, "--solution", "Scoped.sln"],
+            output,
+            error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, error.ToString());
+        var facts = await File.ReadAllTextAsync(Path.Combine(outputPath, "facts.ndjson"));
+        Assert.Contains("global::Keep.Kept", facts);
+        Assert.DoesNotContain("global::Skip.Skipped", facts);
+    }
+
+    [Fact]
     public async Task Flow_traces_parameter_forwarding_paths()
     {
         using var temp = new TempDirectory();
@@ -349,5 +407,71 @@ public sealed class CliTests
         Assert.Contains("InheritsFrom", report);
         Assert.Contains("ImplementsInterface", report);
         Assert.Contains("csharp.semantic.symbolrelationship.v1", report);
+    }
+
+    [Fact]
+    public async Task Relate_both_direction_advances_through_incoming_edges()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var projectPath = Path.Combine(repo, "src", "BothRelateSample");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var relationshipReportPath = Path.Combine(temp.Path, "relationships.md");
+        Directory.CreateDirectory(projectPath);
+        File.WriteAllText(Path.Combine(projectPath, "BothRelateSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(projectPath, "Relationships.cs"), """
+            namespace BothRelateSample;
+
+            public interface IBase
+            {
+            }
+
+            public interface IDerived : IBase
+            {
+            }
+
+            public sealed class Impl : IDerived
+            {
+            }
+            """);
+
+        using var scanOutput = new StringWriter();
+        using var scanError = new StringWriter();
+        var scanExitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], scanOutput, scanError);
+        Assert.Equal(0, scanExitCode);
+        Assert.Equal(string.Empty, scanError.ToString());
+
+        using var relateOutput = new StringWriter();
+        using var relateError = new StringWriter();
+        var relateExitCode = await TraceMapCommand.RunAsync(
+            [
+                "relate",
+                "--index",
+                Path.Combine(outputPath, "index.sqlite"),
+                "--symbol",
+                "IBase",
+                "--out",
+                relationshipReportPath,
+                "--direction",
+                "both",
+                "--max-depth",
+                "3"
+            ],
+            relateOutput,
+            relateError);
+
+        Assert.Equal(0, relateExitCode);
+        Assert.Equal(string.Empty, relateError.ToString());
+        var report = await File.ReadAllTextAsync(relationshipReportPath);
+        Assert.Contains("BothRelateSample.IDerived", report);
+        Assert.Contains("BothRelateSample.Impl", report);
     }
 }

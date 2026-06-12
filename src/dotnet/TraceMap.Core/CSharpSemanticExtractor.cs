@@ -147,7 +147,8 @@ public static class CSharpSemanticExtractor
             }
         }
 
-        foreach (var projectItem in projects.Where(project => !loadedProjectPaths.Contains(project.RelativePath)))
+        var shouldLoadStandaloneProjects = options.SolutionPaths is not { Count: > 0 };
+        foreach (var projectItem in shouldLoadStandaloneProjects ? projects.Where(project => !loadedProjectPaths.Contains(project.RelativePath)) : [])
         {
             attempted = true;
             var projectPath = Path.Combine(repoPath, projectItem.RelativePath);
@@ -250,16 +251,41 @@ public static class CSharpSemanticExtractor
         process.StartInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"restore \"{relativeTargetPath.Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
             WorkingDirectory = repoPath,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false
+            UseShellExecute = false,
+            CreateNoWindow = true
         };
-        process.Start();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
+        process.StartInfo.ArgumentList.Add("restore");
+        process.StartInfo.ArgumentList.Add(relativeTargetPath);
+
+        if (!process.Start())
+        {
+            message = "dotnet restore process failed to start.";
+            return -1;
+        }
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(TimeSpan.FromMinutes(10)))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Best-effort cleanup only.
+            }
+
+            message = "dotnet restore timed out after 10 minutes.";
+            return -1;
+        }
+
+        Task.WaitAll([outputTask, errorTask], TimeSpan.FromSeconds(1));
+        var output = outputTask.IsCompletedSuccessfully ? outputTask.Result : string.Empty;
+        var error = errorTask.IsCompletedSuccessfully ? errorTask.Result : string.Empty;
         message = string.Join(" ", new[] { LastNonEmptyLine(output), LastNonEmptyLine(error) }
             .Where(line => !string.IsNullOrWhiteSpace(line)));
         return process.ExitCode;
@@ -1213,7 +1239,7 @@ public static class CSharpSemanticExtractor
         ExpressionSyntax? receiverExpression,
         ITypeSymbol? receiverType)
     {
-        if (IsDependencyResolutionMethod(method, invocation, out var dependencyType))
+        if (IsDependencyResolutionMethod(method, invocation, model, out var dependencyType))
         {
             facts.Add(CreateInvocationBoundaryFact(
                 projectPath,
@@ -2279,7 +2305,7 @@ public static class CSharpSemanticExtractor
             && TryGetNullPatternKind(patternExpression.Pattern, out feasibilityKind))
         {
             checkedSymbol = model.GetSymbolInfo(patternExpression.Expression).Symbol?.ToDisplayString(SymbolFormat)
-                ?? patternExpression.Expression.ToString();
+                ?? GetSafeExpressionName(patternExpression.Expression);
             comparisonOperator = "is";
             return true;
         }
@@ -2301,7 +2327,7 @@ public static class CSharpSemanticExtractor
         }
 
         checkedSymbol = model.GetSymbolInfo(checkedExpression).Symbol?.ToDisplayString(SymbolFormat)
-            ?? checkedExpression.ToString();
+            ?? GetSafeExpressionName(checkedExpression);
         return true;
     }
 
@@ -2709,10 +2735,36 @@ public static class CSharpSemanticExtractor
         };
     }
 
+    private static string? GetSafeExpressionName(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
+            ThisExpressionSyntax => "this",
+            BaseExpressionSyntax => "base",
+            MemberAccessExpressionSyntax memberAccess when GetSafeExpressionName(memberAccess.Expression) is { Length: > 0 } receiver
+                && GetSimpleName(memberAccess.Name) is { Length: > 0 } memberName => $"{receiver}.{memberName}",
+            InvocationExpressionSyntax invocation => GetInvocationMemberName(invocation.Expression),
+            ConditionalAccessExpressionSyntax => "conditional-access",
+            _ => null
+        };
+    }
+
+    private static string? GetSimpleName(SimpleNameSyntax name)
+    {
+        return name switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
+            _ => null
+        };
+    }
+
     private static string? GetTypeOfExpressionDisplay(ExpressionSyntax expression, SemanticModel model)
     {
         return expression is TypeOfExpressionSyntax typeOfExpression
-            ? model.GetTypeInfo(typeOfExpression.Type).Type?.ToDisplayString(SymbolFormat) ?? typeOfExpression.Type.ToString()
+            ? model.GetTypeInfo(typeOfExpression.Type).Type?.ToDisplayString(SymbolFormat)
             : null;
     }
 
@@ -2766,7 +2818,7 @@ public static class CSharpSemanticExtractor
             {
                 IdentifierNameSyntax name => name.Identifier.ValueText,
                 MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
-                _ => invocation.ArgumentList.Arguments[0].Expression.ToString()
+                _ => null
             };
         }
 
@@ -2814,10 +2866,11 @@ public static class CSharpSemanticExtractor
     private static bool IsDependencyResolutionMethod(
         IMethodSymbol method,
         InvocationExpressionSyntax invocation,
+        SemanticModel model,
         out string dependencyType)
     {
         dependencyType = GetGenericTypeArgument(method)
-            ?? GetTypeOfArgument(invocation)
+            ?? GetTypeOfArgument(invocation, model)
             ?? method.ReturnType.ToDisplayString(SymbolFormat);
 
         var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
@@ -2900,13 +2953,13 @@ public static class CSharpSemanticExtractor
             : method.TypeArguments[0].ToDisplayString(SymbolFormat);
     }
 
-    private static string? GetTypeOfArgument(InvocationExpressionSyntax invocation)
+    private static string? GetTypeOfArgument(InvocationExpressionSyntax invocation, SemanticModel model)
     {
         foreach (var argument in invocation.ArgumentList.Arguments)
         {
             if (argument.Expression is TypeOfExpressionSyntax typeOfExpression)
             {
-                return typeOfExpression.Type.ToString();
+                return model.GetTypeInfo(typeOfExpression.Type).Type?.ToDisplayString(SymbolFormat);
             }
         }
 
@@ -2937,7 +2990,7 @@ public static class CSharpSemanticExtractor
 
         if (creation.Parent is AssignmentExpressionSyntax assignment)
         {
-            return assignment.Left.ToString();
+            return GetSafeExpressionName(assignment.Left);
         }
 
         return null;
