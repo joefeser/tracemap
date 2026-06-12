@@ -1,4 +1,4 @@
-# AGENTS.md — Impact Index Tool
+# AGENTS.md — TraceMap Tool
 
 ## Mission
 
@@ -36,7 +36,7 @@ This is not an AI impact-analysis tool. Do not add LLM calls, embeddings, vector
 - `Microsoft.Data.Sqlite`
 - `xunit` or `NUnit` for tests
 
-## Required outputs for `impact scan`
+## Required outputs for `tracemap scan`
 
 ```text
 scan-manifest.json

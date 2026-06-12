@@ -1,6 +1,6 @@
 # Initial prompt to paste into Codex
 
-You are building an internal deterministic C# repository indexer named `tracemap`. Read `README_Codex_Handoff.md`, `AGENTS.md`, and `MILESTONES.md` before changing code.
+You are building **TraceMap**, an internal deterministic C# repository indexer with a CLI command named `tracemap`. Read `README_Codex_Handoff.md`, `AGENTS.md`, and `MILESTONES.md` before changing code.
 
 Start with Milestone 0 and Milestone 1 only. Do not attempt all milestones in one task.
 
