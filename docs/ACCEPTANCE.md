@@ -36,6 +36,14 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `index.sqlite` includes a `field_aliases` table when field-alias facts are emitted.
 - `index.sqlite` includes a `parameter_forward_edges` table derived from parameter-to-parameter argument-flow facts.
 
+For every successful `tracemap-ts scan --repo <repo> --out <out>` run, verify:
+
+- the same required artifacts are written.
+- `scan-manifest.json` uses `Level1SemanticAnalysis` and `buildStatus: "Succeeded"` only when every selected TypeScript project loads semantically with no known gaps and a known commit SHA.
+- reduced TypeScript scans use `Level1SemanticAnalysisReduced` or `Level3SyntaxAnalysis`.
+- reducer-compatible facts reuse existing fact type strings and matching keys such as `propertyName`, `methodName`, `typeName`, `keyPath`, `name`, `containingType`, and `targetSymbol`.
+- TypeScript facts store hashes/spans for source values, not raw source snippets.
+
 ## Reducer Acceptance
 
 For every successful `tracemap reduce --index <index> --contract-delta <delta> --out <report>` run, verify:
@@ -85,6 +93,46 @@ Expected:
 - syntax facts are emitted for declarations and member names.
 - `AnalysisGap` facts are emitted.
 
+### `samples/typescript-modern-sample`
+
+Purpose: prove the TypeScript full semantic path and reducer compatibility.
+
+Command:
+
+```bash
+cd src/typescript
+node dist/src/cli.js scan --repo ../../samples/typescript-modern-sample --out <tmp>/typescript-modern-sample
+cd ../..
+dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index <tmp>/typescript-modern-sample/index.sqlite --contract-delta samples/contract-deltas/typescript-modern.status.json --out <tmp>/typescript-impact.md
+```
+
+Expected:
+
+- scan analysis level is `Level1SemanticAnalysis`.
+- build status is `Succeeded`.
+- `CustomerContract.status` is `DefiniteImpact`.
+- evidence includes a Tier1 `PropertyAccessed` fact.
+- route, serializer, Zod, Prisma, and `process.env` facts are emitted as bounded integration evidence.
+
+### `samples/typescript-broken-sample`
+
+Purpose: prove TypeScript syntax fallback behavior.
+
+Command:
+
+```bash
+cd src/typescript
+node dist/src/cli.js scan --repo ../../samples/typescript-broken-sample --out <tmp>/typescript-broken-sample
+```
+
+Expected:
+
+- scan completes.
+- analysis level is `Level3SyntaxAnalysis`.
+- build status is `NotRun`.
+- syntax declaration/member facts are emitted.
+- `AnalysisGap` facts are emitted.
+
 ## External Sample Repos
 
 External repos live outside this repository at:
@@ -112,6 +160,13 @@ Expected:
 - scans may report `Level1SemanticAnalysisReduced`.
 - reduced scans must label no-evidence findings as `NoEvidenceReducedCoverage`.
 - generic member names such as `status` may match unrelated code and should emit warnings when they match multiple facts or a high-fan-out set.
+
+TypeScript external smoke, recorded June 12, 2026:
+
+- Repo: `/Users/josephfeser/src/gh-joe/scip-typescript`
+- Command: `node src/typescript/dist/src/cli.js scan --repo /Users/josephfeser/src/gh-joe/scip-typescript --out /tmp/tracemap-ts-scip`
+- Result: completed, 13,883 facts, `Level1SemanticAnalysisReduced`, `FailedOrPartial`.
+- Interpretation: reduced coverage is expected for external repos with TypeScript diagnostics or dependency/config gaps; no-evidence reducer findings must remain reduced.
 
 ## Repo-Specific Delta Fixtures
 
@@ -169,6 +224,9 @@ Each fixture should document:
 | calculation expression | `CalculationExpression` with operator, line span, and expression hash |
 | retry/backoff method | `RetryPolicyLogic` |
 | generated or DI glue file | `InfrastructureBoilerplate` |
+| TypeScript semantic property usage match | `DefiniteImpact` through existing .NET reducer |
+| TypeScript syntax-only fallback | reduced or syntax-only coverage, never clean |
+| TypeScript integration boundary | Tier1/Tier2/Tier3 according to compiler/package/shape evidence |
 
 ## Performance Smoke Targets
 

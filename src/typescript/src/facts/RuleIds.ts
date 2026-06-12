@@ -1,0 +1,42 @@
+export const RuleIds = {
+  RepoManifest: "repo.manifest.v1",
+  FileInventory: "file.inventory.v1",
+  ProjectFile: "project.file.v1",
+  TypeScriptProject: "typescript.project.v1",
+  TypeScriptPackage: "typescript.package.v1",
+  TypeScriptConfig: "typescript.config.v1",
+  TypeScriptSyntaxDeclarations: "typescript.syntax.declarations.v1",
+  TypeScriptSyntaxMemberAccess: "typescript.syntax.memberaccess.v1",
+  TypeScriptSyntaxInvocation: "typescript.syntax.invocation.v1",
+  TypeScriptSyntaxCallGraph: "typescript.syntax.callgraph.v1",
+  TypeScriptSyntaxObjectCreation: "typescript.syntax.objectcreation.v1",
+  TypeScriptSyntaxLogicShape: "typescript.syntax.logicshape.v1",
+  TypeScriptSemanticDeclarations: "typescript.semantic.declarations.v1",
+  TypeScriptSemanticPropertyAccess: "typescript.semantic.propertyaccess.v1",
+  TypeScriptSemanticMethodInvocation: "typescript.semantic.methodinvocation.v1",
+  TypeScriptSemanticCallGraph: "typescript.semantic.callgraph.v1",
+  TypeScriptSemanticObjectCreation: "typescript.semantic.objectcreation.v1",
+  TypeScriptSemanticValueFlow: "typescript.semantic.valueflow.v1",
+  TypeScriptSemanticLocalAlias: "typescript.semantic.localalias.v1",
+  TypeScriptSemanticSymbolIdentity: "typescript.semantic.symbolidentity.v1",
+  TypeScriptSemanticSymbolRelationship: "typescript.semantic.symbolrelationship.v1",
+  TypeScriptIntegrationHttp: "typescript.integration.http.v1",
+  TypeScriptIntegrationRoute: "typescript.integration.route.v1",
+  TypeScriptIntegrationSerializer: "typescript.integration.serializer.v1",
+  TypeScriptIntegrationDatabase: "typescript.integration.database.v1",
+  TypeScriptIntegrationContractMapping: "typescript.integration.contractmapping.v1",
+  TypeScriptIntegrationBoundary: "typescript.integration.boundary.v1",
+  ContractDeltaReduction: "contract.delta.reduce.v1"
+} as const;
+
+export const ScannerVersions = {
+  TraceMapTypeScript: "tracemap-typescript/0.1.0",
+  RepoManifestExtractor: "repo-manifest/0.1.0",
+  FileInventoryExtractor: "file-inventory/0.1.0",
+  TypeScriptProjectExtractor: "typescript-project/0.1.0",
+  TypeScriptPackageExtractor: "typescript-package/0.1.0",
+  TypeScriptConfigExtractor: "typescript-config/0.1.0",
+  TypeScriptSyntaxExtractor: "typescript-syntax/0.1.0",
+  TypeScriptSemanticExtractor: "typescript-semantic/0.1.0",
+  TypeScriptIntegrationExtractor: "typescript-integration/0.1.0"
+} as const;
