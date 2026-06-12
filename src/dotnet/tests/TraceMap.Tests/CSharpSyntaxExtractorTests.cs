@@ -193,6 +193,53 @@ public sealed class CSharpSyntaxExtractorTests
         Assert.Equal("logger", memberAccess.SourceSymbol);
     }
 
+    [Fact]
+    public void Scan_extracts_query_patterns_and_object_shapes_from_syntax()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Queries.cs"), """
+            using System.Linq;
+
+            public sealed class QuerySample
+            {
+                public object Run(IQueryable<Customer> customers)
+                {
+                    return customers
+                        .Where(customer => customer.Status == "active" && customer.OrganizationId == "org_1")
+                        .OrderByDescending(customer => customer.UpdatedAt)
+                        .Select(customer => new { customer.Status, customer.Total })
+                        .ToArray();
+                }
+            }
+
+            public sealed class Customer
+            {
+                public string Status { get; set; } = "";
+                public string OrganizationId { get; set; } = "";
+                public int Total { get; set; }
+                public object UpdatedAt { get; set; } = new();
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        var queryPattern = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.QueryPatternDetected
+            && fact.TargetSymbol == "Where");
+        Assert.Equal(RuleIds.CSharpSyntaxQueryPattern, queryPattern.RuleId);
+        Assert.Contains("Status", queryPattern.Properties["filterFields"]);
+        Assert.True(queryPattern.Properties["patternHash"].Length > 0);
+        Assert.DoesNotContain("org_1", string.Join("|", queryPattern.Properties.Values));
+
+        var objectShape = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.ObjectShapeInferred
+            && fact.TargetSymbol == "anonymous");
+        Assert.Equal(RuleIds.CSharpSyntaxObjectShape, objectShape.RuleId);
+        Assert.Contains("Status", objectShape.Properties["fieldNames"]);
+        Assert.Contains("Total", objectShape.Properties["fieldNames"]);
+        Assert.True(objectShape.Properties["shapeHash"].Length > 0);
+    }
+
     private static void AssertFact(ScanResult result, string factType, string targetSymbol, string filePath, int startLine, int endLine)
     {
         var fact = Assert.Single(result.Facts, fact =>

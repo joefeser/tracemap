@@ -141,6 +141,32 @@ function visit(node: ts.Node, sourceFile: ts.SourceFile, filePath: string, manif
       )
     );
   }
+  if (ts.isObjectLiteralExpression(node)) {
+    const fields = objectLiteralFieldNames(node, sourceFile);
+    if (fields.length > 0) {
+      facts.push(
+        createFact(
+          manifest,
+          FactTypes.ObjectShapeInferred,
+          RuleIds.TypeScriptSyntaxObjectShape,
+          EvidenceTiers.Tier3SyntaxOrTextual,
+          evidence(node, filePath, sourceFile, undefined, undefined, hash(node.getText(sourceFile))),
+          {
+            sourceSymbol: containingFunctionName(node),
+            targetSymbol: "object-literal",
+            contractElement: "object-literal",
+            properties: {
+              objectKind: "object-literal",
+              fieldNames: fields.join(";"),
+              fieldCount: fields.length,
+              shapeHash: hash(fields.join("|")),
+              expressionHash: hash(node.getText(sourceFile))
+            }
+          }
+        )
+      );
+    }
+  }
   ts.forEachChild(node, (child) => visit(child, sourceFile, filePath, manifest, facts));
 }
 
@@ -253,4 +279,19 @@ function evidence(
 
 function isBoilerplatePath(filePath: string): boolean {
   return /(^|\/)(generated|dist|build|routes|controllers)(\/|$)/i.test(filePath) || /\.(generated|gen)\.tsx?$/.test(filePath);
+}
+
+function objectLiteralFieldNames(node: ts.ObjectLiteralExpression, sourceFile: ts.SourceFile): string[] {
+  return [...new Set(node.properties
+    .map((property) => {
+      if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property) || ts.isMethodDeclaration(property)) {
+        return property.name?.getText(sourceFile).replace(/^["']|["']$/g, "");
+      }
+      if (ts.isSpreadAssignment(property)) {
+        return "spread";
+      }
+      return undefined;
+    })
+    .filter((name): name is string => !!name && name.length > 0))]
+    .sort((left, right) => left.localeCompare(right));
 }

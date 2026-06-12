@@ -106,6 +106,28 @@ rules:
       - Calculation expressions store expression hashes, operators, and spans, not raw source snippets.
       - Boilerplate classification is path/name based and can misclassify unconventional project layouts.
 
+  - id: csharp.syntax.querypattern.v1
+    name: C# syntax query pattern
+    description: Records LINQ-style filter, sort, select, and include call shapes with field names and hashed call expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - QueryPatternDetected
+    limitations:
+      - Syntax-only evidence does not prove the query provider, database table, generated SQL, runtime branch feasibility, or whether the query executes.
+      - Field names are extracted from member access inside query arguments and can include unrelated member reads in complex expressions.
+      - Literal values and raw expressions are not stored; pattern hashes, field names, operation names, and spans are emitted.
+
+  - id: csharp.syntax.objectshape.v1
+    name: C# syntax object shape
+    description: Records object initializer and anonymous-object field shapes with field names, shape hashes, and source spans.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectShapeInferred
+    limitations:
+      - Object shape facts are review-routing evidence, not proof of DTO/schema contracts, serializer output, runtime object contents, or nullability.
+      - Nested object contents, collection element shapes, conditional construction, and mutation after initialization are not expanded in this rule.
+      - Raw object expressions are not stored; expression hashes and sorted field names are emitted.
+
   - id: csharp.semantic.propertyaccess.v1
     name: C# semantic property access
     description: Finds compiler-resolved property accesses using Roslyn semantic model.
@@ -481,6 +503,17 @@ rules:
     limitations:
       - Logic shape facts are review-routing signals, not proof of business intent.
 
+  - id: typescript.syntax.objectshape.v1
+    name: TypeScript syntax object shape
+    description: Records object-literal field shapes with sorted field names, shape hashes, expression hashes, and source spans.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectShapeInferred
+    limitations:
+      - Object shape facts are syntax evidence only; they do not prove DTO schemas, serializer output, runtime object contents, or nullability.
+      - Nested object semantics, spread contents, mutation after construction, and branch feasibility are not expanded in this rule.
+      - Raw object expressions and literal values are not stored.
+
   - id: typescript.semantic.declarations.v1
     name: TypeScript semantic declarations
     description: Emits compiler-resolved declaration facts with TraceMap-native TypeScript symbol IDs.
@@ -623,3 +656,14 @@ rules:
       - ConfigKeyDeclared
     limitations:
       - Environment variable availability, provider precedence, and deployment configuration are not proven.
+
+  - id: typescript.integration.querypattern.v1
+    name: TypeScript integration query pattern
+    description: Records Prisma-style and Base44-style entity query call shapes with where, orderBy, select, include, data, filter, sort, and mutation field names plus hashed patterns.
+    evidenceTier: Tier2Structural
+    emits:
+      - QueryPatternDetected
+    limitations:
+      - Structural query evidence does not prove generated SQL, runtime execution, database schema existence, or branch feasibility.
+      - Only statically visible object-literal and simple string sort arguments are inspected in MVP; variables, spreads, helper-built filters, and dynamic keys need later flow rules.
+      - Literal values and raw object text are not stored; field names, operation names, hashes, and spans are emitted.

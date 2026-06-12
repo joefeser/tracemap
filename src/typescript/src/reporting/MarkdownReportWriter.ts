@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { CodeFact, ScanResult } from "../facts/Models";
+import { CodeFact, FactTypes, ScanResult } from "../facts/Models";
 
 export async function writeMarkdownReport(filePath: string, result: ScanResult): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -35,6 +35,20 @@ export async function writeMarkdownReport(filePath: string, result: ScanResult):
     "",
     ...(gaps.length === 0 ? ["No known gaps were recorded."] : gaps.slice(0, 25).map((fact) => `- \`${fact.properties.category ?? "gap"}\` at \`${fact.evidence.filePath}:${fact.evidence.startLine}\``)),
     "",
+    "## Query Patterns",
+    "",
+    ...factList(
+      result.facts.filter((fact) => fact.factType === FactTypes.QueryPatternDetected),
+      (fact) => `- \`${fact.properties.operationName ?? fact.contractElement ?? "unknown"}\` fields \`${displayFields(fact)}\` (${fact.evidenceTier}) at \`${fact.evidence.filePath}:${fact.evidence.startLine}\``
+    ),
+    "",
+    "## Object Shapes",
+    "",
+    ...factList(
+      result.facts.filter((fact) => fact.factType === FactTypes.ObjectShapeInferred),
+      (fact) => `- \`${fact.properties.objectKind ?? fact.contractElement ?? "object"}\` fields \`${fact.properties.fieldNames ?? "unknown"}\` (${fact.evidenceTier}) at \`${fact.evidence.filePath}:${fact.evidence.startLine}\``
+    ),
+    "",
     "## Limitations",
     "",
     "- TypeScript `buildStatus = Succeeded` means semantic analysis succeeded; it does not mean target repo tests or bundlers ran.",
@@ -59,4 +73,26 @@ function table(counts: Map<string, number>): string[] {
     "| --- | ---: |",
     ...[...counts.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `| \`${key}\` | ${value} |`)
   ];
+}
+
+function factList(facts: CodeFact[], format: (fact: CodeFact) => string): string[] {
+  const selectedFacts = facts
+    .sort((left, right) =>
+      left.evidence.filePath.localeCompare(right.evidence.filePath)
+      || left.evidence.startLine - right.evidence.startLine
+      || (left.contractElement ?? "").localeCompare(right.contractElement ?? "")
+    )
+    .slice(0, 50);
+  return selectedFacts.length === 0 ? ["- None found."] : selectedFacts.map(format);
+}
+
+function displayFields(fact: CodeFact): string {
+  const fields = [
+    fact.properties.filterFields,
+    fact.properties.sortFields,
+    fact.properties.selectFields,
+    fact.properties.includeFields,
+    fact.properties.mutationFields
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+  return fields.length === 0 ? "none" : [...new Set(fields)].join(";");
 }

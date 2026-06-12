@@ -105,6 +105,8 @@ export const FactTypes = {
   RetryPolicyLogic: "RetryPolicyLogic",
   SerializationLogic: "SerializationLogic",
   InfrastructureBoilerplate: "InfrastructureBoilerplate",
+  QueryPatternDetected: "QueryPatternDetected",
+  ObjectShapeInferred: "ObjectShapeInferred",
   PropertyAccessed: "PropertyAccessed",
   MethodInvoked: "MethodInvoked",
   HttpCallDetected: "HttpCallDetected",

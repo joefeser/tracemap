@@ -11,6 +11,7 @@ export const RuleIds = {
   TypeScriptSyntaxCallGraph: "typescript.syntax.callgraph.v1",
   TypeScriptSyntaxObjectCreation: "typescript.syntax.objectcreation.v1",
   TypeScriptSyntaxLogicShape: "typescript.syntax.logicshape.v1",
+  TypeScriptSyntaxObjectShape: "typescript.syntax.objectshape.v1",
   TypeScriptSemanticDeclarations: "typescript.semantic.declarations.v1",
   TypeScriptSemanticPropertyAccess: "typescript.semantic.propertyaccess.v1",
   TypeScriptSemanticMethodInvocation: "typescript.semantic.methodinvocation.v1",
@@ -26,6 +27,7 @@ export const RuleIds = {
   TypeScriptIntegrationDatabase: "typescript.integration.database.v1",
   TypeScriptIntegrationContractMapping: "typescript.integration.contractmapping.v1",
   TypeScriptIntegrationBoundary: "typescript.integration.boundary.v1",
+  TypeScriptIntegrationQueryPattern: "typescript.integration.querypattern.v1",
   ContractDeltaReduction: "contract.delta.reduce.v1"
 } as const;
 

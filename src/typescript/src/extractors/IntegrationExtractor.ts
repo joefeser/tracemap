@@ -23,6 +23,7 @@ function visit(repoPath: string, manifest: ScanManifest, project: LoadedProject,
     addSerializerFact(repoPath, manifest, project, sourceFile, node, facts);
     addZodFact(repoPath, manifest, project, sourceFile, node, facts);
     addPrismaFact(repoPath, manifest, project, sourceFile, node, facts);
+    addEntityApiFact(repoPath, manifest, project, sourceFile, node, facts);
   }
   if (ts.isPropertyAccessExpression(node)) {
     addProcessEnvFact(repoPath, manifest, project, sourceFile, node, facts);
@@ -203,6 +204,80 @@ function addPrismaFact(repoPath: string, manifest: ScanManifest, project: Loaded
       }
     )
   );
+  const pattern = extractPrismaPattern(node, sourceFile);
+  if (pattern.fieldCount > 0) {
+    facts.push(
+      createFact(
+        manifest,
+        FactTypes.QueryPatternDetected,
+        RuleIds.TypeScriptIntegrationQueryPattern,
+        EvidenceTiers.Tier2Structural,
+        evidence(repoPath, sourceFile, node),
+        {
+          projectPath: project.projectPath,
+          targetSymbol: operation,
+          contractElement: operation,
+          properties: {
+            operationName: operation,
+            receiverHash: hash(receiver),
+            filterFields: pattern.filterFields.join(";"),
+            sortFields: pattern.sortFields.join(";"),
+            selectFields: pattern.selectFields.join(";"),
+            mutationFields: pattern.mutationFields.join(";"),
+            includeFields: pattern.includeFields.join(";"),
+            fieldCount: pattern.fieldCount,
+            patternHash: pattern.patternHash,
+            orm: "prisma"
+          }
+        }
+      )
+    );
+  }
+}
+
+function addEntityApiFact(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.CallExpression, facts: CodeFact[]): void {
+  if (!ts.isPropertyAccessExpression(node.expression)) {
+    return;
+  }
+  const operation = node.expression.name.text;
+  if (!["filter", "list", "get", "create", "update", "delete", "upsert", "bulkCreate"].includes(operation)) {
+    return;
+  }
+  const receiver = node.expression.expression.getText(sourceFile);
+  if (!receiver.includes(".entities.") && !receiver.startsWith("base44.entities.")) {
+    return;
+  }
+  const pattern = extractEntityApiPattern(operation, node, sourceFile);
+  if (pattern.fieldCount === 0) {
+    return;
+  }
+  facts.push(
+    createFact(
+      manifest,
+      FactTypes.QueryPatternDetected,
+      RuleIds.TypeScriptIntegrationQueryPattern,
+      EvidenceTiers.Tier2Structural,
+      evidence(repoPath, sourceFile, node),
+      {
+        projectPath: project.projectPath,
+        targetSymbol: operation,
+        contractElement: operation,
+        properties: {
+          operationName: operation,
+          receiverHash: hash(receiver),
+          entityName: entityNameFromReceiver(receiver),
+          filterFields: pattern.filterFields.join(";"),
+          sortFields: pattern.sortFields.join(";"),
+          selectFields: pattern.selectFields.join(";"),
+          mutationFields: pattern.mutationFields.join(";"),
+          includeFields: pattern.includeFields.join(";"),
+          fieldCount: pattern.fieldCount,
+          patternHash: pattern.patternHash,
+          integration: "base44-entity"
+        }
+      }
+    )
+  );
 }
 
 function addProcessEnvFact(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.PropertyAccessExpression, facts: CodeFact[]): void {
@@ -268,4 +343,116 @@ function evidence(repoPath: string, sourceFile: ts.SourceFile, node: ts.Node) {
   const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
   const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
   return createEvidence(repoRelative(repoPath, sourceFile.fileName), start, end, "typescript-integration", ScannerVersions.TypeScriptIntegrationExtractor);
+}
+
+function extractPrismaPattern(node: ts.CallExpression, sourceFile: ts.SourceFile): {
+  filterFields: string[];
+  sortFields: string[];
+  selectFields: string[];
+  mutationFields: string[];
+  includeFields: string[];
+  fieldCount: number;
+  patternHash: string;
+} {
+  const firstObject = node.arguments.find(ts.isObjectLiteralExpression);
+  const empty = { filterFields: [], sortFields: [], selectFields: [], mutationFields: [], includeFields: [], fieldCount: 0, patternHash: "" };
+  if (!firstObject) {
+    return empty;
+  }
+  const sectionFields = (section: string) => {
+    const value = objectProperty(firstObject, section, sourceFile);
+    return value && ts.isObjectLiteralExpression(value) ? objectLiteralFieldNames(value, sourceFile) : [];
+  };
+  const filterFields = sectionFields("where");
+  const sortFields = sectionFields("orderBy");
+  const selectFields = sectionFields("select");
+  const mutationFields = sectionFields("data");
+  const includeFields = sectionFields("include");
+  const allFields = [...filterFields, ...sortFields, ...selectFields, ...mutationFields, ...includeFields];
+  return {
+    filterFields,
+    sortFields,
+    selectFields,
+    mutationFields,
+    includeFields,
+    fieldCount: allFields.length,
+    patternHash: hash(allFields.sort().join("|"))
+  };
+}
+
+function extractEntityApiPattern(operation: string, node: ts.CallExpression, sourceFile: ts.SourceFile): {
+  filterFields: string[];
+  sortFields: string[];
+  selectFields: string[];
+  mutationFields: string[];
+  includeFields: string[];
+  fieldCount: number;
+  patternHash: string;
+} {
+  const objectArgs = node.arguments.filter(ts.isObjectLiteralExpression);
+  const filterSource = ["filter", "get", "delete"].includes(operation) ? objectArgs[0] : undefined;
+  const mutationSource = ["create", "bulkCreate"].includes(operation)
+    ? objectArgs[0]
+    : ["update", "upsert"].includes(operation) ? objectArgs[1] ?? objectArgs[0] : undefined;
+  const filterFields = filterSource ? objectLiteralFieldNames(filterSource, sourceFile) : [];
+  const mutationFields = mutationSource ? objectLiteralFieldNames(mutationSource, sourceFile) : [];
+  const sortFields = ["filter", "list"].includes(operation)
+    ? node.arguments.flatMap((argument, index) => index === 0 && operation === "filter" ? [] : sortFieldNames(argument, sourceFile))
+    : [];
+  const selectFields: string[] = [];
+  const includeFields: string[] = [];
+  const allFields = [...filterFields, ...sortFields, ...selectFields, ...mutationFields, ...includeFields];
+  return {
+    filterFields,
+    sortFields,
+    selectFields,
+    mutationFields,
+    includeFields,
+    fieldCount: allFields.length,
+    patternHash: hash([operation, ...allFields.sort()].join("|"))
+  };
+}
+
+function sortFieldNames(node: ts.Expression, sourceFile: ts.SourceFile): string[] {
+  if (ts.isStringLiteralLike(node)) {
+    const field = node.text.replace(/^-/, "").trim();
+    return field.length > 0 ? [field] : [];
+  }
+  if (ts.isObjectLiteralExpression(node)) {
+    return objectLiteralFieldNames(node, sourceFile);
+  }
+  if (ts.isArrayLiteralExpression(node)) {
+    return node.elements.flatMap((element) => sortFieldNames(element, sourceFile));
+  }
+  return [];
+}
+
+function entityNameFromReceiver(receiver: string): string {
+  const match = receiver.match(/(?:^|\.)entities\.([A-Za-z_$][\w$]*)/);
+  return match?.[1] ?? "";
+}
+
+function objectProperty(node: ts.ObjectLiteralExpression, name: string, sourceFile: ts.SourceFile): ts.Expression | null {
+  for (const property of node.properties) {
+    if (!ts.isPropertyAssignment(property)) {
+      continue;
+    }
+    const propertyName = property.name.getText(sourceFile).replace(/^["']|["']$/g, "");
+    if (propertyName === name) {
+      return property.initializer;
+    }
+  }
+  return null;
+}
+
+function objectLiteralFieldNames(node: ts.ObjectLiteralExpression, sourceFile: ts.SourceFile): string[] {
+  return [...new Set(node.properties
+    .map((property) => {
+      if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property) || ts.isMethodDeclaration(property)) {
+        return property.name?.getText(sourceFile).replace(/^["']|["']$/g, "");
+      }
+      return undefined;
+    })
+    .filter((name): name is string => !!name && name.length > 0))]
+    .sort((left, right) => left.localeCompare(right));
 }
