@@ -167,6 +167,7 @@ Deliverables:
 - Semantic `CallEdge` facts when Roslyn resolves method and constructor symbols.
 - Semantic `ObjectCreated` facts with assembly identity when Roslyn resolves created type symbols.
 - Semantic `ArgumentPassed` facts that map call-site arguments to callee parameters.
+- C# semantic symbol IDs on resolved declaration, reference, call, object creation, alias, and argument-flow facts.
 - Semantic `LocalAlias` facts for simple local aliases and assignments.
 - Semantic `FieldAlias` facts for simple field assignments, including constructor field initialization.
 - Semantic flow-boundary facts for DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, and branch conditions.
@@ -174,6 +175,7 @@ Deliverables:
 - SQLite `call_edges` table for caller/callee queries.
 - SQLite `object_creations` table for created-type queries.
 - SQLite `argument_flows` table for parameter/argument provenance queries.
+- SQLite `symbols`, `symbol_occurrences`, `fact_symbols`, and `symbol_relationships` tables for exact symbol queries without replacing facts.
 - SQLite `local_aliases` table for local alias provenance queries.
 - SQLite `field_aliases` table for field alias provenance queries.
 - SQLite `parameter_forward_edges` table for direct parameter-to-parameter forwarding queries.
@@ -193,6 +195,7 @@ Acceptance:
 - A semantic repo emits Tier1 `CallEdge` facts with fully resolved caller and callee symbols.
 - A semantic repo emits Tier1 `ObjectCreated` facts with caller/created assembly name and version when available.
 - A semantic repo emits Tier1 `ArgumentPassed` facts with parameter name/type, argument symbol, and source declaration span when available.
+- A semantic repo emits stable C# symbol IDs that distinguish overloads and link facts to symbols.
 - A semantic repo emits Tier1 `LocalAlias` facts for `var alias = parameter` and simple assignment aliases.
 - A semantic repo emits Tier1 `FieldAlias` facts for field assignments such as `_cached = parameter`.
 - A semantic repo emits Tier1 flow-boundary facts for runtime-sensitive constructs without claiming execution or value provenance across them.
@@ -200,6 +203,7 @@ Acceptance:
 - `index.sqlite` contains queryable `call_edges`.
 - `index.sqlite` contains queryable `object_creations`.
 - `index.sqlite` contains queryable `argument_flows`.
+- `index.sqlite` contains queryable `symbols`, `symbol_occurrences`, and `fact_symbols`.
 - `index.sqlite` contains queryable `local_aliases`.
 - `index.sqlite` contains queryable `field_aliases`.
 - `index.sqlite` contains queryable `parameter_forward_edges`.
