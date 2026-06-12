@@ -66,6 +66,37 @@ public sealed class ReducerTests
     }
 
     [Fact]
+    public async Task Reduce_generic_member_with_many_matches_reports_fan_out_warning()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteDelta(temp.Path, "CustomerProfile.status");
+        var manifest = CreateManifest("Level3SyntaxAnalysis", "NotRun");
+        var facts = Enumerable.Range(1, 12)
+            .Select(index => FactFactory.Create(
+                manifest,
+                FactTypes.MemberAccessName,
+                RuleIds.CSharpSyntaxMemberAccess,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                new EvidenceSpan($"src/File{index}.cs", index, index, null, "test", "test/1.0"),
+                sourceSymbol: $"source{index}",
+                targetSymbol: "Status",
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["memberName"] = "Status"
+                }))
+            .ToArray();
+        SqliteIndexWriter.Write(indexPath, manifest, facts);
+
+        var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
+
+        Assert.Contains("Classification: `NeedsReview`", report);
+        Assert.Contains("Generic member name `status` matched 12 facts", report);
+        Assert.Contains("High fan-out match set: 12 facts across 12 files", report);
+    }
+
+    [Fact]
     public async Task Reduce_changed_type_with_semantic_type_fact_reports_definite_impact()
     {
         using var temp = new TempDirectory();

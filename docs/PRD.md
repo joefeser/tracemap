@@ -130,11 +130,10 @@ Milestones 0 through 7 establish the MVP:
 
 ## Near-Term Roadmap
 
-- Add repo-specific sample contract deltas for external C# sample repositories.
-- Add opt-in external smoke tests that scan sample repos and run reducer reports.
-- Add report warnings for high fan-out generic name matches.
 - Improve DTO and serialization evidence while keeping deterministic rule IDs and documented limitations.
 - Add schema/version documentation for fact and report formats.
+- Add machine-readable reducer output alongside Markdown reports.
+- Expand repo-specific external smoke fixtures beyond the first two sample repositories.
 
 ## Success Criteria
 
@@ -142,5 +141,6 @@ Milestones 0 through 7 establish the MVP:
 - The CLI can scan at least one modern sample repo with full semantic coverage.
 - The CLI can scan legacy or dependency-incomplete sample repos with reduced coverage and useful syntax facts.
 - The reducer emits evidence rows for matches and coverage evidence for no-match classifications.
+- The reducer emits warnings for generic or high fan-out name matches without suppressing evidence.
 - No reducer finding is emitted without a rule ID.
 - No no-evidence result hides reduced coverage.

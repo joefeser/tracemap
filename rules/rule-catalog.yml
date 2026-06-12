@@ -182,3 +182,4 @@ rules:
       - Syntax-only matches are classified as NeedsReview because symbol identity is not proven.
       - NoEvidenceFullCoverage depends on a successful full semantic scan at a known commit SHA; reduced scans only support NoEvidenceReducedCoverage.
       - UnknownAnalysisGap is emitted only when analysis-gap evidence names the changed contract element; unrelated reduced coverage is reported as NoEvidenceReducedCoverage.
+      - Generic or high fan-out name matches are still reported when evidence exists, but warnings mark them as review-sensitive.
