@@ -1,0 +1,12 @@
+{
+  "contract": "JdfNodeAttributeBuilder",
+  "source": "c-sharp-sample-repos/fluentjdf",
+  "changes": [
+    {
+      "element": "JdfNodeAttributeBuilder.status",
+      "changeType": "signature_changed",
+      "oldType": "JdfStatus",
+      "newType": "JdfStatus"
+    }
+  ]
+}

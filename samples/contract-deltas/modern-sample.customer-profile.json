@@ -1,0 +1,17 @@
+{
+  "contract": "CustomerProfileResponse",
+  "source": "samples/modern-sample/CustomerProfile.cs",
+  "changes": [
+    {
+      "element": "CustomerProfileResponse.primaryEmail",
+      "changeType": "removed",
+      "oldType": "string",
+      "newType": null
+    },
+    {
+      "element": "CustomerProfileResponse.status",
+      "changeType": "enum_value_added",
+      "value": "Suspended"
+    }
+  ]
+}

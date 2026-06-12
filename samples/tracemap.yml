@@ -1,0 +1,52 @@
+scan:
+  include:
+    - src/**/*.cs
+    - appsettings*.json
+    - Web.config
+    - App.config
+    - packages.config
+    - '**/*.csproj'
+    - '**/*.sln'
+    - '**/*.sql'
+  exclude:
+    - '**/bin/**'
+    - '**/obj/**'
+    - '**/.git/**'
+    - '**/*.Designer.cs'
+    - '**/*.g.cs'
+
+build:
+  restore: true
+  required: false
+  configuration: Release
+
+analysis:
+  allowPartialCompilation: true
+  allowSyntaxFallback: true
+  includeGeneratedCode: false
+  includeSnippets: false
+  includeLegacyConfig: true
+
+outputs:
+  jsonl: true
+  sqlite: true
+  markdown: true
+  sarif: false
+
+rules:
+  enabled:
+    - repo.manifest.v1
+    - file.inventory.v1
+    - project.file.v1
+    - config.appsettings.v1
+    - config.webconfig.v1
+    - csharp.syntax.declarations.v1
+    - csharp.syntax.memberaccess.v1
+    - csharp.syntax.invocation.v1
+    - csharp.semantic.propertyaccess.v1
+    - csharp.semantic.methodinvocation.v1
+    - http.client.invocation.v1
+    - database.ef.dbset.v1
+    - database.ef.savechanges.v1
+    - database.dapper.invocation.v1
+    - database.sql.text.v1
