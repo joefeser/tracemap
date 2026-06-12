@@ -1,0 +1,60 @@
+rules:
+  - id: repo.manifest.v1
+    name: Repository manifest
+    description: Captures repo metadata, commit SHA, project inventory, scan status, and known gaps.
+    evidenceTier: Tier2Structural
+    emits:
+      - RepoScanned
+      - BuildStatus
+      - AnalysisGap
+    limitations:
+      - Git metadata may be unavailable outside a git checkout.
+
+  - id: csharp.syntax.memberaccess.v1
+    name: C# syntax member access
+    description: Finds member access names from C# syntax without requiring compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MemberAccessName
+    limitations:
+      - Does not prove the containing type or symbol identity.
+      - May match unrelated properties with the same name.
+
+  - id: csharp.semantic.propertyaccess.v1
+    name: C# semantic property access
+    description: Finds compiler-resolved property accesses using Roslyn semantic model.
+    evidenceTier: Tier1Semantic
+    emits:
+      - PropertyAccessed
+    limitations:
+      - Requires project load and enough references to resolve symbols.
+      - Does not detect reflection-only access.
+
+  - id: csharp.semantic.methodinvocation.v1
+    name: C# semantic method invocation
+    description: Finds compiler-resolved method invocations using Roslyn semantic model.
+    evidenceTier: Tier1Semantic
+    emits:
+      - MethodInvoked
+    limitations:
+      - Requires project load and enough references to resolve symbols.
+
+  - id: http.client.invocation.v1
+    name: HTTP client invocation
+    description: Finds outbound HTTP calls through common .NET HTTP APIs.
+    evidenceTier: Tier2Structural
+    emits:
+      - HttpCallDetected
+      - HttpClientCreated
+    limitations:
+      - URL may not be fully resolvable if built dynamically or loaded from runtime configuration.
+
+  - id: database.sql.text.v1
+    name: SQL text detection
+    description: Finds SQL-like files and string literals.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SqlTextUsed
+    limitations:
+      - SQL parsing is approximate in MVP.
+      - Identifier matches are not proof of contract usage.
