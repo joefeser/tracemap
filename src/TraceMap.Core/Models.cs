@@ -84,6 +84,13 @@ public static class FactTypes
     public const string ParameterDeclared = nameof(ParameterDeclared);
     public const string LocalAlias = nameof(LocalAlias);
     public const string FieldAlias = nameof(FieldAlias);
+    public const string DependencyResolved = nameof(DependencyResolved);
+    public const string DeserializedObject = nameof(DeserializedObject);
+    public const string ReflectionUsage = nameof(ReflectionUsage);
+    public const string DynamicInvocation = nameof(DynamicInvocation);
+    public const string CollectionMutation = nameof(CollectionMutation);
+    public const string ObjectMutation = nameof(ObjectMutation);
+    public const string BranchCondition = nameof(BranchCondition);
     public const string EnumDeclared = nameof(EnumDeclared);
     public const string AttributeUsed = nameof(AttributeUsed);
     public const string MemberAccessName = nameof(MemberAccessName);
@@ -130,6 +137,7 @@ public static class RuleIds
     public const string CSharpSemanticLocalAlias = "csharp.semantic.localalias.v1";
     public const string CSharpSemanticFieldAlias = "csharp.semantic.fieldalias.v1";
     public const string CSharpSemanticParameterForwarding = "csharp.semantic.parameterforwarding.v1";
+    public const string CSharpSemanticFlowBoundary = "csharp.semantic.flowboundary.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
     public const string HttpClientInvocation = "http.client.invocation.v1";
     public const string DatabaseEntityFramework = "database.ef.v1";
@@ -141,13 +149,13 @@ public static class RuleIds
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone11";
+    public const string TraceMap = "tracemap-milestone12";
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.6.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.7.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
 }

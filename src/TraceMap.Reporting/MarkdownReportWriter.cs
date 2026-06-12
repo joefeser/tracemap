@@ -142,6 +142,18 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Flow Boundaries",
+            result.Facts.Where(fact => fact.FactType is FactTypes.DependencyResolved
+                or FactTypes.DeserializedObject
+                or FactTypes.ReflectionUsage
+                or FactTypes.DynamicInvocation
+                or FactTypes.CollectionMutation
+                or FactTypes.ObjectMutation
+                or FactTypes.BranchCondition),
+            fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Boilerplate Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
