@@ -125,6 +125,7 @@ public static class RuleIds
     public const string CSharpSemanticCallGraph = "csharp.semantic.callgraph.v1";
     public const string CSharpSemanticObjectCreation = "csharp.semantic.objectcreation.v1";
     public const string CSharpSemanticValueFlow = "csharp.semantic.valueflow.v1";
+    public const string CSharpSemanticParameterForwarding = "csharp.semantic.parameterforwarding.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
     public const string HttpClientInvocation = "http.client.invocation.v1";
     public const string DatabaseEntityFramework = "database.ef.v1";
@@ -136,7 +137,7 @@ public static class RuleIds
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone8";
+    public const string TraceMap = "tracemap-milestone9";
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";

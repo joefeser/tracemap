@@ -135,6 +135,28 @@ public static class SqliteIndexWriter
               end_line integer not null
             );
 
+            create table parameter_forward_edges (
+              fact_id text primary key,
+              scan_id text not null,
+              repo text not null,
+              commit_sha text not null,
+              evidence_tier text not null,
+              rule_id text not null,
+              source_method_symbol text not null,
+              source_parameter_symbol text not null,
+              source_node_key text not null,
+              target_method_symbol text not null,
+              target_parameter_name text not null,
+              target_parameter_type text,
+              target_parameter_symbol text not null,
+              target_node_key text not null,
+              target_assembly_name text,
+              target_assembly_version text,
+              file_path text not null,
+              start_line integer not null,
+              end_line integer not null
+            );
+
             create index ix_facts_type on facts(fact_type);
             create index ix_facts_rule on facts(rule_id);
             create index ix_facts_target_symbol on facts(target_symbol);
@@ -151,6 +173,10 @@ public static class SqliteIndexWriter
             create index ix_argument_flows_parameter on argument_flows(parameter_name, parameter_type);
             create index ix_argument_flows_argument_symbol on argument_flows(argument_symbol);
             create index ix_argument_flows_argument_source on argument_flows(argument_source_file, argument_source_start_line);
+            create index ix_parameter_forward_edges_source on parameter_forward_edges(source_node_key);
+            create index ix_parameter_forward_edges_target on parameter_forward_edges(target_node_key);
+            create index ix_parameter_forward_edges_source_method on parameter_forward_edges(source_method_symbol);
+            create index ix_parameter_forward_edges_target_method on parameter_forward_edges(target_method_symbol);
             """;
         command.ExecuteNonQuery();
     }
@@ -328,6 +354,99 @@ public static class SqliteIndexWriter
         command.ExecuteNonQuery();
     }
 
+    private static void InsertParameterForwardEdge(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    {
+        if (!string.Equals(GetOptionalStringProperty(fact, "argumentSymbolKind"), "Parameter", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var sourceMethodSymbol = fact.SourceSymbol;
+        var sourceParameterSymbol = NormalizeParameterSymbol(GetOptionalStringProperty(fact, "argumentSymbol"));
+        var targetMethodSymbol = fact.TargetSymbol;
+        var targetParameterName = GetRequiredProperty(fact, "parameterName");
+        var targetParameterType = GetOptionalStringProperty(fact, "parameterType");
+        if (string.IsNullOrWhiteSpace(sourceMethodSymbol)
+            || string.IsNullOrWhiteSpace(sourceParameterSymbol)
+            || string.IsNullOrWhiteSpace(targetMethodSymbol)
+            || string.IsNullOrWhiteSpace(targetParameterName))
+        {
+            return;
+        }
+
+        var targetParameterSymbol = NormalizeParameterSymbol(CreateParameterSymbol(targetParameterType, targetParameterName));
+        if (string.IsNullOrWhiteSpace(targetParameterSymbol))
+        {
+            return;
+        }
+
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert into parameter_forward_edges (
+              fact_id,
+              scan_id,
+              repo,
+              commit_sha,
+              evidence_tier,
+              rule_id,
+              source_method_symbol,
+              source_parameter_symbol,
+              source_node_key,
+              target_method_symbol,
+              target_parameter_name,
+              target_parameter_type,
+              target_parameter_symbol,
+              target_node_key,
+              target_assembly_name,
+              target_assembly_version,
+              file_path,
+              start_line,
+              end_line
+            ) values (
+              $fact_id,
+              $scan_id,
+              $repo,
+              $commit_sha,
+              $evidence_tier,
+              $rule_id,
+              $source_method_symbol,
+              $source_parameter_symbol,
+              $source_node_key,
+              $target_method_symbol,
+              $target_parameter_name,
+              $target_parameter_type,
+              $target_parameter_symbol,
+              $target_node_key,
+              $target_assembly_name,
+              $target_assembly_version,
+              $file_path,
+              $start_line,
+              $end_line
+            );
+            """;
+        command.Parameters.AddWithValue("$fact_id", fact.FactId);
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$repo", fact.Repo);
+        command.Parameters.AddWithValue("$commit_sha", fact.CommitSha);
+        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSemanticParameterForwarding);
+        command.Parameters.AddWithValue("$source_method_symbol", sourceMethodSymbol);
+        command.Parameters.AddWithValue("$source_parameter_symbol", sourceParameterSymbol);
+        command.Parameters.AddWithValue("$source_node_key", CreateNodeKey(sourceMethodSymbol, sourceParameterSymbol));
+        command.Parameters.AddWithValue("$target_method_symbol", targetMethodSymbol);
+        command.Parameters.AddWithValue("$target_parameter_name", targetParameterName);
+        command.Parameters.AddWithValue("$target_parameter_type", (object?)targetParameterType ?? DBNull.Value);
+        command.Parameters.AddWithValue("$target_parameter_symbol", targetParameterSymbol);
+        command.Parameters.AddWithValue("$target_node_key", CreateNodeKey(targetMethodSymbol, targetParameterSymbol));
+        command.Parameters.AddWithValue("$target_assembly_name", GetOptionalProperty(fact, "calleeAssemblyName"));
+        command.Parameters.AddWithValue("$target_assembly_version", GetOptionalProperty(fact, "calleeAssemblyVersion"));
+        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
+        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
+        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
+        command.ExecuteNonQuery();
+    }
+
     private static void InsertArgumentFlow(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
     {
         using var command = connection.CreateCommand();
@@ -428,6 +547,8 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
         command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
         command.ExecuteNonQuery();
+
+        InsertParameterForwardEdge(connection, transaction, fact);
     }
 
     private static void InsertObjectCreation(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
@@ -500,6 +621,13 @@ public static class SqliteIndexWriter
             : DBNull.Value;
     }
 
+    private static string? GetOptionalStringProperty(CodeFact fact, string key)
+    {
+        return fact.Properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
+    }
+
     private static object GetOptionalIntProperty(CodeFact fact, string key)
     {
         return fact.Properties.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
@@ -519,5 +647,30 @@ public static class SqliteIndexWriter
         return fact.Properties.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
             ? parsed
             : 0;
+    }
+
+    private static string CreateParameterSymbol(string? parameterType, string parameterName)
+    {
+        return string.IsNullOrWhiteSpace(parameterType)
+            ? parameterName
+            : $"{parameterType} {parameterName}";
+    }
+
+    private static string? NormalizeParameterSymbol(string? parameterSymbol)
+    {
+        if (string.IsNullOrWhiteSpace(parameterSymbol))
+        {
+            return null;
+        }
+
+        var defaultValueIndex = parameterSymbol.IndexOf(" = ", StringComparison.Ordinal);
+        return defaultValueIndex < 0
+            ? parameterSymbol
+            : parameterSymbol[..defaultValueIndex];
+    }
+
+    private static string CreateNodeKey(string methodSymbol, string parameterSymbol)
+    {
+        return $"{methodSymbol}::{parameterSymbol}";
     }
 }

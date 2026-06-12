@@ -33,9 +33,10 @@ public static class TraceMapCommand
                 "scan" => ScanHelp(),
                 "report" => ReportHelp(),
                 "reduce" => ReduceHelp(),
+                "flow" => FlowHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" ? 0 : 1;
         }
 
         try
@@ -45,6 +46,7 @@ public static class TraceMapCommand
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "report" => await NotImplementedYetAsync("report", error),
                 "reduce" => await RunReduceAsync(rest, output, error, cancellationToken),
+                "flow" => await RunFlowAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -120,6 +122,39 @@ public static class TraceMapCommand
         return 0;
     }
 
+    private static async Task<int> RunFlowAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: flow requires --index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--symbol", out var symbol) || string.IsNullOrWhiteSpace(symbol))
+        {
+            await error.WriteLineAsync("error: flow requires --symbol <symbol-or-fragment>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: flow requires --out <path>.");
+            return 1;
+        }
+
+        var maxDepth = ParsePositiveInt(values, "--max-depth", 5);
+        var maxPaths = ParsePositiveInt(values, "--max-paths", 50);
+        var report = await FlowPathReporter.WriteAsync(
+            new FlowOptions(indexPath, symbol, outputPath, maxDepth, maxPaths),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap flow completed: {report.ReportPath}");
+        await output.WriteLineAsync($"Parameter-forward edges indexed: {report.EdgeCount}");
+        await output.WriteLineAsync($"Paths written: {report.PathCount}");
+        return 0;
+    }
+
     private static async Task WriteAnalyzerLogAsync(string path, ScanResult result, CancellationToken cancellationToken)
     {
         var lines = new List<string>
@@ -157,6 +192,21 @@ public static class TraceMapCommand
         return values;
     }
 
+    private static int ParsePositiveInt(IReadOnlyDictionary<string, string> values, string key, int defaultValue)
+    {
+        if (!values.TryGetValue(key, out var value))
+        {
+            return defaultValue;
+        }
+
+        if (int.TryParse(value, out var parsed) && parsed > 0)
+        {
+            return parsed;
+        }
+
+        throw new ArgumentException($"{key} must be a positive integer.");
+    }
+
     private static bool IsHelp(string arg)
     {
         return arg is "-h" or "--help" or "help";
@@ -183,11 +233,13 @@ public static class TraceMapCommand
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
               tracemap reduce --index <path> --contract-delta <path> --out <path>
+              tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a report from an index. Skeleton in Milestone 0.
               reduce    Reduce a contract delta against an index.
+              flow      Trace deterministic parameter-forwarding paths.
             """;
     }
 
@@ -234,6 +286,26 @@ public static class TraceMapCommand
 
             Outputs:
               impact-report.md
+            """;
+    }
+
+    private static string FlowHelp()
+    {
+        return """
+            Usage:
+              tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path> [--max-depth <n>] [--max-paths <n>]
+
+            Required:
+              --index <path>             Existing TraceMap index.sqlite.
+              --symbol <symbol>          Source parameter symbol or fragment to trace.
+              --out <path>               Output directory or flow-report.md path.
+
+            Optional:
+              --max-depth <n>            Maximum forwarding edges per path. Default: 5.
+              --max-paths <n>            Maximum paths to write. Default: 50.
+
+            Outputs:
+              flow-report.md
             """;
     }
 }
