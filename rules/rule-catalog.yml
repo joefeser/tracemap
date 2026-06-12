@@ -169,3 +169,15 @@ rules:
       - JSON line spans are best-effort key locations.
       - Runtime configuration providers, environment overrides, secrets stores, and transformed config files are not evaluated.
       - Raw config values and connection strings are not stored by default; hashes are emitted for sensitive values.
+
+  - id: contract.delta.reduce.v1
+    name: Contract delta reduction
+    description: Matches changed contract type, property, and field names against indexed facts and classifies evidence-backed impact findings.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - ImpactFinding
+    limitations:
+      - Name matching is deterministic and approximate; it does not infer serialization aliases, reflection usage, or runtime contract mapping.
+      - DefiniteImpact requires compiler-resolved usage evidence for the changed member.
+      - Syntax-only matches are classified as NeedsReview because symbol identity is not proven.
+      - NoEvidenceFullCoverage depends on a successful full semantic scan at a known commit SHA; reduced scans only support NoEvidenceReducedCoverage.

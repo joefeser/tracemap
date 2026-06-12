@@ -1,4 +1,5 @@
 using TraceMap.Core;
+using TraceMap.Reduction;
 using TraceMap.Reporting;
 using TraceMap.Storage;
 
@@ -43,7 +44,7 @@ public static class TraceMapCommand
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "report" => await NotImplementedYetAsync("report", error),
-                "reduce" => await NotImplementedYetAsync("reduce", error),
+                "reduce" => await RunReduceAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -52,6 +53,39 @@ public static class TraceMapCommand
             await error.WriteLineAsync($"error: {ex.Message}");
             return 1;
         }
+    }
+
+    private static async Task<int> RunReduceAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: reduce requires --index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--contract-delta", out var contractDeltaPath) || string.IsNullOrWhiteSpace(contractDeltaPath))
+        {
+            await error.WriteLineAsync("error: reduce requires --contract-delta <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: reduce requires --out <path>.");
+            return 1;
+        }
+
+        var report = await ContractDeltaReducer.ReduceAsync(
+            new ReduceOptions(indexPath, contractDeltaPath, outputPath),
+            cancellationToken);
+        var reportPath = Path.GetExtension(Path.GetFullPath(outputPath)).Equals(".md", StringComparison.OrdinalIgnoreCase)
+            ? Path.GetFullPath(outputPath)
+            : Path.Combine(Path.GetFullPath(outputPath), "impact-report.md");
+
+        await output.WriteLineAsync($"TraceMap reduce completed: {reportPath}");
+        await output.WriteLineAsync($"Findings written: {report.Findings.Count}");
+        return 0;
     }
 
     private static async Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -153,7 +187,7 @@ public static class TraceMapCommand
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a report from an index. Skeleton in Milestone 0.
-              reduce    Reduce a contract delta against an index. Skeleton in Milestone 0.
+              reduce    Reduce a contract delta against an index.
             """;
     }
 
@@ -193,8 +227,13 @@ public static class TraceMapCommand
             Usage:
               tracemap reduce --index <path> --contract-delta <path> --out <path>
 
-            Status:
-              Command skeleton only in Milestone 0.
+            Required:
+              --index <path>             Existing TraceMap index.sqlite.
+              --contract-delta <path>    Contract delta JSON file.
+              --out <path>               Output directory or impact-report.md path.
+
+            Outputs:
+              impact-report.md
             """;
     }
 }

@@ -115,11 +115,12 @@ public static class RuleIds
     public const string DatabaseDapperInvocation = "database.dapper.invocation.v1";
     public const string DatabaseSqlText = "database.sql.text.v1";
     public const string ConfigKey = "config.key.v1";
+    public const string ContractDeltaReduction = "contract.delta.reduce.v1";
 }
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone5";
+    public const string TraceMap = "tracemap-milestone7";
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
