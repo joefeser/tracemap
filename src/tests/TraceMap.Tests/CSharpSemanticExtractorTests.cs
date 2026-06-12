@@ -36,12 +36,18 @@ public sealed class CSharpSemanticExtractorTests
                     var observed = profile;
                     cached = observed;
                     var copy = new CustomerProfile();
-                    return Count(cached, copy);
+                    var label = Count(profile.PrimaryEmail);
+                    return Count(cached, copy) + label;
                 }
 
                 private int Count(CustomerProfile source, CustomerProfile other)
                 {
                     return source.PrimaryEmail.Trim().Length + other.PrimaryEmail.Length + seed.PrimaryEmail.Length;
+                }
+
+                private int Count(string source)
+                {
+                    return source.Length;
                 }
             }
             """);
@@ -56,11 +62,20 @@ public sealed class CSharpSemanticExtractorTests
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
             && fact.TargetSymbol == "global::ModernSample.CustomerProfile");
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.TargetSymbol == "global::ModernSample.CustomerProfile"
+            && fact.Properties.TryGetValue("targetSymbolId", out var symbolId)
+            && symbolId.StartsWith("csharp type ", StringComparison.Ordinal)
+            && fact.Properties.TryGetValue("targetSymbolKind", out var symbolKind)
+            && symbolKind == "NamedType");
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.PropertyAccessed
             && fact.RuleId == RuleIds.CSharpSemanticPropertyAccess
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
             && fact.TargetSymbol == "global::ModernSample.CustomerProfile.PrimaryEmail"
-            && fact.ContractElement == "PrimaryEmail");
+            && fact.ContractElement == "PrimaryEmail"
+            && fact.Properties.ContainsKey("sourceSymbolId")
+            && fact.Properties.ContainsKey("targetSymbolId"));
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.FieldDeclared
             && fact.RuleId == RuleIds.CSharpSemanticDeclarations
@@ -133,6 +148,20 @@ public sealed class CSharpSemanticExtractorTests
             && argumentSymbolKind == "Field"
             && fact.Properties.TryGetValue("argumentSourceFile", out var argumentSourceFile)
             && argumentSourceFile == "src/ModernSample/CustomerProfile.cs");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ArgumentPassed
+            && fact.Properties.ContainsKey("sourceSymbolId")
+            && fact.Properties.ContainsKey("targetSymbolId")
+            && fact.Properties.ContainsKey("parameterSymbolId")
+            && fact.Properties.ContainsKey("argumentSymbolId"));
+
+        var countCallTargetIds = result.Facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge && fact.ContractElement == "Count")
+            .Select(fact => fact.Properties.TryGetValue("targetSymbolId", out var symbolId) ? symbolId : string.Empty)
+            .Where(symbolId => !string.IsNullOrWhiteSpace(symbolId))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(2, countCallTargetIds.Length);
     }
 
     [Fact]

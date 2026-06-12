@@ -73,6 +73,78 @@ public sealed class SqliteIndexWriterTests
     }
 
     [Fact]
+    public async Task Scan_writes_semantic_symbol_tables_to_sqlite()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var projectPath = Path.Combine(repo, "src", "SymbolSample");
+        var outputPath = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(projectPath);
+        File.WriteAllText(Path.Combine(projectPath, "SymbolSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(projectPath, "SymbolDemo.cs"), """
+            namespace SymbolSample;
+
+            public sealed class Dto
+            {
+                public string Name { get; set; } = "";
+            }
+
+            public sealed class SymbolDemo
+            {
+                public void Use(Dto dto)
+                {
+                    Overloaded(dto);
+                    Overloaded(dto.Name);
+                }
+
+                private void Overloaded(Dto dto)
+                {
+                }
+
+                private void Overloaded(string name)
+                {
+                }
+            }
+            """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], output, error);
+        Assert.Equal(0, exitCode);
+
+        await using var connection = new SqliteConnection($"Data Source={Path.Combine(outputPath, "index.sqlite")}");
+        await connection.OpenAsync();
+
+        Assert.Equal("Level1SemanticAnalysis", await ExecuteScalarAsync<string>(connection, "select analysis_level from scan_manifest;"));
+        Assert.True(await ExecuteScalarAsync<long>(connection, "select count(*) from symbols where language = 'csharp';") > 0);
+        Assert.True(await ExecuteScalarAsync<long>(connection, "select count(*) from symbol_occurrences where occurrence_kind = 'Definition';") > 0);
+        Assert.True(await ExecuteScalarAsync<long>(connection, "select count(*) from fact_symbols where role = 'target';") > 0);
+
+        var overloadedMethodCount = await ExecuteScalarAsync<long>(
+            connection,
+            "select count(*) from symbols where symbol_kind = 'Method' and display_name like '%Overloaded%';");
+        Assert.Equal(2L, overloadedMethodCount);
+
+        var targetCallSymbolCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from fact_symbols fs
+            join facts f on f.fact_id = fs.fact_id
+            where f.fact_type = 'CallEdge' and fs.role = 'target';
+            """);
+        Assert.True(targetCallSymbolCount >= 2L);
+    }
+
+    [Fact]
     public async Task Scan_writes_required_sqlite_indexes()
     {
         using var temp = new TempDirectory();
@@ -103,6 +175,54 @@ public sealed class SqliteIndexWriterTests
         Assert.Contains("ix_facts_target_symbol", indexNames);
         Assert.Contains("ix_facts_contract_element", indexNames);
         Assert.Contains("ix_facts_file", indexNames);
+
+        var symbolIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var symbolCommand = connection.CreateCommand();
+        symbolCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'symbols';";
+        await using var symbolReader = await symbolCommand.ExecuteReaderAsync();
+        while (await symbolReader.ReadAsync())
+        {
+            symbolIndexNames.Add(symbolReader.GetString(0));
+        }
+
+        Assert.Contains("ix_symbols_display", symbolIndexNames);
+        Assert.Contains("ix_symbols_kind", symbolIndexNames);
+        Assert.Contains("ix_symbols_assembly", symbolIndexNames);
+
+        var symbolOccurrenceIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var symbolOccurrenceCommand = connection.CreateCommand();
+        symbolOccurrenceCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'symbol_occurrences';";
+        await using var symbolOccurrenceReader = await symbolOccurrenceCommand.ExecuteReaderAsync();
+        while (await symbolOccurrenceReader.ReadAsync())
+        {
+            symbolOccurrenceIndexNames.Add(symbolOccurrenceReader.GetString(0));
+        }
+
+        Assert.Contains("ix_symbol_occurrences_symbol", symbolOccurrenceIndexNames);
+        Assert.Contains("ix_symbol_occurrences_file", symbolOccurrenceIndexNames);
+
+        var factSymbolIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var factSymbolCommand = connection.CreateCommand();
+        factSymbolCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'fact_symbols';";
+        await using var factSymbolReader = await factSymbolCommand.ExecuteReaderAsync();
+        while (await factSymbolReader.ReadAsync())
+        {
+            factSymbolIndexNames.Add(factSymbolReader.GetString(0));
+        }
+
+        Assert.Contains("ix_fact_symbols_symbol", factSymbolIndexNames);
+
+        var symbolRelationshipIndexNames = new HashSet<string>(StringComparer.Ordinal);
+        await using var symbolRelationshipCommand = connection.CreateCommand();
+        symbolRelationshipCommand.CommandText = "select name from sqlite_master where type = 'index' and tbl_name = 'symbol_relationships';";
+        await using var symbolRelationshipReader = await symbolRelationshipCommand.ExecuteReaderAsync();
+        while (await symbolRelationshipReader.ReadAsync())
+        {
+            symbolRelationshipIndexNames.Add(symbolRelationshipReader.GetString(0));
+        }
+
+        Assert.Contains("ix_symbol_relationships_source", symbolRelationshipIndexNames);
+        Assert.Contains("ix_symbol_relationships_target", symbolRelationshipIndexNames);
 
         var callEdgeIndexNames = new HashSet<string>(StringComparer.Ordinal);
         await using var callEdgeCommand = connection.CreateCommand();

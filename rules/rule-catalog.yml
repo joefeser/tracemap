@@ -198,6 +198,27 @@ rules:
       - Path reports are bounded by max depth and max path count, so large or cyclic graphs can be intentionally truncated.
       - Paths are evidence chains, not proof that a runtime request always reaches the terminal method.
 
+  - id: csharp.semantic.symbolidentity.v1
+    name: C# semantic symbol identity
+    description: Adds deterministic C# symbol IDs to resolved semantic facts and derives SQLite symbol, occurrence, and fact-symbol rows from those facts.
+    evidenceTier: Tier1Semantic
+    emits:
+      - sourceSymbolId property
+      - targetSymbolId property
+      - argumentSymbolId property
+      - parameterSymbolId property
+      - originSymbolId property
+      - constructorSymbolId property
+      - symbols table rows
+      - symbol_occurrences table rows
+      - fact_symbols table rows
+    limitations:
+      - Symbol IDs require Roslyn semantic symbols; syntax fallback facts do not receive compiler-backed IDs.
+      - IDs include assembly identity, containing symbol, member name, arity, parameter types, and return/type information where available; local IDs include source location to disambiguate same-name locals.
+      - IDs are deterministic for the same source, project load, target framework, and dependency graph, but may change when references, target frameworks, generated source, or compiler binding change.
+      - These rows are derived indexes over facts, not independent conclusions; the originating fact rule ID and evidence span remain authoritative.
+      - Relationship rows are schema-ready but inheritance/interface/override extraction is a separate rule.
+
   - id: csharp.semantic.flowboundary.v1
     name: C# semantic flow boundary
     description: Records deterministic evidence for runtime-sensitive flow boundaries such as DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, and branch conditions.

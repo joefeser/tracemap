@@ -6,6 +6,16 @@ namespace TraceMap.Storage;
 
 public static class SqliteIndexWriter
 {
+    private sealed record SymbolRoleProperties(
+        string Role,
+        string SymbolId,
+        string Language,
+        string SymbolKind,
+        string DisplayName,
+        string? AssemblyName,
+        string? AssemblyVersion,
+        string? ContainingSymbolId);
+
     public static void Write(string path, ScanManifest manifest, IEnumerable<CodeFact> facts)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -61,6 +71,53 @@ public static class SqliteIndexWriter
               end_line integer not null,
               snippet_hash text,
               properties_json text not null
+            );
+
+            create table symbols (
+              scan_id text not null,
+              symbol_id text not null,
+              language text not null,
+              symbol_kind text not null,
+              display_name text not null,
+              assembly_name text,
+              assembly_version text,
+              containing_symbol_id text,
+              primary key (scan_id, symbol_id)
+            );
+
+            create table symbol_occurrences (
+              occurrence_id text primary key,
+              scan_id text not null,
+              symbol_id text not null,
+              fact_id text not null,
+              role text not null,
+              occurrence_kind text not null,
+              evidence_tier text not null,
+              rule_id text not null,
+              file_path text not null,
+              start_line integer not null,
+              end_line integer not null
+            );
+
+            create table fact_symbols (
+              fact_id text not null,
+              scan_id text not null,
+              symbol_id text not null,
+              role text not null,
+              primary key (fact_id, symbol_id, role)
+            );
+
+            create table symbol_relationships (
+              relationship_id text primary key,
+              scan_id text not null,
+              source_symbol_id text not null,
+              target_symbol_id text not null,
+              relationship_kind text not null,
+              rule_id text not null,
+              evidence_tier text not null,
+              file_path text not null,
+              start_line integer not null,
+              end_line integer not null
             );
 
             create table call_edges (
@@ -201,6 +258,14 @@ public static class SqliteIndexWriter
             create index ix_facts_target_symbol on facts(target_symbol);
             create index ix_facts_contract_element on facts(contract_element);
             create index ix_facts_file on facts(file_path);
+            create index ix_symbols_display on symbols(display_name);
+            create index ix_symbols_kind on symbols(symbol_kind);
+            create index ix_symbols_assembly on symbols(assembly_name, display_name);
+            create index ix_symbol_occurrences_symbol on symbol_occurrences(scan_id, symbol_id);
+            create index ix_symbol_occurrences_file on symbol_occurrences(file_path, start_line);
+            create index ix_fact_symbols_symbol on fact_symbols(scan_id, symbol_id);
+            create index ix_symbol_relationships_source on symbol_relationships(scan_id, source_symbol_id);
+            create index ix_symbol_relationships_target on symbol_relationships(scan_id, target_symbol_id);
             create index ix_call_edges_caller on call_edges(caller_symbol);
             create index ix_call_edges_callee on call_edges(callee_symbol);
             create index ix_call_edges_callee_assembly on call_edges(callee_assembly_name, callee_symbol);
@@ -318,6 +383,8 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$properties_json", JsonSerializer.Serialize(fact.Properties, JsonOptions.StableLine));
         command.ExecuteNonQuery();
 
+        InsertSymbolRows(connection, transaction, fact);
+
         if (fact.FactType == FactTypes.CallEdge && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
         {
             InsertCallEdge(connection, transaction, fact);
@@ -342,6 +409,143 @@ public static class SqliteIndexWriter
         {
             InsertArgumentFlow(connection, transaction, fact);
         }
+    }
+
+    private static void InsertSymbolRows(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    {
+        foreach (var role in EnumerateSymbolRoles(fact))
+        {
+            InsertSymbol(connection, transaction, fact, role);
+            InsertFactSymbol(connection, transaction, fact, role);
+            InsertSymbolOccurrence(connection, transaction, fact, role);
+        }
+    }
+
+    private static IEnumerable<SymbolRoleProperties> EnumerateSymbolRoles(CodeFact fact)
+    {
+        foreach (var role in new[] { "source", "target", "argument", "parameter", "origin", "constructor" })
+        {
+            var symbolId = GetStringProperty(fact, $"{role}SymbolId");
+            if (string.IsNullOrWhiteSpace(symbolId))
+            {
+                continue;
+            }
+
+            yield return new SymbolRoleProperties(
+                role,
+                symbolId,
+                GetStringProperty(fact, $"{role}SymbolLanguage") ?? "unknown",
+                GetStringProperty(fact, $"{role}SymbolKind") ?? "Unknown",
+                GetStringProperty(fact, $"{role}SymbolDisplayName") ?? symbolId,
+                GetStringProperty(fact, $"{role}SymbolAssemblyName"),
+                GetStringProperty(fact, $"{role}SymbolAssemblyVersion"),
+                GetStringProperty(fact, $"{role}ContainingSymbolId"));
+        }
+    }
+
+    private static void InsertSymbol(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact, SymbolRoleProperties role)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert or ignore into symbols (
+              scan_id,
+              symbol_id,
+              language,
+              symbol_kind,
+              display_name,
+              assembly_name,
+              assembly_version,
+              containing_symbol_id
+            ) values (
+              $scan_id,
+              $symbol_id,
+              $language,
+              $symbol_kind,
+              $display_name,
+              $assembly_name,
+              $assembly_version,
+              $containing_symbol_id
+            );
+            """;
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$symbol_id", role.SymbolId);
+        command.Parameters.AddWithValue("$language", role.Language);
+        command.Parameters.AddWithValue("$symbol_kind", role.SymbolKind);
+        command.Parameters.AddWithValue("$display_name", role.DisplayName);
+        command.Parameters.AddWithValue("$assembly_name", ToDbValue(role.AssemblyName));
+        command.Parameters.AddWithValue("$assembly_version", ToDbValue(role.AssemblyVersion));
+        command.Parameters.AddWithValue("$containing_symbol_id", ToDbValue(role.ContainingSymbolId));
+        command.ExecuteNonQuery();
+    }
+
+    private static void InsertFactSymbol(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact, SymbolRoleProperties role)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert or ignore into fact_symbols (
+              fact_id,
+              scan_id,
+              symbol_id,
+              role
+            ) values (
+              $fact_id,
+              $scan_id,
+              $symbol_id,
+              $role
+            );
+            """;
+        command.Parameters.AddWithValue("$fact_id", fact.FactId);
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$symbol_id", role.SymbolId);
+        command.Parameters.AddWithValue("$role", role.Role);
+        command.ExecuteNonQuery();
+    }
+
+    private static void InsertSymbolOccurrence(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact, SymbolRoleProperties role)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert or ignore into symbol_occurrences (
+              occurrence_id,
+              scan_id,
+              symbol_id,
+              fact_id,
+              role,
+              occurrence_kind,
+              evidence_tier,
+              rule_id,
+              file_path,
+              start_line,
+              end_line
+            ) values (
+              $occurrence_id,
+              $scan_id,
+              $symbol_id,
+              $fact_id,
+              $role,
+              $occurrence_kind,
+              $evidence_tier,
+              $rule_id,
+              $file_path,
+              $start_line,
+              $end_line
+            );
+            """;
+        command.Parameters.AddWithValue("$occurrence_id", FactFactory.Hash($"{fact.FactId}|{role.Role}|{role.SymbolId}", 32));
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$symbol_id", role.SymbolId);
+        command.Parameters.AddWithValue("$fact_id", fact.FactId);
+        command.Parameters.AddWithValue("$role", role.Role);
+        command.Parameters.AddWithValue("$occurrence_kind", GetOccurrenceKind(fact, role.Role));
+        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$rule_id", fact.RuleId);
+        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
+        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
+        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
+        command.ExecuteNonQuery();
     }
 
     private static void InsertCallEdge(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
@@ -1056,6 +1260,36 @@ public static class SqliteIndexWriter
         return fact.Properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
             : DBNull.Value;
+    }
+
+    private static object ToDbValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? DBNull.Value : value;
+    }
+
+    private static string? GetStringProperty(CodeFact fact, string key)
+    {
+        return fact.Properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
+    }
+
+    private static string GetOccurrenceKind(CodeFact fact, string role)
+    {
+        if (role == "target" && fact.FactType is FactTypes.TypeDeclared or FactTypes.FieldDeclared or FactTypes.ParameterDeclared)
+        {
+            return "Definition";
+        }
+
+        return role switch
+        {
+            "source" => "Enclosing",
+            "argument" => "ValueReference",
+            "parameter" => "ParameterReference",
+            "origin" => "ProvenanceReference",
+            "constructor" => "ConstructorReference",
+            _ => "Reference"
+        };
     }
 
     private static string? GetOptionalStringProperty(CodeFact fact, string key)

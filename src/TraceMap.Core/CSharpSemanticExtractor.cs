@@ -324,12 +324,15 @@ public static class CSharpSemanticExtractor
                 filePath,
                 declaration,
                 targetSymbol: symbol.ToDisplayString(SymbolFormat),
-                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["name"] = symbol.Name,
-                    ["namespace"] = symbol.ContainingNamespace?.IsGlobalNamespace == false ? symbol.ContainingNamespace.ToDisplayString() : string.Empty,
-                    ["typeKind"] = symbol.TypeKind.ToString()
-                }));
+                properties: AddSymbolProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["name"] = symbol.Name,
+                        ["namespace"] = symbol.ContainingNamespace?.IsGlobalNamespace == false ? symbol.ContainingNamespace.ToDisplayString() : string.Empty,
+                        ["typeKind"] = symbol.TypeKind.ToString()
+                    },
+                    "target",
+                    symbol)));
         }
     }
 
@@ -347,6 +350,20 @@ public static class CSharpSemanticExtractor
                 continue;
             }
 
+            var properties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["fieldName"] = field.Name,
+                    ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
+                    ["containingType"] = field.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["declaredAccessibility"] = field.DeclaredAccessibility.ToString(),
+                    ["isStatic"] = field.IsStatic.ToString()
+                },
+                field.ContainingAssembly,
+                field.Type.ContainingAssembly);
+            AddSymbolProperties(properties, "source", field.ContainingType);
+            AddSymbolProperties(properties, "target", field);
+
             facts.Add(CreateSemanticFact(
                 FactTypes.FieldDeclared,
                 RuleIds.CSharpSemanticDeclarations,
@@ -356,17 +373,7 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: field.ContainingType?.ToDisplayString(SymbolFormat),
                 targetSymbol: field.ToDisplayString(SymbolFormat),
                 contractElement: field.Name,
-                properties: AddAssemblyProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["fieldName"] = field.Name,
-                        ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
-                        ["containingType"] = field.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                        ["declaredAccessibility"] = field.DeclaredAccessibility.ToString(),
-                        ["isStatic"] = field.IsStatic.ToString()
-                    },
-                    field.ContainingAssembly,
-                    field.Type.ContainingAssembly)));
+                properties: properties));
         }
     }
 
@@ -385,6 +392,20 @@ public static class CSharpSemanticExtractor
             }
 
             var containingSymbol = parameter.ContainingSymbol;
+            var properties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["parameterName"] = parameter.Name,
+                    ["parameterType"] = parameter.Type.ToDisplayString(SymbolFormat),
+                    ["parameterOrdinal"] = parameter.Ordinal.ToString(),
+                    ["containingSymbol"] = containingSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["isOptional"] = parameter.IsOptional.ToString()
+                },
+                containingSymbol?.ContainingAssembly,
+                parameter.Type.ContainingAssembly);
+            AddSymbolProperties(properties, "source", containingSymbol);
+            AddSymbolProperties(properties, "target", parameter);
+
             facts.Add(CreateSemanticFact(
                 FactTypes.ParameterDeclared,
                 RuleIds.CSharpSemanticDeclarations,
@@ -394,17 +415,7 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: containingSymbol?.ToDisplayString(SymbolFormat),
                 targetSymbol: parameter.ToDisplayString(SymbolFormat),
                 contractElement: parameter.Name,
-                properties: AddAssemblyProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["parameterName"] = parameter.Name,
-                        ["parameterType"] = parameter.Type.ToDisplayString(SymbolFormat),
-                        ["parameterOrdinal"] = parameter.Ordinal.ToString(),
-                        ["containingSymbol"] = containingSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                        ["isOptional"] = parameter.IsOptional.ToString()
-                    },
-                    containingSymbol?.ContainingAssembly,
-                    parameter.Type.ContainingAssembly)));
+                properties: properties));
         }
     }
 
@@ -497,6 +508,9 @@ public static class CSharpSemanticExtractor
             },
             local.ContainingAssembly,
             originSymbol.ContainingAssembly ?? originType?.ContainingAssembly);
+        AddSymbolProperties(properties, "source", local.ContainingSymbol);
+        AddSymbolProperties(properties, "target", local);
+        AddSymbolProperties(properties, "origin", originSymbol);
 
         facts.Add(CreateSemanticFact(
             FactTypes.LocalAlias,
@@ -579,6 +593,9 @@ public static class CSharpSemanticExtractor
             },
             field.ContainingAssembly,
             originSymbol.ContainingAssembly ?? originType?.ContainingAssembly);
+        AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(evidenceNode.SpanStart));
+        AddSymbolProperties(properties, "target", field);
+        AddSymbolProperties(properties, "origin", originSymbol);
 
         facts.Add(CreateSemanticFact(
             FactTypes.FieldAlias,
@@ -623,22 +640,27 @@ public static class CSharpSemanticExtractor
         SemanticModel model,
         IPropertySymbol property)
     {
+        var enclosing = model.GetEnclosingSymbol(node.SpanStart);
         var containingType = property.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["containingType"] = containingType,
+            ["propertyName"] = property.Name,
+            ["propertyType"] = property.Type.ToDisplayString(SymbolFormat)
+        };
+        AddSymbolProperties(properties, "source", enclosing);
+        AddSymbolProperties(properties, "target", property);
+
         return CreateSemanticFact(
             FactTypes.PropertyAccessed,
             RuleIds.CSharpSemanticPropertyAccess,
             projectPath,
             filePath,
             node,
-            sourceSymbol: GetEnclosingSymbol(model, node),
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
             targetSymbol: property.ToDisplayString(SymbolFormat),
             contractElement: property.Name,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["containingType"] = containingType,
-                ["propertyName"] = property.Name,
-                ["propertyType"] = property.Type.ToDisplayString(SymbolFormat)
-            });
+            properties: properties);
     }
 
     private static void AddMethodInvocationFacts(
@@ -658,6 +680,18 @@ public static class CSharpSemanticExtractor
 
             var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
             var enclosingSymbol = enclosing?.ToDisplayString(SymbolFormat);
+            var methodProperties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["methodName"] = method.Name,
+                    ["methodKind"] = method.MethodKind.ToString()
+                },
+                enclosing?.ContainingAssembly,
+                method.ContainingAssembly);
+            AddSymbolProperties(methodProperties, "source", enclosing);
+            AddSymbolProperties(methodProperties, "target", method);
+
             facts.Add(CreateSemanticFact(
                 FactTypes.MethodInvoked,
                 RuleIds.CSharpSemanticMethodInvocation,
@@ -667,15 +701,21 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: enclosingSymbol,
                 targetSymbol: method.ToDisplayString(SymbolFormat),
                 contractElement: method.Name,
-                properties: AddAssemblyProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                        ["methodName"] = method.Name,
-                        ["methodKind"] = method.MethodKind.ToString()
-                    },
-                    enclosing?.ContainingAssembly,
-                    method.ContainingAssembly)));
+                properties: methodProperties));
+
+            var callProperties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callerSymbol"] = enclosingSymbol ?? string.Empty,
+                    ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
+                    ["calleeName"] = method.Name,
+                    ["calleeContainingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                    ["callKind"] = "SemanticMethodInvocation"
+                },
+                enclosing?.ContainingAssembly,
+                method.ContainingAssembly);
+            AddSymbolProperties(callProperties, "source", enclosing);
+            AddSymbolProperties(callProperties, "target", method);
 
             facts.Add(CreateSemanticFact(
                 FactTypes.CallEdge,
@@ -686,17 +726,7 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: enclosingSymbol,
                 targetSymbol: method.ToDisplayString(SymbolFormat),
                 contractElement: method.Name,
-                properties: AddAssemblyProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["callerSymbol"] = enclosingSymbol ?? string.Empty,
-                        ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
-                        ["calleeName"] = method.Name,
-                        ["calleeContainingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                        ["callKind"] = "SemanticMethodInvocation"
-                    },
-                    enclosing?.ContainingAssembly,
-                    method.ContainingAssembly)));
+                properties: callProperties));
 
             AddArgumentPassedFacts(
                 repoPath,
@@ -736,6 +766,23 @@ public static class CSharpSemanticExtractor
             var constructorSymbol = constructor?.ToDisplayString(SymbolFormat) ?? createdType;
             var assignedTo = GetAssignedVariableName(creation);
 
+            var objectProperties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callerSymbol"] = enclosingSymbol ?? string.Empty,
+                    ["createdType"] = createdType,
+                    ["createdTypeName"] = type.Name,
+                    ["constructorSymbol"] = constructorSymbol,
+                    ["assignedTo"] = assignedTo ?? string.Empty,
+                    ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+                    ["creationKind"] = "SemanticObjectCreation"
+                },
+                enclosing?.ContainingAssembly,
+                type.ContainingAssembly);
+            AddSymbolProperties(objectProperties, "source", enclosing);
+            AddSymbolProperties(objectProperties, "target", type);
+            AddSymbolProperties(objectProperties, "constructor", constructor);
+
             facts.Add(CreateSemanticFact(
                 FactTypes.ObjectCreated,
                 RuleIds.CSharpSemanticObjectCreation,
@@ -745,19 +792,22 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: enclosingSymbol,
                 targetSymbol: createdType,
                 contractElement: type.Name,
-                properties: AddAssemblyProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["callerSymbol"] = enclosingSymbol ?? string.Empty,
-                        ["createdType"] = createdType,
-                        ["createdTypeName"] = type.Name,
-                        ["constructorSymbol"] = constructorSymbol,
-                        ["assignedTo"] = assignedTo ?? string.Empty,
-                        ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
-                        ["creationKind"] = "SemanticObjectCreation"
-                    },
-                    enclosing?.ContainingAssembly,
-                    type.ContainingAssembly)));
+                properties: objectProperties));
+
+            var callProperties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callerSymbol"] = enclosingSymbol ?? string.Empty,
+                    ["calleeSymbol"] = constructorSymbol,
+                    ["calleeName"] = type.Name,
+                    ["calleeContainingType"] = createdType,
+                    ["callKind"] = "SemanticObjectCreation",
+                    ["assignedTo"] = assignedTo ?? string.Empty
+                },
+                enclosing?.ContainingAssembly,
+                type.ContainingAssembly);
+            AddSymbolProperties(callProperties, "source", enclosing);
+            AddSymbolProperties(callProperties, "target", (ISymbol?)constructor ?? type);
 
             facts.Add(CreateSemanticFact(
                 FactTypes.CallEdge,
@@ -768,18 +818,7 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: enclosingSymbol,
                 targetSymbol: constructorSymbol,
                 contractElement: type.Name,
-                properties: AddAssemblyProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["callerSymbol"] = enclosingSymbol ?? string.Empty,
-                        ["calleeSymbol"] = constructorSymbol,
-                        ["calleeName"] = type.Name,
-                        ["calleeContainingType"] = createdType,
-                        ["callKind"] = "SemanticObjectCreation",
-                        ["assignedTo"] = assignedTo ?? string.Empty
-                    },
-                    enclosing?.ContainingAssembly,
-                    type.ContainingAssembly)));
+                properties: callProperties));
 
             if (constructor is not null && creation.ArgumentList is not null)
             {
@@ -848,6 +887,10 @@ public static class CSharpSemanticExtractor
                 caller?.ContainingAssembly,
                 callee.ContainingAssembly);
             AddArgumentAssemblyProperties(properties, argumentSymbol, argumentType);
+            AddSymbolProperties(properties, "source", caller);
+            AddSymbolProperties(properties, "target", callee);
+            AddSymbolProperties(properties, "parameter", parameter);
+            AddSymbolProperties(properties, "argument", argumentSymbol);
 
             facts.Add(CreateSemanticFact(
                 FactTypes.ArgumentPassed,
@@ -2032,6 +2075,27 @@ public static class CSharpSemanticExtractor
     {
         properties[$"{prefix}AssemblyName"] = assembly?.Identity.Name ?? string.Empty;
         properties[$"{prefix}AssemblyVersion"] = assembly?.Identity.Version?.ToString() ?? string.Empty;
+    }
+
+    private static SortedDictionary<string, string> AddSymbolProperties(
+        SortedDictionary<string, string> properties,
+        string prefix,
+        ISymbol? symbol)
+    {
+        var identity = CSharpSymbolIdentityProvider.TryCreate(symbol);
+        if (identity is null)
+        {
+            return properties;
+        }
+
+        properties[$"{prefix}SymbolId"] = identity.SymbolId;
+        properties[$"{prefix}SymbolLanguage"] = identity.Language;
+        properties[$"{prefix}SymbolKind"] = identity.SymbolKind;
+        properties[$"{prefix}SymbolDisplayName"] = identity.DisplayName;
+        properties[$"{prefix}SymbolAssemblyName"] = identity.AssemblyName ?? string.Empty;
+        properties[$"{prefix}SymbolAssemblyVersion"] = identity.AssemblyVersion ?? string.Empty;
+        properties[$"{prefix}ContainingSymbolId"] = identity.ContainingSymbolId ?? string.Empty;
+        return properties;
     }
 
     private static void AddArgumentAssemblyProperties(
