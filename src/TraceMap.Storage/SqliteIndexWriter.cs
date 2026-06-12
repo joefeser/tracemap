@@ -425,6 +425,10 @@ public static class SqliteIndexWriter
         int StartLine,
         int EndLine);
 
+    private sealed record ResolvedForwardSource(
+        string SourceMethodSymbol,
+        string SourceParameterSymbol);
+
     private static void InsertParameterForwardEdges(SqliteConnection connection, SqliteTransaction transaction)
     {
         foreach (var argumentFlow in ReadArgumentFlows(connection, transaction))
@@ -486,8 +490,7 @@ public static class SqliteIndexWriter
 
     private static void InsertParameterForwardEdge(SqliteConnection connection, SqliteTransaction transaction, ArgumentFlowRow argumentFlow)
     {
-        var sourceMethodSymbol = argumentFlow.CallerSymbol;
-        var sourceParameterSymbol = ResolveForwardedSourceParameterSymbol(
+        var source = ResolveForwardedSource(
             connection,
             transaction,
             argumentFlow.CallerSymbol,
@@ -497,8 +500,7 @@ public static class SqliteIndexWriter
         var targetMethodSymbol = argumentFlow.CalleeSymbol;
         var targetParameterName = argumentFlow.ParameterName;
         var targetParameterType = argumentFlow.ParameterType;
-        if (string.IsNullOrWhiteSpace(sourceMethodSymbol)
-            || string.IsNullOrWhiteSpace(sourceParameterSymbol)
+        if (source is null
             || string.IsNullOrWhiteSpace(targetMethodSymbol)
             || string.IsNullOrWhiteSpace(targetParameterName))
         {
@@ -562,9 +564,9 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$commit_sha", argumentFlow.CommitSha);
         command.Parameters.AddWithValue("$evidence_tier", argumentFlow.EvidenceTier);
         command.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSemanticParameterForwarding);
-        command.Parameters.AddWithValue("$source_method_symbol", sourceMethodSymbol);
-        command.Parameters.AddWithValue("$source_parameter_symbol", sourceParameterSymbol);
-        command.Parameters.AddWithValue("$source_node_key", CreateNodeKey(sourceMethodSymbol, sourceParameterSymbol));
+        command.Parameters.AddWithValue("$source_method_symbol", source.SourceMethodSymbol);
+        command.Parameters.AddWithValue("$source_parameter_symbol", source.SourceParameterSymbol);
+        command.Parameters.AddWithValue("$source_node_key", CreateNodeKey(source.SourceMethodSymbol, source.SourceParameterSymbol));
         command.Parameters.AddWithValue("$target_method_symbol", targetMethodSymbol);
         command.Parameters.AddWithValue("$target_parameter_name", targetParameterName);
         command.Parameters.AddWithValue("$target_parameter_type", (object?)targetParameterType ?? DBNull.Value);
@@ -578,7 +580,7 @@ public static class SqliteIndexWriter
         command.ExecuteNonQuery();
     }
 
-    private static string? ResolveForwardedSourceParameterSymbol(
+    private static ResolvedForwardSource? ResolveForwardedSource(
         SqliteConnection connection,
         SqliteTransaction transaction,
         string? callerSymbol,
@@ -589,11 +591,13 @@ public static class SqliteIndexWriter
         var argumentSymbol = NormalizeParameterSymbol(rawArgumentSymbol);
         if (string.Equals(argumentSymbolKind, "Parameter", StringComparison.Ordinal))
         {
-            return argumentSymbol;
+            return string.IsNullOrWhiteSpace(callerSymbol) || string.IsNullOrWhiteSpace(argumentSymbol)
+                ? null
+                : new ResolvedForwardSource(callerSymbol, argumentSymbol);
         }
 
-        if (!string.Equals(argumentSymbolKind, "Local", StringComparison.Ordinal)
-            && !string.Equals(argumentSymbolKind, "Field", StringComparison.Ordinal)
+        if ((!string.Equals(argumentSymbolKind, "Local", StringComparison.Ordinal)
+                && !string.Equals(argumentSymbolKind, "Field", StringComparison.Ordinal))
             || string.IsNullOrWhiteSpace(callerSymbol)
             || string.IsNullOrWhiteSpace(argumentSymbol))
         {
@@ -610,7 +614,9 @@ public static class SqliteIndexWriter
                 : ReadNearestLocalAliasOrigin(connection, transaction, callerSymbol, currentSymbol, callStartLine);
             if (origin is null)
             {
-                return null;
+                return string.Equals(currentKind, "Field", StringComparison.Ordinal)
+                    ? ResolveConstructorFieldSource(connection, transaction, callerSymbol, currentSymbol)
+                    : null;
             }
 
             var originSymbol = NormalizeParameterSymbol(origin.Value.Symbol);
@@ -621,7 +627,7 @@ public static class SqliteIndexWriter
 
             if (string.Equals(origin.Value.Kind, "Parameter", StringComparison.Ordinal))
             {
-                return originSymbol;
+                return new ResolvedForwardSource(callerSymbol, originSymbol);
             }
 
             if (!string.Equals(origin.Value.Kind, "Local", StringComparison.Ordinal)
@@ -640,7 +646,64 @@ public static class SqliteIndexWriter
             currentKind = origin.Value.Kind;
         }
 
-        return null;
+        return string.Equals(argumentSymbolKind, "Field", StringComparison.Ordinal)
+            ? ResolveConstructorFieldSource(connection, transaction, callerSymbol, argumentSymbol)
+            : null;
+    }
+
+    private static ResolvedForwardSource? ResolveConstructorFieldSource(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string callerSymbol,
+        string fieldSymbol)
+    {
+        var callerContainingType = GetContainingTypeSymbol(callerSymbol);
+        if (string.IsNullOrWhiteSpace(callerContainingType))
+        {
+            return null;
+        }
+
+        var candidates = ReadConstructorFieldAliasOrigins(connection, transaction, fieldSymbol)
+            .Where(candidate => string.Equals(GetContainingTypeSymbol(candidate.ContainingSymbol), callerContainingType, StringComparison.Ordinal))
+            .ToArray();
+        if (candidates.Length != 1)
+        {
+            return null;
+        }
+
+        var candidate = candidates[0];
+        var originSymbol = NormalizeParameterSymbol(candidate.OriginSymbol);
+        return string.IsNullOrWhiteSpace(originSymbol)
+            ? null
+            : new ResolvedForwardSource(candidate.ContainingSymbol, originSymbol);
+    }
+
+    private static IReadOnlyList<(string ContainingSymbol, string OriginSymbol)> ReadConstructorFieldAliasOrigins(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string fieldSymbol)
+    {
+        var candidates = new List<(string ContainingSymbol, string OriginSymbol)>();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            select containing_symbol, origin_symbol
+            from field_aliases
+            where field_symbol = $field_symbol
+              and origin_symbol_kind = 'Parameter'
+            order by containing_symbol, start_line, fact_id;
+            """;
+        command.Parameters.AddWithValue("$field_symbol", fieldSymbol);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            candidates.Add((reader.GetString(0), reader.GetString(1)));
+        }
+
+        return candidates
+            .Where(candidate => IsConstructorSymbol(candidate.ContainingSymbol))
+            .Distinct()
+            .ToArray();
     }
 
     private static (string Symbol, string? Kind)? ReadNearestLocalAliasOrigin(
@@ -1046,5 +1109,41 @@ public static class SqliteIndexWriter
     private static string CreateNodeKey(string methodSymbol, string parameterSymbol)
     {
         return $"{methodSymbol}::{parameterSymbol}";
+    }
+
+    private static bool IsConstructorSymbol(string symbol)
+    {
+        var memberName = GetMemberName(symbol);
+        var containingType = GetContainingTypeSymbol(symbol);
+        var typeName = GetMemberName(containingType);
+        return !string.IsNullOrWhiteSpace(memberName)
+            && !string.IsNullOrWhiteSpace(typeName)
+            && string.Equals(memberName, typeName, StringComparison.Ordinal);
+    }
+
+    private static string? GetContainingTypeSymbol(string? memberSymbol)
+    {
+        if (string.IsNullOrWhiteSpace(memberSymbol))
+        {
+            return null;
+        }
+
+        var openParenIndex = memberSymbol.IndexOf('(');
+        var withoutParameters = openParenIndex < 0 ? memberSymbol : memberSymbol[..openParenIndex];
+        var lastDotIndex = withoutParameters.LastIndexOf('.');
+        return lastDotIndex <= 0 ? null : withoutParameters[..lastDotIndex];
+    }
+
+    private static string? GetMemberName(string? symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return null;
+        }
+
+        var openParenIndex = symbol.IndexOf('(');
+        var withoutParameters = openParenIndex < 0 ? symbol : symbol[..openParenIndex];
+        var lastDotIndex = withoutParameters.LastIndexOf('.');
+        return lastDotIndex < 0 ? withoutParameters : withoutParameters[(lastDotIndex + 1)..];
     }
 }

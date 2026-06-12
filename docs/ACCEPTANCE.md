@@ -157,7 +157,7 @@ Each fixture should document:
 | semantic local alias | Tier1 `LocalAlias` with alias symbol, origin symbol, rule ID, and evidence span |
 | semantic field alias | Tier1 `FieldAlias` with field symbol, origin symbol, rule ID, and evidence span |
 | semantic parameter forwarding | `parameter_forward_edges` row with source method/parameter, target method/parameter, rule ID, and evidence span |
-| parameter flow report | `tracemap flow` chains direct and same-method alias-resolved parameter-forwarding edges and labels limitations |
+| parameter flow report | `tracemap flow` chains direct forwarding, same-method aliases, and unique constructor field initialization while labeling limitations |
 | calculation expression | `CalculationExpression` with operator, line span, and expression hash |
 | retry/backoff method | `RetryPolicyLogic` |
 | generated or DI glue file | `InfrastructureBoilerplate` |
