@@ -17,7 +17,7 @@ public sealed class JsonlFactWriterTests
             "unknown",
             ScannerVersions.TraceMap,
             DateTimeOffset.UnixEpoch,
-            "Level1FileInventoryOnly",
+            "Level3SyntaxAnalysis",
             "NotRun",
             [],
             [],

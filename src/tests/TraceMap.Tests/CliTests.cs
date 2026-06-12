@@ -53,6 +53,7 @@ public sealed class CliTests
         var facts = await File.ReadAllTextAsync(Path.Combine(outputPath, "facts.ndjson"));
         Assert.Contains("\"factType\":\"PackageReferenced\"", facts);
         Assert.Contains("\"factType\":\"SqlFileDeclared\"", facts);
+        Assert.Contains("\"analysisLevel\": \"Level3SyntaxAnalysis\"", await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-manifest.json")));
         Assert.Equal(string.Empty, error.ToString());
     }
 }

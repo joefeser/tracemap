@@ -37,7 +37,7 @@ public static class MarkdownReportWriter
             $"- Analysis level: `{manifest.AnalysisLevel}`",
             $"- Build status: `{manifest.BuildStatus}`",
             "",
-            "This report is an evidence inventory only. It does not classify contract impact.",
+            "This report is an evidence inventory and syntax map only. It does not classify contract impact.",
             "",
             "## Inventory",
             "",

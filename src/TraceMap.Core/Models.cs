@@ -76,6 +76,13 @@ public static class FactTypes
     public const string TargetFrameworkDeclared = nameof(TargetFrameworkDeclared);
     public const string ConfigFileDeclared = nameof(ConfigFileDeclared);
     public const string SqlFileDeclared = nameof(SqlFileDeclared);
+    public const string TypeDeclared = nameof(TypeDeclared);
+    public const string MethodDeclared = nameof(MethodDeclared);
+    public const string PropertyDeclared = nameof(PropertyDeclared);
+    public const string EnumDeclared = nameof(EnumDeclared);
+    public const string AttributeUsed = nameof(AttributeUsed);
+    public const string MemberAccessName = nameof(MemberAccessName);
+    public const string InvocationName = nameof(InvocationName);
 }
 
 public static class RuleIds
@@ -83,12 +90,16 @@ public static class RuleIds
     public const string RepoManifest = "repo.manifest.v1";
     public const string FileInventory = "file.inventory.v1";
     public const string ProjectFile = "project.file.v1";
+    public const string CSharpSyntaxDeclarations = "csharp.syntax.declarations.v1";
+    public const string CSharpSyntaxMemberAccess = "csharp.syntax.memberaccess.v1";
+    public const string CSharpSyntaxInvocation = "csharp.syntax.invocation.v1";
 }
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone1";
+    public const string TraceMap = "tracemap-milestone2";
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
+    public const string CSharpSyntaxExtractor = "csharp-syntax/0.2.0";
 }

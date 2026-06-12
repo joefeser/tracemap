@@ -31,7 +31,7 @@ public static class ScanEngine
             .ToArray();
 
         var knownGaps = git.KnownGaps
-            .Append("Build was not run in Milestone 1; analysis is limited to deterministic file, project, and config inventory.")
+            .Append("Build was not run in Milestone 2; semantic analysis is not available and C# evidence is syntax-only.")
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .ToArray();
 
@@ -43,14 +43,14 @@ public static class ScanEngine
             git.CommitSha,
             ScannerVersions.TraceMap,
             DateTimeOffset.UtcNow,
-            "Level1FileInventoryOnly",
+            "Level3SyntaxAnalysis",
             "NotRun",
             solutions,
             projects,
             targetFrameworks,
             knownGaps);
 
-        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps);
+        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath);
         return new ScanResult(manifest, facts, inventory);
     }
 
@@ -65,7 +65,8 @@ public static class ScanEngine
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<TargetFrameworkInfo> targetFrameworks,
         IReadOnlyList<PackageReferenceInfo> packageReferences,
-        IReadOnlyList<string> knownGaps)
+        IReadOnlyList<string> knownGaps,
+        string repoPath)
     {
         var facts = new List<CodeFact>
         {
@@ -211,7 +212,11 @@ public static class ScanEngine
                 }));
         }
 
+        facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
+
         return facts
+            .GroupBy(fact => fact.FactId, StringComparer.Ordinal)
+            .Select(group => group.First())
             .OrderBy(fact => fact.FactType, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
