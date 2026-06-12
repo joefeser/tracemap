@@ -55,9 +55,16 @@ public sealed class CSharpSyntaxExtractorTests
         AssertFact(result, FactTypes.MethodDeclared, "LoadAsync", "src/Broken/CustomerProfile.cs", 11, 17);
         AssertFact(result, FactTypes.EnumDeclared, "CustomerStatus", "src/Broken/CustomerProfile.cs", 20, 24);
         AssertFact(result, FactTypes.AttributeUsed, "Obsolete", "src/Broken/CustomerProfile.cs", 6, 6);
+        AssertFact(result, FactTypes.ObjectCreated, "CustomerProfile", "src/Broken/CustomerProfile.cs", 13, 13);
         AssertFact(result, FactTypes.MemberAccessName, "PrimaryEmail", "src/Broken/CustomerProfile.cs", 14, 14);
         AssertFact(result, FactTypes.InvocationName, "GetAsync", "src/Broken/CustomerProfile.cs", 15, 15);
         AssertFact(result, FactTypes.CallEdge, "GetAsync", "src/Broken/CustomerProfile.cs", 15, 15);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSyntaxCallGraph
+            && fact.TargetSymbol == "CustomerProfile"
+            && fact.Properties.TryGetValue("callKind", out var callKind)
+            && callKind == "SyntaxObjectCreation");
 
         Assert.All(
             result.Facts.Where(fact => fact.RuleId.StartsWith("csharp.syntax.", StringComparison.Ordinal)),

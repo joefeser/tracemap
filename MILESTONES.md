@@ -163,8 +163,11 @@ Goal: Make code flow and review-routing signals queryable without claiming runti
 Deliverables:
 
 - Syntax-level `CallEdge` facts for invocation expressions.
-- Semantic `CallEdge` facts when Roslyn resolves method symbols.
+- Syntax-level `ObjectCreated` facts for object creation expressions.
+- Semantic `CallEdge` facts when Roslyn resolves method and constructor symbols.
+- Semantic `ObjectCreated` facts with assembly identity when Roslyn resolves created type symbols.
 - SQLite `call_edges` table for caller/callee queries.
+- SQLite `object_creations` table for created-type queries.
 - Deterministic logic shape facts:
   - `CalculationExpression`
   - `BranchingLogic`
@@ -176,7 +179,10 @@ Deliverables:
 Acceptance:
 
 - A syntax-only repo emits `CallEdge` facts with containing member and invocation name.
+- A syntax-only repo emits `ObjectCreated` facts with created type and assigned variable when obvious.
 - A semantic repo emits Tier1 `CallEdge` facts with fully resolved caller and callee symbols.
+- A semantic repo emits Tier1 `ObjectCreated` facts with caller/created assembly name and version when available.
 - `index.sqlite` contains queryable `call_edges`.
+- `index.sqlite` contains queryable `object_creations`.
 - Calculation/retry logic is findable without storing raw source snippets.
 - Boilerplate/generated/DI glue files are labeled as review-routing signals, not omitted from inventory.

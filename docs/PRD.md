@@ -143,6 +143,6 @@ Milestones 0 through 8 establish the current MVP:
 - The CLI can scan legacy or dependency-incomplete sample repos with reduced coverage and useful syntax facts.
 - The reducer emits evidence rows for matches and coverage evidence for no-match classifications.
 - The reducer emits warnings for generic or high fan-out name matches without suppressing evidence.
-- The scanner emits queryable call edges and review-routing logic shape facts.
+- The scanner emits queryable call edges, object creation facts, assembly identity, and review-routing logic shape facts.
 - No reducer finding is emitted without a rule ID.
 - No no-evidence result hides reduced coverage.

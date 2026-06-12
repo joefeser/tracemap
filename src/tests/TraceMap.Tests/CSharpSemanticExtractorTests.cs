@@ -30,7 +30,8 @@ public sealed class CSharpSemanticExtractorTests
             {
                 public int Measure(CustomerProfile profile)
                 {
-                    return profile.PrimaryEmail.Trim().Length;
+                    var copy = new CustomerProfile();
+                    return profile.PrimaryEmail.Trim().Length + copy.PrimaryEmail.Length;
                 }
             }
             """);
@@ -65,6 +66,17 @@ public sealed class CSharpSemanticExtractorTests
             && fact.SourceSymbol.Contains("ProfileReporter.Measure", StringComparison.Ordinal)
             && fact.TargetSymbol is not null
             && fact.TargetSymbol.Contains("string.Trim", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ObjectCreated
+            && fact.RuleId == RuleIds.CSharpSemanticObjectCreation
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.TargetSymbol == "global::ModernSample.CustomerProfile"
+            && fact.Properties.TryGetValue("callerAssemblyName", out var callerAssembly)
+            && callerAssembly == "ModernSample"
+            && fact.Properties.TryGetValue("calleeAssemblyName", out var calleeAssembly)
+            && calleeAssembly == "ModernSample"
+            && fact.Properties.TryGetValue("assignedTo", out var assignedTo)
+            && assignedTo == "copy");
     }
 
     [Fact]

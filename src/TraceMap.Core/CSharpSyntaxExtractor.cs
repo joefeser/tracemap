@@ -40,6 +40,7 @@ public static class CSharpSyntaxExtractor
                 AddAttributeFacts(manifest, facts, file.RelativePath, root);
                 AddMemberAccessFacts(manifest, facts, file.RelativePath, root);
                 AddInvocationFacts(manifest, facts, file.RelativePath, root);
+                AddObjectCreationFacts(manifest, facts, file.RelativePath, root);
                 AddLogicShapeFacts(manifest, facts, file.RelativePath, root);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -226,6 +227,50 @@ public static class CSharpSyntaxExtractor
         }
     }
 
+    private static void AddObjectCreationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    {
+        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+        {
+            var typeName = creation.Type.ToString();
+            var containingMember = GetContainingMemberName(creation);
+            var assignedTo = GetAssignedVariableName(creation);
+            facts.Add(CreateSyntaxFact(
+                manifest,
+                FactTypes.ObjectCreated,
+                RuleIds.CSharpSyntaxObjectCreation,
+                filePath,
+                creation,
+                sourceSymbol: containingMember,
+                targetSymbol: typeName,
+                contractElement: LastTypePart(typeName),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callerName"] = containingMember ?? string.Empty,
+                    ["createdType"] = typeName,
+                    ["assignedTo"] = assignedTo ?? string.Empty,
+                    ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+                    ["creationKind"] = "SyntaxObjectCreation"
+                }));
+
+            facts.Add(CreateSyntaxFact(
+                manifest,
+                FactTypes.CallEdge,
+                RuleIds.CSharpSyntaxCallGraph,
+                filePath,
+                creation,
+                sourceSymbol: containingMember,
+                targetSymbol: typeName,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callerName"] = containingMember ?? string.Empty,
+                    ["calleeName"] = typeName,
+                    ["calleeContainingType"] = typeName,
+                    ["callKind"] = "SyntaxObjectCreation",
+                    ["assignedTo"] = assignedTo ?? string.Empty
+                }));
+        }
+    }
+
     private static void AddLogicShapeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
     {
         foreach (var binary in root.DescendantNodes().OfType<BinaryExpressionSyntax>().Where(IsCalculationExpression))
@@ -316,6 +361,30 @@ public static class CSharpSyntaxExtractor
         return null;
     }
 
+    private static string? GetAssignedVariableName(ObjectCreationExpressionSyntax creation)
+    {
+        if (creation.Parent is EqualsValueClauseSyntax { Parent: VariableDeclaratorSyntax variable })
+        {
+            return variable.Identifier.ValueText;
+        }
+
+        if (creation.Parent is AssignmentExpressionSyntax assignment)
+        {
+            return assignment.Left.ToString();
+        }
+
+        return null;
+    }
+
+    private static string LastTypePart(string value)
+    {
+        var withoutGeneric = value.Split('<', StringSplitOptions.TrimEntries)[0].Trim();
+        var separator = Math.Max(withoutGeneric.LastIndexOf('.'), withoutGeneric.LastIndexOf(':'));
+        return separator >= 0 && separator + 1 < withoutGeneric.Length
+            ? withoutGeneric[(separator + 1)..]
+            : withoutGeneric;
+    }
+
     private static bool IsCalculationExpression(BinaryExpressionSyntax binary)
     {
         return binary.IsKind(SyntaxKind.MultiplyExpression)
@@ -404,6 +473,7 @@ public static class CSharpSyntaxExtractor
         SyntaxNode node,
         string? sourceSymbol = null,
         string? targetSymbol = null,
+        string? contractElement = null,
         IReadOnlyDictionary<string, string>? properties = null)
     {
         return FactFactory.Create(
@@ -414,7 +484,7 @@ public static class CSharpSyntaxExtractor
             ToEvidenceSpan(filePath, node),
             sourceSymbol: sourceSymbol,
             targetSymbol: targetSymbol,
-            contractElement: factType == FactTypes.CallEdge ? targetSymbol : null,
+            contractElement: contractElement,
             properties: properties);
     }
 

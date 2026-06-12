@@ -70,7 +70,33 @@ public static class SqliteIndexWriter
               evidence_tier text not null,
               rule_id text not null,
               caller_symbol text,
+              caller_assembly_name text,
+              caller_assembly_version text,
               callee_symbol text not null,
+              callee_assembly_name text,
+              callee_assembly_version text,
+              callee_containing_type text,
+              call_kind text,
+              file_path text not null,
+              start_line integer not null,
+              end_line integer not null
+            );
+
+            create table object_creations (
+              fact_id text primary key,
+              scan_id text not null,
+              repo text not null,
+              commit_sha text not null,
+              evidence_tier text not null,
+              rule_id text not null,
+              caller_symbol text,
+              caller_assembly_name text,
+              caller_assembly_version text,
+              created_type text not null,
+              created_type_assembly_name text,
+              created_type_assembly_version text,
+              constructor_symbol text,
+              assigned_to text,
               file_path text not null,
               start_line integer not null,
               end_line integer not null
@@ -83,7 +109,11 @@ public static class SqliteIndexWriter
             create index ix_facts_file on facts(file_path);
             create index ix_call_edges_caller on call_edges(caller_symbol);
             create index ix_call_edges_callee on call_edges(callee_symbol);
+            create index ix_call_edges_callee_assembly on call_edges(callee_assembly_name, callee_symbol);
             create index ix_call_edges_file on call_edges(file_path);
+            create index ix_object_creations_type on object_creations(created_type);
+            create index ix_object_creations_assembly on object_creations(created_type_assembly_name, created_type);
+            create index ix_object_creations_caller on object_creations(caller_symbol);
             """;
         command.ExecuteNonQuery();
     }
@@ -186,6 +216,11 @@ public static class SqliteIndexWriter
         {
             InsertCallEdge(connection, transaction, fact);
         }
+
+        if (fact.FactType == FactTypes.ObjectCreated && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+        {
+            InsertObjectCreation(connection, transaction, fact);
+        }
     }
 
     private static void InsertCallEdge(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
@@ -201,7 +236,13 @@ public static class SqliteIndexWriter
               evidence_tier,
               rule_id,
               caller_symbol,
+              caller_assembly_name,
+              caller_assembly_version,
               callee_symbol,
+              callee_assembly_name,
+              callee_assembly_version,
+              callee_containing_type,
+              call_kind,
               file_path,
               start_line,
               end_line
@@ -213,7 +254,13 @@ public static class SqliteIndexWriter
               $evidence_tier,
               $rule_id,
               $caller_symbol,
+              $caller_assembly_name,
+              $caller_assembly_version,
               $callee_symbol,
+              $callee_assembly_name,
+              $callee_assembly_version,
+              $callee_containing_type,
+              $call_kind,
               $file_path,
               $start_line,
               $end_line
@@ -226,10 +273,86 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
         command.Parameters.AddWithValue("$rule_id", fact.RuleId);
         command.Parameters.AddWithValue("$caller_symbol", (object?)fact.SourceSymbol ?? DBNull.Value);
+        command.Parameters.AddWithValue("$caller_assembly_name", GetOptionalProperty(fact, "callerAssemblyName"));
+        command.Parameters.AddWithValue("$caller_assembly_version", GetOptionalProperty(fact, "callerAssemblyVersion"));
         command.Parameters.AddWithValue("$callee_symbol", fact.TargetSymbol);
+        command.Parameters.AddWithValue("$callee_assembly_name", GetOptionalProperty(fact, "calleeAssemblyName"));
+        command.Parameters.AddWithValue("$callee_assembly_version", GetOptionalProperty(fact, "calleeAssemblyVersion"));
+        command.Parameters.AddWithValue("$callee_containing_type", GetOptionalProperty(fact, "calleeContainingType"));
+        command.Parameters.AddWithValue("$call_kind", GetOptionalProperty(fact, "callKind"));
         command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
         command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
         command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
         command.ExecuteNonQuery();
+    }
+
+    private static void InsertObjectCreation(SqliteConnection connection, SqliteTransaction transaction, CodeFact fact)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            insert into object_creations (
+              fact_id,
+              scan_id,
+              repo,
+              commit_sha,
+              evidence_tier,
+              rule_id,
+              caller_symbol,
+              caller_assembly_name,
+              caller_assembly_version,
+              created_type,
+              created_type_assembly_name,
+              created_type_assembly_version,
+              constructor_symbol,
+              assigned_to,
+              file_path,
+              start_line,
+              end_line
+            ) values (
+              $fact_id,
+              $scan_id,
+              $repo,
+              $commit_sha,
+              $evidence_tier,
+              $rule_id,
+              $caller_symbol,
+              $caller_assembly_name,
+              $caller_assembly_version,
+              $created_type,
+              $created_type_assembly_name,
+              $created_type_assembly_version,
+              $constructor_symbol,
+              $assigned_to,
+              $file_path,
+              $start_line,
+              $end_line
+            );
+            """;
+        command.Parameters.AddWithValue("$fact_id", fact.FactId);
+        command.Parameters.AddWithValue("$scan_id", fact.ScanId);
+        command.Parameters.AddWithValue("$repo", fact.Repo);
+        command.Parameters.AddWithValue("$commit_sha", fact.CommitSha);
+        command.Parameters.AddWithValue("$evidence_tier", fact.EvidenceTier);
+        command.Parameters.AddWithValue("$rule_id", fact.RuleId);
+        command.Parameters.AddWithValue("$caller_symbol", (object?)fact.SourceSymbol ?? DBNull.Value);
+        command.Parameters.AddWithValue("$caller_assembly_name", GetOptionalProperty(fact, "callerAssemblyName"));
+        command.Parameters.AddWithValue("$caller_assembly_version", GetOptionalProperty(fact, "callerAssemblyVersion"));
+        command.Parameters.AddWithValue("$created_type", fact.TargetSymbol);
+        command.Parameters.AddWithValue("$created_type_assembly_name", GetOptionalProperty(fact, "calleeAssemblyName"));
+        command.Parameters.AddWithValue("$created_type_assembly_version", GetOptionalProperty(fact, "calleeAssemblyVersion"));
+        command.Parameters.AddWithValue("$constructor_symbol", GetOptionalProperty(fact, "constructorSymbol"));
+        command.Parameters.AddWithValue("$assigned_to", GetOptionalProperty(fact, "assignedTo"));
+        command.Parameters.AddWithValue("$file_path", fact.Evidence.FilePath);
+        command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
+        command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
+        command.ExecuteNonQuery();
+    }
+
+    private static object GetOptionalProperty(CodeFact fact, string key)
+    {
+        return fact.Properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : DBNull.Value;
     }
 }
