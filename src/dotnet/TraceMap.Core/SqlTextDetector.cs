@@ -11,6 +11,18 @@ public static class SqlTextDetector
 
     public static bool IsSqlLike(string text)
     {
-        return !string.IsNullOrWhiteSpace(text) && SqlPattern.IsMatch(text);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        try
+        {
+            return SqlPattern.IsMatch(text);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 }

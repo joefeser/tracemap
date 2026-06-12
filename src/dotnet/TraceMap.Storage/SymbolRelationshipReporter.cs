@@ -166,7 +166,7 @@ public static class SymbolRelationshipReporter
         var paths = new List<IReadOnlyList<SymbolRelationshipEdge>>();
         foreach (var start in starts)
         {
-            Search([start], new HashSet<string>(StringComparer.Ordinal) { start.RelationshipId }, NextNode(start));
+            Search([start], new HashSet<string>(StringComparer.Ordinal) { start.RelationshipId }, NextNodeFromStart(start));
             if (paths.Count >= maxPaths)
             {
                 break;
@@ -178,6 +178,35 @@ public static class SymbolRelationshipReporter
         string NextNode(SymbolRelationshipEdge edge)
         {
             return direction == "incoming" ? edge.SourceSymbolId : edge.TargetSymbolId;
+        }
+
+        string NextNodeFromStart(SymbolRelationshipEdge edge)
+        {
+            if (direction != "both")
+            {
+                return NextNode(edge);
+            }
+
+            var sourceMatches = Contains(edge.SourceDisplayName, symbolFilter) || Contains(edge.SourceSymbolId, symbolFilter);
+            var targetMatches = Contains(edge.TargetDisplayName, symbolFilter) || Contains(edge.TargetSymbolId, symbolFilter);
+            return targetMatches && !sourceMatches ? edge.SourceSymbolId : edge.TargetSymbolId;
+        }
+
+        string NextNodeFrom(SymbolRelationshipEdge edge, string currentSymbolId)
+        {
+            if (direction == "incoming")
+            {
+                return edge.SourceSymbolId;
+            }
+
+            if (direction == "outgoing")
+            {
+                return edge.TargetSymbolId;
+            }
+
+            return string.Equals(edge.SourceSymbolId, currentSymbolId, StringComparison.Ordinal)
+                ? edge.TargetSymbolId
+                : edge.SourceSymbolId;
         }
 
         void Search(List<SymbolRelationshipEdge> path, HashSet<string> seenIds, string currentSymbolId)
@@ -206,7 +235,7 @@ public static class SymbolRelationshipReporter
 
                 extended = true;
                 path.Add(next);
-                Search(path, seenIds, direction == "incoming" ? next.SourceSymbolId : next.TargetSymbolId);
+                Search(path, seenIds, NextNodeFrom(next, currentSymbolId));
                 path.RemoveAt(path.Count - 1);
                 seenIds.Remove(next.RelationshipId);
             }

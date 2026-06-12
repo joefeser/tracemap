@@ -99,4 +99,61 @@ public sealed class IntegrationExtractorTests
             && fact.Properties.TryGetValue("providerName", out var provider)
             && provider == "System.Data.SqlClient");
     }
+
+    [Fact]
+    public void Scan_records_repeated_json_property_lines_by_full_path()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "appsettings.json"), """
+            {
+              "Logging": {
+                "LogLevel": {
+                  "Default": "Information"
+                }
+              },
+              "ConnectionStrings": {
+                "Default": "Server=.;Database=TraceMap"
+              }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ConfigKeyDeclared
+            && fact.TargetSymbol == "Logging:LogLevel:Default"
+            && fact.Evidence.StartLine == 4);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ConfigKeyDeclared
+            && fact.TargetSymbol == "ConnectionStrings:Default"
+            && fact.Evidence.StartLine == 8);
+    }
+
+    [Fact]
+    public void Scan_detects_sql_in_raw_string_literals_without_storing_text()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "RawSql.cs"), """"
+            public sealed class RawSql
+            {
+                public string Query()
+                {
+                    return """
+                        select Id, Name
+                        from Customers
+                        where IsActive = 1
+                        """;
+                }
+            }
+            """");
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        var sqlFact = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.SqlTextUsed
+            && fact.Evidence.FilePath == "RawSql.cs");
+        Assert.Contains("textHash", sqlFact.Properties.Keys);
+        Assert.Contains("textLength", sqlFact.Properties.Keys);
+        Assert.DoesNotContain("text", sqlFact.Properties.Keys);
+    }
 }

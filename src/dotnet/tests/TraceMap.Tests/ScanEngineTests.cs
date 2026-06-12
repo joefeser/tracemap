@@ -27,4 +27,21 @@ public sealed class ScanEngineTests
         Assert.Contains(result.Manifest.KnownGaps, gap => gap.Contains("commit SHA unavailable", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap);
     }
+
+    [Fact]
+    public void Scan_id_does_not_depend_on_absolute_repo_parent_path()
+    {
+        using var temp = new TempDirectory();
+        var repoA = Path.Combine(temp.Path, "a", "repo");
+        var repoB = Path.Combine(temp.Path, "b", "repo");
+        Directory.CreateDirectory(repoA);
+        Directory.CreateDirectory(repoB);
+        File.WriteAllText(Path.Combine(repoA, "Sample.cs"), "public sealed class Sample { }");
+        File.WriteAllText(Path.Combine(repoB, "Sample.cs"), "public sealed class Sample { }");
+
+        var resultA = ScanEngine.Scan(new ScanOptions(repoA, Path.Combine(temp.Path, "out-a")));
+        var resultB = ScanEngine.Scan(new ScanOptions(repoB, Path.Combine(temp.Path, "out-b")));
+
+        Assert.Equal(resultA.Manifest.ScanId, resultB.Manifest.ScanId);
+    }
 }

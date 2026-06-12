@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -55,22 +56,23 @@ public static class ConfigExtractor
             return;
         }
 
-        AddJsonElementFacts(manifest, facts, relativePath, text, document.RootElement, []);
+        var lineMap = BuildJsonPropertyLineMap(text);
+        AddJsonElementFacts(manifest, facts, relativePath, document.RootElement, [], lineMap);
     }
 
     private static void AddJsonElementFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
         string relativePath,
-        string text,
         JsonElement element,
-        IReadOnlyList<string> pathParts)
+        IReadOnlyList<string> pathParts,
+        IReadOnlyDictionary<string, int> lineMap)
     {
         foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
         {
             var nextPath = pathParts.Concat([property.Name]).ToArray();
             var keyPath = string.Join(":", nextPath);
-            var line = FindLineForJsonProperty(text, property.Name);
+            var line = lineMap.GetValueOrDefault(keyPath, 1);
             facts.Add(FactFactory.Create(
                 manifest,
                 FactTypes.ConfigKeyDeclared,
@@ -106,9 +108,95 @@ public static class ConfigExtractor
 
             if (property.Value.ValueKind == JsonValueKind.Object)
             {
-                AddJsonElementFacts(manifest, facts, relativePath, text, property.Value, nextPath);
+                AddJsonElementFacts(manifest, facts, relativePath, property.Value, nextPath, lineMap);
             }
         }
+    }
+
+    private static IReadOnlyDictionary<string, int> BuildJsonPropertyLineMap(string text)
+    {
+        var map = new Dictionary<string, int>(StringComparer.Ordinal);
+        var bytes = Encoding.UTF8.GetBytes(text);
+        var reader = new Utf8JsonReader(bytes, new JsonReaderOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+        var frames = new Stack<JsonObjectFrame>();
+
+        while (reader.Read())
+        {
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.StartObject:
+                    if (frames.TryPeek(out var parent) && parent.PendingPropertyName is { Length: > 0 } propertyName)
+                    {
+                        frames.Push(new JsonObjectFrame(parent.PathParts.Concat([propertyName]).ToArray()));
+                        parent.PendingPropertyName = null;
+                    }
+                    else
+                    {
+                        frames.Push(new JsonObjectFrame([]));
+                    }
+
+                    break;
+                case JsonTokenType.EndObject:
+                    if (frames.Count > 0)
+                    {
+                        frames.Pop();
+                    }
+
+                    ClearPendingProperty(frames);
+                    break;
+                case JsonTokenType.PropertyName:
+                    if (frames.TryPeek(out var frame))
+                    {
+                        var name = reader.GetString() ?? string.Empty;
+                        var keyPath = string.Join(":", frame.PathParts.Concat([name]));
+                        map.TryAdd(keyPath, CountLine(bytes, reader.TokenStartIndex));
+                        frame.PendingPropertyName = name;
+                    }
+
+                    break;
+                case JsonTokenType.StartArray:
+                case JsonTokenType.EndArray:
+                case JsonTokenType.String:
+                case JsonTokenType.Number:
+                case JsonTokenType.True:
+                case JsonTokenType.False:
+                case JsonTokenType.Null:
+                    ClearPendingProperty(frames);
+                    break;
+            }
+        }
+
+        return map;
+    }
+
+    private static void ClearPendingProperty(Stack<JsonObjectFrame> frames)
+    {
+        if (frames.TryPeek(out var frame))
+        {
+            frame.PendingPropertyName = null;
+        }
+    }
+
+    private static int CountLine(byte[] bytes, long tokenStartIndex)
+    {
+        var line = 1;
+        var length = Math.Min(bytes.Length, checked((int)tokenStartIndex));
+        for (var index = 0; index < length; index++)
+        {
+            if (bytes[index] == (byte)'\n')
+            {
+                line++;
+            }
+        }
+
+        return line;
+    }
+
+    private sealed class JsonObjectFrame(string[] pathParts)
+    {
+        public string[] PathParts { get; } = pathParts;
+
+        public string? PendingPropertyName { get; set; }
     }
 
     private static void AddXmlConfigFacts(ScanManifest manifest, List<CodeFact> facts, string relativePath, string fullPath)
@@ -237,27 +325,6 @@ public static class ConfigExtractor
         connectionName = pathParts[1];
         connectionValue = value.GetString() ?? string.Empty;
         return !string.IsNullOrWhiteSpace(connectionName);
-    }
-
-    private static int FindLineForJsonProperty(string text, string propertyName)
-    {
-        var escapedName = JsonEncodedText.Encode(propertyName).ToString();
-        var index = text.IndexOf($"\"{escapedName}\"", StringComparison.Ordinal);
-        if (index < 0)
-        {
-            return 1;
-        }
-
-        var line = 1;
-        for (var i = 0; i < index; i++)
-        {
-            if (text[i] == '\n')
-            {
-                line++;
-            }
-        }
-
-        return line;
     }
 
     private static string? AttributeValue(XElement element, string name)

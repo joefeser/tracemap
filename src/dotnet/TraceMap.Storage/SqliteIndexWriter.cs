@@ -1408,9 +1408,19 @@ public static class SqliteIndexWriter
         var memberName = GetMemberName(symbol);
         var containingType = GetContainingTypeSymbol(symbol);
         var typeName = GetMemberName(containingType);
+        if (IsConstructorMemberName(memberName))
+        {
+            return !string.IsNullOrWhiteSpace(containingType);
+        }
+
         return !string.IsNullOrWhiteSpace(memberName)
             && !string.IsNullOrWhiteSpace(typeName)
             && string.Equals(memberName, typeName, StringComparison.Ordinal);
+    }
+
+    private static bool IsConstructorMemberName(string? memberName)
+    {
+        return memberName is ".ctor" or "#ctor" or "ctor";
     }
 
     private static string? GetContainingTypeSymbol(string? memberSymbol)
