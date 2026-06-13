@@ -29,7 +29,8 @@ This is still static analysis. `impact` means evidence-backed static change cont
 - MVP is read-only. It must not mutate either input index or persist derived rows.
 - MVP reuses the combined diff engine and combined path query logic instead of adding a second comparison or traversal implementation.
 - MVP computes impact items from changed endpoint, surface, edge, coverage, and optional path evidence.
-- MVP supports bounded before/after path context around changed evidence.
+- MVP path search is off by default and enabled only with `--include-paths`.
+- MVP supports bounded before/after path context around changed evidence when `--include-paths` is set.
 - MVP does not scan repositories, diff source files, execute applications, call LLMs, use embeddings, or query vector databases.
 - MVP does not infer runtime usage or business criticality.
 - MVP does not require path expansion for every diff row by default; it uses strict caps and emits truncation gaps.
@@ -76,7 +77,7 @@ impact-report.json
 4. WHEN `--format json` is provided with file output THEN TraceMap SHALL write a machine-readable JSON report.
 5. WHEN the command runs THEN it SHALL open both databases read-only.
 6. WHEN the command completes THEN the CLI SHALL print output path, source count, diff count, impact item count, gap count, truncation state, and report coverage.
-7. WHEN no comparable changes exist THEN TraceMap SHALL emit a valid report with `NoImpactEvidence` rather than failing.
+7. WHEN no comparable changes exist THEN TraceMap SHALL emit a valid report with a report-level `NoImpactEvidence` gap rather than failing.
 
 ### Requirement 2: Diff Reuse
 
@@ -90,6 +91,7 @@ impact-report.json
 4. WHEN duplicate stable identities exist THEN impact rows SHALL cite the duplicate identity gap and SHALL NOT select an arbitrary winner.
 5. WHEN selectors are provided THEN impact analysis SHALL pass compatible selectors to the diff layer and record ignored selectors.
 6. WHEN diff output is truncated THEN impact analysis SHALL include a truncation gap and SHALL NOT claim complete impact coverage.
+7. WHEN `--scope coverage` is requested THEN impact analysis SHALL delegate to diff's `sources` scope and filter coverage rows afterward, because diff emits coverage evidence with source evidence.
 
 ### Requirement 3: Impact Item Model
 
@@ -97,7 +99,7 @@ impact-report.json
 
 #### Acceptance Criteria
 
-1. WHEN a diff row becomes an impact item THEN the item SHALL include stable ID, change type, classification, confidence, source label, evidence kind, before evidence, after evidence, rule ID, evidence tier, file span, supporting fact IDs, and supporting edge IDs where available.
+1. WHEN a diff row becomes an impact item THEN the item SHALL include stable ID, change type, classification, confidence, source label, evidence kind, before evidence, after evidence, rule ID, evidence tier, file span, supporting fact IDs, and supporting edge IDs where available. The evidence tier, file span, and supporting IDs SHALL be available as top-level normalized item fields and in the nested before/after evidence where side-specific values exist.
 2. WHEN a source coverage diff changes build status, analysis level, commit SHA, or known gaps THEN TraceMap SHALL emit a coverage impact item.
 3. WHEN endpoint evidence changes THEN TraceMap SHALL emit an endpoint impact item with method and normalized path key metadata when available.
 4. WHEN dependency surface evidence changes THEN TraceMap SHALL emit a surface impact item with safe structured metadata only.
@@ -112,16 +114,18 @@ impact-report.json
 
 #### Acceptance Criteria
 
-1. WHEN path context is enabled THEN TraceMap SHALL run bounded path queries against the before and after snapshots for selected impact items.
-2. WHEN a changed endpoint is the focus THEN path context SHALL start from the endpoint selector and search to terminal dependency surfaces.
-3. WHEN a changed surface is the focus THEN path context SHALL search for paths that terminate at the same surface kind and safe surface identity when supported by the path query engine.
-4. WHEN a changed edge is the focus THEN path context SHALL search from the edge source symbol and, when useful, to terminal dependency surfaces.
-5. WHEN path context cannot be queried for an impact item THEN TraceMap SHALL emit `PathContextUnavailable` with a rule ID and limitation.
-6. WHEN before paths exist and after paths do not, or vice versa, THEN TraceMap SHALL classify the context as `ReachabilityChanged` only if source identity and coverage allow the claim.
-7. WHEN both sides have comparable paths but path evidence changed THEN TraceMap SHALL classify the context as `ReachabilityEvidenceChanged`.
-8. WHEN no path is found and coverage is reduced or gaps exist THEN TraceMap SHALL emit `UnknownAnalysisGap` rather than `NoPathEvidence`.
-9. WHEN path search hits depth, frontier, row, or per-item caps THEN TraceMap SHALL emit `TruncatedByLimit` and mark the report partial.
-10. WHEN `--max-paths-per-item` is omitted THEN the default SHALL be small enough for review readability, such as 5.
+1. WHEN `--include-paths` is omitted THEN TraceMap SHALL NOT run path search; it SHALL include only diff evidence context, coverage caveats, identity caveats, and report-level gaps.
+2. WHEN `--include-paths` is provided THEN TraceMap SHALL run bounded path queries against the before and after snapshots for selected impact items.
+3. WHEN a changed endpoint is the focus THEN path context SHALL start from the endpoint selector and search to terminal dependency surfaces.
+4. WHEN a changed surface is the focus THEN path context SHALL search for paths that terminate at the same surface kind and safe surface identity when supported by the path query engine.
+5. WHEN a changed edge is the focus THEN path context SHALL search from the edge source symbol and, when useful, to terminal dependency surfaces.
+6. WHEN path context cannot be queried for an impact item THEN TraceMap SHALL emit `PathContextUnavailable` with a rule ID and limitation.
+7. WHEN before paths exist and after paths do not, or vice versa, THEN TraceMap SHALL classify the path context as `ReachabilityChanged` only if source identity and coverage allow the claim.
+8. WHEN both sides have comparable paths but path evidence changed THEN TraceMap SHALL classify the path context as `ReachabilityEvidenceChanged`.
+9. WHEN no path is found and coverage is reduced or gaps exist THEN TraceMap SHALL emit `UnknownAnalysisGap` rather than `NoPathEvidence`.
+10. WHEN path search hits depth, frontier, row, per-item, or global path-query caps THEN TraceMap SHALL emit `TruncatedByLimit` and mark the report partial.
+11. WHEN `--max-paths-per-item` is omitted THEN the default SHALL be `5`.
+12. WHEN `--max-path-queries` is omitted THEN the default SHALL be `50` total before/after path queries across the whole report.
 
 ### Requirement 5: Selectors and Caps
 
@@ -134,10 +138,11 @@ impact-report.json
 3. WHEN `--surface <kind>` is provided THEN TraceMap SHALL focus surface impact and path context on matching surface kinds.
 4. WHEN `--surface-name <name>` is provided THEN TraceMap SHALL use the same safe surface-name matching rules as `tracemap paths` and `tracemap diff`.
 5. WHEN `--scope <list>` is provided THEN allowed values SHALL be `all`, `sources`, `coverage`, `endpoints`, `surfaces`, `edges`, and `paths`.
-6. WHEN `--scope all` is used THEN path context SHALL remain bounded by `--include-paths` or the command's explicit path-context setting.
+6. WHEN `--scope all` is used THEN path context SHALL remain disabled unless `--include-paths` is also provided.
 7. WHEN `--max-impact-items <n>` is provided THEN output SHALL be capped deterministically with a truncation gap.
-8. WHEN `--max-gaps <n>` is provided THEN gap output SHALL be capped deterministically with a truncation gap.
-9. WHEN a selector matches nothing THEN TraceMap SHALL emit `SelectorNoMatch` and SHALL NOT emit fake impact items.
+8. WHEN `--max-path-queries <n>` is provided THEN path context SHALL stop after that many total before/after path queries and emit a truncation gap if additional queries would have run.
+9. WHEN `--max-gaps <n>` is provided THEN gap output SHALL be capped deterministically with a truncation gap.
+10. WHEN a selector matches nothing THEN TraceMap SHALL emit `SelectorNoMatch` and SHALL NOT emit fake impact items.
 
 ### Requirement 6: Classifications
 
@@ -149,7 +154,7 @@ impact-report.json
 2. WHEN changed evidence is strongly structural but lacks enough path context THEN TraceMap SHALL classify it as `ProbableStaticImpact`.
 3. WHEN changed evidence depends on Tier3 syntax/textual evidence, ambiguous matches, duplicate identities, or name-only linking THEN TraceMap SHALL classify it as `NeedsReviewImpact`.
 4. WHEN analysis gaps prevent a credible conclusion THEN TraceMap SHALL classify it as `UnknownAnalysisGap`.
-5. WHEN comparable evidence exists but no static impact context is found under full coverage THEN TraceMap SHALL classify it as `NoImpactEvidence`.
+5. WHEN comparable evidence exists but no static impact context is found under full coverage THEN TraceMap SHALL emit a report-level `NoImpactEvidence` gap and SHALL NOT use `NoImpactEvidence` as an item classification.
 6. WHEN no selector matches evidence THEN TraceMap SHALL classify the gap as `SelectorNoMatch`.
 7. WHEN output is capped or path search is truncated THEN TraceMap SHALL include `TruncatedByLimit` and SHALL NOT imply complete coverage.
 8. WHEN confidence is emitted THEN it SHALL be derived from classification with a fixed documented mapping.
@@ -165,7 +170,7 @@ impact-report.json
 3. WHEN path context is rendered THEN before and after path evidence SHALL be clearly separated.
 4. WHEN output is partial THEN Markdown SHALL show partial coverage near the summary and affected items.
 5. WHEN safe metadata is rendered THEN it SHALL exclude raw SQL, raw snippets, config values, connection strings, raw URLs, and local absolute paths.
-6. WHEN no impact items exist THEN Markdown SHALL explain whether the result is no changes, selector no match, or unknown due to analysis gaps.
+6. WHEN no impact items exist THEN Markdown SHALL explain whether the result is no comparable changes, selector no match, or unknown due to analysis gaps.
 
 ### Requirement 8: JSON Report Contract
 
@@ -190,8 +195,10 @@ impact-report.json
 1. WHEN impact rows are emitted THEN every row SHALL include a rule ID.
 2. WHEN path context rows are emitted THEN every row SHALL cite path and diff rule IDs that support it.
 3. WHEN gaps are emitted THEN every gap SHALL include a rule ID and evidence tier.
-4. WHEN new `combined.impact.*.v1` rule IDs are introduced THEN `rules/rule-catalog.yml` SHALL document their limitations.
-5. WHEN limitations are emitted THEN they SHALL explicitly state that static impact evidence is not runtime impact proof.
+4. WHEN `PathContextUnavailable` is emitted THEN the row SHALL cite `combined.impact.path-context.v1`.
+5. WHEN identity and schema gaps are propagated from diff THEN the report SHALL preserve `combined.diff.identity.v1` and `combined.diff.schema.v1` rather than inventing new rule IDs.
+6. WHEN new `combined.impact.*.v1` rule IDs are introduced THEN `rules/rule-catalog.yml` SHALL document their limitations.
+7. WHEN limitations are emitted THEN they SHALL explicitly state that static impact evidence is not runtime impact proof.
 
 ### Requirement 10: Tests and Validation
 
@@ -209,4 +216,12 @@ impact-report.json
 8. WHEN identical combined snapshots are compared THEN tests SHALL prove `NoImpactEvidence`.
 9. WHEN the command runs THEN tests SHALL prove input databases are not mutated.
 10. WHEN output is generated twice from identical inputs THEN tests SHALL prove byte-stable Markdown and JSON.
-11. WHEN validation runs locally THEN `dotnet build`, `dotnet test`, `./scripts/check-private-paths.sh`, and `git diff --check` SHALL pass.
+11. WHEN a coverage row changes THEN tests SHALL prove a coverage impact item appears.
+12. WHEN path context is enabled THEN tests SHALL distinguish `ReachabilityChanged` from `ReachabilityEvidenceChanged`.
+13. WHEN `--exit-code` is used THEN tests SHALL prove exit code `1` with impact items and `0` without impact items.
+14. WHEN selectors are irrelevant to the chosen scope THEN tests SHALL prove ignored selectors are recorded.
+15. WHEN classifications are emitted THEN tests SHALL prove confidence mapping is deterministic.
+16. WHEN JSON emits optional fields THEN tests SHALL prove empty-array and null conventions are stable.
+17. WHEN duplicate stable identities exist THEN tests SHALL prove the duplicate identity gap is cited and no arbitrary winner is selected.
+18. WHEN optional precision schema is absent THEN tests SHALL prove propagated schema gaps are included.
+19. WHEN validation runs locally THEN `dotnet build`, `dotnet test`, `./scripts/check-private-paths.sh`, and `git diff --check` SHALL pass.
