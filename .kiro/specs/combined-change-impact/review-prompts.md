@@ -17,11 +17,13 @@ Focus on:
 - Whether the command has a clear product purpose distinct from `tracemap diff` and `tracemap paths`.
 - Whether "impact" is worded safely as static change context rather than runtime proof.
 - Whether the MVP can be implemented by reusing existing combined diff and path query code.
-- Whether path context should be opt-in, default-on with small caps, or deferred.
+- Whether path context being off by default and enabled only with `--include-paths` is the right MVP decision.
 - Whether endpoint, surface, edge, coverage, and path impact items are scoped correctly.
 - Whether classifications avoid overclaiming under reduced coverage, source identity mismatch, duplicate stable identities, and Tier3 evidence.
 - Whether path-context mapping from changed evidence to before/after queries is credible.
 - Whether `PathContextUnavailable`, `NoImpactEvidence`, and `UnknownAnalysisGap` are clearly separated.
+- Whether impact item classifications and path-context classifications are cleanly separated.
+- Whether `coverage` scope mapping to diff's `sources` scope is clear enough.
 - Whether the JSON/Markdown contracts are deterministic and safe.
 - Whether rule IDs and limitations are complete enough.
 - Whether the task list is implementable in reviewable slices.
@@ -46,6 +48,7 @@ Focus on:
 - Risks in stable ID construction.
 - Risks in path-context planning for changed surfaces and edges.
 - Selector parsing and cap semantics.
+- Whether `--max-path-queries` is enough to bound whole-report path work.
 - Output determinism and private-data leakage risks.
 - Minimal useful first PR slice.
 - Tests needed to prove behavior without massive fixtures.
@@ -66,9 +69,9 @@ Look for:
 - Unsafe output of raw SQL, URLs, snippets, config values, connection strings, or local paths.
 - Path query explosion risks.
 - Misleading `NoImpactEvidence` under reduced coverage.
+- Conflation between report-level gaps, impact item classifications, and path-context classifications.
 - Source identity mismatch or checkout-root confusion.
 - Duplicate stable identity handling gaps.
 - Test gaps that could hide false positives.
 
 Return actionable findings with section references and suggested fixes.
-

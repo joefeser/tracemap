@@ -53,6 +53,7 @@ Options:
 --include-paths
 --max-impact-items <n>
 --max-paths-per-item <n>
+--max-path-queries <n>
 --max-depth <n>
 --max-frontier <n>
 --max-gaps <n>
@@ -70,6 +71,29 @@ Output behavior should match existing report/path/diff conventions:
 - Non-combined indexes are rejected with a clear error.
 
 `--exit-code` returns `1` only when requested and impact items are present. Gaps without impact items do not force non-zero exit unless a future option explicitly asks for strict gaps.
+
+Default caps:
+
+| Option | Default |
+| --- | --- |
+| `--max-impact-items` | `100` |
+| `--max-paths-per-item` | `5` |
+| `--max-path-queries` | `50` total before/after path queries across the whole report |
+| `--max-depth` | `8` |
+| `--max-frontier` | `10000` |
+| `--max-gaps` | `1000` |
+
+`--max-impact-items` and `--max-paths-per-item` intentionally differ from `tracemap diff`'s `--max-diff-rows` and `--max-paths`. Impact caps are item-centric because the report groups changed evidence and optional before/after context by changed item.
+
+## Relationship to Diff and Paths
+
+`tracemap diff` answers "what static evidence changed between two combined snapshots?" It can optionally compare path signatures with `--include-paths`, but it does not organize before/after reachability around each changed endpoint, surface, or edge.
+
+`tracemap paths` answers "what static evidence trail connects this selector to dependency surfaces in one combined snapshot?"
+
+`tracemap impact` composes those layers. It uses diff rows as the changed-evidence inventory and, only when `--include-paths` is set, runs bounded before/after path queries for selected changed items. Its differentiator is per-changed-item static context plus impact-specific downgrade/classification vocabulary. It must not reimplement diff comparison or path traversal semantics.
+
+`coverage` is an impact-level scope, not a native diff scope. When `--scope coverage` is requested, the implementation delegates to diff's `sources` scope and filters to coverage rows after diff projection. `--scope all` includes coverage items but still keeps path search disabled unless `--include-paths` is also set.
 
 ## Product Semantics
 
@@ -98,7 +122,7 @@ Avoid:
 4. Run the diff projector/comparer over selected scopes.
 5. Convert eligible diff rows into impact item candidates.
 6. Apply source identity, coverage, duplicate identity, selector, and truncation caveats.
-7. For selected impact items, gather bounded before/after path context.
+7. If `--include-paths` is set, gather bounded before/after path context for selected impact items.
 8. Classify each impact item.
 9. Sort and cap impact items and gaps.
 10. Render deterministic Markdown and JSON.
@@ -176,6 +200,12 @@ public sealed record CombinedImpactItem(
     string StableKey,
     string DiffRuleId,
     string ImpactRuleId,
+    string? EvidenceTier,
+    string? FilePath,
+    int? StartLine,
+    int? EndLine,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SupportingEdgeIds,
     CombinedDiffEvidence? Before,
     CombinedDiffEvidence? After,
     CombinedImpactPathContext PathContext,
@@ -190,6 +220,8 @@ public sealed record CombinedImpactPathContext(
     IReadOnlyList<CombinedImpactPathSummary> AfterPaths,
     IReadOnlyList<CombinedImpactGap> Gaps);
 ```
+
+`EvidenceTier`, `FilePath`, `StartLine`, `EndLine`, `SupportingFactIds`, and `SupportingEdgeIds` are normalized top-level summaries derived from the before/after evidence. Side-specific values remain in `Before` and `After`.
 
 Impact output should keep full path details out of Markdown by default when there are many paths, but JSON should preserve path IDs and enough path evidence to audit the conclusion. The command may include full path node/edge arrays for the top capped paths when safe and deterministic.
 
@@ -222,26 +254,49 @@ Suggested rule IDs:
 
 | Rule ID | Purpose |
 | --- | --- |
-| `combined.impact.source.v1` | Source and coverage impact rows. |
+| `combined.impact.source.v1` | Source inventory impact rows. |
+| `combined.impact.coverage.v1` | Source coverage/build/analysis impact rows. |
 | `combined.impact.endpoint.v1` | Endpoint change impact rows. |
 | `combined.impact.surface.v1` | Dependency surface change impact rows. |
 | `combined.impact.edge.v1` | Dependency edge change impact rows. |
-| `combined.impact.path.v1` | Path signature and path context impact rows. |
+| `combined.impact.path.v1` | Path signature impact rows when path diffs are enabled. |
+| `combined.impact.path-context.v1` | Optional before/after path-context rows and `PathContextUnavailable` gaps. |
 | `combined.impact.selector.v1` | Selector no-match and ignored selector gaps. |
 | `combined.impact.truncation.v1` | Impact item and path-context truncation gaps. |
 
-Suggested classifications:
+Propagated diff rules:
+
+| Rule ID | Impact usage |
+| --- | --- |
+| `combined.diff.identity.v1` | Source identity conflicts, unverified identity, and duplicate stable identity gaps. |
+| `combined.diff.schema.v1` | Missing optional precision schema gaps from the diff layer. |
+| `combined.diff.truncation.v1` | Truncated diff rows that reduce impact completeness. |
+
+Impact item classifications:
 
 | Classification | Meaning |
 | --- | --- |
-| `StaticImpactEvidence` | Changed evidence has credible static support and bounded path context. |
+| `StaticImpactEvidence` | Changed evidence has credible static support and, when path context is requested, bounded path context. |
 | `ProbableStaticImpact` | Changed evidence is strong structural evidence, but path context is absent or partial. |
 | `NeedsReviewImpact` | Changed evidence depends on syntax/textual, ambiguous, duplicate, or name-only evidence. |
+| `UnknownAnalysisGap` | Gaps prevent a credible conclusion. |
+
+Path-context classifications:
+
+| Classification | Meaning |
+| --- | --- |
 | `ReachabilityChanged` | Before/after path context changed under credible source identity and coverage. |
 | `ReachabilityEvidenceChanged` | Comparable before/after paths exist but path evidence changed. |
-| `NoImpactEvidence` | Comparable changes exist but no static impact context is found under full credible coverage. |
+| `PathContextUnavailable` | No safe path selector can be derived for the changed evidence. |
+| `NoPathEvidence` | Path context was requested, selectors matched, full coverage is credible, and no path evidence was found. |
+| `UnknownAnalysisGap` | Gaps prevent a credible path-context conclusion. |
+
+Report-level gap classifications:
+
+| Classification | Meaning |
+| --- | --- |
+| `NoImpactEvidence` | No comparable changes or no static impact items were found under full credible coverage. This is not an impact item classification. |
 | `SelectorNoMatch` | User selectors matched no comparable evidence. |
-| `UnknownAnalysisGap` | Gaps prevent a credible conclusion. |
 | `TruncatedByLimit` | Output or path search was capped. |
 
 Confidence mapping:
@@ -253,6 +308,15 @@ Confidence mapping:
 | `ReachabilityEvidenceChanged` | Medium |
 | `ProbableStaticImpact` | Medium |
 | everything else | Low |
+
+Path classifications map into impact vocabulary as follows:
+
+| Path classification | Impact implication |
+| --- | --- |
+| `StrongStaticPath` | May support `StaticImpactEvidence` when coverage and identity are credible. |
+| `ProbableStaticPath` | May support `ProbableStaticImpact`. |
+| `NeedsReviewPath` | Downgrades the item to `NeedsReviewImpact` or the path context to `UnknownAnalysisGap`, depending on the gap. |
+| `NoPathFound` | Becomes `NoPathEvidence` only when coverage is credible. |
 
 Classifications must be downgraded when:
 
@@ -269,11 +333,22 @@ Path context is expensive, so it must be bounded.
 
 Default behavior:
 
-- `impact` may include direct context from diff rows without running path search.
-- `--include-paths` enables path context gathering.
+- Path search is off by default.
+- Without `--include-paths`, `impact` includes only diff evidence context, source identity caveats, coverage caveats, and report-level gaps.
+- `--include-paths` enables bounded before/after path context gathering.
 - `--max-impact-items` defaults to 100.
 - `--max-paths-per-item` defaults to 5.
-- `--max-depth` and `--max-frontier` should reuse `tracemap paths` defaults unless specified.
+- `--max-path-queries` defaults to 50 total before/after path queries across the report.
+- `--max-depth` defaults to 8.
+- `--max-frontier` defaults to 10000.
+
+Worst-case path work is bounded by:
+
+```text
+min(selected impact items, maxImpactItems) * 2 before/after queries
+```
+
+but execution must stop once `maxPathQueries` is reached. If additional path queries would have run, emit `combined.impact.truncation.v1` with `TruncatedByLimit` and mark report coverage partial.
 
 Selector mapping:
 
@@ -283,7 +358,7 @@ Selector mapping:
 | surface | `--to-surface <kind> --surface-name <safe identity>` when supported |
 | edge | `--from-symbol <source symbol>` when available |
 | source/coverage | no path context by default; summarize coverage/identity only |
-| path diff | summarize path signature and supporting path evidence |
+| path diff | summarize path signature and supporting path evidence without running additional path search unless another selector can be derived |
 
 If a query cannot be represented by the current path selector vocabulary, emit `PathContextUnavailable` instead of inventing a weaker query.
 
@@ -380,9 +455,6 @@ When implementation touches path context, also run the public combined-path smok
 
 ## Open Questions
 
-- Should path context default to off for all users, or should a small direct endpoint/surface context be on by default?
 - Should impact reports support a `--diff-json <path>` input to reuse a previously generated diff report?
-- Should `NoImpactEvidence` be emitted per changed item, or only as a report-level gap when no items exist?
 - Should full path node/edge details be included in Markdown, or only in JSON?
-- Should `impact` eventually subsume some `diff --include-paths` behavior, or should both commands stay distinct?
-
+- Should a future strict mode return non-zero for gaps even when no impact items exist?
