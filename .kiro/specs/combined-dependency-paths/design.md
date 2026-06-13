@@ -74,7 +74,7 @@ Output behavior:
 Default query:
 
 - If no selectors are provided, start from matched endpoint pairs and search forward to terminal dependency surfaces.
-- Terminal surfaces are `sql-query`, `package-config`, `http-client`, `http-route`, and `external`.
+- Terminal surfaces are `sql-query`, `package-config`, `http-client`, and `http-route`.
 - Default query uses `maxDepth = 8`, `maxPaths = 100`, and `maxFrontier = 10000`.
 - Unmatched server routes are not default start nodes in MVP.
 - Endpoint start nodes are not terminal surfaces. `http-route` and `http-client` terminal surfaces are only satisfied after at least one non-endpoint traversal edge reaches HTTP dependency evidence.
@@ -94,7 +94,7 @@ Unsupported in v1:
 - leading/trailing `*` enables prefix, suffix, or contains matching
 - exact matches sort before wildcard matches
 
-`--source-pair` parsing splits on the last colon so labels may contain colons.
+`--source-pair` parsing splits on the first unescaped colon. Literal colons in either label must be escaped as `\:`, so `client\:v2:api\:v1` parses to `client:v2` and `api:v1`.
 
 ## Proposed Package Layout
 
@@ -233,8 +233,6 @@ Surface kind vocabulary:
 | `package-config` | `PackageSurface`, `ConfigSurface` | One selector groups package, config, connection string, and env evidence |
 | `http-client` | `HttpClientSurface` | Terminal outbound HTTP dependency evidence only |
 | `http-route` | `HttpRouteSurface` | Terminal route evidence only when reached after non-endpoint traversal |
-| `external` | `ExternalSurface` | Other explicit external dependency evidence |
-
 Inventory dictionaries use selector/inventory keys for `SurfacesByKind` and node kinds for `NodesByKind`.
 
 ## Evidence Graph
@@ -254,7 +252,6 @@ Suggested node kinds:
 - `PackageSurface`
 - `HttpClientSurface`
 - `HttpRouteSurface`
-- `ExternalSurface`
 
 `AnalysisGap` is a `CombinedPathGap` record in MVP, not a graph node. It may be promoted to a node kind later if path displays need explicit gap terminators.
 
@@ -280,7 +277,7 @@ Each node should carry:
 
 Symbol joins are source-local in MVP. Cross-language or cross-source symbol stitching is not supported.
 
-Normalize display names for symbol-key matching by trimming whitespace, normalizing line endings to spaces, and using ordinal string comparison after exact display format preservation. The normalized form is the key string. Do not lowercase C# or JVM symbol keys by default because generic/type casing can be significant to display identity. Selector matching may be case-insensitive, but graph joins are ordinal. Multi-line display names are rare in Tier1 semantic symbols; line-ending normalization is intentional because symbol keys are for joins, not display.
+Normalize display names for symbol-key matching by trimming whitespace, normalizing line endings to spaces, and using ordinal string comparison after exact display format preservation. The normalized form is the key string. Preserve case for all languages by default because TypeScript, Python, JVM, and C# symbols can all be case-sensitive. Selector matching may be case-insensitive, but graph joins are ordinal. Multi-line display names are rare in Tier1 semantic symbols; line-ending normalization is intentional because symbol keys are for joins, not display.
 
 Symbol key:
 
@@ -299,18 +296,22 @@ When `combined_symbol_id` exists, use it for node identity and retain the source
 
 ### Edge Kinds
 
-Suggested edge kinds:
+Canonical output edge kinds use lowercase hyphenated values, matching existing combined schema style where possible:
 
-- `EndpointMatch`
-- `Calls`
-- `Creates`
-- `Inherits`
-- `Implements`
-- `Overrides`
-- `ArgumentPassed`
-- `ParameterForwarded`
-- `FactAttachedToSymbol`
-- `SurfaceEvidence`
+| Output edge kind | Source DB value or derived source |
+| --- | --- |
+| `endpoint-match` | derived by `CombinedEndpointMatcher` |
+| `calls` | `combined_call_edges` / `combined_dependency_edges.edge_kind = 'calls'` |
+| `creates` | `combined_object_creations` / `combined_dependency_edges.edge_kind = 'creates'` |
+| `inherits` | symbol relationship kind normalized from `Inherits`/`inherits` |
+| `implements` | symbol relationship kind normalized from `Implements`/`implements` |
+| `overrides` | symbol relationship kind normalized from `Overrides`/`overrides` |
+| `argument-passed` | direct argument-flow evidence |
+| `parameter-forward` | `combined_parameter_forward_edges` / `combined_dependency_edges.edge_kind = 'parameter-forward'` |
+| `fact-attached-to-symbol` | derived fact-symbol attachment |
+| `surface-evidence` | derived symbol-to-surface attachment |
+
+Unknown relationship kinds are lowercased and whitespace-normalized to hyphenated form only if they are explicitly present in `combined_symbol_relationships`; otherwise they remain inventory evidence and are not traversed in MVP.
 
 Each edge should carry:
 
@@ -369,11 +370,25 @@ Traversal:
 - Avoid revisiting nodes already in the current path.
 - Record cycle/depth/path/frontier truncation gaps.
 - Stop at terminal surfaces unless future options allow expansion.
-- Down-rank relationship edges relative to call/create/parameter-forward edges so broad inheritance graphs do not dominate early results.
+- Use ordinary BFS by path depth. Within each frontier expansion, sort outgoing edges by traversal rank, then target display name, file path, line, and edge ID. This down-ranks broad relationship edges without changing BFS into a weighted search.
+
+Traversal edge rank:
+
+1. `endpoint-match`
+2. `calls`
+3. `creates`
+4. `parameter-forward`
+5. `argument-passed`
+6. `surface-evidence`
+7. `fact-attached-to-symbol`
+8. `inherits`
+9. `implements`
+10. `overrides`
+11. any other explicitly allowed relationship kind, sorted ordinally after the known kinds
 
 Ordering:
 
-1. classification confidence
+1. classification rank, best-first
 2. path length
 3. start source label
 4. end source label
@@ -403,10 +418,10 @@ Endpoint match quality closed set for path classification:
 
 Classification rank:
 
-1. `UnknownAnalysisGap`
-2. `NeedsReviewPath`
-3. `ProbableStaticPath`
-4. `StrongStaticPath`
+1. `StrongStaticPath`
+2. `ProbableStaticPath`
+3. `NeedsReviewPath`
+4. `UnknownAnalysisGap`
 5. `NoPathFound`
 6. `SelectorNoMatch`
 
@@ -446,13 +461,13 @@ Path rendering example:
 ```text
 1. ProbableStaticPath, Medium, length 5
    client EndpointClient GET /api/orders/{} src/orders.ts:12
-   -> EndpointMatch MatchedEndpoint High
+   -> endpoint-match MatchedEndpoint High
    api EndpointRoute GET /api/orders/{} OrdersController.cs:18
-   -> Calls Tier1Semantic csharp.semantic.call.v1
+   -> calls Tier1Semantic csharp.semantic.call.v1
    api Method OrderService.GetOrders OrderService.cs:42
-   -> Calls Tier1Semantic csharp.semantic.call.v1
+   -> calls Tier1Semantic csharp.semantic.call.v1
    api Method OrderRepository.QueryOrders OrderRepository.cs:77
-   -> SurfaceEvidence Tier2Structural csharp.syntax.querypattern.v1
+   -> surface-evidence Tier2Structural csharp.syntax.querypattern.v1
    api SqlSurface table orders columns id;status shape shape123 OrderRepository.cs:79
 ```
 
