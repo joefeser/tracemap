@@ -166,7 +166,7 @@ Shared `sqlSourceKind` values:
 | `dbapi-execute` | Direct DB API execute call with literal SQL |
 | `dynamic-boundary` | Dynamic SQL construction was detected and concrete SQL was not claimed |
 
-Before the shared SQL parser exists, adapters should not emit guessed `tableName`, `columnName`, or normalized `operationKind` from SQL text. Those fields are derived parser output, not language-adapter guesses.
+`SqlTextUsed` should remain hash/text-length evidence and should not carry guessed table or column fields. Adapters may emit `QueryPatternDetected` with best-effort `tableName`, `tableNames`, `columnNames`, `fieldNames`, and `queryShapeHash` when a lightweight deterministic extractor finds a simple static SQL shape. Those fields are structural review-routing evidence, not proof of dialect validity, generated SQL, runtime execution, or database schema existence. Adapters should omit `QueryPatternDetected` when no operation/table/column shape is statically visible. Lightweight extractors may treat quoted identifiers conservatively as string literals and miss those table/column names until a shared parser exists.
 
 Cross-language SQL matching must not require `operationName` or `sqlSourceKind` until the existing adapters emit those properties consistently.
 

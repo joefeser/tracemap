@@ -16,6 +16,8 @@ from tracemap_py.inventory import discover_inventory
 from tracemap_py.metadata import read_package_metadata
 from tracemap_py.models import EvidenceSpan, ScanManifest
 from tracemap_py.route import normalize_path_key
+from tracemap_py.sql_extractor import extract_sql_files
+from tracemap_py.sql_text import operation_name, query_shape
 from tracemap_py.writers import write_sqlite
 
 
@@ -26,6 +28,34 @@ def test_hashes_and_route_keys_are_deterministic() -> None:
     assert sha256_hex("SELECT 1", 12) == "e004ebd5b553"
     assert normalize_path_key("/API/orders/{order_id}?expand=true") == ("/API/orders/{order_id}", "/api/orders/{}")
     assert normalize_path_key("https://example.test/api/status/<status>") == ("/api/status/{status}", "/api/status/{}")
+
+
+def test_sql_query_shape_is_deterministic_without_raw_sql() -> None:
+    shape = query_shape("SELECT id, status, total FROM orders WHERE status = 'pending'")
+
+    assert shape.operation_name == "SELECT"
+    assert shape.primary_table == "orders"
+    assert shape.table_names == ("orders",)
+    assert shape.column_names == ("id", "status", "total")
+    assert len(shape.query_shape_hash) == 32
+
+
+def test_sql_query_shape_ignores_string_literal_keywords() -> None:
+    shape = query_shape("SELECT id FROM orders WHERE note = 'FROM fake JOIN shadow'")
+
+    assert operation_name("WITH recent AS (SELECT id FROM orders) SELECT id FROM recent") == ""
+    assert shape.operation_name == "SELECT"
+    assert shape.table_names == ("orders",)
+    assert shape.column_names == ("id",)
+
+
+def test_sql_file_without_visible_shape_does_not_emit_query_pattern(tmp_path: Path) -> None:
+    sql_file = tmp_path / "cte.sql"
+    sql_file.write_text("WITH recent AS (SELECT id FROM orders) SELECT id FROM recent\n", encoding="utf-8")
+    facts = extract_sql_files(tmp_path, _manifest("sql-file-cte"), [sql_file], [])
+
+    assert any(fact.fact_type == "SqlTextUsed" for fact in facts)
+    assert not any(fact.fact_type == "QueryPatternDetected" for fact in facts)
 
 
 def test_fact_id_ignores_extractor_version() -> None:
@@ -69,6 +99,7 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
     assert by_type["SerializerContractMember"] >= 1
     assert by_type["DatabaseColumnMapping"] >= 1
     assert by_type["SqlTextUsed"] >= 2
+    assert by_type["QueryPatternDetected"] >= 2
     assert by_type["ConfigKeyDeclared"] >= 2
     assert by_type["CallEdge"] >= 1
     assert by_type["ObjectCreated"] >= 1
@@ -90,6 +121,13 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
         assert route_props["normalizedPathKey"] == "/api/orders/{}"
         assert _scalar(con, "select count(*) from facts where fact_type='HttpCallDetected' and target_symbol='requests.post'") == 1
         assert _scalar(con, "select count(*) from facts where fact_type='HttpCallDetected' and target_symbol='httpx.get'") == 1
+        sql_pattern = con.execute("select properties_json from facts where fact_type='QueryPatternDetected' and target_symbol='orders' order by fact_id limit 1").fetchone()[0]
+        sql_props = json.loads(sql_pattern)
+        assert sql_props["operationName"] in {"CREATE", "SELECT"}
+        assert sql_props["tableName"] == "orders"
+        assert "textHash" in sql_props
+        assert "queryShapeHash" in sql_props
+        assert "rawSql" not in sql_props
     finally:
         con.close()
 
@@ -105,6 +143,23 @@ def test_flask_sample_emits_route_config_and_dynamic_boundaries(tmp_path: Path) 
     assert by_type["HttpCallDetected"] >= 1
     assert by_type["ConfigKeyDeclared"] >= 1
     assert by_type["SqlTextUsed"] >= 1
+    assert by_type["QueryPatternDetected"] >= 1
+
+
+def test_python_client_sample_emits_endpoint_alignment_properties(tmp_path: Path) -> None:
+    out = tmp_path / "client"
+    scan(make_options(str(ROOT / "samples/python-client-sample"), str(out)))
+
+    con = sqlite3.connect(out / "index.sqlite")
+    try:
+        row = con.execute("select properties_json from facts where fact_type='HttpCallDetected' order by fact_id limit 1").fetchone()
+        assert row is not None
+        props = json.loads(row[0])
+        assert props["httpMethod"] == "GET"
+        assert props["normalizedPathTemplate"] == "/api/orders/{order_id}"
+        assert props["normalizedPathKey"] == "/api/orders/{}"
+    finally:
+        con.close()
 
 
 def test_broken_sample_records_parse_and_dynamic_gaps(tmp_path: Path) -> None:

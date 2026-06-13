@@ -494,6 +494,8 @@ Each fixture should document:
 | Python Pydantic DTO member match | `ProbableImpact` through Tier2 `SerializerContractMember` |
 | Python Flask/FastAPI route | `HttpRouteBinding` with normalized route key when static decorator syntax is visible |
 | Python SQLAlchemy column | `DatabaseColumnMapping` with table/column/member evidence when declarative syntax is visible |
+| Python static SQL pattern | `QueryPatternDetected` with operation, table/column metadata, text hash, and query shape hash |
+| Python endpoint smoke | `MatchedEndpoint` from public Python client/server sample indexes |
 | Python syntax invocation | `CallEdge` with containing function/module and callee syntax name |
 | Python broken file | reduced coverage with `AnalysisGap`, while other files continue scanning |
 
