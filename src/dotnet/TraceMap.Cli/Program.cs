@@ -40,9 +40,10 @@ public static class TraceMapCommand
                 "export" => ExportHelp(),
                 "endpoints" => EndpointsHelp(),
                 "combine" => CombineHelp(),
+                "paths" => PathsHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" ? 0 : 1;
         }
 
         try
@@ -57,6 +58,7 @@ public static class TraceMapCommand
                 "export" => await RunExportAsync(rest, output, error, cancellationToken),
                 "endpoints" => await RunEndpointsAsync(rest, output, error, cancellationToken),
                 "combine" => await RunCombineAsync(rest, output, error, cancellationToken),
+                "paths" => await RunPathsAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -173,6 +175,65 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Facts: {result.Report.Summary.FactCount}");
         await output.WriteLineAsync($"Dependency edges: {result.Report.Summary.DependencyEdgeCount}");
         await output.WriteLineAsync($"Endpoint findings: {result.Report.Summary.EndpointFindingCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return 0;
+    }
+
+    private static async Task<int> RunPathsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: paths requires --index <combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: paths requires --out <path>.");
+            return 1;
+        }
+
+        foreach (var unsupported in new[] { "--to-endpoint", "--to-source", "--to-symbol" })
+        {
+            if (values.TryGetValue(unsupported, out _))
+            {
+                await error.WriteLineAsync($"error: paths {unsupported} is not supported in v1.");
+                return 1;
+            }
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: paths --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                indexPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--from-endpoint"),
+                values.GetValueOrDefault("--from-symbol"),
+                values.GetValueOrDefault("--from-source"),
+                values.GetValueOrDefault("--to-surface"),
+                values.GetValueOrDefault("--surface-name"),
+                values.GetValueOrDefault("--source-pair"),
+                ParsePositiveInt(values, "--max-depth", 8),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-frontier", 10000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap paths completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
+        await output.WriteLineAsync($"Graph nodes: {result.Report.Summary.GraphNodeCount}");
+        await output.WriteLineAsync($"Graph edges: {result.Report.Summary.GraphEdgeCount}");
+        await output.WriteLineAsync($"Paths: {result.Report.Summary.PathCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return 0;
     }
@@ -481,6 +542,7 @@ public static class TraceMapCommand
               tracemap export --index <path> --out <path> [--format <json|mermaid>]
               tracemap endpoints --client-index <path> --server-index <path> --out <path> [--format <markdown|json>]
               tracemap combine --index <path> [--index <path>] --out <combined.sqlite> [--label <label>]
+              tracemap paths --index <combined.sqlite> --out <path> [selectors]
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -491,6 +553,7 @@ public static class TraceMapCommand
               export    Export a deterministic JSON summary or Mermaid graph from an index.
               endpoints Align client HTTP calls with server HTTP route bindings.
               combine   Combine multiple TraceMap indexes into one queryable SQLite database.
+              paths     Trace deterministic dependency paths through a combined index.
             """;
     }
 
@@ -536,6 +599,34 @@ public static class TraceMapCommand
 
             Outputs:
               dependency-report.md and/or dependency-report.json
+            """;
+    }
+
+    private static string PathsHelp()
+    {
+        return """
+            Usage:
+              tracemap paths --index <combined.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --index <path>             Combined TraceMap index from tracemap combine.
+              --out <path>               Output directory or file path.
+
+            Selectors:
+              --from-endpoint "<M> <P>"  Start from an HTTP endpoint method/path key.
+              --from-symbol <symbol>     Start from matching source-local symbol candidates.
+              --from-source <label>      Constrain start evidence to a source label.
+              --to-surface <kind>        sql-query, http-route, http-client, or package-config.
+              --surface-name <text>      Exact name, or leading/trailing * wildcard.
+              --source-pair <a>:<b>      Constrain endpoint crossing; escape literal colons as \:.
+
+            Bounds:
+              --max-depth <n>            Default: 8.
+              --max-paths <n>            Default: 100.
+              --max-frontier <n>         Default: 10000.
+
+            Outputs:
+              paths-report.md and/or paths-report.json
             """;
     }
 

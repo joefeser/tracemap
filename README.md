@@ -9,7 +9,7 @@ The current language scanners are:
 - `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
 - `Python` under `src/python`, including AST/package/config/SQL extraction, FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests integration facts, reduced coverage labeling, and reducer-compatible SQLite output.
 
-TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
+TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
 Start here:
 
@@ -71,10 +71,13 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --index .tracemap-ts/index.sqlite --label typescript-sample \
   --out .tracemap-combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index .tracemap-combined.sqlite --out .tracemap-combined-report
+dotnet run --project src/dotnet/TraceMap.Cli -- paths --index .tracemap-combined.sqlite --from-endpoint "GET /api/orders/{}" --to-surface sql-query --out .tracemap-combined-paths
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combined.sqlite --out .tracemap-combined.json --format json
 ```
 
 The combined dependency report writes `dependency-report.md` and `dependency-report.json` when `--out` is a directory. It summarizes source coverage, endpoint alignment, HTTP/SQL/package/config surfaces, dependency edges, needs-review rows, known gaps, and static-analysis limitations without mutating the combined database.
+
+The combined dependency paths command writes `paths-report.md` and `paths-report.json` when `--out` is a directory. It follows static evidence from endpoint, symbol, or source selectors to terminal dependency surfaces such as `sql-query`, `http-client`, `http-route`, and `package-config`. Paths are evidence trails, not runtime traces.
 
 TypeScript scanner:
 
