@@ -40,6 +40,17 @@ final class ScanEngineIntegrationTest {
             FactTypes.BUILD_STATUS.equals(fact.factType())
                 && result.manifest().buildStatus().equals(fact.targetSymbol())
                 && result.manifest().analysisLevel().equals(fact.properties().get("analysisLevel"))));
+        assertEquals(1, result.facts().stream()
+            .filter(fact -> FactTypes.HTTP_ROUTE_BINDING.equals(fact.factType()))
+            .count());
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.HTTP_ROUTE_BINDING.equals(fact.factType())
+                && "GET".equals(fact.properties().get("httpMethod"))
+                && "/api/orders/{id}".equals(fact.properties().get("normalizedPathTemplate"))
+                && "getOrder".equals(fact.properties().get("methodName"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.CALCULATION_EXPRESSION.equals(fact.factType())
+                && fact.evidence().filePath().endsWith("OrderController.java")));
         assertTrue(result.facts().stream().anyMatch(fact ->
             FactTypes.PROPERTY_ACCESSED.equals(fact.factType())
                 && EvidenceTiers.TIER1_SEMANTIC.equals(fact.evidenceTier())
