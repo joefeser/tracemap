@@ -10,7 +10,7 @@ Add a JVM TraceMap scanner under `src/jvm`. The package will produce TraceMap-co
 - `report.md`
 - `logs/analyzer.log`
 
-The scanner will use Java compiler APIs for Tier1 Java semantic extraction, JVM build-file metadata for structural evidence, and Java/Kotlin syntax traversal for fallback. Kotlin semantic extraction should be a planned second slice unless a deterministic compiler-backed approach is practical during the first implementation.
+The scanner will use Java compiler APIs for Tier1 Java semantic extraction, JVM build-file metadata for structural evidence, and Java/Kotlin syntax traversal for fallback. Kotlin semantic extraction is a follow-up slice; MVP Kotlin support is inventory plus syntax fallback.
 
 This is a sibling implementation, not a rewrite of the .NET or TypeScript scanners:
 
@@ -39,13 +39,15 @@ src/
 - No direct dependency on SCIP output as the canonical TraceMap artifact.
 - No bytecode-only decompilation in MVP.
 - No Kotlin semantic claims until a compiler-backed extractor exists.
+- No claim that `Level1SemanticAnalysis` means the target repository builds, tests, starts, or runs its annotation processors successfully.
+- No field/property aliasing, derived parameter-forward edges, reflection-target inference, dependency-injection target inference, generated-source execution, or runtime route/serializer configuration inference in MVP.
 
 ## Locked Decisions To Review
 
 - Initial CLI is standalone `tracemap-jvm`; root `tracemap` dispatch is out of scope unless review asks for it.
 - Existing .NET `tracemap reduce` is the MVP reduction path for JVM indexes.
 - Java and Kotlin live together under `src/jvm`.
-- Java semantic extraction comes first; Kotlin starts with syntax/structural evidence and receives semantic extraction in a follow-up slice.
+- Java semantic extraction comes after the always-on syntax fallback baseline; Kotlin starts with syntax/structural evidence and receives semantic extraction in a follow-up slice.
 - Build tools are parsed from local files; target build commands are not run during scan.
 - JVM facts that should influence reducer classification reuse existing `FactTypes` strings and reducer-matching camelCase property keys.
 - `tracemap combine` is the cross-index dependency home; JVM scan output remains a normal single-language index.
@@ -88,6 +90,7 @@ src/jvm/
       ConfigExtractor.java
       IntegrationExtractor.java
       LogicShapeExtractor.java
+      Extractor.java
     storage/
       JsonlFactWriter.java
       SqliteIndexWriter.java
@@ -101,6 +104,9 @@ src/jvm/
       Hashes.java
       LineMap.java
       SizeParser.java
+      RuleCatalogValidator.java
+      GeneratedSourceDetector.java
+      ClasspathResolver.java
   src/test/
 ```
 
@@ -163,6 +169,8 @@ JVM build status:
 - `FailedOrPartial`: at least one selected project had diagnostics or gaps that reduce confidence.
 - `NotRun`: semantic analysis was disabled or no semantic project was loadable.
 
+Manifest JSON must deserialize into the .NET `ScanManifest` contract. Property names must include the .NET-compatible meanings for `RepoName`, `CommitSha`, `AnalysisLevel`, `BuildStatus`, and `KnownGaps`; JSON casing may vary only where the .NET deserializer is already case-insensitive.
+
 ### Facts
 
 Use the existing TraceMap fact envelope:
@@ -192,7 +200,7 @@ Reducer-compatible fact types:
 - `QueryPatternDetected`
 - `DatabaseColumnMapping`
 - `SqlTextUsed`
-- `SerializationLogic`
+- `SerializerContractMember`
 - `SymbolRelationship`
 - `CallEdge`
 - `ObjectCreated`
@@ -201,6 +209,14 @@ Reducer-compatible fact types:
 - `AnalysisGap`
 
 No property should store raw source text. Raw string/template/config values become hashes, lengths, kinds, spans, and normalized keys where safe.
+
+Reducer-classification roles are not the same as storage compatibility:
+
+- Definite reducer facts require `Tier1Semantic` plus `TypeDeclared`, `PropertyAccessed`, or `MethodInvoked`.
+- Semantic probable reducer facts must use the reducer's current probable set, including `SerializerContractMember` rather than `SerializationLogic`.
+- Any `Tier2Structural` fact can become `ProbableImpact`, so Tier2 must be reserved for recognized framework/build structure, not mere name similarity.
+- `CallEdge`, `ObjectCreated`, `ArgumentPassed`, `LocalAlias`, `FieldDeclared`, `ParameterDeclared`, `SerializationLogic`, and Tier3 `QueryPatternDetected` are useful for reports/export/combine, but they do not by themselves drive reducer classification.
+- Route paths, SQL hashes, query hashes, and JVM descriptors are not matched by the current reducer. They should be treated as evidence details unless a fact also carries a `Type.member`-style `contractElement` or plain matching keys.
 
 ### SQLite
 
@@ -221,12 +237,12 @@ Follow-up tables:
 
 - `field_aliases`
 - `parameter_forward_edges`
-- `package_dependencies`
-- `routes`
-- `config_uses`
-- `database_mappings`
+- JVM-local `package_dependencies`
+- JVM-local `routes`
+- JVM-local `config_uses`
+- JVM-local `database_mappings`
 
-Schema changes must be additive. JVM indexes must remain readable by existing `tracemap reduce`, `tracemap export`, and `tracemap combine` where those commands rely on shared tables.
+Schema changes must be additive. JVM indexes must remain readable by existing `tracemap reduce`, `tracemap export`, and `tracemap combine` where those commands rely on shared tables. JVM-local tables are allowed only when documented as having no current downstream consumer.
 
 ## Project Loading
 
@@ -242,30 +258,29 @@ Project loading should be conservative and file-backed:
    - properties
    - standard source/test roots
    - compiler source/target/release properties
-5. Parse Gradle files with a lightweight parser or bounded pattern extraction:
+5. Parse Gradle files with bounded literal extraction:
    - `settings.gradle*` include declarations
-   - `group`, `version`, plugins, dependencies when literal
-   - standard source roots
-   - gaps for dynamic build logic
+   - literal `group`, `version`, plugins, and dependency coordinates
+   - gaps for version catalogs, `buildSrc`, convention plugins, composite builds, string interpolation, and dynamic build logic
 6. Build a `ProjectModel` containing modules, source roots, dependency coordinates, and confidence labels.
-7. For Java semantic extraction, create compiler tasks using `javax.tools.JavaCompiler` or `com.sun.source.util.JavacTask` where available.
-8. Do not execute annotation processors. Disable processing where possible and report generated-source/processor gaps.
-9. Record diagnostics through `DiagnosticAggregator` as bounded `AnalysisGap` facts without storing source snippets.
-10. Run syntax fallback for selected source files regardless of semantic success; deduplicate or prefer Tier1 facts where needed.
+7. Resolve the Java semantic API before implementation begins. The default recommendation is public `javax.tools` plus `com.sun.source.util.JavacTask`/`Trees` on a pinned JDK baseline, with `-proc:none`; alternatives such as Eclipse JDT or JavaParser semantic support must be documented before Phase 5 work starts.
+8. Add a classpath decision layer. MVP may use the JDK platform classpath plus source roots and any user-provided classpath metadata; missing external dependencies become reduced-coverage gaps.
+9. Do not execute annotation processors. Disable processing where possible and report generated-source/processor gaps.
+10. Record diagnostics through `DiagnosticAggregator` as bounded `AnalysisGap` facts without storing source snippets.
+11. Run syntax fallback for selected source files regardless of semantic success. When both a Tier1 semantic fact and a Tier3 syntax fact describe the same logical site, suppress the weaker syntax duplicate using this default key: file path, start line, end line, fact type, containing symbol/display name, and plain member/type name.
 
 Missing dependencies reduce coverage; they do not fail the scan unless no useful analysis can be performed.
 
 ## Syntax Fallback
 
-Java syntax options:
+Java syntax decision:
 
-- Prefer JavaParser or javac parse APIs for tolerant source traversal.
+- Pick exactly one Java syntax parser before implementation. The recommended default is javac parse APIs if the Java semantic extractor uses `JavacTask`; JavaParser is acceptable only if spans and duplicate suppression are tested against semantic extraction.
 - Emit declarations, annotations, member access, invocations, constructors, call edges, object creation, logic shape, and route/SQL/config patterns.
 
 Kotlin syntax options:
 
-- Prefer Kotlin compiler PSI/parser if dependency cost is acceptable.
-- If compiler PSI is too heavy for MVP, use a bounded parser library or conservative syntax scanner for declarations, annotations, call expressions, route builders, object creation, and logic shape.
+- Pick the Kotlin syntax strategy before implementing Kotlin syntax fixtures. MVP may choose conservative pattern fallback to avoid the full `kotlin-compiler-embeddable` dependency; if PSI is used, dependency size/license and isolation from Java-only builds must be documented.
 - Kotlin syntax facts must remain Tier3 unless structural framework evidence supports Tier2.
 
 Syntax fallback must not store raw expressions. Use expression kind, hashes, stable names, and spans.
@@ -274,7 +289,7 @@ Syntax fallback must not store raw expressions. Use expression kind, hashes, sta
 
 JVM symbol identity should be stable and precise enough for multi-index dependency queries.
 
-Candidate symbol ID shape:
+Candidate machine symbol ID shape:
 
 ```text
 jvm:<language>:<group>:<artifact>:<version-or-HEAD>:<module>:<package>/<ClassName>#<memberName><descriptor>
@@ -300,6 +315,10 @@ Symbol rows should carry:
 
 Source fallback symbols are deterministic but weaker than compiler symbols.
 
+Reducer-facing display names must stay plain and dotted. Keep machine IDs and JVM descriptors in `symbols.symbol_id` and JVM-specific properties, but populate `facts.target_symbol`, `facts.source_symbol`, `methodName`, `propertyName`, `memberName`, `typeName`, `namespace`, `containingType`, `sourceSymbolDisplayName`, and `targetSymbolDisplayName` with reducer-friendly values such as `com.example.orders.OrderService.submit`. Do not place slash/descriptor-only strings like `com/example/orders/OrderService#submit(L...)V` in fields the reducer uses for name matching.
+
+Fact IDs must follow the existing adapter formula: hash `scanId`, `factType`, `ruleId`, evidence file path, start line, end line, project path, source symbol, target symbol, contract element, and sorted `key=value` properties. Extractor version is intentionally excluded from the fact ID input.
+
 ## Integration Extractors
 
 ### HTTP Server
@@ -322,15 +341,15 @@ JAX-RS annotations:
 - `@PATCH`
 - `@DELETE`
 
-Ktor route builders:
+Follow-up Ktor route builders:
 
 - `route`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`
 
-Facts should populate `httpMethod`, `normalizedPathTemplate`, `normalizedPathKey`, `routePatternHash`, `controllerName`, `methodName`, `targetSymbol`, and route parameter metadata when visible.
+HTTP route facts should populate `httpMethod`, `normalizedPathTemplate`, `normalizedPathKey`, `routePatternHash`, `controllerName`, `methodName`, `targetSymbol`, and route parameter metadata when visible. MVP route extraction is Spring plus JAX-RS; Ktor remains follow-up unless implementation review expands the slice.
 
 ### HTTP Client
 
-Retrofit:
+MVP excludes HTTP client integrations unless scope is expanded by review. Retrofit is the first follow-up candidate:
 
 - `@GET`, `@POST`, `@PUT`, `@PATCH`, `@DELETE`, `@HEAD`, `@OPTIONS`, `@HTTP`
 
@@ -358,13 +377,17 @@ Facts should record operation names, SQL hashes/lengths, table/column names when
 
 MVP detectors:
 
-- Jackson annotations and `ObjectMapper` calls
-- Gson `Gson` calls
+- Jackson annotations with explicit member names as `SerializerContractMember`
+- broad Jackson `ObjectMapper` calls as `SerializationLogic` report/export evidence
+
+Follow-up detectors:
+
+- Gson `Gson` calls and annotations
 - Moshi adapter calls
-- kotlinx.serialization annotations
+- kotlinx.serialization annotations and compiler plugin metadata
 - Java serialization interfaces
 
-Do not claim exact runtime wire contracts unless explicit source evidence exists.
+Do not claim exact runtime wire contracts unless explicit source evidence exists. `SerializationLogic` is not reducer-probable in the current reducer; `SerializerContractMember` is the reducer-compatible serializer fact.
 
 ### Config
 
@@ -372,10 +395,13 @@ MVP detectors:
 
 - Spring `@Value`
 - `Environment.getProperty`
-- MicroProfile `@ConfigProperty`
 - `System.getenv`
 - `System.getProperty`
 - config files: `.properties`, `.yml`, `.yaml`, `.json`, `.xml`
+
+Follow-up:
+
+- MicroProfile `@ConfigProperty`
 
 Sensitive values remain hashed.
 
@@ -415,7 +441,10 @@ Test layers:
 - Java semantic fixture tests
 - Java syntax fallback fixture tests with broken source
 - Kotlin syntax fallback fixture tests
-- integration extractor fixtures for Spring, JAX-RS, Ktor, Retrofit, JDBC, JPA, Jackson/Gson/Moshi, and config reads
+- MVP integration extractor fixtures for Spring, JAX-RS, JDBC, JPA, Jackson `SerializerContractMember`, and config reads
+- follow-up integration fixture plans for Ktor, Retrofit, Gson, Moshi, kotlinx.serialization, broader JVM HTTP clients, and MicroProfile Config
+- cross-binary compatibility tests that run the real .NET `tracemap reduce`, `tracemap export`, and `tracemap combine` against hand-written JVM fixture indexes
+- cross-language fixtures for Java/Kotlin source interaction once Kotlin semantic work begins
 - SQLite row-count and reducer compatibility tests
 - smoke scripts against external local samples, excluded from private or machine-specific paths
 

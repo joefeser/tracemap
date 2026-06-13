@@ -13,7 +13,8 @@ Context:
 - The JVM scanner must emit compatible TraceMap artifacts: scan-manifest.json, facts.ndjson, index.sqlite, report.md, logs/analyzer.log.
 - It must use deterministic Java/Kotlin compiler, build-file, and syntax evidence, not LLMs or embeddings.
 - The implementation target is src/jvm and should support Java and Kotlin together.
-- Java semantic extraction is expected before Kotlin semantic extraction unless review finds a better first slice.
+- Java semantic extraction follows the syntax fallback baseline; Kotlin semantic extraction is out of MVP unless review finds a strong reason to expand scope.
+- The spec should reflect actual reducer behavior: `SerializerContractMember` is reducer-probable, `SerializationLogic` is report/export evidence, `QueryPatternDetected` is reducer-probable only through Tier2, and reducer matching needs plain/dotted display names.
 - The local scip-java repo is a reference for compiler-backed indexing ideas, but TraceMap should emit native facts rather than SCIP as the canonical artifact.
 
 Files to review:
@@ -29,6 +30,7 @@ Please review for:
 - Missing non-goals or JVM-specific limitations.
 - Contract reducer, export, or combine compatibility gaps.
 - Whether Java and Kotlin should remain together under src/jvm for this phase.
+- Whether Ktor, Retrofit, broader serializers, and Kotlin semantic extraction are correctly deferred.
 
 Return:
 - Blockers.
@@ -47,6 +49,7 @@ Context:
 - It should borrow ideas from a local scip-java checkout: compiler-backed Java extraction, clear separation between extraction and aggregation, dependency coordinate mapping, and honest reduced-coverage behavior when builds/classpaths are incomplete.
 - It should emit TraceMap-compatible facts and SQLite tables.
 - It should parse Maven and Gradle local files, but scan should not run Maven/Gradle target builds or download dependencies.
+- The first implementation gates should prove .NET reduce/export/combine compatibility against JVM fixture indexes before extractor breadth.
 
 Files to review:
 - .kiro/specs/jvm-indexer/requirements.md
@@ -56,6 +59,7 @@ Files to review:
 Please review for:
 - Incorrect Java compiler API assumptions.
 - Kotlin compiler/API risks that should be scoped differently.
+- Whether the Java syntax parser, Java semantic API, Kotlin syntax strategy, and target JDK baseline are decided early enough.
 - Maven/Gradle parser scope that is too broad or too vague.
 - Hard implementation areas that need smaller task slices.
 - Missing modules or interfaces in the proposed package structure.
