@@ -59,6 +59,7 @@ Options:
 --source-pair <fromLabel>:<toLabel>
 --max-depth <n>
 --max-paths <n>
+--max-frontier <n>
 ```
 
 Output behavior:
@@ -75,6 +76,8 @@ Default query:
 - If no selectors are provided, start from matched endpoint pairs and search forward to terminal dependency surfaces.
 - Terminal surfaces are `sql-query`, `package-config`, `http-client`, `http-route`, and `external`.
 - Default query uses `maxDepth = 8`, `maxPaths = 100`, and `maxFrontier = 10000`.
+- Unmatched server routes are not default start nodes in MVP.
+- Endpoint start nodes are not terminal surfaces. `http-route` and `http-client` terminal surfaces are only satisfied after at least one non-endpoint traversal edge reaches HTTP dependency evidence.
 - Emit a summary if no starting endpoint evidence exists.
 
 Unsupported in v1:
@@ -137,6 +140,7 @@ The graph builder should prefer precise tables when present and use `combined_de
 
 - The table exists in combined indexes but is intentionally unused by MVP report and paths commands.
 - Both commands compute endpoint alignment in memory through one shared matcher.
+- Extraction target: promote the combined-report endpoint matching logic into an internal `CombinedEndpointMatcher` service inside `TraceMap.Reporting`; `CombinedDependencyReporter` and `tracemap paths` both call that service. The existing two-index `TraceMap.EndpointAlignment.EndpointMatcher` remains for `tracemap endpoints` until a later compatibility refactor.
 - The paths command must not read `endpoint_matches` as source of truth because indexes produced today have no rows there.
 - Persisting endpoint matches is a follow-up that must first define ownership, lifecycle, and schema behavior for one-sided/dynamic findings.
 
@@ -221,6 +225,18 @@ public sealed record CombinedPathInventory(
 
 `EvidenceNodes` and `EvidenceEdges` include only nodes/edges participating in returned paths plus gap evidence. They do not dump the entire graph by default.
 
+Surface kind vocabulary:
+
+| Selector / inventory key | Node kind(s) | Notes |
+| --- | --- | --- |
+| `sql-query` | `SqlSurface` | SQL shape/hash evidence only |
+| `package-config` | `PackageSurface`, `ConfigSurface` | One selector groups package, config, connection string, and env evidence |
+| `http-client` | `HttpClientSurface` | Terminal outbound HTTP dependency evidence only |
+| `http-route` | `HttpRouteSurface` | Terminal route evidence only when reached after non-endpoint traversal |
+| `external` | `ExternalSurface` | Other explicit external dependency evidence |
+
+Inventory dictionaries use selector/inventory keys for `SurfacesByKind` and node kinds for `NodesByKind`.
+
 ## Evidence Graph
 
 ### Node Kinds
@@ -236,8 +252,11 @@ Suggested node kinds:
 - `SqlSurface`
 - `ConfigSurface`
 - `PackageSurface`
+- `HttpClientSurface`
+- `HttpRouteSurface`
 - `ExternalSurface`
-- `AnalysisGap`
+
+`AnalysisGap` is a `CombinedPathGap` record in MVP, not a graph node. It may be promoted to a node kind later if path displays need explicit gap terminators.
 
 Each node should carry:
 
@@ -261,7 +280,7 @@ Each node should carry:
 
 Symbol joins are source-local in MVP. Cross-language or cross-source symbol stitching is not supported.
 
-Normalize display names for symbol-key matching by trimming whitespace, normalizing line endings to spaces, and using ordinal string comparison after exact display format preservation. Do not lowercase C# or JVM symbol keys by default because generic/type casing can be significant to display identity. Selector matching may be case-insensitive, but graph joins are ordinal.
+Normalize display names for symbol-key matching by trimming whitespace, normalizing line endings to spaces, and using ordinal string comparison after exact display format preservation. The normalized form is the key string. Do not lowercase C# or JVM symbol keys by default because generic/type casing can be significant to display identity. Selector matching may be case-insensitive, but graph joins are ordinal. Multi-line display names are rare in Tier1 semantic symbols; line-ending normalization is intentional because symbol keys are for joins, not display.
 
 Symbol key:
 
@@ -365,21 +384,37 @@ Ordering:
 
 Confidence:
 
-- `High`: Tier1 semantic non-endpoint hops plus exact endpoint match.
-- `Medium`: Tier2 structural hops or optional endpoint match.
-- `Low`: Tier3 syntax/textual hops, fallback symbol links, dynamic or incomplete evidence.
+- `High`: derived from `StrongStaticPath`.
+- `Medium`: derived from `ProbableStaticPath`.
+- `Low`: derived from `NeedsReviewPath`, `UnknownAnalysisGap`, `NoPathFound`, or `SelectorNoMatch`.
 
 Classification:
 
-- `StrongStaticPath`: all non-endpoint hops are Tier1 semantic and any endpoint hops are exact static method/path matches.
-- `ProbableStaticPath`: at least one Tier2 structural hop and no Tier3/fallback gaps.
-- `NeedsReviewPath`: Tier3/fallback/name-only evidence is required.
+- `StrongStaticPath`: all non-endpoint hops are Tier1 semantic and every endpoint hop, if present, is an exact static method/path match. A pure symbol-to-surface path with all Tier1 hops also qualifies.
+- `ProbableStaticPath`: at least one Tier2 structural hop and no Tier3/fallback/ambiguous/gap evidence.
+- `NeedsReviewPath`: Tier3/fallback/name-only/ambiguous symbol evidence, optional endpoint matches, method mismatches, dynamic evidence, or unresolved receivers are required.
 - `UnknownAnalysisGap`: visible gaps prevent credible conclusion.
+
+Endpoint match quality closed set for path classification:
+
+- Exact endpoint hop: `MatchedEndpoint` with static match quality `High`.
+- Non-exact endpoint hop: `OptionalSegmentMatch`, `MethodMismatch`, `AmbiguousMatch`, `DynamicClientUrlNeedsReview`, `ClientCallNoServerEndpoint`, `ServerEndpointNoClientMatch`, or `UnknownAnalysisGap`.
+- Any non-exact endpoint hop prevents `StrongStaticPath`.
+
+Classification rank:
+
+1. `UnknownAnalysisGap`
+2. `NeedsReviewPath`
+3. `ProbableStaticPath`
+4. `StrongStaticPath`
+5. `NoPathFound`
+6. `SelectorNoMatch`
 
 No-path rule:
 
-- If selectors match but no path is found and any source contributing nodes to the queried segment has reduced coverage, known gaps, failed/partial build status, unknown commit SHA, or analysis gaps, emit `UnknownAnalysisGap`.
-- Emit `NoPathFound` only when every source contributing nodes to the queried segment has credible full coverage.
+- Contributing sources are the sources of all resolved start nodes plus all sources reachable from those start nodes within `maxDepth` and `maxFrontier` using outbound traversal.
+- If selectors match but no path is found and any contributing source has reduced coverage, known gaps, failed/partial build status, unknown commit SHA, or analysis gaps, emit `UnknownAnalysisGap`.
+- Emit `NoPathFound` only when every contributing source has credible full coverage.
 
 ## Surface Attachment Rules
 

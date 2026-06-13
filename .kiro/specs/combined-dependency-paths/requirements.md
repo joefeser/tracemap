@@ -29,8 +29,10 @@ This is still static analysis. A path means TraceMap found connected static evid
 - MVP builds an in-memory graph from existing combined tables and facts.
 - MVP supports bounded forward path search from endpoints, symbols, sources, and terminal dependency surfaces.
 - MVP uses one shared endpoint matcher with `tracemap report`; it must not add a third endpoint alignment implementation. The existing `endpoint_matches` table is reserved and remains unused/read-only in this slice.
-- MVP does not support reverse traversal, `--to-endpoint`, or `--to-source`.
+- MVP does not support reverse traversal, `--to-endpoint`, `--to-symbol`, or `--to-source`.
 - MVP treats `EndpointMatch` as the only cross-source graph edge. Symbol-name joins are source-local only.
+- MVP default query starts from matched endpoint pairs only. Unmatched server routes are not default start nodes until a future selector mode asks for route-only path exploration.
+- MVP treats endpoint facts as start/intermediate nodes by default, not terminal surfaces; `http-route` and `http-client` terminal surfaces only match non-start HTTP dependency evidence reached after at least one non-endpoint traversal edge.
 - MVP favors high-confidence paths and explicitly emits `PathGap` rows when evidence is missing.
 - MVP does not require scanner changes, but it may add small helper APIs to reuse combined report readers/matchers.
 - MVP does not implement a UI, HTML graph viewer, graph database, LLM ranking, embeddings, runtime tracing, or whole-program taint analysis.
@@ -93,6 +95,7 @@ paths-report.json
 10. WHEN multiple selectors are provided THEN TraceMap SHALL combine them as filters, not as separate independent reports, unless a future `--batch` mode is added.
 11. WHEN a selector matches multiple evidence nodes THEN TraceMap SHALL include deterministic top-N results and state how many candidates were matched.
 12. WHEN a selector matches nothing THEN TraceMap SHALL emit a valid report with zero paths and a `SelectorNoMatch` gap.
+13. WHEN `--max-frontier <n>` is provided THEN TraceMap SHALL use it as the maximum queued path-state count before emitting a `TruncatedByLimit` gap with reason `frontier`.
 
 ### Requirement 3: Evidence Graph Model
 
@@ -101,7 +104,7 @@ paths-report.json
 #### Acceptance Criteria
 
 1. WHEN the graph is built THEN every graph node SHALL have a stable node ID, node kind, source index ID, source label, optional symbol ID, optional combined fact ID, optional edge ID, display name, evidence tier, rule ID, file path, and line span where available.
-2. WHEN endpoint facts are loaded THEN client calls and server routes SHALL become `Endpoint` nodes.
+2. WHEN endpoint facts are loaded THEN client calls SHALL become `EndpointClient` nodes and server routes SHALL become `EndpointRoute` nodes.
 3. WHEN endpoint alignment finds matches THEN matched client and server endpoint nodes SHALL be connected by derived `EndpointMatch` edges with classification and static match quality.
 4. WHEN symbol nodes are created THEN TraceMap SHALL use a deterministic source-local symbol key: `sourceIndexId + normalizedDisplayName`, with `combined_symbol_id` retained as provenance and preferred for node identity when available.
 5. WHEN a raw edge table references symbols by display string THEN TraceMap SHALL join it only to symbol nodes in the same `sourceIndexId`; if more than one symbol in the source has the same normalized display name, the graph SHALL keep all provenance and classify resulting paths as `NeedsReviewPath`.
@@ -122,13 +125,13 @@ paths-report.json
 
 1. WHEN path search runs THEN it SHALL use deterministic breadth-first search or another documented deterministic algorithm.
 2. WHEN multiple paths are available THEN TraceMap SHALL sort by confidence, path length, source label, display name, file path, line, and stable ID.
-3. WHEN `--max-depth <n>` is omitted THEN the command SHALL default to a conservative depth that can connect endpoint-to-controller-to-service-to-repository-to-surface paths.
+3. WHEN `--max-depth <n>` is omitted THEN the command SHALL default to `8`, a conservative depth that can connect endpoint-to-controller-to-service-to-repository-to-surface paths.
 4. WHEN `--max-paths <n>` is omitted THEN the command SHALL default to a bounded count such as 100 paths.
 5. WHEN a graph has cycles THEN the search SHALL avoid infinite traversal and SHALL record whether paths were truncated by cycle, depth, path, or frontier-size limits.
 6. WHEN a route endpoint is matched to a server method symbol THEN traversal SHALL continue through static call edges, object creations, parameter-forwarding edges, and symbol relationships where evidence exists.
 7. WHEN a client endpoint is matched to a server route through endpoint alignment THEN traversal MAY cross source indexes only through that derived endpoint edge.
-8. WHEN no endpoint alignment exists and any source contributing nodes to the queried segment has reduced coverage, known gaps, failed/partial build status, unknown commit SHA, or analysis gaps THEN the command SHALL emit `UnknownAnalysisGap` rather than `NoPathFound`.
-9. WHEN selectors match but no path exists and every source contributing nodes to the queried segment has full credible coverage THEN the command SHALL emit `NoPathFound`.
+8. WHEN no endpoint alignment exists and any contributing source has reduced coverage, known gaps, failed/partial build status, unknown commit SHA, or analysis gaps THEN the command SHALL emit `UnknownAnalysisGap` rather than `NoPathFound`.
+9. WHEN selectors match but no path exists and every contributing source has full credible coverage THEN the command SHALL emit `NoPathFound`.
 10. WHEN reduced coverage exists THEN path absence SHALL be labeled coverage-relative and SHALL NOT be described as proof that no dependency exists.
 11. WHEN a path crosses languages or source indexes THEN every crossing SHALL include source labels, scan IDs, commit SHAs, rule IDs, evidence tiers, and file spans.
 12. WHEN path search reaches a terminal surface THEN the path SHALL stop unless the user opts into deeper expansion in a future command.
@@ -139,14 +142,17 @@ paths-report.json
 
 #### Acceptance Criteria
 
-1. WHEN every non-endpoint hop is Tier1 semantic and any endpoint hop is an exact static method/path match THEN the path SHALL be classified as `StrongStaticPath`.
-2. WHEN a path includes strong structural evidence such as route syntax, SQL shape, package/config facts, or object creation without full semantic resolution THEN the path SHALL be classified as `ProbableStaticPath`.
-3. WHEN a path depends on syntax/textual symbols, name-only matching, unresolved receivers, or fallback symbol links THEN the path SHALL be classified as `NeedsReviewPath`.
-4. WHEN analysis gaps prevent a credible conclusion THEN the path SHALL be classified as `UnknownAnalysisGap`.
-5. WHEN selectors match but no path exists under full coverage THEN the result SHALL be classified as `NoPathFound`.
-6. WHEN selectors match nothing THEN the result SHALL be classified as `SelectorNoMatch`.
-7. WHEN path search stops because of depth, row, cycle, or result caps THEN the report SHALL include `TruncatedByLimit` gaps.
-8. WHEN dynamic URL, reflection, dynamic dispatch, DI, serializer, or runtime route gaps are visible THEN the report SHALL include `NeedsReview` or `UnknownAnalysisGap` rows tied to the supporting facts.
+1. WHEN every non-endpoint hop is Tier1 semantic and every endpoint hop, if present, is an exact static method/path match equivalent to `MatchedEndpoint` with static match quality `High` THEN the path SHALL be classified as `StrongStaticPath`.
+2. WHEN a path has no endpoint hops and every hop is Tier1 semantic THEN the path SHALL be classified as `StrongStaticPath`.
+3. WHEN a path includes Tier2 structural evidence such as route syntax, SQL shape, package/config facts, or object creation without full semantic resolution and has no Tier3, fallback, ambiguous-symbol, dynamic, or gap evidence THEN the path SHALL be classified as `ProbableStaticPath`.
+4. WHEN a path depends on syntax/textual symbols, name-only matching, unresolved receivers, fallback symbol links, optional endpoint matches, method mismatches, or any Tier3 hop THEN the path SHALL be classified as `NeedsReviewPath`.
+5. WHEN analysis gaps prevent a credible conclusion THEN the path SHALL be classified as `UnknownAnalysisGap`.
+6. WHEN selectors match but no path exists under full coverage THEN the result SHALL be classified as `NoPathFound`.
+7. WHEN selectors match nothing THEN the result SHALL be classified as `SelectorNoMatch`.
+8. WHEN path search stops because of depth, row, cycle, frontier, or result caps THEN the report SHALL include `TruncatedByLimit` gaps.
+9. WHEN dynamic URL, reflection, dynamic dispatch, DI, serializer, or runtime route gaps are visible THEN the report SHALL include `NeedsReview` or `UnknownAnalysisGap` rows tied to the supporting facts.
+10. WHEN confidence is emitted THEN it SHALL be derived from classification using the fixed mapping `StrongStaticPath = High`, `ProbableStaticPath = Medium`, `NeedsReviewPath = Low`, `UnknownAnalysisGap = Low`, `NoPathFound = Low`, and `SelectorNoMatch = Low`.
+11. WHEN paths are sorted THEN classification rank SHALL be `UnknownAnalysisGap`, `NeedsReviewPath`, `ProbableStaticPath`, `StrongStaticPath`, `NoPathFound`, `SelectorNoMatch`, followed by path length and stable evidence fields.
 
 ### Requirement 6: Markdown Report
 
@@ -220,7 +226,16 @@ paths-report.json
 16. WHEN precise edge tables are missing optional rows but the dependency view has fallback rows THEN tests SHALL prove documented fallback behavior.
 17. WHEN `--surface-name` uses exact and wildcard matching THEN tests SHALL prove the documented matching semantics.
 18. WHEN a large graph exceeds the frontier cap THEN tests SHALL prove the command terminates and emits `TruncatedByLimit`.
-19. WHEN files are checked in THEN `dotnet build src/dotnet/TraceMap.sln`, `dotnet test src/dotnet/TraceMap.sln`, `./scripts/check-private-paths.sh`, and `git diff --check` SHALL pass.
+19. WHEN `call`, `create`, `relationship`, or `parameter-forward` are passed to `--to-surface` THEN tests SHALL prove they are rejected as edge kinds.
+20. WHEN `--source-pair` is parsed with labels containing colons THEN tests SHALL prove splitting uses the last colon.
+21. WHEN a selector matches multiple candidates THEN tests SHALL prove deterministic top-N handling and reported candidate counts.
+22. WHEN Markdown cells include `|`, line endings, `[`, `]`, `(`, or `)` THEN tests SHALL prove escaped output does not create table or link corruption.
+23. WHEN `--to-surface http-route` or `--to-surface http-client` is used THEN tests SHALL prove endpoint start nodes do not produce trivial terminal paths.
+24. WHEN a path contains an optional endpoint match THEN tests SHALL prove it is not classified as `StrongStaticPath`.
+25. WHEN `--surface-name` matches exact and wildcard candidates THEN tests SHALL prove exact matches sort before wildcard matches.
+26. WHEN the frontier cap is hit before depth limit THEN tests SHALL prove the `TruncatedByLimit` gap reason is `frontier`.
+27. WHEN a no-path query includes both full and reduced contributing sources THEN tests SHALL prove the reduced contributing source causes `UnknownAnalysisGap` and unrelated reduced sources do not.
+28. WHEN files are checked in THEN `dotnet build src/dotnet/TraceMap.sln`, `dotnet test src/dotnet/TraceMap.sln`, `./scripts/check-private-paths.sh`, and `git diff --check` SHALL pass.
 
 ## Future Work
 
