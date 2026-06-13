@@ -2,49 +2,46 @@
 
 ## Purpose
 
-TraceMap already stores query-pattern facts from several language adapters. The next slice makes those facts readable in human reports so users can see database/query evidence without opening SQLite or raw NDJSON.
+TraceMap's Python adapter now stores useful SQL-shape `QueryPatternDetected` facts, but the Python scan report only summarizes counts, tiers, rules, and gaps. This slice makes those facts readable in `report.md` so users can see database/query evidence without opening SQLite or raw NDJSON.
 
 This is a presentation layer change. It must not add new analysis claims, mutate fact schemas, or change reducer behavior.
 
 ## Requirements
 
-### 1. SQL-shape query patterns are readable
+### 1. Python SQL-shape query patterns are readable
 
-1. WHEN a report includes a `QueryPatternDetected` fact with `sqlSourceKind` THEN the report SHALL render it as SQL-shape evidence.
+1. WHEN a Python scan emits a `QueryPatternDetected` fact with a non-empty `sqlSourceKind` property THEN the Python report SHALL render it as SQL-shape evidence.
 2. SQL-shape report rows SHALL include visible derived fields when present:
    - `operationName`
    - `tableName` or `tableNames`
-   - `columnNames` or `fieldNames`
+   - `columnNames`, preferring `columnNames` over duplicate `fieldNames`
    - `sqlSourceKind`
    - `queryShapeHash`
 3. SQL-shape rows SHALL include evidence tier and file/line span.
 4. SQL-shape rows SHALL NOT claim runtime execution, database schema existence, generated SQL equivalence, branch feasibility, or dialect validity.
 5. SQL-shape rows SHALL NOT display raw SQL text or literal values.
+6. The Python report SHALL include SQL-shape limitations near the query-pattern output or in the Python limitations section.
 
-### 2. Existing query-builder pattern rendering is preserved
+### 2. Python report output remains deterministic
 
-1. WHEN a `QueryPatternDetected` fact does not have `sqlSourceKind` THEN existing query-builder rendering SHALL continue to display fields from:
-   - `filterFields`
-   - `sortFields`
-   - `selectFields`
-   - `includeFields`
-   - `mutationFields`
-2. Existing C#, TypeScript, and JVM-style query-builder facts SHALL NOT regress to `fields none` when those properties are present.
-3. Report rendering MAY use a shared helper per language/runtime, but it SHALL remain deterministic and schema-compatible.
+1. The Python report SHALL preserve the existing deterministic fact emission order for the query-pattern section.
+2. The Python report SHALL use explicit placeholders such as `unknown`, `none`, or `n/a` when optional properties are absent.
+3. The Python report SHALL not add a row cap or truncation behavior in this slice.
 
-### 3. Scan reports use the same presentation contract
+### 3. Documentation and tests
 
-1. The .NET Markdown scan report SHALL render SQL-shape query patterns distinctly from query-builder patterns.
-2. The TypeScript Markdown scan report SHALL render SQL-shape query patterns distinctly if such facts are present in a TypeScript `ScanResult`.
-3. The Python Markdown scan report SHALL add a query-pattern section and render Python SQL-shape facts with the same field vocabulary.
-4. Report output SHALL remain useful when optional properties are absent by using explicit placeholders such as `unknown`, `none`, or `n/a`.
+1. The implementation SHALL add tests covering Python SQL-shape query-pattern rendering from `samples/python-fastapi-sample`.
+2. The tests SHALL assert that the report includes `orders`, `id;status;total`, `orm-text` or another visible SQL source kind, and `queryShapeHash`.
+3. The tests SHALL assert that raw SQL text such as `SELECT id, status, total FROM orders` is not displayed in `report.md`.
+4. `docs/VALIDATION.md` SHALL include a Markdown report inspection command, such as a `grep` against the public Python sample scan output.
+5. `rules/rule-catalog.yml` SHALL keep `python.integration.sql.v1` aligned with the report display contract by noting that reports display derived table/column/source-kind metadata without raw SQL text.
+6. `docs/LANGUAGE_ADAPTER_CONTRACT.md` SHALL remain the source of truth for SQL evidence semantics; this slice MAY clarify report behavior but SHALL NOT loosen evidence limitations.
 
-### 4. Documentation and tests
+### 4. Follow-up renderer scope is explicit
 
-1. The implementation SHALL add tests covering SQL-shape query-pattern rendering.
-2. The implementation SHALL add tests proving existing query-builder rendering remains intact.
-3. `docs/VALIDATION.md` or equivalent validation notes SHALL include a way to inspect query-pattern report output from public samples.
-4. `docs/LANGUAGE_ADAPTER_CONTRACT.md` SHALL remain the source of truth for SQL evidence semantics; this slice MAY clarify report behavior but SHALL NOT loosen evidence limitations.
+1. .NET and TypeScript report renderers are out of scope for the first implementation PR because no current .NET or TypeScript adapter emits SQL-shape `QueryPatternDetected` facts with `sqlSourceKind`.
+2. A future .NET or TypeScript renderer PR MAY add SQL-shape formatting as forward-compatibility scaffolding, but tests for that path SHALL be labeled synthetic unless an adapter emits real `sqlSourceKind` facts.
+3. JVM report rendering is out of scope for this slice; current JVM reports do not render query-builder fields that could regress to `fields none`.
 
 ## Non-goals
 
@@ -54,3 +51,4 @@ This is a presentation layer change. It must not add new analysis claims, mutate
 - No reducer classification changes.
 - No endpoint alignment changes.
 - No runtime dependency inference.
+- No .NET, TypeScript, or JVM report-renderer changes in the first implementation PR.
