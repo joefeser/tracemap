@@ -1,6 +1,7 @@
 package com.tracemap.jvm;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.tracemap.jvm.model.EvidenceTiers;
@@ -35,6 +36,10 @@ final class ScanEngineIntegrationTest {
         assertTrue(Files.exists(out.resolve("index.sqlite")));
         assertTrue(Files.exists(out.resolve("report.md")));
         assertTrue(Files.exists(out.resolve("logs/analyzer.log")));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.BUILD_STATUS.equals(fact.factType())
+                && result.manifest().buildStatus().equals(fact.targetSymbol())
+                && result.manifest().analysisLevel().equals(fact.properties().get("analysisLevel"))));
         assertTrue(result.facts().stream().anyMatch(fact ->
             FactTypes.PROPERTY_ACCESSED.equals(fact.factType())
                 && EvidenceTiers.TIER1_SEMANTIC.equals(fact.evidenceTier())
@@ -75,6 +80,100 @@ final class ScanEngineIntegrationTest {
         assertEquals("Level3SyntaxAnalysis", result.manifest().analysisLevel());
         assertTrue(result.manifest().knownGaps().stream().anyMatch(gap -> gap.startsWith("KotlinSemanticNotImplemented")));
         assertTrue(result.facts().stream().anyMatch(fact -> FactTypes.TYPE_DECLARED.equals(fact.factType()) && "kotlin".equals(fact.properties().get("language"))));
+    }
+
+    @Test
+    void projectOptionLimitsInventoryToRequestedModule() throws Exception {
+        Path repo = temp.resolve("multi-module");
+        Files.createDirectories(repo.resolve("module-a/src/main/java/example"));
+        Files.createDirectories(repo.resolve("module-b/src/main/java/example"));
+        Files.writeString(repo.resolve("module-a/pom.xml"), """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>example</groupId>
+              <artifactId>module-a</artifactId>
+              <version>1.0.0</version>
+            </project>
+            """);
+        Files.writeString(repo.resolve("module-b/pom.xml"), """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>example</groupId>
+              <artifactId>module-b</artifactId>
+              <version>1.0.0</version>
+            </project>
+            """);
+        Files.writeString(repo.resolve("module-a/src/main/java/example/A.java"), "package example; class A {}\n");
+        Files.writeString(repo.resolve("module-b/src/main/java/example/B.java"), "package example; class B {}\n");
+        initGit(repo);
+
+        ScanResult result = new ScanEngine().scan(new ScanOptions(
+            repo,
+            temp.resolve("module-out"),
+            List.of(Path.of("module-a/pom.xml")),
+            List.of(),
+            List.of(),
+            1024 * 1024,
+            false,
+            "all"));
+
+        assertTrue(result.inventory().stream().anyMatch(item -> item.relativePath().startsWith("module-a/")));
+        assertFalse(result.inventory().stream().anyMatch(item -> item.relativePath().startsWith("module-b/")));
+    }
+
+    @Test
+    void extractsJsonArrayConfigKeys() throws Exception {
+        Path repo = temp.resolve("json-config");
+        Files.createDirectories(repo);
+        Files.writeString(repo.resolve("application.json"), """
+            {
+              "servers": [
+                { "url": "https://example.invalid", "enabled": true }
+              ]
+            }
+            """);
+        initGit(repo);
+
+        ScanResult result = new ScanEngine().scan(new ScanOptions(repo, temp.resolve("json-out"), List.of(), List.of(), List.of(), 1024 * 1024, false, "all"));
+
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.CONFIG_KEY_DECLARED.equals(fact.factType())
+                && "servers[0].url".equals(fact.properties().get("keyPath"))));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.CONFIG_KEY_DECLARED.equals(fact.factType())
+                && "servers[0].enabled".equals(fact.properties().get("keyPath"))));
+
+        ScanResult differentOptions = new ScanEngine().scan(new ScanOptions(repo, temp.resolve("json-out-small"), List.of(), List.of(), List.of(), 16, false, "all"));
+        assertFalse(result.manifest().scanId().equals(differentOptions.manifest().scanId()));
+    }
+
+    @Test
+    void mavenProjectCoordinatesPreferDirectProjectChildren() throws Exception {
+        Path repo = temp.resolve("maven-parent");
+        Files.createDirectories(repo);
+        Files.writeString(repo.resolve("pom.xml"), """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <parent>
+                <groupId>example.parent</groupId>
+                <artifactId>parent-artifact</artifactId>
+                <version>9.9.9</version>
+                <relativePath>../missing-parent.xml</relativePath>
+              </parent>
+              <artifactId>child-artifact</artifactId>
+            </project>
+            """);
+        initGit(repo);
+
+        ScanResult result = new ScanEngine().scan(new ScanOptions(repo, temp.resolve("maven-out"), List.of(), List.of(), List.of(), 1024 * 1024, false, "all"));
+
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.PROJECT_DECLARED.equals(fact.factType())
+                && "example.parent:child-artifact".equals(fact.targetSymbol())
+                && "child-artifact".equals(fact.properties().get("artifactId"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.PROJECT_DECLARED.equals(fact.factType())
+                && "example.parent:parent-artifact".equals(fact.targetSymbol())));
     }
 
     private static Path repoRoot() {

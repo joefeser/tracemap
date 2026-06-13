@@ -338,7 +338,12 @@ public static class CSharpIntegrationSyntaxExtractor
 
     private static bool IsStringLiteralToken(SyntaxToken token)
     {
-        return token.Kind().ToString().Contains("StringLiteralToken", StringComparison.Ordinal);
+        return token.IsKind(SyntaxKind.StringLiteralToken)
+            || token.IsKind(SyntaxKind.SingleLineRawStringLiteralToken)
+            || token.IsKind(SyntaxKind.MultiLineRawStringLiteralToken)
+            || token.IsKind(SyntaxKind.Utf8StringLiteralToken)
+            || token.IsKind(SyntaxKind.Utf8SingleLineRawStringLiteralToken)
+            || token.IsKind(SyntaxKind.Utf8MultiLineRawStringLiteralToken);
     }
 
     private static bool IsDbContextTypeName(string typeName)

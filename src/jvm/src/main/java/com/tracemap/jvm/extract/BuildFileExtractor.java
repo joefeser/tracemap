@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public final class BuildFileExtractor {
@@ -54,14 +55,14 @@ public final class BuildFileExtractor {
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             Document document = factory.newDocumentBuilder().parse(file.absolutePath().toFile());
             Element project = document.getDocumentElement();
-            String groupId = firstText(project, "groupId");
-            String artifactId = firstText(project, "artifactId");
-            String version = firstText(project, "version");
-            NodeList parentNodes = project.getElementsByTagName("parent");
-            if (parentNodes.getLength() > 0 && parentNodes.item(0) instanceof Element parent) {
-                if (groupId == null) groupId = firstText(parent, "groupId");
-                if (version == null) version = firstText(parent, "version");
-                String relativePath = firstText(parent, "relativePath");
+            String groupId = firstDirectText(project, "groupId");
+            String artifactId = firstDirectText(project, "artifactId");
+            String version = firstDirectText(project, "version");
+            Element parent = firstDirectChild(project, "parent");
+            if (parent != null) {
+                if (groupId == null) groupId = firstDirectText(parent, "groupId");
+                if (version == null) version = firstDirectText(parent, "version");
+                String relativePath = firstDirectText(parent, "relativePath");
                 if (relativePath != null && !relativePath.isBlank()) {
                     var parentPath = file.absolutePath().getParent().resolve(relativePath).normalize();
                     if (!Files.exists(parentPath)) {
@@ -87,9 +88,9 @@ public final class BuildFileExtractor {
                 if (!(dependencies.item(i) instanceof Element dep)) {
                     continue;
                 }
-                String depGroup = firstText(dep, "groupId");
-                String depArtifact = firstText(dep, "artifactId");
-                String depVersion = firstText(dep, "version");
+                String depGroup = firstDirectText(dep, "groupId");
+                String depArtifact = firstDirectText(dep, "artifactId");
+                String depVersion = firstDirectText(dep, "version");
                 if (depGroup == null || depArtifact == null) {
                     continue;
                 }
@@ -170,13 +171,24 @@ public final class BuildFileExtractor {
         }
     }
 
-    private static String firstText(Element parent, String tag) {
-        NodeList nodes = parent.getElementsByTagName(tag);
-        if (nodes.getLength() == 0 || nodes.item(0) == null) {
+    private static String firstDirectText(Element parent, String tag) {
+        Element child = firstDirectChild(parent, tag);
+        if (child == null) {
             return null;
         }
-        String value = nodes.item(0).getTextContent();
+        String value = child.getTextContent();
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static Element firstDirectChild(Element parent, String tag) {
+        NodeList children = parent.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child instanceof Element element && tag.equals(element.getTagName())) {
+                return element;
+            }
+        }
+        return null;
     }
 
     private static String firstMatch(Pattern pattern, String text, int group) {

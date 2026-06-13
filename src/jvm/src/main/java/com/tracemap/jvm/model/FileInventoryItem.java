@@ -7,5 +7,6 @@ public record FileInventoryItem(
     Path absolutePath,
     String kind,
     long sizeBytes,
-    boolean skipped) {
+    boolean skipped,
+    String skipReason) {
 }

@@ -52,14 +52,12 @@ public final class ScanEngine {
         git.knownGaps().forEach(gaps::add);
         for (FileInventoryItem item : inventory) {
             if (item.skipped()) {
-                gaps.add("FileSkippedMaxSize: " + item.relativePath());
+                gaps.add(item.skipReason() == null ? "FileSkipped: " + item.relativePath() : item.skipReason());
             }
         }
 
         ScanManifest provisional = manifest(options, git, inventory, gaps.gaps(), "Level3SyntaxAnalysis", "NotRun");
         List<CodeFact> facts = new ArrayList<>();
-        facts.add(repoScanned(provisional, git));
-        facts.add(buildStatus(provisional));
         facts.addAll(fileFacts(provisional, inventory));
         facts.addAll(BuildFileExtractor.extract(provisional, inventory, gaps));
         facts.addAll(ConfigExtractor.extract(provisional, inventory, gaps));
@@ -94,6 +92,8 @@ public final class ScanEngine {
 
         ScanManifest manifest = manifest(options, git, inventory, gaps.gaps(), analysisLevel, buildStatus);
         facts = rewriteManifest(facts, provisional, manifest);
+        facts.add(repoScanned(manifest, git));
+        facts.add(buildStatus(manifest));
         for (String gap : gaps.gaps()) {
             facts.add(analysisGap(manifest, gap));
         }
@@ -109,7 +109,13 @@ public final class ScanEngine {
 
     private static ScanManifest manifest(ScanOptions options, GitMetadata git, List<FileInventoryItem> inventory, List<String> knownGaps, String analysisLevel, String buildStatus) {
         String repoIdentity = git.remoteUrl() == null ? git.repoName() : git.remoteUrl();
-        String signature = options.projectPaths().toString() + "|" + options.includeGlobs() + "|" + options.excludeGlobs() + "|" + options.language();
+        String signature = String.join("|",
+            sortedPaths(options.projectPaths()).toString(),
+            options.includeGlobs().stream().sorted().toList().toString(),
+            options.excludeGlobs().stream().sorted().toList().toString(),
+            options.language(),
+            "semantic=" + options.semantic(),
+            "maxFileByteSize=" + options.maxFileByteSize());
         String scanId = "scan-" + Hashes.sha256(repoIdentity + "|" + git.commitSha() + "|" + signature, 20);
         List<String> projects = inventory.stream()
             .filter(file -> file.kind().contains("Project") || file.kind().contains("Gradle"))
@@ -179,7 +185,13 @@ public final class ScanEngine {
                 null,
                 item.relativePath(),
                 null,
-                props("path", item.relativePath(), "kind", item.kind(), "sizeBytes", String.valueOf(item.sizeBytes()), "skipped", String.valueOf(item.skipped()), "name", item.relativePath())));
+                props(
+                    "path", item.relativePath(),
+                    "kind", item.kind(),
+                    "sizeBytes", String.valueOf(item.sizeBytes()),
+                    "skipped", String.valueOf(item.skipped()),
+                    "skipReason", item.skipReason(),
+                    "name", item.relativePath())));
         }
         return facts;
     }
@@ -250,6 +262,13 @@ public final class ScanEngine {
             case EvidenceTiers.TIER3_SYNTAX_OR_TEXTUAL -> 3;
             default -> 4;
         };
+    }
+
+    private static List<String> sortedPaths(List<Path> paths) {
+        return paths.stream()
+            .map(Path::toString)
+            .sorted()
+            .toList();
     }
 
     private static Map<String, String> props(String... values) {

@@ -96,6 +96,15 @@ public final class ConfigExtractor {
                 }
                 walkJson(manifest, file, entry.getValue(), next, facts);
             }
+        } else if (node.isArray()) {
+            for (int i = 0; i < node.size(); i++) {
+                String next = path.isBlank() ? "[" + i + "]" : path + "[" + i + "]";
+                JsonNode child = node.get(i);
+                if (child != null && child.isValueNode()) {
+                    facts.add(configKey(manifest, file, next, child.asText(), 1, "json"));
+                }
+                walkJson(manifest, file, child, next, facts);
+            }
         }
     }
 
