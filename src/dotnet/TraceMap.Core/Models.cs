@@ -13,7 +13,10 @@ public sealed record ScanManifest(
     IReadOnlyList<string> Solutions,
     IReadOnlyList<string> Projects,
     IReadOnlyList<string> TargetFrameworks,
-    IReadOnlyList<string> KnownGaps);
+    IReadOnlyList<string> KnownGaps,
+    string? ScanRootRelativePath = null,
+    string? ScanRootPathHash = null,
+    string? GitRootHash = null);
 
 public sealed record EvidenceSpan(
     string FilePath,
@@ -81,7 +84,8 @@ public sealed record GitMetadata(
     string? RemoteUrl,
     string? Branch,
     string CommitSha,
-    IReadOnlyList<string> KnownGaps);
+    IReadOnlyList<string> KnownGaps,
+    string? GitRootPath = null);
 
 public sealed record ScanResult(
     ScanManifest Manifest,
@@ -174,6 +178,7 @@ public static class RuleIds
     public const string CSharpSyntaxLogicShape = "csharp.syntax.logicshape.v1";
     public const string CSharpSyntaxQueryPattern = "csharp.syntax.querypattern.v1";
     public const string CSharpSyntaxObjectShape = "csharp.syntax.objectshape.v1";
+    public const string CSharpSyntaxAspNetRoute = "csharp.syntax.aspnetroute.v1";
     public const string CSharpSemanticDeclarations = "csharp.semantic.declarations.v1";
     public const string CSharpSemanticPropertyAccess = "csharp.semantic.propertyaccess.v1";
     public const string CSharpSemanticMethodInvocation = "csharp.semantic.methodinvocation.v1";
@@ -195,6 +200,7 @@ public static class RuleIds
     public const string DatabaseSqlText = "database.sql.text.v1";
     public const string ConfigKey = "config.key.v1";
     public const string ContractDeltaReduction = "contract.delta.reduce.v1";
+    public const string EndpointAlignment = "endpoint.alignment.v1";
 }
 
 public static class ScannerVersions
@@ -204,8 +210,10 @@ public static class ScannerVersions
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
+    public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.10.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
+    public const string EndpointAlignment = "endpoint-alignment/0.1.0";
 }

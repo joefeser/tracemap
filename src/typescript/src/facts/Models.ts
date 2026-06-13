@@ -12,6 +12,9 @@ export interface ScanManifest {
   projects: string[];
   targetFrameworks: string[];
   knownGaps: string[];
+  scanRootRelativePath?: string | null;
+  scanRootPathHash?: string | null;
+  gitRootHash?: string | null;
 }
 
 export interface EvidenceSpan {
@@ -53,6 +56,7 @@ export interface GitMetadata {
   branch: string | null;
   commitSha: string;
   knownGaps: string[];
+  gitRootPath?: string | null;
 }
 
 export interface ScanOptions {

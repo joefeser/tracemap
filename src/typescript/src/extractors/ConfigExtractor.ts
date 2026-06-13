@@ -20,7 +20,7 @@ export async function extractConfigFacts(manifest: ScanManifest, inventory: read
       )
     );
     try {
-      const json = JSON.parse(text) as unknown;
+      const json = JSON.parse(item.relativePath.startsWith("tsconfig") ? stripJsonComments(text) : text) as unknown;
       walkJson(manifest, facts, item.relativePath, text, json, []);
     } catch {
       facts.push(
@@ -36,6 +36,50 @@ export async function extractConfigFacts(manifest: ScanManifest, inventory: read
     }
   }
   return facts;
+}
+
+function stripJsonComments(text: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index++) {
+    const current = text[index];
+    const next = text[index + 1];
+    if (inString) {
+      result += current;
+      escaped = current === "\\" && !escaped;
+      if (current === "\"" && !escaped) {
+        inString = false;
+      }
+      if (current !== "\\") {
+        escaped = false;
+      }
+      continue;
+    }
+    if (current === "\"") {
+      inString = true;
+      result += current;
+      continue;
+    }
+    if (current === "/" && next === "/") {
+      while (index < text.length && text[index] !== "\n") {
+        index++;
+      }
+      result += "\n";
+      continue;
+    }
+    if (current === "/" && next === "*") {
+      index += 2;
+      while (index < text.length && !(text[index] === "*" && text[index + 1] === "/")) {
+        result += text[index] === "\n" ? "\n" : " ";
+        index++;
+      }
+      index++;
+      continue;
+    }
+    result += current;
+  }
+  return result;
 }
 
 function walkJson(manifest: ScanManifest, facts: CodeFact[], filePath: string, text: string, value: unknown, pathParts: string[]): void {

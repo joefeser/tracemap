@@ -667,3 +667,38 @@ rules:
       - Structural query evidence does not prove generated SQL, runtime execution, database schema existence, or branch feasibility.
       - Only statically visible object-literal and simple string sort arguments are inspected in MVP; variables, spreads, helper-built filters, and dynamic keys need later flow rules.
       - Literal values and raw object text are not stored; field names, operation names, hashes, and spans are emitted.
+
+  - id: typescript.integration.angular-httpclient.v1
+    name: TypeScript Angular HttpClient integration
+    description: Detects Angular HttpClient calls, hashes raw URL expressions, and stores normalized route templates/keys when statically visible.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    limitations:
+      - Static extraction does not prove runtime interceptor rewrites, proxy configuration, deployment base paths, auth state, CORS behavior, or whether a call executes.
+      - Environment base URL values are not stored raw; only hash evidence and cleartext relative path suffixes such as /api are stored for matching.
+      - Variables, helper functions, destructured methods, indirect receivers, and complex URL expressions are marked dynamic and require review.
+
+  - id: csharp.syntax.aspnetroute.v1
+    name: C# ASP.NET syntax route fallback
+    description: Extracts ASP.NET controller attribute route bindings from C# syntax and normalizes route templates without requiring framework references.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - HttpRouteBinding
+    limitations:
+      - Syntax fallback does not prove runtime route registration, middleware ordering, conventional routes, minimal APIs, endpoint filters, route groups, or custom route attributes.
+      - Supports literal controller/method route attributes and common Http* attributes; non-literal route constants and advanced routing are not guessed.
+      - Route constraints and optional segments are retained as evidence, but runtime constraint behavior is not evaluated.
+
+  - id: endpoint.alignment.v1
+    name: Cross-index endpoint alignment
+    description: Derives a report by matching client HttpCallDetected facts to server HttpRouteBinding facts by HTTP method and normalized route key.
+    evidenceTier: Derived report over source evidence
+    emits:
+      - endpoint-report.md
+      - endpoint-report.json
+    limitations:
+      - Endpoint findings are derived report rows, not source facts.
+      - Matching is static and coverage-relative; client-only findings are not proof of broken calls and server-only findings are not proof of dead or unused endpoints.
+      - Does not prove runtime reachability, reverse proxy behavior, auth policies, feature flags, branch feasibility, deployment routing, or generated OpenAPI behavior.
+      - MVP compares one client index and one server index; N-way combined dependency analysis and endpoint diffs are follow-up work.

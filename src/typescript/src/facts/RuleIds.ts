@@ -22,6 +22,7 @@ export const RuleIds = {
   TypeScriptSemanticSymbolIdentity: "typescript.semantic.symbolidentity.v1",
   TypeScriptSemanticSymbolRelationship: "typescript.semantic.symbolrelationship.v1",
   TypeScriptIntegrationHttp: "typescript.integration.http.v1",
+  TypeScriptIntegrationAngularHttpClient: "typescript.integration.angular-httpclient.v1",
   TypeScriptIntegrationRoute: "typescript.integration.route.v1",
   TypeScriptIntegrationSerializer: "typescript.integration.serializer.v1",
   TypeScriptIntegrationDatabase: "typescript.integration.database.v1",
@@ -40,5 +41,6 @@ export const ScannerVersions = {
   TypeScriptConfigExtractor: "typescript-config/0.1.0",
   TypeScriptSyntaxExtractor: "typescript-syntax/0.1.0",
   TypeScriptSemanticExtractor: "typescript-semantic/0.1.0",
-  TypeScriptIntegrationExtractor: "typescript-integration/0.1.0"
+  TypeScriptIntegrationExtractor: "typescript-integration/0.1.0",
+  TypeScriptAngularHttpClientExtractor: "typescript-angular-httpclient/0.1.0"
 } as const;

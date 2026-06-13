@@ -8,17 +8,19 @@ const execFileAsync = promisify(execFile);
 export async function getGitMetadata(repoPath: string): Promise<GitMetadata> {
   const repoName = path.basename(repoPath);
   try {
-    const [commitSha, branch, remoteUrl] = await Promise.all([
+    const [commitSha, branch, remoteUrl, gitRootPath] = await Promise.all([
       git(repoPath, ["rev-parse", "HEAD"]),
       git(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"]),
-      git(repoPath, ["config", "--get", "remote.origin.url"]).catch(() => null)
+      git(repoPath, ["config", "--get", "remote.origin.url"]).catch(() => null),
+      git(repoPath, ["rev-parse", "--show-toplevel"]).catch(() => null)
     ]);
     return {
-      repoName,
+      repoName: gitRootPath ? path.basename(gitRootPath) : repoName,
       remoteUrl,
       branch,
       commitSha: commitSha ?? "unknown",
-      knownGaps: []
+      knownGaps: [],
+      gitRootPath
     };
   } catch {
     return {
@@ -26,7 +28,8 @@ export async function getGitMetadata(repoPath: string): Promise<GitMetadata> {
       remoteUrl: null,
       branch: null,
       commitSha: "unknown",
-      knownGaps: ["Git metadata unavailable."]
+      knownGaps: ["Git metadata unavailable."],
+      gitRootPath: null
     };
   }
 }

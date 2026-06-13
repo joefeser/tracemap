@@ -9,6 +9,11 @@ public static class GitMetadataProvider
         var root = Path.GetFullPath(repoPath);
         var repoName = new DirectoryInfo(root).Name;
         var gaps = new List<string>();
+        var gitRoot = RunGit(root, "rev-parse", "--show-toplevel");
+        if (!string.IsNullOrWhiteSpace(gitRoot))
+        {
+            repoName = new DirectoryInfo(gitRoot).Name;
+        }
 
         var commitSha = RunGit(root, "rev-parse", "HEAD");
         if (string.IsNullOrWhiteSpace(commitSha))
@@ -29,7 +34,7 @@ public static class GitMetadataProvider
             remoteUrl = null;
         }
 
-        return new GitMetadata(repoName, remoteUrl, branch, commitSha, gaps);
+        return new GitMetadata(repoName, remoteUrl, branch, commitSha, gaps, gitRoot);
     }
 
     private static string? RunGit(string workingDirectory, params string[] arguments)

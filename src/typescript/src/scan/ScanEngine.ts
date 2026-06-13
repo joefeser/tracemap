@@ -40,7 +40,10 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
     solutions: [],
     projects: [],
     targetFrameworks: [],
-    knownGaps: [...git.knownGaps]
+    knownGaps: [...git.knownGaps],
+    scanRootRelativePath: git.gitRootPath ? normalizeManifestPath(path.relative(git.gitRootPath, repoPath)) : ".",
+    scanRootPathHash: hash(repoPath),
+    gitRootHash: git.gitRootPath ? hash(path.resolve(git.gitRootPath)) : null
   };
   const gapCollector = new AnalysisGapCollector();
   for (const gitGap of git.knownGaps) {
@@ -95,6 +98,10 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   await writeMarkdownReport(path.join(outputPath, "report.md"), result);
   await fs.writeFile(path.join(outputPath, "logs", "analyzer.log"), analyzerLog(result), "utf8");
   return result;
+}
+
+function normalizeManifestPath(value: string): string {
+  return !value || value === "." ? "." : value.replaceAll("\\", "/");
 }
 
 function inventoryFacts(manifest: ScanManifest, inventory: readonly { relativePath: string; kind: string; sizeBytes: number; skipped: boolean }[]): CodeFact[] {
