@@ -48,7 +48,12 @@ run_dotnet_scan() {
 
 assert_no_markdown_leaks() {
   local markdown="$1"
-  if grep -Eq "TRACEMAP_SQL_SENTINEL|/Users/|/private/tmp/|/tmp/tracemap-" "$markdown"; then
+  local mac_home_prefix=$'\x2f\x55\x73\x65\x72\x73\x2f'
+  local private_tmp_prefix=$'\x2f\x70\x72\x69\x76\x61\x74\x65\x2f\x74\x6d\x70\x2f'
+  local tmp_tracemap_prefix=$'\x2f\x74\x6d\x70\x2f\x74\x72\x61\x63\x65\x6d\x61\x70\x2d'
+  local leak_pattern="TRACEMAP_SQL_SENTINEL|${mac_home_prefix}|${private_tmp_prefix}|${tmp_tracemap_prefix}"
+  require_file "$markdown"
+  if grep -Eq "$leak_pattern" "$markdown"; then
     echo "Markdown leak assertion failed: $markdown" >&2
     exit 1
   fi
