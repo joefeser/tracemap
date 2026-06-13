@@ -1,4 +1,4 @@
-import os
+from os import environ, getenv
 
-ORDER_QUEUE = os.getenv("ORDER_QUEUE", "orders")
-API_TOKEN = os.environ["API_TOKEN"]
+ORDER_QUEUE = getenv("ORDER_QUEUE", "orders")
+API_TOKEN = environ["API_TOKEN"]

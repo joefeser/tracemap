@@ -69,6 +69,7 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
     assert by_type["CallEdge"] >= 1
     assert by_type["ObjectCreated"] >= 1
     assert by_type["ArgumentPassed"] >= 1
+    assert by_type["FieldAlias"] >= 1
     assert by_type["SymbolRelationship"] >= 1
 
     con = sqlite3.connect(out / "index.sqlite")
@@ -76,11 +77,15 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
         assert _scalar(con, "select count(*) from call_edges") >= 1
         assert _scalar(con, "select count(*) from object_creations") >= 1
         assert _scalar(con, "select count(*) from argument_flows") >= 1
+        assert _scalar(con, "select count(*) from field_aliases") >= 1
+        assert _scalar(con, "select count(*) from parameter_forward_edges") >= 1
         assert _scalar(con, "select count(*) from symbol_relationships") >= 1
         assert _scalar(con, "select count(*) from symbols where language = 'python'") >= 1
         route = con.execute("select properties_json from facts where fact_type='HttpRouteBinding' order by fact_id limit 1").fetchone()[0]
         route_props = json.loads(route)
-        assert route_props["normalizedPathKey"] == "/orders/{}"
+        assert route_props["normalizedPathKey"] == "/api/orders/{}"
+        assert _scalar(con, "select count(*) from facts where fact_type='HttpCallDetected' and target_symbol='requests.post'") == 1
+        assert _scalar(con, "select count(*) from facts where fact_type='HttpCallDetected' and target_symbol='httpx.get'") == 1
     finally:
         con.close()
 

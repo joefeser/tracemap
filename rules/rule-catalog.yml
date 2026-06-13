@@ -1020,14 +1020,15 @@ rules:
 
   - id: python.ast.argumentflow.v1
     name: Python AST argument flow
-    description: Emits direct parameter-to-call argument flow and simple local alias facts when a function parameter is passed by name.
+    description: Emits direct parameter-to-call argument flow, simple local alias facts, and direct self-field alias facts when a function parameter or simple name is passed or assigned by name.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - ArgumentPassed
       - LocalAlias
+      - FieldAlias
     limitations:
-      - Tracks direct same-function call arguments only.
-      - Does not model field aliases, mutation, collection contents, interprocedural return values, branch feasibility, async/callback flow, or dynamic kwargs expansion.
+      - Tracks direct same-function call arguments, local aliases, and self-field assignments only.
+      - Does not model transitive aliasing, mutation, collection contents, interprocedural return values, branch feasibility, async/callback flow, or dynamic kwargs expansion.
 
   - id: python.ast.relationships.v1
     name: Python AST symbol relationships

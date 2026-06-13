@@ -395,6 +395,7 @@ def insert_derived_rows(con: sqlite3.Connection, fact: CodeFact) -> None:
                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (fact.fact_id, fact.scan_id, fact.repo, fact.commit_sha, fact.evidence_tier, fact.rule_id, fact.source_symbol, p.get("sourceSymbolAssemblyName"), p.get("sourceSymbolAssemblyVersion"), fact.target_symbol, p.get("targetSymbolAssemblyName"), p.get("targetSymbolAssemblyVersion"), p.get("callKind"), _int(p.get("parameterOrdinal"), 0), p.get("parameterName", "unknown"), p.get("parameterType"), _int(p.get("argumentOrdinal"), 0), p.get("argumentExpressionKind"), p.get("argumentExpressionHash"), p.get("argumentSymbol"), p.get("argumentSymbolKind"), p.get("argumentType"), p.get("argumentAssemblyName"), p.get("argumentAssemblyVersion"), p.get("argumentSourceFile"), _nullable_int(p.get("argumentSourceStartLine")), _nullable_int(p.get("argumentSourceEndLine")), fact.evidence.file_path, fact.evidence.start_line, fact.evidence.end_line),
         )
+        insert_parameter_forward_row(con, fact)
     if fact.fact_type == "LocalAlias" and fact.target_symbol:
         con.execute(
             """insert or ignore into local_aliases
@@ -402,6 +403,51 @@ def insert_derived_rows(con: sqlite3.Connection, fact: CodeFact) -> None:
                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (fact.fact_id, fact.scan_id, fact.repo, fact.commit_sha, fact.evidence_tier, fact.rule_id, fact.source_symbol, fact.target_symbol, p.get("aliasSymbolKind"), p.get("aliasType"), p.get("originSymbol", p.get("originSymbolId", "unknown")), p.get("originSymbolKind"), p.get("originType"), fact.evidence.file_path, fact.evidence.start_line, fact.evidence.end_line),
         )
+    if fact.fact_type == "FieldAlias" and fact.target_symbol:
+        con.execute(
+            """insert or ignore into field_aliases
+               (fact_id, scan_id, repo, commit_sha, evidence_tier, rule_id, containing_symbol, field_symbol, field_symbol_kind, field_type, origin_symbol, origin_symbol_kind, origin_type, file_path, start_line, end_line)
+               values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (fact.fact_id, fact.scan_id, fact.repo, fact.commit_sha, fact.evidence_tier, fact.rule_id, fact.source_symbol, p.get("fieldSymbol", fact.target_symbol), p.get("fieldSymbolKind"), p.get("fieldType"), p.get("originSymbol", p.get("originSymbolId", "unknown")), p.get("originSymbolKind"), p.get("originType"), fact.evidence.file_path, fact.evidence.start_line, fact.evidence.end_line),
+        )
+
+
+def insert_parameter_forward_row(con: sqlite3.Connection, fact: CodeFact) -> None:
+    p = fact.properties
+    if p.get("argumentSymbolKind") != "parameter" or not fact.source_symbol or not fact.target_symbol:
+        return
+    argument_symbol = p.get("argumentSymbol")
+    parameter_name = p.get("parameterName")
+    if not argument_symbol or not parameter_name:
+        return
+    source_parameter_symbol = p.get("sourceParameterSymbol") or f"{fact.source_symbol}({argument_symbol})"
+    target_parameter_symbol = p.get("targetParameterSymbol") or f"{fact.target_symbol}({parameter_name})"
+    con.execute(
+        """insert or ignore into parameter_forward_edges
+           (fact_id, scan_id, repo, commit_sha, evidence_tier, rule_id, source_method_symbol, source_parameter_symbol, source_node_key, target_method_symbol, target_parameter_name, target_parameter_type, target_parameter_symbol, target_node_key, target_assembly_name, target_assembly_version, file_path, start_line, end_line)
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            fact.fact_id,
+            fact.scan_id,
+            fact.repo,
+            fact.commit_sha,
+            fact.evidence_tier,
+            fact.rule_id,
+            fact.source_symbol,
+            source_parameter_symbol,
+            source_parameter_symbol,
+            fact.target_symbol,
+            parameter_name,
+            p.get("parameterType"),
+            target_parameter_symbol,
+            target_parameter_symbol,
+            p.get("targetAssemblyName"),
+            p.get("targetAssemblyVersion"),
+            fact.evidence.file_path,
+            fact.evidence.start_line,
+            fact.evidence.end_line,
+        ),
+    )
 
 
 def _int(value: str | None, fallback: int) -> int:
