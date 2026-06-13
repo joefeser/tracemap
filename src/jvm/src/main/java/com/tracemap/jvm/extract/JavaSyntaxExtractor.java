@@ -414,6 +414,10 @@ public final class JavaSyntaxExtractor {
     }
 
     private static void emitLogicFacts(ScanManifest manifest, FileInventoryItem file, List<CodeFact> facts, String currentSymbol, String line, int lineNo) {
+        String trimmed = line.trim();
+        if (trimmed.startsWith("@")) {
+            return;
+        }
         if (line.matches(".*[A-Za-z0-9_)]\\s*[+\\-*/%]\\s*[A-Za-z0-9_(].*")) {
             facts.add(FactFactory.create(
                 manifest,
@@ -474,8 +478,15 @@ public final class JavaSyntaxExtractor {
     }
 
     private static RouteAnnotation routeBefore(List<String> lines, int index) {
-        for (int i = Math.max(0, index - 5); i < index; i++) {
-            Matcher matcher = ANNOTATION.matcher(lines.get(i));
+        for (int i = index - 1; i >= 0; i--) {
+            String line = lines.get(i).trim();
+            if (line.isBlank() || line.startsWith("//") || line.startsWith("/*") || line.startsWith("*")) {
+                continue;
+            }
+            if (!line.startsWith("@")) {
+                return null;
+            }
+            Matcher matcher = ANNOTATION.matcher(line);
             while (matcher.find()) {
                 RouteAnnotation route = routeAnnotation(simple(matcher.group(1)), matcher.group(2) == null ? "" : matcher.group(2));
                 if (route != null) return route;
