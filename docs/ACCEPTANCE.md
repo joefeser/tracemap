@@ -129,6 +129,18 @@ For every successful `tracemap export --index <combined.sqlite> --out <out> --fo
 - Mermaid output starts with `flowchart TD` and groups dependency rows by source label.
 - export output does not include raw source snippets.
 
+For every successful `tracemap report --index <combined.sqlite> --out <out>` run, verify:
+
+- report rejects single-language indexes with a clear combined-index error.
+- directory output writes `dependency-report.md` and `dependency-report.json`.
+- source inventory includes labels, language, scan root, commit SHA, analysis level, and build status without local absolute paths.
+- reduced coverage and known gaps are labeled as coverage-relative.
+- endpoint findings distinguish two-sided pairwise comparisons from one-sided global inventory rows.
+- endpoint JSON rows include side-specific scan IDs, commit SHAs, rule IDs, evidence tiers, file spans, and fact IDs.
+- HTTP, SQL/query, package/config, and dependency-edge surfaces preserve source labels and evidence spans.
+- SQL and dynamic URL rows do not display raw SQL text, raw URLs, source snippets, or local absolute paths.
+- `endpoint_matches` is not mutated by report generation.
+
 ## Language Adapter Acceptance
 
 New language adapters should satisfy [Language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md) before language-specific depth is considered complete.

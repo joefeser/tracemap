@@ -2,109 +2,109 @@
 
 ## Implementation Tasks
 
-- [ ] Add combined dependency report models.
-  - [ ] Define source, summary, endpoint finding, dependency surface, dependency edge, needs-review, known-gap, and limitation rows.
-  - [ ] Define stable JSON shape version `1.0`.
-  - [ ] Pin endpoint finding JSON fields, including client/server source labels, fact IDs, file spans, `sameSource`, and nullable one-sided values.
+- [x] Add combined dependency report models.
+  - [x] Define source, summary, endpoint finding, dependency surface, dependency edge, needs-review, known-gap, and limitation rows.
+  - [x] Define stable JSON shape version `1.0`.
+  - [x] Pin endpoint finding JSON fields, including client/server source labels, fact IDs, file spans, `sameSource`, and nullable one-sided values.
 
-- [ ] Add project wiring.
-  - [ ] Add `Microsoft.Data.Sqlite` access to `TraceMap.Reporting`.
-  - [ ] Decide whether to duplicate minimal source records or reference `TraceMap.Combine` without creating awkward ownership.
-  - [ ] Keep scanner projects untouched unless a small combine compatibility fix is required.
+- [x] Add project wiring.
+  - [x] Add `Microsoft.Data.Sqlite` access to `TraceMap.Reporting`.
+  - [x] Decide whether to duplicate minimal source records or reference `TraceMap.Combine` without creating awkward ownership.
+  - [x] Keep scanner projects untouched unless a small combine compatibility fix is required.
 
-- [ ] Fix combined source language inference.
-  - [ ] Update `CombinedIndexBuilder.InferLanguage` so JVM sources render as `jvm`.
-  - [ ] Update `CombinedIndexBuilder.InferLanguage` so Python sources render as `python`.
-  - [ ] Add regression coverage for JVM/Python language values.
+- [x] Fix combined source language inference.
+  - [x] Update `CombinedIndexBuilder.InferLanguage` so JVM sources render as `jvm`.
+  - [x] Update `CombinedIndexBuilder.InferLanguage` so Python sources render as `python`.
+  - [x] Add regression coverage for JVM/Python language values.
 
-- [ ] Add combined index reader.
-  - [ ] Detect combined indexes by requiring `index_sources` with at least one row, `combined_facts`, and `combined_dependency_edges`.
-  - [ ] Reject single-language indexes with a clear message.
-  - [ ] Treat missing `endpoint_matches` as a warning for read-only MVP reporting.
-  - [ ] Read `index_sources` with manifest JSON.
-  - [ ] Read endpoint, SQL/query, package/config, and dependency-edge rows.
-  - [ ] Parse `properties_json` defensively.
+- [x] Add combined index reader.
+  - [x] Detect combined indexes by requiring `index_sources` with at least one row, `combined_facts`, and `combined_dependency_edges`.
+  - [x] Reject single-language indexes with a clear message.
+  - [x] Treat missing `endpoint_matches` as a warning for read-only MVP reporting.
+  - [x] Read `index_sources` with manifest JSON.
+  - [x] Read endpoint, SQL/query, package/config, and dependency-edge rows.
+  - [x] Parse `properties_json` defensively.
 
-- [ ] Add coverage summarization.
-  - [ ] Classify report coverage.
-  - [ ] Distinguish report-level `UnknownAnalysisGap` from finding-level `UnknownAnalysisGap`.
-  - [ ] Correct stale source-language display from scanner version and emit a warning.
-  - [ ] Group known gaps by source label and category.
-  - [ ] Ensure local absolute paths are not rendered.
+- [x] Add coverage summarization.
+  - [x] Classify report coverage.
+  - [x] Distinguish report-level `UnknownAnalysisGap` from finding-level `UnknownAnalysisGap`.
+  - [x] Correct stale source-language display from scanner version and emit a warning.
+  - [x] Group known gaps by source label and category.
+  - [x] Ensure local absolute paths are not rendered.
 
-- [ ] Add endpoint candidate extraction.
-  - [ ] Identify client and server endpoint candidates from combined facts.
-  - [ ] Preserve source/fact provenance before matching.
-  - [ ] Sanitize dynamic URL reasons so raw URL fragments are not rendered.
+- [x] Add endpoint candidate extraction.
+  - [x] Identify client and server endpoint candidates from combined facts.
+  - [x] Preserve source/fact provenance before matching.
+  - [x] Sanitize dynamic URL reasons so raw URL fragments are not rendered.
 
-- [ ] Add combined endpoint classification.
-  - [ ] Match by HTTP method and normalized path key.
-  - [ ] Compute two-sided comparison findings per `(client source, server source)` pair.
-  - [ ] Compute client-only, server-only, and dynamic findings as global one-sided inventory rows with absent-side JSON fields set to `null`.
-  - [ ] Emit fan-out matches across different server sources as separate matches, not global ambiguity.
-  - [ ] Include same-source client/route pairs and flag `sameSource`.
-  - [ ] Classify matched, optional, method mismatch, ambiguous, dynamic, client-only, server-only, and unknown-gap cases.
-  - [ ] Preserve full source/fact provenance in each finding.
+- [x] Add combined endpoint classification.
+  - [x] Match by HTTP method and normalized path key.
+  - [x] Compute two-sided comparison findings per `(client source, server source)` pair.
+  - [x] Compute client-only, server-only, and dynamic findings as global one-sided inventory rows with absent-side JSON fields set to `null`.
+  - [x] Emit fan-out matches across different server sources as separate matches, not global ambiguity.
+  - [x] Include same-source client/route pairs and flag `sameSource`.
+  - [x] Classify matched, optional, method mismatch, ambiguous, dynamic, client-only, server-only, and unknown-gap cases.
+  - [x] Preserve full source/fact provenance in each finding.
 
-- [ ] Keep MVP endpoint reporting read-only.
-  - [ ] Prove report generation does not mutate `endpoint_matches`.
-  - [ ] Defer `--write-derived` and derived DB writes unless explicitly pulled into a follow-up.
-  - [ ] If `--write-derived` is implemented later, add boolean flag parsing support and delete old rows by `derivedBy` before inserting new rows.
+- [x] Keep MVP endpoint reporting read-only.
+  - [x] Prove report generation does not mutate `endpoint_matches`.
+  - [x] Defer `--write-derived` and derived DB writes unless explicitly pulled into a follow-up.
+  - [x] If `--write-derived` is implemented later, add boolean flag parsing support and delete old rows by `derivedBy` before inserting new rows.
 
-- [ ] Add dependency surface extraction.
-  - [ ] Render HTTP client and route surfaces.
-  - [ ] Render SQL-shape and query-builder surfaces.
-  - [ ] Render `SqlTextUsed`, `DapperCallDetected`, and `SqlCommandDetected` as hash/length or operation/source metadata evidence only.
-  - [ ] Render `n/a` for table/column fields when only hash/length SQL evidence exists.
-  - [ ] Render package/config surfaces only from the explicit fact/property keys listed in the design.
-  - [ ] Derive deterministic surface display names using the design fallback order.
+- [x] Add dependency surface extraction.
+  - [x] Render HTTP client and route surfaces.
+  - [x] Render SQL-shape and query-builder surfaces.
+  - [x] Render `SqlTextUsed`, `DapperCallDetected`, and `SqlCommandDetected` as hash/length or operation/source metadata evidence only.
+  - [x] Render `n/a` for table/column fields when only hash/length SQL evidence exists.
+  - [x] Render package/config surfaces only from the explicit fact/property keys listed in the design.
+  - [x] Derive deterministic surface display names using the design fallback order.
 
-- [ ] Add dependency edge extraction.
-  - [ ] Read `combined_dependency_edges`.
-  - [ ] Include calls, creates, symbol relationships, and parameter-forwarding edges.
-  - [ ] Preserve source label, edge IDs, rule IDs, evidence tiers, and file spans.
+- [x] Add dependency edge extraction.
+  - [x] Read `combined_dependency_edges`.
+  - [x] Include calls, creates, symbol relationships, and parameter-forwarding edges.
+  - [x] Preserve source label, edge IDs, rule IDs, evidence tiers, and file spans.
 
-- [ ] Add Markdown writer.
-  - [ ] Sections: Summary, Sources, Endpoint Alignment, Dependency Surfaces, Dependency Edges, Needs Review, Known Gaps, Limitations.
-  - [ ] Deterministic sort order.
-  - [ ] Row caps with truncation notices.
-  - [ ] Inline coverage-relative caveats for unmatched endpoints.
+- [x] Add Markdown writer.
+  - [x] Sections: Summary, Sources, Endpoint Alignment, Dependency Surfaces, Dependency Edges, Needs Review, Known Gaps, Limitations.
+  - [x] Deterministic sort order.
+  - [x] Row caps with truncation notices.
+  - [x] Inline coverage-relative caveats for unmatched endpoints.
 
-- [ ] Add JSON writer.
-  - [ ] Emit stable top-level shape.
-  - [ ] Include all rows without Markdown caps.
-  - [ ] Use `null` and empty arrays consistently for missing values.
+- [x] Add JSON writer.
+  - [x] Emit stable top-level shape.
+  - [x] Include all rows without Markdown caps.
+  - [x] Use `null` and empty arrays consistently for missing values.
 
-- [ ] Wire CLI.
-  - [ ] Replace `report` skeleton with combined dependency report implementation.
-  - [ ] Update root help and report help.
-  - [ ] Treat missing-extension output paths as directories.
-  - [ ] Print useful completion summary.
+- [x] Wire CLI.
+  - [x] Replace `report` skeleton with combined dependency report implementation.
+  - [x] Update root help and report help.
+  - [x] Treat missing-extension output paths as directories.
+  - [x] Print useful completion summary.
 
-- [ ] Add tests.
-  - [ ] Single-language index rejection.
-  - [ ] Markdown and JSON output.
-  - [ ] Source coverage warnings.
-  - [ ] Endpoint classifications, fan-out matching, and same-source matching.
-  - [ ] No mutation of `endpoint_matches`.
-  - [ ] Dependency edge rows.
-  - [ ] SQL/query rows without raw SQL, including `SqlTextUsed`-only rows.
-  - [ ] Dynamic URL findings without raw URL fragments.
-  - [ ] JVM/Python language inference.
-  - [ ] Markdown 200-row truncation notice with full JSON rows.
-  - [ ] Deterministic output ordering.
+- [x] Add tests.
+  - [x] Single-language index rejection.
+  - [x] Markdown and JSON output.
+  - [x] Source coverage warnings.
+  - [x] Endpoint classifications, fan-out matching, and same-source matching.
+  - [x] No mutation of `endpoint_matches`.
+  - [x] Dependency edge rows.
+  - [x] SQL/query rows without raw SQL, including `SqlTextUsed`-only rows.
+  - [x] Dynamic URL findings without raw URL fragments.
+  - [x] JVM/Python language inference.
+  - [x] Markdown 200-row truncation notice with full JSON rows.
+  - [x] Deterministic output ordering.
 
-- [ ] Update docs.
-  - [ ] README quickstart for `combine -> report`.
-  - [ ] `docs/ACCEPTANCE.md` combined report acceptance.
-  - [ ] `docs/VALIDATION.md` smoke command.
-  - [ ] Rule catalog only if a derived rule ID is introduced.
+- [x] Update docs.
+  - [x] README quickstart for `combine -> report`.
+  - [x] `docs/ACCEPTANCE.md` combined report acceptance.
+  - [x] `docs/VALIDATION.md` smoke command.
+  - [x] Rule catalog only if a derived rule ID is introduced.
 
-- [ ] Validate.
-  - [ ] `dotnet build src/dotnet/TraceMap.sln`
-  - [ ] `dotnet test src/dotnet/TraceMap.sln`
-  - [ ] `./scripts/check-private-paths.sh`
-  - [ ] `git diff --check`
+- [x] Validate.
+  - [x] `dotnet build src/dotnet/TraceMap.sln`
+  - [x] `dotnet test src/dotnet/TraceMap.sln`
+  - [x] `./scripts/check-private-paths.sh`
+  - [x] `git diff --check`
 
 ## Deferred Follow-Ups
 
