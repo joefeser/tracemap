@@ -4,6 +4,11 @@ from collections import Counter
 
 from .models import CodeFact, ScanManifest
 
+SQL_SHAPE_LIMITATION = (
+    "- SQL query-pattern rows are static shape evidence only; they do not prove runtime execution, "
+    "database schema existence, dialect validity, generated SQL equivalence, or branch feasibility."
+)
+
 
 def render_report(manifest: ScanManifest, facts: list[CodeFact]) -> str:
     by_type = Counter(f.fact_type for f in facts)
@@ -33,6 +38,8 @@ def render_report(manifest: ScanManifest, facts: list[CodeFact]) -> str:
     lines.extend(["", "## Rules", "", "| Rule | Count |", "| --- | ---: |"])
     for key, count in sorted(by_rule.items()):
         lines.append(f"| `{key}` | {count} |")
+    lines.extend(["", "## Query Patterns", "", SQL_SHAPE_LIMITATION, ""])
+    lines.extend(_query_pattern_lines(facts))
     lines.extend(["", "## Known Gaps", ""])
     if manifest.known_gaps:
         for gap in manifest.known_gaps:
@@ -52,3 +59,27 @@ def render_report(manifest: ScanManifest, facts: list[CodeFact]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _query_pattern_lines(facts: list[CodeFact]) -> list[str]:
+    patterns = [
+        fact
+        for fact in facts
+        if fact.fact_type == "QueryPatternDetected" and _prop(fact, "sqlSourceKind")
+    ]
+    if not patterns:
+        return ["- None found."]
+    return [_format_sql_query_pattern(fact) for fact in patterns]
+
+
+def _format_sql_query_pattern(fact: CodeFact) -> str:
+    operation = _prop(fact, "operationName") or "unknown"
+    table = _prop(fact, "tableName") or _prop(fact, "tableNames") or "unknown"
+    columns = _prop(fact, "columnNames") or _prop(fact, "fieldNames") or "none"
+    source = _prop(fact, "sqlSourceKind") or "unknown"
+    shape = _prop(fact, "queryShapeHash") or "n/a"
+    return f"- `{operation}` on `{table}` columns `{columns}` source `{source}` shape `{shape}` ({fact.evidence_tier}) at `{fact.evidence.file_path}:{fact.evidence.start_line}`"
+
+
+def _prop(fact: CodeFact, key: str) -> str:
+    return fact.properties.get(key, "").strip()
