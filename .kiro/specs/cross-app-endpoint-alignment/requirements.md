@@ -149,7 +149,7 @@ Labels are important when both indexes come from the same Git remote and commit 
 3. WHEN scan root metadata is unavailable THEN the endpoint command SHALL allow `--client-label` and `--server-label`.
 4. WHEN scanners are updated for this phase THEN they SHALL add non-breaking manifest fields for scan-root identity, including `scanRootRelativePath`, `scanRootPathHash`, and `gitRootHash`.
 5. WHEN absolute local paths are useful for a local-only report THEN they MAY be emitted behind an explicit option such as `--include-local-paths`; raw absolute paths SHOULD NOT become required for shareable artifacts.
-6. WHEN facts are copied into a derived report or future combined database THEN original `factId`, `scanId`, `repo`, `commitSha`, evidence span, rule ID, and evidence tier SHALL be preserved.
+6. WHEN facts are copied into a derived report or combined database THEN original `factId`, `scanId`, `repo`, `commitSha`, evidence span, rule ID, and evidence tier SHALL be preserved.
 7. WHEN indexes are combined in a future command THEN fact IDs SHALL be namespaced by source index or scan ID to avoid collisions.
 8. WHEN a repo is dirty or Git metadata is missing THEN the report SHALL preserve the known metadata and label the snapshot as reduced provenance.
 
@@ -160,14 +160,14 @@ Labels are important when both indexes come from the same Git remote and commit 
 #### Acceptance Criteria
 
 1. WHEN this MVP is implemented THEN it SHALL not require changing single-language scan output into a monolithic scan.
-2. WHEN designing endpoint alignment tables or JSON output THEN the design SHALL be compatible with a future `tracemap combine --index <path> --label <label> --out <combined.sqlite>` workflow.
-3. WHEN adding the next language family, JVM support SHALL assume `tracemap combine` lands first or alongside it so cross-index dependency analysis has a stable home.
-4. WHEN a future combine command imports indexes THEN it SHALL store an `index_sources` table containing source index path hash, label, scan ID, repo identity, scan root identity, language, scanner version, analysis level, build status, commit SHA, and imported-at timestamp.
-5. WHEN a future combine command imports facts THEN it SHALL store or expose a `combinedFactId` while keeping the original fact ID unchanged.
-6. WHEN a future combine command imports symbols and relationships THEN it SHALL namespace language-specific symbol IDs, carry a `language` discriminator, and retain language/package/assembly identity; raw symbol ID equality across languages SHALL NOT imply identity.
+2. WHEN designing endpoint alignment tables or JSON output THEN the design SHALL be compatible with the `tracemap combine --index <path> --label <label> --out <combined.sqlite>` workflow.
+3. WHEN adding the next language family, JVM support SHALL use `tracemap combine` as the stable home for cross-index dependency analysis.
+4. WHEN `tracemap combine` imports indexes THEN it SHALL store an `index_sources` table containing source index path hash, label, scan ID, repo identity, scan root identity, language, scanner version, analysis level, build status, commit SHA, and imported-at timestamp.
+5. WHEN `tracemap combine` imports facts THEN it SHALL store or expose a `combinedFactId` while keeping the original fact ID unchanged.
+6. WHEN `tracemap combine` imports symbols and relationships THEN it SHALL namespace language-specific symbol IDs, carry a `language` discriminator, and retain language/package/assembly identity; raw symbol ID equality across languages SHALL NOT imply identity.
 7. WHEN endpoint matches are computed from a combined database THEN they SHALL be represented as derived rows, not source facts, unless a future rule catalog entry defines an evidence-backed derived fact type.
 8. WHEN future dependency reports traverse multiple indexes THEN every edge SHALL remain traceable to one or more source facts with rule IDs.
-9. WHEN future combined databases are used for long-term analysis THEN commit SHA and scan root metadata SHALL allow comparing snapshots from two different commits.
+9. WHEN combined databases are used for long-term analysis THEN commit SHA and scan root metadata SHALL allow comparing snapshots from two different commits.
 
 ### Requirement 7: Long-Term Snapshot and Diff Readiness
 
@@ -227,7 +227,7 @@ Labels are important when both indexes come from the same Git remote and commit 
 6. WHEN route constraints are present THEN tests SHALL retain constraints in evidence and match by route shape.
 7. WHEN TypeScript dependencies are missing THEN tests SHALL verify reduced coverage with useful syntax/client endpoint facts.
 8. WHEN C# framework references are missing THEN tests SHALL verify reduced coverage with useful syntax/server endpoint facts.
-9. WHEN combining two indexes is not implemented in MVP THEN tests SHALL still verify that endpoint JSON includes source index metadata needed by a later combine command.
+9. WHEN endpoint alignment runs outside a combined database THEN tests SHALL still verify that endpoint JSON includes source index metadata compatible with `tracemap combine`.
 10. WHEN duplicate client call sites map to the same server endpoint THEN tests SHALL preserve both call-site evidence rows.
 11. WHEN duplicate server routes expose the same method/path from multiple actions THEN tests SHALL report ambiguity or duplicate-route evidence.
 12. WHEN URLs contain query strings, fragments, or URL-encoded path segments THEN tests SHALL verify stable path matching and side evidence.
@@ -289,4 +289,4 @@ Endpoint alignment findings SHALL include source fact IDs and SHALL not become s
 - Client helper methods can construct URLs dynamically; MVP labels these as needs-review.
 - ASP.NET conventional routes, minimal APIs, endpoint filters, route groups, `[Area]`, `AcceptVerbs`, custom route attributes, `[ApiController]` implicit routing, and middleware-generated endpoints are follow-up unless simple extraction can be added without overclaiming.
 - Optional segment matching can create ambiguity; ambiguity must be reported rather than silently resolved when scores are tied.
-- Multi-index combine and long-term diff are intentionally future work, but this spec preserves the metadata needed to build them.
+- N-way endpoint matching and long-term diff are intentionally future work, but this spec preserves the metadata needed to build them.

@@ -25,7 +25,7 @@ Please review for:
 - Evidence tier ambiguity.
 - Places where reduced coverage is not labeled strongly enough.
 - Report classifications that are confusing or incomplete.
-- Whether the two-index MVP still leaves the right seam for future `tracemap combine`.
+- Whether the two-index MVP still leaves the right seam for `tracemap combine` and follow-up derived rows.
 - Whether `ServerEndpointNoClientMatch` and `ClientCallNoServerEndpoint` caveats are strong enough to avoid dead-code or broken-call claims.
 - Whether cleartext relative base path storage, such as `/api`, is scoped correctly and host/scheme values remain protected.
 
@@ -78,7 +78,7 @@ You are reviewing the TraceMap Cross-App Endpoint Alignment spec specifically fo
 
 Context:
 - The MVP compares two existing index.sqlite files and emits a derived endpoint report.
-- Future work may add tracemap combine to merge multiple indexes into one queryable database.
+- `tracemap combine` merges multiple indexes into one queryable database.
 - The user wants to analyze multiple apps together, know which folder/root each scan represented, and compare results across commit SHAs over time.
 - Existing scan manifests already include repo name, remote URL, branch, commit SHA, scanner version, analysis level, and build status.
 - The spec requires additive scan-root fields: scanRootRelativePath, scanRootPathHash, and gitRootHash, with raw absolute path only behind an explicit local option.
@@ -89,7 +89,7 @@ Files to review:
 - .kiro/specs/cross-app-endpoint-alignment/tasks.md
 
 Please review for:
-- Whether the MVP report JSON has enough source metadata for a future combine command.
+- Whether the MVP report JSON has enough source metadata for the combine command.
 - Whether scan-root identity fields are sufficient and should be mandatory for new scans.
 - Whether hash-only local path storage is enough for long-term local analysis.
 - How fact IDs and symbol IDs should be namespaced in a combined database.

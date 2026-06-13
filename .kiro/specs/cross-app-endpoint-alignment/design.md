@@ -23,7 +23,7 @@ This is a report/correlation layer over evidence. It does not mutate source fact
 - Normalize client and server route templates consistently.
 - Correlate client calls to server endpoints across two indexes.
 - Preserve source index provenance, commit SHA, scan root identity, rule IDs, evidence tiers, and file spans.
-- Keep the design compatible with a future combined multi-index dependency database.
+- Keep the design compatible with the combined multi-index dependency database.
 
 ## Non-Goals
 
@@ -46,8 +46,8 @@ This is a report/correlation layer over evidence. It does not mutate source fact
 - Angular `HttpClient` client calls reuse `HttpCallDetected`.
 - ASP.NET controller endpoints reuse `HttpRouteBinding`.
 - Server syntax route fallback is required because unresolved ASP.NET references can prevent semantic route extraction.
-- Combined database work is future-facing, but endpoint result JSON and source metadata must be shaped so a future combine command can reuse it.
-- `tracemap combine` should land before or alongside JVM support so Java/Kotlin dependency analysis can use the same cross-index model instead of inventing a language-specific merger.
+- Combined database work is available through `tracemap combine`; endpoint result JSON and source metadata must stay compatible with that cross-index model.
+- JVM support should use the same cross-index model instead of inventing a language-specific merger.
 
 ## Proposed Package Layout
 
@@ -406,7 +406,7 @@ JSON should be stable and testable:
 
 The MVP should not create a combined database, but it should avoid decisions that make one hard later.
 
-Preferred future direction: **combine existing indexes**, not scan all languages into one index initially.
+Implemented direction: **combine existing indexes**, not scan all languages into one index initially.
 
 Why:
 
@@ -416,7 +416,7 @@ Why:
 - Combining can be repeated without rescanning source.
 - Multi-repo dependency analysis can include repos scanned at different times or commits.
 
-Future command shape:
+Command shape:
 
 ```bash
 tracemap combine \
@@ -427,7 +427,7 @@ tracemap combine \
 
 Preferred JVM layout after combine: `src/jvm`. Java and Kotlin can share Gradle/Maven discovery, package/module metadata, JVM signatures, call edges, inheritance relationships, and dependency facts. Split Java/Kotlin internally only where front-end parsers or compiler integrations require it.
 
-Future combined schema candidates:
+Combined schema baseline:
 
 ```sql
 CREATE TABLE index_sources (

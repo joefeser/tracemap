@@ -31,6 +31,19 @@ public sealed class CliTests
     }
 
     [Fact]
+    public async Task Help_for_combine_returns_usage()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["combine", "--help"], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("tracemap combine --index <path>", output.ToString());
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
     public async Task Scan_against_temporary_directory_writes_required_outputs()
     {
         using var temp = new TempDirectory();
