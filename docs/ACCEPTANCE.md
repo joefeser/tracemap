@@ -75,6 +75,29 @@ For every successful `tracemap export --index <index> --out <out> --format merma
 
 For TypeScript indexes, `tracemap-ts export --index <index> --out <out> --format <json|mermaid>` should produce equivalent export shapes from the same SQLite tables.
 
+## Combine Acceptance
+
+For every successful `tracemap combine --index <index> [--index <index>] --out <combined.sqlite>` run, verify:
+
+- combined SQLite output exists.
+- `index_sources` contains one row per imported index.
+- source labels are unique and deterministic; explicit `--label` values are preserved.
+- `index_sources` stores source index path hash, scan ID, repo identity, scan root metadata, language when inferred, scanner version, analysis level, build status, and commit SHA.
+- `combined_facts` contains every imported source fact.
+- `combined_facts.original_fact_id` and `combined_facts.original_scan_id` preserve the source index identity.
+- `combined_facts.combined_fact_id` namespaces facts by source index so equal source fact IDs do not collide.
+- combined symbol, relationship, call-edge, object-creation, argument-flow, alias, and parameter-forwarding tables are populated when those source tables exist.
+- `combined_dependency_edges` view exposes calls, object creations, relationships, and parameter-forwarding edges with source labels and evidence spans.
+- the empty `endpoint_matches` table exists as a placeholder for future derived cross-index rows.
+- raw source snippets are not added by combine.
+
+For every successful `tracemap export --index <combined.sqlite> --out <out> --format <json|mermaid>` run, verify:
+
+- export JSON includes `sources`, `factsByType`, `factsBySourceAndType`, `relationships`, `callEdges`, and `objectCreations`.
+- source labels and source index IDs are included on combined dependency rows.
+- Mermaid output starts with `flowchart TD` and groups dependency rows by source label.
+- export output does not include raw source snippets.
+
 ## Language Adapter Acceptance
 
 New language adapters should satisfy [Language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md) before language-specific depth is considered complete.

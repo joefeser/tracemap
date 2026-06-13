@@ -7,7 +7,7 @@ This spec has been implemented as the first endpoint-alignment slice. The checkl
 ### Completed
 
 - [x] Support exactly one client index and one server index for MVP.
-- [x] Keep N-way endpoint matching for future `tracemap combine`.
+- [x] Keep N-way endpoint matching for combined database follow-up work.
 - [x] Implement endpoint alignment in `src/dotnet/TraceMap.EndpointAlignment`.
 - [x] Keep scan-time extractors in `TraceMap.Core` and `src/typescript`.
 - [x] Write Markdown for default file output, JSON for `--format json`, and both `endpoint-report.md` plus `endpoint-report.json` for directory output.
@@ -39,7 +39,8 @@ This spec has been implemented as the first endpoint-alignment slice. The checkl
 
 ### Intentionally Partial or Deferred
 
-- [ ] `tracemap combine` for N indexes with source-index namespacing and derived cross-index rows.
+- [x] `tracemap combine` baseline for N indexes with source-index namespacing and source fact/table imports.
+- [ ] Derived cross-index rows on top of combined databases.
 - [ ] `tracemap endpoint-diff` for comparing endpoint reports across commit SHAs.
 - [ ] N-client-to-N-server endpoint alignment.
 - [ ] React, Next.js, Remix, Nest, Fastify, Koa, GraphQL, OpenAPI, and other non-Angular/ASP.NET endpoint families.
