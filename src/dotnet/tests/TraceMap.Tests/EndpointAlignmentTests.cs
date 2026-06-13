@@ -108,14 +108,63 @@ public sealed class EndpointAlignmentTests
         Assert.Contains("not proof of dead code", markdown);
     }
 
+    [Fact]
+    public async Task Endpoint_alignment_attaches_analysis_gap_evidence_to_unknown_gap_findings()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var clientManifest = Manifest("client", "Level3SyntaxAnalysis", "NotRun", "client/root", commitSha: "unknown");
+        var serverManifest = Manifest("server", "Level1SemanticAnalysis", "Succeeded", "server/root");
+
+        SqliteIndexWriter.Write(clientIndex, clientManifest, [
+            AnalysisGapFact(clientManifest, "gap-client", "src/app.ts", 3)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, serverManifest, []);
+
+        var result = await EndpointAlignmentEngine.AlignAsync(new EndpointAlignmentOptions(clientIndex, serverIndex, Path.Combine(temp.Path, "endpoints")));
+
+        var finding = Assert.Single(result.Report.Findings, item => item.Classification == EndpointClassifications.UnknownAnalysisGap);
+        Assert.NotNull(finding.ClientEvidence);
+        Assert.Equal(FactTypes.AnalysisGap, finding.ClientEvidence!.FactType);
+        Assert.StartsWith("fact-", finding.ClientFactId);
+    }
+
+    [Fact]
+    public async Task Endpoint_alignment_combines_semantic_controller_and_action_route_templates()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var outDir = Path.Combine(temp.Path, "endpoints");
+        var clientManifest = Manifest("client", "Level1SemanticAnalysis", "Succeeded", "client/root");
+        var serverManifest = Manifest("server", "Level1SemanticAnalysis", "Succeeded", "server/root");
+
+        SqliteIndexWriter.Write(clientIndex, clientManifest, [
+            HttpClientFact(clientManifest, "fact-client", "GET", "/api/runner/get-by-id/{id}", "/api/runner/get-by-id/{}", "src/runner.service.ts", 8)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, serverManifest, [
+            SemanticRouteTemplateFact(serverManifest, "GET", "api/[controller],get-by-id/{id}", "Controllers/RunnerController.cs", 10)
+        ]);
+
+        var result = await EndpointAlignmentEngine.AlignAsync(new EndpointAlignmentOptions(clientIndex, serverIndex, outDir));
+
+        Assert.Contains(result.Report.Findings, finding => finding.Classification == EndpointClassifications.MatchedEndpoint);
+    }
+
     private static ScanManifest Manifest(string repo, string analysisLevel, string buildStatus, string scanRoot)
+    {
+        return Manifest(repo, analysisLevel, buildStatus, scanRoot, "abc123");
+    }
+
+    private static ScanManifest Manifest(string repo, string analysisLevel, string buildStatus, string scanRoot, string commitSha)
     {
         return new ScanManifest(
             $"scan-{repo}",
             repo,
             null,
             "main",
-            "abc123",
+            commitSha,
             "test",
             DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
             analysisLevel,
@@ -187,6 +236,41 @@ public sealed class EndpointAlignmentTests
                 ["normalizedPathTemplate"] = template,
                 ["normalizedPathKey"] = key,
                 ["optionalParameterNames"] = optional
+            });
+    }
+
+    private static CodeFact SemanticRouteTemplateFact(ScanManifest manifest, string method, string routeTemplates, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSemanticContractMapping,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: $"{method} {routeTemplates}",
+            contractElement: routeTemplates,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["routeTemplates"] = routeTemplates,
+                ["containingType"] = "Sample.Api.RunnerController"
+            });
+    }
+
+    private static CodeFact AnalysisGapFact(ScanManifest manifest, string id, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.EndpointAlignment,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: id,
+            contractElement: "analysis-gap",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = "project-load",
+                ["message"] = "test gap"
             });
     }
 }

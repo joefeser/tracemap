@@ -21,6 +21,9 @@ declare const base44: {
 declare const app: {
   get(route: string, handler: unknown): void;
 };
+declare const process: {
+  env: Record<string, string | undefined>;
+};
 
 export const CustomerSchema = z.object({
   status: z.string()

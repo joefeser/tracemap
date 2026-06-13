@@ -11,25 +11,7 @@ internal static class EndpointMatcher
 
         if (HasCredibilityGap(clientIndex) || HasCredibilityGap(serverIndex))
         {
-            findings.Add(new EndpointFinding(
-                EndpointClassifications.UnknownAnalysisGap,
-                "ANY",
-                null,
-                null,
-                null,
-                null,
-                null,
-                clientIndex.Source.ScanId,
-                serverIndex.Source.ScanId,
-                clientIndex.Source.CommitSha,
-                serverIndex.Source.CommitSha,
-                RuleIds.EndpointAlignment,
-                "Low",
-                null,
-                null,
-                null,
-                null,
-                ["One or both source indexes contain analysis gaps. Endpoint findings remain coverage-relative."]));
+            findings.Add(CreateAnalysisGapFinding(clientIndex, serverIndex));
         }
 
         foreach (var client in clientIndex.Endpoints)
@@ -155,6 +137,54 @@ internal static class EndpointMatcher
             client is null ? null : ToEvidence(client),
             server is null ? null : ToEvidence(server),
             notes);
+    }
+
+    private static EndpointFinding CreateAnalysisGapFinding(EndpointIndex clientIndex, EndpointIndex serverIndex)
+    {
+        var clientGap = RepresentativeGap(clientIndex);
+        var serverGap = RepresentativeGap(serverIndex);
+        return new EndpointFinding(
+            EndpointClassifications.UnknownAnalysisGap,
+            "ANY",
+            null,
+            null,
+            null,
+            clientGap?.FactId,
+            serverGap?.FactId,
+            clientGap?.ScanId ?? clientIndex.Source.ScanId,
+            serverGap?.ScanId ?? serverIndex.Source.ScanId,
+            clientGap?.CommitSha ?? clientIndex.Source.CommitSha,
+            serverGap?.CommitSha ?? serverIndex.Source.CommitSha,
+            RuleIds.EndpointAlignment,
+            "Low",
+            clientGap?.EvidenceTier,
+            serverGap?.EvidenceTier,
+            clientGap is null ? null : ToEvidence(clientGap),
+            serverGap is null ? null : ToEvidence(serverGap),
+            AnalysisGapNotes(clientGap, serverGap));
+    }
+
+    private static EndpointCandidate? RepresentativeGap(EndpointIndex index)
+    {
+        return index.AnalysisGaps
+            .OrderBy(gap => gap.FilePath, StringComparer.Ordinal)
+            .ThenBy(gap => gap.StartLine)
+            .ThenBy(gap => gap.FactId, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    private static IReadOnlyList<string> AnalysisGapNotes(EndpointCandidate? clientGap, EndpointCandidate? serverGap)
+    {
+        var notes = new List<string> { "One or both source indexes contain analysis gaps. Endpoint findings remain coverage-relative." };
+        if (clientGap is not null)
+        {
+            notes.Add($"Client analysis gap evidence: {clientGap.FilePath}:{clientGap.StartLine}.");
+        }
+        if (serverGap is not null)
+        {
+            notes.Add($"Server analysis gap evidence: {serverGap.FilePath}:{serverGap.StartLine}.");
+        }
+        return notes;
     }
 
     private static EndpointEvidence ToEvidence(EndpointCandidate candidate)
