@@ -15,7 +15,8 @@ from tracemap_py.git_metadata import read_git_metadata
 from tracemap_py.hashes import sha256_hex
 from tracemap_py.inventory import discover_inventory
 from tracemap_py.metadata import read_package_metadata
-from tracemap_py.models import EvidenceSpan, ScanManifest
+from tracemap_py.models import CodeFact, EvidenceSpan, ScanManifest
+from tracemap_py.report import render_report
 from tracemap_py.route import normalize_path_key
 from tracemap_py.sql_extractor import extract_sql_files
 from tracemap_py.sql_text import operation_name, query_shape
@@ -140,22 +141,48 @@ def test_fastapi_report_renders_sql_query_patterns_without_raw_sql(tmp_path: Pat
     _, facts = scan(make_options(str(ROOT / "samples/python-fastapi-sample"), str(out)))
 
     report = (out / "report.md").read_text(encoding="utf-8")
-    orm_pattern = next(
-        fact for fact in facts
-        if fact.fact_type == "QueryPatternDetected" and fact.properties.get("sqlSourceKind") == "orm-text"
+    patterns = [fact for fact in facts if fact.fact_type == "QueryPatternDetected" and fact.properties.get("sqlSourceKind")]
+    selected = next(
+        fact for fact in patterns
+        if fact.properties.get("tableName") == "orders" and fact.properties.get("columnNames") == "id;status;total"
     )
-    shape_hash = orm_pattern.properties["queryShapeHash"]
+    expected_orders = sum(1 for fact in patterns if fact.properties.get("tableName") == "orders")
 
     assert report.index("## Rules") < report.index("## Query Patterns") < report.index("## Known Gaps")
     assert "static shape evidence" in report
     assert "runtime execution" in report
     assert "`orders`" in report
     assert "`id;status;total`" in report
-    assert "`orm-text`" in report
-    assert shape_hash in report
+    assert f"`{selected.properties['sqlSourceKind']}`" in report
+    assert selected.properties["queryShapeHash"] in report
     assert re.search(r"\b[0-9a-f]{32}\b", report)
-    assert report.count("on `orders`") >= 3
+    assert report.count("on `orders`") == expected_orders
     assert "SELECT id, status, total FROM orders" not in report
+
+
+def test_python_report_handles_nullish_query_pattern_properties() -> None:
+    manifest = _manifest("nullish-report")
+    fact = CodeFact(
+        "fact-nullish",
+        manifest.scan_id,
+        manifest.repo_name,
+        manifest.commit_sha,
+        None,
+        "QueryPatternDetected",
+        "python.integration.sql.v1",
+        "Tier2Structural",
+        None,
+        "orders",
+        "orders",
+        EvidenceSpan("app/query.py", 4, 4, None, "PythonAstExtractor", "python-sql/0.1.0"),
+        {"sqlSourceKind": "sql-file", "tableName": None, "columnNames": "id;status", "queryShapeHash": None},  # type: ignore[dict-item]
+    )
+
+    report = render_report(manifest, [fact])
+
+    assert "on `unknown`" in report
+    assert "columns `id;status`" in report
+    assert "shape `n/a`" in report
 
 
 def test_flask_sample_emits_route_config_and_dynamic_boundaries(tmp_path: Path) -> None:

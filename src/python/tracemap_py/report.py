@@ -82,4 +82,5 @@ def _format_sql_query_pattern(fact: CodeFact) -> str:
 
 
 def _prop(fact: CodeFact, key: str) -> str:
-    return fact.properties.get(key, "").strip()
+    value = fact.properties.get(key)
+    return str(value).strip() if value is not None else ""
