@@ -1098,7 +1098,7 @@ public static class CombinedDependencyReporter
         return value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
-    private static bool MethodsCompatible(string clientMethod, string serverMethod)
+    internal static bool MethodsCompatible(string clientMethod, string serverMethod)
     {
         var clientMethods = SplitMethods(clientMethod);
         var serverMethods = SplitMethods(serverMethod);
@@ -1107,7 +1107,7 @@ public static class CombinedDependencyReporter
             || clientMethods.Intersect(serverMethods, StringComparer.Ordinal).Any();
     }
 
-    private static IReadOnlyList<string> SplitMethods(string? value)
+    internal static IReadOnlyList<string> SplitMethods(string? value)
     {
         var methods = SplitList(value)
             .Select(method => method.ToUpperInvariant())
@@ -1117,7 +1117,7 @@ public static class CombinedDependencyReporter
         return methods.Length == 0 ? ["ANY"] : methods;
     }
 
-    private static NormalizedEndpointRoute? TryNormalizeEndpoint(IReadOnlyDictionary<string, string> properties)
+    internal static NormalizedEndpointRoute? TryNormalizeEndpoint(IReadOnlyDictionary<string, string> properties)
     {
         var normalizedTemplate = FirstValue(properties, "normalizedPathTemplate");
         if (!string.IsNullOrWhiteSpace(normalizedTemplate))

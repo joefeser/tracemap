@@ -57,6 +57,7 @@ public sealed class CombinedDependencyPathTests
         Assert.Contains("TraceMap Paths Report", markdown);
         Assert.Contains("source transition:", markdown);
         Assert.Contains("sql-query", markdown);
+        Assert.DoesNotContain("Inventory rows are capped", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from orders", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
 
@@ -76,6 +77,73 @@ public sealed class CombinedDependencyPathTests
                 ToSurface: "sql-query"));
         Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "paths-report.md")));
         Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "paths-report.json")));
+    }
+
+    [Fact]
+    public async Task Paths_from_endpoint_matches_multi_method_route_without_stored_path_key()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Upsert(System.Int32)";
+        var repository = "Server.OrderRepository.Save(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFactWithoutPathKey(server, "GET,POST", "/api/orders/{id:int}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/orders/{id}",
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal("GET,POST", path.Nodes.First().HttpMethod);
+        Assert.Equal("/api/orders/{}", path.Nodes.First().NormalizedPathKey);
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+    }
+
+    [Fact]
+    public async Task Paths_from_client_symbol_can_traverse_http_fact_to_server_surface()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var clientMethod = "Client.OrderService.loadOrder(System.Int32)";
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5, clientMethod)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: clientMethod,
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(clientMethod, path.Nodes.First().SymbolId);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "fact-attached-to-symbol" && edge.FromNodeId == path.Nodes.First().NodeId);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "endpoint-match");
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
     }
 
     [Fact]
@@ -102,6 +170,7 @@ public sealed class CombinedDependencyPathTests
                 SurfaceName: "ConnectionStrings:Default"));
 
         var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(startup, path.Nodes.First().SymbolId);
         Assert.Equal("package-config", path.Nodes.Last().SurfaceKind);
         Assert.Equal("ConnectionStrings:Default", path.Nodes.Last().ConfigKey);
         Assert.Null(result.MarkdownPath);
@@ -127,6 +196,11 @@ public sealed class CombinedDependencyPathTests
 
         Assert.Empty(result.Report.Paths);
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.All(result.Report.Gaps, gap =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(gap.RuleId));
+            Assert.False(string.IsNullOrWhiteSpace(gap.EvidenceTier));
+        });
 
         var ex = await Assert.ThrowsAsync<ArgumentException>(() => CombinedDependencyPathReporter.WriteAsync(
             new CombinedDependencyPathOptions(
@@ -280,7 +354,7 @@ public sealed class CombinedDependencyPathTests
             FactFactory.Hash("git-root", 32));
     }
 
-    private static CodeFact HttpClientFact(ScanManifest manifest, string method, string template, string key, string file, int line)
+    private static CodeFact HttpClientFact(ScanManifest manifest, string method, string template, string key, string file, int line, string? sourceSymbol = null)
     {
         return FactFactory.Create(
             manifest,
@@ -288,6 +362,7 @@ public sealed class CombinedDependencyPathTests
             RuleIds.HttpClientInvocation,
             EvidenceTiers.Tier2Structural,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
             targetSymbol: $"{method} {template}",
             contractElement: method,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -298,6 +373,25 @@ public sealed class CombinedDependencyPathTests
                 ["normalizedPathKey"] = key,
                 ["urlKind"] = "template",
                 ["clientFramework"] = "test"
+            });
+    }
+
+    private static CodeFact RouteFactWithoutPathKey(ScanManifest manifest, string method, string template, string methodSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol,
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["routeTemplates"] = template
             });
     }
 

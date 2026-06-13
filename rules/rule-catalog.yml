@@ -29,6 +29,27 @@ rules:
       - Surface attachment proves only static evidence proximity through recorded symbol fields; it does not prove runtime SQL execution, config usage, package loading, or outbound traffic.
       - Unattached surfaces remain inventory evidence and are reported as review gaps rather than guessed paths.
 
+  - id: combined.paths.query-gap.v1
+    name: Combined dependency path query gap
+    description: Emits query-level path gaps such as selector misses, no matching terminal surfaces, and coverage-relative no-path outcomes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch path gap
+      - UnknownAnalysisGap path gap
+    limitations:
+      - Query gaps are conclusions about the current static graph and selector bounds, not proof that runtime dependencies do or do not exist.
+      - File spans may be absent when no source evidence matched the selector.
+
+  - id: combined.paths.truncation-gap.v1
+    name: Combined dependency path truncation gap
+    description: Emits path-search limit gaps when selector candidate, depth, cycle, path-count, or frontier bounds stop traversal.
+    evidenceTier: Tier4Unknown
+    emits:
+      - TruncatedByLimit path gap
+    limitations:
+      - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
+      - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
+
   - id: repo.manifest.v1
     name: Repository manifest
     description: Captures repo metadata, commit SHA, project inventory, scan status, and known gaps.
