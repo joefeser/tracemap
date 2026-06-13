@@ -100,6 +100,103 @@ rules:
     limitations:
       - Truncated output is intentionally partial and must not be treated as complete evidence coverage.
 
+  - id: combined.impact.source.v1
+    name: Combined change impact source item
+    description: Projects combined source diff rows into static change-impact source items with source identity, coverage, and rule-backed evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - source impact item
+      - NoImpactEvidence gap
+    limitations:
+      - Source impact items describe changed static source metadata, not runtime behavior.
+      - Source pairing is exact-label based and does not infer renamed sources.
+      - Missing or conflicting source identity metadata downgrades confidence.
+
+  - id: combined.impact.coverage.v1
+    name: Combined change impact coverage item
+    description: Projects combined coverage diff rows into static change-impact coverage items so reduced scans and build-status changes are visible in impact reports.
+    evidenceTier: Tier4Unknown
+    emits:
+      - coverage impact item
+    limitations:
+      - Coverage is source-level unless adapters emit more precise gap metadata.
+      - Reduced coverage makes absence of impact evidence coverage-relative, not proof that a dependency was unaffected.
+
+  - id: combined.impact.endpoint.v1
+    name: Combined change impact endpoint item
+    description: Projects combined endpoint diff rows into static change-impact endpoint items using method/path keys and side-specific endpoint provenance.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - endpoint impact item
+    limitations:
+      - Endpoint impact items do not prove runtime traffic, auth behavior, proxies, deployment base paths, CORS behavior, or reachability.
+      - Dynamic, ambiguous, optional, and method-mismatch evidence remains review-tier.
+
+  - id: combined.impact.surface.v1
+    name: Combined change impact dependency surface item
+    description: Projects dependency-surface diff rows into static change-impact items for SQL/query, HTTP, package, and config surfaces using safe structured metadata.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - surface impact item
+    limitations:
+      - Surface impact items do not prove runtime SQL execution, database schema existence, config loading, package loading, generated SQL equivalence, or branch feasibility.
+      - Raw SQL, URLs, config values, connection strings, and source snippets are not rendered by default.
+
+  - id: combined.impact.edge.v1
+    name: Combined change impact dependency edge item
+    description: Projects dependency-edge diff rows into static change-impact items for calls, object creations, relationships, and parameter-forwarding evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - edge impact item
+    limitations:
+      - Edge impact items do not prove dynamic dispatch, runtime dependency injection registrations, reflection targets, branch feasibility, or collection contents.
+      - Syntax-only or name-only edge evidence remains review-tier.
+
+  - id: combined.impact.path.v1
+    name: Combined change impact path item
+    description: Projects opt-in combined path diff rows into static change-impact path items and path context summaries.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - path impact item
+      - path context summary
+    limitations:
+      - Path context is opt-in, bounded, and must not be treated as complete dependency coverage when truncated.
+      - Path evidence is a static trail, not runtime execution, full taint analysis, or proof of business impact.
+
+  - id: combined.impact.path-context.v1
+    name: Combined change impact path context
+    description: Classifies optional per-item path context when the impact planner can safely map a changed endpoint, surface, or edge to bounded before/after path queries.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - ReachabilityChanged path context
+      - ReachabilityEvidenceChanged path context
+      - PathContextUnavailable gap
+      - NoPathEvidence gap
+    limitations:
+      - Path context is static graph evidence and does not prove runtime reachability, branch feasibility, dynamic dispatch, dependency injection binding, or data flow.
+      - Unsupported selector mappings must emit review or unknown gaps rather than guessed paths.
+      - Reduced coverage and traversal truncation make no-path conclusions coverage-relative.
+
+  - id: combined.impact.selector.v1
+    name: Combined change impact selector handling
+    description: Emits selector and ignored-selector gaps when user-supplied source, endpoint, surface, or path filters match no comparable evidence or are outside the selected scope.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch gap
+      - IgnoredSelector gap
+    limitations:
+      - Selector gaps describe only the current static evidence and query bounds.
+      - Ignored selector gaps do not prove matching evidence exists outside the selected scope.
+
+  - id: combined.impact.truncation.v1
+    name: Combined change impact truncation gap
+    description: Emits gaps when impact item, path-query, or gap caps truncate report output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - TruncatedByLimit gap
+    limitations:
+      - Truncated output is intentionally partial and must not be treated as complete impact coverage.
+
   - id: combined.paths.endpoint-match.v1
     name: Combined dependency path endpoint match edge
     description: Derives an in-memory path edge between HTTP client and server endpoint facts using the same deterministic endpoint matcher as the combined dependency report.

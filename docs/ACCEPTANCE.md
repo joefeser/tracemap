@@ -168,6 +168,21 @@ For every successful `tracemap diff --before <before.sqlite> --after <after.sqli
 - `--exit-code` returns a non-zero exit only when requested and diff rows are present.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
 
+For every successful `tracemap impact --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are combined indexes and are opened read-only through the shared diff pipeline.
+- directory output writes `impact-report.md` and `impact-report.json`, even when `--format json` is supplied.
+- JSON includes `reportType: combined-change-impact`, required empty arrays, stable query metadata, source snapshots, impact items, gaps, and limitations.
+- every impact item carries an impact rule ID, the delegated diff rule ID, evidence tier, source label, stable key, file span when available, and supporting fact/edge IDs when available.
+- `NoImpactEvidence` is emitted as a rule-backed gap when no comparable static impact items exist for the selected snapshots and scopes.
+- default scope includes sources, coverage, endpoints, surfaces, and edges; path context is off by default.
+- `coverage` scope maps to the delegated diff `sources` scope and filters the resulting report to coverage impact items.
+- `--scope paths` requires `--include-paths`; this implementation slice includes opt-in path diff evidence but does not run additional per-item path expansion.
+- reduced coverage or source identity uncertainty downgrades confidence rather than producing strong static impact claims.
+- `--source`, `--endpoint`, `--surface`, `--surface-name`, `--max-impact-items`, `--max-paths-per-item`, `--max-path-queries`, `--max-depth`, `--max-frontier`, `--max-gaps`, and `--exit-code` behave deterministically.
+- `--exit-code` returns a non-zero exit only when requested and impact items are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
+
 ## Language Adapter Acceptance
 
 New language adapters should satisfy [Language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md) before language-specific depth is considered complete.
