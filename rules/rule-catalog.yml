@@ -1,4 +1,55 @@
 rules:
+  - id: combined.paths.endpoint-match.v1
+    name: Combined dependency path endpoint match edge
+    description: Derives an in-memory path edge between HTTP client and server endpoint facts using the same deterministic endpoint matcher as the combined dependency report.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - endpoint-match path edge
+    limitations:
+      - Endpoint matches are static method/path evidence and do not prove runtime traffic, auth behavior, proxy behavior, deployment base paths, CORS behavior, or reachability.
+      - Optional segment, ambiguous, method-mismatch, and dynamic URL cases are review evidence and cannot produce strong static paths.
+
+  - id: combined.paths.fact-attached-to-symbol.v1
+    name: Combined dependency path fact-to-symbol attachment edge
+    description: Derives an in-memory path edge from endpoint facts to source-local symbol nodes when a fact carries source or target symbol evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - fact-attached-to-symbol path edge
+    limitations:
+      - Attachment strength follows the originating fact tier and rule; syntax or textual symbols remain review evidence.
+      - Symbol display-name equality is source-local and does not imply identity across languages or source indexes.
+
+  - id: combined.paths.surface-evidence.v1
+    name: Combined dependency path surface evidence edge
+    description: Derives an in-memory path edge from source-local symbol nodes to terminal dependency surfaces such as SQL, HTTP, config, and package evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - surface-evidence path edge
+    limitations:
+      - Surface attachment proves only static evidence proximity through recorded symbol fields; it does not prove runtime SQL execution, config usage, package loading, or outbound traffic.
+      - Unattached surfaces remain inventory evidence and are reported as review gaps rather than guessed paths.
+
+  - id: combined.paths.query-gap.v1
+    name: Combined dependency path query gap
+    description: Emits query-level path gaps such as selector misses, no matching terminal surfaces, and coverage-relative no-path outcomes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch path gap
+      - UnknownAnalysisGap path gap
+    limitations:
+      - Query gaps are conclusions about the current static graph and selector bounds, not proof that runtime dependencies do or do not exist.
+      - File spans may be absent when no source evidence matched the selector.
+
+  - id: combined.paths.truncation-gap.v1
+    name: Combined dependency path truncation gap
+    description: Emits path-search limit gaps when selector candidate, depth, cycle, path-count, or frontier bounds stop traversal.
+    evidenceTier: Tier4Unknown
+    emits:
+      - TruncatedByLimit path gap
+    limitations:
+      - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
+      - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
+
   - id: repo.manifest.v1
     name: Repository manifest
     description: Captures repo metadata, commit SHA, project inventory, scan status, and known gaps.
