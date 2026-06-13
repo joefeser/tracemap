@@ -143,4 +143,6 @@ sqlite3 <out>/index.sqlite "select count(*) from argument_flows;"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='HttpRouteBinding';"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='DatabaseColumnMapping';"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='QueryPatternDetected';"
+grep "orm-text" <out>/report.md
+grep "orders" <out>/report.md
 ```

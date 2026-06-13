@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -132,6 +133,29 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
         con.close()
 
     assert any(fact.evidence.extractor_version for fact in facts)
+
+
+def test_fastapi_report_renders_sql_query_patterns_without_raw_sql(tmp_path: Path) -> None:
+    out = tmp_path / "fastapi-report"
+    _, facts = scan(make_options(str(ROOT / "samples/python-fastapi-sample"), str(out)))
+
+    report = (out / "report.md").read_text(encoding="utf-8")
+    orm_pattern = next(
+        fact for fact in facts
+        if fact.fact_type == "QueryPatternDetected" and fact.properties.get("sqlSourceKind") == "orm-text"
+    )
+    shape_hash = orm_pattern.properties["queryShapeHash"]
+
+    assert report.index("## Rules") < report.index("## Query Patterns") < report.index("## Known Gaps")
+    assert "static shape evidence" in report
+    assert "runtime execution" in report
+    assert "`orders`" in report
+    assert "`id;status;total`" in report
+    assert "`orm-text`" in report
+    assert shape_hash in report
+    assert re.search(r"\b[0-9a-f]{32}\b", report)
+    assert report.count("on `orders`") >= 3
+    assert "SELECT id, status, total FROM orders" not in report
 
 
 def test_flask_sample_emits_route_config_and_dynamic_boundaries(tmp_path: Path) -> None:

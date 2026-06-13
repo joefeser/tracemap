@@ -1107,6 +1107,7 @@ rules:
     limitations:
       - SQL text is hashed and operation-shaped; raw SQL text and literal values are not stored by default.
       - Query-pattern extraction is best-effort for simple static SQL operation, table, and column shapes; full SQL parsing, dialect behavior, schema existence, generated SQL, and runtime execution are not proven.
+      - Reports may display derived table, column, source-kind, and shape-hash metadata, but must not display raw SQL text or literal values.
       - Quoted identifiers may be treated conservatively as string literals by lightweight SQL shape extraction and missed until a shared SQL parser exists.
       - Tier2 query patterns are structural evidence only; Tier3 query patterns are review-routing evidence and should not be treated as semantic database proof.
 
