@@ -68,7 +68,7 @@
   - [ ] Keep symbol selector matches as deterministic per-source candidates unless `--from-source` narrows them.
   - [ ] Resolve source selectors by label.
   - [ ] Resolve surface selectors by terminal kind and optional exact or wildcard name filter.
-  - [ ] Resolve source-pair filters by splitting on the first unescaped colon and unescaping `\:`.
+  - [ ] Resolve source-pair filters by splitting on the first unescaped colon and unescaping `\:` in both labels.
   - [ ] Reject unsupported reverse selectors with clear errors.
   - [ ] Emit `SelectorNoMatch` gaps for empty selector matches.
 
