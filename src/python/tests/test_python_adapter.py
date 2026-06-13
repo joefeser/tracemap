@@ -138,6 +138,28 @@ def test_scan_rejects_destructive_output_paths() -> None:
         scan(make_options(str(repo), str(repo.parent)))
 
 
+def test_scan_refuses_to_delete_arbitrary_existing_output(tmp_path: Path) -> None:
+    repo = ROOT / "samples/python-fastapi-sample"
+    out = tmp_path / "existing"
+    out.mkdir()
+    (out / "keep.txt").write_text("important\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        scan(make_options(str(repo), str(out)))
+
+    assert (out / "keep.txt").read_text(encoding="utf-8") == "important\n"
+
+
+def test_scan_can_replace_existing_tracemap_output(tmp_path: Path) -> None:
+    repo = ROOT / "samples/python-fastapi-sample"
+    out = tmp_path / "tracemap"
+
+    scan(make_options(str(repo), str(out)))
+    scan(make_options(str(repo), str(out)))
+
+    assert (out / "scan-manifest.json").exists()
+
+
 def test_inventory_skips_project_paths_outside_repo(tmp_path: Path) -> None:
     repo = ROOT / "samples/python-fastapi-sample"
     outside = tmp_path / "outside.py"
@@ -194,6 +216,28 @@ def test_annotated_sqlalchemy_tablename_is_detected(tmp_path: Path) -> None:
 
     assert any(fact.fact_type == "DatabaseColumnMapping" and fact.properties.get("tableName") == "orders" for fact in facts)
     assert gaps == []
+
+
+def test_dynamic_sql_name_argument_records_gap(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "dynamic_sql.py"
+    source.write_text("def query(cursor, table):\n    sql = f\"SELECT * FROM {table}\"\n    cursor.execute(sql)\n", encoding="utf-8")
+
+    facts = extract_python_files(repo, _manifest("dynamic-sql"), [source], [repo], {}, [])
+
+    assert any(fact.fact_type == "AnalysisGap" and fact.properties.get("gapKind") == "dynamic-sql" for fact in facts)
+
+
+def test_route_method_without_framework_evidence_is_not_http_route(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "not_flask.py"
+    source.write_text("class Router:\n    def route(self, path):\n        return path\n\nrouter = Router()\nrouter.route('/not-http')\n", encoding="utf-8")
+
+    facts = extract_python_files(repo, _manifest("route-false-positive"), [source], [repo], {}, [])
+
+    assert not any(fact.fact_type == "HttpRouteBinding" for fact in facts)
 
 
 def test_sqlite_symbol_rows_follow_role_properties(tmp_path: Path) -> None:

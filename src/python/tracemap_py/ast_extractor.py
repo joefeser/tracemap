@@ -52,6 +52,7 @@ class ParsedPythonFile:
 class PythonPrepass:
     aliases_by_module: dict[str, dict[str, str]]
     router_prefixes_by_module: dict[str, dict[str, str]]
+    flask_vars_by_module: dict[str, set[str]]
 
 
 def extract_python_files(repo: Path, manifest: ScanManifest, files: list[Path], package_roots: list[Path], dependencies: dict[str, str], gaps: list[str]) -> list[CodeFact]:
@@ -78,7 +79,7 @@ def extract_python_files(repo: Path, manifest: ScanManifest, files: list[Path], 
     prepass = _prepass_python_files(parsed)
     for item in parsed:
         aliases = prepass.aliases_by_module.get(item.module, {})
-        ctx = PythonContext(repo, package_roots, dependencies, import_aliases=aliases, resolved_router_prefixes=prepass.router_prefixes_by_module.get(item.module, {}))
+        ctx = PythonContext(repo, package_roots, dependencies, import_aliases=aliases, resolved_router_prefixes=prepass.router_prefixes_by_module.get(item.module, {}), flask_vars=prepass.flask_vars_by_module.get(item.module, set()))
         _seed_context_imports(ctx, aliases)
         visitor = AstVisitor(manifest, item.rel, item.module, ctx)
         visitor.visit(item.root)
@@ -377,8 +378,9 @@ class AstVisitor(ast.NodeVisitor):
         if not receiver or not route_literal:
             return
         is_fastapi = receiver in self.ctx.app_vars and ("fastapi" in self.ctx.imports or "fastapi" in self.ctx.dependencies)
-        is_flask = receiver in self.ctx.flask_vars and ("flask" in self.ctx.imports or "flask" in self.ctx.dependencies)
-        if not (is_fastapi or is_flask or node.func.attr == "route"):
+        local_receiver = _name_of(node.func.value)
+        is_flask = (local_receiver in self.ctx.flask_vars or receiver in self.ctx.flask_vars) and ("flask" in self.ctx.imports or "flask" in self.ctx.dependencies)
+        if not (is_fastapi or is_flask):
             return
         methods = [method] if method else _methods_kw(node) or ["ANY"]
         prefix = self.ctx.router_prefixes.get(receiver, "")
@@ -444,11 +446,11 @@ class AstVisitor(ast.NodeVisitor):
 
     def _record_sql_call(self, node: ast.Call) -> None:
         literal = _first_string(node)
-        if not literal:
-            if any(isinstance(arg, (ast.JoinedStr, ast.BinOp)) for arg in node.args):
-                self.facts.append(create_fact(self.manifest, FactTypes.ANALYSIS_GAP, RuleIds.SQL, EvidenceTiers.TIER4, self._span(node, "PythonAstExtractor", ScannerVersions.SQL), source_symbol=self.containing_symbol, target_symbol="dynamic-sql", properties={"gapKind": "dynamic-sql", "expressionHash": _node_hash(node)}))
-            return
         call = self._call_name(node)
+        if not literal:
+            if call.endswith(".execute") or call.endswith(".executemany") or call.endswith("text") or any(isinstance(arg, (ast.JoinedStr, ast.BinOp)) for arg in node.args):
+                self.facts.append(create_fact(self.manifest, FactTypes.ANALYSIS_GAP, RuleIds.SQL, EvidenceTiers.TIER4, self._span(node, "PythonAstExtractor", ScannerVersions.SQL), source_symbol=self.containing_symbol, target_symbol="dynamic-sql", properties={"gapKind": "dynamic-sql", "dynamicReason": "non-literal-sql-argument", "expressionHash": _node_hash(node)}))
+            return
         if not (call.endswith(".execute") or call.endswith(".executemany") or call.endswith("text") or is_sql_like(literal)):
             return
         source_kind = "orm-text" if call.endswith("text") else "dbapi-execute" if ".execute" in call else "literal-string"
@@ -514,6 +516,7 @@ def _gap(manifest: ScanManifest, rel: str, kind: str, message: str, line: int = 
 def _prepass_python_files(files: list[ParsedPythonFile]) -> PythonPrepass:
     aliases_by_module: dict[str, dict[str, str]] = {}
     local_router_prefixes: dict[str, str] = {}
+    local_flask_vars: set[str] = set()
     include_prefixes: dict[str, str] = {}
     for item in files:
         aliases = _import_aliases(item.root)
@@ -523,6 +526,8 @@ def _prepass_python_files(files: list[ParsedPythonFile]) -> PythonPrepass:
                 call = _resolve_alias(_call_name(node.value), aliases)
                 if call.endswith("APIRouter"):
                     local_router_prefixes[f"{item.module}.{node.targets[0].id}"] = _kw_literal(node.value, "prefix") or ""
+                if call.endswith("Flask") or call.endswith("Blueprint"):
+                    local_flask_vars.add(_module_symbol(item.module, node.targets[0].id))
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "include_router" and node.args:
                 router_symbol = _resolve_router_symbol(_safe_name(node.args[0]), item.module, aliases)
                 if router_symbol:
@@ -542,7 +547,27 @@ def _prepass_python_files(files: list[ParsedPythonFile]) -> PythonPrepass:
                 module_prefixes[local_name] = combine_paths(include_prefixes.get(imported, ""), local_router_prefixes[imported])
         if module_prefixes:
             router_prefixes_by_module[item.module] = module_prefixes
-    return PythonPrepass(aliases_by_module, router_prefixes_by_module)
+    flask_vars_by_module = _flask_vars_by_module(files, aliases_by_module, local_flask_vars)
+    return PythonPrepass(aliases_by_module, router_prefixes_by_module, flask_vars_by_module)
+
+
+def _flask_vars_by_module(files: list[ParsedPythonFile], aliases_by_module: dict[str, dict[str, str]], local_flask_vars: set[str]) -> dict[str, set[str]]:
+    result: dict[str, set[str]] = {}
+    for item in files:
+        aliases = aliases_by_module.get(item.module, {})
+        module_vars: set[str] = set()
+        for symbol in local_flask_vars:
+            module, _, local_name = symbol.rpartition(".")
+            if module == item.module:
+                module_vars.add(local_name)
+                module_vars.add(symbol)
+        for local_name, imported in aliases.items():
+            if any(_symbols_match(imported, flask_symbol) for flask_symbol in local_flask_vars):
+                module_vars.add(local_name)
+                module_vars.add(imported)
+        if module_vars:
+            result[item.module] = module_vars
+    return result
 
 
 def _normalize_include_prefixes(include_prefixes: dict[str, str], local_router_prefixes: dict[str, str]) -> dict[str, str]:
@@ -555,6 +580,14 @@ def _normalize_include_prefixes(include_prefixes: dict[str, str], local_router_p
             if symbol.endswith("." + candidate) or candidate.endswith("." + symbol):
                 normalized.setdefault(candidate, prefix)
     return normalized
+
+
+def _module_symbol(module: str, name: str) -> str:
+    return f"{module}.{name}" if module else name
+
+
+def _symbols_match(left: str, right: str) -> bool:
+    return left == right or left.endswith("." + right) or right.endswith("." + left)
 
 
 def _import_aliases(root: ast.Module) -> dict[str, str]:
