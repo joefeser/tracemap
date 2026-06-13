@@ -15,6 +15,8 @@ Review this TraceMap spec for public combined dependency path validation.
 Focus on:
 
 - Whether the spec proves the value of `tracemap paths` rather than just checking that files exist.
+- Whether the new real-scanned linkage spike properly addresses the risk that synthetic path tests do not cover actual scanner output.
+- Whether source-local symbol reconciliation is scoped safely enough: no cross-source joins, rule-backed evidence, review-tier classification, and ambiguity gaps.
 - Whether checked-in samples are the right source for deterministic assertions.
 - Whether keeping pinned OSS repos in the separate OSS smoke is the right scope cut.
 - Whether the proposed assertions are strong enough: endpoint match, structural source transition, terminal `sql-query` surface, rule IDs, evidence tiers, deterministic output, bogus-selector gap, and safe rendering.
@@ -23,6 +25,7 @@ Focus on:
 - Whether the default smoke is likely to be fast and reliable enough for PR review.
 - Whether docs should include only commands, expected artifacts, and small illustrative snippets.
 - Whether requiring endpoint-to-`sql-query` while deferring `package-config` is the right first slice.
+- Whether splitting into PR 1 path-graph reconciliation and PR 2 public smoke/docs is the right plan if the linkage spike confirms the mismatch.
 - Whether the actual sample endpoint key `GET /api/admin/runner/get-by-id/{}` is the right documented targeted query.
 - Whether any wording overclaims runtime behavior instead of static evidence.
 
@@ -43,6 +46,8 @@ Focus on:
 - The current script patterns in `scripts/`.
 - The current sample fixtures under `samples/`.
 - Whether `samples/endpoint-client-angular` and `samples/endpoint-server-aspnet` are sufficient for endpoint-to-surface path assertions.
+- How to implement the real-scanned linkage spike and inspect route/call/query symbols from SQLite.
+- Whether path-graph symbol reconciliation belongs in `TraceMap.Reporting` and what focused tests should prove it.
 - The safest way to inspect `paths-report.json` from shell scripts.
 - How to keep the script readable and deterministic.
 - What sample changes, if any, are required.
@@ -60,6 +65,8 @@ Review this spec for correctness, maintainability, and privacy risks.
 Look for:
 
 - Weak smoke assertions that could pass while path analysis is broken.
+- Symbol reconciliation false positives or accidental cross-source joins.
+- Missing rule IDs or limitations for derived symbol-reconciliation evidence.
 - Network-dependent behavior in the default path.
 - Hardcoded private paths or names.
 - Unsafe report rendering expectations.
