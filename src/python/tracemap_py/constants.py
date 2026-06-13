@@ -23,6 +23,7 @@ class FactTypes:
     OBJECT_CREATED = "ObjectCreated"
     ARGUMENT_PASSED = "ArgumentPassed"
     LOCAL_ALIAS = "LocalAlias"
+    FIELD_ALIAS = "FieldAlias"
     SYMBOL_RELATIONSHIP = "SymbolRelationship"
     HTTP_ROUTE_BINDING = "HttpRouteBinding"
     HTTP_CALL_DETECTED = "HttpCallDetected"
