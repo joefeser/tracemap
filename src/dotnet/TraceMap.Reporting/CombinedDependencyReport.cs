@@ -204,7 +204,7 @@ public static class CombinedDependencyReporter
     private const string Version = "1.0";
     private const int MarkdownRowLimit = 200;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
@@ -213,7 +213,7 @@ public static class CombinedDependencyReporter
         AllowTrailingCommas = true
     };
 
-    private static readonly IReadOnlyList<string> Limitations =
+    internal static readonly IReadOnlyList<string> Limitations =
     [
         "Endpoint alignment is static method/path evidence. It does not prove runtime traffic, runtime reachability, auth behavior, proxy behavior, deployment base paths, CORS behavior, or user exercise.",
         "SQL/query rows are static shape or hash evidence. They do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.",
@@ -282,7 +282,7 @@ public static class CombinedDependencyReporter
         return new CombinedDependencyReportResult(report, markdownPath, jsonPath);
     }
 
-    private static async Task ValidateCombinedIndexAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    internal static async Task ValidateCombinedIndexAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         if (!await TableExistsAsync(connection, "index_sources", cancellationToken)
             || !await TableExistsAsync(connection, "combined_facts", cancellationToken)
@@ -300,7 +300,7 @@ public static class CombinedDependencyReporter
         }
     }
 
-    private static async Task<CombinedReadResult> ReadAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    internal static async Task<CombinedReadResult> ReadAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         var sourceRows = await ReadSourcesAsync(connection, cancellationToken);
         var sources = sourceRows.Select(row => row.Source).ToArray();
@@ -468,7 +468,7 @@ public static class CombinedDependencyReporter
         return rows;
     }
 
-    private static IReadOnlyList<CombinedEndpointFinding> MatchEndpoints(IReadOnlyList<CombinedReportSource> sources, IReadOnlyList<CombinedFactRow> facts)
+    internal static IReadOnlyList<CombinedEndpointFinding> MatchEndpoints(IReadOnlyList<CombinedReportSource> sources, IReadOnlyList<CombinedFactRow> facts)
     {
         var sourceById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
         var candidates = facts
@@ -688,7 +688,7 @@ public static class CombinedDependencyReporter
             notes);
     }
 
-    private static IReadOnlyList<CombinedDependencySurfaceRow> BuildSurfaces(IReadOnlyList<CombinedFactRow> facts)
+    internal static IReadOnlyList<CombinedDependencySurfaceRow> BuildSurfaces(IReadOnlyList<CombinedFactRow> facts)
     {
         return facts
             .Select(ToSurface)
@@ -958,7 +958,7 @@ public static class CombinedDependencyReporter
         }
     }
 
-    private static string SurfaceDetails(CombinedDependencySurfaceRow surface)
+    internal static string SurfaceDetails(CombinedDependencySurfaceRow surface)
     {
         return surface.SurfaceKind switch
         {
@@ -975,12 +975,12 @@ public static class CombinedDependencyReporter
         return sourceLabel is null ? location : $"{sourceLabel} {location}";
     }
 
-    private static string Cell(string value)
+    internal static string Cell(string value)
     {
         return value.Replace("|", "\\|", StringComparison.Ordinal).ReplaceLineEndings(" ");
     }
 
-    private static IReadOnlyDictionary<string, int> CountBy<T>(IEnumerable<T> rows, Func<T, string> selector)
+    internal static IReadOnlyDictionary<string, int> CountBy<T>(IEnumerable<T> rows, Func<T, string> selector)
     {
         return rows
             .GroupBy(selector, StringComparer.Ordinal)
@@ -1065,12 +1065,12 @@ public static class CombinedDependencyReporter
         return string.IsNullOrWhiteSpace(storedLanguage) ? null : storedLanguage;
     }
 
-    private static bool SourceHasCredibilityGap(CombinedReportSource source)
+    internal static bool SourceHasCredibilityGap(CombinedReportSource source)
     {
         return source.CommitSha == "unknown" || (!source.AnalysisLevel.Equals("Level1SemanticAnalysis", StringComparison.Ordinal) && !source.AnalysisLevel.Contains("Reduced", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string? FirstValue(IReadOnlyDictionary<string, string> properties, params string[] keys)
+    internal static string? FirstValue(IReadOnlyDictionary<string, string> properties, params string[] keys)
     {
         foreach (var key in keys)
         {
@@ -1098,7 +1098,7 @@ public static class CombinedDependencyReporter
         return value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
-    private static bool MethodsCompatible(string clientMethod, string serverMethod)
+    internal static bool MethodsCompatible(string clientMethod, string serverMethod)
     {
         var clientMethods = SplitMethods(clientMethod);
         var serverMethods = SplitMethods(serverMethod);
@@ -1107,7 +1107,7 @@ public static class CombinedDependencyReporter
             || clientMethods.Intersect(serverMethods, StringComparer.Ordinal).Any();
     }
 
-    private static IReadOnlyList<string> SplitMethods(string? value)
+    internal static IReadOnlyList<string> SplitMethods(string? value)
     {
         var methods = SplitList(value)
             .Select(method => method.ToUpperInvariant())
@@ -1117,7 +1117,7 @@ public static class CombinedDependencyReporter
         return methods.Length == 0 ? ["ANY"] : methods;
     }
 
-    private static NormalizedEndpointRoute? TryNormalizeEndpoint(IReadOnlyDictionary<string, string> properties)
+    internal static NormalizedEndpointRoute? TryNormalizeEndpoint(IReadOnlyDictionary<string, string> properties)
     {
         var normalizedTemplate = FirstValue(properties, "normalizedPathTemplate");
         if (!string.IsNullOrWhiteSpace(normalizedTemplate))
@@ -1180,7 +1180,7 @@ public static class CombinedDependencyReporter
         return $"Client URL dynamic reason: {reason}.";
     }
 
-    private static int ClassificationPriority(string classification)
+    internal static int ClassificationPriority(string classification)
     {
         return classification switch
         {

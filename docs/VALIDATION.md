@@ -41,7 +41,7 @@ For JVM CLI smoke, also run:
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
 ```
 
-For combined dependency report changes, run a combine/report smoke over any two existing local scan outputs:
+For combined dependency report or path-query changes, run a combine/report/paths smoke over any two existing local scan outputs:
 
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- combine \
@@ -49,8 +49,11 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --index <second>/index.sqlite --label second \
   --out <tmp>/combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sqlite --out <tmp>/combined-report
+dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
 test -f <tmp>/combined-report/dependency-report.md
 test -f <tmp>/combined-report/dependency-report.json
+test -f <tmp>/combined-paths/paths-report.md
+test -f <tmp>/combined-paths/paths-report.json
 ```
 
 ## Public OSS Smoke
