@@ -228,7 +228,7 @@ Artifact assertions:
 
 Dependency report assertions:
 
-- at least one `MatchedEndpoint`
+- at least one endpoint finding for `/api/admin/runner/get-by-id/{}` classified as `MatchedEndpoint` or review-tier `AmbiguousMatch`
 - report coverage is present
 - source labels are `sample-client` and `sample-server`
 

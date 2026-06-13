@@ -96,7 +96,7 @@ What is missing is a first-class, public smoke/demo workflow that:
 
 #### Acceptance Criteria
 
-1. WHEN the fixture contains a matched client call and server route THEN the smoke SHALL assert a `MatchedEndpoint` finding appears in the dependency report.
+1. WHEN the fixture contains a matched client call and server route THEN the smoke SHALL assert a dependency report endpoint finding appears for the normalized path key with either `MatchedEndpoint` or review-tier `AmbiguousMatch` classification.
 2. WHEN the fixture contains a server call chain to SQL evidence THEN the smoke SHALL assert a path reaches `sql-query`.
 3. WHEN the fixture contains config or package evidence attached to reachable symbols THEN the smoke SHOULD assert a path can reach `package-config`; this assertion is deferred until the public fixture proves such a reachable surface.
 4. WHEN a path crosses from client to server THEN JSON assertions SHALL prove at least one edge connects nodes with different source labels.

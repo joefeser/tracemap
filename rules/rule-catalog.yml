@@ -29,6 +29,18 @@ rules:
       - Surface attachment proves only static evidence proximity through recorded symbol fields; it does not prove runtime SQL execution, config usage, package loading, or outbound traffic.
       - Unattached surfaces remain inventory evidence and are reported as review gaps rather than guessed paths.
 
+  - id: combined.paths.symbol-reconciliation.v1
+    name: Combined dependency path source-local symbol reconciliation edge
+    description: Derives an in-memory review-tier path edge between source-local symbol nodes when deterministic scanner facts describe the same member with compatible but non-identical display strings.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - symbol-reconciliation path edge
+    limitations:
+      - Reconciliation is source-local and must not join symbols across combined indexes or languages.
+      - Short-name reconciliation is review evidence only and cannot produce a strong static path.
+      - Ambiguous same-name candidates must remain gaps or review evidence rather than arbitrary strong links.
+      - Reconciliation does not prove runtime dispatch, dependency injection binding, reflection targets, branch feasibility, serializer behavior, or SQL execution.
+
   - id: combined.paths.query-gap.v1
     name: Combined dependency path query gap
     description: Emits query-level path gaps such as selector misses, no matching terminal surfaces, and coverage-relative no-path outcomes.

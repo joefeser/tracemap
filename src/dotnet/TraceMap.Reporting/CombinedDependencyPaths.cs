@@ -158,6 +158,7 @@ public static class CombinedDependencyPathReporter
     private const string SurfaceEvidenceRuleId = "combined.paths.surface-evidence.v1";
     private const string QueryGapRuleId = "combined.paths.query-gap.v1";
     private const string TruncationGapRuleId = "combined.paths.truncation-gap.v1";
+    private const string SymbolReconciliationRuleId = "combined.paths.symbol-reconciliation.v1";
 
     private static readonly HashSet<string> TerminalSurfaceKinds = new(StringComparer.Ordinal)
     {
@@ -177,7 +178,8 @@ public static class CombinedDependencyPathReporter
         "argument-passed",
         "parameter-forward",
         "fact-attached-to-symbol",
-        "surface-evidence"
+        "surface-evidence",
+        "symbol-reconciliation"
     };
 
     public static async Task<CombinedDependencyPathResult> WriteAsync(CombinedDependencyPathOptions options, CancellationToken cancellationToken = default)
@@ -521,6 +523,7 @@ public static class CombinedDependencyPathReporter
                 finding.ServerEndLine ?? finding.ClientEndLine));
         }
 
+        AddSymbolReconciliationEdges(graph);
         graph.Sort();
         return graph;
     }
@@ -566,6 +569,136 @@ public static class CombinedDependencyPathReporter
                     fact.EndLine));
             }
         }
+    }
+
+    private static void AddSymbolReconciliationEdges(EvidenceGraph graph)
+    {
+        var symbolNodes = graph.Nodes.Values
+            .Where(node => node.NodeKind is "Symbol" or "Method" or "Type")
+            .Select(node => (Node: node, Alias: TryCreateSymbolAlias(node.DisplayName)))
+            .Where(pair => pair.Alias is not null)
+            .Select(pair => (pair.Node, Alias: pair.Alias!))
+            .GroupBy(pair => $"{pair.Node.SourceIndexId}\0{pair.Alias.MemberKey}", pair => pair, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var group in symbolNodes)
+        {
+            var qualified = group
+                .Where(pair => pair.Alias.TypeKey is not null)
+                .GroupBy(pair => pair.Alias.TypeKey, StringComparer.Ordinal)
+                .ToDictionary(pair => pair.Key!, pair => pair.Select(item => item.Node).DistinctBy(node => node.NodeId).ToArray(), StringComparer.Ordinal);
+            var allQualified = qualified.Values.SelectMany(nodes => nodes).DistinctBy(node => node.NodeId).ToArray();
+            var bare = group
+                .Where(pair => pair.Alias.TypeKey is null)
+                .Select(pair => pair.Node)
+                .DistinctBy(node => node.NodeId)
+                .ToArray();
+
+            foreach (var pair in group.Where(pair => pair.Alias.TypeKey is not null))
+            {
+                if (!qualified.TryGetValue(pair.Alias.TypeKey!, out var sameType))
+                {
+                    continue;
+                }
+
+                foreach (var target in sameType)
+                {
+                    AddSymbolReconciliationEdge(graph, pair.Node, target);
+                }
+            }
+
+            if (bare.Length == 0 || allQualified.Length != 1)
+            {
+                continue;
+            }
+
+            foreach (var bareNode in bare)
+            {
+                AddSymbolReconciliationEdge(graph, allQualified[0], bareNode);
+                AddSymbolReconciliationEdge(graph, bareNode, allQualified[0]);
+            }
+        }
+    }
+
+    private static void AddSymbolReconciliationEdge(EvidenceGraph graph, GraphNode from, GraphNode to)
+    {
+        if (from.NodeId == to.NodeId || from.SourceIndexId != to.SourceIndexId)
+        {
+            return;
+        }
+
+        graph.AddEdge(new GraphEdge(
+            $"symbol-reconciliation:{from.NodeId}:{to.NodeId}",
+            "symbol-reconciliation",
+            from.NodeId,
+            to.NodeId,
+            "EvidenceEdge",
+            SymbolReconciliationRuleId,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            [],
+            [],
+            from.FilePath ?? to.FilePath,
+            from.StartLine ?? to.StartLine,
+            from.EndLine ?? to.EndLine));
+    }
+
+    private static SymbolAlias? TryCreateSymbolAlias(string displayName)
+    {
+        var normalized = displayName.Trim();
+        if (normalized.Length == 0 || normalized.Contains("):", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var parenIndex = normalized.IndexOf('(', StringComparison.Ordinal);
+        if (parenIndex >= 0)
+        {
+            normalized = normalized[..parenIndex];
+        }
+
+        normalized = normalized.Trim().TrimEnd('.');
+        if (normalized.Length == 0 || normalized.Contains(' '))
+        {
+            return null;
+        }
+
+        var parts = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return null;
+        }
+
+        var member = CleanSymbolPart(parts[^1]);
+        if (member.Length == 0 || !char.IsLetter(member[0]))
+        {
+            return null;
+        }
+
+        var type = parts.Length >= 2 ? CleanSymbolPart(parts[^2]) : null;
+        if (string.Equals(type, "global::", StringComparison.Ordinal))
+        {
+            type = null;
+        }
+
+        return new SymbolAlias(MemberKey: member.ToLowerInvariant(), TypeKey: string.IsNullOrWhiteSpace(type) ? null : type.ToLowerInvariant());
+    }
+
+    private static string CleanSymbolPart(string value)
+    {
+        var cleaned = value.Trim();
+        var globalIndex = cleaned.LastIndexOf("global::", StringComparison.Ordinal);
+        if (globalIndex >= 0)
+        {
+            cleaned = cleaned[(globalIndex + "global::".Length)..];
+        }
+
+        var genericIndex = cleaned.IndexOf('<', StringComparison.Ordinal);
+        if (genericIndex >= 0)
+        {
+            cleaned = cleaned[..genericIndex];
+        }
+
+        return cleaned;
     }
 
     private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier)
@@ -688,6 +821,11 @@ public static class CombinedDependencyPathReporter
         if (edges.Any(edge => edge.EdgeKind is "calls" or "creates" or "inherits" or "implements" or "overrides"))
         {
             notes.Add(new CombinedPathNote("StaticCodeEvidence", "Code relationship hops do not prove dynamic dispatch, runtime DI, reflection, branch feasibility, collection contents, or serializer behavior."));
+        }
+
+        if (edges.Any(edge => edge.EdgeKind == "symbol-reconciliation"))
+        {
+            notes.Add(new CombinedPathNote("SymbolReconciliationBoundary", "Symbol reconciliation hops connect source-local symbol names when deterministic aliases match; they are review-tier evidence, not compiler-resolved call evidence."));
         }
 
         return notes;
@@ -1343,9 +1481,10 @@ public static class CombinedDependencyPathReporter
             "argument-passed" => 4,
             "surface-evidence" => 5,
             "fact-attached-to-symbol" => 6,
-            "inherits" => 7,
-            "implements" => 8,
-            "overrides" => 9,
+            "symbol-reconciliation" => 7,
+            "inherits" => 8,
+            "implements" => 9,
+            "overrides" => 10,
             _ => 99
         };
     }
@@ -1521,6 +1660,8 @@ public static class CombinedDependencyPathReporter
     private sealed record PathState(IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
 
     private sealed record SelectorResolution(IReadOnlyList<GraphNode> Nodes, int TotalMatchCount);
+
+    private sealed record SymbolAlias(string MemberKey, string? TypeKey);
 
     private sealed record GraphNode(
         string NodeId,
