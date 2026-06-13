@@ -89,10 +89,16 @@ public sealed class CombinedDependencyReportTests
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
         Assert.Contains("\"clientScanId\"", json);
         Assert.Contains("\"serverEndLine\"", json);
+        Assert.DoesNotContain("generatedAt", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private.example", json, StringComparison.OrdinalIgnoreCase);
         var document = JsonSerializer.Deserialize<CombinedDependencyReportDocument>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(document);
         Assert.Equal(result.Report.EndpointFindings.Count, document!.EndpointFindings.Count);
+
+        var secondOutDir = Path.Combine(temp.Path, "report-second");
+        await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, secondOutDir));
+        Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "dependency-report.md")));
+        Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "dependency-report.json")));
     }
 
     [Fact]
@@ -122,6 +128,45 @@ public sealed class CombinedDependencyReportTests
         Assert.Equal(205, result.Report.DependencySurfaces.Count(surface => surface.SurfaceKind == "package-config"));
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
         Assert.Contains("Showing first 200 of", markdown);
+    }
+
+    [Fact]
+    public async Task Report_matches_multi_method_any_and_optional_server_routes()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var clientManifest = Manifest("client", "tracemap-typescript/0.1.0");
+        var serverManifest = Manifest("server", "tracemap-milestone15");
+
+        SqliteIndexWriter.Write(clientIndex, clientManifest, [
+            HttpClientFact(clientManifest, "GET", "/api/methods", "/api/methods", "src/client.ts", 5),
+            HttpClientFact(clientManifest, "ANY", "/api/any", "/api/any", "src/client.ts", 10),
+            HttpClientFact(clientManifest, "GET", "/api/items", "/api/items", "src/client.ts", 15)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, serverManifest, [
+            RouteFact(serverManifest, "GET,POST", "/api/methods", "/api/methods", "Controllers/ApiController.cs", 5),
+            RouteFact(serverManifest, "POST", "/api/any", "/api/any", "Controllers/ApiController.cs", 10),
+            RouteFact(serverManifest, "GET", "/api/items/{id?}", "/api/items/{?}", "Controllers/ApiController.cs", 15)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        Assert.Contains(result.Report.EndpointFindings, finding =>
+            finding.Classification == CombinedEndpointClassifications.MatchedEndpoint
+            && finding.NormalizedPathKey == "/api/methods"
+            && finding.HttpMethod == "GET");
+        Assert.Contains(result.Report.EndpointFindings, finding =>
+            finding.Classification == CombinedEndpointClassifications.MatchedEndpoint
+            && finding.NormalizedPathKey == "/api/any"
+            && finding.HttpMethod == "ANY");
+        Assert.Contains(result.Report.EndpointFindings, finding =>
+            finding.Classification == CombinedEndpointClassifications.OptionalSegmentMatch
+            && finding.NormalizedPathKey == "/api/items");
+        Assert.DoesNotContain(result.Report.EndpointFindings, finding => finding.Classification == CombinedEndpointClassifications.MethodMismatch);
     }
 
     [Fact]
