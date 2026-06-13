@@ -6,6 +6,7 @@ The current language scanners are:
 
 - `.NET/C#` under `src/dotnet`, including semantic Roslyn extraction, syntax fallback, flow/export commands, and contract reduction.
 - `TypeScript` under `src/typescript`, including compiler-backed facts, syntax fallback, integration facts, and reducer-compatible SQLite output.
+- `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
 
 TraceMap can also combine multiple indexes into one provenance-preserving SQLite database and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
@@ -31,6 +32,7 @@ cd src/typescript
 npm install
 npm run check
 cd ../..
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
 ```
 
 .NET/C# scan and reduce:
@@ -70,6 +72,17 @@ node dist/src/cli.js export --index ../../.tracemap-ts/index.sqlite --out ../../
 cd ../..
 dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap-ts/index.sqlite --contract-delta samples/contract-deltas/typescript-modern.status.json --out .tracemap-ts/impact-report.md
 ```
+
+JVM scanner:
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
+src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm scan --repo samples/jvm-modern-sample --out .tracemap-jvm
+dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap-jvm/index.sqlite --contract-delta samples/contract-deltas/jvm-modern.order-status.json --out .tracemap-jvm/impact-report.md
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index .tracemap-jvm/index.sqlite --label jvm-sample --out .tracemap-jvm-combined.sqlite
+```
+
+The JVM scanner does not run Maven, Gradle, annotation processors, app code, or dependency restore during scan. Kotlin MVP support is syntax fallback only, so Kotlin-only scans are labeled syntax coverage.
 
 Endpoint alignment compares two existing indexes instead of scanning multiple apps in one command. This keeps language scanners independent and preserves per-index coverage/provenance:
 

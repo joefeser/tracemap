@@ -9,6 +9,7 @@ Use the generic `samples/contract-delta.example.json` for quick CLI demos. Use t
 | File | Target repo | Purpose |
 | --- | --- | --- |
 | `modern-sample.customer-profile.json` | `samples/modern-sample` | Full semantic match for `CustomerProfileResponse.primaryEmail`. |
+| `jvm-modern.order-status.json` | `samples/jvm-modern-sample` | JVM semantic match for `OrderResponse.status`. |
 | `servicebus.transient-status.json` | `c-sharp-sample-repos/ProjectExtensions.Azure.ServiceBus` | Generic `status` syntax/textual match in a reduced-coverage legacy repo. |
 | `fluentjdf.status-builder.json` | `c-sharp-sample-repos/fluentjdf` | Generic `status` match with Tier1 method invocation evidence and warning-worthy fan-out. |
 
