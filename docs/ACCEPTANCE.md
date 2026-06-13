@@ -4,6 +4,8 @@
 
 This plan defines how TraceMap proves that scanner and reducer behavior is deterministic, evidence-backed, and honest about coverage.
 
+Concrete sample fixtures, pinned public open-source smoke repositories, and repeatable smoke commands are documented in [Validation guide](VALIDATION.md).
+
 ## Required Local Verification
 
 Run before finishing implementation work:

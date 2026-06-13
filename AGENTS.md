@@ -69,6 +69,7 @@ When semantic analysis fails:
 
 - Does `dotnet test` pass?
 - Can the CLI run against at least one sample repo?
+- For language-adapter changes, did we follow `docs/VALIDATION.md` and run or explicitly defer the relevant pinned smoke checks?
 - Are facts deterministic and evidence-backed?
 - Did we avoid saying “impacted” without a reducer and evidence?
 - Did we clearly mark partial/failed analysis?
