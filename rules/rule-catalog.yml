@@ -954,3 +954,183 @@ rules:
       - ConfigKeyDeclared
     limitations:
       - Runtime config providers, precedence, environment contents, profiles, and secret availability are not proven.
+
+  - id: python.package.metadata.v1
+    name: Python package metadata
+    description: Emits Python package dependency facts from pyproject.toml, setup.cfg, setup.py literals, and requirements files.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - PackageReferenced
+      - AnalysisGap
+    limitations:
+      - setup.py is parsed for literal dependency lists only and is never executed.
+      - Dependency resolution, extras, lockfile solving, environment markers, and installed package versions are not proven.
+
+  - id: python.ast.declarations.v1
+    name: Python AST declarations
+    description: Emits syntax-level class, function, field, and parameter declaration facts from Python AST.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - FieldDeclared
+      - ParameterDeclared
+    limitations:
+      - Python MVP does not run a type checker or import user code.
+      - Dynamic class creation, monkey patching, decorators that add members, and runtime annotations are not expanded.
+
+  - id: python.ast.imports.v1
+    name: Python AST imports
+    description: Tracks import roots used to classify bounded Python integration patterns.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - AnalysisGap
+    limitations:
+      - Import aliases help classify local syntax only; imported module contents and runtime side effects are not loaded.
+
+  - id: python.ast.invocation.v1
+    name: Python AST invocation
+    description: Emits syntax-level member access and invocation-name facts.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MemberAccessName
+      - InvocationName
+    limitations:
+      - Receiver type, overload target, dynamic dispatch, monkey patching, decorators, and runtime bindings are not proven.
+
+  - id: python.ast.callgraph.v1
+    name: Python AST call graph
+    description: Emits syntax-level caller-to-callee call-edge facts from call expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - CallEdge
+    limitations:
+      - Callee names are syntax names and may be local functions, methods, constructors, or callable objects.
+      - Branch feasibility, callbacks, async scheduling, decorators, dynamic dispatch, and framework wiring are not modeled.
+
+  - id: python.ast.objectcreation.v1
+    name: Python AST object creation
+    description: Emits syntax-level object creation facts for constructor-like calls.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectCreated
+    limitations:
+      - Constructor-like syntax can be ordinary callable invocation in Python.
+      - Factory return types, dependency injection, deserialization, and runtime metaclass behavior are not proven.
+
+  - id: python.ast.argumentflow.v1
+    name: Python AST argument flow
+    description: Emits direct parameter-to-call argument flow, simple local alias facts, and direct self-field alias facts when a function parameter or simple name is passed or assigned by name.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ArgumentPassed
+      - LocalAlias
+      - FieldAlias
+    limitations:
+      - Tracks direct same-function call arguments, local aliases, and self-field assignments only.
+      - Does not model transitive aliasing, mutation, collection contents, interprocedural return values, branch feasibility, async/callback flow, or dynamic kwargs expansion.
+
+  - id: python.ast.relationships.v1
+    name: Python AST symbol relationships
+    description: Emits syntax-level class inheritance relationships.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SymbolRelationship
+    limitations:
+      - Base names are syntax names and may not be fully qualified.
+      - MRO, metaclasses, protocols, mixins loaded dynamically, and runtime base mutation are not evaluated.
+
+  - id: python.ast.dynamic-boundary.v1
+    name: Python dynamic boundary
+    description: Emits analysis gaps and syntax-only boundary evidence for Python constructs that require runtime context.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AnalysisGap
+      - HttpRouteBinding
+    limitations:
+      - Dynamic routes, dynamic SQL, dynamic config keys, importlib targets, and unparsable files remain review evidence rather than resolved facts.
+
+  - id: python.integration.fastapi.v1
+    name: Python FastAPI integration
+    description: Detects FastAPI and APIRouter route decorator bindings with normalized route keys.
+    evidenceTier: Tier2Structural
+    emits:
+      - HttpRouteBinding
+    limitations:
+      - Static extraction does not prove runtime router inclusion, dependency overrides, middleware, auth, deployment prefixes, or generated OpenAPI output.
+
+  - id: python.integration.flask.v1
+    name: Python Flask integration
+    description: Detects Flask route decorator bindings with normalized route keys.
+    evidenceTier: Tier2Structural
+    emits:
+      - HttpRouteBinding
+    limitations:
+      - Static extraction does not prove app factory behavior, blueprint registration, middleware, auth, reverse proxies, or runtime route mutation.
+
+  - id: python.integration.pydantic.v1
+    name: Python Pydantic integration
+    description: Emits serializer contract member evidence for classes deriving from BaseModel.
+    evidenceTier: Tier2Structural
+    emits:
+      - SerializerContractMember
+    limitations:
+      - Field aliases, validators, computed fields, runtime config, model serializers, and version-specific behavior are not fully evaluated in MVP.
+
+  - id: python.integration.dataclass.v1
+    name: Python dataclass integration
+    description: Emits serializer-like structural member evidence for dataclass fields.
+    evidenceTier: Tier2Structural
+    emits:
+      - SerializerContractMember
+    limitations:
+      - Runtime serializers, custom encoders, post-init mutation, default factories, and inheritance behavior are not proven.
+
+  - id: python.integration.sqlalchemy.v1
+    name: Python SQLAlchemy integration
+    description: Detects SQLAlchemy declarative column mapping syntax.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabaseColumnMapping
+    limitations:
+      - Runtime engine configuration, migrations, generated schema, hybrid properties, relationships, naming conventions, and lazy-loading behavior are not proven.
+
+  - id: python.integration.sql.v1
+    name: Python SQL integration
+    description: Detects SQL files and direct SQL text literals used by common DB-API or SQLAlchemy call shapes.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - SqlFileDeclared
+      - SqlTextUsed
+      - AnalysisGap
+    limitations:
+      - SQL text is hashed and operation-shaped; full SQL parsing, dialect behavior, schema existence, generated SQL, and runtime execution are not proven.
+
+  - id: python.integration.config.v1
+    name: Python config integration
+    description: Detects config files, Python config module assignments, and static os.environ/os.getenv key reads.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - ConfigFileDeclared
+      - ConfigKeyDeclared
+      - AnalysisGap
+    limitations:
+      - Runtime config providers, environment contents, secret availability, precedence, profiles, and dynamic key construction are not proven.
+
+  - id: python.integration.httpclient.v1
+    name: Python HTTP client integration
+    description: Detects requests and httpx HTTP calls with normalized static URL path keys when literals are present.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    limitations:
+      - Runtime base URLs, sessions, auth, retries, proxies, redirects, and dynamically constructed URLs are not resolved.
+
+  - id: python.boilerplate.v1
+    name: Python boilerplate shape
+    description: Reserved for deterministic Python infrastructure or boilerplate classification.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - InfrastructureBoilerplate
+    limitations:
+      - Boilerplate classification is a review-routing heuristic and not proof of business intent.
