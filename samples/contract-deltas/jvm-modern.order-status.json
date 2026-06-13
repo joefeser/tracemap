@@ -1,0 +1,12 @@
+{
+  "contract": "OrderResponse",
+  "source": "samples/jvm-modern-sample",
+  "changes": [
+    {
+      "element": "OrderResponse.status",
+      "changeType": "behavior_changed",
+      "oldType": "string",
+      "newType": "string"
+    }
+  ]
+}

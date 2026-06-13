@@ -702,3 +702,255 @@ rules:
       - Matching is static and coverage-relative; client-only findings are not proof of broken calls and server-only findings are not proof of dead or unused endpoints.
       - Does not prove runtime reachability, reverse proxy behavior, auth policies, feature flags, branch feasibility, deployment routing, or generated OpenAPI behavior.
       - MVP compares one client index and one server index; N-way combined dependency analysis and endpoint diffs are follow-up work.
+
+  - id: jvm.file.inventory.v1
+    name: JVM file inventory
+    description: Records deterministic inventory facts for supported Java, Kotlin, Maven, Gradle, config, XML, JSON, YAML, and SQL files.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - File presence is structural evidence only and does not prove build or runtime usage.
+      - Generated output, build output, dependency caches, and TraceMap output directories are excluded by default.
+
+  - id: jvm.buildfile.v1
+    name: JVM build file metadata
+    description: Extracts local Maven and literal Gradle module/dependency metadata without running build tools.
+    evidenceTier: Tier2Structural
+    emits:
+      - ProjectDeclared
+      - PackageReferenced
+      - AnalysisGap
+    limitations:
+      - Maven parent POMs are resolved only when local files are present.
+      - Gradle extraction is literal-only; version catalogs, convention plugins, buildSrc, composite builds, and interpolation are reduced-coverage gaps.
+      - Dependency metadata is structural and does not prove the dependency is resolved on the scanner classpath.
+
+  - id: jvm.config.v1
+    name: JVM config files
+    description: Extracts config file declarations and key paths from properties, JSON, YAML, XML, and env-like config files with hashed values.
+    evidenceTier: Tier2Structural
+    emits:
+      - ConfigFileDeclared
+      - ConfigKeyDeclared
+      - AnalysisGap
+    limitations:
+      - Config precedence, profile activation, environment overrides, and runtime availability are not evaluated.
+      - Values are hashed and not stored raw.
+
+  - id: jvm.java.syntax.declarations.v1
+    name: Java syntax declarations
+    description: Finds Java package, type, method, field, parameter, annotation, and simple relationship syntax without relying on compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - FieldDeclared
+      - ParameterDeclared
+      - AttributeUsed
+      - SymbolRelationship
+    limitations:
+      - Syntax evidence does not prove symbol identity, overload resolution, generated code, or runtime dispatch.
+      - Relationship targets are syntax names when semantic binding is unavailable.
+
+  - id: jvm.java.syntax.invocation.v1
+    name: Java syntax invocation
+    description: Finds Java member access and invocation names without resolving receiver types or overloads.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MemberAccessName
+      - InvocationName
+      - ArgumentPassed
+    limitations:
+      - Does not prove receiver type, overload target, extension/framework behavior, reflection, or runtime dispatch.
+      - Argument flow is call-site shape evidence only when semantic binding is unavailable.
+
+  - id: jvm.java.syntax.callgraph.v1
+    name: Java syntax call graph
+    description: Emits syntax-only caller-to-callee edges from Java invocation expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - CallEdge
+      - ArgumentPassed
+    limitations:
+      - Caller/callee symbols are best-effort source names, not compiler-resolved symbols.
+      - Dynamic dispatch, lambdas, reflection, method references, and async/thread behavior are not modeled.
+
+  - id: jvm.java.syntax.objectcreation.v1
+    name: Java syntax object creation
+    description: Emits syntax-only object creation facts from Java constructor expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectCreated
+    limitations:
+      - Created type and constructor are syntax names and may not be fully qualified.
+      - Constructor overload and dependency-injection activation are not proven.
+
+  - id: jvm.java.syntax.logicshape.v1
+    name: Java syntax logic shape
+    description: Emits deterministic syntax signals for calculation, branching, and boilerplate-like Java code.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - CalculationExpression
+      - BranchingLogic
+      - InfrastructureBoilerplate
+    limitations:
+      - Logic shape facts are review-routing heuristics, not proof of business intent.
+      - Raw expressions are not stored; expression hashes and spans are emitted.
+
+  - id: jvm.java.semantic.declarations.v1
+    name: Java semantic declarations
+    description: Emits compiler-resolved Java type, method, field, and parameter declaration facts using JDK compiler APIs.
+    evidenceTier: Tier1Semantic
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - FieldDeclared
+      - ParameterDeclared
+    limitations:
+      - Requires a JDK compiler and enough classpath/source context for symbols to resolve.
+      - Annotation processors are disabled; generated declarations are not created during scan.
+
+  - id: jvm.java.semantic.memberaccess.v1
+    name: Java semantic member access
+    description: Emits compiler-resolved Java field/member access facts with reducer-friendly plain symbol names.
+    evidenceTier: Tier1Semantic
+    emits:
+      - PropertyAccessed
+    limitations:
+      - Requires compiler symbol resolution.
+      - Does not infer reflection, dynamic proxies, Lombok-generated accessors, or runtime dispatch targets.
+
+  - id: jvm.java.semantic.invocation.v1
+    name: Java semantic invocation
+    description: Emits compiler-resolved Java method invocation facts.
+    evidenceTier: Tier1Semantic
+    emits:
+      - MethodInvoked
+    limitations:
+      - Requires compiler symbol resolution.
+      - Does not model runtime polymorphism, reflection targets, dependency injection, method references, or async/thread execution.
+
+  - id: jvm.java.semantic.callgraph.v1
+    name: Java semantic call graph
+    description: Emits compiler-resolved Java caller-to-callee call edges.
+    evidenceTier: Tier1Semantic
+    emits:
+      - CallEdge
+    limitations:
+      - Records syntactic call sites, not proof that a branch executes at runtime.
+      - Dynamic dispatch, callbacks, reflection, and framework wiring are not expanded.
+
+  - id: jvm.java.semantic.objectcreation.v1
+    name: Java semantic object creation
+    description: Emits compiler-resolved Java object creation facts.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ObjectCreated
+    limitations:
+      - Does not model dependency-injection-created instances, reflection-created objects, deserialization, or factory-return runtime types.
+
+  - id: jvm.java.semantic.valueflow.v1
+    name: Java semantic argument value flow
+    description: Maps resolved Java call-site argument expressions to callee parameter names and records simple local aliases when the initializer resolves to a symbol.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ArgumentPassed
+      - LocalAlias
+    limitations:
+      - Tracks direct call-site arguments only.
+      - Local aliases are limited to direct local variable initializers with a resolved origin symbol.
+      - Does not perform interprocedural aliasing, field aliasing, mutation tracking, collection contents, branch feasibility, or async/callback flow.
+
+  - id: jvm.java.semantic.relationship.v1
+    name: Java semantic relationships
+    description: Emits compiler-resolved Java extends and implements relationships.
+    evidenceTier: Tier1Semantic
+    emits:
+      - SymbolRelationship
+    limitations:
+      - Missing dependencies, generated sources, or annotation processors reduce relationship coverage.
+      - Runtime proxies and dependency injection substitutions are not modeled.
+
+  - id: jvm.kotlin.syntax.declarations.v1
+    name: Kotlin syntax declarations
+    description: Finds Kotlin package, type, function, and annotation syntax without Kotlin compiler semantic analysis.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - AttributeUsed
+    limitations:
+      - Kotlin MVP support is syntax-only; symbol identity, overload resolution, extension dispatch, compiler plugins, and generated members are not proven.
+
+  - id: jvm.kotlin.syntax.invocation.v1
+    name: Kotlin syntax invocation
+    description: Finds Kotlin member access, invocation names, and syntax call edges.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MemberAccessName
+      - InvocationName
+      - CallEdge
+      - HttpRouteBinding
+    limitations:
+      - Does not prove receiver type, Ktor runtime installation, extension dispatch, coroutine behavior, or overload target.
+
+  - id: jvm.kotlin.syntax.objectcreation.v1
+    name: Kotlin syntax object creation
+    description: Emits syntax-only object creation facts for Kotlin constructor-like calls.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectCreated
+    limitations:
+      - Constructor-like syntax can also be ordinary function calls; semantic Kotlin extraction is required for stronger evidence.
+
+  - id: jvm.integration.http.route.v1
+    name: JVM HTTP route integration
+    description: Detects Spring, JAX-RS, and syntax-only Ktor route evidence and stores normalized route keys.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - HttpRouteBinding
+    limitations:
+      - Static extraction does not prove runtime route registration, middleware/filter behavior, profiles, reverse proxies, auth, or deployment base paths.
+      - Ktor route evidence is syntax/structural only until Kotlin semantic extraction exists.
+
+  - id: jvm.integration.sql.v1
+    name: JVM SQL integration
+    description: Detects SQL resources, JDBC SQL literals, and JPA query literals with hashed SQL evidence.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - SqlFileDeclared
+      - SqlTextUsed
+      - QueryPatternDetected
+    limitations:
+      - SQL hashes do not participate in reducer matching unless paired with a reducer-recognized contract element or symbol.
+      - Runtime query execution, database schema existence, generated SQL, and branch feasibility are not proven.
+
+  - id: jvm.integration.jpa.v1
+    name: JVM JPA mapping integration
+    description: Detects JPA entity and column mapping annotations as persistence boundary evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - DatabaseColumnMapping
+    limitations:
+      - Naming conventions and annotation presence do not prove runtime entity manager configuration, migrations, generated schema, or lazy-loading behavior.
+
+  - id: jvm.integration.serializer.v1
+    name: JVM serializer integration
+    description: Detects Jackson explicit serializer contract members and broad serializer logic.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - SerializerContractMember
+      - SerializationLogic
+    limitations:
+      - Serializer runtime configuration, modules, mixins, naming policies, and profile-specific behavior are not evaluated.
+      - SerializationLogic is report/export evidence; SerializerContractMember is the reducer-probable serializer fact.
+
+  - id: jvm.integration.configuse.v1
+    name: JVM config usage integration
+    description: Detects Spring @Value, Environment/System property reads, and environment variable access with hashed/static key evidence.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - ConfigKeyDeclared
+    limitations:
+      - Runtime config providers, precedence, environment contents, profiles, and secret availability are not proven.
