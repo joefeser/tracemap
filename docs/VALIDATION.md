@@ -31,6 +31,7 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle 
 python3 -m venv /tmp/tracemap-python-venv
 /tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]"
 /tmp/tracemap-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
 ./scripts/check-private-paths.sh
 ```
 
@@ -125,8 +126,10 @@ The Python FastAPI sample is the minimum high-signal fixture. It should produce:
 - serializer contract member facts for Pydantic and dataclass-like DTO fields
 - SQLAlchemy column mapping facts for declarative mapped columns
 - SQL file and direct SQL literal facts with hashed SQL text
+- query-pattern facts with operation, table, column, text hash, and query shape hash metadata when simple static SQL is visible
 - config key facts for config module assignments and static `os.getenv` or `os.environ[...]` reads
 - HTTP client facts for `requests` and `httpx` static URL calls
+- endpoint alignment smoke from `samples/python-client-sample` to `samples/python-fastapi-sample` produces at least one `MatchedEndpoint`
 - shared SQLite rows for `call_edges`, `object_creations`, `argument_flows`, `symbol_relationships`, and `symbols`
 - a reducer `ProbableImpact` or stronger structural finding for `OrderResponse.status`
 
@@ -139,4 +142,5 @@ sqlite3 <out>/index.sqlite "select count(*) from object_creations;"
 sqlite3 <out>/index.sqlite "select count(*) from argument_flows;"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='HttpRouteBinding';"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='DatabaseColumnMapping';"
+sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='QueryPatternDetected';"
 ```
