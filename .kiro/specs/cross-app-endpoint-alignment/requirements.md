@@ -2,10 +2,10 @@
 
 ## Introduction
 
-TraceMap needs to line up client-side API calls with server-side API endpoints across separately scanned applications. The motivating fixture is an Angular client under a legacy ASP.NET Core solution where the frontend lives inside the backend project tree:
+TraceMap needs to line up client-side API calls with server-side API endpoints across separately scanned applications. The motivating fixture is a private Angular client under a legacy ASP.NET Core solution where the frontend lives inside the backend project tree:
 
-- Angular app root: `/Users/josephfeser/src/ffp/FFP%20Platform%20v2/backend/FFPRunningClub/FFPRunningClub.Api/ClientApp`
-- ASP.NET app root: `/Users/josephfeser/src/ffp/FFP%20Platform%20v2/backend/FFPRunningClub`
+- Angular app root: `<private-angular-client-app>`
+- ASP.NET app root: `<private-aspnet-server-root>`
 
 The goal is deterministic evidence, not runtime traffic capture. TraceMap should identify what endpoints the Angular code appears to call, what endpoints the ASP.NET code appears to expose, and whether the two can be matched by HTTP method and normalized route template.
 
@@ -13,12 +13,12 @@ This spec does not add LLMs, embeddings, vector databases, or prompt-based class
 
 ## Discovery Summary
 
-The FFP probe showed this phase is viable:
+The private fixture probe showed this phase is viable:
 
 - Angular dependencies restored with `npm ci`.
 - Angular build printed successful build output and warnings, but the Angular CLI process did not exit cleanly in the shell environment.
-- `dotnet build FFPRunningClub.sln` failed because the `.sln` references a folder with real spaces (`FFP Platform v2`) while the actual checkout folder is named `FFP%20Platform%20v2`.
-- A direct backend scan using `--project FFPRunningClub.Api/FFPRunningClub.Api.csproj` reached reduced semantic coverage, but existing semantic `HttpRouteBinding` extraction produced no route facts because ASP.NET references were unresolved.
+- `dotnet build <solution>.sln` failed because the `.sln` references a folder with real spaces while the actual checkout folder uses URL-encoded spaces.
+- A direct backend scan using `--project <private-aspnet-server-project>` reached reduced semantic coverage, but existing semantic `HttpRouteBinding` extraction produced no route facts because ASP.NET references were unresolved.
 - A throwaway source-text matcher found 34 Angular HTTP calls, 37 ASP.NET endpoints, and 34/34 client calls matched server endpoints after case-insensitive route comparison and optional-segment handling.
 
 The implementation should therefore add Angular `HttpClient` call extraction, ASP.NET route syntax fallback, route normalization, and a cross-index alignment report.
@@ -38,7 +38,7 @@ The implementation should therefore add Angular `HttpClient` call extraction, AS
 
 ## Quick Start Workflow
 
-For a nested Angular/ASP.NET app like the FFP fixture, the intended workflow is:
+For a nested Angular/ASP.NET app like the private fixture, the intended workflow is:
 
 ```bash
 node src/typescript/dist/src/cli.js scan \
@@ -132,10 +132,11 @@ Labels are important when both indexes come from the same Git remote and commit 
 6. WHEN no server endpoint matches a client call THEN the report SHALL classify it as `ClientCallNoServerEndpoint`.
 7. WHEN no client call matches a server endpoint THEN the report SHALL classify it as `ServerEndpointNoClientMatch`.
 8. WHEN URL or route evidence is dynamic or incomplete THEN the report SHALL classify it as `DynamicClientUrlNeedsReview` or `UnknownAnalysisGap`.
-9. WHEN findings are reported THEN each finding SHALL include client evidence, server evidence when available, source index identity, rule IDs, evidence tiers, file paths, line spans, scan IDs, commit SHAs, and extractor versions.
-10. WHEN either index has reduced coverage or unknown commit SHA THEN the report SHALL label conclusions as reduced coverage and SHALL not imply full dependency coverage.
-11. WHEN `ClientCallNoServerEndpoint` or `ServerEndpointNoClientMatch` is reported THEN the report SHALL state inline that the classification is coverage-relative and is not proof of a broken call, dead code, or unused endpoint.
-12. WHEN report JSON is emitted THEN it SHALL include a top-level `reportCoverage` value and `coverageWarnings` array describing reduced source coverage and its implication.
+9. WHEN findings are reported THEN each finding SHALL include client evidence when available, server evidence when available, source index identity, rule IDs, evidence tiers, file paths, line spans, scan IDs, commit SHAs, and extractor versions.
+10. WHEN `UnknownAnalysisGap` is reported THEN the finding SHALL attach at least one representative `AnalysisGap` fact as client or server evidence whenever the source indexes contain such a fact.
+11. WHEN either index has reduced coverage or unknown commit SHA THEN the report SHALL label conclusions as reduced coverage and SHALL not imply full dependency coverage.
+12. WHEN `ClientCallNoServerEndpoint` or `ServerEndpointNoClientMatch` is reported THEN the report SHALL state inline that the classification is coverage-relative and is not proof of a broken call, dead code, or unused endpoint.
+13. WHEN report JSON is emitted THEN it SHALL include a top-level `reportCoverage` value and `coverageWarnings` array describing reduced source coverage and its implication.
 
 ### Requirement 5: Cross-Index Identity and Provenance
 
@@ -160,12 +161,13 @@ Labels are important when both indexes come from the same Git remote and commit 
 
 1. WHEN this MVP is implemented THEN it SHALL not require changing single-language scan output into a monolithic scan.
 2. WHEN designing endpoint alignment tables or JSON output THEN the design SHALL be compatible with a future `tracemap combine --index <path> --label <label> --out <combined.sqlite>` workflow.
-3. WHEN a future combine command imports indexes THEN it SHALL store an `index_sources` table containing source index path hash, label, scan ID, repo identity, scan root identity, language, scanner version, analysis level, build status, commit SHA, and imported-at timestamp.
-4. WHEN a future combine command imports facts THEN it SHALL store or expose a `combinedFactId` while keeping the original fact ID unchanged.
-5. WHEN a future combine command imports symbols and relationships THEN it SHALL namespace language-specific symbol IDs, carry a `language` discriminator, and retain language/package/assembly identity; raw symbol ID equality across languages SHALL NOT imply identity.
-6. WHEN endpoint matches are computed from a combined database THEN they SHALL be represented as derived rows, not source facts, unless a future rule catalog entry defines an evidence-backed derived fact type.
-7. WHEN future dependency reports traverse multiple indexes THEN every edge SHALL remain traceable to one or more source facts with rule IDs.
-8. WHEN future combined databases are used for long-term analysis THEN commit SHA and scan root metadata SHALL allow comparing snapshots from two different commits.
+3. WHEN adding the next language family, JVM support SHALL assume `tracemap combine` lands first or alongside it so cross-index dependency analysis has a stable home.
+4. WHEN a future combine command imports indexes THEN it SHALL store an `index_sources` table containing source index path hash, label, scan ID, repo identity, scan root identity, language, scanner version, analysis level, build status, commit SHA, and imported-at timestamp.
+5. WHEN a future combine command imports facts THEN it SHALL store or expose a `combinedFactId` while keeping the original fact ID unchanged.
+6. WHEN a future combine command imports symbols and relationships THEN it SHALL namespace language-specific symbol IDs, carry a `language` discriminator, and retain language/package/assembly identity; raw symbol ID equality across languages SHALL NOT imply identity.
+7. WHEN endpoint matches are computed from a combined database THEN they SHALL be represented as derived rows, not source facts, unless a future rule catalog entry defines an evidence-backed derived fact type.
+8. WHEN future dependency reports traverse multiple indexes THEN every edge SHALL remain traceable to one or more source facts with rule IDs.
+9. WHEN future combined databases are used for long-term analysis THEN commit SHA and scan root metadata SHALL allow comparing snapshots from two different commits.
 
 ### Requirement 7: Long-Term Snapshot and Diff Readiness
 

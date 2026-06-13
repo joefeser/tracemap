@@ -104,16 +104,16 @@ Return:
 - What should stay explicitly out of MVP.
 ```
 
-## FFP Fixture Review
+## Private Fixture Review
 
 ```text
-You are reviewing whether the Cross-App Endpoint Alignment spec handles the FFP Angular/ASP.NET fixture.
+You are reviewing whether the Cross-App Endpoint Alignment spec handles a private Angular/ASP.NET fixture.
 
 Fixture context:
-- Angular root: /Users/josephfeser/src/ffp/FFP%20Platform%20v2/backend/FFPRunningClub/FFPRunningClub.Api/ClientApp
-- ASP.NET root: /Users/josephfeser/src/ffp/FFP%20Platform%20v2/backend/FFPRunningClub
+- Angular root: <private-angular-client-app>
+- ASP.NET root: <private-aspnet-server-root>
 - Angular service calls use environment.apiUri plus template literals.
-- FFP's development environment.apiUri includes the `/api` base path, while production uses `/api`; base-path extraction is required for matching.
+- The fixture's development environment.apiUri includes the `/api` base path, while production uses `/api`; base-path extraction is required for matching.
 - ASP.NET endpoints use controller and method attributes such as Route("api/[controller]"), Route("api/admin/[controller]"), HttpGet, HttpPost, and Route("...").
 - The solution path has a space-vs-%20 mismatch that can break dotnet build.
 - A throwaway static matcher found 34 client calls and matched all 34 to server endpoints when base-path and optional route segments were handled. These counts are smoke observations, not test assertions.

@@ -200,6 +200,8 @@ If TypeScript requires additional columns, add tables rather than changing exist
 - `routes`
 - `config_uses`
 
+`sql.js` wasm asset resolution must fail clearly if the installed package assets cannot be found. The writer should resolve `sql.js/dist/sql-wasm.wasm` through package resolution first, then deterministic fallback probes, and never return a path known not to exist.
+
 ## Project Loading
 
 Borrow the `scip-typescript` approach:
@@ -219,7 +221,7 @@ Borrow the `scip-typescript` approach:
 6. Create a custom compiler host through `util/CompilerHost.ts`, borrowing SCIP's parsed-config/source-file caching pattern.
 7. Enforce max-file-size behavior before source files are indexed; TypeScript may still need to parse config membership, but oversized files are skipped as extraction inputs and recorded as gaps.
 8. Create a `ts.Program` and `TypeChecker`.
-9. Record diagnostics through `DiagnosticAggregator` as bounded `AnalysisGap` facts without storing source snippets.
+9. Record diagnostics through `DiagnosticAggregator` as bounded `AnalysisGap` facts without storing source snippets. Missing dependencies and ordinary TypeScript compiler errors both reduce coverage; ordinary errors should not be hidden just because semantic extraction can still recover some facts.
 10. Run syntax fallback for selected source files regardless of semantic success; deduplicate or prefer Tier1 facts where needed.
 
 Semantic load should avoid running package managers. Missing dependencies reduce coverage; they do not fail the scan.

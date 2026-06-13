@@ -44,7 +44,7 @@ TraceMap should not copy SCIP output as its primary product. SCIP is symbol-inde
 3. WHEN the repo is inside a Git checkout THEN the manifest SHALL include repo name, remote URL when available, branch when available, and commit SHA.
 4. WHEN Git commit metadata is unavailable THEN the scanner SHALL fail before writing scan artifacts, because TraceMap scans require a concrete commit SHA.
 5. WHEN output already exists THEN the scanner SHALL overwrite only the requested output path and SHALL not delete files outside that path.
-6. WHEN scan completes with any project-load or semantic gaps THEN the manifest SHALL set `analysisLevel` to `Level1SemanticAnalysisReduced` or `Level3SyntaxAnalysis` as appropriate and SHALL include at least one `AnalysisGap` fact.
+6. WHEN scan completes with any project-load, compiler diagnostic, or semantic gaps THEN the manifest SHALL set `analysisLevel` to `Level1SemanticAnalysisReduced` or `Level3SyntaxAnalysis` as appropriate and SHALL include at least one `AnalysisGap` fact.
 7. WHEN every selected TypeScript project loads semantically, `commitSha != "unknown"`, and no known gaps are emitted THEN the manifest SHALL set `analysisLevel = "Level1SemanticAnalysis"` and `buildStatus = "Succeeded"` for compatibility with the existing reducer's full-coverage gate.
 8. WHEN semantic analysis is incomplete THEN the manifest SHALL set `buildStatus = "FailedOrPartial"` or `buildStatus = "NotRun"` consistently with the .NET scanner semantics.
 
@@ -171,7 +171,7 @@ TraceMap should not copy SCIP output as its primary product. SCIP is symbol-inde
 #### Acceptance Criteria
 
 1. WHEN the same repo commit and scan options are scanned twice THEN stable fact IDs SHALL match except for explicitly time-stamped manifest fields.
-2. WHEN dependencies are missing THEN the scanner SHALL continue with reduced semantic coverage and syntax fallback.
+2. WHEN dependencies are missing or TypeScript reports ordinary compiler errors THEN the scanner SHALL continue with reduced semantic coverage and syntax fallback.
 3. WHEN a file exceeds the max byte-size threshold THEN the scanner SHALL skip semantic/syntax extraction for that file and emit an `AnalysisGap`.
 4. WHEN worker/project indexing fails unexpectedly THEN the scanner SHALL record the failure and continue to remaining projects when possible.
 5. WHEN paths are emitted THEN they SHALL be normalized repo-relative paths.

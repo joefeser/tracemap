@@ -56,7 +56,7 @@
 - [x] 5.4 Integrate file-size skip behavior with compiler host/source indexing.
 - [x] 5.5 Create `ts.Program` and `TypeChecker`.
 - [x] 5.6 Convert missing dependency/module diagnostics into bounded `AnalysisGap` facts.
-- [x] 5.7 Avoid treating ordinary type errors as scan-blocking unless they prevent semantic extraction.
+- [x] 5.7 Record ordinary TypeScript diagnostics as reduced-coverage `AnalysisGap` facts without aborting recoverable semantic extraction.
 - [x] 5.8 Add tests for explicit projects, project references, missing dependency reduced coverage, and no-config syntax fallback.
 
 ### Phase 6: Syntax Fallback Extractor
@@ -90,6 +90,7 @@
 - [x] 8.4 Add SQLite indexes matching expected reducer/report queries.
 - [x] 8.5 Generate `report.md` with metadata, coverage, gaps, fact counts, and limitations.
 - [x] 8.6 Add SQLite row-count and report snapshot tests.
+- [x] 8.7 Resolve `sql.js` wasm assets deterministically and fail with a clear message when assets are missing.
 
 ### Phase 9: Symbol Relationships
 
