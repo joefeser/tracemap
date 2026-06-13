@@ -149,11 +149,13 @@ public static class CombinedImpactClassifications
     public const string PathContextUnavailable = nameof(PathContextUnavailable);
     public const string ReachabilityChanged = nameof(ReachabilityChanged);
     public const string ReachabilityEvidenceChanged = nameof(ReachabilityEvidenceChanged);
+    public const string ReachabilityUnchanged = nameof(ReachabilityUnchanged);
     public const string NoPathEvidence = nameof(NoPathEvidence);
 }
 
 public static class CombinedChangeImpactReporter
 {
+    private const int DelegatedDiffRowCap = 1000;
     private const string Version = "1.0";
     private const string ReportType = "combined-change-impact";
     private const string Algorithm = "diff-to-static-impact";
@@ -224,9 +226,9 @@ public static class CombinedChangeImpactReporter
             options.Surface,
             options.SurfaceName,
             options.MaxDepth,
-            Math.Max(options.MaxPathsPerItem, 1),
+            options.MaxPathsPerItem,
             options.MaxFrontier,
-            options.MaxImpactItems,
+            DelegatedDiffRowCap,
             options.MaxGaps), cancellationToken);
 
         var gaps = diffReport.Gaps.Select(FromDiffGap).ToList();
@@ -245,27 +247,27 @@ public static class CombinedChangeImpactReporter
         var items = new List<CombinedImpactItem>();
         if (scopes.Contains("sources"))
         {
-            items.AddRange(diffReport.SourceDiffs.Select(row => FromDiffRow(row, "source", SourceRuleId, options.IncludePaths)));
+            items.AddRange(diffReport.SourceDiffs.Select(row => FromDiffRow(row, "source", SourceRuleId)));
         }
 
         if (scopes.Contains("coverage"))
         {
-            items.AddRange(diffReport.CoverageDiffs.Select(row => FromDiffRow(row, "coverage", CoverageRuleId, options.IncludePaths)));
+            items.AddRange(diffReport.CoverageDiffs.Select(row => FromDiffRow(row, "coverage", CoverageRuleId)));
         }
 
         if (scopes.Contains("endpoints"))
         {
-            items.AddRange(diffReport.EndpointDiffs.Select(row => FromDiffRow(row, "endpoint", EndpointRuleId, options.IncludePaths)));
+            items.AddRange(diffReport.EndpointDiffs.Select(row => FromDiffRow(row, "endpoint", EndpointRuleId)));
         }
 
         if (scopes.Contains("surfaces"))
         {
-            items.AddRange(diffReport.SurfaceDiffs.Select(row => FromDiffRow(row, "surface", SurfaceRuleId, options.IncludePaths)));
+            items.AddRange(diffReport.SurfaceDiffs.Select(row => FromDiffRow(row, "surface", SurfaceRuleId)));
         }
 
         if (scopes.Contains("edges"))
         {
-            items.AddRange(diffReport.EdgeDiffs.Select(row => FromDiffRow(row, "edge", EdgeRuleId, options.IncludePaths)));
+            items.AddRange(diffReport.EdgeDiffs.Select(row => FromDiffRow(row, "edge", EdgeRuleId)));
         }
 
         if (scopes.Contains("paths"))
@@ -276,8 +278,7 @@ public static class CombinedChangeImpactReporter
         var sortedItems = SortAndCapItems(items, options.MaxImpactItems, gaps, out var itemsTruncated);
         var contextualItems = await AddPathContextAsync(sortedItems, options, gaps, cancellationToken);
         if (contextualItems.Count == 0
-            && !gaps.Any(gap => gap.Classification == CombinedImpactClassifications.SelectorNoMatch)
-            && !gaps.Any(gap => gap.Classification == CombinedImpactClassifications.NoImpactEvidence))
+            && !gaps.Any(gap => gap.Classification is CombinedImpactClassifications.SelectorNoMatch or CombinedImpactClassifications.NoImpactEvidence))
         {
             gaps.Add(new CombinedImpactGap(
                 "gap:impact:no-evidence",
@@ -418,6 +419,16 @@ public static class CombinedChangeImpactReporter
     private static IReadOnlyList<string> IgnoredSelectors(CombinedChangeImpactOptions options, IReadOnlyList<string> scopes)
     {
         var ignored = new List<string>();
+        if (!scopes.Contains("endpoints") && !scopes.Contains("paths") && !string.IsNullOrWhiteSpace(options.Endpoint))
+        {
+            ignored.Add("--endpoint has no enabled endpoint or path scope.");
+        }
+
+        if (!scopes.Contains("surfaces") && !scopes.Contains("paths") && !string.IsNullOrWhiteSpace(options.Surface))
+        {
+            ignored.Add("--surface has no enabled surface or path scope.");
+        }
+
         if (!scopes.Contains("surfaces") && !scopes.Contains("paths") && !string.IsNullOrWhiteSpace(options.SurfaceName))
         {
             ignored.Add("--surface-name has no enabled surface or path scope.");
@@ -486,8 +497,11 @@ public static class CombinedChangeImpactReporter
             }
 
             queryCount += 2;
-            var before = await QueryPathContextAsync(options.BeforePath, selector, options, cancellationToken);
-            var after = await QueryPathContextAsync(options.AfterPath, selector, options, cancellationToken);
+            var beforeTask = QueryPathContextAsync(options.BeforePath, selector, options, cancellationToken);
+            var afterTask = QueryPathContextAsync(options.AfterPath, selector, options, cancellationToken);
+            await Task.WhenAll(beforeTask, afterTask);
+            var before = await beforeTask;
+            var after = await afterTask;
             var pathContext = ClassifyPathContext(item, before, after);
             globalGaps.AddRange(pathContext.Gaps);
             contextual.Add(item with { PathContext = pathContext });
@@ -506,11 +520,10 @@ public static class CombinedChangeImpactReporter
 
         if (item.EvidenceKind == "endpoint")
         {
-            var method = MetadataValue(evidence, "httpMethod") ?? evidence.DisplayName?.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            var displayNameParts = evidence.DisplayName?.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            var method = MetadataValue(evidence, "httpMethod") ?? displayNameParts?.FirstOrDefault();
             var pathKey = MetadataValue(evidence, "normalizedPathKey")
-                ?? (evidence.DisplayName?.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).Length == 2
-                    ? evidence.DisplayName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[1]
-                    : null);
+                ?? (displayNameParts?.Length == 2 ? displayNameParts[1] : null);
             if (string.IsNullOrWhiteSpace(method) || string.IsNullOrWhiteSpace(pathKey))
             {
                 return null;
@@ -574,7 +587,7 @@ public static class CombinedChangeImpactReporter
                 cancellationToken);
             return new PathContextQueryResult(report.Paths, report.Gaps, report.ReportCoverage);
         }
-        catch (ArgumentException exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             return new PathContextQueryResult(
                 [],
@@ -620,29 +633,31 @@ public static class CombinedChangeImpactReporter
     private static string PathContextClassification(PathContextQueryResult before, PathContextQueryResult after, IReadOnlyList<CombinedImpactGap> gaps)
     {
         var hasAnyPathEvidence = before.Paths.Count > 0 || after.Paths.Count > 0;
-        if (!hasAnyPathEvidence && gaps.Any(gap => gap.Classification == CombinedImpactClassifications.TruncatedByLimit))
+        if (!hasAnyPathEvidence)
         {
-            return CombinedImpactClassifications.PathContextUnavailable;
-        }
+            if (gaps.Any(gap => gap.Classification == CombinedImpactClassifications.TruncatedByLimit))
+            {
+                return CombinedImpactClassifications.PathContextUnavailable;
+            }
 
-        if (!hasAnyPathEvidence
-            && (before.ReportCoverage == "UnknownAnalysisGap"
+            if (before.ReportCoverage == "UnknownAnalysisGap"
                 || after.ReportCoverage == "UnknownAnalysisGap"
-                || gaps.Any(gap => gap.Classification == CombinedImpactClassifications.UnknownAnalysisGap)))
-        {
-            return CombinedImpactClassifications.UnknownAnalysisGap;
-        }
+                || gaps.Any(gap => gap.Classification == CombinedImpactClassifications.UnknownAnalysisGap))
+            {
+                return CombinedImpactClassifications.UnknownAnalysisGap;
+            }
 
-        if (!hasAnyPathEvidence && (before.ReportCoverage != "FullEvidenceAvailable" || after.ReportCoverage != "FullEvidenceAvailable"))
-        {
-            return CombinedImpactClassifications.UnknownAnalysisGap;
-        }
+            if (before.ReportCoverage != "FullEvidenceAvailable" || after.ReportCoverage != "FullEvidenceAvailable")
+            {
+                return CombinedImpactClassifications.UnknownAnalysisGap;
+            }
 
-        if (gaps.Any(gap => gap.Classification == CombinedImpactClassifications.PathContextUnavailable)
-            && before.Paths.Count == 0
-            && after.Paths.Count == 0)
-        {
-            return CombinedImpactClassifications.PathContextUnavailable;
+            if (gaps.Any(gap => gap.Classification == CombinedImpactClassifications.PathContextUnavailable))
+            {
+                return CombinedImpactClassifications.PathContextUnavailable;
+            }
+
+            return CombinedImpactClassifications.NoPathEvidence;
         }
 
         var beforeIdentity = before.Paths.Select(PathIdentity).ToHashSet(StringComparer.Ordinal);
@@ -652,15 +667,10 @@ public static class CombinedChangeImpactReporter
             return CombinedImpactClassifications.ReachabilityChanged;
         }
 
-        if (before.Paths.Count == 0 && after.Paths.Count == 0)
-        {
-            return CombinedImpactClassifications.NoPathEvidence;
-        }
-
         var beforeEvidence = before.Paths.Select(PathEvidenceSignature).ToHashSet(StringComparer.Ordinal);
         var afterEvidence = after.Paths.Select(PathEvidenceSignature).ToHashSet(StringComparer.Ordinal);
         return beforeEvidence.SetEquals(afterEvidence)
-            ? CombinedImpactClassifications.NoPathEvidence
+            ? CombinedImpactClassifications.ReachabilityUnchanged
             : CombinedImpactClassifications.ReachabilityEvidenceChanged;
     }
 
@@ -768,7 +778,7 @@ public static class CombinedChangeImpactReporter
 
     private static KeyValuePair<string, string?> Pair(string key, string? value) => new(key, value);
 
-    private static CombinedImpactItem FromDiffRow(CombinedDiffRow row, string evidenceKind, string impactRuleId, bool includePaths)
+    private static CombinedImpactItem FromDiffRow(CombinedDiffRow row, string evidenceKind, string impactRuleId)
     {
         var evidence = row.After ?? row.Before;
         var classification = ImpactClassification(row, evidence);
@@ -866,6 +876,11 @@ public static class CombinedChangeImpactReporter
         if (string.Equals(evidence?.EvidenceTier, EvidenceTiers.Tier3SyntaxOrTextual, StringComparison.Ordinal))
         {
             return CombinedImpactClassifications.NeedsReviewImpact;
+        }
+
+        if (string.Equals(evidence?.EvidenceTier, EvidenceTiers.Tier4Unknown, StringComparison.Ordinal))
+        {
+            return CombinedImpactClassifications.UnknownAnalysisGap;
         }
 
         return CombinedImpactClassifications.ProbableStaticImpact;
@@ -988,7 +1003,10 @@ public static class CombinedChangeImpactReporter
         return classification switch
         {
             CombinedImpactClassifications.StaticImpactEvidence => "High",
-            CombinedImpactClassifications.ProbableStaticImpact or CombinedImpactClassifications.ReachabilityEvidenceChanged => "Medium",
+            CombinedImpactClassifications.ProbableStaticImpact
+                or CombinedImpactClassifications.ReachabilityChanged
+                or CombinedImpactClassifications.ReachabilityEvidenceChanged
+                or CombinedImpactClassifications.ReachabilityUnchanged => "Medium",
             _ => "Low"
         };
     }
@@ -999,11 +1017,14 @@ public static class CombinedChangeImpactReporter
         {
             CombinedImpactClassifications.StaticImpactEvidence => 0,
             CombinedImpactClassifications.ProbableStaticImpact => 1,
-            CombinedImpactClassifications.NeedsReviewImpact => 2,
-            CombinedImpactClassifications.UnknownAnalysisGap => 3,
-            CombinedImpactClassifications.NoImpactEvidence => 4,
-            CombinedImpactClassifications.SelectorNoMatch => 5,
-            CombinedImpactClassifications.TruncatedByLimit => 6,
+            CombinedImpactClassifications.ReachabilityChanged => 2,
+            CombinedImpactClassifications.ReachabilityEvidenceChanged => 3,
+            CombinedImpactClassifications.ReachabilityUnchanged => 4,
+            CombinedImpactClassifications.NeedsReviewImpact => 5,
+            CombinedImpactClassifications.UnknownAnalysisGap => 6,
+            CombinedImpactClassifications.NoImpactEvidence => 7,
+            CombinedImpactClassifications.SelectorNoMatch => 8,
+            CombinedImpactClassifications.TruncatedByLimit => 9,
             _ => 99
         };
     }
@@ -1149,7 +1170,12 @@ public static class CombinedChangeImpactReporter
             return "n/a";
         }
 
-        return $"{item.FilePath}:{item.StartLine ?? 0}";
+        if (item.StartLine is null)
+        {
+            return item.FilePath;
+        }
+
+        return $"{item.FilePath}:{item.StartLine}";
     }
 
     private static void AppendList(StringBuilder builder, string title, IReadOnlyList<string> values)
