@@ -216,6 +216,112 @@ public sealed class CombinedDependencyDiffTests
         Assert.DoesNotContain(added.Report.EndpointDiffs, row => row.Classification == CombinedDependencyDiffClassifications.Added);
     }
 
+    [Fact]
+    public async Task Diff_scope_all_does_not_require_path_opt_in()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        await WriteSimpleCombinedAsync(temp, beforeCombined, "before");
+        await WriteSimpleCombinedAsync(temp, afterCombined, "after");
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "all"));
+
+        Assert.DoesNotContain("paths", result.Report.Query.Scopes);
+        Assert.Empty(result.Report.PathDiffs);
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == CombinedDependencyDiffClassifications.NoDiffEvidence);
+    }
+
+    [Fact]
+    public async Task Diff_reports_changed_evidence_when_span_moves_but_metadata_is_same()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, [RouteFact(manifest, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)]);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [RouteFact(manifest, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 22)]);
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "endpoints"));
+
+        var row = Assert.Single(result.Report.EndpointDiffs);
+        Assert.Equal(CombinedDependencyDiffClassifications.ChangedEvidence, row.Classification);
+        Assert.Equal(10, row.Before?.StartLine);
+        Assert.Equal(22, row.After?.StartLine);
+    }
+
+    [Fact]
+    public async Task Diff_warns_but_does_not_block_when_only_checkout_root_hash_changes()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Manifest("api", "tracemap-milestone15", gitRootHash: "git-root-before");
+        var afterManifest = Manifest("api", "tracemap-milestone15", gitRootHash: "git-root-after");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", beforeManifest, [RouteFact(beforeManifest, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)]);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", afterManifest, [RouteFact(afterManifest, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)]);
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "sources"));
+
+        Assert.Contains(result.Report.CoverageWarnings, warning => warning.Contains("different checkout root", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "SourceIdentityChanged");
+    }
+
+    [Fact]
+    public async Task Diff_downgrades_path_removal_when_after_snapshot_has_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var reducedServer = Manifest("server", "tracemap-milestone15", analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+        var beforeClient = Path.Combine(temp.Path, "before-client.sqlite");
+        var beforeServer = Path.Combine(temp.Path, "before-server.sqlite");
+        var afterClient = Path.Combine(temp.Path, "after-client.sqlite");
+        var afterServer = Path.Combine(temp.Path, "after-server.sqlite");
+
+        SqliteIndexWriter.Write(beforeClient, client, [HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)]);
+        SqliteIndexWriter.Write(beforeServer, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10, controller),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        SqliteIndexWriter.Write(afterClient, client, [HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)]);
+        SqliteIndexWriter.Write(afterServer, reducedServer, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeClient, beforeServer], beforeCombined, ["client", "server"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterClient, afterServer], afterCombined, ["client", "server"]));
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "paths",
+            IncludePaths: true,
+            Source: "client",
+            Endpoint: "GET /api/orders/{}",
+            Surface: "sql-query"));
+
+        Assert.Contains(result.Report.PathDiffs, row => row.Classification == CombinedDependencyDiffClassifications.RemovedWithAfterGap);
+        Assert.DoesNotContain(result.Report.PathDiffs, row => row.Classification == CombinedDependencyDiffClassifications.Removed);
+    }
+
     private static async Task WriteSimpleCombinedAsync(TempDirectory temp, string combinedPath, string prefix)
     {
         var clientIndex = Path.Combine(temp.Path, $"{prefix}-client.sqlite");
@@ -238,7 +344,8 @@ public sealed class CombinedDependencyDiffTests
         string repo,
         string scannerVersion,
         string analysisLevel = "Level1SemanticAnalysis",
-        string buildStatus = "Succeeded")
+        string buildStatus = "Succeeded",
+        string? gitRootHash = null)
     {
         return new ScanManifest(
             $"scan-{repo}",
@@ -256,7 +363,7 @@ public sealed class CombinedDependencyDiffTests
             [],
             ".",
             FactFactory.Hash(repo, 32),
-            FactFactory.Hash($"{repo}-git-root", 32));
+            gitRootHash ?? FactFactory.Hash($"{repo}-git-root", 32));
     }
 
     private static CodeFact HttpClientFact(ScanManifest manifest, string method, string template, string key, string file, int line)
@@ -280,7 +387,7 @@ public sealed class CombinedDependencyDiffTests
             });
     }
 
-    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string file, int line)
+    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string file, int line, string? methodSymbol = null)
     {
         return FactFactory.Create(
             manifest,
@@ -288,7 +395,8 @@ public sealed class CombinedDependencyDiffTests
             RuleIds.CSharpSyntaxAspNetRoute,
             EvidenceTiers.Tier3SyntaxOrTextual,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
-            targetSymbol: $"{method} {template}",
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol ?? $"{method} {template}",
             contractElement: template,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -300,7 +408,28 @@ public sealed class CombinedDependencyDiffTests
             });
     }
 
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callKind"] = "method"
+            });
+    }
+
     private static CodeFact QueryPatternFact(ScanManifest manifest, string file, int line)
+    {
+        return QueryPatternFact(manifest, null, file, line);
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
     {
         return FactFactory.Create(
             manifest,
@@ -308,6 +437,7 @@ public sealed class CombinedDependencyDiffTests
             RuleIds.CSharpSyntaxQueryPattern,
             EvidenceTiers.Tier2Structural,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
             targetSymbol: "orders",
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {

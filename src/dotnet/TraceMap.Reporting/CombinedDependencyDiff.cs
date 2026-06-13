@@ -173,6 +173,7 @@ internal sealed record ComparableDiffRecord(
     string Kind,
     string StableKey,
     string MetadataHash,
+    string EvidenceHash,
     CombinedDiffEvidence Evidence,
     bool NeedsReview = false);
 
@@ -244,7 +245,7 @@ public static class CombinedDependencyDiffer
     {
         ValidateOptions(options);
         var format = CombinedReportHelpers.NormalizeFormat(options.Format, "diff");
-        var scopes = NormalizeScopes(options.Scope);
+        var scopes = NormalizeScopes(options.Scope, options.IncludePaths);
         (string Method, string PathKey)? endpointSelector = string.IsNullOrWhiteSpace(options.Endpoint) ? null : ParseEndpointSelector(options.Endpoint);
         var ignoredSelectors = IgnoredSelectors(options, scopes);
 
@@ -279,6 +280,7 @@ public static class CombinedDependencyDiffer
         }
 
         var sortedGaps = SortAndCapGaps(gaps, options.MaxGaps, out var gapsTruncated);
+        var outputTruncated = gapsTruncated || sortedGaps.Any(gap => gap.GapKind == "TruncatedByLimit");
         var warnings = before.Read.CoverageWarnings
             .Concat(after.Read.CoverageWarnings)
             .Concat(sourceIdentity.Values.SelectMany(value => value.Caveats.Select(caveat => caveat.Message)))
@@ -309,7 +311,7 @@ public static class CombinedDependencyDiffer
                 AlgorithmVersion),
             ToSnapshotInfo("before", before.Read),
             ToSnapshotInfo("after", after.Read),
-            new CombinedDiffSummary(sourceDiffs.Count, coverageDiffs.Count, endpointDiffs.Count, surfaceDiffs.Count, edgeDiffs.Count, pathDiffs.Count, sortedGaps.Count, gapsTruncated),
+            new CombinedDiffSummary(sourceDiffs.Count, coverageDiffs.Count, endpointDiffs.Count, surfaceDiffs.Count, edgeDiffs.Count, pathDiffs.Count, sortedGaps.Count, outputTruncated),
             sourceDiffs,
             coverageDiffs,
             endpointDiffs,
@@ -358,14 +360,14 @@ public static class CombinedDependencyDiffer
             throw new ArgumentException("diff --surface must be one of sql-query, http-route, http-client, or package-config.");
         }
 
-        var scopes = NormalizeScopes(options.Scope);
+        var scopes = NormalizeScopes(options.Scope, options.IncludePaths);
         if (scopes.Contains("paths") && !options.IncludePaths)
         {
             throw new ArgumentException("diff --scope paths requires --include-paths.");
         }
     }
 
-    private static IReadOnlyList<string> NormalizeScopes(string? value)
+    private static IReadOnlyList<string> NormalizeScopes(string? value, bool includePaths)
     {
         var rawScopes = string.IsNullOrWhiteSpace(value)
             ? ["sources", "endpoints", "surfaces", "edges"]
@@ -381,7 +383,9 @@ public static class CombinedDependencyDiffer
 
         if (scopes.Contains("all"))
         {
-            scopes = ["sources", "endpoints", "surfaces", "edges", "paths"];
+            scopes = includePaths
+                ? ["sources", "endpoints", "surfaces", "edges", "paths"]
+                : ["sources", "endpoints", "surfaces", "edges"];
         }
 
         if (!scopes.Contains("sources"))
@@ -541,11 +545,13 @@ public static class CombinedDependencyDiffer
                     Pair("commitSha", source.CommitSha),
                     Pair("scannerVersion", source.ScannerVersion)
                 ]);
+                var evidence = Evidence(source, "source", source.Label, SourceRuleId, EvidenceTiers.Tier2Structural, null, null, null, metadata, [], []);
                 return new ComparableDiffRecord(
                     "source",
                     $"source:{source.Label}",
                     MetadataHash(metadata),
-                    Evidence(source, "source", source.Label, SourceRuleId, EvidenceTiers.Tier2Structural, null, null, null, metadata, [], []));
+                    EvidenceHash(evidence),
+                    evidence);
             })
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
             .ToArray();
@@ -562,11 +568,13 @@ public static class CombinedDependencyDiffer
                     Pair("buildStatus", source.BuildStatus),
                     Pair("commitSha", source.CommitSha)
                 ]);
+                var evidence = Evidence(source, "coverage", $"{source.AnalysisLevel}/{source.BuildStatus}", CoverageRuleId, EvidenceTiers.Tier4Unknown, null, null, null, metadata, [], []);
                 return new ComparableDiffRecord(
                     "coverage",
                     $"coverage:{source.Label}",
                     MetadataHash(metadata),
-                    Evidence(source, "coverage", $"{source.AnalysisLevel}/{source.BuildStatus}", CoverageRuleId, EvidenceTiers.Tier4Unknown, null, null, null, metadata, [], []));
+                    EvidenceHash(evidence),
+                    evidence);
             })
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
             .ToArray();
@@ -593,22 +601,24 @@ public static class CombinedDependencyDiffer
                     Pair("serverSource", finding.ServerSourceLabel),
                     Pair("staticMatchQuality", finding.StaticMatchQuality)
                 ]);
+                var evidence = Evidence(
+                    source,
+                    "endpoint",
+                    $"{finding.HttpMethod} {finding.NormalizedPathKey ?? "unknown"}",
+                    finding.ClientRuleId ?? finding.ServerRuleId ?? EndpointRuleId,
+                    finding.ClientEvidenceTier ?? finding.ServerEvidenceTier ?? EvidenceTiers.Tier4Unknown,
+                    finding.ClientFilePath ?? finding.ServerFilePath,
+                    finding.ClientStartLine ?? finding.ServerStartLine,
+                    finding.ClientEndLine ?? finding.ServerEndLine,
+                    metadata,
+                    SortedIds([finding.ClientCombinedFactId, finding.ServerCombinedFactId]),
+                    []);
                 return new ComparableDiffRecord(
                     "endpoint",
                     key,
                     MetadataHash(metadata),
-                    Evidence(
-                        source,
-                        "endpoint",
-                        $"{finding.HttpMethod} {finding.NormalizedPathKey ?? "unknown"}",
-                        finding.ClientRuleId ?? finding.ServerRuleId ?? EndpointRuleId,
-                        finding.ClientEvidenceTier ?? finding.ServerEvidenceTier ?? EvidenceTiers.Tier4Unknown,
-                        finding.ClientFilePath ?? finding.ServerFilePath,
-                        finding.ClientStartLine ?? finding.ServerStartLine,
-                        finding.ClientEndLine ?? finding.ServerEndLine,
-                        metadata,
-                        SortedIds([finding.ClientCombinedFactId, finding.ServerCombinedFactId]),
-                        []),
+                    EvidenceHash(evidence),
+                    evidence,
                     finding.Classification is CombinedEndpointClassifications.AmbiguousMatch or CombinedEndpointClassifications.DynamicClientUrlNeedsReview or CombinedEndpointClassifications.MethodMismatch or CombinedEndpointClassifications.UnknownAnalysisGap);
             })
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
@@ -642,22 +652,24 @@ public static class CombinedDependencyDiffer
                 var source = SourceFor(read, surface.SourceIndexId);
                 var metadata = SurfaceMetadata(surface);
                 var stable = $"surface:{surface.SourceLabel}:{surface.SurfaceKind}:{MetadataHash(metadata)}";
+                var evidence = Evidence(
+                    source,
+                    "surface",
+                    surface.DisplayName,
+                    surface.RuleId,
+                    surface.EvidenceTier,
+                    surface.FilePath,
+                    surface.StartLine,
+                    surface.EndLine,
+                    metadata,
+                    [surface.CombinedFactId],
+                    []);
                 return new ComparableDiffRecord(
                     "surface",
                     stable,
                     MetadataHash(metadata),
-                    Evidence(
-                        source,
-                        "surface",
-                        surface.DisplayName,
-                        surface.RuleId,
-                        surface.EvidenceTier,
-                        surface.FilePath,
-                        surface.StartLine,
-                        surface.EndLine,
-                        metadata,
-                        [surface.CombinedFactId],
-                        []),
+                    EvidenceHash(evidence),
+                    evidence,
                     surface.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
             })
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
@@ -708,22 +720,24 @@ public static class CombinedDependencyDiffer
                     Pair("ruleFamily", RuleFamily(edge.RuleId))
                 ]);
                 var stable = $"edge:{edge.SourceLabel}:{MetadataHash(metadata)}";
+                var evidence = Evidence(
+                    source,
+                    "edge",
+                    $"{edge.SourceSymbol ?? "unknown"} -> {edge.TargetSymbol ?? "unknown"}",
+                    edge.RuleId,
+                    edge.EvidenceTier,
+                    edge.FilePath,
+                    edge.StartLine,
+                    edge.EndLine,
+                    metadata,
+                    [],
+                    [edge.EdgeId]);
                 return new ComparableDiffRecord(
                     "edge",
                     stable,
                     MetadataHash(metadata),
-                    Evidence(
-                        source,
-                        "edge",
-                        $"{edge.SourceSymbol ?? "unknown"} -> {edge.TargetSymbol ?? "unknown"}",
-                        edge.RuleId,
-                        edge.EvidenceTier,
-                        edge.FilePath,
-                        edge.StartLine,
-                        edge.EndLine,
-                        metadata,
-                        [],
-                        [edge.EdgeId]),
+                    EvidenceHash(evidence),
+                    evidence,
                     edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual || string.IsNullOrWhiteSpace(edge.SourceSymbol) || string.IsNullOrWhiteSpace(edge.TargetSymbol));
             })
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
@@ -872,7 +886,7 @@ public static class CombinedDependencyDiffer
             afterGroups.TryGetValue(key, out var afterRows);
             var beforeRecord = beforeRows?.OrderBy(row => row.MetadataHash, StringComparer.Ordinal).FirstOrDefault();
             var afterRecord = afterRows?.OrderBy(row => row.MetadataHash, StringComparer.Ordinal).FirstOrDefault();
-            if (beforeRecord is not null && afterRecord is not null && beforeRecord.MetadataHash == afterRecord.MetadataHash && beforeRows!.Length == afterRows!.Length)
+            if (beforeRecord is not null && afterRecord is not null && beforeRecord.MetadataHash == afterRecord.MetadataHash && beforeRecord.EvidenceHash == afterRecord.EvidenceHash && beforeRows!.Length == afterRows!.Length)
             {
                 continue;
             }
@@ -905,15 +919,8 @@ public static class CombinedDependencyDiffer
 
             var beforeEvidence = beforeRecord?.Evidence;
             var afterEvidence = afterRecord?.Evidence;
-            var classification = beforeRecord is null
-                ? CombinedDependencyDiffClassifications.Added
-                : afterRecord is null
-                    ? CombinedDependencyDiffClassifications.Removed
-                    : CombinedDependencyDiffClassifications.ChangedEvidence;
-            if (beforeRecord?.NeedsReview == true || afterRecord?.NeedsReview == true)
-            {
-                classification = CombinedDependencyDiffClassifications.NeedsReviewDiff;
-            }
+            var classification = ClassifyPathRecord(beforeRecord, afterRecord, sourceIdentity);
+            var caveats = PathCaveats(beforeRecord, afterRecord, sourceIdentity);
 
             var changeType = ChangeType(classification);
             rows.Add(new CombinedPathDiffRow(
@@ -925,15 +932,84 @@ public static class CombinedDependencyDiffer
                 PathRuleId,
                 beforeEvidence,
                 afterEvidence,
-                [],
+                caveats,
                 []));
         }
 
-        return rows
+        var sorted = rows
             .OrderBy(row => ClassificationRank(row.Classification))
             .ThenBy(row => row.PathSignature, StringComparer.Ordinal)
-            .Take(maxPaths * 3)
             .ToArray();
+        var maxRows = maxPaths * 3;
+        if (sorted.Length <= maxRows)
+        {
+            return sorted;
+        }
+
+        gaps.Add(new CombinedDiffGap($"gap:truncated:{PathRuleId}", "TruncatedByLimit", null, "path", TruncationRuleId, EvidenceTiers.Tier4Unknown, CombinedDependencyDiffClassifications.NeedsReviewDiff, $"{PathRuleId} produced {sorted.Length} rows; output was capped at {maxRows}.", [], []));
+        return sorted.Take(maxRows).ToArray();
+    }
+
+    private static string ClassifyPathRecord(
+        ComparablePathRecord? before,
+        ComparablePathRecord? after,
+        IReadOnlyDictionary<string, SourceIdentityAssessment> sourceIdentity)
+    {
+        var assessments = PathSourceAssessments(before, after, sourceIdentity).ToArray();
+        if (assessments.Any(assessment => assessment.BlocksStrongClaims))
+        {
+            return assessments.Any(assessment => assessment.Unknown)
+                ? CombinedDependencyDiffClassifications.UnknownAnalysisGap
+                : CombinedDependencyDiffClassifications.NeedsReviewDiff;
+        }
+
+        if (before is null && assessments.Any(assessment => assessment.BeforeReduced))
+        {
+            return CombinedDependencyDiffClassifications.AddedWithBeforeGap;
+        }
+
+        if (after is null && assessments.Any(assessment => assessment.AfterReduced))
+        {
+            return CombinedDependencyDiffClassifications.RemovedWithAfterGap;
+        }
+
+        if (before?.NeedsReview == true || after?.NeedsReview == true)
+        {
+            return CombinedDependencyDiffClassifications.NeedsReviewDiff;
+        }
+
+        return before is null
+            ? CombinedDependencyDiffClassifications.Added
+            : after is null
+                ? CombinedDependencyDiffClassifications.Removed
+                : CombinedDependencyDiffClassifications.ChangedEvidence;
+    }
+
+    private static IReadOnlyList<CombinedCoverageCaveat> PathCaveats(
+        ComparablePathRecord? before,
+        ComparablePathRecord? after,
+        IReadOnlyDictionary<string, SourceIdentityAssessment> sourceIdentity)
+    {
+        return PathSourceAssessments(before, after, sourceIdentity)
+            .SelectMany(assessment => assessment.Caveats)
+            .GroupBy(caveat => $"{caveat.SourceLabel}\u001f{caveat.Code}\u001f{caveat.Message}", StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(caveat => caveat.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(caveat => caveat.Code, StringComparer.Ordinal)
+            .ThenBy(caveat => caveat.Message, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IEnumerable<SourceIdentityAssessment> PathSourceAssessments(
+        ComparablePathRecord? before,
+        ComparablePathRecord? after,
+        IReadOnlyDictionary<string, SourceIdentityAssessment> sourceIdentity)
+    {
+        return (before?.Evidence.SourceTransitions ?? [])
+            .Concat(after?.Evidence.SourceTransitions ?? [])
+            .Distinct(StringComparer.Ordinal)
+            .Select(label => sourceIdentity.TryGetValue(label, out var assessment) ? assessment : null)
+            .Where(assessment => assessment is not null)!;
     }
 
     private static string ClassifyRecord(ComparableDiffRecord? before, ComparableDiffRecord? after, int beforeCount, int afterCount, IReadOnlyDictionary<string, SourceIdentityAssessment> sourceIdentity)
@@ -1065,6 +1141,11 @@ public static class CombinedDependencyDiffer
                     unknown = true;
                     caveats.Add(new CombinedCoverageCaveat(label, "UnknownCommitSha", $"Source `{label}` has unknown commit SHA on at least one side."));
                 }
+
+                if (CheckoutRootChanged(before, after))
+                {
+                    caveats.Add(new CombinedCoverageCaveat(label, "SourceCheckoutRootChanged", $"Source `{label}` was scanned from different checkout root paths; source identity matched, so diffing continued."));
+                }
             }
 
             result[label] = new SourceIdentityAssessment(beforeReduced, afterReduced, blocks, unknown, caveats);
@@ -1077,8 +1158,7 @@ public static class CombinedDependencyDiffer
     {
         return BothPresentDifferent(before.Language, after.Language)
             || BothPresentDifferent(before.RepoName, after.RepoName)
-            || BothPresentDifferent(before.RemoteUrl, after.RemoteUrl)
-            || BothPresentDifferent(before.GitRootHash, after.GitRootHash);
+            || BothPresentDifferent(before.RemoteUrl, after.RemoteUrl);
     }
 
     private static bool IdentityUnverified(CombinedReportSource before, CombinedReportSource after)
@@ -1087,6 +1167,12 @@ public static class CombinedDependencyDiffer
             || string.IsNullOrWhiteSpace(after.Language)
             || (string.IsNullOrWhiteSpace(before.RemoteUrl) && string.IsNullOrWhiteSpace(before.GitRootHash) && string.IsNullOrWhiteSpace(before.RepoName))
             || (string.IsNullOrWhiteSpace(after.RemoteUrl) && string.IsNullOrWhiteSpace(after.GitRootHash) && string.IsNullOrWhiteSpace(after.RepoName));
+    }
+
+    private static bool CheckoutRootChanged(CombinedReportSource before, CombinedReportSource after)
+    {
+        return BothPresentDifferent(before.GitRootHash, after.GitRootHash)
+            || BothPresentDifferent(before.ScanRootPathHash, after.ScanRootPathHash);
     }
 
     private static bool BothPresentDifferent(string? before, string? after)
@@ -1358,14 +1444,46 @@ public static class CombinedDependencyDiffer
         return CombinedReportHelpers.Hash(string.Join("\n", metadata.Select(pair => $"{pair.Key}={pair.Value}")));
     }
 
-    private static string RuleFamily(string ruleId)
+    private static string EvidenceHash(CombinedDiffEvidence evidence)
     {
+        var values = new[]
+        {
+            evidence.SourceLabel,
+            evidence.Language ?? string.Empty,
+            evidence.ScanId ?? string.Empty,
+            evidence.CommitSha ?? string.Empty,
+            evidence.EvidenceKind ?? string.Empty,
+            evidence.DisplayName ?? string.Empty,
+            evidence.RuleId ?? string.Empty,
+            evidence.EvidenceTier ?? string.Empty,
+            evidence.FilePath ?? string.Empty,
+            (evidence.StartLine ?? 0).ToString(),
+            (evidence.EndLine ?? 0).ToString(),
+            string.Join("\u001f", evidence.SafeMetadata.Select(pair => $"{pair.Key}={pair.Value}")),
+            string.Join("\u001f", evidence.SupportingFactIds),
+            string.Join("\u001f", evidence.SupportingEdgeIds)
+        };
+        return CombinedReportHelpers.Hash(string.Join("\n", values));
+    }
+
+    private static string RuleFamily(string? ruleId)
+    {
+        if (string.IsNullOrWhiteSpace(ruleId))
+        {
+            return "unknown";
+        }
+
         var index = ruleId.LastIndexOf(".v", StringComparison.Ordinal);
         return index > 0 && ruleId[(index + 2)..].All(char.IsDigit) ? ruleId[..index] : ruleId;
     }
 
-    private static string NormalizeEdgeKind(string value)
+    private static string NormalizeEdgeKind(string? value)
     {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "unknown";
+        }
+
         return value.Trim().Replace("_", "-", StringComparison.Ordinal).Replace(" ", "-", StringComparison.Ordinal).ToLowerInvariant();
     }
 
@@ -1414,7 +1532,7 @@ public static class CombinedDependencyDiffer
         };
     }
 
-    private static string Cell(string value) => CombinedReportHelpers.Cell(value);
+    private static string Cell(string? value) => CombinedReportHelpers.Cell(value);
 
     private sealed record SourceIdentityAssessment(
         bool BeforeReduced,
