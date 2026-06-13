@@ -7,10 +7,13 @@
   - [ ] Confirm OSS scans remain in the separate pinned OSS smoke.
   - [ ] Confirm optional external repo mode is deferred.
   - [ ] Confirm generated outputs are not committed.
-  - [ ] Confirm this slice does not change path-search behavior unless a validation blocker is found.
+  - [ ] Confirm path-search behavior changes are allowed only if the real-scanned linkage spike proves they are required.
   - [ ] Confirm the new script stays independent from `scripts/smoke-typescript-endpoints.sh`.
+  - [ ] Decide after the spike whether to split into two PRs: path-graph reconciliation first, smoke/docs second.
 
-- [ ] Inspect current endpoint samples.
+### PR 1: Real-Scanned Path Linkage
+
+- [ ] Run the linkage spike before changing samples.
   - [ ] Scan `samples/endpoint-client-angular`.
   - [ ] Scan `samples/endpoint-server-aspnet`.
   - [ ] Combine the two indexes with labels `sample-client` and `sample-server`.
@@ -19,7 +22,23 @@
   - [ ] Determine whether current samples already produce endpoint-to-`sql-query` paths.
   - [ ] Determine whether current samples already produce endpoint-to-`package-config` paths.
   - [ ] Verify the sample matched endpoint key, expected to be `GET /api/admin/runner/get-by-id/{}` unless scanner output says otherwise.
-  - [ ] Record any sample evidence gaps in implementation notes or tests.
+  - [ ] Inspect route fact source symbols, call-edge source/target symbols, and surface source symbols from real scanned indexes.
+  - [ ] Record whether SQL/config surfaces are reachable or only reported as `UnlinkedSurface`.
+
+- [ ] If scanned symbols do not connect, add path-graph reconciliation.
+  - [ ] Add focused tests that reproduce route/call/query source-symbol mismatch using facts shaped like real scanner output.
+  - [ ] Keep reconciliation source-local to a single `sourceIndexId`.
+  - [ ] Prefer exact symbol IDs and exact display names before any short-name alias.
+  - [ ] Add a documented derived rule ID for any symbol alias/reconciliation edge.
+  - [ ] Add the rule and limitations to `rules/rule-catalog.yml`.
+  - [ ] Classify syntax/name-only reconciled paths no stronger than `NeedsReviewPath`.
+  - [ ] Preserve supporting fact IDs or combined edge IDs on derived reconciliation evidence.
+  - [ ] Emit a gap or review-tier ambiguity when multiple source-local candidates match.
+  - [ ] Prove SQL surfaces that remain unlinked do not satisfy path success.
+  - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
+  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
+
+### PR 2: Public Fixture and Smoke
 
 - [ ] Extend checked-in samples for reachable SQL evidence.
   - [ ] Add minimal server code that emits SQL/query evidence reachable from a matched route.
@@ -29,6 +48,7 @@
   - [ ] Keep sample code small and realistic.
   - [ ] Avoid raw secrets, real hostnames, private names, private schemas, and local paths.
   - [ ] Update any existing sample expectations affected by the added code.
+  - [ ] Re-run the real-scanned workflow and prove endpoint-to-`sql-query` now works before writing smoke assertions.
 
 - [ ] Add `scripts/smoke-combined-paths.sh`.
   - [ ] Resolve repo root from the script location.
@@ -56,6 +76,8 @@
   - [ ] Assert path report includes at least one `endpoint-match` edge.
   - [ ] Assert path report includes a source transition across sample labels.
   - [ ] Assert a path reaches `sql-query`.
+  - [ ] Assert the SQL path includes an endpoint-match edge and at least one code traversal or documented reconciliation edge before the SQL terminal.
+  - [ ] Assert SQL evidence reported only as `UnlinkedSurface` does not count as success.
   - [ ] Assert at least one path is classified as `StrongStaticPath`, `ProbableStaticPath`, or `NeedsReviewPath`.
   - [ ] Assert path edges have rule IDs and evidence tiers.
   - [ ] Assert gaps have rule IDs and evidence tiers.
@@ -89,6 +111,7 @@
 
 - [ ] Add or update tests where useful.
   - [ ] Prefer existing .NET and TypeScript unit tests for scanner behavior.
+  - [ ] Add path-graph tests for any reconciliation rules added in PR 1.
   - [ ] Add small tests only if sample changes affect extractor behavior.
   - [ ] Avoid brittle golden Markdown snapshots.
   - [ ] Assert semantic JSON fields rather than full report text.
