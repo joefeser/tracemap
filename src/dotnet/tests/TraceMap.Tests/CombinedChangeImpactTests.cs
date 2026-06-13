@@ -107,6 +107,34 @@ public sealed class CombinedChangeImpactTests
         Assert.Equal(["sources"], result.Report.Query.DelegatedDiffScopes);
         Assert.NotEmpty(result.Report.ImpactItems);
         Assert.All(result.Report.ImpactItems, item => Assert.Equal("coverage", item.EvidenceKind));
+        Assert.All(result.Report.ImpactItems, item => Assert.Equal(CombinedImpactClassifications.UnknownAnalysisGap, item.Classification));
+    }
+
+    [Fact]
+    public async Task Impact_records_ignored_selectors_when_scope_cannot_apply_them()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var fullManifest = Manifest("api", "tracemap-milestone15");
+        var reducedManifest = Manifest("api", "tracemap-milestone15", analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before-full", fullManifest, []);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after-reduced", reducedManifest, []);
+
+        var result = await CombinedChangeImpactReporter.WriteAsync(new CombinedChangeImpactOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "impact"),
+            Scope: "coverage",
+            Endpoint: "GET /api/orders",
+            Surface: "sql-query",
+            SurfaceName: "orders"));
+
+        Assert.Contains("--endpoint has no enabled endpoint or path scope.", result.Report.Query.IgnoredSelectors);
+        Assert.Contains("--surface has no enabled surface or path scope.", result.Report.Query.IgnoredSelectors);
+        Assert.Contains("--surface-name has no enabled surface or path scope.", result.Report.Query.IgnoredSelectors);
+        Assert.All(result.Report.ImpactItems, item => Assert.Equal("coverage", item.EvidenceKind));
     }
 
     [Fact]
@@ -223,6 +251,7 @@ public sealed class CombinedChangeImpactTests
         Assert.Single(result.Report.ImpactItems);
         Assert.True(result.Report.Summary.Truncated);
         Assert.Contains(result.Report.Gaps, gap => gap.Classification == CombinedImpactClassifications.TruncatedByLimit);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.Message.Contains("combined.diff.endpoint.v1 produced", StringComparison.Ordinal));
     }
 
     [Fact]

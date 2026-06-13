@@ -287,6 +287,7 @@ Path-context classifications:
 | --- | --- |
 | `ReachabilityChanged` | Before/after path context changed under credible source identity and coverage. |
 | `ReachabilityEvidenceChanged` | Comparable before/after paths exist but path evidence changed. |
+| `ReachabilityUnchanged` | Comparable before/after paths exist and path evidence is unchanged. |
 | `PathContextUnavailable` | No safe path selector can be derived for the changed evidence. |
 | `NoPathEvidence` | Path context was requested, selectors matched, full coverage is credible, and no path evidence was found. |
 | `UnknownAnalysisGap` | Gaps prevent a credible path-context conclusion. |
@@ -306,6 +307,7 @@ Confidence mapping:
 | `StaticImpactEvidence` | High |
 | `ReachabilityChanged` | Medium |
 | `ReachabilityEvidenceChanged` | Medium |
+| `ReachabilityUnchanged` | Medium |
 | `ProbableStaticImpact` | Medium |
 | everything else | Low |
 

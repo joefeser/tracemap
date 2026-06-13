@@ -170,6 +170,7 @@ rules:
     emits:
       - ReachabilityChanged path context
       - ReachabilityEvidenceChanged path context
+      - ReachabilityUnchanged path context
       - PathContextUnavailable gap
       - NoPathEvidence gap
     limitations:
