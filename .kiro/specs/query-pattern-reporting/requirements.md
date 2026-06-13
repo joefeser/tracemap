@@ -14,28 +14,30 @@ This is a presentation layer change. It must not add new analysis claims, mutate
 2. SQL-shape report rows SHALL include visible derived fields when present:
    - `operationName`
    - `tableName` or `tableNames`
-   - `columnNames`, preferring `columnNames` over duplicate `fieldNames`
+   - `columnNames`, preferring `columnNames` over duplicate `fieldNames`; values are semicolon-delimited strings, not arrays
    - `sqlSourceKind`
    - `queryShapeHash`
 3. SQL-shape rows SHALL include evidence tier and file/line span.
 4. SQL-shape rows SHALL NOT claim runtime execution, database schema existence, generated SQL equivalence, branch feasibility, or dialect validity.
 5. SQL-shape rows SHALL NOT display raw SQL text or literal values.
-6. The Python report SHALL include SQL-shape limitations near the query-pattern output or in the Python limitations section.
+6. The Python report SHALL include SQL-shape limitations directly under the query-pattern section.
 
 ### 2. Python report output remains deterministic
 
 1. The Python report SHALL preserve the existing deterministic fact emission order for the query-pattern section.
 2. The Python report SHALL use explicit placeholders such as `unknown`, `none`, or `n/a` when optional properties are absent.
 3. The Python report SHALL not add a row cap or truncation behavior in this slice.
+4. The Python report SHALL preserve distinct rows for distinct evidence sources; multiple `orders` rows from ORM text, SQL files, and migrations are expected and SHALL NOT be deduplicated in this slice.
 
 ### 3. Documentation and tests
 
 1. The implementation SHALL add tests covering Python SQL-shape query-pattern rendering from `samples/python-fastapi-sample`.
-2. The tests SHALL assert that the report includes `orders`, `id;status;total`, `orm-text` or another visible SQL source kind, and `queryShapeHash`.
+2. The tests SHALL assert that the report includes `orders`, `id;status;total`, `orm-text` or another visible SQL source kind, and an actual 32-character lowercase hex shape hash value. The tests SHALL NOT pass by checking only the literal property name `queryShapeHash`.
 3. The tests SHALL assert that raw SQL text such as `SELECT id, status, total FROM orders` is not displayed in `report.md`.
-4. `docs/VALIDATION.md` SHALL include a Markdown report inspection command, such as a `grep` against the public Python sample scan output.
-5. `rules/rule-catalog.yml` SHALL keep `python.integration.sql.v1` aligned with the report display contract by noting that reports display derived table/column/source-kind metadata without raw SQL text.
-6. `docs/LANGUAGE_ADAPTER_CONTRACT.md` SHALL remain the source of truth for SQL evidence semantics; this slice MAY clarify report behavior but SHALL NOT loosen evidence limitations.
+4. The tests SHALL assert a stable limitation anchor phrase appears, including at least `static shape evidence` and `runtime execution`.
+5. `docs/VALIDATION.md` SHALL include Markdown report inspection commands, such as `grep "orm-text" <out>/report.md` and `grep "orders" <out>/report.md`, against the public Python sample scan output.
+6. `rules/rule-catalog.yml` SHALL keep the existing `python.integration.sql.v1` entry aligned with the report display contract by noting that reports display derived table/column/source-kind metadata without raw SQL text.
+7. `docs/LANGUAGE_ADAPTER_CONTRACT.md` SHALL remain the source of truth for SQL evidence semantics; this slice MAY clarify report behavior but SHALL NOT loosen evidence limitations.
 
 ### 4. Follow-up renderer scope is explicit
 

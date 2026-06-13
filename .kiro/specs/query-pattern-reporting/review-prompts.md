@@ -19,7 +19,7 @@ Focus areas:
 - Does the Python report plan avoid overclaiming runtime SQL execution, schema existence, dialect validity, generated SQL equivalence, or branch feasibility?
 - Are the proposed report fields useful for open-source demo/readability without leaking raw SQL or literal values?
 - Are ordering, row-limit, and placeholder behaviors implementable without scope creep?
-- Are tests and validation concrete enough, especially `orders`, `id;status;total`, source kind, `queryShapeHash`, no raw SQL, and limitation text?
+- Are tests and validation concrete enough, especially `orders`, `id;status;total`, source kind, an actual 32-character shape hash value, no raw SQL, and limitation text anchors?
 - Are docs/rule-catalog tasks sufficient?
 
 Please identify merge-blocking spec issues separately from nice-to-have polish.
