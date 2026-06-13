@@ -1,0 +1,18 @@
+name: Private Path Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  private-path-guard:
+    name: Private path guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check for private paths and fixture names
+        run: scripts/check-private-paths.sh
