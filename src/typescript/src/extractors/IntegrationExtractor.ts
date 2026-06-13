@@ -1,23 +1,47 @@
 import ts from "typescript";
+import fs from "node:fs";
+import path from "node:path";
 import { CodeFact, EvidenceTiers, FactTypes, ScanManifest } from "../facts/Models";
 import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { hash } from "../util/Hash";
 import { repoRelative } from "../util/Paths";
 import { LoadedProject } from "./TypeScriptProjectLoader";
+import { normalizeEndpointRoute } from "../endpoints/RouteTemplateNormalizer";
+
+interface VisitContext {
+  httpClientNames: Set<string>;
+  environmentBases: Map<string, string>;
+}
+
+interface UrlAnalysis {
+  urlKind: string;
+  dynamicReason: string;
+  routeTemplate: string;
+  baseUrlSymbol: string;
+  basePathPrefix: string;
+  urlHash: string;
+  responseType: string;
+}
 
 export function extractIntegrationFacts(repoPath: string, manifest: ScanManifest, projects: readonly LoadedProject[]): CodeFact[] {
   const facts: CodeFact[] = [];
+  const environmentBases = readEnvironmentBasePaths(repoPath);
   for (const project of projects) {
     for (const sourceFile of project.sourceFiles) {
-      visit(repoPath, manifest, project, sourceFile, sourceFile, facts);
+      const context: VisitContext = {
+        httpClientNames: collectHttpClientReceivers(sourceFile),
+        environmentBases
+      };
+      visit(repoPath, manifest, project, sourceFile, sourceFile, facts, context);
     }
   }
   return facts;
 }
 
-function visit(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.Node, facts: CodeFact[]): void {
+function visit(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.Node, facts: CodeFact[], context: VisitContext): void {
   if (ts.isCallExpression(node)) {
+    addAngularHttpClientFact(repoPath, manifest, project, sourceFile, node, facts, context);
     addHttpFact(repoPath, manifest, project, sourceFile, node, facts);
     addExpressRouteFact(repoPath, manifest, project, sourceFile, node, facts);
     addSerializerFact(repoPath, manifest, project, sourceFile, node, facts);
@@ -28,7 +52,78 @@ function visit(repoPath: string, manifest: ScanManifest, project: LoadedProject,
   if (ts.isPropertyAccessExpression(node)) {
     addProcessEnvFact(repoPath, manifest, project, sourceFile, node, facts);
   }
-  ts.forEachChild(node, (child) => visit(repoPath, manifest, project, sourceFile, child, facts));
+  ts.forEachChild(node, (child) => visit(repoPath, manifest, project, sourceFile, child, facts, context));
+}
+
+function addAngularHttpClientFact(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.CallExpression, facts: CodeFact[], context: VisitContext): void {
+  if (!ts.isPropertyAccessExpression(node.expression)) {
+    return;
+  }
+
+  const verb = node.expression.name.text.toLowerCase();
+  if (!["get", "post", "put", "patch", "delete", "head", "options", "request"].includes(verb)) {
+    return;
+  }
+
+  const receiver = node.expression.expression.getText(sourceFile);
+  if (!isHttpClientReceiver(receiver, context.httpClientNames)) {
+    return;
+  }
+
+  const methodArg = verb === "request" ? node.arguments[0] : undefined;
+  const urlArg = verb === "request" ? node.arguments[1] : node.arguments[0];
+  if (!urlArg) {
+    return;
+  }
+
+  const method = verb === "request" && methodArg && ts.isStringLiteralLike(methodArg)
+    ? methodArg.text.toUpperCase()
+    : verb.toUpperCase();
+  const analysis = analyzeUrlExpression(urlArg, sourceFile, context.environmentBases);
+  const normalized = analysis.routeTemplate
+    ? normalizeEndpointRoute(analysis.routeTemplate, analysis.basePathPrefix)
+    : null;
+  const properties: Record<string, string> = {
+    name: "HttpClient." + verb,
+    methodName: method,
+    httpMethod: method,
+    urlKind: analysis.urlKind,
+    dynamicReason: analysis.dynamicReason,
+    urlHash: analysis.urlHash,
+    valueStored: "hash-only",
+    clientFramework: "angular",
+    baseUrlSymbol: analysis.baseUrlSymbol,
+    basePathPrefix: analysis.basePathPrefix,
+    sourceClass: containingClass(sourceFile, node),
+    sourceMethod: containingFunction(sourceFile, node),
+    responseType: analysis.responseType,
+    targetSymbol: `HttpClient.${verb}`,
+    contractElement: method
+  };
+  if (normalized) {
+    properties.normalizedPathTemplate = normalized.pathTemplate;
+    properties.normalizedPathKey = normalized.pathKey;
+    properties.pathParameterNames = normalized.parameterNames.join(";");
+    properties.queryParameterNames = normalized.queryParameterNames.join(";");
+    properties.hasQueryParameters = String(normalized.hasQueryParameters);
+    properties.staticMatchQuality = normalized.staticMatchQuality;
+  }
+
+  facts.push(
+    createFact(
+      manifest,
+      FactTypes.HttpCallDetected,
+      RuleIds.TypeScriptIntegrationAngularHttpClient,
+      context.httpClientNames.size > 0 ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
+      createEvidence(repoRelative(repoPath, sourceFile.fileName), sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1, sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1, "typescript-angular-httpclient", ScannerVersions.TypeScriptAngularHttpClientExtractor),
+      {
+        projectPath: project.projectPath,
+        targetSymbol: `HttpClient.${verb}`,
+        contractElement: method,
+        properties
+      }
+    )
+  );
 }
 
 function addHttpFact(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.CallExpression, facts: CodeFact[]): void {
@@ -319,6 +414,220 @@ function methodFromFetch(node: ts.CallExpression, sourceFile: ts.SourceFile): st
     }
   }
   return "GET";
+}
+
+function collectHttpClientReceivers(sourceFile: ts.SourceFile): Set<string> {
+  const receivers = new Set<string>();
+  let importsHttpClient = false;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !statement.importClause?.namedBindings || !ts.isNamedImports(statement.importClause.namedBindings)) {
+      continue;
+    }
+    for (const element of statement.importClause.namedBindings.elements) {
+      if ((element.propertyName?.text ?? element.name.text) === "HttpClient") {
+        importsHttpClient = true;
+      }
+    }
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isParameter(node) && node.type?.getText(sourceFile).endsWith("HttpClient")) {
+      receivers.add(node.name.getText(sourceFile));
+      receivers.add(`this.${node.name.getText(sourceFile)}`);
+    }
+    if (ts.isPropertyDeclaration(node) && node.type?.getText(sourceFile).endsWith("HttpClient") && ts.isIdentifier(node.name)) {
+      receivers.add(node.name.text);
+      receivers.add(`this.${node.name.text}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  if (importsHttpClient) {
+    visit(sourceFile);
+  }
+  return receivers;
+}
+
+function isHttpClientReceiver(receiver: string, knownReceivers: Set<string>): boolean {
+  if (knownReceivers.has(receiver)) {
+    return true;
+  }
+  return /(^|\.)(http|httpClient)$/.test(receiver);
+}
+
+function analyzeUrlExpression(expression: ts.Expression, sourceFile: ts.SourceFile, environmentBases: Map<string, string>): UrlAnalysis {
+  const responseType = "";
+  if (ts.isStringLiteralLike(expression)) {
+    return {
+      urlKind: "literal",
+      dynamicReason: "",
+      routeTemplate: expression.text,
+      baseUrlSymbol: "",
+      basePathPrefix: "",
+      urlHash: hash(expression.text),
+      responseType
+    };
+  }
+  if (ts.isNoSubstitutionTemplateLiteral(expression)) {
+    return {
+      urlKind: "template",
+      dynamicReason: "",
+      routeTemplate: expression.text,
+      baseUrlSymbol: "",
+      basePathPrefix: "",
+      urlHash: hash(expression.text),
+      responseType
+    };
+  }
+  if (ts.isTemplateExpression(expression)) {
+    const template = templateExpressionToRoute(expression, sourceFile, environmentBases);
+    return {
+      urlKind: template.dynamicReason ? "dynamic" : "template",
+      dynamicReason: template.dynamicReason,
+      routeTemplate: template.routeTemplate,
+      baseUrlSymbol: template.baseUrlSymbol,
+      basePathPrefix: template.basePathPrefix,
+      urlHash: hash(expression.getText(sourceFile)),
+      responseType
+    };
+  }
+  if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const concat = concatenateUrlExpression(expression, sourceFile, environmentBases);
+    return {
+      urlKind: concat.dynamicReason ? "dynamic" : "template",
+      dynamicReason: concat.dynamicReason || "VariableConcatenation",
+      routeTemplate: concat.routeTemplate,
+      baseUrlSymbol: concat.baseUrlSymbol,
+      basePathPrefix: concat.basePathPrefix,
+      urlHash: hash(expression.getText(sourceFile)),
+      responseType
+    };
+  }
+  return {
+    urlKind: "dynamic",
+    dynamicReason: ts.isCallExpression(expression) ? "HelperFunctionCall" : "ComplexExpression",
+    routeTemplate: "",
+    baseUrlSymbol: "",
+    basePathPrefix: "",
+    urlHash: hash(expression.getText(sourceFile)),
+    responseType
+  };
+}
+
+function templateExpressionToRoute(expression: ts.TemplateExpression, sourceFile: ts.SourceFile, environmentBases: Map<string, string>): { routeTemplate: string; baseUrlSymbol: string; basePathPrefix: string; dynamicReason: string } {
+  let routeTemplate = expression.head.text;
+  let baseUrlSymbol = "";
+  let basePathPrefix = "";
+  let dynamicReason = "";
+  for (const span of expression.templateSpans) {
+    const resolved = expressionToTemplatePart(span.expression, sourceFile, environmentBases);
+    if (resolved.kind === "base") {
+      baseUrlSymbol = resolved.name;
+      basePathPrefix = resolved.basePathPrefix;
+    } else if (resolved.kind === "param") {
+      routeTemplate += `{${resolved.name}}`;
+    } else {
+      dynamicReason = "TemplateExpressionNotResolvable";
+    }
+    routeTemplate += span.literal.text;
+  }
+  return { routeTemplate, baseUrlSymbol, basePathPrefix, dynamicReason };
+}
+
+function concatenateUrlExpression(expression: ts.Expression, sourceFile: ts.SourceFile, environmentBases: Map<string, string>): { routeTemplate: string; baseUrlSymbol: string; basePathPrefix: string; dynamicReason: string } {
+  const parts = flattenPlusExpression(expression);
+  let routeTemplate = "";
+  let baseUrlSymbol = "";
+  let basePathPrefix = "";
+  let dynamicReason = "";
+  for (const part of parts) {
+    if (ts.isStringLiteralLike(part) || ts.isNoSubstitutionTemplateLiteral(part)) {
+      routeTemplate += part.text;
+      continue;
+    }
+    const resolved = expressionToTemplatePart(part, sourceFile, environmentBases);
+    if (resolved.kind === "base") {
+      baseUrlSymbol = resolved.name;
+      basePathPrefix = resolved.basePathPrefix;
+    } else if (resolved.kind === "param") {
+      routeTemplate += `{${resolved.name}}`;
+    } else {
+      dynamicReason = "VariableConcatenation";
+    }
+  }
+  return { routeTemplate, baseUrlSymbol, basePathPrefix, dynamicReason };
+}
+
+function flattenPlusExpression(expression: ts.Expression): ts.Expression[] {
+  if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    return [...flattenPlusExpression(expression.left), ...flattenPlusExpression(expression.right)];
+  }
+  return [expression];
+}
+
+function expressionToTemplatePart(expression: ts.Expression, sourceFile: ts.SourceFile, environmentBases: Map<string, string>): { kind: "base"; name: string; basePathPrefix: string } | { kind: "param"; name: string } | { kind: "unknown" } {
+  const text = expression.getText(sourceFile);
+  if (environmentBases.has(text)) {
+    return { kind: "base", name: text, basePathPrefix: environmentBases.get(text) ?? "" };
+  }
+  if (ts.isIdentifier(expression)) {
+    return { kind: "param", name: expression.text };
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    return { kind: "param", name: expression.name.text };
+  }
+  return { kind: "unknown" };
+}
+
+function readEnvironmentBasePaths(repoPath: string): Map<string, string> {
+  const result = new Map<string, string>();
+  const envDir = path.join(repoPath, "src", "environments");
+  if (!fs.existsSync(envDir)) {
+    return result;
+  }
+  for (const file of fs.readdirSync(envDir).filter((name) => /^environment.*\.ts$/.test(name)).sort()) {
+    const fullPath = path.join(envDir, file);
+    const text = fs.readFileSync(fullPath, "utf8");
+    for (const match of text.matchAll(/([A-Za-z_$][\w$]*(?:Uri|Url|BasePath|BaseUrl))\s*:\s*["']([^"']+)["']/g)) {
+      const key = match[1];
+      const value = match[2];
+      const pathSuffix = pathSuffixFromUrl(value);
+      result.set(`environment.${key}`, pathSuffix);
+    }
+  }
+  return result;
+}
+
+function pathSuffixFromUrl(value: string): string {
+  try {
+    return new URL(value).pathname || "/";
+  } catch {
+    return value.startsWith("/") ? value : "";
+  }
+}
+
+function containingClass(sourceFile: ts.SourceFile, node: ts.Node): string {
+  let current: ts.Node | undefined = node.parent;
+  while (current) {
+    if (ts.isClassDeclaration(current)) {
+      return current.name?.text ?? "";
+    }
+    current = current.parent;
+  }
+  return "";
+}
+
+function containingFunction(sourceFile: ts.SourceFile, node: ts.Node): string {
+  let current: ts.Node | undefined = node.parent;
+  while (current) {
+    if ((ts.isMethodDeclaration(current) || ts.isFunctionDeclaration(current)) && current.name) {
+      return current.name.getText(sourceFile);
+    }
+    if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) {
+      return "anonymous";
+    }
+    current = current.parent;
+  }
+  return "";
 }
 
 function packageEvidenceTier(project: LoadedProject, node: ts.Node): string | null {

@@ -5,6 +5,7 @@
     <ProjectReference Include="..\TraceMap.Reduction\TraceMap.Reduction.csproj" />
     <ProjectReference Include="..\TraceMap.Storage\TraceMap.Storage.csproj" />
     <ProjectReference Include="..\TraceMap.Reporting\TraceMap.Reporting.csproj" />
+    <ProjectReference Include="..\TraceMap.EndpointAlignment\TraceMap.EndpointAlignment.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

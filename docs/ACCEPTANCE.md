@@ -72,6 +72,21 @@ For every successful `tracemap export --index <index> --out <out> --format merma
 
 For TypeScript indexes, `tracemap-ts export --index <index> --out <out> --format <json|mermaid>` should produce equivalent export shapes from the same SQLite tables.
 
+## Endpoint Alignment Acceptance
+
+For every successful `tracemap endpoints --client-index <client> --server-index <server> --out <out>` run, verify:
+
+- Markdown and/or JSON output follows the requested output shape.
+- output includes client and server scan IDs, commit SHAs, analysis levels, build statuses, labels, scan-root metadata, and index path hashes.
+- every finding includes the derived rule ID `endpoint.alignment.v1`.
+- matched rows preserve source fact IDs, rule IDs, evidence tiers, file paths, and line spans from both indexes.
+- reduced client or server coverage appears in `coverageWarnings`.
+- `ClientCallNoServerEndpoint` states it is not proof of a broken call.
+- `ServerEndpointNoClientMatch` states it is not proof of dead code or an unused endpoint.
+- dynamic client URLs are classified as `DynamicClientUrlNeedsReview` rather than guessed.
+
+Endpoint alignment is static code evidence only. It does not prove runtime routing, middleware behavior, reverse proxies, auth policies, deployment base paths, CORS behavior, feature flags, or whether a route executes.
+
 ## Included Sample Repos
 
 ### `samples/modern-sample`
@@ -151,6 +166,27 @@ Expected:
 - syntax declaration/member facts are emitted.
 - `AnalysisGap` facts are emitted.
 
+### `samples/endpoint-client-angular` and `samples/endpoint-server-aspnet`
+
+Purpose: prove cross-index endpoint alignment over Angular `HttpClient` and ASP.NET controller route syntax fallback.
+
+Command:
+
+```bash
+cd src/typescript
+node dist/src/cli.js scan --repo ../../samples/endpoint-client-angular --out <tmp>/endpoint-client
+cd ../..
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/endpoint-server-aspnet --out <tmp>/endpoint-server
+dotnet run --project src/dotnet/TraceMap.Cli -- endpoints --client-index <tmp>/endpoint-client/index.sqlite --server-index <tmp>/endpoint-server/index.sqlite --client-label endpoint-client --server-label endpoint-server --out <tmp>/endpoint-report
+```
+
+Expected:
+
+- Angular scan emits `HttpCallDetected` facts from `typescript.integration.angular-httpclient.v1`.
+- ASP.NET scan emits `HttpRouteBinding` facts from `csharp.syntax.aspnetroute.v1`.
+- endpoint report contains `MatchedEndpoint`, `OptionalSegmentMatch`, `MethodMismatch`, `DynamicClientUrlNeedsReview`, and `ServerEndpointNoClientMatch`.
+- report warnings remain coverage-relative and do not claim runtime reachability.
+
 ## External Sample Repos
 
 External repos live outside this repository at:
@@ -186,6 +222,15 @@ TypeScript external smoke, recorded June 12, 2026:
 - Result: completed, 13,883 facts, `Level1SemanticAnalysisReduced`, `FailedOrPartial`.
 - Interpretation: reduced coverage is expected for external repos with TypeScript diagnostics or dependency/config gaps; no-evidence reducer findings must remain reduced.
 
+FFP endpoint smoke, recorded June 12, 2026:
+
+- Client repo: `/Users/josephfeser/src/ffp/FFP%20Platform%20v2/backend/FFPRunningClub/FFPRunningClub.Api/ClientApp`
+- Server repo: `/Users/josephfeser/src/ffp/FFP%20Platform%20v2/backend/FFPRunningClub`
+- Server project: `FFPRunningClub.Api/FFPRunningClub.Api.csproj`
+- Result: client scan completed with 34 `HttpCallDetected` facts and `Level1SemanticAnalysisReduced`; server scan completed with 37 `HttpRouteBinding` facts and `Level1SemanticAnalysisReduced`.
+- Endpoint report: 38 findings, `ReducedEvidenceForScannedIndexes`, with `MatchedEndpoint`, `OptionalSegmentMatch`, `ServerEndpointNoClientMatch`, and coverage-warning sections.
+- Interpretation: reduced coverage is expected because the fixture has dependency/project-load quirks; endpoint no-match findings remain coverage-relative.
+
 ## Repo-Specific Delta Fixtures
 
 Repo-specific deltas live under:
@@ -218,6 +263,12 @@ Each fixture should document:
 | syntax-only member match | `NeedsReview` |
 | no match with full semantic coverage | `NoEvidenceFullCoverage` |
 | no match with reduced coverage | `NoEvidenceReducedCoverage` |
+| Angular HttpClient static URL | `HttpCallDetected` with normalized path key |
+| ASP.NET controller attribute route with missing framework refs | Tier3 `HttpRouteBinding` from `csharp.syntax.aspnetroute.v1` |
+| client/server method and path match | `MatchedEndpoint` |
+| server optional segment match | `OptionalSegmentMatch` |
+| path match but method differs | `MethodMismatch` |
+| dynamic client URL | `DynamicClientUrlNeedsReview` |
 | analysis-gap evidence names changed element | `UnknownAnalysisGap` |
 | unparsable contract element | `UnknownAnalysisGap` |
 | generic member with multiple matches | classification preserved plus generic-name warning |

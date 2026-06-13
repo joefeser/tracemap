@@ -44,6 +44,7 @@ public static class CSharpSyntaxExtractor
                 AddLogicShapeFacts(manifest, facts, file.RelativePath, root);
                 AddQueryPatternFacts(manifest, facts, file.RelativePath, root);
                 AddObjectShapeFacts(manifest, facts, file.RelativePath, root);
+                AddAspNetRouteFacts(manifest, facts, file.RelativePath, root);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -415,6 +416,102 @@ public static class CSharpSyntaxExtractor
         }
     }
 
+    private static void AddAspNetRouteFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    {
+        foreach (var type in root.DescendantNodes().OfType<ClassDeclarationSyntax>().OrderBy(type => type.Identifier.ValueText, StringComparer.Ordinal))
+        {
+            var controllerName = GetControllerName(type);
+            if (!LooksLikeController(type, controllerName))
+            {
+                continue;
+            }
+
+            var controllerRoutes = AttributeRoutes(type.AttributeLists, "Route").DefaultIfEmpty(string.Empty).ToArray();
+            var controllerTokens = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["controller"] = controllerName,
+                ["action"] = string.Empty
+            };
+
+            foreach (var method in type.Members.OfType<MethodDeclarationSyntax>().OrderBy(method => method.Identifier.ValueText, StringComparer.Ordinal))
+            {
+                var httpAttributes = HttpMethodAttributes(method.AttributeLists).ToArray();
+                var methodRoutes = AttributeRoutes(method.AttributeLists, "Route").ToArray();
+                if (httpAttributes.Length == 0 && methodRoutes.Length == 0)
+                {
+                    continue;
+                }
+
+                if (httpAttributes.Length == 0)
+                {
+                    httpAttributes = [new HttpAttribute("ANY", string.Empty)];
+                }
+
+                var methodTokens = new SortedDictionary<string, string>(controllerTokens, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["action"] = method.Identifier.ValueText
+                };
+                var bodyParameters = LikelyBodyParameters(method).ToArray();
+                foreach (var httpAttribute in httpAttributes)
+                {
+                    var routes = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(httpAttribute.Template))
+                    {
+                        routes.Add(httpAttribute.Template);
+                    }
+                    routes.AddRange(methodRoutes);
+                    if (routes.Count == 0)
+                    {
+                        routes.Add(string.Empty);
+                    }
+
+                    foreach (var route in routes)
+                    {
+                        foreach (var controllerRoute in controllerRoutes)
+                        {
+                            var combinedRoute = CombineRouteTemplates(controllerRoute, route);
+                            var normalized = EndpointRouteNormalizer.Normalize(combinedRoute, tokens: methodTokens);
+                            facts.Add(FactFactory.Create(
+                                manifest,
+                                FactTypes.HttpRouteBinding,
+                                RuleIds.CSharpSyntaxAspNetRoute,
+                                EvidenceTiers.Tier3SyntaxOrTextual,
+                                new EvidenceSpan(
+                                    filePath,
+                                    method.SyntaxTree.GetLineSpan(method.Span).StartLinePosition.Line + 1,
+                                    Math.Max(
+                                        method.SyntaxTree.GetLineSpan(method.Span).StartLinePosition.Line + 1,
+                                        method.SyntaxTree.GetLineSpan(method.Span).EndLinePosition.Line + 1),
+                                    null,
+                                    "CSharpAspNetSyntaxRouteExtractor",
+                                    ScannerVersions.CSharpAspNetSyntaxRouteExtractor),
+                                sourceSymbol: $"{controllerName}Controller.{method.Identifier.ValueText}",
+                                targetSymbol: $"{httpAttribute.Method} {normalized.PathTemplate}",
+                                contractElement: normalized.PathTemplate,
+                                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                                {
+                                    ["methodName"] = httpAttribute.Method,
+                                    ["httpMethods"] = httpAttribute.Method,
+                                    ["routeTemplates"] = string.Join(",", new[] { controllerRoute, route }.Where(value => !string.IsNullOrWhiteSpace(value))),
+                                    ["normalizedPathTemplate"] = normalized.PathTemplate,
+                                    ["normalizedPathKey"] = normalized.PathKey,
+                                    ["routeParameterNames"] = string.Join(";", normalized.ParameterNames),
+                                    ["optionalParameterNames"] = string.Join(";", normalized.OptionalParameterNames),
+                                    ["routeConstraints"] = string.Join(";", normalized.RouteConstraints),
+                                    ["controllerName"] = controllerName,
+                                    ["actionName"] = method.Identifier.ValueText,
+                                    ["bodyParameterNames"] = string.Join(";", bodyParameters.Select(parameter => parameter.Name)),
+                                    ["bodyParameterTypes"] = string.Join(";", bodyParameters.Select(parameter => parameter.Type)),
+                                    ["authorizationKind"] = AuthorizationKind(type, method),
+                                    ["staticMatchQuality"] = normalized.StaticMatchQuality
+                                }));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private static CodeFact CreateObjectShapeFact(ScanManifest manifest, string filePath, SyntaxNode node, string objectKind, IReadOnlyList<string> fields)
     {
         return FactFactory.Create(
@@ -706,6 +803,162 @@ public static class CSharpSyntaxExtractor
             "CSharpSyntaxExtractor",
             ScannerVersions.CSharpSyntaxExtractor);
     }
+
+    private static bool LooksLikeController(ClassDeclarationSyntax type, string controllerName)
+    {
+        return type.Identifier.ValueText.EndsWith("Controller", StringComparison.Ordinal)
+            || HasAttribute(type.AttributeLists, "ApiController")
+            || AttributeRoutes(type.AttributeLists, "Route").Any()
+            || type.BaseList?.Types.Any(baseType => baseType.Type.ToString().Contains("Controller", StringComparison.Ordinal)) == true
+            || !string.IsNullOrWhiteSpace(controllerName) && type.Members.OfType<MethodDeclarationSyntax>().Any(method => HttpMethodAttributes(method.AttributeLists).Any());
+    }
+
+    private static string GetControllerName(ClassDeclarationSyntax type)
+    {
+        var name = type.Identifier.ValueText;
+        return name.EndsWith("Controller", StringComparison.Ordinal)
+            ? name[..^"Controller".Length]
+            : name;
+    }
+
+    private static IEnumerable<string> AttributeRoutes(SyntaxList<AttributeListSyntax> attributeLists, string attributeName)
+    {
+        foreach (var attribute in AttributesNamed(attributeLists, attributeName))
+        {
+            if (TryGetLiteralAttributeArgument(attribute, out var route))
+            {
+                yield return route;
+            }
+        }
+    }
+
+    private static IEnumerable<HttpAttribute> HttpMethodAttributes(SyntaxList<AttributeListSyntax> attributeLists)
+    {
+        foreach (var attribute in attributeLists.SelectMany(list => list.Attributes))
+        {
+            var name = SimplifyAttributeName(attribute.Name.ToString());
+            var method = name switch
+            {
+                "HttpGet" => "GET",
+                "HttpPost" => "POST",
+                "HttpPut" => "PUT",
+                "HttpPatch" => "PATCH",
+                "HttpDelete" => "DELETE",
+                "HttpHead" => "HEAD",
+                "HttpOptions" => "OPTIONS",
+                _ => null
+            };
+            if (method is null)
+            {
+                continue;
+            }
+
+            yield return new HttpAttribute(method, TryGetLiteralAttributeArgument(attribute, out var route) ? route : string.Empty);
+        }
+    }
+
+    private static IEnumerable<AttributeSyntax> AttributesNamed(SyntaxList<AttributeListSyntax> attributeLists, string name)
+    {
+        return attributeLists
+            .SelectMany(list => list.Attributes)
+            .Where(attribute => SimplifyAttributeName(attribute.Name.ToString()).Equals(name, StringComparison.Ordinal));
+    }
+
+    private static bool HasAttribute(SyntaxList<AttributeListSyntax> attributeLists, string name)
+    {
+        return AttributesNamed(attributeLists, name).Any();
+    }
+
+    private static string SimplifyAttributeName(string value)
+    {
+        var simple = value.Split('.').Last();
+        return simple.EndsWith("Attribute", StringComparison.Ordinal) ? simple[..^"Attribute".Length] : simple;
+    }
+
+    private static bool TryGetLiteralAttributeArgument(AttributeSyntax attribute, out string value)
+    {
+        value = string.Empty;
+        var expression = attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
+        if (expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression))
+        {
+            value = literal.Token.ValueText;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string CombineRouteTemplates(string controllerRoute, string methodRoute)
+    {
+        if (methodRoute.StartsWith("~/", StringComparison.Ordinal) || methodRoute.StartsWith("/", StringComparison.Ordinal))
+        {
+            return methodRoute;
+        }
+
+        if (string.IsNullOrWhiteSpace(controllerRoute))
+        {
+            return methodRoute;
+        }
+
+        if (string.IsNullOrWhiteSpace(methodRoute))
+        {
+            return controllerRoute;
+        }
+
+        return $"{controllerRoute.TrimEnd('/')}/{methodRoute.TrimStart('/')}";
+    }
+
+    private static IEnumerable<(string Name, string Type)> LikelyBodyParameters(MethodDeclarationSyntax method)
+    {
+        foreach (var parameter in method.ParameterList.Parameters)
+        {
+            if (HasAttribute(parameter.AttributeLists, "FromRoute") || HasAttribute(parameter.AttributeLists, "FromQuery") || HasAttribute(parameter.AttributeLists, "FromHeader"))
+            {
+                continue;
+            }
+
+            var type = parameter.Type?.ToString() ?? string.Empty;
+            if (HasAttribute(parameter.AttributeLists, "FromBody") || LooksLikeBodyType(type))
+            {
+                yield return (parameter.Identifier.ValueText, type);
+            }
+        }
+    }
+
+    private static bool LooksLikeBodyType(string type)
+    {
+        var lowered = type.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(lowered))
+        {
+            return false;
+        }
+
+        return !lowered.StartsWith("int", StringComparison.Ordinal)
+            && !lowered.StartsWith("long", StringComparison.Ordinal)
+            && !lowered.StartsWith("short", StringComparison.Ordinal)
+            && !lowered.StartsWith("bool", StringComparison.Ordinal)
+            && !lowered.StartsWith("string", StringComparison.Ordinal)
+            && !lowered.StartsWith("guid", StringComparison.Ordinal)
+            && !lowered.StartsWith("datetime", StringComparison.Ordinal)
+            && !lowered.EndsWith("cancellationtoken", StringComparison.Ordinal);
+    }
+
+    private static string AuthorizationKind(ClassDeclarationSyntax type, MethodDeclarationSyntax method)
+    {
+        if (HasAttribute(method.AttributeLists, "AllowAnonymous"))
+        {
+            return "allow-anonymous";
+        }
+
+        if (HasAttribute(method.AttributeLists, "Authorize") || HasAttribute(type.AttributeLists, "Authorize"))
+        {
+            return "authorize";
+        }
+
+        return string.Empty;
+    }
+
+    private sealed record HttpAttribute(string Method, string Template);
 
     private static bool IsGeneratedSource(string fullPath)
     {

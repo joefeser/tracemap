@@ -22,6 +22,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap/index.s
 dotnet run --project src/dotnet/TraceMap.Cli -- flow --index .tracemap/index.sqlite --symbol request --out .tracemap/flow-report.md
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap/index.sqlite --out .tracemap/index-export.json --format json
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap/index.sqlite --out .tracemap/relationships.mmd --format mermaid
+dotnet run --project src/dotnet/TraceMap.Cli -- endpoints --client-index .tracemap-client/index.sqlite --server-index .tracemap-server/index.sqlite --client-label app-client --server-label app-api --out .tracemap-endpoints
 scripts/smoke-sample-repos.sh
 ```
 
@@ -37,6 +38,16 @@ node dist/src/cli.js export --index ../../.tracemap-ts/index.sqlite --out ../../
 cd ../..
 dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap-ts/index.sqlite --contract-delta samples/contract-deltas/typescript-modern.status.json --out .tracemap-ts/impact-report.md
 ```
+
+Endpoint alignment compares two existing indexes instead of scanning multiple apps in one command:
+
+```bash
+node src/typescript/dist/src/cli.js scan --repo /path/to/App.Api/ClientApp --out /tmp/app-client
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo /path/to/App --project App.Api/App.Api.csproj --out /tmp/app-server
+dotnet run --project src/dotnet/TraceMap.Cli -- endpoints --client-index /tmp/app-client/index.sqlite --server-index /tmp/app-server/index.sqlite --client-label app-client --server-label app-api --out /tmp/app-endpoints
+```
+
+Endpoint findings are static, coverage-relative evidence. A client-only row is not proof of a broken call, and a server-only row is not proof of dead code.
 
 ## License
 

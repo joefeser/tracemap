@@ -3,7 +3,7 @@ import path from "node:path";
 import { FileInventoryItem, ScanOptions } from "../facts/Models";
 import { matchesSimpleGlob, normalizePath, repoRelative } from "../util/Paths";
 
-const defaultExcludedNames = new Set([".git", "node_modules", ".pnpm-store", "dist", "build", "coverage", ".next", ".nuxt", ".turbo"]);
+const defaultExcludedNames = new Set([".git", "node_modules", ".pnpm-store", "dist", "build", "coverage", ".angular", ".next", ".nuxt", ".turbo"]);
 const sourceExtensions = new Set([".ts", ".tsx", ".d.ts", ".json"]);
 
 export async function collectFileInventory(options: ScanOptions): Promise<FileInventoryItem[]> {

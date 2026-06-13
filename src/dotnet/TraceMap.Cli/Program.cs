@@ -1,4 +1,5 @@
 using TraceMap.Core;
+using TraceMap.EndpointAlignment;
 using TraceMap.Reduction;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -36,9 +37,10 @@ public static class TraceMapCommand
                 "flow" => FlowHelp(),
                 "relate" => RelateHelp(),
                 "export" => ExportHelp(),
+                "endpoints" => EndpointsHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" ? 0 : 1;
         }
 
         try
@@ -51,6 +53,7 @@ public static class TraceMapCommand
                 "flow" => await RunFlowAsync(rest, output, error, cancellationToken),
                 "relate" => await RunRelateAsync(rest, output, error, cancellationToken),
                 "export" => await RunExportAsync(rest, output, error, cancellationToken),
+                "endpoints" => await RunEndpointsAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -131,6 +134,50 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"TraceMap scan completed: {fullOutputPath}");
         await output.WriteLineAsync($"Facts written: {result.Facts.Count}");
         await output.WriteLineAsync($"Analysis level: {result.Manifest.AnalysisLevel}");
+        return 0;
+    }
+
+    private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--client-index", out var clientIndexPath) || string.IsNullOrWhiteSpace(clientIndexPath))
+        {
+            await error.WriteLineAsync("error: endpoints requires --client-index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--server-index", out var serverIndexPath) || string.IsNullOrWhiteSpace(serverIndexPath))
+        {
+            await error.WriteLineAsync("error: endpoints requires --server-index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: endpoints requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase) && !format.Equals("md", StringComparison.OrdinalIgnoreCase) && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: endpoints --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await EndpointAlignmentEngine.AlignAsync(
+            new EndpointAlignmentOptions(
+                clientIndexPath,
+                serverIndexPath,
+                outputPath,
+                format.Equals("json", StringComparison.OrdinalIgnoreCase) ? "json" : "markdown",
+                values.GetValueOrDefault("--client-label"),
+                values.GetValueOrDefault("--server-label")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap endpoints completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Findings written: {result.Report.Findings.Count}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return 0;
     }
 
@@ -356,6 +403,7 @@ public static class TraceMapCommand
               tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>
               tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path>
               tracemap export --index <path> --out <path> [--format <json|mermaid>]
+              tracemap endpoints --client-index <path> --server-index <path> --out <path> [--format <markdown|json>]
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -364,6 +412,7 @@ public static class TraceMapCommand
               flow      Trace deterministic parameter-forwarding paths.
               relate    Trace deterministic symbol relationship paths.
               export    Export a deterministic JSON summary or Mermaid graph from an index.
+              endpoints Align client HTTP calls with server HTTP route bindings.
             """;
     }
 
@@ -477,6 +526,27 @@ public static class TraceMapCommand
 
             Outputs:
               index-export.json or relationships.mmd
+            """;
+    }
+
+    private static string EndpointsHelp()
+    {
+        return """
+            Usage:
+              tracemap endpoints --client-index <path> --server-index <path> --out <path> [--format <markdown|json>] [--client-label <label>] [--server-label <label>]
+
+            Required:
+              --client-index <path>      Client TraceMap index.sqlite.
+              --server-index <path>      Server TraceMap index.sqlite.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+              --client-label <label>     Human-readable client source label.
+              --server-label <label>     Human-readable server source label.
+
+            Outputs:
+              endpoint-report.md and/or endpoint-report.json
             """;
     }
 }

@@ -56,7 +56,10 @@ public static class ScanEngine
             solutions,
             projects,
             targetFrameworks,
-            knownGaps);
+            knownGaps,
+            GetScanRootRelativePath(repoPath, git),
+            FactFactory.Hash(repoPath, 32),
+            string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32));
 
         var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options);
         return new ScanResult(manifest, facts, inventory);
@@ -67,6 +70,19 @@ public static class ScanEngine
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{signature}", 20);
+    }
+
+    private static string GetScanRootRelativePath(string repoPath, GitMetadata git)
+    {
+        if (string.IsNullOrWhiteSpace(git.GitRootPath))
+        {
+            return ".";
+        }
+
+        var relative = Path.GetRelativePath(git.GitRootPath, repoPath);
+        return relative is "." or ""
+            ? "."
+            : FileInventory.NormalizeRelativePath(relative);
     }
 
     private static IReadOnlyList<CodeFact> CreateFacts(
