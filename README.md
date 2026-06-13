@@ -7,6 +7,7 @@ The current language scanners are:
 - `.NET/C#` under `src/dotnet`, including semantic Roslyn extraction, syntax fallback, flow/export commands, and contract reduction.
 - `TypeScript` under `src/typescript`, including compiler-backed facts, syntax fallback, integration facts, and reducer-compatible SQLite output.
 - `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
+- `Python` under `src/python`, including AST/package/config/SQL extraction, FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests integration facts, reduced coverage labeling, and reducer-compatible SQLite output.
 
 TraceMap can also combine multiple indexes into one provenance-preserving SQLite database and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
@@ -34,6 +35,9 @@ npm install
 npm run check
 cd ../..
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-python-venv
+/tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]"
+/tmp/tracemap-python-venv/bin/python -m pytest src/python/tests
 ```
 
 Run the pinned public open-source smoke set when changing adapter behavior:
@@ -92,6 +96,18 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine --index .tracemap-jvm/in
 ```
 
 The JVM scanner does not run Maven, Gradle, annotation processors, app code, or dependency restore during scan. Kotlin MVP support is syntax fallback only, so Kotlin-only scans are labeled syntax coverage.
+
+Python scanner:
+
+```bash
+python3 -m venv /tmp/tracemap-python-venv
+/tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]"
+/tmp/tracemap-python-venv/bin/python -m tracemap_py.cli scan --repo samples/python-fastapi-sample --out .tracemap-py
+dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap-py/index.sqlite --contract-delta samples/contract-deltas/python-fastapi.order-status.json --out .tracemap-py/impact-report.md
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index .tracemap-py/index.sqlite --label python-sample --out .tracemap-py-combined.sqlite
+```
+
+The Python scanner does not import user code, execute setup.py, run a type checker, or install project dependencies during scan. MVP coverage is reduced AST/package/config/SQL evidence, so no-match reducer outcomes are coverage-relative.
 
 Endpoint alignment compares two existing indexes instead of scanning multiple apps in one command. This keeps language scanners independent and preserves per-index coverage/provenance:
 

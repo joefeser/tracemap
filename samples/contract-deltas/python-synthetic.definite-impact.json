@@ -1,0 +1,12 @@
+{
+  "contract": "SyntheticOrder",
+  "source": "samples/python-synthetic-tier1-fixture",
+  "changes": [
+    {
+      "element": "SyntheticOrder.status",
+      "changeType": "behavior_changed",
+      "oldType": "str",
+      "newType": "str"
+    }
+  ]
+}

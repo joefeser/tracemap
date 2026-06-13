@@ -17,6 +17,9 @@ cd src/typescript
 npm run check
 cd ../..
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-python-venv
+/tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]"
+/tmp/tracemap-python-venv/bin/python -m pytest src/python/tests
 ```
 
 Expected result:
@@ -61,6 +64,16 @@ For every successful `tracemap-jvm scan --repo <repo> --out <out>` run, verify:
 - reducer-compatible facts reuse existing fact type strings and matching keys such as `propertyName`, `methodName`, `typeName`, `keyPath`, `name`, `containingType`, and `targetSymbol`.
 - JVM descriptor, group ID, artifact ID, and module metadata are stored as review/export properties and not as reducer-matching names.
 - JVM facts store hashes/spans for source values, not raw source snippets.
+
+For every successful `tracemap-py scan --repo <repo> --out <out>` run, verify:
+
+- the same required artifacts are written.
+- scans outside a Git checkout with a known commit SHA fail before artifacts are written.
+- `scan-manifest.json` uses `Level1SemanticAnalysisReduced` for Python MVP AST/package/config/SQL scans with Python source files.
+- scans with only non-Python evidence use `Level3SyntaxAnalysis` or reduced coverage labels, never clean semantic coverage.
+- reducer-compatible facts reuse existing fact type strings and matching keys such as `fieldName`, `memberName`, `methodName`, `typeName`, `keyPath`, `name`, `containingType`, and `targetSymbol`.
+- Python facts store hashes/spans for source values, not raw source snippets.
+- Python scanner does not import user code, execute setup.py, run a type checker, or install project dependencies during scan.
 
 ## Reducer Acceptance
 
@@ -279,6 +292,59 @@ Expected:
 - syntax facts are emitted where recoverable.
 - Java compiler diagnostics and/or parser gaps are emitted as `AnalysisGap` facts.
 
+### `samples/python-fastapi-sample`
+
+Purpose: prove Python AST/package/config/SQL extraction and reducer compatibility.
+
+Command:
+
+```bash
+/tmp/tracemap-python-venv/bin/python -m tracemap_py.cli scan --repo samples/python-fastapi-sample --out <tmp>/python-fastapi-sample
+dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index <tmp>/python-fastapi-sample/index.sqlite --contract-delta samples/contract-deltas/python-fastapi.order-status.json --out <tmp>/python-impact.md
+```
+
+Expected:
+
+- scan emits the required artifacts.
+- scan analysis level is `Level1SemanticAnalysisReduced`.
+- build status is `FailedOrPartial`.
+- `OrderResponse.status` is at least `ProbableImpact` through Tier2 serializer/DTO evidence.
+- FastAPI route, requests/httpx HTTP call, Pydantic serializer, SQLAlchemy column, SQL text/file, config key, call edge, object creation, argument flow, and symbol relationship facts are emitted where visible.
+- raw SQL/config/serializer values are hashed or represented as safe normalized keys.
+
+### `samples/python-flask-sample`
+
+Purpose: prove Flask route extraction, config module assignments, static HTTP calls, and SQL files.
+
+Command:
+
+```bash
+/tmp/tracemap-python-venv/bin/python -m tracemap_py.cli scan --repo samples/python-flask-sample --out <tmp>/python-flask-sample
+```
+
+Expected:
+
+- scan completes with reduced Python coverage.
+- Flask route, httpx call, config key, and SQL file facts are emitted.
+- dynamic route registration that cannot be resolved remains lower-tier review evidence or an analysis gap.
+
+### `samples/python-broken-sample`
+
+Purpose: prove Python syntax failure recovery.
+
+Command:
+
+```bash
+/tmp/tracemap-python-venv/bin/python -m tracemap_py.cli scan --repo samples/python-broken-sample --out <tmp>/python-broken-sample
+```
+
+Expected:
+
+- scan completes.
+- analysis level is reduced.
+- parse failures and dynamic SQL/import boundaries are recorded as `AnalysisGap` facts.
+- recoverable Python files still emit declaration, invocation, and alias facts.
+
 ### `samples/endpoint-client-angular` and `samples/endpoint-server-aspnet`
 
 Purpose: prove cross-index endpoint alignment over Angular `HttpClient` and ASP.NET controller route syntax fallback.
@@ -425,6 +491,11 @@ Each fixture should document:
 | TypeScript semantic property usage match | `DefiniteImpact` through existing .NET reducer |
 | TypeScript syntax-only fallback | reduced or syntax-only coverage, never clean |
 | TypeScript integration boundary | Tier1/Tier2/Tier3 according to compiler/package/shape evidence |
+| Python Pydantic DTO member match | `ProbableImpact` through Tier2 `SerializerContractMember` |
+| Python Flask/FastAPI route | `HttpRouteBinding` with normalized route key when static decorator syntax is visible |
+| Python SQLAlchemy column | `DatabaseColumnMapping` with table/column/member evidence when declarative syntax is visible |
+| Python syntax invocation | `CallEdge` with containing function/module and callee syntax name |
+| Python broken file | reduced coverage with `AnalysisGap`, while other files continue scanning |
 
 ## Performance Smoke Targets
 

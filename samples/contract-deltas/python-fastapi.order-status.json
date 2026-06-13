@@ -1,0 +1,12 @@
+{
+  "contract": "OrderResponse",
+  "source": "samples/python-fastapi-sample",
+  "changes": [
+    {
+      "element": "OrderResponse.status",
+      "changeType": "behavior_changed",
+      "oldType": "str",
+      "newType": "str"
+    }
+  ]
+}
