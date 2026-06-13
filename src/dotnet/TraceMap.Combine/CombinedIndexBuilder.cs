@@ -583,6 +583,16 @@ public static class CombinedIndexBuilder
             return "typescript";
         }
 
+        if (scannerVersion.Contains("jvm", StringComparison.OrdinalIgnoreCase))
+        {
+            return "jvm";
+        }
+
+        if (scannerVersion.Contains("python", StringComparison.OrdinalIgnoreCase))
+        {
+            return "python";
+        }
+
         if (scannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase))
         {
             return "csharp";
