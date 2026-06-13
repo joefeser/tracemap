@@ -69,7 +69,7 @@
   - [ ] Print a concise summary.
 
 - [ ] Add JSON assertion helpers.
-  - [ ] Assert dependency report includes at least one `MatchedEndpoint`.
+  - [ ] Assert dependency report includes target endpoint evidence classified as `MatchedEndpoint` or review-tier `AmbiguousMatch`.
   - [ ] Assert dependency report imports exactly two sources with labels `sample-client` and `sample-server`.
   - [ ] Assert matching client/server endpoint evidence share the same normalized path key.
   - [ ] Assert path report has expected source labels.

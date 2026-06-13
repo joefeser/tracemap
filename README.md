@@ -46,6 +46,12 @@ Run the pinned public open-source smoke set when changing adapter behavior:
 scripts/smoke-open-source-repos.sh /tmp/tracemap-oss-cache /tmp/tracemap-oss-smoke
 ```
 
+Run the public combined-path smoke when changing `combine`, `report`, `paths`, endpoint extraction, or dependency-surface extraction:
+
+```bash
+./scripts/smoke-combined-paths.sh
+```
+
 See [Validation guide](docs/VALIDATION.md) for the language matrix, expected artifact/table checks, and pinned repository SHAs.
 
 .NET/C# scan and reduce:
@@ -71,7 +77,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --index .tracemap-ts/index.sqlite --label typescript-sample \
   --out .tracemap-combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index .tracemap-combined.sqlite --out .tracemap-combined-report
-dotnet run --project src/dotnet/TraceMap.Cli -- paths --index .tracemap-combined.sqlite --from-endpoint "GET /api/orders/{}" --to-surface sql-query --out .tracemap-combined-paths
+dotnet run --project src/dotnet/TraceMap.Cli -- paths --index .tracemap-combined.sqlite --from-endpoint "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out .tracemap-combined-paths
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combined.sqlite --out .tracemap-combined.json --format json
 ```
 

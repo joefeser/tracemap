@@ -139,11 +139,48 @@ public sealed class CombinedDependencyPathTests
                 FromSymbol: clientMethod,
                 ToSurface: "sql-query"));
 
-        var path = Assert.Single(result.Report.Paths);
+        var path = Assert.Single(result.Report.Paths, candidate => candidate.Edges.Any(edge => edge.EdgeKind == "endpoint-match"));
         Assert.Equal(clientMethod, path.Nodes.First().SymbolId);
         Assert.Contains(path.Edges, edge => edge.EdgeKind == "fact-attached-to-symbol" && edge.FromNodeId == path.Nodes.First().NodeId);
         Assert.Contains(path.Edges, edge => edge.EdgeKind == "endpoint-match");
         Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+    }
+
+    [Fact]
+    public async Task Paths_reconciles_source_local_symbols_to_connect_scanned_route_call_and_query_shapes()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "global::EndpointServerSample.Controllers.RunnerController.GetById(string runnerId)";
+        var repository = "global::EndpointServerSample.Services.RunnerRepository.Query(string runnerId)";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/admin/runner/get-by-id/{runnerId}", "/api/admin/runner/get-by-id/{}", "src/runner.ts", 5)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/admin/runner/get-by-id/{runnerId:guid}", "/api/admin/runner/get-by-id/{}", controller, "Controllers/RunnerController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/RunnerController.cs", 14),
+            QueryPatternFact(server, "Query", "Services/RunnerRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/admin/runner/get-by-id/{}",
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths, candidate => candidate.Edges.Any(edge => edge.EdgeKind == "endpoint-match"));
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "endpoint-match");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "calls");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "symbol-reconciliation" && edge.RuleId == "combined.paths.symbol-reconciliation.v1");
+        Assert.Equal("NeedsReviewPath", path.Classification);
     }
 
     [Fact]
