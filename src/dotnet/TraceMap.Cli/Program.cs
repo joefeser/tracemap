@@ -50,7 +50,7 @@ public static class TraceMapCommand
             return command switch
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
-                "report" => await NotImplementedYetAsync("report", error),
+                "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "reduce" => await RunReduceAsync(rest, output, error, cancellationToken),
                 "flow" => await RunFlowAsync(rest, output, error, cancellationToken),
                 "relate" => await RunRelateAsync(rest, output, error, cancellationToken),
@@ -137,6 +137,43 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"TraceMap scan completed: {fullOutputPath}");
         await output.WriteLineAsync($"Facts written: {result.Facts.Count}");
         await output.WriteLineAsync($"Analysis level: {result.Manifest.AnalysisLevel}");
+        return 0;
+    }
+
+    private static async Task<int> RunReportAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: report requires --index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: report requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: report --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await CombinedDependencyReporter.WriteAsync(
+            new CombinedDependencyReportOptions(indexPath, outputPath, format),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap report completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
+        await output.WriteLineAsync($"Facts: {result.Report.Summary.FactCount}");
+        await output.WriteLineAsync($"Dependency edges: {result.Report.Summary.DependencyEdgeCount}");
+        await output.WriteLineAsync($"Endpoint findings: {result.Report.Summary.EndpointFindingCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return 0;
     }
 
@@ -447,7 +484,7 @@ public static class TraceMapCommand
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
-              report    Generate a report from an index. Skeleton in Milestone 0.
+              report    Generate a combined dependency report from a combined index.
               reduce    Reduce a contract delta against an index.
               flow      Trace deterministic parameter-forwarding paths.
               relate    Trace deterministic symbol relationship paths.
@@ -488,10 +525,17 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap report --index <path> --out <path>
+              tracemap report --index <combined.sqlite> --out <path> [--format <markdown|json>]
 
-            Status:
-              Command skeleton only in Milestone 0.
+            Required:
+              --index <path>             Combined TraceMap index from tracemap combine.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+
+            Outputs:
+              dependency-report.md and/or dependency-report.json
             """;
     }
 

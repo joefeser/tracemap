@@ -9,7 +9,7 @@ The current language scanners are:
 - `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
 - `Python` under `src/python`, including AST/package/config/SQL extraction, FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests integration facts, reduced coverage labeling, and reducer-compatible SQLite output.
 
-TraceMap can also combine multiple indexes into one provenance-preserving SQLite database and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
+TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
 Start here:
 
@@ -70,8 +70,11 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --index .tracemap/index.sqlite --label dotnet-sample \
   --index .tracemap-ts/index.sqlite --label typescript-sample \
   --out .tracemap-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index .tracemap-combined.sqlite --out .tracemap-combined-report
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combined.sqlite --out .tracemap-combined.json --format json
 ```
+
+The combined dependency report writes `dependency-report.md` and `dependency-report.json` when `--out` is a directory. It summarizes source coverage, endpoint alignment, HTTP/SQL/package/config surfaces, dependency edges, needs-review rows, known gaps, and static-analysis limitations without mutating the combined database.
 
 TypeScript scanner:
 
