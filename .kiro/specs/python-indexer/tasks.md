@@ -17,7 +17,7 @@
 - [ ] 0.11 Confirm dynamic imports, monkey patching, decorator side effects, runtime DI, route inclusion order, collection contents, mutation semantics, and branch feasibility are gaps/boundaries, not inferred facts.
 - [ ] 0.12 Confirm reducer-compatible facts reuse existing fact types and camelCase property keys.
 - [ ] 0.13 Confirm Python emits compatible artifacts and does not reimplement `.NET` reduce/export/combine/endpoint alignment.
-- [ ] 0.14 Confirm shared adapter contract decisions: deterministic `scanId`, role-symbol property keys, route normalization, SQL source kinds, and SQLite DDL source of truth.
+- [ ] 0.14 Confirm shared adapter contract decisions: deterministic `scanId`, supported role-symbol property keys, route normalization, additive SQL source kinds, and SQLite DDL source of truth.
 
 ### Phase 1: Scaffold `src/python`
 
@@ -32,11 +32,11 @@
 
 ### Phase 2: Fact Model and Cross-Language Contract
 
-- [ ] 2.1 Update/confirm `docs/LANGUAGE_ADAPTER_CONTRACT.md` covers Python-needed scan IDs, role-symbol properties, route normalization, SQL source kinds, and SQLite DDL conventions.
+- [ ] 2.1 Update/confirm `docs/LANGUAGE_ADAPTER_CONTRACT.md` covers Python-needed scan IDs, supported role-symbol properties, route normalization, additive SQL source kinds, and SQLite DDL conventions.
 - [ ] 2.2 Define Python models matching the existing TraceMap fact envelope and JSON casing.
 - [ ] 2.3 Implement deterministic hashing and sorted-property fact creation.
 - [ ] 2.4 Document and test that extractor version is excluded from fact ID hash input.
-- [ ] 2.5 Implement deterministic `scanId` helper from repository identity, commit SHA, scan options, and sorted inventory signature.
+- [ ] 2.5 Implement deterministic `scanId` helper from repository identity, commit SHA, and sorted inventory signature.
 - [ ] 2.6 Implement SQL/text hash helper: SHA-256 over exact UTF-8 string bytes, truncated to 32 lowercase hex chars.
 - [ ] 2.7 Create hand-crafted synthetic Python `.ndjson`/`.sqlite` fixture files with Tier1 `TypeDeclared`, `PropertyAccessed`, and `MethodInvoked` facts labeled with `isSyntheticFixture = "true"` and a fixture rule ID.
 - [ ] 2.8 Run existing `.NET` `tracemap reduce` against the synthetic fixture and prove `DefiniteImpact`.
@@ -95,7 +95,7 @@
 - [ ] 6.3 Emit FastAPI route gaps/boundaries for dynamic decorators and unresolved `include_router`.
 - [ ] 6.4 Emit Flask route facts for `route`, HTTP-method shortcuts, literal `methods`, and same-module literal blueprint prefixes.
 - [ ] 6.5 Emit Flask route gaps/boundaries for dynamic route registration and runtime blueprint wiring.
-- [ ] 6.6 Emit shared `normalizedPathKey` values according to `docs/LANGUAGE_ADAPTER_CONTRACT.md`.
+- [ ] 6.6 Emit shared path-only, lowercased `normalizedPathKey` values with `{}` placeholders according to `docs/LANGUAGE_ADAPTER_CONTRACT.md`.
 - [ ] 6.7 Emit HTTP client facts for `requests` and `httpx` calls.
 - [ ] 6.8 Emit dynamic client URL boundary facts when URL cannot be normalized.
 - [ ] 6.9 Add tests for each supported route/client shape, async route handlers, method mismatch possibilities, dynamic URLs, route prefix limitations, and endpoint-reader visibility.
@@ -112,7 +112,7 @@
 
 - [ ] 7.6 Emit SQLAlchemy declarative model table/column mapping facts only for literal declarations with SQLAlchemy import evidence and recognized declarative base evidence.
 - [ ] 7.7 Emit SQLAlchemy query boundary facts as `AnalysisGap` with `gapKind = "orm-query-boundary"` for ORM builders, filters, relationships, and dynamic query patterns.
-- [ ] 7.8 Emit DB-API and SQLAlchemy `text(...)` SQL call facts with `textHash`, `textLength`, allowlisted `operationName`, `sqlSourceKind`, and target symbol.
+- [ ] 7.8 Emit DB-API and SQLAlchemy `text(...)` SQL call facts with `textHash`, `textLength`, target symbol, and additive allowlisted `operationName`/`sqlSourceKind` when available.
 - [ ] 7.9 Emit dynamic SQL boundary facts as `AnalysisGap` with `gapKind = "dynamic-sql"`.
 - [ ] 7.10 Emit SQL resource facts for `.sql` files and migration files.
 - [ ] 7.11 Add tests for SQLAlchemy declared columns, recognized declarative base gates, query boundaries, direct SQL, dynamic SQL, migrations, operation-name allowlist, and config reads.

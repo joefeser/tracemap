@@ -150,7 +150,7 @@ Python coverage mapping SHALL be conservative:
 8. WHEN Pydantic `BaseModel` classes or dataclasses are found THEN the scanner SHALL emit `TypeDeclared`, `FieldDeclared`, and `SerializerContractMember`/schema facts for statically written field annotations and direct `Field(...)` calls.
 9. WHEN SQLAlchemy declarative models have literal `Column` or `mapped_column` assignments with statically visible attribute names, SQLAlchemy import evidence, and a recognized declarative base THEN the scanner SHALL emit structural `DatabaseColumnMapping` facts for declared column-to-attribute mappings.
 10. WHEN SQLAlchemy query calls, ORM filters, `relationship()` strings, or runtime builder expressions are found THEN the scanner SHALL emit query boundary/gap evidence and SHALL NOT infer runtime table/column access.
-11. WHEN direct SQL literals are passed to DB-API, SQLAlchemy `text`, or migration helpers THEN the scanner SHALL emit SQL facts with text hash, length, leading operation name when allowed, source kind, target symbol, and source span.
+11. WHEN direct SQL literals are passed to DB-API, SQLAlchemy `text`, or migration helpers THEN the scanner SHALL emit SQL facts with text hash, length, target symbol, source span, and additive `operationName`/`sqlSourceKind` where available.
 12. WHEN environment/config reads through `os.environ`, `os.getenv`, or Flask config are found THEN the scanner SHALL emit config-use facts with `keyPath` or hashed dynamic expression evidence. Literal `os.environ`/`os.getenv` keys MAY be Tier2 from stdlib evidence; Flask config requires Flask app evidence for Tier2.
 
 ### Requirement 7: Relationships and Flow
@@ -174,8 +174,8 @@ Python coverage mapping SHALL be conservative:
 
 #### Acceptance Criteria
 
-1. WHEN Python emits SQL facts THEN it SHALL use shared fact types and properties compatible with .NET, TypeScript, and JVM SQL evidence.
-2. WHEN SQL text is found THEN raw SQL SHALL not be stored by default; store SHA-256 over the exact raw SQL string bytes encoded as UTF-8 and truncated to 32 lowercase hex chars as `textHash`, plus `textLength`, `sqlSourceKind`, source span, and target symbol.
+1. WHEN Python emits SQL facts THEN it SHALL use shared fact types and the current shared minimum properties compatible with .NET, TypeScript, and JVM SQL evidence.
+2. WHEN SQL text is found THEN raw SQL SHALL not be stored by default; store SHA-256 over the exact raw SQL string bytes encoded as UTF-8 and truncated to 32 lowercase hex chars as `textHash`, plus `textLength`, source span, and target symbol.
 3. WHEN a direct SQL literal begins with one of `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `CALL`, `EXEC`, or `EXECUTE` after trimming leading whitespace THEN the scanner SHALL emit `operationName` as the uppercase first token; otherwise it SHALL leave `operationName` empty or omit it.
 4. WHEN `.sql`, Alembic migration files, or SQLAlchemy migration files are discovered THEN they SHALL be inventoried and scanned for SQL text/resource facts.
 5. WHEN a future shared SQL parser extracts tables, columns, joins, procedure calls, views, or write operations THEN Python shall attach those derived facts to the original source fact IDs and rule IDs.
@@ -211,7 +211,7 @@ Python coverage mapping SHALL be conservative:
 #### Acceptance Criteria
 
 1. WHEN the same repo commit and scan options are scanned twice THEN stable scan IDs and fact IDs SHALL match except for explicitly time-stamped manifest fields.
-2. WHEN computing `scanId` THEN the scanner SHALL derive it deterministically from repository identity, commit SHA, scan options, and a sorted file-inventory signature, mirroring the existing .NET approach and avoiding timestamps, UUIDs, process IDs, or output paths.
+2. WHEN computing `scanId` THEN the scanner SHALL derive it deterministically from repository identity, commit SHA, and a sorted file-inventory signature, mirroring the existing .NET/TypeScript inventory-signature approach and avoiding timestamps, UUIDs, process IDs, or output paths.
 3. WHEN dependencies are missing or imports cannot resolve THEN the scanner SHALL continue with reduced coverage and syntax/AST facts.
 4. WHEN a file exceeds the max byte-size threshold THEN the scanner SHALL skip extraction for that file and emit an `AnalysisGap`.
 5. WHEN parser or worker failures occur THEN the scanner SHALL record bounded diagnostics and continue to remaining files when possible.
@@ -230,9 +230,9 @@ The Python scanner SHALL use these existing property keys when emitting reducer-
 | `FieldDeclared` | `fieldName`, `fieldType`, `containingType`, `targetSymbol` | Tier2 for Pydantic/dataclass declarations with structural evidence; SQLAlchemy columns use `DatabaseColumnMapping` |
 | `ParameterDeclared` | `parameterName`, `parameterType`, `sourceSymbol` | Tier3 unless type-checker-backed |
 | `ConfigKeyDeclared` | `keyPath`, `name`, `targetSymbol` | Tier2 for literal config/env keys with known framework/config source |
-| `HttpRouteBinding` | `httpMethod`, `normalizedPathKey`, `methodName`, `targetSymbol`, `contractElement` | Tier2 for FastAPI/Flask evidence with literal route |
-| `HttpCallDetected` | `httpMethod`, `normalizedPathKey`, `methodName`, `targetSymbol`, `contractElement` | Tier2 for recognized `requests`/`httpx` call with literal/static-enough URL |
-| `SqlTextUsed` | `textHash`, `textLength`, `operationName`, `sqlSourceKind`, `targetSymbol` | Tier3 by default for `.execute(<literal>)`; Tier2 only with structural DB/ORM/migration/file evidence; no table/column guesses |
+| `HttpRouteBinding` | `httpMethod`, `normalizedPathKey`, `methodName`, `targetSymbol`, `contractElement` | Tier2 for FastAPI/Flask evidence with literal route; `normalizedPathKey` is path-only, lowercased, and uses `{}` route placeholders |
+| `HttpCallDetected` | `httpMethod`, `normalizedPathKey`, `methodName`, `targetSymbol`, `contractElement` | Tier2 for recognized `requests`/`httpx` call with literal/static-enough URL; `normalizedPathKey` is path-only, lowercased, and uses `{}` route placeholders |
+| `SqlTextUsed` | `textHash`, `textLength`, `targetSymbol`; additive `operationName`, `sqlSourceKind` | Tier3 by default for `.execute(<literal>)`; Tier2 only with structural DB/ORM/migration/file evidence; no table/column guesses |
 | `DatabaseColumnMapping` | `columnName`, `attributeName`, `containingType`, `targetSymbol` | Tier2 only with SQLAlchemy import evidence and a recognized declarative base |
 | `SerializerContractMember` | `contractName`, `memberName`, `containingType`, `targetSymbol` | Tier2 for Pydantic/dataclass fields with structural evidence |
 | `ArgumentPassed` | `parameterName`, `argumentKind`, `containingSymbol`, `targetSymbol` | Tier3 for AST-only direct argument evidence |

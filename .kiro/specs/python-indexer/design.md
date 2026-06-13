@@ -200,7 +200,7 @@ Analysis-level policy:
 
 `buildStatus = FailedOrPartial` is the compatibility value for Python MVP reduced coverage. It means "full semantic analysis was not achieved"; it does not mean the scanner attempted and failed a Python build.
 
-`scanId` should be deterministic and mirror the existing .NET approach: derive it from stable repository identity, commit SHA, scan options, and a sorted file-inventory signature. It must not use timestamps, UUIDs, process IDs, or output paths because fact IDs include `scanId`.
+`scanId` should be deterministic and mirror the existing .NET/TypeScript inventory-signature approach: derive it from stable repository identity, commit SHA, and a sorted file-inventory signature. It must not use timestamps, UUIDs, process IDs, or output paths because fact IDs include `scanId`.
 
 ## Fact Compatibility
 
@@ -265,7 +265,7 @@ External imports should use package metadata when resolvable, otherwise record t
 
 Reducer-facing `targetSymbol` values should be human dotted display symbols, such as `orders.models.OrderResponse.status`, so `Type.member` contract deltas can match. Stable internal IDs should be stored in `sourceSymbolId` and `targetSymbolId` properties and symbol tables.
 
-Facts that populate symbol/relationship/flow tables should use the role-property convention in `docs/LANGUAGE_ADAPTER_CONTRACT.md`: `{role}SymbolId`, `{role}SymbolLanguage`, `{role}SymbolKind`, and `{role}SymbolDisplayName`. Python should not invent different role names for the shared SQLite tables.
+Facts that populate symbol/relationship/flow tables should use the current shared role-property convention in `docs/LANGUAGE_ADAPTER_CONTRACT.md`: `{role}SymbolId`, `{role}SymbolLanguage`, `{role}SymbolKind`, and `{role}SymbolDisplayName` for supported roles such as `source`, `target`, `argument`, `parameter`, `origin`, and `constructor`. Python should not invent different role names for the shared SQLite tables.
 
 ## Framework Extractors
 
@@ -281,7 +281,7 @@ Recognize:
 
 Emit `HttpRouteBinding` with method, normalized path, handler symbol, route hash, router/app variable, and evidence tier.
 
-Tier2 requires FastAPI import/dependency evidence plus a route-shaped decorator or app/router construction. Route-shaped decorators without evidence are Tier3. Same-module literal `APIRouter(prefix=...)` can be combined into `normalizedPathKey`; unresolved `include_router` should emit a gap rather than a merged path.
+Tier2 requires FastAPI import/dependency evidence plus a route-shaped decorator or app/router construction. Route-shaped decorators without evidence are Tier3. Same-module literal `APIRouter(prefix=...)` can be combined into `normalizedPathKey`; unresolved `include_router` should emit a gap rather than a merged path. `normalizedPathKey` should be path-only, lowercased, and use `{}` placeholders for route parameters.
 
 ### Flask
 
@@ -341,10 +341,12 @@ Initial shared SQL properties:
 
 - `textHash`: SHA-256 over the exact raw SQL string bytes encoded as UTF-8, truncated to 32 lowercase hex chars.
 - `textLength`: length of the raw SQL string.
-- `operationName`: only the visible leading SQL verb from a direct literal after trimming leading whitespace; empty when dynamic, unclear, or not one of `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `CALL`, `EXEC`, or `EXECUTE`.
-- `sqlSourceKind`: shared values from `docs/LANGUAGE_ADAPTER_CONTRACT.md`, such as `literal-string`, `sql-file`, `migration-file`, `orm-text`, `dbapi-execute`, and `dynamic-boundary`.
 - `containingModule`, `containingType`, `containingFunction`, or equivalent symbol display fields.
 - `targetSymbol`: reducer-friendly display symbol.
+- additive `operationName`: only the visible leading SQL verb from a direct literal after trimming leading whitespace; empty when dynamic, unclear, or not one of `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `CALL`, `EXEC`, or `EXECUTE`.
+- additive `sqlSourceKind`: shared values from `docs/LANGUAGE_ADAPTER_CONTRACT.md`, such as `literal-string`, `sql-file`, `migration-file`, `orm-text`, `dbapi-execute`, and `dynamic-boundary`.
+
+`operationName` and `sqlSourceKind` are additive Python properties until existing adapters backfill them consistently. Cross-language SQL matching should continue to rely on `textHash`/`textLength` for the current MVP contract.
 
 Before the shared SQL parser exists, Python must not emit `tableName`, `columnName`, or `operationKind` from guessed SQL text. Dynamic SQL from f-strings, concatenation, `.format`, templates, or ORM builders should be represented as `AnalysisGap` boundary facts with `gapKind` values such as `dynamic-sql` or `orm-query-boundary`, plus hashes of expressions, not raw snippets.
 
