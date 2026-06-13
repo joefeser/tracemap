@@ -99,11 +99,12 @@ SQL validation should therefore plug into every app-language adapter, because C#
 Python is the next recommended app-language adapter. Useful early fixtures should cover:
 
 - FastAPI routes and Pydantic DTOs
-- Flask/Django routes where syntax can prove them
-- SQLAlchemy models and query calls
+- Flask routes where syntax can prove them
+- SQLAlchemy declared columns and direct SQL literals
 - direct SQL literals
 - environment/config reads
-- requests/httpx/aiohttp client calls
-- Celery/background job entry points when statically visible
+- requests/httpx client calls
 
 Python should follow the same matrix: modern sample, broken sample, reducer fixture, relationship tables, integration facts, public OSS smoke, and private-path guard.
+
+Python MVP no-match reducer outcomes are expected to be `NoEvidenceReducedCoverage` because MVP scans use reduced AST/package/config coverage, not full type-checker semantic coverage.
