@@ -154,6 +154,20 @@ For every successful `tracemap paths --index <combined.sqlite> --out <out>` run,
 - no-path conclusions are coverage-relative when contributing sources have reduced coverage.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, or local absolute paths.
 
+For every successful `tracemap diff --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are combined indexes and are opened read-only.
+- directory output writes `diff-report.md` and `diff-report.json`, even when `--format json` is supplied.
+- JSON includes `reportType: combined-dependency-diff`, required empty arrays, stable query metadata, source snapshots, diff rows, gaps, and limitations.
+- source labels are paired exactly, and known source identity conflicts fail by default unless `--allow-identity-mismatch` is supplied.
+- source-only metadata changes do not create endpoint, surface, edge, or path churn.
+- endpoint, surface, and edge rows use stable evidence keys, not volatile SQLite row IDs.
+- `--scope paths` requires `--include-paths`; path diffing is otherwise explicitly reported as not requested.
+- `--endpoint "<METHOD> <PATH_KEY>"`, `--source`, `--surface`, and `--surface-name` selectors behave deterministically.
+- `--max-diff-rows` and `--max-gaps` cap output deterministically and emit truncation gaps.
+- `--exit-code` returns a non-zero exit only when requested and diff rows are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
+
 ## Language Adapter Acceptance
 
 New language adapters should satisfy [Language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md) before language-specific depth is considered complete.
