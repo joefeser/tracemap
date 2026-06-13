@@ -2,24 +2,46 @@
 
 ## Overview
 
-TraceMap now has two practical flavors of `QueryPatternDetected` evidence:
+Python now emits SQL-shape `QueryPatternDetected` evidence with:
 
-| Flavor | Identifier | Typical fields | Meaning |
+- `sqlSourceKind`
+- `operationName`
+- `tableName` / `tableNames`
+- `columnNames` / `fieldNames`
+- `queryShapeHash`
+
+The current Python report does not list query-pattern evidence, so the most valuable first slice is to make Python `report.md` show this evidence clearly and safely.
+
+This spec intentionally scopes .NET, TypeScript, and JVM report changes out of the first PR. Their current scan reports only receive facts produced by their own adapters, and those adapters do not emit SQL-shape `QueryPatternDetected` facts today.
+
+## Fact Flavors
+
+TraceMap has two practical flavors of `QueryPatternDetected` evidence:
+
+| Flavor | Discriminator | Typical fields | Meaning |
 | --- | --- | --- | --- |
-| SQL-shape | `sqlSourceKind` is present | `operationName`, `tableName`, `tableNames`, `columnNames`, `fieldNames`, `queryShapeHash` | Lightweight static SQL shape evidence |
-| Query-builder | `sqlSourceKind` absent | `filterFields`, `sortFields`, `selectFields`, `includeFields`, `mutationFields`, `patternHash` | Framework/query-builder call shape evidence |
+| SQL-shape | non-empty `sqlSourceKind` | `operationName`, `tableName`, `tableNames`, `columnNames`, `fieldNames`, `queryShapeHash` | Lightweight static SQL shape evidence |
+| Query-builder | no `sqlSourceKind` | `filterFields`, `sortFields`, `selectFields`, `includeFields`, `mutationFields`, `patternHash` | Framework/query-builder call shape evidence |
 
-Reports should display these as different evidence shapes while keeping the underlying fact schema unchanged.
+Python currently emits the SQL-shape flavor. C# and TypeScript currently emit the query-builder flavor. JVM query-pattern reporting is not part of this slice.
 
 ## Current Behavior
 
-.NET and TypeScript reports currently format all query patterns with query-builder fields. SQL-shape facts can therefore render as low-signal lines such as `fields none`, even though the SQLite/NDJSON fact contains useful table and column metadata.
+Python scan reports currently summarize:
 
-Python scan reports currently summarize fact counts, tiers, rules, and gaps, but do not list query-pattern evidence at all.
+- fact counts
+- evidence tiers
+- rule counts
+- known gaps
+- Python MVP limitations
 
-## Proposed Output
+They do not list query-pattern evidence, even though `facts.ndjson` and `index.sqlite` contain useful SQL-shape metadata for public samples such as `samples/python-fastapi-sample`.
 
-For SQL-shape facts, render a compact line like:
+## Proposed Python Output
+
+Add a `## Query Patterns` section to `src/python/tracemap_py/report.py`.
+
+For SQL-shape facts, render compact lines like:
 
 ```text
 - `SELECT` on `orders` columns `id;status;total` source `orm-text` shape `9858bc44eae2ff12104e17967718e5dc` (Tier2Structural) at `app/repository.py:8`
@@ -28,79 +50,69 @@ For SQL-shape facts, render a compact line like:
 When optional fields are missing, keep the row honest:
 
 ```text
-- `unknown` on `unknown` columns `none` source `sql-file` shape `abc123...` (Tier2Structural) at `schema.sql:1`
+- `unknown` on `unknown` columns `none` source `sql-file` shape `n/a` (Tier2Structural) at `schema.sql:1`
 ```
 
-For query-builder facts, preserve the existing shape:
+Use:
+
+- operation: `operationName` or `unknown`
+- table: `tableName`, else `tableNames`, else `unknown`
+- columns: `columnNames`, else `fieldNames`, else `none`
+- source: `sqlSourceKind` or `unknown`
+- shape: `queryShapeHash` or `n/a`
+- location: `evidence.file_path:evidence.start_line`
+
+Do not display raw SQL text, source snippets, or literal values.
+
+## Limitations in Report
+
+The Python report must include a visible SQL-shape limitation, either directly below the query-pattern section or in `## Python Limitations`.
+
+Required limitation meaning:
 
 ```text
-- `Where` fields `Status` (Tier3SyntaxOrTextual) at `src/Repo.cs:12`
+SQL query-pattern rows are static shape evidence only; they do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.
 ```
 
-The exact Markdown wording can vary slightly by runtime, but the field vocabulary and evidence boundaries should be consistent.
+Exact wording can vary, but the report must keep the evidence boundary visible.
 
-## Implementation Plan
+## Ordering and Row Count
 
-### .NET
+Preserve existing Python report behavior by iterating over facts in emission order. The Python scanner already discovers inventory deterministically, and this avoids introducing a new sort contract.
 
-Update `src/dotnet/TraceMap.Reporting/MarkdownReportWriter.cs`.
+Do not add a row cap or truncation behavior in this slice. Existing report sections do not implement truncation notices, and adding that behavior would broaden the PR.
 
-- Add a helper that detects SQL-shape facts by `properties["sqlSourceKind"]`.
-- Render SQL-shape query facts with operation, table, columns, source kind, shape hash, tier, and span.
-- Keep existing `DisplayFields` behavior for query-builder facts.
-- Add tests in `src/dotnet/tests/TraceMap.Tests` that construct representative `CodeFact` values and assert report text.
+## Documentation
 
-### TypeScript
+Update:
 
-Update `src/typescript/src/reporting/MarkdownReportWriter.ts`.
+- `docs/VALIDATION.md` with a Markdown report inspection command for the public Python sample.
+- `rules/rule-catalog.yml` under `python.integration.sql.v1` with a report-display limitation note that derived table/column/source-kind metadata may be displayed but raw SQL text and literal values are not.
 
-- Add a `formatQueryPattern` helper parallel to .NET.
-- Branch on `fact.properties.sqlSourceKind`.
-- Preserve existing `displayFields` for query-builder facts.
-- Add or extend TypeScript report tests to cover both SQL-shape and query-builder rows.
+Do not loosen `docs/LANGUAGE_ADAPTER_CONTRACT.md`. Clarifications are allowed only if they preserve the existing evidence boundary.
 
-### Python
+## Future .NET and TypeScript Work
 
-Update `src/python/tracemap_py/report.py`.
+.NET and TypeScript report renderers may later add SQL-shape formatting as forward-compatibility scaffolding. That follow-up should state clearly that:
 
-- Add a `## Query Patterns` section.
-- Render SQL-shape facts using the same field vocabulary.
-- If Python later emits query-builder facts, fall back to the query-builder field display rather than printing `none` for all cases.
-- Add Python tests that scan `samples/python-fastapi-sample` and assert report output contains the `orders` SQL-shape evidence without raw SQL text.
+- C# and TypeScript adapters do not emit `sqlSourceKind` query-pattern facts today.
+- SQL-shape renderer tests are synthetic unless a real adapter producer exists.
+- Query-builder rendering must continue using `filterFields`, `sortFields`, `selectFields`, `includeFields`, `mutationFields`, and `patternHash`.
+- SQL-shape rendering should use `queryShapeHash`, not `patternHash`.
 
-## Shared Formatting Rules
-
-- Sort rows deterministically by file path, line, fact ID or stable display name where available.
-- Limit displayed rows if the report has an existing section limit; if truncation exists, say how many rows were omitted.
-- Escape or wrap display values in Markdown backticks.
-- Use semicolon-separated field lists as already stored in fact properties.
-- Do not display raw snippets, raw SQL text, or literal values.
-
-## Limitations
-
-Reports are evidence presentation only. A readable SQL-shape row does not prove:
-
-- the query executes at runtime
-- the database table exists
-- the SQL dialect accepts the query
-- a branch is feasible
-- generated ORM SQL is equivalent
-- values inside the query are known
-
-These limitations should be visible either in the report limitations section or traceable through `docs/LANGUAGE_ADAPTER_CONTRACT.md` and `rules/rule-catalog.yml`.
+Keep this future work separate from the Python report PR unless a new producer makes it user-visible.
 
 ## Validation
 
 Run:
 
 ```bash
-dotnet build src/dotnet/TraceMap.sln
-dotnet test src/dotnet/TraceMap.sln
-npm run check --prefix src/typescript
 /tmp/tracemap-python-venv/bin/python -m pytest src/python/tests
 PYTHON_BIN=/tmp/tracemap-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
 ./scripts/check-private-paths.sh
 git diff --check
 ```
 
-If TypeScript dependencies are not installed, install them according to the existing TypeScript validation path before running `npm run check`.
+`npm run check --prefix src/typescript` is not required for the first implementation PR unless TypeScript files are changed.
