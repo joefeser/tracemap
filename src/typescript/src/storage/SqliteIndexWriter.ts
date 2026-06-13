@@ -12,15 +12,32 @@ export async function writeSqliteIndex(filePath: string, manifest: ScanManifest,
     locateFile: (file) => findSqlJsFile(file)
   });
   const db = new sqlJs.Database();
-  createSchema(db);
-  insertManifest(db, manifest);
-  db.run("begin transaction;");
-  for (const fact of facts) {
-    insertFact(db, fact);
+  let transactionOpen = false;
+  try {
+    createSchema(db);
+    insertManifest(db, manifest);
+    db.run("begin transaction;");
+    transactionOpen = true;
+    for (const fact of facts) {
+      insertFact(db, fact);
+    }
+    db.run("commit;");
+    transactionOpen = false;
+    const tempPath = `${filePath}.tmp`;
+    await fs.writeFile(tempPath, Buffer.from(db.export()));
+    await fs.rename(tempPath, filePath);
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        db.run("rollback;");
+      } catch {
+        // Best-effort rollback only; the database is still closed in finally.
+      }
+    }
+    throw error;
+  } finally {
+    db.close();
   }
-  db.run("commit;");
-  await fs.writeFile(filePath, Buffer.from(db.export()));
-  db.close();
 }
 
 function findSqlJsFile(file: string): string {

@@ -46,7 +46,7 @@ function descriptorFor(symbol: ts.Symbol, checker: ts.TypeChecker, declaration: 
   if (ts.isClassDeclaration(declaration) || ts.isInterfaceDeclaration(declaration) || ts.isTypeAliasDeclaration(declaration) || ts.isEnumDeclaration(declaration)) {
     return `${name}#`;
   }
-  if (ts.isMethodDeclaration(declaration) || ts.isFunctionDeclaration(declaration) || ts.isConstructorDeclaration(declaration) || ts.isCallSignatureDeclaration(declaration)) {
+  if (ts.isMethodDeclaration(declaration) || ts.isMethodSignature(declaration) || ts.isFunctionDeclaration(declaration) || ts.isConstructorDeclaration(declaration) || ts.isCallSignatureDeclaration(declaration)) {
     const type = checker.getTypeOfSymbolAtLocation(symbol, declaration);
     const signatures = checker.getSignaturesOfType(type, ts.SignatureKind.Call);
     const signature = signatures[0];

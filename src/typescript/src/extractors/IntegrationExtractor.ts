@@ -645,7 +645,7 @@ function callName(expression: ts.Expression, sourceFile: ts.SourceFile): string 
   if (ts.isIdentifier(expression)) {
     return expression.text;
   }
-  return expression.getText(sourceFile);
+  return ts.SyntaxKind[expression.kind];
 }
 
 function evidence(repoPath: string, sourceFile: ts.SourceFile, node: ts.Node) {
@@ -746,7 +746,7 @@ function objectProperty(node: ts.ObjectLiteralExpression, name: string, sourceFi
     if (!ts.isPropertyAssignment(property)) {
       continue;
     }
-    const propertyName = property.name.getText(sourceFile).replace(/^["']|["']$/g, "");
+    const propertyName = propertyNameText(property.name);
     if (propertyName === name) {
       return property.initializer;
     }
@@ -758,10 +758,20 @@ function objectLiteralFieldNames(node: ts.ObjectLiteralExpression, sourceFile: t
   return [...new Set(node.properties
     .map((property) => {
       if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property) || ts.isMethodDeclaration(property)) {
-        return property.name?.getText(sourceFile).replace(/^["']|["']$/g, "");
+        return property.name ? propertyNameText(property.name) : undefined;
       }
       return undefined;
     })
     .filter((name): name is string => !!name && name.length > 0))]
     .sort((left, right) => left.localeCompare(right));
+}
+
+function propertyNameText(name: ts.PropertyName): string {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  if (ts.isPrivateIdentifier(name)) {
+    return name.text;
+  }
+  return "computed";
 }

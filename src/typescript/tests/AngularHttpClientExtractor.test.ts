@@ -2,6 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
 import { FactTypes } from "../src/facts/Models";
@@ -43,6 +44,7 @@ describe("Angular HttpClient extraction", () => {
         }
       }
     `);
+    initGitRepo(repo);
 
     const out = await tempDir();
     const result = await scan({
@@ -72,4 +74,10 @@ describe("Angular HttpClient extraction", () => {
 
 async function tempDir(): Promise<string> {
   return fsp.mkdtemp(path.join(os.tmpdir(), "tracemap-angular-"));
+}
+
+function initGitRepo(repo: string): void {
+  expect(spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+  expect(spawnSync("git", ["add", "."], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+  expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "initial"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
 }

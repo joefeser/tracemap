@@ -18,17 +18,23 @@ import { writeManifest } from "../storage/ManifestWriter";
 import { writeSqliteIndex } from "../storage/SqliteIndexWriter";
 import { writeMarkdownReport } from "../reporting/MarkdownReportWriter";
 import { hash } from "../util/Hash";
+import { isUnderPath } from "../util/Paths";
 
 export async function scan(options: ScanOptions): Promise<ScanResult> {
   const repoPath = path.resolve(options.repoPath);
   const outputPath = path.resolve(options.outputPath);
   await ensureRepo(repoPath);
+  ensureSafeOutputPath(repoPath, outputPath);
   await fs.rm(outputPath, { recursive: true, force: true });
   await fs.mkdir(path.join(outputPath, "logs"), { recursive: true });
 
   const git = await getGitMetadata(repoPath);
+  if (git.commitSha === "unknown") {
+    throw new Error("TraceMap TypeScript scan requires git commit SHA. Run inside a git checkout with at least one commit.");
+  }
+  const inventory = await collectFileInventory(options);
   const manifest: ScanManifest = {
-    scanId: `scan-${hash(`${repoPath}|${git.commitSha}|${JSON.stringify(options.projectPaths)}|${JSON.stringify(options.includeGlobs)}|${JSON.stringify(options.excludeGlobs)}`, 20)}`,
+    scanId: createScanId(git, inventory),
     repoName: git.repoName,
     remoteUrl: git.remoteUrl,
     branch: git.branch,
@@ -51,7 +57,6 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   }
 
   const facts: CodeFact[] = [];
-  const inventory = await collectFileInventory(options);
   facts.push(...inventoryFacts(manifest, inventory));
   for (const skipped of inventory.filter((item) => item.skipped)) {
     gapCollector.add(manifest, "file-size-limit", "File exceeded max byte-size threshold.", skipped.relativePath, 1, { sizeBytes: skipped.sizeBytes });
@@ -102,6 +107,25 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
 
 function normalizeManifestPath(value: string): string {
   return !value || value === "." ? "." : value.replaceAll("\\", "/");
+}
+
+function createScanId(git: { repoName: string; remoteUrl: string | null; commitSha: string }, inventory: readonly { relativePath: string; kind: string; sizeBytes: number }[]): string {
+  const repoIdentity = git.remoteUrl && git.remoteUrl.trim().length > 0 ? git.remoteUrl : git.repoName;
+  const signature = inventory
+    .map((item) => `${item.relativePath}|${item.kind}|${item.sizeBytes}`)
+    .sort()
+    .join("\n");
+  return `scan-${hash(`${repoIdentity}|${git.commitSha}|${signature}`, 20)}`;
+}
+
+function ensureSafeOutputPath(repoPath: string, outputPath: string): void {
+  const parsed = path.parse(outputPath);
+  if (outputPath === parsed.root) {
+    throw new Error(`Unsafe output path: ${outputPath}. Choose a dedicated TraceMap output directory.`);
+  }
+  if (outputPath === repoPath || isUnderPath(repoPath, outputPath)) {
+    throw new Error(`Unsafe output path: ${outputPath}. Output cannot be the repository root or an ancestor of it.`);
+  }
 }
 
 function inventoryFacts(manifest: ScanManifest, inventory: readonly { relativePath: string; kind: string; sizeBytes: number; skipped: boolean }[]): CodeFact[] {

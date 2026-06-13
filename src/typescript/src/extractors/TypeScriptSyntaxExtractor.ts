@@ -100,7 +100,7 @@ function visit(node: ts.Node, sourceFile: ts.SourceFile, filePath: string, manif
     );
   }
   if (ts.isNewExpression(node)) {
-    const createdType = node.expression.getText(sourceFile);
+    const createdType = safeExpressionName(node.expression, sourceFile) ?? `new-${ts.SyntaxKind[node.expression.kind]}`;
     facts.push(
       createFact(
         manifest,
@@ -112,7 +112,13 @@ function visit(node: ts.Node, sourceFile: ts.SourceFile, filePath: string, manif
           sourceSymbol: containingFunctionName(node),
           targetSymbol: createdType,
           contractElement: createdType,
-          properties: { name: createdType, typeName: createdType, argumentCount: node.arguments?.length ?? 0, assignedTo: assignedToName(node, sourceFile) ?? "" }
+          properties: {
+            name: createdType,
+            typeName: createdType,
+            expressionHash: hash(node.expression.getText(sourceFile)),
+            argumentCount: node.arguments?.length ?? 0,
+            assignedTo: assignedToName(node, sourceFile) ?? ""
+          }
         }
       )
     );
@@ -209,7 +215,7 @@ function declarationFactType(node: ts.Node): string | null {
   if (ts.isEnumDeclaration(node)) {
     return FactTypes.TypeDeclared;
   }
-  if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
+  if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) {
     return FactTypes.MethodDeclared;
   }
   if (ts.isPropertyDeclaration(node) || ts.isPropertySignature(node)) {
@@ -228,7 +234,7 @@ function callName(expression: ts.Expression, sourceFile: ts.SourceFile): string 
   if (ts.isIdentifier(expression)) {
     return expression.text;
   }
-  return expression.getText(sourceFile);
+  return ts.SyntaxKind[expression.kind];
 }
 
 function containingFunctionName(node: ts.Node): string | null {
@@ -246,10 +252,34 @@ function containingFunctionName(node: ts.Node): string | null {
 function assignedToName(node: ts.Node, sourceFile: ts.SourceFile): string | null {
   const parent = node.parent;
   if (ts.isVariableDeclaration(parent) && parent.name) {
-    return parent.name.getText(sourceFile);
+    return bindingName(parent.name);
   }
   if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-    return parent.left.getText(sourceFile);
+    return safeExpressionName(parent.left, sourceFile);
+  }
+  return null;
+}
+
+function bindingName(name: ts.BindingName): string {
+  if (ts.isIdentifier(name)) {
+    return name.text;
+  }
+  return ts.isObjectBindingPattern(name) ? "object-binding-pattern" : "array-binding-pattern";
+}
+
+function safeExpressionName(expression: ts.Expression, sourceFile: ts.SourceFile): string | null {
+  if (ts.isIdentifier(expression)) {
+    return expression.text;
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    const receiver = safeExpressionName(expression.expression, sourceFile);
+    return receiver ? `${receiver}.${expression.name.text}` : expression.name.text;
+  }
+  if (expression.kind === ts.SyntaxKind.ThisKeyword) {
+    return "this";
+  }
+  if (expression.kind === ts.SyntaxKind.SuperKeyword) {
+    return "super";
   }
   return null;
 }
@@ -285,7 +315,7 @@ function objectLiteralFieldNames(node: ts.ObjectLiteralExpression, sourceFile: t
   return [...new Set(node.properties
     .map((property) => {
       if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property) || ts.isMethodDeclaration(property)) {
-        return property.name?.getText(sourceFile).replace(/^["']|["']$/g, "");
+        return property.name ? propertyNameText(property.name) : undefined;
       }
       if (ts.isSpreadAssignment(property)) {
         return "spread";
@@ -294,4 +324,14 @@ function objectLiteralFieldNames(node: ts.ObjectLiteralExpression, sourceFile: t
     })
     .filter((name): name is string => !!name && name.length > 0))]
     .sort((left, right) => left.localeCompare(right));
+}
+
+function propertyNameText(name: ts.PropertyName): string {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  if (ts.isPrivateIdentifier(name)) {
+    return name.text;
+  }
+  return "computed";
 }

@@ -286,7 +286,7 @@ async function addObjectCreationFact(
   }
   const type = project.checker.getTypeAtLocation(node.expression);
   const symbol = type.symbol ?? project.checker.getSymbolAtLocation(node.expression);
-  const createdType = node.expression.getText(sourceFile);
+  const createdType = safeExpressionName(node.expression) ?? `new-${ts.SyntaxKind[node.expression.kind]}`;
   const symbolId = await provider.symbolId(symbol, project.checker, sourceFile, node.expression, createdType);
   const packageIdentity = await provider.packageFor(sourceFile.fileName);
   const target = symbol ? project.checker.getFullyQualifiedName(symbol).replace(/^".*"\./, "") : createdType;
@@ -306,6 +306,7 @@ async function addObjectCreationFact(
           ...symbolProperties("target", symbolId, createdType, "type", target, packageIdentity),
           name: createdType,
           typeName: createdType,
+          expressionHash: hash(node.expression.getText(sourceFile)),
           assignedTo: assignedToName(node, sourceFile) ?? "",
           argumentCount: node.arguments?.length ?? 0,
           packageName: packageIdentity.name,
@@ -395,7 +396,8 @@ async function addRelationshipFacts(
       if (!targetSymbol) {
         continue;
       }
-      const targetId = await provider.symbolId(targetSymbol, project.checker, sourceFile, typeNode.expression, typeNode.expression.getText(sourceFile));
+      const targetName = safeExpressionName(typeNode.expression) ?? targetSymbol.getName();
+      const targetId = await provider.symbolId(targetSymbol, project.checker, sourceFile, typeNode.expression, targetName);
       facts.push(
         createFact(
           manifest,
@@ -467,7 +469,7 @@ function declarationFactType(node: ts.Node): string | null {
   if (ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node)) {
     return FactTypes.TypeDeclared;
   }
-  if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
+  if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) {
     return FactTypes.MethodDeclared;
   }
   if (ts.isPropertyDeclaration(node) || ts.isPropertySignature(node)) {
@@ -502,7 +504,7 @@ function symbolKind(node: ts.Node): string {
   if (ts.isInterfaceDeclaration(node)) return "interface";
   if (ts.isTypeAliasDeclaration(node)) return "type";
   if (ts.isEnumDeclaration(node)) return "enum";
-  if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) return "method";
+  if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) return "method";
   if (ts.isPropertyDeclaration(node) || ts.isPropertySignature(node)) return "property";
   if (ts.isParameter(node)) return "parameter";
   return "symbol";
@@ -532,9 +534,21 @@ async function containingSymbol(
   let current: ts.Node | undefined = node.parent;
   while (current) {
     const named = current as { name?: ts.Node };
-    if ((ts.isFunctionDeclaration(current) || ts.isMethodDeclaration(current)) && named.name && ts.isIdentifier(named.name)) {
+    if ((ts.isFunctionDeclaration(current) || ts.isMethodDeclaration(current) || ts.isConstructorDeclaration(current) || ts.isArrowFunction(current) || ts.isFunctionExpression(current)) && named.name && ts.isIdentifier(named.name)) {
       const symbol = project.checker.getSymbolAtLocation(named.name);
       return symbol ? provider.symbolId(symbol, project.checker, sourceFile, named.name, named.name.text) : named.name.text;
+    }
+    if (ts.isConstructorDeclaration(current)) {
+      const containingClass = current.parent;
+      if (ts.isClassDeclaration(containingClass) && containingClass.name) {
+        const symbol = project.checker.getSymbolAtLocation(containingClass.name);
+        const name = `${containingClass.name.text}.constructor`;
+        return symbol ? `${await provider.symbolId(symbol, project.checker, sourceFile, containingClass.name, containingClass.name.text)} constructor` : name;
+      }
+    }
+    if ((ts.isArrowFunction(current) || ts.isFunctionExpression(current)) && ts.isVariableDeclaration(current.parent) && ts.isIdentifier(current.parent.name)) {
+      const symbol = project.checker.getSymbolAtLocation(current.parent.name);
+      return symbol ? provider.symbolId(symbol, project.checker, sourceFile, current.parent.name, current.parent.name.text) : current.parent.name.text;
     }
     current = current.parent;
   }
@@ -548,7 +562,7 @@ function callNameNode(node: ts.CallExpression): ts.Node {
 function callName(expression: ts.Expression, sourceFile: ts.SourceFile): string {
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
   if (ts.isIdentifier(expression)) return expression.text;
-  return expression.getText(sourceFile);
+  return ts.SyntaxKind[expression.kind];
 }
 
 function isWriteAccess(node: ts.PropertyAccessExpression): boolean {
@@ -559,10 +573,34 @@ function isWriteAccess(node: ts.PropertyAccessExpression): boolean {
 function assignedToName(node: ts.Node, sourceFile: ts.SourceFile): string | null {
   const parent = node.parent;
   if (ts.isVariableDeclaration(parent)) {
-    return parent.name.getText(sourceFile);
+    return bindingName(parent.name);
   }
   if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-    return parent.left.getText(sourceFile);
+    return safeExpressionName(parent.left);
+  }
+  return null;
+}
+
+function bindingName(name: ts.BindingName): string {
+  if (ts.isIdentifier(name)) {
+    return name.text;
+  }
+  return ts.isObjectBindingPattern(name) ? "object-binding-pattern" : "array-binding-pattern";
+}
+
+function safeExpressionName(expression: ts.Expression): string | null {
+  if (ts.isIdentifier(expression)) {
+    return expression.text;
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    const receiver = safeExpressionName(expression.expression);
+    return receiver ? `${receiver}.${expression.name.text}` : expression.name.text;
+  }
+  if (expression.kind === ts.SyntaxKind.ThisKeyword) {
+    return "this";
+  }
+  if (expression.kind === ts.SyntaxKind.SuperKeyword) {
+    return "super";
   }
   return null;
 }
