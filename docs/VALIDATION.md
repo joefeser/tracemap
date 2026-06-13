@@ -41,7 +41,7 @@ For JVM CLI smoke, also run:
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
 ```
 
-For combined dependency report or path-query changes, run a combine/report/paths smoke over any two existing local scan outputs:
+For combined dependency report, path-query, or diff changes, run a combine/report/paths/diff smoke over any two existing local scan outputs:
 
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- combine \
@@ -50,10 +50,13 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --out <tmp>/combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sqlite --out <tmp>/combined-report
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
+dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-diff
 test -f <tmp>/combined-report/dependency-report.md
 test -f <tmp>/combined-report/dependency-report.json
 test -f <tmp>/combined-paths/paths-report.md
 test -f <tmp>/combined-paths/paths-report.json
+test -f <tmp>/combined-diff/diff-report.md
+test -f <tmp>/combined-diff/diff-report.json
 ```
 
 For changes to `combine`, `report`, `paths`, endpoint extraction, call edges, SQL/query extraction, or dependency-surface projection, run the public combined-path smoke:

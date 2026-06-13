@@ -41,9 +41,10 @@ public static class TraceMapCommand
                 "endpoints" => EndpointsHelp(),
                 "combine" => CombineHelp(),
                 "paths" => PathsHelp(),
+                "diff" => DiffHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" ? 0 : 1;
         }
 
         try
@@ -59,6 +60,7 @@ public static class TraceMapCommand
                 "endpoints" => await RunEndpointsAsync(rest, output, error, cancellationToken),
                 "combine" => await RunCombineAsync(rest, output, error, cancellationToken),
                 "paths" => await RunPathsAsync(rest, output, error, cancellationToken),
+                "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -236,6 +238,69 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return 0;
+    }
+
+    private static async Task<int> RunDiffAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--before", out var beforePath) || string.IsNullOrWhiteSpace(beforePath))
+        {
+            await error.WriteLineAsync("error: diff requires --before <combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--after", out var afterPath) || string.IsNullOrWhiteSpace(afterPath))
+        {
+            await error.WriteLineAsync("error: diff requires --after <combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: diff requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: diff --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await CombinedDependencyDiffer.WriteAsync(
+            new CombinedDependencyDiffOptions(
+                beforePath,
+                afterPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--scope"),
+                values.HasFlag("--include-paths"),
+                values.HasFlag("--allow-identity-mismatch"),
+                values.HasFlag("--exit-code"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--endpoint"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--surface-name"),
+                ParsePositiveInt(values, "--max-depth", 8),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-diff-rows", 1000),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap diff completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Source diffs: {result.Report.Summary.SourceDiffCount}");
+        await output.WriteLineAsync($"Coverage diffs: {result.Report.Summary.CoverageDiffCount}");
+        await output.WriteLineAsync($"Endpoint diffs: {result.Report.Summary.EndpointDiffCount}");
+        await output.WriteLineAsync($"Surface diffs: {result.Report.Summary.SurfaceDiffCount}");
+        await output.WriteLineAsync($"Edge diffs: {result.Report.Summary.EdgeDiffCount}");
+        await output.WriteLineAsync($"Path diffs: {result.Report.Summary.PathDiffCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasDiffs ? 1 : 0;
     }
 
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -440,7 +505,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore")
+            if (arg is "--restore" or "--include-paths" or "--allow-identity-mismatch" or "--exit-code")
             {
                 flags.Add(arg);
                 continue;
@@ -543,6 +608,7 @@ public static class TraceMapCommand
               tracemap endpoints --client-index <path> --server-index <path> --out <path> [--format <markdown|json>]
               tracemap combine --index <path> [--index <path>] --out <combined.sqlite> [--label <label>]
               tracemap paths --index <combined.sqlite> --out <path> [selectors]
+              tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -554,6 +620,7 @@ public static class TraceMapCommand
               endpoints Align client HTTP calls with server HTTP route bindings.
               combine   Combine multiple TraceMap indexes into one queryable SQLite database.
               paths     Trace deterministic dependency paths through a combined index.
+              diff      Compare two combined indexes and report static evidence changes.
             """;
     }
 
@@ -627,6 +694,38 @@ public static class TraceMapCommand
 
             Outputs:
               paths-report.md and/or paths-report.json
+            """;
+    }
+
+    private static string DiffHelp()
+    {
+        return """
+            Usage:
+              tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --before <path>            Earlier combined TraceMap index.
+              --after <path>             Later combined TraceMap index.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+              --scope <value>            all, sources, endpoints, surfaces, edges, or paths. Comma-separated. Default: sources,endpoints,surfaces,edges.
+              --include-paths            Enable bounded dependency path comparison.
+              --allow-identity-mismatch  Continue when same source labels point at different source identities.
+              --exit-code                Return exit code 1 when diff rows are present.
+              --source <label>           Filter to one source label.
+              --endpoint "<M> <P>"       Filter endpoint/path diffs to method/path key.
+              --surface <kind>           sql-query, http-route, http-client, or package-config.
+              --surface-name <text>      Exact case-insensitive surface name.
+              --max-depth <n>            Path diff depth. Default: 8.
+              --max-paths <n>            Path diff paths per snapshot. Default: 100.
+              --max-frontier <n>         Path diff frontier cap. Default: 10000.
+              --max-diff-rows <n>        Diff rows per kind. Default: 1000.
+              --max-gaps <n>             Gap rows. Default: 1000.
+
+            Outputs:
+              diff-report.md and/or diff-report.json
             """;
     }
 
