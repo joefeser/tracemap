@@ -111,7 +111,7 @@ def _deps_from_requirements(path: Path, repo: Path, manifest: ScanManifest, fact
     deps: dict[str, str] = {}
     for line_no, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         text = raw.strip()
-        if not text or text.startswith("#"):
+        if not text or text.startswith("#") or text.startswith(_REQUIREMENTS_OPTIONS_TO_SKIP):
             continue
         if text.startswith("-e ") or "git+" in text or text.startswith(("./", "../", "/")):
             ref_hash = sha256_hex(text, 32)
@@ -139,6 +139,21 @@ def _parse_requirement(value: str) -> tuple[str, str]:
     if not match:
         return "", ""
     return match.group(1).lower(), (match.group(2) or "").strip()
+
+
+_REQUIREMENTS_OPTIONS_TO_SKIP = (
+    "-r ",
+    "--requirement ",
+    "-c ",
+    "--constraint ",
+    "--index-url ",
+    "--extra-index-url ",
+    "--find-links ",
+    "--trusted-host ",
+    "--pre",
+    "--no-binary ",
+    "--only-binary ",
+)
 
 
 def _rel(path: Path, repo: Path) -> str:

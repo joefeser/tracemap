@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from pathlib import Path
 
 from .constants import EvidenceTiers, FactTypes, RuleIds, ScannerVersions
@@ -47,10 +48,17 @@ def extract_config_files(repo: Path, manifest: ScanManifest, files: list[Path], 
 
 
 def _parse_keys(path: Path, lines: list[str]) -> list[tuple[int, str, str]]:
-    if path.suffix.lower() == ".json":
+    suffix = path.suffix.lower()
+    if suffix == ".json":
         try:
             data = json.loads("\n".join(lines))
         except json.JSONDecodeError:
+            return []
+        return [(1, key, str(value)) for key, value in _flatten(data)]
+    if suffix == ".toml":
+        try:
+            data = tomllib.loads("\n".join(lines))
+        except tomllib.TOMLDecodeError:
             return []
         return [(1, key, str(value)) for key, value in _flatten(data)]
     result: list[tuple[int, str, str]] = []

@@ -31,6 +31,12 @@ def discover_inventory(repo: Path, options: ScanOptions) -> list[FileInventoryIt
     items: list[FileInventoryItem] = []
     roots = _scope_roots(repo, options.project_paths)
     for root in roots:
+        try:
+            root.relative_to(repo)
+        except ValueError:
+            continue
+        if not root.exists():
+            continue
         if root.is_file():
             candidates = [root]
         else:
@@ -39,7 +45,10 @@ def discover_inventory(repo: Path, options: ScanOptions) -> list[FileInventoryIt
             resolved = path.resolve()
             if output == resolved or output in resolved.parents:
                 continue
-            rel = relative_to(resolved, repo)
+            try:
+                rel = relative_to(resolved, repo)
+            except ValueError:
+                continue
             if _excluded(resolved, repo):
                 continue
             if options.include_globs and not matches_any(rel, options.include_globs):

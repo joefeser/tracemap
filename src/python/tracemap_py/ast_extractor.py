@@ -671,15 +671,19 @@ def _tablename(statements: Iterable[ast.stmt]) -> str | None:
     for stmt in statements:
         if not _is_tablename_assignment(stmt):
             continue
-        value = stmt.value if isinstance(stmt, ast.Assign) else None
+        value = stmt.value if isinstance(stmt, (ast.Assign, ast.AnnAssign)) else None
         return _constant_string(value) if value else None
     return None
 
 
 def _is_tablename_assignment(node: ast.stmt) -> bool:
-    if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+    if isinstance(node, ast.Assign) and len(node.targets) == 1:
+        target = node.targets[0]
+    elif isinstance(node, ast.AnnAssign):
+        target = node.target
+    else:
         return False
-    return isinstance(node.targets[0], ast.Name) and node.targets[0].id == "__tablename__"
+    return isinstance(target, ast.Name) and target.id == "__tablename__"
 
 
 def _node_hash(node: ast.AST) -> str:

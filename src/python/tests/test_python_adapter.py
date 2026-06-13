@@ -6,10 +6,14 @@ from pathlib import Path
 
 import pytest
 
+from tracemap_py.ast_extractor import extract_python_files
 from tracemap_py.engine import make_options, scan
 from tracemap_py.fact_factory import create_fact
+from tracemap_py.config_extractor import extract_config_files
 from tracemap_py.git_metadata import read_git_metadata
 from tracemap_py.hashes import sha256_hex
+from tracemap_py.inventory import discover_inventory
+from tracemap_py.metadata import read_package_metadata
 from tracemap_py.models import EvidenceSpan, ScanManifest
 from tracemap_py.route import normalize_path_key
 from tracemap_py.writers import write_sqlite
@@ -122,6 +126,74 @@ def test_scans_outside_git_checkout_fail(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError):
         read_git_metadata(repo)
+
+
+def test_scan_rejects_destructive_output_paths() -> None:
+    repo = ROOT / "samples/python-fastapi-sample"
+
+    with pytest.raises(ValueError):
+        scan(make_options(str(repo), str(repo)))
+
+    with pytest.raises(ValueError):
+        scan(make_options(str(repo), str(repo.parent)))
+
+
+def test_inventory_skips_project_paths_outside_repo(tmp_path: Path) -> None:
+    repo = ROOT / "samples/python-fastapi-sample"
+    outside = tmp_path / "outside.py"
+    outside.write_text("print('outside')\n", encoding="utf-8")
+
+    inventory = discover_inventory(repo, make_options(str(repo), str(tmp_path / "out"), project=[str(outside)]))
+
+    assert inventory == []
+
+
+def test_config_toml_uses_structured_key_paths(tmp_path: Path) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text("[tool.poetry]\nname = \"demo\"\n", encoding="utf-8")
+    manifest = _manifest("toml")
+    gaps: list[str] = []
+
+    facts = extract_config_files(tmp_path, manifest, [config], gaps)
+
+    key_paths = {fact.properties.get("keyPath") for fact in facts if fact.fact_type == "ConfigKeyDeclared"}
+    assert "tool.poetry.name" in key_paths
+    assert "name" not in key_paths
+    assert gaps == []
+
+
+def test_requirements_options_are_not_packages(tmp_path: Path) -> None:
+    req = tmp_path / "requirements.txt"
+    req.write_text("-r base.txt\n-c constraints.txt\nrequests==2.32.0\n", encoding="utf-8")
+    manifest = _manifest("requirements")
+    gaps: list[str] = []
+
+    deps, facts = read_package_metadata(tmp_path, manifest, [req], gaps)
+
+    assert deps == {"requests": "==2.32.0"}
+    assert all(fact.target_symbol not in {"-r", "-c"} for fact in facts)
+    assert gaps == []
+
+
+def test_annotated_sqlalchemy_tablename_is_detected(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    model_file = repo / "models.py"
+    model_file.write_text(
+        "from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n"
+        "class Base(DeclarativeBase):\n"
+        "    pass\n\n"
+        "class Order(Base):\n"
+        "    __tablename__: str = \"orders\"\n"
+        "    status: Mapped[str] = mapped_column()\n",
+        encoding="utf-8",
+    )
+    gaps: list[str] = []
+
+    facts = extract_python_files(repo, _manifest("sqlalchemy-annassign"), [model_file], [repo], {"sqlalchemy": "2.0.0"}, gaps)
+
+    assert any(fact.fact_type == "DatabaseColumnMapping" and fact.properties.get("tableName") == "orders" for fact in facts)
+    assert gaps == []
 
 
 def test_sqlite_symbol_rows_follow_role_properties(tmp_path: Path) -> None:

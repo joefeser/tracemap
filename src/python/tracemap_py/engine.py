@@ -23,6 +23,8 @@ from .writers import write_facts, write_manifest, write_sqlite
 def scan(options: ScanOptions) -> tuple[ScanManifest, list[CodeFact]]:
     repo = Path(options.repo_path).resolve()
     out = Path(options.output_path).resolve()
+    if out == repo or out in repo.parents:
+        raise ValueError("Output path cannot be the repository path or one of its parents.")
     if not repo.exists():
         raise FileNotFoundError(f"Repository path does not exist: {repo}")
     git = read_git_metadata(repo)
