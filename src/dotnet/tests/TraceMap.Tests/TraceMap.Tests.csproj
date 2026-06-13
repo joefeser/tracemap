@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\TraceMap.Reporting\TraceMap.Reporting.csproj" />
     <ProjectReference Include="..\..\TraceMap.Cli\TraceMap.Cli.csproj" />
     <ProjectReference Include="..\..\TraceMap.EndpointAlignment\TraceMap.EndpointAlignment.csproj" />
+    <ProjectReference Include="..\..\TraceMap.Combine\TraceMap.Combine.csproj" />
   </ItemGroup>
 
 </Project>
