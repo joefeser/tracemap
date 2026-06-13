@@ -179,8 +179,52 @@ internal static class EndpointIndexReader
             return null;
         }
 
-        var selectedRoute = route.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? route;
-        return EndpointRouteNormalizer.Normalize(selectedRoute, properties.TryGetValue("basePathPrefix", out var basePath) ? basePath : null);
+        var selectedRoute = CombineRouteTemplates(route);
+        return EndpointRouteNormalizer.Normalize(
+            selectedRoute,
+            properties.TryGetValue("basePathPrefix", out var basePath) ? basePath : null,
+            RouteTokens(properties));
+    }
+
+    private static string CombineRouteTemplates(string route)
+    {
+        var templates = route
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+        if (templates.Length == 0)
+        {
+            return route;
+        }
+
+        return string.Join("/", templates.Select(template => template.Trim('/')));
+    }
+
+    private static IReadOnlyDictionary<string, string> RouteTokens(IReadOnlyDictionary<string, string> properties)
+    {
+        var controller = ControllerName(properties);
+        return string.IsNullOrWhiteSpace(controller)
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["controller"] = controller };
+    }
+
+    private static string ControllerName(IReadOnlyDictionary<string, string> properties)
+    {
+        var containingType = Get(properties, "containingType", "targetContainingType");
+        if (string.IsNullOrWhiteSpace(containingType))
+        {
+            var targetSymbol = Get(properties, "targetSymbol", "methodSymbol");
+            var lastDot = targetSymbol.LastIndexOf('.');
+            if (lastDot > 0)
+            {
+                containingType = targetSymbol[..lastDot];
+            }
+        }
+
+        var typeName = containingType.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? string.Empty;
+        return typeName.EndsWith("Controller", StringComparison.Ordinal)
+            ? typeName[..^"Controller".Length]
+            : typeName;
     }
 
     private static async Task<ScanManifest> ReadManifestAsync(SqliteConnection connection, CancellationToken cancellationToken)

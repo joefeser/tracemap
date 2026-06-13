@@ -1,10 +1,13 @@
 import fs from "node:fs/promises";
+import syncFs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import initSqlJs from "sql.js";
 import { CodeFact, ScanManifest } from "../facts/Models";
 import { hash } from "../util/Hash";
 
 type SqlValue = string | number | null;
+const sqlJsRequire = createRequire(__filename);
 
 export async function writeSqliteIndex(filePath: string, manifest: ScanManifest, facts: readonly CodeFact[]): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -40,7 +43,13 @@ export async function writeSqliteIndex(filePath: string, manifest: ScanManifest,
   }
 }
 
-function findSqlJsFile(file: string): string {
+export function findSqlJsFile(file: string): string {
+  try {
+    return sqlJsRequire.resolve(`sql.js/dist/${file}`);
+  } catch {
+    // Fall through to deterministic path probes for packaged or unusual layouts.
+  }
+
   const candidates = [
     path.join(process.cwd(), "node_modules", "sql.js", "dist", file),
     path.join(__dirname, "..", "..", "node_modules", "sql.js", "dist", file),
@@ -48,14 +57,14 @@ function findSqlJsFile(file: string): string {
   ];
   for (const candidate of candidates) {
     try {
-      if (require("node:fs").existsSync(candidate)) {
+      if (syncFs.existsSync(candidate)) {
         return candidate;
       }
     } catch {
       // Continue to the next deterministic lookup path.
     }
   }
-  return candidates[0];
+  throw new Error(`Unable to locate sql.js asset '${file}'. Tried: ${candidates.join(", ")}. Ensure sql.js and its dist assets are installed.`);
 }
 
 function createSchema(db: initSqlJs.Database): void {

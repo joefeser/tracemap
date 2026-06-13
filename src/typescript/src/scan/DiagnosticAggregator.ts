@@ -13,9 +13,6 @@ export function aggregateDiagnostics(diagnostics: readonly ts.Diagnostic[], repo
   const groups = new Map<string, AggregatedDiagnostic>();
   for (const diagnostic of diagnostics) {
     const category = diagnosticCategory(diagnostic);
-    if (category === "ordinary-type-error") {
-      continue;
-    }
     const filePath = diagnostic.file ? relative(repoPath, diagnostic.file.fileName) : ".";
     const line = diagnostic.file && diagnostic.start !== undefined ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start).line + 1 : 1;
     const key = `${category}|${diagnostic.code}|${filePath}`;

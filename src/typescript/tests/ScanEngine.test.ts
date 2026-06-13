@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
 import { FactTypes } from "../src/facts/Models";
 import { exportIndex } from "../src/export/IndexExporter";
+import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
 
 const packageRoot = process.cwd();
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -157,6 +158,30 @@ describe("ScanEngine", () => {
     await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export const value = 1;\n");
 
     await expect(scan(scanOptions(repo, path.join(root, "out")))).rejects.toThrow(/requires git commit SHA/);
+  });
+
+  it("marks ordinary TypeScript diagnostics as reduced coverage gaps", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }, null, 2));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export const value: string = 1;\n");
+    initGitRepo(repo);
+
+    const result = await scan(scanOptions(repo, path.join(root, "out")));
+
+    expect(result.manifest.analysisLevel).toBe("Level1SemanticAnalysisReduced");
+    expect(result.manifest.buildStatus).toBe("FailedOrPartial");
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "ordinary-type-error", diagnosticCode: "2322" })
+    }));
+  });
+
+  it("resolves sql.js wasm assets to an existing file", () => {
+    const resolved = findSqlJsFile("sql-wasm.wasm");
+
+    expect(fs.existsSync(resolved)).toBe(true);
   });
 });
 
