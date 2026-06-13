@@ -162,6 +162,61 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_reports_unknown_gap_when_reachable_server_has_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15", analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            QueryPatternFact(server, null, "Infrastructure/UnlinkedRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "client",
+                ToSurface: "sql-query"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnknownAnalysisGap" && gap.SourceLabel == "server");
+    }
+
+    [Fact]
+    public async Task Paths_does_not_treat_surface_target_symbol_as_code_symbol()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        SqliteIndexWriter.Write(index, manifest, [
+            QueryPatternFact(manifest, null, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: "orders",
+                ToSurface: "sql-query"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnlinkedSurface");
+    }
+
+    [Fact]
     public async Task Paths_cli_writes_summary_and_parses_escaped_source_pair()
     {
         using var temp = new TempDirectory();

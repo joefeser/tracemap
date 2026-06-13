@@ -250,12 +250,32 @@ public static class CombinedDependencyPathReporter
         (string Client, string Server)? sourcePair)
     {
         var sourceFilter = string.IsNullOrWhiteSpace(options.FromSource) ? null : options.FromSource.Trim();
-        var startNodes = ResolveStartNodes(options, graph, sourceFilter);
+        var resolvedStarts = ResolveStartNodes(options, graph, sourceFilter);
+        var startNodes = resolvedStarts.Nodes;
         var terminalNodes = ResolveTerminalNodes(options, graph);
         var gaps = new List<CombinedPathGap>(graph.Gaps);
-        var selectorCandidateCount = startNodes.Count;
+        var selectorCandidateCount = resolvedStarts.TotalMatchCount;
         var paths = new List<CombinedPath>();
         var truncated = false;
+
+        if (resolvedStarts.TotalMatchCount > startNodes.Count)
+        {
+            gaps.Add(new CombinedPathGap(
+                $"gap:truncated:selector-candidates:{resolvedStarts.TotalMatchCount}",
+                "TruncatedByLimit",
+                CombinedDependencyPathClassifications.NeedsReviewPath,
+                $"Selector matched {resolvedStarts.TotalMatchCount} starting nodes; traversal used the first {startNodes.Count} deterministic candidates.",
+                null,
+                sourceFilter,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "selector-candidates"));
+            truncated = true;
+        }
 
         if (startNodes.Count == 0)
         {
@@ -287,7 +307,7 @@ public static class CombinedDependencyPathReporter
 
             if (paths.Count == 0)
             {
-                gaps.Add(CreateNoPathGap(read, graph, startNodes));
+                gaps.Add(CreateNoPathGap(read, graph, startNodes, options.MaxDepth, options.MaxFrontier));
             }
         }
 
@@ -385,7 +405,10 @@ public static class CombinedDependencyPathReporter
             }
 
             AddSymbolNodeAndAttachment(graph, fact, fact.SourceSymbol, fact.CombinedFactId);
-            AddSymbolNodeAndAttachment(graph, fact, fact.TargetSymbol, fact.CombinedFactId);
+            if (!IsDependencySurfaceFact(fact))
+            {
+                AddSymbolNodeAndAttachment(graph, fact, fact.TargetSymbol, fact.CombinedFactId);
+            }
         }
 
         foreach (var edge in read.Edges)
@@ -422,9 +445,9 @@ public static class CombinedDependencyPathReporter
             var surfaceNode = ToSurfaceNode(surface);
             graph.AddNode(surfaceNode);
             var attached = false;
-            foreach (var symbol in new[] { fact.SourceSymbol, fact.TargetSymbol }.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal))
+            foreach (var symbol in SurfaceAttachmentSymbols(fact))
             {
-                var symbolNode = graph.GetOrAddSymbolNode(fact.SourceIndexId, fact.SourceLabel, symbol!, fact.FilePath, fact.StartLine, fact.EndLine, fact.RuleId, fact.EvidenceTier);
+                var symbolNode = graph.GetOrAddSymbolNode(fact.SourceIndexId, fact.SourceLabel, symbol, fact.FilePath, fact.StartLine, fact.EndLine, fact.RuleId, fact.EvidenceTier);
                 graph.AddEdge(new GraphEdge(
                     $"surface:{surface.CombinedFactId}:{symbolNode.NodeId}",
                     "surface-evidence",
@@ -618,8 +641,7 @@ public static class CombinedDependencyPathReporter
         }
 
         if (edges.Any(edge => edge.EdgeKind == "endpoint-match" && (edge.Classification != CombinedEndpointClassifications.MatchedEndpoint || edge.EvidenceTier != EvidenceTiers.Tier2Structural))
-            || edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
-            || edges.Any(edge => edge.EdgeKind == "fact-attached-to-symbol"))
+            || edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual))
         {
             return CombinedDependencyPathClassifications.NeedsReviewPath;
         }
@@ -653,7 +675,7 @@ public static class CombinedDependencyPathReporter
         return notes;
     }
 
-    private static IReadOnlyList<GraphNode> ResolveStartNodes(CombinedDependencyPathOptions options, EvidenceGraph graph, string? sourceFilter)
+    private static SelectorResolution ResolveStartNodes(CombinedDependencyPathOptions options, EvidenceGraph graph, string? sourceFilter)
     {
         IEnumerable<GraphNode> candidates;
         if (!string.IsNullOrWhiteSpace(options.FromEndpoint))
@@ -691,14 +713,14 @@ public static class CombinedDependencyPathReporter
             candidates = candidates.Where(node => string.Equals(node.SourceLabel, sourceFilter, StringComparison.OrdinalIgnoreCase));
         }
 
-        return candidates
+        var ordered = candidates
             .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
             .ThenBy(node => node.DisplayName, StringComparer.Ordinal)
             .ThenBy(node => node.FilePath, StringComparer.Ordinal)
             .ThenBy(node => node.StartLine ?? 0)
             .ThenBy(node => node.NodeId, StringComparer.Ordinal)
-            .Take(250)
             .ToArray();
+        return new SelectorResolution(ordered.Take(250).ToArray(), ordered.Length);
     }
 
     private static IReadOnlySet<string> ResolveTerminalNodes(CombinedDependencyPathOptions options, EvidenceGraph graph)
@@ -766,9 +788,9 @@ public static class CombinedDependencyPathReporter
             "selector");
     }
 
-    private static CombinedPathGap CreateNoPathGap(CombinedReadResult read, EvidenceGraph graph, IReadOnlyList<GraphNode> starts)
+    private static CombinedPathGap CreateNoPathGap(CombinedReadResult read, EvidenceGraph graph, IReadOnlyList<GraphNode> starts, int maxDepth, int maxFrontier)
     {
-        var sourceIds = starts.Select(node => node.SourceIndexId).Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
+        var sourceIds = ReachableSourceIds(graph, starts, maxDepth, maxFrontier);
         var reducedSource = read.Sources
             .Where(source => sourceIds.Contains(source.SourceIndexId))
             .FirstOrDefault(SourceHasReducedCoverage);
@@ -812,6 +834,84 @@ public static class CombinedDependencyPathReporter
         return !source.AnalysisLevel.Equals("Level1SemanticAnalysis", StringComparison.Ordinal)
             || !source.BuildStatus.Equals("Succeeded", StringComparison.Ordinal)
             || source.CommitSha == "unknown";
+    }
+
+    private static IReadOnlySet<string> ReachableSourceIds(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, int maxDepth, int maxFrontier)
+    {
+        var sourceIds = new HashSet<string>(starts.Select(node => node.SourceIndexId), StringComparer.Ordinal);
+        var queue = new Queue<(string NodeId, int Depth)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var start in starts)
+        {
+            queue.Enqueue((start.NodeId, 0));
+            seen.Add(start.NodeId);
+        }
+
+        var visitedStates = 0;
+        while (queue.Count > 0 && visitedStates < maxFrontier)
+        {
+            visitedStates++;
+            var (nodeId, depth) = queue.Dequeue();
+            if (graph.Nodes.TryGetValue(nodeId, out var node))
+            {
+                sourceIds.Add(node.SourceIndexId);
+            }
+
+            if (depth >= maxDepth || !graph.Outgoing.TryGetValue(nodeId, out var outgoing))
+            {
+                continue;
+            }
+
+            foreach (var edge in outgoing)
+            {
+                if (seen.Add(edge.ToNodeId))
+                {
+                    queue.Enqueue((edge.ToNodeId, depth + 1));
+                }
+            }
+        }
+
+        return sourceIds;
+    }
+
+    private static IReadOnlyList<string> SurfaceAttachmentSymbols(CombinedFactRow fact)
+    {
+        return new[]
+            {
+                fact.SourceSymbol,
+                CombinedDependencyReporter.FirstValue(
+                    fact.Properties,
+                    "methodSymbol",
+                    "containingMethod",
+                    "containingSymbol",
+                    "containingType",
+                    "targetContainingType")
+            }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsDependencySurfaceFact(CombinedFactRow fact)
+    {
+        return fact.FactType is FactTypes.QueryPatternDetected
+            or FactTypes.SqlTextUsed
+            or FactTypes.DatabaseColumnMapping
+            or FactTypes.DapperCallDetected
+            or FactTypes.SqlCommandDetected
+            or FactTypes.HttpCallDetected
+            or FactTypes.PackageReferenced
+            or FactTypes.ConfigBinding
+            or FactTypes.ConfigKeyDeclared
+            or FactTypes.ConnectionStringDeclared
+            || fact.FactType.Contains("Package", StringComparison.Ordinal)
+            || fact.FactType.Contains("Dependency", StringComparison.Ordinal)
+            || fact.FactType.Contains("ProjectReference", StringComparison.Ordinal)
+            || fact.FactType.Contains("Config", StringComparison.Ordinal)
+            || fact.FactType.Contains("ConnectionString", StringComparison.Ordinal)
+            || fact.FactType.Contains("EnvironmentVariable", StringComparison.Ordinal);
     }
 
     private static CombinedPathGap TruncatedGap(string reason, string nodeId, EvidenceGraph graph)
@@ -1393,6 +1493,8 @@ public static class CombinedDependencyPathReporter
     private sealed record SearchResult(IReadOnlyList<CombinedPath> Paths, IReadOnlyList<CombinedPathGap> Gaps, bool Truncated);
 
     private sealed record PathState(IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
+
+    private sealed record SelectorResolution(IReadOnlyList<GraphNode> Nodes, int TotalMatchCount);
 
     private sealed record GraphNode(
         string NodeId,
