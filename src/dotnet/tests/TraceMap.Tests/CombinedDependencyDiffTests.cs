@@ -54,6 +54,7 @@ public sealed class CombinedDependencyDiffTests
         Assert.Contains("Path comparison: `not requested`", markdown);
         Assert.Contains("\"reportType\": \"combined-dependency-diff\"", json);
         Assert.Contains("\"edgeDiffs\": []", json);
+        Assert.DoesNotContain("https://example.invalid", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from orders", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("generatedAt", json, StringComparison.OrdinalIgnoreCase);
 
@@ -162,6 +163,59 @@ public sealed class CombinedDependencyDiffTests
         Assert.Contains(result.Report.Gaps, gap => gap.Classification == CombinedDependencyDiffClassifications.NoDiffEvidence);
     }
 
+    [Fact]
+    public async Task Diff_source_scope_only_does_not_emit_false_selector_no_match()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        await WriteSimpleCombinedAsync(temp, beforeCombined, "before");
+        await WriteSimpleCombinedAsync(temp, afterCombined, "after");
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "sources",
+            Source: "client"));
+
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.Classification == CombinedDependencyDiffClassifications.SelectorNoMatch);
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == CombinedDependencyDiffClassifications.NoDiffEvidence);
+    }
+
+    [Fact]
+    public async Task Diff_downgrades_one_sided_evidence_when_opposite_snapshot_has_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterReducedCombined = Path.Combine(temp.Path, "after-reduced.sqlite");
+        var beforeReducedCombined = Path.Combine(temp.Path, "before-reduced.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var fullManifest = Manifest("api", "tracemap-milestone15");
+        var reducedManifest = Manifest("api", "tracemap-milestone15", analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before-full", fullManifest, [RouteFact(fullManifest, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)]);
+        await WriteSingleCombinedAsync(temp, afterReducedCombined, "after-reduced", reducedManifest, []);
+        await WriteSingleCombinedAsync(temp, beforeReducedCombined, "before-reduced", reducedManifest, []);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after-full", fullManifest, [RouteFact(fullManifest, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)]);
+
+        var removed = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterReducedCombined,
+            Path.Combine(temp.Path, "removed"),
+            Scope: "endpoints"));
+        var added = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeReducedCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "added"),
+            Scope: "endpoints"));
+
+        Assert.Contains(removed.Report.EndpointDiffs, row => row.Classification == CombinedDependencyDiffClassifications.RemovedWithAfterGap);
+        Assert.DoesNotContain(removed.Report.EndpointDiffs, row => row.Classification == CombinedDependencyDiffClassifications.Removed);
+        Assert.Contains(added.Report.EndpointDiffs, row => row.Classification == CombinedDependencyDiffClassifications.AddedWithBeforeGap);
+        Assert.DoesNotContain(added.Report.EndpointDiffs, row => row.Classification == CombinedDependencyDiffClassifications.Added);
+    }
+
     private static async Task WriteSimpleCombinedAsync(TempDirectory temp, string combinedPath, string prefix)
     {
         var clientIndex = Path.Combine(temp.Path, $"{prefix}-client.sqlite");
@@ -173,7 +227,18 @@ public sealed class CombinedDependencyDiffTests
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
     }
 
-    private static ScanManifest Manifest(string repo, string scannerVersion)
+    private static async Task WriteSingleCombinedAsync(TempDirectory temp, string combinedPath, string prefix, ScanManifest manifest, IReadOnlyList<CodeFact> facts)
+    {
+        var indexPath = Path.Combine(temp.Path, $"{prefix}-index.sqlite");
+        SqliteIndexWriter.Write(indexPath, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["api"]));
+    }
+
+    private static ScanManifest Manifest(
+        string repo,
+        string scannerVersion,
+        string analysisLevel = "Level1SemanticAnalysis",
+        string buildStatus = "Succeeded")
     {
         return new ScanManifest(
             $"scan-{repo}",
@@ -183,8 +248,8 @@ public sealed class CombinedDependencyDiffTests
             "abc1234567890",
             scannerVersion,
             DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
-            "Level1SemanticAnalysis",
-            "Succeeded",
+            analysisLevel,
+            buildStatus,
             [],
             [],
             [],

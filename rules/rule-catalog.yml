@@ -52,6 +52,17 @@ rules:
       - Edge diffs are static evidence and do not prove dynamic dispatch, runtime DI registrations, reflection targets, branch feasibility, or collection contents.
       - Syntax-only or name-only edge evidence remains review-tier.
 
+  - id: combined.diff.identity.v1
+    name: Combined dependency diff stable identity
+    description: Constructs stable identity keys for diffing and emits duplicate identity gaps when multiple records share the same stable key.
+    evidenceTier: Tier4Unknown
+    emits:
+      - DuplicateIdentity gap
+    limitations:
+      - Stable identity is label-and-metadata based; renamed labels are not inferred as the same source.
+      - Duplicate identity within one snapshot means diff comparison for affected records is review-tier only.
+      - Identity construction depends on combined fact metadata quality; malformed or incomplete metadata degrades identity.
+
   - id: combined.diff.path.v1
     name: Combined dependency diff path comparison
     description: Compares opt-in dependency path signatures produced by the combined path query engine.
