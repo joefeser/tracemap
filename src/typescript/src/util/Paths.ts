@@ -33,7 +33,8 @@ export function matchesSimpleGlob(relativePath: string, glob: string): boolean {
     return true;
   }
   if (pattern.endsWith("/**")) {
-    return normalized.startsWith(pattern.slice(0, -3));
+    const prefix = pattern.slice(0, -2);
+    return normalized === prefix.slice(0, -1) || normalized.startsWith(prefix);
   }
   if (pattern.startsWith("**/*.")) {
     return normalized.endsWith(pattern.slice(4));

@@ -12,8 +12,9 @@ export interface PackageIdentity {
 }
 
 export async function findNearestPackageIdentity(repoPath: string, filePath: string): Promise<PackageIdentity> {
-  let current = path.dirname(filePath);
-  while (current.startsWith(repoPath)) {
+  const resolvedRepoPath = path.resolve(repoPath);
+  let current = path.resolve(path.dirname(filePath));
+  while (current === resolvedRepoPath || current.startsWith(resolvedRepoPath + path.sep)) {
     const packagePath = path.join(current, "package.json");
     try {
       const parsed = JSON.parse(await fs.readFile(packagePath, "utf8")) as { name?: unknown; version?: unknown };
@@ -30,7 +31,7 @@ export async function findNearestPackageIdentity(repoPath: string, filePath: str
       current = parent;
     }
   }
-  return { name: path.basename(repoPath), version: "HEAD", rootPath: repoPath };
+  return { name: path.basename(resolvedRepoPath), version: "HEAD", rootPath: resolvedRepoPath };
 }
 
 export async function extractPackageFacts(manifest: ScanManifest, repoPath: string, inventory: readonly FileInventoryItem[]): Promise<CodeFact[]> {

@@ -584,15 +584,23 @@ function readEnvironmentBasePaths(repoPath: string): Map<string, string> {
   if (!fs.existsSync(envDir)) {
     return result;
   }
-  for (const file of fs.readdirSync(envDir).filter((name) => /^environment.*\.ts$/.test(name)).sort()) {
-    const fullPath = path.join(envDir, file);
-    const text = fs.readFileSync(fullPath, "utf8");
-    for (const match of text.matchAll(/([A-Za-z_$][\w$]*(?:Uri|Url|BasePath|BaseUrl))\s*:\s*["']([^"']+)["']/g)) {
-      const key = match[1];
-      const value = match[2];
-      const pathSuffix = pathSuffixFromUrl(value);
-      result.set(`environment.${key}`, pathSuffix);
+  try {
+    for (const file of fs.readdirSync(envDir).filter((name) => /^environment.*\.ts$/.test(name)).sort()) {
+      const fullPath = path.join(envDir, file);
+      try {
+        const text = fs.readFileSync(fullPath, "utf8");
+        for (const match of text.matchAll(/([A-Za-z_$][\w$]*(?:Uri|Url|BasePath|BaseUrl))\s*:\s*["']([^"']+)["']/g)) {
+          const key = match[1];
+          const value = match[2];
+          const pathSuffix = pathSuffixFromUrl(value);
+          result.set(`environment.${key}`, pathSuffix);
+        }
+      } catch {
+        continue;
+      }
     }
+  } catch {
+    return result;
   }
   return result;
 }

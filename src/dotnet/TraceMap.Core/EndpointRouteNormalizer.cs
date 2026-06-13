@@ -40,7 +40,7 @@ public static partial class EndpointRouteNormalizer
 
         foreach (var rawSegment in value.Split('/', StringSplitOptions.RemoveEmptyEntries))
         {
-            var segment = Uri.UnescapeDataString(rawSegment);
+            var segment = SafeUnescapeDataString(rawSegment);
             if (TryParseAspNetParameter(segment, out var parameter))
             {
                 parameters.Add(parameter.Name);
@@ -90,6 +90,7 @@ public static partial class EndpointRouteNormalizer
 
     public static IReadOnlyList<string> ExpandOptionalPathKeys(NormalizedEndpointRoute route)
     {
+        const int MaxOptionalSegmentExpansion = 5;
         if (route.OptionalParameterNames.Count == 0)
         {
             return [route.PathKey];
@@ -101,6 +102,11 @@ public static partial class EndpointRouteNormalizer
             .Where(item => item.segment == "{?}")
             .Select(item => item.index)
             .ToArray();
+        if (optionalIndexes.Length > MaxOptionalSegmentExpansion)
+        {
+            return [route.PathKey.Replace("{?}", "{}")];
+        }
+
         var keys = new SortedSet<string>(StringComparer.Ordinal) { route.PathKey.Replace("{?}", "{}") };
         var combinations = 1 << optionalIndexes.Length;
         for (var mask = 0; mask < combinations; mask++)
@@ -112,6 +118,18 @@ public static partial class EndpointRouteNormalizer
         }
 
         return keys.ToArray();
+    }
+
+    private static string SafeUnescapeDataString(string value)
+    {
+        try
+        {
+            return Uri.UnescapeDataString(value);
+        }
+        catch (UriFormatException)
+        {
+            return value;
+        }
     }
 
     private static string ReplaceTokens(string value, IReadOnlyDictionary<string, string>? tokens)
