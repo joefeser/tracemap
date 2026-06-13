@@ -72,8 +72,13 @@ internal static class CombinedReportHelpers
         return text[..Math.Min(length, text.Length)];
     }
 
-    public static string Cell(string value)
+    public static string Cell(string? value)
     {
+        if (value is null)
+        {
+            return string.Empty;
+        }
+
         return value
             .Replace("|", "\\|", StringComparison.Ordinal)
             .ReplaceLineEndings(" ")
