@@ -153,6 +153,7 @@ public sealed record CombinedDiffGap(
     string? SourceLabel,
     string? EvidenceKind,
     string RuleId,
+    string EvidenceTier,
     string Classification,
     string Message,
     IReadOnlyList<string> SupportingFactIds,
@@ -259,20 +260,22 @@ public static class CombinedDependencyDiffer
         var edgeDiffs = scopes.Contains("edges") ? CompareRecords(before.Edges, after.Edges, EdgeRuleId, options.MaxDiffRows, sourceIdentity, gaps) : [];
         var pathDiffs = scopes.Contains("paths") ? ComparePathRecords(before.Paths, after.Paths, options.MaxPaths, sourceIdentity, gaps) : [];
 
-        if (HasAnySelector(options) && before.Endpoints.Count + before.Surfaces.Count + before.Edges.Count + before.Paths.Count == 0 && after.Endpoints.Count + after.Surfaces.Count + after.Edges.Count + after.Paths.Count == 0)
+        if (HasAnySelector(options)
+            && ComparableEvidenceCount(before) == 0
+            && ComparableEvidenceCount(after) == 0)
         {
-            gaps.Add(new CombinedDiffGap("gap:selector:no-match", "SelectorNoMatch", options.Source, null, SelectorRuleId, CombinedDependencyDiffClassifications.SelectorNoMatch, "Selectors matched no comparable evidence in either snapshot.", [], []));
+            gaps.Add(new CombinedDiffGap("gap:selector:no-match", "SelectorNoMatch", options.Source, null, SelectorRuleId, EvidenceTiers.Tier4Unknown, CombinedDependencyDiffClassifications.SelectorNoMatch, "Selectors matched no comparable evidence in either snapshot.", [], []));
         }
 
         if (scopes.Contains("paths") && before.Paths.Count == 0 && after.Paths.Count == 0)
         {
-            gaps.Add(new CombinedDiffGap("gap:path:no-evidence", "NoPathEvidence", options.Source, "path", PathRuleId, CombinedDependencyDiffClassifications.NoPathEvidence, "Path comparison was requested but no path evidence was returned in either snapshot.", [], []));
+            gaps.Add(new CombinedDiffGap("gap:path:no-evidence", "NoPathEvidence", options.Source, "path", PathRuleId, EvidenceTiers.Tier4Unknown, CombinedDependencyDiffClassifications.NoPathEvidence, "Path comparison was requested but no path evidence was returned in either snapshot.", [], []));
         }
 
         var diffCount = sourceDiffs.Count + coverageDiffs.Count + endpointDiffs.Count + surfaceDiffs.Count + edgeDiffs.Count + pathDiffs.Count;
         if (diffCount == 0 && gaps.All(gap => gap.Classification != CombinedDependencyDiffClassifications.SelectorNoMatch))
         {
-            gaps.Add(new CombinedDiffGap("gap:no-diff-evidence", "NoDiffEvidence", null, null, SourceRuleId, CombinedDependencyDiffClassifications.NoDiffEvidence, "Comparable evidence was found, but no diff was detected.", [], []));
+            gaps.Add(new CombinedDiffGap("gap:no-diff-evidence", "NoDiffEvidence", null, null, SourceRuleId, EvidenceTiers.Tier4Unknown, CombinedDependencyDiffClassifications.NoDiffEvidence, "Comparable evidence was found, but no diff was detected.", [], []));
         }
 
         var sortedGaps = SortAndCapGaps(gaps, options.MaxGaps, out var gapsTruncated);
@@ -438,6 +441,16 @@ public static class CombinedDependencyDiffer
             || !string.IsNullOrWhiteSpace(options.SurfaceName);
     }
 
+    private static int ComparableEvidenceCount(CombinedDiffSnapshot snapshot)
+    {
+        return snapshot.Sources.Count
+            + snapshot.Coverages.Count
+            + snapshot.Endpoints.Count
+            + snapshot.Surfaces.Count
+            + snapshot.Edges.Count
+            + snapshot.Paths.Count;
+    }
+
     private static async Task<CombinedDiffSnapshot> ReadSnapshotAsync(
         string side,
         string indexPath,
@@ -495,6 +508,7 @@ public static class CombinedDependencyDiffer
                     null,
                     table,
                     SchemaRuleId,
+                    EvidenceTiers.Tier4Unknown,
                     CombinedDependencyDiffClassifications.UnknownAnalysisGap,
                     $"{side} combined index is missing optional precision table `{table}`; fallback comparison may be reduced.",
                     [],
@@ -783,7 +797,16 @@ public static class CombinedDependencyDiffer
         {
             if (Directory.Exists(tempDir))
             {
-                Directory.Delete(tempDir, recursive: true);
+                try
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
             }
         }
     }
@@ -840,7 +863,7 @@ public static class CombinedDependencyDiffer
         var afterGroups = after.GroupBy(record => record.StableKey, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         foreach (var duplicate in beforeGroups.Where(group => group.Value.Length > 1).Concat(afterGroups.Where(group => group.Value.Length > 1)))
         {
-            gaps.Add(new CombinedDiffGap($"gap:duplicate:{ruleId}:{CombinedReportHelpers.Hash(duplicate.Key, 16)}", "DuplicateIdentity", duplicate.Value[0].Evidence.SourceLabel, duplicate.Value[0].Kind, "combined.diff.identity.v1", CombinedDependencyDiffClassifications.NeedsReviewDiff, $"Duplicate stable identity `{duplicate.Key}` has {duplicate.Value.Length} instances.", duplicate.Value.SelectMany(row => row.Evidence.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(), duplicate.Value.SelectMany(row => row.Evidence.SupportingEdgeIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()));
+            gaps.Add(new CombinedDiffGap($"gap:duplicate:{ruleId}:{CombinedReportHelpers.Hash(duplicate.Key, 16)}", "DuplicateIdentity", duplicate.Value[0].Evidence.SourceLabel, duplicate.Value[0].Kind, "combined.diff.identity.v1", EvidenceTiers.Tier4Unknown, CombinedDependencyDiffClassifications.NeedsReviewDiff, $"Duplicate stable identity `{duplicate.Key}` has {duplicate.Value.Length} instances.", duplicate.Value.SelectMany(row => row.Evidence.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(), duplicate.Value.SelectMany(row => row.Evidence.SupportingEdgeIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()));
         }
 
         foreach (var key in beforeGroups.Keys.Concat(afterGroups.Keys).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
@@ -973,7 +996,7 @@ public static class CombinedDependencyDiffer
             return sorted;
         }
 
-        gaps.Add(new CombinedDiffGap($"gap:truncated:{ruleId}", "TruncatedByLimit", null, null, TruncationRuleId, CombinedDependencyDiffClassifications.NeedsReviewDiff, $"{ruleId} produced {sorted.Length} rows; output was capped at {maxRows}.", [], []));
+        gaps.Add(new CombinedDiffGap($"gap:truncated:{ruleId}", "TruncatedByLimit", null, null, TruncationRuleId, EvidenceTiers.Tier4Unknown, CombinedDependencyDiffClassifications.NeedsReviewDiff, $"{ruleId} produced {sorted.Length} rows; output was capped at {maxRows}.", [], []));
         return sorted.Take(maxRows).ToArray();
     }
 
@@ -995,7 +1018,7 @@ public static class CombinedDependencyDiffer
             return sorted;
         }
 
-        return [.. sorted.Take(maxGaps - 1), new CombinedDiffGap("gap:truncated:gaps", "TruncatedByLimit", null, null, TruncationRuleId, CombinedDependencyDiffClassifications.NeedsReviewDiff, $"Gap output was capped at {maxGaps}.", [], [])];
+        return [.. sorted.Take(maxGaps - 1), new CombinedDiffGap("gap:truncated:gaps", "TruncatedByLimit", null, null, TruncationRuleId, EvidenceTiers.Tier4Unknown, CombinedDependencyDiffClassifications.NeedsReviewDiff, $"Gap output was capped at {maxGaps}.", [], [])];
     }
 
     private static IReadOnlyDictionary<string, SourceIdentityAssessment> ValidateSourceIdentity(
@@ -1028,7 +1051,7 @@ public static class CombinedDependencyDiffer
 
                     blocks = true;
                     caveats.Add(new CombinedCoverageCaveat(label, "SourceIdentityChanged", message));
-                    gaps.Add(new CombinedDiffGap($"gap:identity:{CombinedReportHelpers.Hash(label, 16)}", "SourceIdentityChanged", label, "source", SourceRuleId, CombinedDependencyDiffClassifications.NeedsReviewDiff, message, [], []));
+                    gaps.Add(new CombinedDiffGap($"gap:identity:{CombinedReportHelpers.Hash(label, 16)}", "SourceIdentityChanged", label, "source", SourceRuleId, EvidenceTiers.Tier4Unknown, CombinedDependencyDiffClassifications.NeedsReviewDiff, message, [], []));
                 }
                 else if (IdentityUnverified(before, after))
                 {
@@ -1097,7 +1120,7 @@ public static class CombinedDependencyDiffer
                     source.Language,
                     source.ScanId,
                     source.CommitSha,
-                    source.RemoteUrl ?? source.RepoName,
+                    $"repo-hash:{CombinedReportHelpers.Hash(source.RemoteUrl ?? source.RepoName ?? "unknown", 24)}",
                     source.ScanRootPathHash ?? source.GitRootHash,
                     $"{source.AnalysisLevel}/{source.BuildStatus}",
                     read.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId).Select(gap => gap.Category).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()))
