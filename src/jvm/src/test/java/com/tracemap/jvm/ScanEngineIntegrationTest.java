@@ -41,6 +41,14 @@ final class ScanEngineIntegrationTest {
                 && result.manifest().buildStatus().equals(fact.targetSymbol())
                 && result.manifest().analysisLevel().equals(fact.properties().get("analysisLevel"))));
         assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.HTTP_ROUTE_BINDING.equals(fact.factType())
+                && "GET".equals(fact.properties().get("httpMethod"))
+                && "/api/orders/{id}".equals(fact.properties().get("normalizedPathTemplate"))
+                && "getOrder".equals(fact.properties().get("methodName"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.CALCULATION_EXPRESSION.equals(fact.factType())
+                && fact.evidence().filePath().endsWith("OrderController.java")));
+        assertTrue(result.facts().stream().anyMatch(fact ->
             FactTypes.PROPERTY_ACCESSED.equals(fact.factType())
                 && EvidenceTiers.TIER1_SEMANTIC.equals(fact.evidenceTier())
                 && "status".equals(fact.properties().get("propertyName"))));
@@ -80,6 +88,54 @@ final class ScanEngineIntegrationTest {
         assertEquals("Level3SyntaxAnalysis", result.manifest().analysisLevel());
         assertTrue(result.manifest().knownGaps().stream().anyMatch(gap -> gap.startsWith("KotlinSemanticNotImplemented")));
         assertTrue(result.facts().stream().anyMatch(fact -> FactTypes.TYPE_DECLARED.equals(fact.factType()) && "kotlin".equals(fact.properties().get("language"))));
+    }
+
+    @Test
+    void javaSyntaxHandlesMultilineRoutesAndSpringBootAnnotations() throws Exception {
+        Path repo = temp.resolve("java-routes");
+        Files.createDirectories(repo.resolve("src/main/java/example"));
+        Files.writeString(repo.resolve("src/main/java/example/SampleApplication.java"), """
+            package example;
+
+            import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+            @SpringBootApplication
+            public class SampleApplication {
+            }
+            """);
+        Files.writeString(repo.resolve("src/main/java/example/SampleController.java"), """
+            package example;
+
+            import org.springframework.web.bind.annotation.GetMapping;
+            import org.springframework.web.bind.annotation.RequestMapping;
+
+            @RequestMapping("/api")
+            public class SampleController {
+                @GetMapping(
+                    value = "/multi/{id}",
+                    produces = "application/json"
+                )
+                @SuppressWarnings("unused")
+                public String show(String id) {
+                    return id;
+                }
+            }
+            """);
+        initGit(repo);
+
+        ScanResult result = new ScanEngine().scan(new ScanOptions(repo, temp.resolve("java-routes-out"), List.of(), List.of(), List.of(), 1024 * 1024, false, "all"));
+
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.HTTP_ROUTE_BINDING.equals(fact.factType())
+                && "GET".equals(fact.properties().get("httpMethod"))
+                && "/api/multi/{id}".equals(fact.properties().get("normalizedPathTemplate"))
+                && "show".equals(fact.properties().get("methodName"))));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.INFRASTRUCTURE_BOILERPLATE.equals(fact.factType())
+                && "SpringBootEntrypoint".equals(fact.properties().get("boilerplateKind"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.CALCULATION_EXPRESSION.equals(fact.factType())
+                && fact.evidence().filePath().endsWith("SampleController.java")));
     }
 
     @Test
