@@ -7,13 +7,15 @@
   - [ ] Confirm `--from-endpoint`, `--from-symbol`, `--from-source`, `--to-surface`, `--surface-name`, `--source-pair`, `--max-depth`, `--max-paths`, and `--max-frontier` are the MVP flags.
   - [ ] Confirm `--to-endpoint`, `--to-symbol`, `--to-source`, and reverse traversal are deferred.
   - [ ] Confirm terminal surfaces are `sql-query`, `http-route`, `http-client`, `package-config`, and `external`.
+  - [ ] Confirm endpoint start nodes are not terminal HTTP surfaces in default queries.
   - [ ] Document selector matching rules and ambiguity behavior.
   - [ ] Document that `endpoint_matches` is reserved/unused and both report and paths use one shared in-memory matcher.
 
 - [ ] Refactor combined report internals without behavior changes.
   - [ ] Extract combined index validation from the current report implementation.
   - [ ] Extract source inventory and coverage reading.
-  - [ ] Extract endpoint candidate/matching behavior so report and paths agree.
+  - [ ] Extract combined endpoint candidate/matching behavior into `TraceMap.Reporting` internal `CombinedEndpointMatcher`.
+  - [ ] Update `CombinedDependencyReporter` to call `CombinedEndpointMatcher`.
   - [ ] Extract dependency surface projection or create a shared internal projector.
   - [ ] Preserve existing `tracemap report` behavior and tests while refactoring.
   - [ ] Prove report output remains byte-stable before adding path code.
@@ -25,6 +27,8 @@
   - [ ] Ensure no generated timestamp is emitted by default.
   - [ ] Use structured path notes with `code` and `message`.
   - [ ] Pin inventory shape as counts plus path/gap evidence nodes and edges.
+  - [ ] Pin confidence as a deterministic derivation of classification.
+  - [ ] Pin classification ordering ranks.
   - [ ] Pin nullable fields and required arrays.
 
 - [ ] Add graph reader.
@@ -51,6 +55,7 @@
   - [ ] Mark duplicate source-local display-name joins as `NeedsReviewPath`.
   - [ ] Add call, create, relationship, argument, and parameter-forward edges.
   - [ ] Add SQL, config, package, HTTP, and external dependency surface nodes.
+  - [ ] Map surface selector keys to node kinds and inventory keys.
   - [ ] Attach surfaces to symbols using conservative rule-backed evidence.
   - [ ] Emit `UnlinkedSurface` gaps when surfaces cannot be attached.
   - [ ] Ensure the only cross-source edge in MVP is `EndpointMatch`.
@@ -73,7 +78,9 @@
   - [ ] Record `TruncatedByLimit` gaps for depth/path/cycle/frontier limits.
   - [ ] Sort paths deterministically.
   - [ ] Classify `StrongStaticPath`, `ProbableStaticPath`, `NeedsReviewPath`, `UnknownAnalysisGap`, and `NoPathFound`.
+  - [ ] Classify optional endpoint matches and method mismatches below `StrongStaticPath`.
   - [ ] Emit `UnknownAnalysisGap` instead of `NoPathFound` when contributing sources have reduced coverage or known gaps.
+  - [ ] Define contributing sources as resolved start-node sources plus outbound-reachable sources within search bounds.
 
 - [ ] Add Markdown writer.
   - [ ] Sections: Summary, Query, Sources, Paths, Path Gaps, Evidence Inventory, Limitations.
@@ -109,6 +116,7 @@
   - [ ] Endpoint-to-package path.
   - [ ] Symbol-to-surface path.
   - [ ] Source pair filter.
+  - [ ] Source pair labels containing colons split on the last colon.
   - [ ] Report/paths endpoint-match parity.
   - [ ] Symbol-key determinism and same-display-name collision behavior.
   - [ ] Within-source symbol joins and cross-source boundary enforcement.
@@ -116,11 +124,19 @@
   - [ ] Precise-table-vs-view fallback behavior.
   - [ ] Schema error naming for missing required tables/views.
   - [ ] `--surface-name` exact and wildcard behavior.
+  - [ ] `--surface-name` exact matches sort before wildcard matches.
+  - [ ] Edge-kind rejection for `--to-surface call/create/relationship/parameter-forward`.
+  - [ ] Endpoint start nodes do not satisfy `http-route` or `http-client` terminal surfaces in default queries.
+  - [ ] Optional endpoint matches do not classify as `StrongStaticPath`.
   - [ ] Multiple paths deterministic ordering.
   - [ ] Cycle/frontier handling and `TruncatedByLimit`.
+  - [ ] Frontier cap gaps identify `frontier` as the truncation reason.
   - [ ] `SelectorNoMatch`.
   - [ ] `NoPathFound` under full coverage.
   - [ ] Reduced coverage no-path caveat.
+  - [ ] Partial reduced-coverage boundary where unrelated reduced sources do not affect no-path classification.
+  - [ ] Multi-candidate selector top-N and candidate count.
+  - [ ] Markdown escaping for pipes, line endings, brackets, and parentheses.
   - [ ] Unlinked surface gap.
   - [ ] No raw SQL, raw URL, config value, snippet, or local absolute path output.
 

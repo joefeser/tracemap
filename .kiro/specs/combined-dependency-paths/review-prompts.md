@@ -18,8 +18,11 @@ Focus on:
 - Whether `tracemap paths` has a clear product purpose distinct from `tracemap report`.
 - Whether the evidence graph model is deterministic and provenance-preserving.
 - Whether `endpoint_matches` being reserved/unused while report and paths share one in-memory matcher is the right MVP ownership decision.
+- Whether `CombinedEndpointMatcher` in `TraceMap.Reporting` is the right extraction target for combined N-way matching.
 - Whether source-local symbol keys are sufficiently precise and collision behavior is honest.
 - Whether limiting cross-source traversal to `EndpointMatch` is clear enough.
+- Whether endpoint start nodes are correctly excluded from terminal `http-route`/`http-client` surface matches in default queries.
+- Whether the contributing-source rule for `NoPathFound` vs `UnknownAnalysisGap` is deterministic.
 - Whether endpoint-to-symbol-to-surface linking rules are too ambitious, too weak, or missing important evidence sources.
 - Whether the selector set is the right first version.
 - Whether path classifications map cleanly to TraceMap evidence tiers.
@@ -48,6 +51,7 @@ Focus on:
 - Edge cases in selector parsing and deterministic BFS.
 - Risks in source-local symbol display-name joins.
 - Risks in endpoint-match parity between `tracemap report` and `tracemap paths`.
+- Risks in `maxFrontier` semantics and truncation reporting.
 - Test fixtures needed to prove the feature.
 - Risks around output determinism and private-data leakage.
 
