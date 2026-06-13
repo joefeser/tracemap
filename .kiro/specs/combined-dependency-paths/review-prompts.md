@@ -17,6 +17,9 @@ Focus on:
 - Whether the MVP scope is implementable without scanner rewrites.
 - Whether `tracemap paths` has a clear product purpose distinct from `tracemap report`.
 - Whether the evidence graph model is deterministic and provenance-preserving.
+- Whether `endpoint_matches` being reserved/unused while report and paths share one in-memory matcher is the right MVP ownership decision.
+- Whether source-local symbol keys are sufficiently precise and collision behavior is honest.
+- Whether limiting cross-source traversal to `EndpointMatch` is clear enough.
 - Whether endpoint-to-symbol-to-surface linking rules are too ambitious, too weak, or missing important evidence sources.
 - Whether the selector set is the right first version.
 - Whether path classifications map cleanly to TraceMap evidence tiers.
@@ -40,8 +43,11 @@ Focus on:
 
 - Likely code seams in the current .NET solution.
 - What should be refactored from `CombinedDependencyReport` before adding paths.
+- Whether the behavior-preserving refactor slice is correctly isolated.
 - Table/column assumptions that may not match the current combined SQLite schema.
 - Edge cases in selector parsing and deterministic BFS.
+- Risks in source-local symbol display-name joins.
+- Risks in endpoint-match parity between `tracemap report` and `tracemap paths`.
 - Test fixtures needed to prove the feature.
 - Risks around output determinism and private-data leakage.
 
@@ -59,6 +65,8 @@ Look for:
 - Unsafe rendering of raw SQL, URLs, snippets, config values, connection strings, or local paths.
 - Graph traversal cycle or explosion risks.
 - Ambiguous selector behavior.
+- Accidental cross-source symbol stitching.
+- Divergence between endpoint matching in report and paths.
 - JSON schema instability.
 - Unclear ownership between report and paths code.
 

@@ -52,11 +52,8 @@ Options:
 ```text
 --format <markdown|json>
 --from-endpoint "<METHOD> <PATH_KEY>"
---to-endpoint "<METHOD> <PATH_KEY>"
 --from-symbol <symbol>
---to-symbol <symbol>
 --from-source <label>
---to-source <label>
 --to-surface <kind>
 --surface-name <text>
 --source-pair <fromLabel>:<toLabel>
@@ -75,9 +72,26 @@ Output behavior:
 
 Default query:
 
-- If no selectors are provided, start from matched endpoint pairs and search for paths to dependency surfaces.
-- Cap default output tightly enough for review.
+- If no selectors are provided, start from matched endpoint pairs and search forward to terminal dependency surfaces.
+- Terminal surfaces are `sql-query`, `package-config`, `http-client`, `http-route`, and `external`.
+- Default query uses `maxDepth = 8`, `maxPaths = 100`, and `maxFrontier = 10000`.
 - Emit a summary if no starting endpoint evidence exists.
+
+Unsupported in v1:
+
+- reverse traversal
+- `--to-endpoint`
+- `--to-symbol`
+- `--to-source`
+- treating call/create/relationship/parameter-forward edge kinds as terminal surfaces
+
+`--surface-name` matching:
+
+- case-insensitive exact matching by default
+- leading/trailing `*` enables prefix, suffix, or contains matching
+- exact matches sort before wildcard matches
+
+`--source-pair` parsing splits on the last colon so labels may contain colons.
 
 ## Proposed Package Layout
 
@@ -98,6 +112,8 @@ src/dotnet/
 
 `TraceMap.Reporting` remains the home because paths are a reporting/query layer over combined evidence. If the current combined report implementation remains a single file, this slice may first extract reusable source/report reader pieces so path search and report generation do not drift.
 
+First implementation should be a behavior-preserving refactor of the combined report internals. Existing report tests should pass without changed output before path-specific code lands.
+
 ## Data Sources
 
 Read from combined tables and views:
@@ -116,6 +132,13 @@ Read from combined tables and views:
 | `combined_dependency_edges` | summary fallback for graph edges |
 
 The graph builder should prefer precise tables when present and use `combined_dependency_edges` as fallback or inventory evidence.
+
+`endpoint_matches` ownership:
+
+- The table exists in combined indexes but is intentionally unused by MVP report and paths commands.
+- Both commands compute endpoint alignment in memory through one shared matcher.
+- The paths command must not read `endpoint_matches` as source of truth because indexes produced today have no rows there.
+- Persisting endpoint matches is a follow-up that must first define ownership, lifecycle, and schema behavior for one-sided/dynamic findings.
 
 ## Report Model
 
@@ -151,7 +174,11 @@ public sealed record CombinedPath(
     IReadOnlyList<CombinedPathEdge> Edges,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<CombinedPathNote> Notes);
+
+public sealed record CombinedPathNote(
+    string Code,
+    string Message);
 ```
 
 Coverage values:
@@ -162,7 +189,7 @@ Coverage values:
 
 Path classifications:
 
-- `DefiniteStaticPath`
+- `StrongStaticPath`
 - `ProbableStaticPath`
 - `NeedsReviewPath`
 - `UnknownAnalysisGap`
@@ -178,6 +205,21 @@ Gap kinds:
 - `UnlinkedSurface`
 - `DynamicBoundary`
 - `SchemaMissing`
+
+Inventory shape:
+
+```csharp
+public sealed record CombinedPathInventory(
+    IReadOnlyDictionary<string, int> NodesByKind,
+    IReadOnlyDictionary<string, int> EdgesByKind,
+    IReadOnlyDictionary<string, int> NodesBySource,
+    IReadOnlyDictionary<string, int> SurfacesByKind,
+    IReadOnlyDictionary<string, int> GapsByKind,
+    IReadOnlyList<CombinedPathNode> EvidenceNodes,
+    IReadOnlyList<CombinedPathEdge> EvidenceEdges);
+```
+
+`EvidenceNodes` and `EvidenceEdges` include only nodes/edges participating in returned paths plus gap evidence. They do not dump the entire graph by default.
 
 ## Evidence Graph
 
@@ -215,12 +257,26 @@ Each node should carry:
 - `endLine`
 - optional surface metadata
 
+### Symbol Keys and Node IDs
+
+Symbol joins are source-local in MVP. Cross-language or cross-source symbol stitching is not supported.
+
+Normalize display names for symbol-key matching by trimming whitespace, normalizing line endings to spaces, and using ordinal string comparison after exact display format preservation. Do not lowercase C# or JVM symbol keys by default because generic/type casing can be significant to display identity. Selector matching may be case-insensitive, but graph joins are ordinal.
+
+Symbol key:
+
+```text
+symbol-key-v1:{sourceIndexId}:{normalizedDisplayName}
+```
+
 Node IDs should be deterministic from source index ID plus the strongest available stable identifier:
 
 1. symbol ID
 2. combined fact ID
 3. combined edge ID
 4. source label, file path, line span, node kind, and display name hash
+
+When `combined_symbol_id` exists, use it for node identity and retain the source-local symbol key for raw edge-table joins. When raw edge tables reference display strings, join only inside the same `sourceIndexId` using the symbol key. If multiple symbol rows in one source share a normalized display name, keep all candidates, retain provenance, and classify paths using that ambiguous join as `NeedsReviewPath`.
 
 ### Edge Kinds
 
@@ -236,7 +292,6 @@ Suggested edge kinds:
 - `ParameterForwarded`
 - `FactAttachedToSymbol`
 - `SurfaceEvidence`
-- `SameFileFallback`
 
 Each edge should carry:
 
@@ -264,12 +319,16 @@ Derived edge IDs should include an algorithm tag such as `tracemap.paths.endpoin
 5. Read precise edge tables.
 6. Read `combined_dependency_edges` as fallback/inventory.
 7. Build endpoint nodes and endpoint match edges using shared endpoint matching behavior from combined reporting.
-8. Build symbol nodes from `combined_symbols` and source/target symbol fields.
+8. Build symbol nodes from `combined_symbols` and source/target symbol fields using source-local symbol keys.
 9. Build dependency surface nodes from the same fact-type/property rules used by `tracemap report`.
-10. Attach facts to symbols using `combined_fact_symbols`, explicit symbol properties, target/source symbols, containing type metadata, or file/line proximity only when the fallback is documented and classified as needs review.
+10. Attach facts to symbols using `combined_fact_symbols`, explicit symbol properties, target/source symbols, method symbols, or containing type metadata.
 11. Add graph gaps where a surface, endpoint, or edge cannot be credibly linked.
 
 The graph should retain all provenance even when display nodes are deduplicated.
+
+Do not attach surfaces by same-file or line-proximity fallback in MVP. Emit `UnlinkedSurface` instead.
+
+The only cross-source edge in MVP is `EndpointMatch`.
 
 ## Path Search Algorithm
 
@@ -279,18 +338,19 @@ Defaults:
 
 - `maxDepth`: 8
 - `maxPaths`: 100
+- `maxFrontier`: 10000 queued path states
 - Markdown path cap: 100
 - Markdown inventory cap: 200
 
 Traversal:
 
 - Start node set comes from selectors.
-- End node set comes from selectors, `--to-surface`, or default terminal surfaces.
-- Traverse outbound edges first.
-- Optionally include reverse traversal only when the query asks for `--to-*` without a `--from-*`; this must be documented in query metadata.
+- End node set comes from `--to-surface` and optional `--surface-name`, or default terminal surfaces.
+- Traverse outbound edges only.
 - Avoid revisiting nodes already in the current path.
-- Record cycle/depth truncation gaps.
+- Record cycle/depth/path/frontier truncation gaps.
 - Stop at terminal surfaces unless future options allow expansion.
+- Down-rank relationship edges relative to call/create/parameter-forward edges so broad inheritance graphs do not dominate early results.
 
 Ordering:
 
@@ -305,16 +365,21 @@ Ordering:
 
 Confidence:
 
-- `High`: Tier1 semantic hops plus exact endpoint match.
+- `High`: Tier1 semantic non-endpoint hops plus exact endpoint match.
 - `Medium`: Tier2 structural hops or optional endpoint match.
 - `Low`: Tier3 syntax/textual hops, fallback symbol links, dynamic or incomplete evidence.
 
 Classification:
 
-- `DefiniteStaticPath`: all hops are Tier1 semantic or exact endpoint derived.
+- `StrongStaticPath`: all non-endpoint hops are Tier1 semantic and any endpoint hops are exact static method/path matches.
 - `ProbableStaticPath`: at least one Tier2 structural hop and no Tier3/fallback gaps.
 - `NeedsReviewPath`: Tier3/fallback/name-only evidence is required.
 - `UnknownAnalysisGap`: visible gaps prevent credible conclusion.
+
+No-path rule:
+
+- If selectors match but no path is found and any source contributing nodes to the queried segment has reduced coverage, known gaps, failed/partial build status, unknown commit SHA, or analysis gaps, emit `UnknownAnalysisGap`.
+- Emit `NoPathFound` only when every source contributing nodes to the queried segment has credible full coverage.
 
 ## Surface Attachment Rules
 
@@ -322,10 +387,10 @@ Attach surfaces conservatively:
 
 - Use `combined_fact_symbols` when available.
 - Use explicit `sourceSymbol`, `targetSymbol`, `methodSymbol`, `containingType`, `targetContainingType`, or equivalent properties when present.
-- Use source label plus exact file path and line-span containment only as `NeedsReviewPath` evidence.
 - Do not attach raw SQL text to table symbols by string matching.
 - Do not infer repository/service ownership from folder names unless a fact or source label supports it.
 - Do not infer runtime object identity from constructor arguments.
+- Do not attach surfaces by source label plus file path or line proximity in MVP.
 
 Unattached surfaces should still appear in inventory and may produce `UnlinkedSurface` gaps.
 
@@ -353,10 +418,16 @@ Path rendering example:
    -> Calls Tier1Semantic csharp.semantic.call.v1
    api Method OrderRepository.QueryOrders OrderRepository.cs:77
    -> SurfaceEvidence Tier2Structural csharp.syntax.querypattern.v1
-   api SqlSurface SELECT orders columns id;status OrderRepository.cs:79
+   api SqlSurface table orders columns id;status shape shape123 OrderRepository.cs:79
 ```
 
 Markdown must not render raw snippets, raw SQL, raw URLs, local absolute paths, config values, or connection strings.
+
+Markdown path and display helpers should:
+
+- use a shared safe-file-path helper that hashes or rejects local absolute paths
+- cap display names at 200 characters
+- escape `|`, line endings, `[`, `]`, `(`, and `)` in table cells
 
 ## JSON Output
 
@@ -379,6 +450,12 @@ Top-level shape:
 
 Use camelCase through existing JSON serializer options. Required arrays should be present even when empty. Missing values should be `null`, not omitted.
 
+Path JSON should include structured notes:
+
+```json
+{ "code": "ReducedCoverage", "message": "api has known gaps; absence conclusions are coverage-relative." }
+```
+
 ## Reuse and Refactoring
 
 This spec should avoid copy-pasting the combined report internals.
@@ -386,9 +463,10 @@ This spec should avoid copy-pasting the combined report internals.
 Preferred implementation path:
 
 1. Extract combined index validation/source reading into reusable internal helpers.
-2. Extract dependency surface row construction into a reusable service or keep a shared internal projector.
-3. Extract endpoint candidate/matcher behavior so `tracemap report` and `tracemap paths` agree on method lists, optional routes, dynamic reasons, same-source matches, and fan-out.
-4. Keep output model types separate so report JSON and paths JSON can evolve independently.
+2. Extract endpoint candidate/matcher behavior so `tracemap report` and `tracemap paths` agree on method lists, optional routes, dynamic reasons, same-source matches, and fan-out.
+3. Extract dependency surface row construction into a reusable service or keep a shared internal projector.
+4. Add report/paths endpoint-match parity tests before implementing BFS.
+5. Keep output model types separate so report JSON and paths JSON can evolve independently.
 
 ## Limitations Text
 
@@ -401,10 +479,10 @@ Path reports must include these limitations:
 - SQL/query surfaces do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.
 - Reduced coverage means path absence is not evidence of absence.
 
-## Open Questions for Review
+## Review Decisions
 
-- Should `paths` default to endpoint-to-surface queries, or require an explicit selector for the first implementation?
-- Should reverse traversal be supported in MVP for `--to-symbol` and `--to-surface` queries?
-- Should path reports reuse `CombinedDependencyReportDocument` source rows directly or introduce a narrower source row?
-- Should `SameFileFallback` be included in MVP or deferred to avoid noisy paths?
-- Should path JSON include an inventory of all graph nodes/edges, or only nodes/edges participating in returned paths plus gap evidence?
+- Default query: endpoint-matched pairs to terminal surfaces with `maxDepth = 8`, `maxPaths = 100`, and `maxFrontier = 10000`.
+- Reverse traversal: deferred.
+- Source rows: use a narrower paths source row or shared source inventory model, not `CombinedDependencyReportDocument`.
+- Same-file fallback: deferred.
+- JSON inventory: include counts plus nodes/edges participating in returned paths and gap evidence, not the full graph.
