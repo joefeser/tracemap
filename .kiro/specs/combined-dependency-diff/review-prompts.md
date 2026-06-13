@@ -30,7 +30,9 @@ Focus on:
 7. Whether evidence/rule ID requirements are strong enough.
 8. Whether Markdown and JSON contracts are useful for humans and automation.
 9. Whether safety rules prevent leaking raw SQL, URLs, config values, source snippets, local absolute paths, or private repo names.
-10. Whether implementation tasks are ordered for a reviewable PR.
+10. Whether source identity mismatch behavior is strict enough for multi-repo diffs.
+11. Whether path diffing has a deterministic default start set and safe truncation behavior.
+12. Whether implementation tasks are ordered for a reviewable PR.
 
 Please return:
 - Blocking issues.
@@ -55,6 +57,9 @@ Look for:
 - Performance traps, especially around --include-paths.
 - Output contract fields that will be hard to keep stable.
 - Places where coverage semantics could produce incorrect classifications.
+- Missing source identity checks or cases where `--allow-identity-mismatch` could hide bad comparisons.
+- Missing engine-level row caps or unstable JSON ordering.
+- Missing shared-helper/path-query extraction tasks.
 
 Please be concrete. Reference the exact requirement, design section, or task bullet that needs changes.
 ```
@@ -75,6 +80,9 @@ Find likely bugs before implementation:
 - JSON instability from timestamps, dictionary ordering, or unordered sets.
 - Markdown injection or broken tables.
 - Large graph/path explosions.
+- Unsafe `SafeMetadata` keys leaking raw values.
+- `--scope paths` behavior when `--include-paths` is omitted.
+- Source label matches that compare unrelated repositories.
 
 Return issues ordered by severity with suggested spec edits.
 ```
@@ -85,8 +93,12 @@ Return issues ordered by severity with suggested spec edits.
 - [ ] Does every diff claim require a diff rule ID and source evidence rule IDs where available?
 - [ ] Are reduced coverage and unknown commit SHAs handled without overclaiming?
 - [ ] Are source pairing rules exact and deterministic?
+- [ ] Do source identity conflicts fail by default?
 - [ ] Are endpoint, surface, edge, and path identity keys stable enough?
 - [ ] Is path diffing explicitly opt-in?
+- [ ] Does path diffing define a default start set and cap behavior?
+- [ ] Is `SafeMetadata` allowlisted and deterministically ordered?
+- [ ] Are row caps and `--exit-code` semantics documented?
 - [ ] Are outputs byte-stable?
 - [ ] Are unsafe values excluded by default?
 - [ ] Are CLI outputs and file/directory behavior specified?
