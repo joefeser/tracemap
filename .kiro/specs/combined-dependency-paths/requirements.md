@@ -92,7 +92,7 @@ paths-report.json
 6. WHEN `--source-pair <client>:<server>` is provided THEN TraceMap SHALL constrain endpoint alignment starts to that source pair; the parser SHALL split on the first unescaped colon and SHALL allow literal colons in either label when escaped as `\:`.
 7. WHEN `--to-endpoint`, `--to-source`, or `--to-symbol` is requested in v1 THEN the command SHALL fail with a clear unsupported-selector message rather than attempting reverse traversal.
 8. WHEN `calls`, `creates`, `inherits`, `implements`, `overrides`, `argument-passed`, `parameter-forward`, `fact-attached-to-symbol`, or `surface-evidence` terms are requested as `--to-surface` values THEN the command SHALL reject them as edge kinds, not terminal surfaces.
-9. WHEN symbol selectors match by display name THEN matching SHALL be scoped to a single source index unless the user also provides an explicit `--from-source` filter.
+9. WHEN symbol selectors match by display name across multiple source indexes THEN TraceMap SHALL keep deterministic per-source candidates, report the candidate count, and SHALL NOT merge symbols across sources; `--from-source` narrows the candidate set to matching source labels when provided.
 10. WHEN multiple selectors are provided THEN TraceMap SHALL combine them as filters, not as separate independent reports, unless a future `--batch` mode is added.
 11. WHEN a selector matches multiple evidence nodes THEN TraceMap SHALL include deterministic top-N results and state how many candidates were matched.
 12. WHEN a selector matches nothing THEN TraceMap SHALL emit a valid report with zero paths and a `SelectorNoMatch` gap.
