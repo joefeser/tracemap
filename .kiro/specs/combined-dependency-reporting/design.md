@@ -371,21 +371,31 @@ Endpoint finding rows must include:
 - `normalizedPathKey`
 - `clientSourceIndexId`
 - `clientSourceLabel`
-- `serverSourceIndexId`
-- `serverSourceLabel`
+- `clientScanId`
+- `clientCommitSha`
 - `clientCombinedFactId`
-- `serverCombinedFactId`
 - `clientOriginalFactId`
-- `serverOriginalFactId`
+- `clientRuleId`
+- `clientEvidenceTier`
 - `clientFilePath`
 - `clientStartLine`
+- `clientEndLine`
+- `serverSourceIndexId`
+- `serverSourceLabel`
+- `serverScanId`
+- `serverCommitSha`
+- `serverCombinedFactId`
+- `serverOriginalFactId`
+- `serverRuleId`
+- `serverEvidenceTier`
 - `serverFilePath`
 - `serverStartLine`
+- `serverEndLine`
 - `staticMatchQuality`
 - `sameSource`
 - `notes`
 
-Use `null` for absent one-sided values.
+Use `null` for absent one-sided values. These side-specific fields intentionally repeat the common provenance fields so `endpointFindings` can stand alone as a machine-readable audit trail.
 
 ## Evidence Boundaries
 
