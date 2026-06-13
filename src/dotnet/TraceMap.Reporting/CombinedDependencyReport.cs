@@ -17,7 +17,6 @@ public sealed record CombinedDependencyReportResult(
 
 public sealed record CombinedDependencyReportDocument(
     string Version,
-    DateTimeOffset GeneratedAt,
     string ReportCoverage,
     IReadOnlyList<string> CoverageWarnings,
     IReadOnlyList<CombinedReportSource> Sources,
@@ -236,7 +235,12 @@ public static class CombinedDependencyReporter
         }
 
         var format = NormalizeFormat(options.Format);
-        await using var connection = new SqliteConnection($"Data Source={options.IndexPath}");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = options.IndexPath,
+            Mode = SqliteOpenMode.ReadOnly
+        }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
         await ValidateCombinedIndexAsync(connection, cancellationToken);
 
@@ -249,7 +253,6 @@ public static class CombinedDependencyReporter
             .ToArray();
         var report = new CombinedDependencyReportDocument(
             Version,
-            DateTimeOffset.UtcNow,
             warnings.Length == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
             warnings,
             read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
@@ -615,12 +618,21 @@ public static class CombinedDependencyReporter
         var isClient = fact.FactType == FactTypes.HttpCallDetected || HasAny(fact.Properties, "clientFramework", "urlKind", "dynamicReason");
         var isServer = fact.FactType == FactTypes.HttpRouteBinding || HasAny(fact.Properties, "controllerName", "actionName", "routeTemplates");
         var method = FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName") ?? fact.TargetSymbol ?? "ANY";
-        var key = FirstValue(fact.Properties, "normalizedPathKey");
-        var template = FirstValue(fact.Properties, "normalizedPathTemplate", "routeTemplate", "path");
-        var expanded = SplitList(FirstValue(fact.Properties, "expandedPathKeys", "expandedRouteKeys"));
-        if (!string.IsNullOrWhiteSpace(key) && !expanded.Contains(key, StringComparer.Ordinal))
+        var normalized = TryNormalizeEndpoint(fact.Properties);
+        var key = FirstValue(fact.Properties, "normalizedPathKey") ?? normalized?.PathKey;
+        var template = FirstValue(fact.Properties, "normalizedPathTemplate", "routeTemplate", "path") ?? normalized?.PathTemplate;
+        var expanded = new SortedSet<string>(SplitList(FirstValue(fact.Properties, "expandedPathKeys", "expandedRouteKeys")), StringComparer.Ordinal);
+        if (normalized is not null)
         {
-            expanded = [.. expanded, key];
+            foreach (var expandedKey in EndpointRouteNormalizer.ExpandOptionalPathKeys(normalized))
+            {
+                expanded.Add(expandedKey);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(key))
+        {
+            expanded.Add(key);
         }
 
         var urlKind = FirstValue(fact.Properties, "urlKind");
@@ -630,7 +642,7 @@ public static class CombinedDependencyReporter
             method.ToUpperInvariant(),
             template,
             key,
-            expanded,
+            expanded.ToArray(),
             string.Equals(urlKind, "dynamic", StringComparison.OrdinalIgnoreCase) || !string.IsNullOrWhiteSpace(dynamicReason),
             dynamicReason,
             isClient,
@@ -822,7 +834,12 @@ public static class CombinedDependencyReporter
             return (markdownPath, jsonPath);
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        var directoryName = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrWhiteSpace(directoryName))
+        {
+            Directory.CreateDirectory(directoryName);
+        }
+
         if (format == "json")
         {
             await File.WriteAllTextAsync(fullPath, JsonSerializer.Serialize(report, JsonOptions) + Environment.NewLine, cancellationToken);
@@ -976,7 +993,7 @@ public static class CombinedDependencyReporter
         try
         {
             var manifest = JsonSerializer.Deserialize<ScanManifest>(manifestJson, JsonOptions);
-            if (manifest is null || manifest.KnownGaps.Count == 0)
+            if (manifest?.KnownGaps is null || manifest.KnownGaps.Count == 0)
             {
                 return [];
             }
@@ -1083,25 +1100,82 @@ public static class CombinedDependencyReporter
 
     private static bool MethodsCompatible(string clientMethod, string serverMethod)
     {
-        return serverMethod == "ANY" || clientMethod == serverMethod;
+        var clientMethods = SplitMethods(clientMethod);
+        var serverMethods = SplitMethods(serverMethod);
+        return clientMethods.Contains("ANY", StringComparer.Ordinal)
+            || serverMethods.Contains("ANY", StringComparer.Ordinal)
+            || clientMethods.Intersect(serverMethods, StringComparer.Ordinal).Any();
+    }
+
+    private static IReadOnlyList<string> SplitMethods(string? value)
+    {
+        var methods = SplitList(value)
+            .Select(method => method.ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(method => method, StringComparer.Ordinal)
+            .ToArray();
+        return methods.Length == 0 ? ["ANY"] : methods;
+    }
+
+    private static NormalizedEndpointRoute? TryNormalizeEndpoint(IReadOnlyDictionary<string, string> properties)
+    {
+        var normalizedTemplate = FirstValue(properties, "normalizedPathTemplate");
+        if (!string.IsNullOrWhiteSpace(normalizedTemplate))
+        {
+            return EndpointRouteNormalizer.Normalize(normalizedTemplate);
+        }
+
+        var route = FirstValue(properties, "routeTemplate", "routePattern", "routeTemplates", "path", "urlPath");
+        if (string.IsNullOrWhiteSpace(route))
+        {
+            return null;
+        }
+
+        return EndpointRouteNormalizer.Normalize(
+            CombineRouteTemplates(route),
+            FirstValue(properties, "basePathPrefix"),
+            RouteTokens(properties));
+    }
+
+    private static string CombineRouteTemplates(string route)
+    {
+        var templates = route
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+        return templates.Length == 0 ? route : string.Join("/", templates.Select(template => template.Trim('/')));
+    }
+
+    private static IReadOnlyDictionary<string, string> RouteTokens(IReadOnlyDictionary<string, string> properties)
+    {
+        var controller = FirstValue(properties, "controllerName", "controller", "containingType", "targetContainingType");
+        if (string.IsNullOrWhiteSpace(controller))
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var name = controller.Split('.').Last().Trim();
+        if (name.EndsWith("Controller", StringComparison.OrdinalIgnoreCase))
+        {
+            name = name[..^"Controller".Length];
+        }
+
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["controller"] = name };
     }
 
     private static string SanitizedDynamicReason(EndpointCandidate candidate)
     {
         var reason = string.IsNullOrWhiteSpace(candidate.DynamicReason) ? "Unknown" : candidate.DynamicReason.Trim();
-        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        reason = reason switch
         {
-            "TemplateExpressionNotResolvable",
-            "VariableConcatenation",
-            "HelperFunctionCall",
-            "IndirectReceiver",
-            "ComplexExpression",
-            "Unknown"
+            "TemplateExpressionNotResolvable"
+                or "VariableConcatenation"
+                or "HelperFunctionCall"
+                or "IndirectReceiver"
+                or "ComplexExpression"
+                or "Unknown" => reason,
+            _ => "Unknown"
         };
-        if (!allowed.Contains(reason))
-        {
-            reason = "Unknown";
-        }
 
         return $"Client URL dynamic reason: {reason}.";
     }
