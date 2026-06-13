@@ -28,6 +28,9 @@ dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
 npm run check --prefix src/typescript
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-python-venv
+/tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]"
+/tmp/tracemap-python-venv/bin/python -m pytest src/python/tests
 ./scripts/check-private-paths.sh
 ```
 
@@ -55,6 +58,9 @@ The script uses exact commit SHAs so results are comparable over time.
 | `scip-java` | JVM | `https://github.com/sourcegraph/scip-java.git` | `825463cb15d540d45c680593aad1f634330435cf` | usually `Level1SemanticAnalysisReduced` |
 | `spring-petclinic` | JVM | `https://github.com/spring-projects/spring-petclinic.git` | `a2c2ef994340d3970eb6db51247456a51bb161f8` | usually `Level1SemanticAnalysisReduced` |
 | `okio` | JVM/Kotlin | `https://github.com/square/okio.git` | `cad7ff1057307142149b1a28dfcb49117e89b0d3` | usually reduced or syntax fallback for Kotlin-heavy areas |
+| `full-stack-fastapi-template` | Python | `https://github.com/fastapi/full-stack-fastapi-template.git` | `1c1175eb5045e6e8fca3bcbc4134630f3ae640ba` | `Level1SemanticAnalysisReduced` |
+| `microblog` | Python | `https://github.com/miguelgrinberg/microblog.git` | `a975ef64864354867c88e0ed3a17ba7d17dca752` | `Level1SemanticAnalysisReduced` |
+| `sqlalchemy` | Python | `https://github.com/sqlalchemy/sqlalchemy.git` | `bfe559a7e4d69e5699c390ac9cafd2a5a2d38078` | `Level1SemanticAnalysisReduced` |
 
 Reduced coverage is acceptable for OSS smoke when project/dependency/classpath gaps are recorded as `AnalysisGap` facts. A successful smoke means the scan completes, artifacts exist, the manifest is honest about coverage, and important relationship tables can be queried.
 
@@ -94,9 +100,9 @@ SQL should be treated as a first-class cross-language data dependency surface, n
 
 SQL validation should therefore plug into every app-language adapter, because C#, TypeScript, JVM, and Python can all emit SQL evidence.
 
-## Next Language Candidate
+## Python Adapter
 
-Python is the next recommended app-language adapter. Useful early fixtures should cover:
+Python validation fixtures should cover:
 
 - FastAPI routes and Pydantic DTOs
 - Flask routes where syntax can prove them
@@ -105,6 +111,32 @@ Python is the next recommended app-language adapter. Useful early fixtures shoul
 - environment/config reads
 - requests/httpx client calls
 
-Python should follow the same matrix: modern sample, broken sample, reducer fixture, relationship tables, integration facts, public OSS smoke, and private-path guard.
+Python follows the same matrix: modern sample, broken sample, reducer fixture, relationship tables, integration facts, public OSS smoke, and private-path guard.
 
 Python MVP no-match reducer outcomes are expected to be `NoEvidenceReducedCoverage` because MVP scans use reduced AST/package/config coverage, not full type-checker semantic coverage.
+
+## Python Smoke Expectations
+
+The Python FastAPI sample is the minimum high-signal fixture. It should produce:
+
+- `Level1SemanticAnalysisReduced`
+- `buildStatus = "FailedOrPartial"`
+- route facts for FastAPI/Flask decorators when static decorator syntax is visible
+- serializer contract member facts for Pydantic and dataclass-like DTO fields
+- SQLAlchemy column mapping facts for declarative mapped columns
+- SQL file and direct SQL literal facts with hashed SQL text
+- config key facts for config module assignments and static `os.getenv` or `os.environ[...]` reads
+- HTTP client facts for `requests` and `httpx` static URL calls
+- shared SQLite rows for `call_edges`, `object_creations`, `argument_flows`, `symbol_relationships`, and `symbols`
+- a reducer `ProbableImpact` or stronger structural finding for `OrderResponse.status`
+
+Example query set:
+
+```bash
+sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts group by fact_type order by fact_type;"
+sqlite3 <out>/index.sqlite "select count(*) from call_edges;"
+sqlite3 <out>/index.sqlite "select count(*) from object_creations;"
+sqlite3 <out>/index.sqlite "select count(*) from argument_flows;"
+sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='HttpRouteBinding';"
+sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='DatabaseColumnMapping';"
+```

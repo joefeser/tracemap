@@ -8,6 +8,7 @@ DOTNET_CLI="${ROOT_DIR}/src/dotnet/TraceMap.Cli"
 TS_CLI="${ROOT_DIR}/src/typescript/dist/src/cli.js"
 JVM_CLI="${ROOT_DIR}/src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm"
 JDK21_HOME="${JAVA_HOME:-"/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"}"
+PYTHON_BIN="${TRACEMAP_PYTHON:-python3}"
 
 mkdir -p "$CACHE_ROOT" "$OUT_ROOT"
 
@@ -15,6 +16,7 @@ if [[ "${TRACEMAP_SKIP_BUILD:-0}" != "1" ]]; then
   dotnet build "$ROOT_DIR/src/dotnet/TraceMap.sln"
   npm run check --prefix "$ROOT_DIR/src/typescript"
   JAVA_HOME="$JDK21_HOME" gradle -p "$ROOT_DIR/src/jvm" installDist
+  "$PYTHON_BIN" -m py_compile "$ROOT_DIR"/src/python/tracemap_py/*.py
 fi
 
 clone_checkout() {
@@ -133,6 +135,24 @@ scan_jvm() {
   print_summary "$label" "$out"
 }
 
+scan_python() {
+  local label="$1"
+  local url="$2"
+  local sha="$3"
+  local scan_subdir="${4:-"."}"
+  local repo
+  repo="$(clone_checkout "$label" "$url" "$sha")"
+  local scan_root="$repo"
+  if [[ "$scan_subdir" != "." ]]; then
+    scan_root="$repo/$scan_subdir"
+  fi
+  local out="$OUT_ROOT/$label"
+  rm -rf "$out"
+  PYTHONPATH="$ROOT_DIR/src/python" "$PYTHON_BIN" -m tracemap_py.cli scan --repo "$scan_root" --out "$out"
+  require_artifacts "$out"
+  print_summary "$label" "$out"
+}
+
 printf 'TraceMap OSS smoke cache: %s\n' "$CACHE_ROOT"
 printf 'TraceMap OSS smoke output: %s\n' "$OUT_ROOT"
 
@@ -142,5 +162,8 @@ scan_typescript "scip-typescript" "https://github.com/sourcegraph/scip-typescrip
 scan_jvm "scip-java" "https://github.com/sourcegraph/scip-java.git" "825463cb15d540d45c680593aad1f634330435cf"
 scan_jvm "spring-petclinic" "https://github.com/spring-projects/spring-petclinic.git" "a2c2ef994340d3970eb6db51247456a51bb161f8"
 scan_jvm "okio" "https://github.com/square/okio.git" "cad7ff1057307142149b1a28dfcb49117e89b0d3"
+scan_python "full-stack-fastapi-template" "https://github.com/fastapi/full-stack-fastapi-template.git" "1c1175eb5045e6e8fca3bcbc4134630f3ae640ba" "backend"
+scan_python "microblog" "https://github.com/miguelgrinberg/microblog.git" "a975ef64864354867c88e0ed3a17ba7d17dca752"
+scan_python "sqlalchemy" "https://github.com/sqlalchemy/sqlalchemy.git" "bfe559a7e4d69e5699c390ac9cafd2a5a2d38078"
 
 printf '\nOSS smoke complete: %s\n' "$OUT_ROOT"
