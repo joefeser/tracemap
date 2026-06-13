@@ -184,8 +184,15 @@ public static class CombinedDependencyPathReporter
 
     public static async Task<CombinedDependencyPathResult> WriteAsync(CombinedDependencyPathOptions options, CancellationToken cancellationToken = default)
     {
-        ValidateOptions(options);
+        var report = await BuildReportAsync(options, cancellationToken);
         var format = NormalizeFormat(options.Format);
+        var (markdownPath, jsonPath) = await WriteOutputsAsync(options.OutputPath, format, report, cancellationToken);
+        return new CombinedDependencyPathResult(report, markdownPath, jsonPath);
+    }
+
+    public static async Task<CombinedDependencyPathReport> BuildReportAsync(CombinedDependencyPathOptions options, CancellationToken cancellationToken = default)
+    {
+        ValidateOptions(options);
         var sourcePair = ParseSourcePair(options.SourcePair);
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -200,9 +207,7 @@ public static class CombinedDependencyPathReporter
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts);
         var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair);
-        var report = BuildReport(options, read, graph, sourcePair);
-        var (markdownPath, jsonPath) = await WriteOutputsAsync(options.OutputPath, format, report, cancellationToken);
-        return new CombinedDependencyPathResult(report, markdownPath, jsonPath);
+        return BuildReport(options, read, graph, sourcePair);
     }
 
     private static void ValidateOptions(CombinedDependencyPathOptions options)
