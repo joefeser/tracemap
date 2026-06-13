@@ -7,7 +7,7 @@ TraceMap can combine multiple language indexes and produce a combined dependency
 The goal is to answer review questions like:
 
 - Which discovered client calls can be connected to backend route evidence?
-- Once a backend route is found, what static call, creation, parameter-forwarding, SQL, config, package, or external dependency evidence sits behind it?
+- Once a backend route is found, what static call, creation, parameter-forwarding, SQL, config, package, or outbound dependency evidence sits behind it?
 - Which dependency surfaces are reachable from a known symbol or endpoint according to static evidence?
 - Where does the evidence stop because a language adapter, framework pattern, dynamic dispatch, or reduced scan coverage prevents a credible path?
 
@@ -17,7 +17,7 @@ This is still static analysis. A path means TraceMap found connected static evid
 
 - `tracemap combine` writes combined source, fact, symbol, relationship, call, object creation, argument flow, alias, parameter-forwarding, and dependency-edge data.
 - `tracemap report` summarizes endpoint alignment, dependency surfaces, dependency edges, known gaps, and limitations over a combined index.
-- There is not yet a command that traverses the combined evidence graph from an endpoint, symbol, source, or surface to downstream dependencies.
+- There is not yet a command that traverses the combined evidence graph from an endpoint, symbol, or source to downstream dependency surfaces.
 - `combined_dependency_edges` gives a useful summary view, but endpoint-to-symbol and symbol-to-surface joins need deterministic linking rules.
 
 ## MVP Scope Decisions
@@ -27,12 +27,13 @@ This is still static analysis. A path means TraceMap found connected static evid
 - MVP output is Markdown by default, JSON with `--format json`, and both files for directory output.
 - MVP is read-only. It does not write derived path rows back to the combined database.
 - MVP builds an in-memory graph from existing combined tables and facts.
-- MVP supports bounded forward path search from endpoints, symbols, sources, and terminal dependency surfaces.
+- MVP supports bounded forward path search from endpoints, symbols, and sources to terminal dependency surfaces.
 - MVP uses one shared endpoint matcher with `tracemap report`; it must not add a third endpoint alignment implementation. The existing `endpoint_matches` table is reserved and remains unused/read-only in this slice.
 - MVP does not support reverse traversal, `--to-endpoint`, `--to-symbol`, or `--to-source`.
 - MVP treats `EndpointMatch` as the only cross-source graph edge. Symbol-name joins are source-local only.
 - MVP default query starts from matched endpoint pairs only. Unmatched server routes are not default start nodes until a future selector mode asks for route-only path exploration.
 - MVP treats endpoint facts as start/intermediate nodes by default, not terminal surfaces; `http-route` and `http-client` terminal surfaces only match non-start HTTP dependency evidence reached after at least one non-endpoint traversal edge.
+- MVP terminal surfaces are `sql-query`, `http-route`, `http-client`, and `package-config`; `external` is deferred until explicit fact/property rules exist.
 - MVP favors high-confidence paths and explicitly emits `PathGap` rows when evidence is missing.
 - MVP does not require scanner changes, but it may add small helper APIs to reuse combined report readers/matchers.
 - MVP does not implement a UI, HTML graph viewer, graph database, LLM ranking, embeddings, runtime tracing, or whole-program taint analysis.
@@ -86,11 +87,11 @@ paths-report.json
 1. WHEN `--from-endpoint "<METHOD> <PATH_KEY>"` is provided THEN TraceMap SHALL start from matching HTTP client calls and server route facts using normalized path keys.
 2. WHEN `--from-symbol <symbol>` is provided THEN TraceMap SHALL start from matching symbol IDs, display names, fully qualified names, source symbols, or target symbols using the source-local symbol key rules.
 3. WHEN `--from-source <label>` is provided THEN TraceMap SHALL start from facts and edges belonging to matching source labels.
-4. WHEN `--to-surface <kind>` is provided THEN TraceMap SHALL find paths ending at terminal dependency surfaces of that kind, limited to `sql-query`, `http-route`, `http-client`, `package-config`, or `external`.
+4. WHEN `--to-surface <kind>` is provided THEN TraceMap SHALL find paths ending at terminal dependency surfaces of that kind, limited to `sql-query`, `http-route`, `http-client`, or `package-config`.
 5. WHEN `--surface-name <text>` is provided with `--to-surface` THEN TraceMap SHALL filter surface display names, package names, config keys, table names, or normalized path keys with case-insensitive exact matching by default; `*` MAY be used as a leading/trailing wildcard for prefix, suffix, or contains matching.
-6. WHEN `--source-pair <client>:<server>` is provided THEN TraceMap SHALL constrain endpoint alignment starts to that source pair; the parser SHALL split on the last colon so labels can contain colons.
+6. WHEN `--source-pair <client>:<server>` is provided THEN TraceMap SHALL constrain endpoint alignment starts to that source pair; the parser SHALL split on the first unescaped colon and SHALL allow literal colons in either label when escaped as `\:`.
 7. WHEN `--to-endpoint`, `--to-source`, or `--to-symbol` is requested in v1 THEN the command SHALL fail with a clear unsupported-selector message rather than attempting reverse traversal.
-8. WHEN `call`, `create`, `relationship`, or `parameter-forward` terms are requested as `--to-surface` values THEN the command SHALL reject them as edge kinds, not terminal surfaces.
+8. WHEN `calls`, `creates`, `inherits`, `implements`, `overrides`, `argument-passed`, `parameter-forward`, `fact-attached-to-symbol`, or `surface-evidence` terms are requested as `--to-surface` values THEN the command SHALL reject them as edge kinds, not terminal surfaces.
 9. WHEN symbol selectors match by display name THEN matching SHALL be scoped to a single source index unless the user also provides an explicit `--from-source` filter.
 10. WHEN multiple selectors are provided THEN TraceMap SHALL combine them as filters, not as separate independent reports, unless a future `--batch` mode is added.
 11. WHEN a selector matches multiple evidence nodes THEN TraceMap SHALL include deterministic top-N results and state how many candidates were matched.
@@ -111,8 +112,8 @@ paths-report.json
 6. WHEN `combined_dependency_edges` rows are loaded THEN each row SHALL become an edge between source-local symbol nodes where deterministic symbol keys can be resolved.
 7. WHEN `combined_call_edges`, `combined_object_creations`, `combined_symbol_relationships`, and `combined_parameter_forward_edges` provide more precise source/target IDs than the summary view THEN the graph builder SHOULD prefer the precise table while keeping the summary view as fallback.
 8. WHEN the graph crosses from one source index to another THEN it SHALL do so only through a derived `EndpointMatch` edge in MVP.
-9. WHEN dependency surface facts are loaded THEN SQL, config, package, HTTP, and external dependency evidence SHALL become terminal `Surface` nodes.
-10. WHEN a fact can be attached to a symbol by `combined_fact_symbols`, source/target symbol fields, method symbol fields, or containing type metadata THEN the graph SHALL connect the symbol node to the surface node with a rule-backed `SurfaceEvidence` edge.
+9. WHEN dependency surface facts are loaded THEN SQL, config, package, and HTTP dependency evidence SHALL become terminal `Surface` nodes.
+10. WHEN a fact can be attached to a symbol by `combined_fact_symbols`, source/target symbol fields, method symbol fields, or containing type metadata THEN the graph SHALL connect the symbol node to the surface node with a rule-backed `surface-evidence` edge.
 11. WHEN no credible symbol-to-surface link exists THEN the surface SHALL remain discoverable by source and file path, but path reports SHALL mark the missing link as a gap rather than inventing a path.
 12. WHEN multiple facts describe the same logical node THEN the graph MAY deduplicate by stable ID only if all provenance is retained in evidence rows.
 13. WHEN a path uses a derived edge THEN the edge SHALL name the derived rule or algorithm ID and all supporting source fact IDs.
@@ -124,17 +125,18 @@ paths-report.json
 #### Acceptance Criteria
 
 1. WHEN path search runs THEN it SHALL use deterministic breadth-first search or another documented deterministic algorithm.
-2. WHEN multiple paths are available THEN TraceMap SHALL sort by confidence, path length, source label, display name, file path, line, and stable ID.
+2. WHEN multiple paths are available THEN TraceMap SHALL sort by classification rank, path length, source label, display name, file path, line, and stable ID.
 3. WHEN `--max-depth <n>` is omitted THEN the command SHALL default to `8`, a conservative depth that can connect endpoint-to-controller-to-service-to-repository-to-surface paths.
 4. WHEN `--max-paths <n>` is omitted THEN the command SHALL default to a bounded count such as 100 paths.
-5. WHEN a graph has cycles THEN the search SHALL avoid infinite traversal and SHALL record whether paths were truncated by cycle, depth, path, or frontier-size limits.
-6. WHEN a route endpoint is matched to a server method symbol THEN traversal SHALL continue through static call edges, object creations, parameter-forwarding edges, and symbol relationships where evidence exists.
-7. WHEN a client endpoint is matched to a server route through endpoint alignment THEN traversal MAY cross source indexes only through that derived endpoint edge.
-8. WHEN no endpoint alignment exists and any contributing source has reduced coverage, known gaps, failed/partial build status, unknown commit SHA, or analysis gaps THEN the command SHALL emit `UnknownAnalysisGap` rather than `NoPathFound`.
-9. WHEN selectors match but no path exists and every contributing source has full credible coverage THEN the command SHALL emit `NoPathFound`.
-10. WHEN reduced coverage exists THEN path absence SHALL be labeled coverage-relative and SHALL NOT be described as proof that no dependency exists.
-11. WHEN a path crosses languages or source indexes THEN every crossing SHALL include source labels, scan IDs, commit SHAs, rule IDs, evidence tiers, and file spans.
-12. WHEN path search reaches a terminal surface THEN the path SHALL stop unless the user opts into deeper expansion in a future command.
+5. WHEN `--max-frontier <n>` is omitted THEN the command SHALL default to `10000` queued path states.
+6. WHEN a graph has cycles THEN the search SHALL avoid infinite traversal and SHALL record whether paths were truncated by cycle, depth, path, or frontier-size limits.
+7. WHEN a route endpoint is matched to a server method symbol THEN traversal SHALL continue through static call edges, object creations, parameter-forwarding edges, and symbol relationships where evidence exists.
+8. WHEN a client endpoint is matched to a server route through endpoint alignment THEN traversal MAY cross source indexes only through that derived endpoint edge.
+9. WHEN no path is found and any contributing source has reduced coverage, known gaps, failed/partial build status, unknown commit SHA, or analysis gaps THEN the command SHALL emit `UnknownAnalysisGap` rather than `NoPathFound`.
+10. WHEN selectors match but no path exists and every contributing source has full credible coverage THEN the command SHALL emit `NoPathFound`.
+11. WHEN reduced coverage exists THEN path absence SHALL be labeled coverage-relative and SHALL NOT be described as proof that no dependency exists.
+12. WHEN a path crosses languages or source indexes THEN every crossing SHALL include source labels, scan IDs, commit SHAs, rule IDs, evidence tiers, and file spans.
+13. WHEN path search reaches a terminal surface THEN the path SHALL stop unless the user opts into deeper expansion in a future command.
 
 ### Requirement 5: Path Classifications
 
@@ -152,7 +154,7 @@ paths-report.json
 8. WHEN path search stops because of depth, row, cycle, frontier, or result caps THEN the report SHALL include `TruncatedByLimit` gaps.
 9. WHEN dynamic URL, reflection, dynamic dispatch, DI, serializer, or runtime route gaps are visible THEN the report SHALL include `NeedsReview` or `UnknownAnalysisGap` rows tied to the supporting facts.
 10. WHEN confidence is emitted THEN it SHALL be derived from classification using the fixed mapping `StrongStaticPath = High`, `ProbableStaticPath = Medium`, `NeedsReviewPath = Low`, `UnknownAnalysisGap = Low`, `NoPathFound = Low`, and `SelectorNoMatch = Low`.
-11. WHEN paths are sorted THEN classification rank SHALL be `UnknownAnalysisGap`, `NeedsReviewPath`, `ProbableStaticPath`, `StrongStaticPath`, `NoPathFound`, `SelectorNoMatch`, followed by path length and stable evidence fields.
+11. WHEN paths are sorted THEN classification rank SHALL be `StrongStaticPath`, `ProbableStaticPath`, `NeedsReviewPath`, `UnknownAnalysisGap`, `NoPathFound`, `SelectorNoMatch`, followed by path length and stable evidence fields.
 
 ### Requirement 6: Markdown Report
 
@@ -226,8 +228,8 @@ paths-report.json
 16. WHEN precise edge tables are missing optional rows but the dependency view has fallback rows THEN tests SHALL prove documented fallback behavior.
 17. WHEN `--surface-name` uses exact and wildcard matching THEN tests SHALL prove the documented matching semantics.
 18. WHEN a large graph exceeds the frontier cap THEN tests SHALL prove the command terminates and emits `TruncatedByLimit`.
-19. WHEN `call`, `create`, `relationship`, or `parameter-forward` are passed to `--to-surface` THEN tests SHALL prove they are rejected as edge kinds.
-20. WHEN `--source-pair` is parsed with labels containing colons THEN tests SHALL prove splitting uses the last colon.
+19. WHEN edge kinds such as `calls`, `creates`, `inherits`, `implements`, `overrides`, `argument-passed`, `parameter-forward`, `fact-attached-to-symbol`, or `surface-evidence` are passed to `--to-surface` THEN tests SHALL prove they are rejected as edge kinds.
+20. WHEN `--source-pair` is parsed with labels containing escaped colons THEN tests SHALL prove splitting uses the first unescaped colon and unescapes `\:` in both labels.
 21. WHEN a selector matches multiple candidates THEN tests SHALL prove deterministic top-N handling and reported candidate counts.
 22. WHEN Markdown cells include `|`, line endings, `[`, `]`, `(`, or `)` THEN tests SHALL prove escaped output does not create table or link corruption.
 23. WHEN `--to-surface http-route` or `--to-surface http-client` is used THEN tests SHALL prove endpoint start nodes do not produce trivial terminal paths.
@@ -244,6 +246,7 @@ paths-report.json
 - Populating or reading persisted `endpoint_matches` after the schema and ownership model are finalized.
 - Reverse traversal and `--to-endpoint`, `--to-source`, or `--to-symbol` selectors.
 - Same-file or line-proximity surface attachment.
+- `external` terminal surfaces after explicit fact/property rules are defined.
 - Snapshot path diffing between two combined indexes.
 - More advanced SQL parsing and symbol-to-SQL attachment.
 - Framework-specific route-to-handler and DI binding evidence.

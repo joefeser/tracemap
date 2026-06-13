@@ -6,7 +6,7 @@
   - [ ] Confirm no-selector default runs endpoint-matched-pairs to terminal surfaces.
   - [ ] Confirm `--from-endpoint`, `--from-symbol`, `--from-source`, `--to-surface`, `--surface-name`, `--source-pair`, `--max-depth`, `--max-paths`, and `--max-frontier` are the MVP flags.
   - [ ] Confirm `--to-endpoint`, `--to-symbol`, `--to-source`, and reverse traversal are deferred.
-  - [ ] Confirm terminal surfaces are `sql-query`, `http-route`, `http-client`, `package-config`, and `external`.
+  - [ ] Confirm terminal surfaces are `sql-query`, `http-route`, `http-client`, and `package-config`.
   - [ ] Confirm endpoint start nodes are not terminal HTTP surfaces in default queries.
   - [ ] Document selector matching rules and ambiguity behavior.
   - [ ] Document that `endpoint_matches` is reserved/unused and both report and paths use one shared in-memory matcher.
@@ -54,7 +54,8 @@
   - [ ] Join raw symbol display strings only within the same source index.
   - [ ] Mark duplicate source-local display-name joins as `NeedsReviewPath`.
   - [ ] Add call, create, relationship, argument, and parameter-forward edges.
-  - [ ] Add SQL, config, package, HTTP, and external dependency surface nodes.
+  - [ ] Add SQL, config, package, and HTTP dependency surface nodes.
+  - [ ] Normalize output edge kinds to the canonical lowercase hyphenated vocabulary.
   - [ ] Map surface selector keys to node kinds and inventory keys.
   - [ ] Attach surfaces to symbols using conservative rule-backed evidence.
   - [ ] Emit `UnlinkedSurface` gaps when surfaces cannot be attached.
@@ -66,7 +67,7 @@
   - [ ] Resolve symbol selectors against symbol IDs, display names, fully qualified names, source symbols, and target symbols.
   - [ ] Resolve source selectors by label.
   - [ ] Resolve surface selectors by terminal kind and optional exact or wildcard name filter.
-  - [ ] Resolve source-pair filters by splitting on the last colon.
+  - [ ] Resolve source-pair filters by splitting on the first unescaped colon and unescaping `\:`.
   - [ ] Reject unsupported reverse selectors with clear errors.
   - [ ] Emit `SelectorNoMatch` gaps for empty selector matches.
 
@@ -74,6 +75,7 @@
   - [ ] Use bounded breadth-first search.
   - [ ] Support default `maxDepth`, `maxPaths`, and `maxFrontier`.
   - [ ] Traverse outbound edges only.
+  - [ ] Sort outgoing edges within each BFS frontier by the documented traversal edge rank.
   - [ ] Prevent infinite traversal on cycles.
   - [ ] Record `TruncatedByLimit` gaps for depth/path/cycle/frontier limits.
   - [ ] Sort paths deterministically.
@@ -116,7 +118,7 @@
   - [ ] Endpoint-to-package path.
   - [ ] Symbol-to-surface path.
   - [ ] Source pair filter.
-  - [ ] Source pair labels containing colons split on the last colon.
+  - [ ] Source pair labels containing escaped colons split on the first unescaped colon.
   - [ ] Report/paths endpoint-match parity.
   - [ ] Symbol-key determinism and same-display-name collision behavior.
   - [ ] Within-source symbol joins and cross-source boundary enforcement.
@@ -125,10 +127,12 @@
   - [ ] Schema error naming for missing required tables/views.
   - [ ] `--surface-name` exact and wildcard behavior.
   - [ ] `--surface-name` exact matches sort before wildcard matches.
-  - [ ] Edge-kind rejection for `--to-surface call/create/relationship/parameter-forward`.
+  - [ ] Edge-kind rejection for `--to-surface calls/creates/inherits/implements/overrides/argument-passed/parameter-forward/fact-attached-to-symbol/surface-evidence`.
+  - [ ] Canonical edge-kind normalization for schema values and relationship kinds.
   - [ ] Endpoint start nodes do not satisfy `http-route` or `http-client` terminal surfaces in default queries.
   - [ ] Optional endpoint matches do not classify as `StrongStaticPath`.
   - [ ] Multiple paths deterministic ordering.
+  - [ ] Relationship edge down-ranking through documented BFS frontier edge order.
   - [ ] Cycle/frontier handling and `TruncatedByLimit`.
   - [ ] Frontier cap gaps identify `frontier` as the truncation reason.
   - [ ] `SelectorNoMatch`.
