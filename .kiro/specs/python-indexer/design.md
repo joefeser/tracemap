@@ -41,6 +41,7 @@ src/
 - No full SQL parser in the Python adapter MVP.
 - No cross-module type inference in MVP.
 - No `.pyi`, `__all__`, wildcard-import, descriptor, metaclass, `@property`, cached-property, validator, computed-field, context-manager, async-generator, or cache-decorator semantics in MVP.
+- No Python reimplementation of `.NET` `tracemap reduce`, `tracemap export`, `tracemap combine`, or endpoint alignment.
 
 ## Locked Decisions
 
@@ -112,7 +113,10 @@ Implementation language should be Python 3.11+ to reuse Python `ast`, `tomllib`,
 Initial Python CLI:
 
 ```bash
+cd src/python
+python -m pip install -e .
 tracemap-py scan --repo <path> --out <path>
+tracemap reduce --index <path>/index.sqlite --contract-delta delta.json --out report.md
 ```
 
 Options:
@@ -196,6 +200,8 @@ Analysis-level policy:
 
 `buildStatus = FailedOrPartial` is the compatibility value for Python MVP reduced coverage. It means "full semantic analysis was not achieved"; it does not mean the scanner attempted and failed a Python build.
 
+`scanId` should be deterministic and mirror the existing .NET approach: derive it from stable repository identity, commit SHA, scan options, and a sorted file-inventory signature. It must not use timestamps, UUIDs, process IDs, or output paths because fact IDs include `scanId`.
+
 ## Fact Compatibility
 
 Use the existing TraceMap fact envelope:
@@ -234,6 +240,8 @@ Reducer-compatible MVP fact types:
 
 No property should store raw source text. Literal URL, SQL, config, and serializer values should become normalized route keys where safe, hashes, lengths, kinds, and spans.
 
+Synthetic Tier1 fixtures should use an explicit fixture rule ID and properties such as `isSyntheticFixture = "true"` so they cannot be confused with real Python extractor output.
+
 ## Symbol Identity
 
 Python symbol IDs should include:
@@ -257,6 +265,8 @@ External imports should use package metadata when resolvable, otherwise record t
 
 Reducer-facing `targetSymbol` values should be human dotted display symbols, such as `orders.models.OrderResponse.status`, so `Type.member` contract deltas can match. Stable internal IDs should be stored in `sourceSymbolId` and `targetSymbolId` properties and symbol tables.
 
+Facts that populate symbol/relationship/flow tables should use the role-property convention in `docs/LANGUAGE_ADAPTER_CONTRACT.md`: `{role}SymbolId`, `{role}SymbolLanguage`, `{role}SymbolKind`, and `{role}SymbolDisplayName`. Python should not invent different role names for the shared SQLite tables.
+
 ## Framework Extractors
 
 ### FastAPI
@@ -271,6 +281,8 @@ Recognize:
 
 Emit `HttpRouteBinding` with method, normalized path, handler symbol, route hash, router/app variable, and evidence tier.
 
+Tier2 requires FastAPI import/dependency evidence plus a route-shaped decorator or app/router construction. Route-shaped decorators without evidence are Tier3. Same-module literal `APIRouter(prefix=...)` can be combined into `normalizedPathKey`; unresolved `include_router` should emit a gap rather than a merged path.
+
 ### Flask
 
 Recognize:
@@ -283,6 +295,8 @@ Recognize:
 
 Emit `HttpRouteBinding` and avoid claiming runtime blueprint registration unless `register_blueprint` is statically visible in a same-module literal pattern.
 
+Tier2 requires Flask import/dependency evidence plus same-module app or blueprint evidence. Runtime blueprint registration outside the module is a gap.
+
 ### Pydantic and Dataclasses
 
 Recognize:
@@ -293,6 +307,8 @@ Recognize:
 - standard-library `@dataclass`
 
 Emit `TypeDeclared`, `FieldDeclared`, and `SerializerContractMember` where field names are statically visible. Do not claim runtime validators, computed fields, descriptors, or post-init mutation.
+
+Pydantic v2 `Annotated[T, Field(...)]` is MVP-supported only for the direct `Annotated[T, Field(...)]` pattern. Arbitrary `Annotated` metadata is not expanded. Dataclass Tier2 requires a visible standard-library `dataclasses` import or fully qualified `dataclasses.dataclass` decorator.
 
 ### SQLAlchemy and SQL
 
@@ -305,7 +321,7 @@ Recognize:
 - DB-API cursor/connection `.execute*`
 - SQL files and migration files
 
-Emit `DatabaseColumnMapping` only for literal declarative column-to-attribute declarations. Emit `SqlTextUsed` for direct SQL literals. Emit query boundary facts for ORM expression builders, filters, relationship strings, and dynamic SQL; do not infer runtime table/column usage from those patterns.
+Emit `DatabaseColumnMapping` only for literal declarative column-to-attribute declarations with SQLAlchemy import evidence and a recognized declarative base. SQLAlchemy 1.x `Column(...)` and 2.0 `Mapped[...]`/`mapped_column(...)` are in scope. Emit `tableName` only when `__tablename__` is a literal string. ForeignKey string targets should be hashed reference evidence, not resolved table names. Emit `SqlTextUsed` for direct SQL literals. Emit `AnalysisGap` boundary facts for ORM expression builders, filters, relationship strings, and dynamic SQL; do not infer runtime table/column usage from those patterns.
 
 ### HTTP Clients
 
@@ -315,7 +331,7 @@ Recognize:
 - `requests.request(method, url, ...)`
 - `httpx.get/post/...`, `httpx.Client`, `httpx.AsyncClient`
 
-Emit `HttpCallDetected` with method/path when literal or static-enough. Dynamic URLs become boundary evidence, not guessed endpoints.
+Emit `HttpCallDetected` with method/path when literal or static-enough and import/dependency evidence exists. Dynamic URLs become boundary evidence, not guessed endpoints.
 
 ## SQL Shared Layer
 
@@ -325,12 +341,12 @@ Initial shared SQL properties:
 
 - `textHash`: SHA-256 over the exact raw SQL string bytes encoded as UTF-8, truncated to 32 lowercase hex chars.
 - `textLength`: length of the raw SQL string.
-- `operationName`: only the visible leading SQL verb from a direct literal; empty when dynamic or unclear.
-- `sqlSourceKind`: examples include `python-string-literal`, `sql-file`, `alembic-migration`, `sqlalchemy-text`, and `dbapi-execute`.
+- `operationName`: only the visible leading SQL verb from a direct literal after trimming leading whitespace; empty when dynamic, unclear, or not one of `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `CALL`, `EXEC`, or `EXECUTE`.
+- `sqlSourceKind`: shared values from `docs/LANGUAGE_ADAPTER_CONTRACT.md`, such as `literal-string`, `sql-file`, `migration-file`, `orm-text`, `dbapi-execute`, and `dynamic-boundary`.
 - `containingModule`, `containingType`, `containingFunction`, or equivalent symbol display fields.
 - `targetSymbol`: reducer-friendly display symbol.
 
-Before the shared SQL parser exists, Python must not emit `tableName`, `columnName`, or `operationKind` from guessed SQL text. Dynamic SQL from f-strings, concatenation, `.format`, templates, or ORM builders should be represented as a dynamic SQL boundary fact with hashes of expressions, not raw snippets.
+Before the shared SQL parser exists, Python must not emit `tableName`, `columnName`, or `operationKind` from guessed SQL text. Dynamic SQL from f-strings, concatenation, `.format`, templates, or ORM builders should be represented as `AnalysisGap` boundary facts with `gapKind` values such as `dynamic-sql` or `orm-query-boundary`, plus hashes of expressions, not raw snippets.
 
 ## SQLite Writer
 
@@ -347,7 +363,7 @@ Python indexes must include:
 - `argument_flows`
 - `local_aliases`
 
-The table shapes should match the current shared schema. Schema additions must be additive and documented.
+The table shapes should match the current shared schema and snake_case DDL used by the .NET storage layer. JSON fact properties remain camelCase. Schema additions must be additive and documented in `docs/LANGUAGE_ADAPTER_CONTRACT.md`.
 
 ## Report
 
@@ -362,6 +378,8 @@ The table shapes should match the current shared schema. Schema additions must b
 - Python-specific limitations
 
 The report should explicitly state that no target code was imported or executed.
+
+For MVP Python scans, the report should explain that `buildStatus = FailedOrPartial` means AST/package/config evidence was collected but full type-checker semantic analysis was not performed. This is expected for MVP scans and does not by itself indicate a scanner error.
 
 ## Samples
 
@@ -427,6 +445,7 @@ Minimum implementation validation:
 - `.NET` `tracemap reduce` classifies a real Python structural contract match as `ProbableImpact` or `NeedsReview`.
 - `.NET` `tracemap export` reads Python call/object/route/SQL rows.
 - `.NET` `tracemap combine` imports Python indexes with .NET/TypeScript/JVM indexes.
+- `.NET` endpoint alignment reads Python route/client rows without error; exact cross-repo matching remains a post-MVP quality goal.
 - No-match MVP Python deltas report `NoEvidenceReducedCoverage`.
 - `./scripts/check-private-paths.sh` passes.
 
