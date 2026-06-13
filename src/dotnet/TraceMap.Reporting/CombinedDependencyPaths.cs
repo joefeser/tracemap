@@ -1630,7 +1630,7 @@ public static class CombinedDependencyPathReporter
             }
         }
 
-        private static int CompareEdges(GraphEdge left, GraphEdge right)
+        private int CompareEdges(GraphEdge left, GraphEdge right)
         {
             var rank = EdgeRank(left.EdgeKind).CompareTo(EdgeRank(right.EdgeKind));
             if (rank != 0)
@@ -1638,7 +1638,9 @@ public static class CombinedDependencyPathReporter
                 return rank;
             }
 
-            var toName = string.Compare(left.ToNodeId, right.ToNodeId, StringComparison.Ordinal);
+            var leftDisplayName = Nodes.TryGetValue(left.ToNodeId, out var leftNode) ? leftNode.DisplayName : string.Empty;
+            var rightDisplayName = Nodes.TryGetValue(right.ToNodeId, out var rightNode) ? rightNode.DisplayName : string.Empty;
+            var toName = string.Compare(leftDisplayName, rightDisplayName, StringComparison.Ordinal);
             if (toName != 0)
             {
                 return toName;
