@@ -6,55 +6,64 @@
 
 - [ ] 0.1 Confirm Python lives under `src/python` as a sibling adapter.
 - [ ] 0.2 Confirm MVP does not import target modules, run framework startup, run tests, install packages, or execute decorators.
-- [ ] 0.3 Confirm Python MVP uses AST/package/config evidence first; type-checker-backed Tier1 is follow-up unless explicitly designed.
-- [ ] 0.4 Confirm existing `.NET` `tracemap reduce`, `tracemap export`, `tracemap combine`, and `tracemap endpoints` are MVP downstream commands.
-- [ ] 0.5 Confirm FastAPI, Flask, Django, Pydantic, SQLAlchemy, direct SQL, config/env reads, and common HTTP clients are MVP integration families.
-- [ ] 0.6 Confirm SQL is shared cross-language evidence and not a standalone app-language adapter in this slice.
-- [ ] 0.7 Confirm dynamic imports, monkey patching, decorator side effects, runtime DI, and route inclusion order are gaps/boundaries, not inferred facts.
-- [ ] 0.8 Confirm reducer-compatible facts reuse existing fact types and camelCase property keys.
+- [ ] 0.3 Confirm Python MVP uses AST/package/config evidence first; type-checker-backed Tier1 is post-MVP.
+- [ ] 0.4 Confirm existing `.NET` `tracemap reduce`, `tracemap export`, `tracemap combine`, and `tracemap endpoints` are downstream commands.
+- [ ] 0.5 Confirm real Python MVP scans do not emit Tier1 `PropertyAccessed` or `MethodInvoked`.
+- [ ] 0.6 Confirm real Python reducer outcomes are expected to be `ProbableImpact`, `NeedsReview`, or `NoEvidenceReducedCoverage`.
+- [ ] 0.7 Confirm FastAPI, Flask, Pydantic, dataclasses, SQLAlchemy declared columns, direct SQL, config/env reads, and `requests`/`httpx` are MVP integration families.
+- [ ] 0.8 Confirm Django, aiohttp, urllib, attrs, TypedDict, lockfile parsing, and richer logic-shape detection are post-MVP.
+- [ ] 0.9 Confirm `buildStatus = FailedOrPartial` means reduced semantic coverage for Python MVP, not a failed Python build.
+- [ ] 0.10 Confirm SQL is shared cross-language evidence and not a standalone app-language adapter in this slice.
+- [ ] 0.11 Confirm dynamic imports, monkey patching, decorator side effects, runtime DI, route inclusion order, collection contents, mutation semantics, and branch feasibility are gaps/boundaries, not inferred facts.
+- [ ] 0.12 Confirm reducer-compatible facts reuse existing fact types and camelCase property keys.
 
 ### Phase 1: Scaffold `src/python`
 
 - [ ] 1.1 Create `src/python` package, `pyproject.toml`, test config, and README.
-- [ ] 1.2 Choose packaging/test tooling; recommended default: Python package with pytest and standard-library-first runtime.
+- [ ] 1.2 Choose packaging/test tooling; recommended default: Python 3.11+ package with pytest and standard-library-first runtime.
 - [ ] 1.3 Add `tracemap-py scan --help`, `tracemap-py --help`, and `tracemap-py --version`.
 - [ ] 1.4 Add deterministic local build/test commands.
 - [ ] 1.5 Add package docs for standalone `tracemap-py` usage and first-scan minimum input.
 - [ ] 1.6 Ensure private-path guard covers Python docs and smoke outputs.
 - [ ] 1.7 Add rule-catalog validation hook so emitted Python rule IDs must exist before tests pass.
 
-### Phase 2: Fact Model and SQLite Contract
+### Phase 2: Fact Model and Cross-Language Contract
 
 - [ ] 2.1 Define Python models matching the existing TraceMap fact envelope and JSON casing.
 - [ ] 2.2 Implement deterministic hashing and sorted-property fact creation.
 - [ ] 2.3 Document and test that extractor version is excluded from fact ID hash input.
-- [ ] 2.4 Implement `JsonlFactWriter`.
-- [ ] 2.5 Implement SQLite writer compatible with shared `scan_manifest`, `facts`, symbols, relationship, call, object, argument, and alias tables.
-- [ ] 2.6 Create a tiny Python index fixture with hand-written `TypeDeclared`, `PropertyAccessed`, `MethodInvoked`, `HttpRouteBinding`, and `SqlTextUsed` facts.
-- [ ] 2.7 Run existing `.NET` `tracemap reduce` against the fixture and prove `DefiniteImpact`.
-- [ ] 2.8 Verify existing `.NET` `tracemap export` reads Python fixture indexes.
-- [ ] 2.9 Verify existing `.NET` `tracemap combine` can merge a Python fixture index with .NET/TypeScript/JVM fixture indexes.
-- [ ] 2.10 Add tests for reducer-compatible fact types and required camelCase property keys.
+- [ ] 2.4 Implement SQL/text hash helper: SHA-256 over exact UTF-8 string bytes, truncated to 32 lowercase hex chars.
+- [ ] 2.5 Create a tiny synthetic Python index fixture with hand-written Tier1 `TypeDeclared`, `PropertyAccessed`, and `MethodInvoked` facts labeled as fixture evidence.
+- [ ] 2.6 Run existing `.NET` `tracemap reduce` against the synthetic fixture and prove `DefiniteImpact`.
+- [ ] 2.7 Create a real-MVP-style Python fixture with Tier2 `HttpRouteBinding`, `SerializerContractMember`, `SqlTextUsed`, and `ConfigKeyDeclared` facts.
+- [ ] 2.8 Run existing `.NET` `tracemap reduce` against the real-MVP-style fixture and prove `ProbableImpact`/`NeedsReview`, not `DefiniteImpact`.
+- [ ] 2.9 Verify no-match real-MVP-style fixture deltas return `NoEvidenceReducedCoverage`.
+- [ ] 2.10 Verify existing `.NET` `tracemap export` reads Python fixture indexes.
+- [ ] 2.11 Verify existing `.NET` `tracemap combine` can merge a Python fixture index with .NET/TypeScript/JVM fixture indexes.
+- [ ] 2.12 Implement `JsonlFactWriter`.
+- [ ] 2.13 Implement SQLite writer compatible with shared `scan_manifest`, `facts`, symbols, relationship, call, object, argument, and alias tables.
+- [ ] 2.14 Add tests for reducer-compatible fact types and required camelCase property keys.
 
-### Phase 3: Repo Metadata, Manifest, and Inventory
+### Phase 3: Repo Metadata, Manifest, Inventory, and Package Roots
 
 - [ ] 3.1 Implement bounded Git metadata detection with timeout and stderr/stdout handling.
 - [ ] 3.2 Implement manifest writing with conservative Python coverage semantics.
 - [ ] 3.3 Implement file inventory for `.py`, Python metadata files, config files, SQL files, and migration files.
 - [ ] 3.4 Implement default excludes: `.git`, output path, virtualenvs, `site-packages`, `__pycache__`, caches, build/dist outputs, generated outputs, and dependency caches.
-- [ ] 3.5 Implement include/exclude/project scope filtering.
-- [ ] 3.6 Implement max file byte-size parsing and skip gaps.
-- [ ] 3.7 Add tests for path normalization, excluded directories, stable scan IDs, full/reduced manifest gates, and missing Git SHA failure.
+- [ ] 3.5 Implement include/exclude/project scope filtering and manifest scan-root metadata.
+- [ ] 3.6 Implement package-root discovery before symbol identity is computed.
+- [ ] 3.7 Implement max file byte-size parsing and skip gaps.
+- [ ] 3.8 Add tests for path normalization, excluded directories, package-root ordering, stable scan IDs, full/reduced manifest gates, and missing Git SHA failure.
 
-### Phase 4: Package, Config, and Gap Infrastructure
+### Phase 4: Rule Catalog, Package, Config, and Gap Infrastructure
 
-- [ ] 4.1 Parse `pyproject.toml` with `tomllib` for project name/version/dependencies/build backend/tool sections.
-- [ ] 4.2 Parse `setup.cfg` for literal metadata/dependencies.
-- [ ] 4.3 Parse `requirements*.txt` for package references and literal pins/ranges.
-- [ ] 4.4 Parse lockfiles where practical: Poetry and uv lockfiles first.
+- [ ] 4.1 Add Python rule IDs and limitations to `rules/rule-catalog.yml` before extractors emit those rule IDs.
+- [ ] 4.2 Parse `pyproject.toml` with `tomllib` for project name/version/dependencies/build backend/tool sections.
+- [ ] 4.3 Parse `setup.cfg` for literal metadata/dependencies.
+- [ ] 4.4 Parse `requirements*.txt` for package references and literal pins/ranges.
 - [ ] 4.5 Treat `setup.py` as dynamic unless literal metadata can be extracted without executing code.
 - [ ] 4.6 Emit package/dependency facts.
-- [ ] 4.7 Parse `.env`, `.ini`, `.cfg`, `.toml`, `.yaml`, `.json`, and framework config key paths with hashes.
+- [ ] 4.7 Parse `.env`, `.ini`, `.cfg`, `.toml`, `.yaml`, `.json`, and Flask config key paths with hashes.
 - [ ] 4.8 Add `AnalysisGapCollector` with bounded diagnostic output.
 - [ ] 4.9 Add generated-file and migration-file detectors.
 - [ ] 4.10 Add tests for package metadata, dynamic setup gaps, config parsing, repeated keys, parse gaps, and diagnostic caps.
@@ -63,77 +72,85 @@
 
 - [ ] 5.1 Parse `.py` files with Python `ast` and record parse diagnostics as gaps.
 - [ ] 5.2 Emit module, class, function, async function, method, field/assignment, and parameter declaration facts.
-- [ ] 5.3 Emit decorator facts with safe names and hashed literal arguments.
+- [ ] 5.3 Emit decorator facts for bare name, attribute, and call decorators with safe names and hashed literal arguments.
 - [ ] 5.4 Emit import facts and in-repo module references when statically resolvable.
-- [ ] 5.5 Emit member access facts with receiver hashes, not raw expressions.
-- [ ] 5.6 Emit invocation and syntax call-edge facts.
-- [ ] 5.7 Emit object creation facts for class-like calls and obvious assignments.
-- [ ] 5.8 Emit direct argument-passed facts.
-- [ ] 5.9 Emit local alias facts for simple assignments.
-- [ ] 5.10 Emit symbol table, occurrence, fact-symbol, call-edge, object-creation, argument-flow, and alias rows.
-- [ ] 5.11 Add tests for decorators, async functions, nested functions, class methods, imports, calls, object creation, arguments, aliases, parse errors, and deterministic spans.
+- [ ] 5.5 Emit `TYPE_CHECKING` block facts only as Tier3 with `typeCheckingOnly = true`.
+- [ ] 5.6 Emit member-name facts with receiver hashes, not raw expressions, and do not emit `PropertyAccessed`.
+- [ ] 5.7 Emit invocation-name and syntax call-edge facts, and do not emit `MethodInvoked`.
+- [ ] 5.8 Emit object creation facts for class-like calls and obvious assignments.
+- [ ] 5.9 Emit direct argument-passed facts.
+- [ ] 5.10 Emit local alias facts for simple assignments.
+- [ ] 5.11 Emit symbol table, occurrence, fact-symbol, call-edge, object-creation, argument-flow, and alias rows.
+- [ ] 5.12 Add tests for decorators, async functions, nested functions, class methods, imports, calls, object creation, arguments, aliases, `TYPE_CHECKING`, match/walrus syntax, parse errors, and deterministic spans.
 
 ### Phase 6: Framework Boundary Extractors
 
 - [ ] 6.1 Emit FastAPI route facts for app/router decorators with literal paths and HTTP methods.
 - [ ] 6.2 Emit FastAPI APIRouter prefix facts when prefix is literal and same-module.
-- [ ] 6.3 Emit Flask route facts for `route`, HTTP-method shortcuts, and literal `methods`.
-- [ ] 6.4 Emit Django route facts for `path`, `re_path`, and view target references in URL config files.
-- [ ] 6.5 Emit HTTP client facts for `requests`, `httpx`, `aiohttp`, and `urllib` calls.
-- [ ] 6.6 Emit dynamic client URL boundary facts when URL cannot be normalized.
-- [ ] 6.7 Add tests for each supported route/client shape, method mismatch possibilities, dynamic URLs, and route prefix limitations.
+- [ ] 6.3 Emit FastAPI route gaps/boundaries for dynamic decorators and unresolved `include_router`.
+- [ ] 6.4 Emit Flask route facts for `route`, HTTP-method shortcuts, literal `methods`, and same-module literal blueprint prefixes.
+- [ ] 6.5 Emit Flask route gaps/boundaries for dynamic route registration and runtime blueprint wiring.
+- [ ] 6.6 Emit HTTP client facts for `requests` and `httpx` calls.
+- [ ] 6.7 Emit dynamic client URL boundary facts when URL cannot be normalized.
+- [ ] 6.8 Add tests for each supported route/client shape, async route handlers, method mismatch possibilities, dynamic URLs, and route prefix limitations.
 
 ### Phase 7: Schema, Serializer, Config, and Persistence Extractors
 
 - [ ] 7.1 Emit Pydantic `BaseModel` type/field/schema facts.
-- [ ] 7.2 Emit dataclass, TypedDict, attrs, and simple serializer/schema facts.
-- [ ] 7.3 Emit config/env facts for `os.environ`, `os.getenv`, Pydantic settings, Django settings, Flask config, Dynaconf, and decouple where statically visible.
-- [ ] 7.4 Emit SQLAlchemy declarative model table/column mapping facts.
-- [ ] 7.5 Emit SQLAlchemy and DB-API SQL call facts with hashes and operation names.
-- [ ] 7.6 Emit SQL resource facts for `.sql` files and migration files.
-- [ ] 7.7 Add tests for Pydantic fields/aliases, SQLAlchemy models/queries, direct SQL, migrations, and config reads.
+- [ ] 7.2 Emit dataclass type/field/schema facts.
+- [ ] 7.3 Emit config/env facts for `os.environ`, `os.getenv`, and Flask config where statically visible.
+- [ ] 7.4 Emit SQLAlchemy declarative model table/column mapping facts only for literal declarations.
+- [ ] 7.5 Emit SQLAlchemy query boundary facts for ORM builders, filters, relationships, and dynamic query patterns.
+- [ ] 7.6 Emit DB-API and SQLAlchemy `text(...)` SQL call facts with `textHash`, `textLength`, `operationName`, `sqlSourceKind`, and target symbol.
+- [ ] 7.7 Emit SQL resource facts for `.sql` files and migration files.
+- [ ] 7.8 Add tests for Pydantic fields/aliases, dataclass fields, SQLAlchemy declared columns, query boundaries, direct SQL, dynamic SQL, migrations, and config reads.
 
-### Phase 8: Relationships and Logic Shape
+### Phase 8: Relationships and Boilerplate
 
 - [ ] 8.1 Emit class inheritance `SymbolRelationship` facts for statically named bases.
 - [ ] 8.2 Defer `Overrides` unless type-aware evidence is added.
-- [ ] 8.3 Emit logic-shape facts for arithmetic, comparison, branching, validation, transformations, collection processing, retry/backoff, and date/time logic.
-- [ ] 8.4 Emit infrastructure/boilerplate facts for generated files, migrations, settings modules, app wiring, test fixtures, and DTO-only modules.
-- [ ] 8.5 Add tests for inheritance, logic-shape detection, boilerplate classification, and false-positive limitations.
+- [ ] 8.3 Emit infrastructure/boilerplate facts for generated files, migrations, settings modules, app wiring, test fixtures, and DTO-only modules.
+- [ ] 8.4 Add tests for inheritance, boilerplate classification, and false-positive limitations.
 
-### Phase 9: Report, Docs, Rule Catalog, and Validation
+### Phase 9: Samples and Smoke
 
-- [ ] 9.1 Generate `report.md` with metadata, coverage, gaps, fact counts, package counts, route/client/config/SQL/model counts, and Python limitations.
-- [ ] 9.2 Update root README with Python scan/reduce/combine examples.
-- [ ] 9.3 Add `src/python/README.md`.
-- [ ] 9.4 Update `docs/ACCEPTANCE.md` and `docs/VALIDATION.md` with Python scenarios and smoke commands.
-- [ ] 9.5 Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` only if implementation discovers contract gaps.
-- [ ] 9.6 Add Python rule IDs and limitations to `rules/rule-catalog.yml` before any extractor emits those rule IDs.
-- [ ] 9.7 Add public OSS smoke candidates to `docs/VALIDATION.md` with pinned SHAs after selection.
+- [ ] 9.1 Add `samples/python-fastapi-sample` with FastAPI route, Pydantic DTO, SQLAlchemy declared column/direct SQL, config/env read, HTTP client call, call edges, object creation, and argument flow.
+- [ ] 9.2 Add `samples/python-flask-sample` with small Flask route and dynamic reduced-coverage examples.
+- [ ] 9.3 Add `samples/python-broken-sample` for parse errors and dynamic reduced coverage.
+- [ ] 9.4 Add Python sample contract delta.
+- [ ] 9.5 Add synthetic Tier1 reducer contract delta fixture and label it as synthetic compatibility evidence.
+- [ ] 9.6 Add Python section to open-source smoke script after public repos are selected/pinned.
+- [ ] 9.7 Smoke-test at least one FastAPI repo, one Flask repo, and one SQLAlchemy-heavy repo from public pinned SHAs.
+- [ ] 9.8 Record smoke results without committing absolute local paths or sensitive repository names.
 
-### Phase 10: Samples and Smoke
+### Phase 10: Report, Docs, and Validation
 
-- [ ] 10.1 Add `samples/python-fastapi-sample` with FastAPI route, Pydantic DTO, SQLAlchemy/direct SQL, config/env read, HTTP client call, call edges, object creation, and argument flow.
-- [ ] 10.2 Add `samples/python-flask-django-sample` with small Flask and Django route fixtures.
-- [ ] 10.3 Add `samples/python-broken-sample` for parse errors and dynamic reduced coverage.
-- [ ] 10.4 Add Python sample contract delta.
-- [ ] 10.5 Add endpoint-alignment smoke between Python server and TypeScript or .NET client sample if useful.
-- [ ] 10.6 Add Python section to open-source smoke script after public repos are selected/pinned.
-- [ ] 10.7 Smoke-test at least one FastAPI repo, one Flask/Django repo, and one SQLAlchemy-heavy repo from public pinned SHAs.
-- [ ] 10.8 Record smoke results without committing absolute local paths or private repo names.
+- [ ] 10.1 Generate `report.md` with metadata, coverage, gaps, fact counts, package counts, route/client/config/SQL/model counts, and Python limitations.
+- [ ] 10.2 Update root README with Python scan/reduce/combine examples.
+- [ ] 10.3 Add `src/python/README.md`.
+- [ ] 10.4 Update `docs/ACCEPTANCE.md` and `docs/VALIDATION.md` with Python scenarios and smoke commands.
+- [ ] 10.5 Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` only if implementation discovers contract gaps.
+- [ ] 10.6 Document that endpoint alignment can consume Python route/client facts, but full cross-repo endpoint matching is post-MVP validation unless implemented naturally by existing commands.
+- [ ] 10.7 Add public OSS smoke candidates to `docs/VALIDATION.md` with pinned SHAs after selection.
 
 ### Phase 11: Post-MVP Backlog
 
 - [ ] 11.1 Type-checker-backed Tier1 facts using Pyright/MyPy metadata or another deterministic static source.
-- [ ] 11.2 Cross-module route prefix/include expansion for FastAPI/Django/Flask.
-- [ ] 11.3 Celery task graph and background job boundary facts.
-- [ ] 11.4 Airflow DAG/task boundary facts.
-- [ ] 11.5 GraphQL schema/resolver facts.
-- [ ] 11.6 Pandas/Spark/dataframe schema and SQL facts.
-- [ ] 11.7 Deep SQL dialect parser shared across all adapters.
-- [ ] 11.8 Field/attribute aliasing and derived `parameter_forward_edges`.
-- [ ] 11.9 Framework-specific dependency injection containers.
-- [ ] 11.10 Jupyter notebook source extraction.
+- [ ] 11.2 Real Python `PropertyAccessed` and `MethodInvoked` facts after receiver types can be proven.
+- [ ] 11.3 Cross-module route prefix/include expansion for FastAPI/Django/Flask.
+- [ ] 11.4 Django route/view facts.
+- [ ] 11.5 aiohttp and urllib HTTP client facts.
+- [ ] 11.6 attrs and TypedDict schema facts.
+- [ ] 11.7 Poetry and uv lockfile parsing.
+- [ ] 11.8 Logic-shape/business-logic facts.
+- [ ] 11.9 Celery task graph and background job boundary facts.
+- [ ] 11.10 Airflow DAG/task boundary facts.
+- [ ] 11.11 GraphQL schema/resolver facts.
+- [ ] 11.12 Pandas/Spark/dataframe schema and SQL facts.
+- [ ] 11.13 Deep SQL dialect parser shared across all adapters.
+- [ ] 11.14 Field/attribute aliasing and derived `parameter_forward_edges`.
+- [ ] 11.15 Framework-specific dependency injection containers.
+- [ ] 11.16 Jupyter notebook source extraction.
 
 ## Definition of Done
 
@@ -143,7 +160,9 @@
 - [ ] Existing `.NET` `dotnet test src/dotnet/TraceMap.sln` passes after repo changes.
 - [ ] Existing TypeScript and JVM checks pass if shared docs/schema changed.
 - [ ] `tracemap-py scan` writes required artifacts for modern and broken Python samples.
-- [ ] Existing `.NET` `tracemap reduce` classifies a Python contract match.
+- [ ] Existing `.NET` `tracemap reduce` classifies a synthetic Python fixture as `DefiniteImpact`.
+- [ ] Existing `.NET` `tracemap reduce` classifies a real Python structural fixture as `ProbableImpact` or `NeedsReview`.
+- [ ] Existing `.NET` `tracemap reduce` returns `NoEvidenceReducedCoverage` for no-match real Python MVP fixtures.
 - [ ] Existing `.NET` `tracemap export` reads Python route/call/object/SQL rows.
 - [ ] Existing `.NET` `tracemap combine` imports a Python index.
 - [ ] Facts contain rule IDs, evidence tiers, repo/commit SHA, line spans, extractor versions, and no raw snippets.
