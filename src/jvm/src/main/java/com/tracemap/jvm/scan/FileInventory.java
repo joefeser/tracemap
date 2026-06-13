@@ -10,7 +10,6 @@ import java.nio.file.PathMatcher;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -37,12 +36,21 @@ public final class FileInventory {
                 .filter(FileInventory::isIncluded)
                 .filter(path -> matchesScope(repo, path, options))
                 .forEach(path -> {
+                    String relative = PathsUtil.relativeUnix(repo, path);
+                    Path absolute = path.toAbsolutePath().normalize();
                     try {
-                        String relative = PathsUtil.relativeUnix(repo, path);
-                        boolean skipped = Files.size(path) > options.maxFileByteSize();
-                        items.add(new FileInventoryItem(relative, path.toAbsolutePath().normalize(), kind(path), Files.size(path), skipped));
+                        long size = Files.size(path);
+                        boolean skipped = size > options.maxFileByteSize();
+                        String skipReason = skipped ? "FileSkippedMaxSize: " + relative : null;
+                        items.add(new FileInventoryItem(relative, absolute, kind(path), size, skipped, skipReason));
                     } catch (IOException exception) {
-                        // Unreadable files are represented later as gaps by the scan engine.
+                        items.add(new FileInventoryItem(
+                            relative,
+                            absolute,
+                            kind(path),
+                            -1,
+                            true,
+                            "FileUnreadable: " + relative + " (" + exception.getClass().getSimpleName() + ")"));
                     }
                 });
         }
@@ -52,6 +60,9 @@ public final class FileInventory {
 
     private static boolean matchesScope(Path repo, Path path, ScanOptions options) {
         String relative = PathsUtil.relativeUnix(repo, path);
+        if (!matchesProjectPaths(repo, path, options.projectPaths())) {
+            return false;
+        }
         if (!matchesLanguage(relative, options.language())) {
             return false;
         }
@@ -59,6 +70,23 @@ public final class FileInventory {
             return false;
         }
         return options.excludeGlobs().stream().noneMatch(glob -> globMatches(glob, relative));
+    }
+
+    private static boolean matchesProjectPaths(Path repo, Path path, List<Path> projectPaths) {
+        if (projectPaths.isEmpty()) {
+            return true;
+        }
+        Path absolute = path.toAbsolutePath().normalize();
+        for (Path projectPath : projectPaths) {
+            Path scope = projectPath.isAbsolute()
+                ? projectPath.toAbsolutePath().normalize()
+                : repo.resolve(projectPath).toAbsolutePath().normalize();
+            Path scopeRoot = isProjectFile(scope) || Files.isRegularFile(scope) ? scope.getParent() : scope;
+            if (absolute.equals(scope) || scopeRoot != null && absolute.startsWith(scopeRoot)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean matchesLanguage(String relative, String language) {
@@ -96,12 +124,8 @@ public final class FileInventory {
     }
 
     private static boolean hasExcludedDir(Path root, Path path) {
-        Set<String> parts = new HashSet<>();
         for (Path part : root.toAbsolutePath().normalize().relativize(path.toAbsolutePath().normalize())) {
-            parts.add(part.toString());
-        }
-        for (String excluded : EXCLUDED_DIRS) {
-            if (parts.contains(excluded)) {
+            if (EXCLUDED_DIRS.contains(part.toString())) {
                 return true;
             }
         }
@@ -111,6 +135,11 @@ public final class FileInventory {
 
     private static boolean isUnder(Path parent, Path child) {
         return child.startsWith(parent);
+    }
+
+    private static boolean isProjectFile(Path path) {
+        Path fileName = path.getFileName();
+        return fileName != null && INCLUDED_NAMES.contains(fileName.toString());
     }
 
     private static String kind(Path path) {

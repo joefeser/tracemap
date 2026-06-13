@@ -22,23 +22,41 @@ public final class SqliteIndexWriter {
     public static void write(Path path, ScanManifest manifest, List<CodeFact> facts) throws IOException, SQLException {
         Files.createDirectories(path.toAbsolutePath().normalize().getParent());
         Files.deleteIfExists(path);
+        boolean committed = false;
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + path.toAbsolutePath().normalize())) {
-            createSchema(connection);
-            insertManifest(connection, manifest);
             connection.setAutoCommit(false);
             try {
+                createSchema(connection);
+                insertManifest(connection, manifest);
                 for (CodeFact fact : facts) {
                     insertFact(connection, fact);
                     insertSymbolRows(connection, fact);
                     insertDerivedRows(connection, fact);
                 }
                 connection.commit();
+                committed = true;
             } catch (SQLException exception) {
-                connection.rollback();
+                rollbackQuietly(connection);
+                throw exception;
+            } catch (IOException exception) {
+                rollbackQuietly(connection);
                 throw exception;
             } finally {
                 connection.setAutoCommit(true);
             }
+        } catch (IOException | SQLException exception) {
+            if (!committed) {
+                Files.deleteIfExists(path);
+            }
+            throw exception;
+        }
+    }
+
+    private static void rollbackQuietly(Connection connection) {
+        try {
+            connection.rollback();
+        } catch (SQLException ignored) {
+            // Preserve the original write failure.
         }
     }
 

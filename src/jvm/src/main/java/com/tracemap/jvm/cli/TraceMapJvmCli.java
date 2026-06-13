@@ -121,9 +121,9 @@ public final class TraceMapJvmCli {
               tracemap-jvm scan --repo <path> --out <path> [options]
 
             Options:
-              --project <path>              Limit scan to project/build path (repeatable metadata only in MVP)
-              --include <glob>              Reserved for scope filters
-              --exclude <glob>              Reserved for scope filters
+              --project <path>              Limit scan to a project/build file or directory (repeatable)
+              --include <glob>              Include matching paths
+              --exclude <glob>              Exclude matching paths
               --max-file-byte-size <size>   Default: 1mb
               --no-semantic                 Disable Java semantic extraction
               --language <java|kotlin|all>  Default: all
