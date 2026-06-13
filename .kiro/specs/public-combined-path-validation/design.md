@@ -37,6 +37,8 @@ The script should produce:
 
 The output directory is generated and should not be committed.
 
+The first implementation is sample-only. It should not reach the network, clone OSS repositories, or read external application paths.
+
 ## Goals
 
 - Prove `scan -> combine -> report -> paths` end to end.
@@ -53,6 +55,8 @@ The output directory is generated and should not be committed.
 - No private repo-specific script defaults.
 - No CI workflow unless explicitly added in a follow-up.
 - No graph visualization in this slice.
+- No optional external repo mode in this slice.
+- No OSS network smoke inside this script.
 
 ## Proposed Files
 
@@ -70,7 +74,7 @@ samples/
   endpoint-server-aspnet/
 ```
 
-The existing endpoint samples should be used first. If they do not currently emit enough evidence for SQL/config/package path assertions, extend them in small, realistic ways.
+The existing endpoint samples should be used, but the server sample must be extended before implementation because it currently has route actions with no downstream service/repository/SQL evidence. The minimum fixture target is endpoint-to-`sql-query`. Reachable `package-config` is useful but deferred unless the fixture naturally supports it.
 
 ## Smoke Script Shape
 
@@ -83,11 +87,7 @@ Command:
 Environment variables:
 
 ```text
-TRACEMAP_INCLUDE_OSS=0|1
-TRACEMAP_OSS_CACHE=<path>
-TRACEMAP_EXTERNAL_CLIENT_REPO=<path>
-TRACEMAP_EXTERNAL_SERVER_REPO=<path>
-TRACEMAP_EXTERNAL_SERVER_PROJECT=<path>
+none for the first implementation
 ```
 
 Default behavior:
@@ -97,12 +97,19 @@ Default behavior:
 - Build TypeScript CLI if needed.
 - Use `dotnet run --project src/dotnet/TraceMap.Cli`.
 - Fail fast on missing artifacts or failed assertions.
+- Perform semantic JSON assertions with Node.js, which is already required by the TypeScript adapter.
+- Do not require `jq`.
+- Do not access the network.
 
-Optional behavior:
+Reserved follow-up environment variables:
 
-- If `TRACEMAP_INCLUDE_OSS=1`, run or invoke pinned OSS smoke in a separate cache/output area.
-- If external repo env vars are supplied, scan those repos using generic labels such as `external-client` and `external-server`.
-- Optional external validation must never be required for default success.
+```text
+TRACEMAP_EXTERNAL_CLIENT_REPO=<path>
+TRACEMAP_EXTERNAL_SERVER_REPO=<path>
+TRACEMAP_EXTERNAL_SERVER_PROJECT=<path>
+```
+
+If a later slice implements these, diagnostics must print only labels, basenames, or hashes for external paths, never full absolute paths.
 
 ## Detailed Flow
 
@@ -143,13 +150,15 @@ dotnet run --project src/dotnet/TraceMap.Cli -- paths \
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- paths \
   --index <out>/combined.sqlite \
-  --from-endpoint "GET /api/orders/{}" \
+  --from-endpoint "GET /api/admin/runner/get-by-id/{}" \
   --to-surface sql-query \
-  --out <out>/paths-orders-sql
+  --out <out>/paths-runner-sql
 ```
 
-12. Inspect JSON with Node.js or another already-required local runtime.
-13. Print summary.
+12. Run a deliberately bogus selector query and assert it produces a valid zero-path report with a rule-backed gap.
+13. Re-run the successful targeted paths query into a second output directory and compare `paths-report.json` bytes for deterministic output.
+14. Inspect JSON with Node.js.
+15. Print summary.
 
 ## Assertions
 
@@ -175,16 +184,18 @@ Path report assertions:
 - `summary.pathCount > 0` for default or targeted query
 - at least one path contains an `endpoint-match` edge
 - at least one path crosses from `sample-client` to `sample-server`
-- at least one terminal node has `surfaceKind = "sql-query"` when SQL fixture evidence exists
-- at least one terminal node has `surfaceKind = "package-config"` when config/package fixture evidence exists
+- at least one terminal node has `surfaceKind = "sql-query"`
+- at least one returned path has classification `StrongStaticPath`, `ProbableStaticPath`, or `NeedsReviewPath`
 - every path edge has a non-empty `ruleId`
 - every path edge has a non-empty `evidenceTier`
 - every gap has a non-empty `ruleId`
 - every gap has a non-empty `evidenceTier`
-- Markdown contains `source transition:`
-- Markdown does not contain raw SQL text, raw config values, or developer-local absolute paths
+- the same normalized path key appears in client and server endpoint evidence for the matched route
+- a bogus endpoint selector produces a valid report with zero paths and a rule-backed gap
+- repeated targeted `paths` output is byte-stable
+- Markdown does not contain fixture sentinel tokens, raw SQL text, raw config values, or developer-local absolute paths
 
-If a fixture cannot support one of these assertions yet, the implementation should either extend the fixture or document that assertion as deferred. It should not leave a weak file-existence-only smoke.
+Reachable `package-config` path assertion is deferred. If the sample extension naturally creates a reachable config/package surface, the implementation may add a non-blocking assertion or promote it with reviewer agreement.
 
 ## Fixture Guidance
 
@@ -194,19 +205,20 @@ The checked-in full-stack fixture should be intentionally small:
 - ASP.NET server exposes a matching route.
 - Controller calls service/repository code through static evidence.
 - Repository emits SQL/query facts using hash-only rendering.
-- Startup/config code emits config or package facts.
+- SQL text includes a synthetic sentinel token that the smoke can assert does not appear in Markdown.
+- Optional config text includes a synthetic sentinel token if config rendering safety is asserted.
 
 This fixture should be boring on purpose. It is a validation target, not a product sample app.
 
 ## OSS Strategy
 
-Pinned OSS repositories are useful for breadth, but they are not guaranteed to contain a clean client/server pair that proves path queries. Treat OSS scans as confidence checks:
+Pinned OSS repositories are useful for breadth, but they are not guaranteed to contain a clean client/server pair that proves path queries. Treat OSS scans as confidence checks and keep them in `scripts/smoke-open-source-repos.sh`:
 
 - scan completes,
 - artifacts exist,
 - coverage is honestly labeled,
 - important tables are populated where evidence exists,
-- combine/report/paths do not crash on larger real indexes.
+- combine/report/paths do not crash on larger real indexes when that separate smoke is extended to run them.
 
 `docs/VALIDATION.md` should keep the current pinned table and add a short section explaining which repos were used for broad smoke versus path-specific assertions.
 
@@ -228,7 +240,7 @@ Use existing privacy checks:
 git diff --check
 ```
 
-Generated output directories should be ignored if they are predictable. Prefer `mktemp` defaults to avoid new ignore rules.
+Generated output directories should be ignored if they are predictable. This script should use `mktemp` by default and should not need new ignore rules.
 
 ## Documentation Updates
 
@@ -243,7 +255,7 @@ and a manual command sketch:
 ```bash
 tracemap combine --index client/index.sqlite --label client --index api/index.sqlite --label api --out combined.sqlite
 tracemap report --index combined.sqlite --out dependency-report
-tracemap paths --index combined.sqlite --from-endpoint "GET /api/orders/{}" --to-surface sql-query --out paths
+tracemap paths --index combined.sqlite --from-endpoint "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out paths
 ```
 
 `docs/VALIDATION.md` should describe:
@@ -252,24 +264,26 @@ tracemap paths --index combined.sqlite --from-endpoint "GET /api/orders/{}" --to
 - prerequisites,
 - expected outputs,
 - expected assertions,
-- how to run optional OSS smoke,
-- how to run optional generic external validation,
+- how the separate OSS smoke relates to this sample-only smoke,
+- which external validation env var names are reserved for a follow-up,
 - how to interpret reduced coverage.
 
 ## Risks
 
 | Risk | Mitigation |
 | --- | --- |
-| Fixture does not currently emit enough SQL/config path evidence | Extend checked-in samples with small deterministic evidence. |
-| Smoke becomes too slow | Keep default sample-only; make OSS optional. |
-| Docs accidentally mention private paths | Run private path guard and use generic env var names only. |
+| Fixture does not currently emit enough SQL path evidence | Extend checked-in samples with small deterministic evidence before adding the script. |
+| Fixture does not emit reachable package/config evidence | Defer package-config assertion unless the extension naturally creates it. |
+| Smoke becomes too slow | Keep default sample-only and keep OSS in the existing separate script. |
+| Docs accidentally mention private paths | Run private path guard and avoid external path support in this slice. |
 | Path assertions become brittle | Assert semantic JSON fields and counts, not exact full Markdown bytes. |
 | Toolchain prerequisites differ by machine | Fail with clear messages and document prerequisites. |
 | Generated outputs are accidentally committed | Use `mktemp` by default and generic `.gitignore` patterns only if needed. |
 
-## Open Questions for Review
+## Decisions From Review
 
-- Should the default smoke require both `sql-query` and `package-config` paths, or should one be optional until the sample fixture is extended?
-- Should the smoke script call the existing endpoint smoke script or stay independent for clearer output?
-- Should optional OSS mode live in this script or remain delegated to `scripts/smoke-open-source-repos.sh`?
-- Should the README include command output snippets, or only commands and output file descriptions?
+- The default smoke requires endpoint-to-`sql-query` after extending the public fixture.
+- `package-config` reachability is deferred unless the fixture naturally proves it.
+- The new script stays independent from `scripts/smoke-typescript-endpoints.sh`; docs explain when to run each.
+- OSS remains delegated to `scripts/smoke-open-source-repos.sh`.
+- README should include commands, expected artifacts, and at most one clearly labeled illustrative snippet, not captured full reports.

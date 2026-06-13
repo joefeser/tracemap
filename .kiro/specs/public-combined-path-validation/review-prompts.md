@@ -16,13 +16,14 @@ Focus on:
 
 - Whether the spec proves the value of `tracemap paths` rather than just checking that files exist.
 - Whether checked-in samples are the right source for deterministic assertions.
-- Whether pinned OSS repos should be part of this script or remain a separate smoke.
-- Whether the proposed assertions are strong enough: endpoint match, source transition, terminal surface, rule IDs, evidence tiers, and safe rendering.
-- Whether the optional external repo support is safe for an open-source repository.
+- Whether keeping pinned OSS repos in the separate OSS smoke is the right scope cut.
+- Whether the proposed assertions are strong enough: endpoint match, structural source transition, terminal `sql-query` surface, rule IDs, evidence tiers, deterministic output, bogus-selector gap, and safe rendering.
+- Whether deferring optional external repo support is the right privacy/scope choice.
 - Whether any requirement risks leaking private paths, private repo names, raw SQL, config values, or source snippets.
 - Whether the default smoke is likely to be fast and reliable enough for PR review.
-- Whether docs should include command output snippets or only commands and expected artifacts.
-- Whether the sample fixture should require both `sql-query` and `package-config` paths before implementation.
+- Whether docs should include only commands, expected artifacts, and small illustrative snippets.
+- Whether requiring endpoint-to-`sql-query` while deferring `package-config` is the right first slice.
+- Whether the actual sample endpoint key `GET /api/admin/runner/get-by-id/{}` is the right documented targeted query.
 - Whether any wording overclaims runtime behavior instead of static evidence.
 
 Please return:
@@ -45,7 +46,8 @@ Focus on:
 - The safest way to inspect `paths-report.json` from shell scripts.
 - How to keep the script readable and deterministic.
 - What sample changes, if any, are required.
-- Whether optional external repo support should be implemented now or deferred.
+- Whether the required sample extension should be service/repository based or smaller.
+- Whether optional external repo support should remain deferred.
 - Whether docs and `.gitignore` need changes.
 - Which validation commands should be required before PR.
 
@@ -66,5 +68,6 @@ Look for:
 - Missing reduced-coverage caveats.
 - Missing toolchain prerequisite documentation.
 - Ambiguous ownership between this new smoke and existing endpoint/OSS smoke scripts.
+- Incorrect sample endpoint keys or assumptions not grounded in current fixtures.
 
 Please provide actionable findings with file/section references and suggested fixes.
