@@ -29,6 +29,7 @@ public final class JavaSyntaxExtractor {
     private static final Pattern NEW_OBJECT = Pattern.compile("\\bnew\\s+([A-Za-z_][\\w.]*)\\s*\\(([^)]*)\\)");
     private static final Pattern ANNOTATION = Pattern.compile("@([A-Za-z_][\\w.]*)\\s*(?:\\((.*)\\))?");
     private static final Pattern STRING = Pattern.compile("\"((?:\\\\.|[^\"\\\\])*)\"");
+    private static final int ROUTE_ANNOTATION_LOOKBACK_LINES = 24;
 
     private JavaSyntaxExtractor() {
     }
@@ -415,10 +416,8 @@ public final class JavaSyntaxExtractor {
 
     private static void emitLogicFacts(ScanManifest manifest, FileInventoryItem file, List<CodeFact> facts, String currentSymbol, String line, int lineNo) {
         String trimmed = line.trim();
-        if (trimmed.startsWith("@")) {
-            return;
-        }
-        if (line.matches(".*[A-Za-z0-9_)]\\s*[+\\-*/%]\\s*[A-Za-z0-9_(].*")) {
+        String calculationSource = STRING.matcher(line).replaceAll("\"\"");
+        if (!trimmed.startsWith("@") && calculationSource.matches(".*[A-Za-z0-9_)]\\s*[+\\-*/%]\\s*[A-Za-z0-9_(].*")) {
             facts.add(FactFactory.create(
                 manifest,
                 FactTypes.CALCULATION_EXPRESSION,
@@ -478,21 +477,34 @@ public final class JavaSyntaxExtractor {
     }
 
     private static RouteAnnotation routeBefore(List<String> lines, int index) {
-        for (int i = index - 1; i >= 0; i--) {
+        StringBuilder annotationBlock = new StringBuilder();
+        int firstLine = Math.max(0, index - ROUTE_ANNOTATION_LOOKBACK_LINES);
+        for (int i = index - 1; i >= firstLine; i--) {
             String line = lines.get(i).trim();
             if (line.isBlank() || line.startsWith("//") || line.startsWith("/*") || line.startsWith("*")) {
                 continue;
             }
-            if (!line.startsWith("@")) {
+            if (isRouteAnnotationBoundary(line)) {
                 return null;
             }
-            Matcher matcher = ANNOTATION.matcher(line);
-            while (matcher.find()) {
-                RouteAnnotation route = routeAnnotation(simple(matcher.group(1)), matcher.group(2) == null ? "" : matcher.group(2));
-                if (route != null) return route;
+            annotationBlock.insert(0, line + " ");
+            if (line.startsWith("@")) {
+                Matcher matcher = ANNOTATION.matcher(annotationBlock.toString().trim());
+                while (matcher.find()) {
+                    RouteAnnotation route = routeAnnotation(simple(matcher.group(1)), matcher.group(2) == null ? "" : matcher.group(2));
+                    if (route != null) return route;
+                }
+                annotationBlock.setLength(0);
             }
         }
         return null;
+    }
+
+    private static boolean isRouteAnnotationBoundary(String line) {
+        return line.equals("}")
+            || TYPE.matcher(line).find()
+            || METHOD.matcher(line).find()
+            || FIELD.matcher(line).find();
     }
 
     private static RouteAnnotation routeAnnotation(String annotation, String args) {
