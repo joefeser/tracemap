@@ -1,0 +1,663 @@
+using System.Security.Cryptography;
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
+using TraceMap.Cli;
+using TraceMap.Combine;
+using TraceMap.Core;
+using TraceMap.Reporting;
+using TraceMap.Storage;
+
+namespace TraceMap.Tests;
+
+public sealed class CombinedDependencyPathTests
+{
+    [Fact]
+    public async Task Paths_writes_endpoint_to_sql_markdown_and_json_without_mutating_combined_index()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "paths");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+        var before = await Sha256Async(combinedPath);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                outDir,
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "client",
+                ToSurface: "sql-query"));
+
+        Assert.Equal(before, await Sha256Async(combinedPath));
+        Assert.True(File.Exists(Path.Combine(outDir, "paths-report.md")));
+        Assert.True(File.Exists(Path.Combine(outDir, "paths-report.json")));
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "endpoint-match");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "calls");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "surface-evidence");
+        Assert.Equal("NeedsReviewPath", path.Classification);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.md"));
+        Assert.Contains("TraceMap Paths Report", markdown);
+        Assert.Contains("source transition:", markdown);
+        Assert.Contains("sql-query", markdown);
+        Assert.DoesNotContain("Inventory rows are capped", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("select * from orders", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
+
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.json"));
+        Assert.DoesNotContain("generatedAt", json, StringComparison.OrdinalIgnoreCase);
+        var document = JsonSerializer.Deserialize<CombinedDependencyPathReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(document);
+        Assert.Equal(result.Report.Paths.Count, document!.Paths.Count);
+
+        var secondOutDir = Path.Combine(temp.Path, "paths-second");
+        await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                secondOutDir,
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "client",
+                ToSurface: "sql-query"));
+        Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "paths-report.md")));
+        Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "paths-report.json")));
+    }
+
+    [Fact]
+    public async Task Paths_from_endpoint_matches_multi_method_route_without_stored_path_key()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Upsert(System.Int32)";
+        var repository = "Server.OrderRepository.Save(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFactWithoutPathKey(server, "GET,POST", "/api/orders/{id:int}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/orders/{id}",
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal("GET,POST", path.Nodes.First().HttpMethod);
+        Assert.Equal("/api/orders/{}", path.Nodes.First().NormalizedPathKey);
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+    }
+
+    [Fact]
+    public async Task Paths_from_client_symbol_can_traverse_http_fact_to_server_surface()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var clientMethod = "Client.OrderService.loadOrder(System.Int32)";
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5, clientMethod)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: clientMethod,
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths, candidate => candidate.Edges.Any(edge => edge.EdgeKind == "endpoint-match"));
+        Assert.Equal(clientMethod, path.Nodes.First().SymbolId);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "fact-attached-to-symbol" && edge.FromNodeId == path.Nodes.First().NodeId);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "endpoint-match");
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+    }
+
+    [Fact]
+    public async Task Paths_from_endpoint_and_symbol_narrows_duplicate_endpoint_facts()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var clientMethodA = "Client.OrderService.loadOrderA(System.Int32)";
+        var clientMethodB = "Client.OrderService.loadOrderB(System.Int32)";
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5, clientMethodA),
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 7, clientMethodB)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSymbol: clientMethodB,
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths, candidate => candidate.Edges.Any(edge => edge.EdgeKind == "endpoint-match"));
+        Assert.Equal("client", path.Nodes.First().SourceLabel);
+        Assert.Equal(7, path.Nodes.First().StartLine);
+        Assert.DoesNotContain(result.Report.Paths, candidate => candidate.Nodes.First().StartLine == 5);
+    }
+
+    [Fact]
+    public async Task Paths_without_surface_filter_does_not_stop_at_endpoint_surfaces()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.HealthController.Get()";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/health", "/health", "src/health.ts", 3)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/health", "/health", controller, "HealthController.cs", 6)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /health"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+    }
+
+    [Fact]
+    public async Task Paths_reconciles_source_local_symbols_to_connect_scanned_route_call_and_query_shapes()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "global::EndpointServerSample.Controllers.RunnerController.GetById(string runnerId)";
+        var syntaxController = "EndpointServerSample.Controllers.RunnerController.GetById";
+        var repository = "global::EndpointServerSample.Services.RunnerRepository.Query(string runnerId)";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/admin/runner/get-by-id/{runnerId}", "/api/admin/runner/get-by-id/{}", "src/runner.ts", 5)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/admin/runner/get-by-id/{runnerId:guid}", "/api/admin/runner/get-by-id/{}", syntaxController, "Controllers/RunnerController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/RunnerController.cs", 14),
+            QueryPatternFact(server, "Query", "Services/RunnerRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/admin/runner/get-by-id/{}",
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths, candidate => candidate.Edges.Any(edge => edge.EdgeKind == "endpoint-match"));
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "endpoint-match");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "calls");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "symbol-reconciliation" && edge.RuleId == "combined.paths.symbol-reconciliation.v1");
+        Assert.Equal("NeedsReviewPath", path.Classification);
+    }
+
+    [Fact]
+    public async Task Paths_does_not_reconcile_distinct_overload_signatures()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.RunnerController.Get()";
+        var queryByNumber = "Server.RunnerRepository.Query(int runnerNumber)";
+        var queryById = "Server.RunnerRepository.Query(string runnerId)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            CallFact(server, controller, queryByNumber, "Controllers/RunnerController.cs", 14),
+            QueryPatternFact(server, queryById, "Infrastructure/RunnerRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: queryByNumber,
+                ToSurface: "sql-query"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "NoPathFound");
+    }
+
+    [Fact]
+    public async Task Paths_supports_package_config_surface_and_symbol_selector()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var startup = "Server.Startup.Configure()";
+        SqliteIndexWriter.Write(index, manifest, [
+            ConfigFact(manifest, startup, "appsettings.json", 4),
+            PackageFact(manifest, startup, "Server.csproj", 7)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths.json"),
+                Format: "json",
+                FromSymbol: startup,
+                ToSurface: "package-config",
+                SurfaceName: "ConnectionStrings:Default"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(startup, path.Nodes.First().SymbolId);
+        Assert.Equal("package-config", path.Nodes.Last().SurfaceKind);
+        Assert.Equal("ConnectionStrings:Default", path.Nodes.Last().ConfigKey);
+        Assert.Null(result.MarkdownPath);
+        Assert.True(File.Exists(result.JsonPath));
+    }
+
+    [Fact]
+    public async Task Paths_reports_selector_no_match_and_rejects_edge_kind_surface()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        SqliteIndexWriter.Write(index, manifest, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: "Missing.Symbol",
+                ToSurface: "sql-query"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.All(result.Report.Gaps, gap =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(gap.RuleId));
+            Assert.False(string.IsNullOrWhiteSpace(gap.EvidenceTier));
+        });
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "bad"),
+                ToSurface: "calls")));
+        Assert.Contains("edge kind", ex.Message);
+    }
+
+    [Fact]
+    public async Task Paths_reports_unknown_gap_for_no_path_with_reduced_contributing_source()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15", analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial");
+        var method = "Server.Orphan.Run()";
+        SqliteIndexWriter.Write(index, manifest, [
+            MethodFact(manifest, method, "Orphan.cs", 4),
+            QueryPatternFact(manifest, null, "Infrastructure/UnlinkedRepository.cs", 12)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: method,
+                ToSurface: "sql-query"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnknownAnalysisGap" && gap.Classification == "UnknownAnalysisGap");
+    }
+
+    [Fact]
+    public async Task Paths_reports_unknown_gap_when_reachable_server_has_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15", analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            QueryPatternFact(server, null, "Infrastructure/UnlinkedRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "client",
+                ToSurface: "sql-query"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnknownAnalysisGap" && gap.SourceLabel == "server");
+    }
+
+    [Fact]
+    public async Task Paths_does_not_treat_surface_target_symbol_as_code_symbol()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        SqliteIndexWriter.Write(index, manifest, [
+            QueryPatternFact(manifest, null, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: "orders",
+                ToSurface: "sql-query"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnlinkedSurface");
+    }
+
+    [Fact]
+    public async Task Paths_cli_writes_summary_and_parses_escaped_source_pair()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.HealthController.Get()";
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/health", "/health", "src/health.ts", 3)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/health", "/health", controller, "HealthController.cs", 6),
+            ConfigFact(server, controller, "appsettings.json", 2)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client:v1", "server:v1"]));
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync(
+            [
+                "paths",
+                "--index", combinedPath,
+                "--out", Path.Combine(temp.Path, "paths"),
+                "--source-pair", " client\\:v1 : server\\:v1 ",
+                "--to-surface", "package-config"
+            ],
+            output,
+            error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, error.ToString());
+        Assert.Contains("TraceMap paths completed:", output.ToString());
+        Assert.Contains("Graph nodes:", output.ToString());
+        Assert.True(File.Exists(Path.Combine(temp.Path, "paths", "paths-report.md")));
+    }
+
+    [Fact]
+    public async Task Paths_preserves_selector_truncation_when_search_is_not_truncated()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var facts = Enumerable.Range(0, 260)
+            .Select(index => PackageFact(manifest, $"Server.Startup.Configure{index}()", "Server.csproj", index + 1))
+            .ToArray();
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSource: "server",
+                ToSurface: "package-config"));
+
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "selector-candidates");
+    }
+
+    private static ScanManifest Manifest(
+        string repo,
+        string scannerVersion,
+        string analysisLevel = "Level1SemanticAnalysis",
+        string buildStatus = "Succeeded")
+    {
+        return new ScanManifest(
+            $"scan-{repo}",
+            repo,
+            null,
+            "main",
+            "abc123",
+            scannerVersion,
+            DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+            analysisLevel,
+            buildStatus,
+            [],
+            [],
+            [],
+            [],
+            ".",
+            FactFactory.Hash(repo, 32),
+            FactFactory.Hash("git-root", 32));
+    }
+
+    private static CodeFact HttpClientFact(ScanManifest manifest, string method, string template, string key, string file, int line, string? sourceSymbol = null)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpCallDetected,
+            RuleIds.HttpClientInvocation,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: $"{method} {template}",
+            contractElement: method,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethod"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["urlKind"] = "template",
+                ["clientFramework"] = "test"
+            });
+    }
+
+    private static CodeFact RouteFactWithoutPathKey(ScanManifest manifest, string method, string template, string methodSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol,
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["routeTemplates"] = template
+            });
+    }
+
+    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string methodSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol,
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["routeTemplates"] = template
+            });
+    }
+
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callKind"] = "method"
+            });
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.QueryPatternDetected,
+            RuleIds.CSharpSyntaxQueryPattern,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "orders",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["operationName"] = "SELECT",
+                ["tableName"] = "orders",
+                ["columnNames"] = "id;status",
+                ["sqlSourceKind"] = "literal-string",
+                ["queryShapeHash"] = "shape123"
+            });
+    }
+
+    private static CodeFact ConfigFact(ScanManifest manifest, string sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ConnectionStringDeclared,
+            RuleIds.ConfigKey,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "ConnectionStrings:Default",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["keyPath"] = "ConnectionStrings:Default",
+                ["valueHash"] = "hash-only"
+            });
+    }
+
+    private static CodeFact PackageFact(ScanManifest manifest, string sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.PackageReferenced,
+            RuleIds.ProjectFile,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "Package.TraceMap.Test",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["package"] = "Package.TraceMap.Test",
+                ["version"] = "1.0.0"
+            });
+    }
+
+    private static CodeFact MethodFact(ScanManifest manifest, string methodSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.MethodDeclared,
+            RuleIds.CSharpSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: methodSymbol);
+    }
+
+    private static async Task<string> Sha256Async(string path)
+    {
+        await using var stream = File.OpenRead(path);
+        return Convert.ToHexString(await SHA256.HashDataAsync(stream));
+    }
+}

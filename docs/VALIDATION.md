@@ -15,7 +15,7 @@ Every language adapter should have:
 | reducer fixture | proves contract delta matching through shared facts/index schema |
 | SQLite relationship queries | proves `call_edges`, `object_creations`, `argument_flows`, symbols, and relationship tables are populated when facts exist |
 | integration facts | proves HTTP/API, config, SQL/DB, serializer, and package/dependency facts where supported |
-| combine/export smoke | proves shared schema compatibility across adapters |
+| combine/report/paths/export smoke | proves shared schema compatibility, combined dependency reporting, and static dependency path queries across adapters |
 | public OSS smoke | proves larger real-world repos complete without unchecked assumptions |
 | private-path guard | proves generated docs/scripts do not leak developer-local paths |
 
@@ -40,6 +40,40 @@ For JVM CLI smoke, also run:
 ```bash
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
 ```
+
+For combined dependency report or path-query changes, run a combine/report/paths smoke over any two existing local scan outputs:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+  --index <first>/index.sqlite --label first \
+  --index <second>/index.sqlite --label second \
+  --out <tmp>/combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sqlite --out <tmp>/combined-report
+dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
+test -f <tmp>/combined-report/dependency-report.md
+test -f <tmp>/combined-report/dependency-report.json
+test -f <tmp>/combined-paths/paths-report.md
+test -f <tmp>/combined-paths/paths-report.json
+```
+
+For changes to `combine`, `report`, `paths`, endpoint extraction, call edges, SQL/query extraction, or dependency-surface projection, run the public combined-path smoke:
+
+```bash
+./scripts/smoke-combined-paths.sh
+```
+
+The smoke is sample-only and does not clone repositories or read external application paths. It scans `samples/endpoint-client-angular` and `samples/endpoint-server-aspnet`, combines them as `sample-client` and `sample-server`, runs `report`, runs default and targeted `paths` queries, and verifies:
+
+- required scan, combined, report, and paths artifacts exist
+- the combined report has exactly `sample-client` and `sample-server`
+- the sample endpoint `/api/admin/runner/get-by-id/{}` has endpoint alignment evidence; duplicate syntax/semantic server route facts may classify this as review-tier `AmbiguousMatch`
+- a targeted path reaches a `sql-query` terminal from the client through an endpoint match, server call edge, source-local symbol reconciliation edge, and surface evidence edge
+- path edges and gaps carry rule IDs and evidence tiers
+- a bogus endpoint selector returns a valid zero-path report with a rule-backed gap
+- repeated targeted `paths` JSON output is byte-stable
+- generated Markdown does not render the synthetic SQL sentinel or developer-local absolute paths
+
+The smoke writes generated manifests, logs, SQLite files, and reports under a caller-provided directory or `mktemp -d`. Generated manifests/logs may contain absolute paths to the checked-in samples or temporary output roots; they must not be committed.
 
 ## Public OSS Smoke
 

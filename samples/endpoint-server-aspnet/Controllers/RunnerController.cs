@@ -4,10 +4,13 @@ namespace EndpointServerSample.Controllers;
 [Route("api/admin/[controller]")]
 public sealed class RunnerController
 {
+    private readonly RunnerRepository repository = new();
+
     [HttpGet("get-by-id/{runnerId:guid}")]
     public object GetById(string runnerId)
     {
-        return new { runnerId };
+        var status = repository.Query(runnerId);
+        return new { runnerId, status };
     }
 
     [HttpPost("check-in/{clubId?}")]

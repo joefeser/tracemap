@@ -129,6 +129,31 @@ For every successful `tracemap export --index <combined.sqlite> --out <out> --fo
 - Mermaid output starts with `flowchart TD` and groups dependency rows by source label.
 - export output does not include raw source snippets.
 
+For every successful `tracemap report --index <combined.sqlite> --out <out>` run, verify:
+
+- report rejects single-language indexes with a clear combined-index error.
+- directory output writes `dependency-report.md` and `dependency-report.json`.
+- source inventory includes labels, language, scan root, commit SHA, analysis level, and build status without local absolute paths.
+- reduced coverage and known gaps are labeled as coverage-relative.
+- endpoint findings distinguish two-sided pairwise comparisons from one-sided global inventory rows.
+- endpoint JSON rows include side-specific scan IDs, commit SHAs, rule IDs, evidence tiers, file spans, and fact IDs.
+- HTTP, SQL/query, package/config, and dependency-edge surfaces preserve source labels and evidence spans.
+- SQL and dynamic URL rows do not display raw SQL text, raw URLs, source snippets, or local absolute paths.
+- `endpoint_matches` is not mutated by report generation.
+
+For every successful `tracemap paths --index <combined.sqlite> --out <out>` run, verify:
+
+- path reports reject single-language indexes with a clear combined-index error.
+- directory output writes `paths-report.md` and `paths-report.json`.
+- the command opens the combined database read-only and does not mutate `endpoint_matches` or source evidence tables.
+- no-selector mode starts from in-memory endpoint matches and searches to terminal dependency surfaces.
+- `--from-endpoint`, `--from-symbol`, `--from-source`, `--to-surface`, `--surface-name`, `--source-pair`, `--max-depth`, `--max-paths`, and `--max-frontier` behave deterministically.
+- terminal surfaces are limited to `sql-query`, `http-route`, `http-client`, and `package-config`.
+- path rows include source labels, scan IDs, commit SHAs, rule IDs, evidence tiers, file spans, node IDs, edge IDs, and supporting fact or edge IDs where available.
+- classifications use `StrongStaticPath`, `ProbableStaticPath`, `NeedsReviewPath`, `UnknownAnalysisGap`, `NoPathFound`, and `SelectorNoMatch`.
+- no-path conclusions are coverage-relative when contributing sources have reduced coverage.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, or local absolute paths.
+
 ## Language Adapter Acceptance
 
 New language adapters should satisfy [Language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md) before language-specific depth is considered complete.

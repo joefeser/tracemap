@@ -123,6 +123,14 @@ Adapters should emit direct relationships only when evidence supports them:
 
 Avoid inferring runtime dependency injection bindings, dynamic dispatch targets, reflection targets, serializer mappings, branch feasibility, or collection contents without explicit rule-backed evidence.
 
+Combined path queries work best when adapters attach integration facts to the containing source symbol and emit direct call/object/argument/relationship evidence with stable display symbols. In practice, endpoint-to-surface paths need:
+
+- endpoint facts with `normalizedPathKey`, method properties, source labels, and a containing method symbol when statically visible.
+- dependency surface facts such as SQL/config/package/HTTP evidence with `sourceSymbol` or role properties pointing to the containing method/type when statically visible.
+- call, object creation, argument-flow, relationship, and parameter-forward rows that stay source-local unless a derived boundary rule such as endpoint matching connects sources.
+
+Adapters should leave surfaces unlinked when containing symbols are not credible. The combined paths report will surface those as review gaps instead of inventing a path.
+
 Endpoint boundary facts should use a shared path key when possible:
 
 - `normalizedPathKey` is path-only; HTTP method belongs in `httpMethod` and should not be prefixed into the key.
