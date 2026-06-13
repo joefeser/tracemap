@@ -105,12 +105,13 @@ dependency-report.json
 1. WHEN combined facts contain HTTP client calls THEN the report SHALL summarize them by source label, HTTP method, normalized path key when available, and dynamic/unknown URL status.
 2. WHEN combined facts contain HTTP route bindings THEN the report SHALL summarize them by source label, HTTP method, normalized path key when available, and route evidence tier.
 3. WHEN combined facts contain structured SQL or query-pattern evidence THEN the report SHALL summarize operation, table names, column names, source kind, shape hash, source label, evidence tier, rule ID, and file span where available.
-4. WHEN combined facts contain `SqlTextUsed` evidence only THEN the report SHALL render text hash, text length, source kind when available, and `n/a` for table/column fields rather than inventing parsed SQL structure.
+4. WHEN combined facts contain `SqlTextUsed`, `DapperCallDetected`, or `SqlCommandDetected` evidence only THEN the report SHALL render text hash, text length, source kind or operation metadata when available, and `n/a` for table/column fields rather than inventing parsed SQL structure.
 5. WHEN combined facts contain package/dependency evidence THEN the report SHALL summarize package/module names by source label and dependency kind where available.
-6. WHEN combined dependency edges exist THEN the report SHALL summarize calls, object creations, symbol relationships, and parameter-forwarding edges by source label and edge kind.
-7. WHEN facts lack optional normalized fields THEN the report SHALL render `unknown` or `n/a`, not crash and not invent values.
-8. WHEN the same dependency surface appears in multiple sources THEN the report SHALL preserve separate source evidence rows rather than deduplicating away provenance.
-9. WHEN tables become large THEN Markdown SHALL show the first 200 rows per section using deterministic ordering, emit a truncation notice, and include full rows in JSON unless a JSON cap is explicitly requested.
+6. WHEN combined facts contain config, connection string, or environment variable evidence THEN the report SHALL summarize stable key/name metadata by source label without raw sensitive values.
+7. WHEN combined dependency edges exist THEN the report SHALL summarize calls, object creations, symbol relationships, and parameter-forwarding edges by source label and edge kind.
+8. WHEN facts lack optional normalized fields THEN the report SHALL render `unknown` or `n/a`, not crash and not invent values.
+9. WHEN the same dependency surface appears in multiple sources THEN the report SHALL preserve separate source evidence rows rather than deduplicating away provenance.
+10. WHEN tables become large THEN Markdown SHALL show the first 200 rows per section using deterministic ordering, emit a truncation notice, and include full rows in JSON unless a JSON cap is explicitly requested.
 
 ### Requirement 4: Combined Endpoint Alignment
 
@@ -118,17 +119,17 @@ dependency-report.json
 
 #### Acceptance Criteria
 
-1. WHEN combined facts include `HttpCallDetected` and `HttpRouteBinding` facts with normalized path evidence THEN the report SHALL compute endpoint alignment per compatible `(client source, server source)` pair.
+1. WHEN combined facts include `HttpCallDetected` and `HttpRouteBinding` facts with normalized path evidence THEN the report SHALL compute two-sided endpoint comparisons per compatible `(client source, server source)` pair.
 2. WHEN a client call and server endpoint match by HTTP method and normalized path key THEN the finding SHALL be classified as `MatchedEndpoint`.
 3. WHEN a server optional segment produces a compatible path shape THEN the finding SHALL be classified as `OptionalSegmentMatch`.
 4. WHEN path keys match but HTTP methods differ THEN the finding SHALL be classified as `MethodMismatch`.
-5. WHEN a client call has no matching server endpoint in the combined index THEN the finding SHALL be classified as `ClientCallNoServerEndpoint`.
-6. WHEN a server endpoint has no matching client call in the combined index THEN the finding SHALL be classified as `ServerEndpointNoClientMatch`.
-7. WHEN a client URL is dynamic or cannot be normalized safely THEN the finding SHALL be classified as `DynamicClientUrlNeedsReview`.
+5. WHEN a client call has no matching server endpoint anywhere in the combined index THEN the report SHALL emit one global inventory finding classified as `ClientCallNoServerEndpoint` with server-side JSON fields set to `null`.
+6. WHEN a server endpoint has no matching client call anywhere in the combined index THEN the report SHALL emit one global inventory finding classified as `ServerEndpointNoClientMatch` with client-side JSON fields set to `null`.
+7. WHEN a client URL is dynamic or cannot be normalized safely THEN the report SHALL emit one global inventory finding classified as `DynamicClientUrlNeedsReview` with server-side JSON fields set to `null`.
 8. WHEN the same client call matches endpoints in two different server sources THEN the report SHALL emit one match per server source and SHALL NOT collapse that fan-out into `AmbiguousMatch`.
-9. WHEN multiple server endpoints inside the same server source tie for the same best match THEN the finding SHALL be classified as `AmbiguousMatch`.
+9. WHEN multiple server endpoints inside the same server source match the same client call at the same match class THEN the finding SHALL be classified as `AmbiguousMatch`.
 10. WHEN a single source contains both HTTP client calls and HTTP route bindings THEN same-source matches SHALL be included and flagged with `sameSource = true`.
-11. WHEN analysis gaps prevent credible matching THEN the finding SHALL be classified as `UnknownAnalysisGap` and SHALL attach representative source evidence where available.
+11. WHEN analysis gaps prevent credible matching THEN the finding SHALL be classified as `UnknownAnalysisGap`, SHALL attach representative source evidence where available, and MAY be either pairwise or one-sided depending on the available evidence.
 12. WHEN no client facts or no server route facts exist THEN the report SHALL say that endpoint alignment was not computable for those sources rather than implying no dependencies.
 13. WHEN classifications like client-only or server-only are reported THEN the report SHALL state they are coverage-relative and are not proof of broken calls, unused endpoints, or dead code.
 14. WHEN endpoint findings are computed THEN each finding SHALL include source labels, source index IDs, combined fact IDs, original fact IDs, scan IDs, commit SHAs, rule IDs, evidence tiers, file paths, line spans, and static match quality where available.
@@ -142,7 +143,7 @@ dependency-report.json
 1. WHEN the MVP `tracemap report` command computes endpoint matches THEN it SHALL keep them in memory and SHALL NOT write to `endpoint_matches`.
 2. WHEN a future opt-in write mode is added THEN it SHALL be explicit, such as `--write-derived`, not the default report behavior.
 3. WHEN future rows are inserted into the current `endpoint_matches` table THEN only two-sided findings with both client and server source IDs SHALL be persisted unless the schema is changed.
-4. WHEN one-sided, dynamic, or gap findings are produced against the current schema THEN they SHALL remain report-only because `client_source_index_id` and `server_source_index_id` are `NOT NULL`.
+4. WHEN one-sided, dynamic, or one-sided gap findings are produced against the current schema THEN they SHALL remain report-only because `client_source_index_id` and `server_source_index_id` are `NOT NULL`.
 5. WHEN rows are inserted in a future slice THEN `endpoint_match_id` SHALL be deterministic from source index IDs, combined fact IDs, classification, HTTP method, and normalized path key.
 6. WHEN future derived persistence runs repeatedly on the same combined index THEN it SHALL delete rows with the same `derivedBy` algorithm tag before inserting new rows, so changed classifications do not leave orphan rows.
 7. WHEN endpoint matches are stored THEN full provenance SHALL live in `evidence_json`, including source labels, source index IDs, combined fact IDs, original fact IDs, scan IDs, commit SHAs, rule IDs, evidence tiers, file paths, line spans, and static match quality.

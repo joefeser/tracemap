@@ -39,7 +39,8 @@
 
 - [ ] Add combined endpoint classification.
   - [ ] Match by HTTP method and normalized path key.
-  - [ ] Compute matches per `(client source, server source)` pair.
+  - [ ] Compute two-sided comparison findings per `(client source, server source)` pair.
+  - [ ] Compute client-only, server-only, and dynamic findings as global one-sided inventory rows with absent-side JSON fields set to `null`.
   - [ ] Emit fan-out matches across different server sources as separate matches, not global ambiguity.
   - [ ] Include same-source client/route pairs and flag `sameSource`.
   - [ ] Classify matched, optional, method mismatch, ambiguous, dynamic, client-only, server-only, and unknown-gap cases.
@@ -53,9 +54,10 @@
 - [ ] Add dependency surface extraction.
   - [ ] Render HTTP client and route surfaces.
   - [ ] Render SQL-shape and query-builder surfaces.
-  - [ ] Render `SqlTextUsed` as hash/length evidence only.
+  - [ ] Render `SqlTextUsed`, `DapperCallDetected`, and `SqlCommandDetected` as hash/length or operation/source metadata evidence only.
   - [ ] Render `n/a` for table/column fields when only hash/length SQL evidence exists.
-  - [ ] Render package/dependency surfaces only from the explicit fact/property keys listed in the design.
+  - [ ] Render package/config surfaces only from the explicit fact/property keys listed in the design.
+  - [ ] Derive deterministic surface display names using the design fallback order.
 
 - [ ] Add dependency edge extraction.
   - [ ] Read `combined_dependency_edges`.

@@ -136,7 +136,7 @@ For each source:
   - manifest known gaps are non-empty.
 - Correct language display when `scanner_version` clearly identifies an adapter but `index_sources.language` is stale or wrong.
 - Treat a corrected language as a coverage warning because provenance stored in the combined DB was inconsistent.
-- Group known gaps by stable category. A simple MVP category can use the prefix before `:` or the first sentence fragment.
+- Group known gaps by stable category. A simple MVP category can use the prefix before `:` or the first sentence fragment, falling back to the entire gap message and then `General` if no non-empty category can be derived.
 
 Small compatibility fix: update `CombinedIndexBuilder.InferLanguage` so `tracemap-jvm-*` becomes `jvm` and Python scanner versions become `python` before the generic `tracemap` -> `csharp` fallback.
 
@@ -179,6 +179,8 @@ Fact types:
 - `QueryPatternDetected`
 - `SqlTextUsed`
 - `DatabaseColumnMapping`
+- `DapperCallDetected`
+- `SqlCommandDetected`
 
 SQL-shape rows should prefer:
 
@@ -197,20 +199,25 @@ Query-builder rows should prefer:
 - `mutationFields`
 - `patternHash`
 
-`SqlTextUsed` rows should display only hashes/lengths/source kind. They must not display raw SQL.
+`SqlTextUsed`, `DapperCallDetected`, and `SqlCommandDetected` rows should display only hashes/lengths/source kind and visible operation/source metadata where available. They must not display raw SQL or invent table/column names.
 
 ### Packages and Config
 
-Package/dependency facts differ by adapter. MVP should start with explicit, conservative property extraction:
+Package/dependency and configuration facts differ by adapter. MVP should start with explicit, conservative property extraction:
 
-- fact types containing `Package`, `Dependency`, or `ProjectReference`
-- properties named `packageName`, `dependencyName`, `moduleName`, `groupId`, `artifactId`, `version`, `dependencyKind`, `name`, or `targetSymbol`
+- fact types containing `Package`, `Dependency`, `ProjectReference`, `Config`, `ConnectionString`, or `EnvironmentVariable`
+- properties named `packageName`, `dependencyName`, `moduleName`, `groupId`, `artifactId`, `version`, `dependencyKind`, `name`, `targetSymbol`, `keyPath`, `configKey`, `connectionStringName`, or `environmentVariableName`
 
-If no stable package facts are present, show `No evidence found in the combined index.`
+If no stable package or config facts are present, show `No evidence found in the combined index.`
 
 ## Endpoint Alignment
 
-The combined matcher generalizes the existing two-index endpoint concept, but matches are evaluated per `(client source, server source)` pair.
+The combined matcher generalizes the existing two-index endpoint concept.
+
+There are two endpoint row shapes:
+
+- Two-sided comparison findings compare a client candidate with server candidates per `(client source, server source)` pair. These include `MatchedEndpoint`, `OptionalSegmentMatch`, `MethodMismatch`, `AmbiguousMatch`, and pairwise `UnknownAnalysisGap`.
+- One-sided inventory findings are emitted once per unmatched or dynamic candidate across the whole combined index. These include `ClientCallNoServerEndpoint`, `ServerEndpointNoClientMatch`, `DynamicClientUrlNeedsReview`, and one-sided `UnknownAnalysisGap`. The absent side's JSON fields are `null`, and these rows are report-only in the MVP.
 
 Inputs:
 
@@ -226,14 +233,15 @@ Matching:
 1. Exclude only self-pairs where client and server candidates are the exact same combined fact.
 2. Include same-source client/route pairs when the facts differ and candidate roles differ; set `sameSource = true`.
 3. Normalize or read `normalizedPathKey`.
-4. If a client has `urlKind = dynamic` or no safe path key, emit `DynamicClientUrlNeedsReview`.
+4. If a client has `urlKind = dynamic` or no safe path key, emit one global `DynamicClientUrlNeedsReview` inventory row for that client candidate.
 5. Match exact method + path key as `MatchedEndpoint`.
 6. Match compatible optional route shapes as `OptionalSegmentMatch` when optional metadata is available.
 7. Match path key but method mismatch as `MethodMismatch`.
 8. If one client call matches two different server sources, emit one match per server source. This is source fan-out, not ambiguity.
-9. If multiple server candidates inside the same server source tie with the same highest score, emit `AmbiguousMatch`.
-10. Emit client-only and server-only inventory after matched/mismatch/ambiguous findings.
-11. Emit `UnknownAnalysisGap` for source pairs where missing route/call facts plus known gaps make a clean statement unreliable.
+9. If multiple server candidates inside the same server source match the same client call at the same match class, emit `AmbiguousMatch`.
+10. Emit one global client-only row for each client candidate with no matched, optional, method-mismatch, or ambiguous comparison anywhere in the combined index.
+11. Emit one global server-only row for each server candidate with no matched, optional, method-mismatch, or ambiguous comparison anywhere in the combined index.
+12. Emit `UnknownAnalysisGap` for source pairs or one-sided candidates where missing route/call facts plus known gaps make a clean statement unreliable.
 
 Static match quality:
 
@@ -297,6 +305,12 @@ Keep rows compact and deterministic. Suggested sorting:
 - Endpoint findings by classification priority, method, path key, client label, server label, file path, line.
 - Surfaces by surface kind, source label, display name, file path, line.
 - Edges by edge kind, source label, source symbol, target symbol, file path, line.
+
+Surface `displayName` derivation:
+
+- HTTP client/route surfaces: `normalizedPathKey`, else `normalizedPathTemplate`, else HTTP method plus `unknown`.
+- SQL/query surfaces: `tableName`, else `tableNames`, else `queryShapeHash`, else `textHash`, else `targetSymbol`, else `unknown`.
+- Package/config surfaces: `packageName`, `dependencyName`, `moduleName`, `keyPath`, `configKey`, `connectionStringName`, `environmentVariableName`, `name`, then `targetSymbol`.
 
 Classification priority:
 
