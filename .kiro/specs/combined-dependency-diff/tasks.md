@@ -9,6 +9,9 @@
   - [ ] Confirm `--scope paths` without `--include-paths` is a hard error.
   - [ ] Confirm `--scope all` without `--include-paths` runs non-path scopes and reports that path comparison was not requested.
   - [ ] Confirm selectors and limits: `--source`, `--endpoint`, `--surface`, `--surface-name`, `--scope`, `--max-depth`, `--max-paths`, `--max-frontier`, and `--max-diff-rows`.
+  - [ ] Confirm `--max-gaps` default and truncation behavior.
+  - [ ] Confirm `--format json` with directory output still writes both Markdown and JSON.
+  - [ ] Confirm endpoint selector parsing uses first token as method and remainder as path key.
   - [ ] Confirm `--surface-name` is exact case-insensitive matching in MVP and wildcard support is deferred.
   - [ ] Confirm `--allow-identity-mismatch` is required to compare sources with known identity conflicts.
   - [ ] Confirm `--exit-code` is opt-in and diffs return exit code `0` by default.
@@ -26,7 +29,14 @@
   - [ ] Reuse dependency surface projection where possible.
   - [ ] Extract a reusable path query/projection API that returns path inventory without writing reports.
   - [ ] Extract shared safe path, SHA-256 hashing, sorted metadata, and Markdown escaping helpers.
+  - [ ] Extract shared output writing, directory detection, and format normalization helpers.
+  - [ ] Extract path signature hasher.
+  - [ ] Extract endpoint stable key builder.
+  - [ ] Extract defensive JSON property parser.
+  - [ ] Extract deterministic classification/sort helpers.
   - [ ] Make `ReadAsync`, endpoint matching, surface projection, and helper APIs visible within the reporting assembly as needed without exposing unnecessary public API.
+  - [ ] Keep diff implementation in the reporting assembly unless shared APIs become public.
+  - [ ] Avoid holding full before and after report object graphs longer than needed during projection.
   - [ ] Preserve existing report/path output before adding diff behavior.
   - [ ] Add parity tests proving report/path behavior did not change after extraction.
 
@@ -39,6 +49,8 @@
   - [ ] Define deterministic classification ordering.
   - [ ] Define `DiffId` derivation using SHA-256 lowercase hex.
   - [ ] Define `CombinedPathDiffRow` and path evidence models.
+  - [ ] Define `CombinedDiffSnapshotInfo` and source info models.
+  - [ ] Define `CombinedDiffGap` separately from path-specific gap models.
   - [ ] Ensure required JSON fields use `null` or empty arrays consistently.
   - [ ] Serialize dictionaries as sorted key-value arrays.
   - [ ] Ensure no generated timestamp is emitted.
@@ -51,10 +63,14 @@
   - [ ] Optionally project comparable path records through the path query engine.
   - [ ] Preserve fact IDs, edge IDs, scan IDs, commit SHAs, rule IDs, evidence tiers, file paths, and line spans.
   - [ ] Parse JSON property bags defensively.
+  - [ ] Emit `MalformedPropertiesJson` gaps and continue where possible.
+  - [ ] Emit `MissingManifestJson` gaps when source manifest metadata is absent or empty.
   - [ ] Apply the `SafeMetadata` allowlist and exclude or hash all other values.
   - [ ] Treat normalized table names as renderable schema identifiers only when extractor metadata marks them safe enough.
   - [ ] Strip or hash unsafe values.
   - [ ] Validate required schema objects and treat optional schema objects as precision improvements with explicit gaps when absent.
+  - [ ] Check underlying edge/relationship/flow tables individually rather than only validating `combined_dependency_edges`.
+  - [ ] Treat `endpoint_matches` as off-limits for diff reads.
   - [ ] Emit schema errors with side-specific table names.
 
 - [ ] Implement stable identity construction.
@@ -63,13 +79,14 @@
   - [ ] Fail by default on known source identity conflicts.
   - [ ] Down-rank evidence for unverified source identity or identity mismatches allowed with `--allow-identity-mismatch`.
   - [ ] Build endpoint stable keys from source label, endpoint kind, method, normalized path key, and handler identity where available.
+  - [ ] Classify stable unmatched-to-matched endpoint evidence as `ChangedEvidence` rather than added/removed churn.
   - [ ] Build surface stable keys from source label, surface kind, normalized metadata, and structured metadata hash.
   - [ ] Use HTTP path key when present, host hash fallback, then safe file span fallback.
   - [ ] Use safe file path plus line span hash when surface symbol identity is unavailable.
   - [ ] Build edge stable keys from source label, edge kind, source identity, target identity, rule family, and metadata hash.
   - [ ] Define rule family by removing a trailing `.v<digits>` token from `ruleId`.
   - [ ] Build path signatures from ordered node/edge descriptors and terminal surface identity.
-  - [ ] Prefer stable symbol IDs and fully qualified signatures over display names in path signatures.
+  - [ ] Prefer stable combined fact IDs, combined symbol IDs, source IDs, and fully qualified signatures over display names in path signatures.
   - [ ] Ignore volatile database row IDs when comparing.
   - [ ] Detect duplicate stable identities within each side and kind.
   - [ ] Emit `DuplicateIdentity` gaps.
@@ -82,8 +99,10 @@
   - [ ] Filter surface names by exact case-insensitive match.
   - [ ] Reject or treat wildcard characters literally in MVP, with clear docs that wildcard support is deferred.
   - [ ] Apply selectors symmetrically to both before and after snapshots.
+  - [ ] Record selectors ignored by disabled scopes in query metadata.
   - [ ] Include one-sided selector matches as added/removed/gap-aware rows rather than dropping them.
   - [ ] Emit `SelectorNoMatch` when selectors match neither snapshot.
+  - [ ] Reject endpoint selectors missing either method or path key.
   - [ ] Validate unsupported or invalid selector combinations with clear errors.
 
 - [ ] Implement diff engine.
@@ -101,7 +120,10 @@
   - [ ] Apply `UnknownAnalysisGap` when source identity, commit SHA, schema, or coverage prevents credible comparison.
   - [ ] Emit `NoDiffEvidence` when comparable evidence exists and no changes are found.
   - [ ] Apply `--max-diff-rows` caps per diff kind and emit `TruncatedByLimit` gaps.
+  - [ ] Apply `--max-gaps` and emit a final `TruncatedByLimit` gap when gaps are omitted.
+  - [ ] Coalesce duplicate before/after selector and schema gaps.
   - [ ] Sort diff rows deterministically.
+  - [ ] Sort gaps, limitations, supporting fact IDs, and supporting edge IDs deterministically.
 
 - [ ] Add Markdown writer.
   - [ ] Render sections: Summary, Compared Snapshots, Sources, Coverage Changes, Endpoint Diffs, Surface Diffs, Edge Diffs, Path Diffs, Gaps, Limitations.
@@ -122,11 +144,13 @@
   - [ ] Exclude timestamps and raw input property bags.
   - [ ] Use `null` and empty arrays consistently.
   - [ ] Include configured row/path caps in query metadata.
+  - [ ] Include `reportType = combined-dependency-diff`.
+  - [ ] Emit empty required arrays even when there are no rows.
   - [ ] Produce byte-stable output for identical inputs.
 
 - [ ] Wire CLI.
   - [ ] Add `tracemap diff --help`.
-  - [ ] Parse `--before`, `--after`, `--out`, `--format`, `--scope`, `--include-paths`, `--allow-identity-mismatch`, `--exit-code`, selectors, row caps, and path limits.
+  - [ ] Parse `--before`, `--after`, `--out`, `--format`, `--scope`, `--include-paths`, `--allow-identity-mismatch`, `--exit-code`, selectors, row/gap caps, and path limits.
   - [ ] Validate required arguments.
   - [ ] Validate scope values.
   - [ ] Treat missing-extension output paths as directories.
@@ -147,6 +171,7 @@
   - [ ] Source identity unverified down-ranks evidence.
   - [ ] Source identity mismatch fails by default and proceeds only with `--allow-identity-mismatch`.
   - [ ] Short and full commit SHAs are treated as different strings.
+  - [ ] Commit SHA only change produces source-level `ChangedEvidence` without endpoint/surface/edge/path churn.
   - [ ] Coverage changed.
   - [ ] Endpoint added.
   - [ ] Endpoint removed.
@@ -172,17 +197,27 @@
   - [ ] Omitted `--include-paths` renders path-not-run notice.
   - [ ] `--scope paths` without `--include-paths` fails clearly.
   - [ ] `--scope endpoints`, `--scope surfaces`, and `--scope edges` exclude unrelated sections.
+  - [ ] `--format json` with directory output writes both report files.
+  - [ ] Endpoint selector without method or without path key fails clearly.
   - [ ] `--source` filters both snapshots.
   - [ ] `--endpoint` filters endpoint and path diffs.
   - [ ] `--surface` filters surface and path diffs.
   - [ ] `--surface-name` exact case-insensitive matching.
   - [ ] Valid `--surface` values and report-to-path surface mapping.
   - [ ] `--max-diff-rows` caps rows deterministically and emits truncation gaps.
+  - [ ] `--max-gaps` caps gaps deterministically and emits truncation notice.
   - [ ] `--exit-code` returns non-zero only when requested and diffs exist.
   - [ ] Selector no-match gap.
+  - [ ] Duplicate selector gaps from before and after are coalesced.
+  - [ ] Identical inputs emit `NoDiffEvidence`.
+  - [ ] JSON emits required empty arrays.
+  - [ ] Markdown section order matches requirements.
+  - [ ] Malformed properties JSON emits a gap and does not crash.
+  - [ ] Missing manifest JSON emits a gap and does not crash.
   - [ ] Markdown escaping for pipes, line endings, brackets, and parentheses.
   - [ ] Markdown escaping for backticks and angle brackets.
   - [ ] Sorted metadata output with special characters is byte-stable.
+  - [ ] Supporting fact IDs, supporting edge IDs, gaps, and limitations are sorted deterministically.
   - [ ] No raw SQL, raw URL, config value, connection string, snippet, local absolute path, or private repo name output.
 
 - [ ] Update docs.

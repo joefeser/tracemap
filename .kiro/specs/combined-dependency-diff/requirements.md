@@ -73,7 +73,7 @@ diff-report.json
 
 1. WHEN the user runs `tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path>` THEN TraceMap SHALL read both indexes and emit a deterministic diff report.
 2. WHEN `--format json` is provided with a file output THEN TraceMap SHALL emit a machine-readable JSON diff report.
-3. WHEN `--out` is an existing directory or a path without an extension THEN TraceMap SHALL emit both `diff-report.md` and `diff-report.json`.
+3. WHEN `--out` is an existing directory or a path without an extension THEN TraceMap SHALL emit both `diff-report.md` and `diff-report.json` regardless of `--format`.
 4. WHEN `--out` is a file path THEN TraceMap SHALL emit only the requested format, defaulting to Markdown.
 5. WHEN either input is not a combined index THEN the command SHALL fail with a clear message and SHALL NOT silently compare single-language indexes.
 6. WHEN required combined tables or views are missing THEN the command SHALL fail with a schema error naming the missing table or view and input side.
@@ -93,14 +93,17 @@ diff-report.json
 5. WHEN `--scope paths` is provided without `--include-paths` THEN TraceMap SHALL fail with a clear message that path comparison is opt-in and requires `--include-paths`.
 6. WHEN `--scope all` is provided without `--include-paths` THEN TraceMap SHALL run non-path scopes and SHALL state in CLI output and the report summary that path comparison was not requested.
 7. WHEN `--source <label>` is provided THEN TraceMap SHALL constrain comparison to matching source labels.
-8. WHEN `--endpoint "<METHOD> <PATH_KEY>"` is provided THEN TraceMap SHALL constrain endpoint and path comparison to matching normalized endpoint evidence.
+8. WHEN `--endpoint "<METHOD> <PATH_KEY>"` is provided THEN TraceMap SHALL constrain endpoint and path comparison to matching normalized endpoint evidence. The parser SHALL split on the first whitespace token; the first token is the method and the remaining non-empty text is the path key.
 9. WHEN `--surface <kind>` is provided THEN TraceMap SHALL constrain surface and path comparison to that terminal surface kind. Valid MVP values SHALL be `sql-query`, `http-route`, `http-client`, and `package-config`.
 10. WHEN `--surface-name <text>` is provided with `--surface` THEN TraceMap SHALL filter surface display names, package names, config keys, table names, or normalized path keys with case-insensitive exact matching. Wildcards are deferred from MVP.
 11. WHEN `--max-depth`, `--max-paths`, or `--max-frontier` are provided with `--include-paths` THEN TraceMap SHALL pass those limits to the path query engine for both snapshots.
 12. WHEN `--max-diff-rows <n>` is provided THEN TraceMap SHALL cap produced endpoint, surface, edge, and path diff rows per kind using deterministic ordering and SHALL emit `TruncatedByLimit` gaps when rows are omitted.
-13. WHEN `--exit-code` is provided THEN TraceMap SHALL return exit code `1` when diff rows are present and SHALL return exit code `0` when no diff rows are present; invalid inputs and schema errors SHALL continue to return non-zero regardless of `--exit-code`.
-14. WHEN selectors match evidence in only one snapshot THEN TraceMap SHALL include that evidence in diff output and SHALL NOT silently filter it; selectors define comparison scope, not a requirement that evidence exist on both sides.
-15. WHEN selectors match neither snapshot THEN TraceMap SHALL emit a valid report with zero diffs and a `SelectorNoMatch` gap.
+13. WHEN `--max-gaps <n>` is provided THEN TraceMap SHALL cap produced gaps using deterministic ordering and SHALL emit a final `TruncatedByLimit` gap when gaps are omitted.
+14. WHEN `--exit-code` is provided THEN TraceMap SHALL return exit code `1` when diff rows are present and SHALL return exit code `0` when no diff rows are present; invalid inputs and schema errors SHALL continue to return non-zero regardless of `--exit-code`.
+15. WHEN selectors are provided THEN TraceMap SHALL apply them only to enabled scopes, and SHALL report ignored selector/scope combinations in query metadata.
+16. WHEN selectors match evidence in only one snapshot THEN TraceMap SHALL include that evidence in diff output and SHALL NOT silently filter it; selectors define comparison scope, not a requirement that evidence exist on both sides.
+17. WHEN selectors match neither snapshot THEN TraceMap SHALL emit a valid report with zero diffs and a `SelectorNoMatch` gap.
+18. WHEN `--endpoint` is provided without a method token or without a path-key token THEN TraceMap SHALL fail with a clear selector parse error rather than matching all methods.
 
 ### Requirement 3: Snapshot and Source Pairing
 
@@ -116,10 +119,11 @@ diff-report.json
 6. WHEN a paired source lacks enough identity metadata to verify it is the same repository THEN TraceMap SHALL emit a `SourceIdentityUnverified` gap and SHALL classify evidence diffs for that source no stronger than `NeedsReviewDiff`.
 7. WHEN paired sources have different commit SHAs THEN TraceMap SHALL include before and after SHAs in source metadata; SHAs are compared as case-insensitive strings with no prefix matching, so short and full SHAs are treated as different.
 8. WHEN either paired source has an unknown commit SHA THEN TraceMap SHALL emit `UnknownAnalysisGap` for conclusions that depend on complete source history.
-9. WHEN scan coverage differs between snapshots THEN TraceMap SHALL emit `CoverageChanged` with before and after coverage values.
-10. WHEN after coverage is reduced and evidence is missing after the change THEN TraceMap SHALL classify the missing evidence as coverage-relative rather than definite removal.
-11. WHEN before coverage is reduced and evidence appears after the change THEN TraceMap SHALL classify the new evidence as `AddedWithBeforeGap` rather than proving it was newly introduced.
-12. WHEN unpaired sources exist THEN path and endpoint diffs SHALL remain source-scoped and SHALL NOT compare unrelated labels by name similarity.
+9. WHEN commit SHA is the only changed source metadata and comparable evidence is otherwise unchanged THEN TraceMap SHALL emit a source-level `ChangedEvidence` row and SHALL NOT emit endpoint, surface, edge, or path churn.
+10. WHEN scan coverage differs between snapshots THEN TraceMap SHALL emit `CoverageChanged` with before and after coverage values.
+11. WHEN after coverage is reduced and evidence is missing after the change THEN TraceMap SHALL classify the missing evidence as coverage-relative rather than definite removal.
+12. WHEN before coverage is reduced and evidence appears after the change THEN TraceMap SHALL classify the new evidence as `AddedWithBeforeGap` rather than proving it was newly introduced.
+13. WHEN unpaired sources exist THEN path and endpoint diffs SHALL remain source-scoped and SHALL NOT compare unrelated labels by name similarity.
 
 ### Requirement 4: Stable Identity Keys
 
@@ -190,8 +194,8 @@ diff-report.json
 
 #### Acceptance Criteria
 
-1. WHEN JSON is emitted THEN it SHALL include top-level `version`, `reportCoverage`, `coverageWarnings`, `query`, `beforeSnapshot`, `afterSnapshot`, `summary`, `sourceDiffs`, `coverageDiffs`, `endpointDiffs`, `surfaceDiffs`, `edgeDiffs`, `pathDiffs`, `gaps`, and `limitations`.
-2. WHEN query metadata is emitted THEN it SHALL include normalized selectors, scopes, include-paths flag, max depth, max paths, max frontier, and algorithm/version identifiers.
+1. WHEN JSON is emitted THEN it SHALL include top-level `reportType`, `version`, `reportCoverage`, `coverageWarnings`, `query`, `beforeSnapshot`, `afterSnapshot`, `summary`, `sourceDiffs`, `coverageDiffs`, `endpointDiffs`, `surfaceDiffs`, `edgeDiffs`, `pathDiffs`, `gaps`, and `limitations`.
+2. WHEN query metadata is emitted THEN it SHALL include normalized selectors, scopes, include-paths flag, max depth, max paths, max frontier, max diff rows, max gaps, Markdown row caps, ignored selector/scope combinations, and algorithm/version identifiers.
 3. WHEN snapshot metadata is emitted THEN it SHALL include source labels, languages, scan IDs, commit SHAs, repo identity where available, coverage, and extractor versions where available.
 4. WHEN a diff row is emitted THEN it SHALL include `diffId`, `changeType`, `classification`, `confidence`, `stableKey`, `diffRuleId`, `before`, `after`, `coverageCaveats`, and `notes`.
 5. WHEN before or after evidence is missing THEN JSON SHALL use `null` consistently rather than omitting required fields.
@@ -233,7 +237,13 @@ diff-report.json
 10. WHEN `--scope paths` is provided without `--include-paths` THEN tests SHALL prove the command fails clearly.
 11. WHEN `--scope endpoints`, `--scope surfaces`, or `--scope edges` is provided THEN tests SHALL prove unrelated diff sections are excluded.
 12. WHEN source labels match but source identity conflicts THEN tests SHALL prove the command fails by default and only proceeds with `--allow-identity-mismatch`.
-13. WHEN selectors match nothing THEN tests SHALL prove `SelectorNoMatch`.
-14. WHEN both inputs are opened read-only THEN tests SHALL prove the main database file hash is unchanged after the command.
-15. WHEN reports are emitted repeatedly for identical inputs THEN tests SHALL prove byte-stable Markdown and JSON output, including sorted metadata containing special characters.
-16. WHEN unsafe values are present in properties THEN tests SHALL prove reports do not contain raw SQL, raw URLs, config values, source snippets, connection strings, local absolute paths, or private repository names.
+13. WHEN commit SHA is the only changed source metadata THEN tests SHALL prove only a source-level `ChangedEvidence` row appears.
+14. WHEN an endpoint selector has no method token or no path-key token THEN tests SHALL prove a clear parse error.
+15. WHEN selectors match nothing THEN tests SHALL prove `SelectorNoMatch`.
+16. WHEN before or after has unknown commit SHA THEN tests SHALL prove only history-dependent conclusions are classified `UnknownAnalysisGap`.
+17. WHEN identical inputs are compared THEN tests SHALL prove `NoDiffEvidence` and required empty JSON arrays are emitted.
+18. WHEN Markdown is emitted THEN tests SHALL prove section order matches the spec.
+19. WHEN malformed `properties_json` or missing/empty `manifest_json` is present THEN tests SHALL prove the command emits `UnknownAnalysisGap` and continues where possible.
+20. WHEN both inputs are opened read-only THEN tests SHALL prove the main database file hash is unchanged after the command.
+21. WHEN reports are emitted repeatedly for identical inputs THEN tests SHALL prove byte-stable Markdown and JSON output, including sorted metadata containing special characters and sorted supporting ID lists.
+22. WHEN unsafe values are present in properties THEN tests SHALL prove reports do not contain raw SQL, raw URLs, config values, source snippets, connection strings, local absolute paths, or private repository names.

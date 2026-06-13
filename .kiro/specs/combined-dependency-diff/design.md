@@ -66,6 +66,7 @@ Options:
 --max-paths <n>
 --max-frontier <n>
 --max-diff-rows <n>
+--max-gaps <n>
 --exit-code
 ```
 
@@ -73,7 +74,7 @@ Output behavior:
 
 - File output defaults to Markdown.
 - `--format json` with a file writes JSON.
-- Directory output writes both `diff-report.md` and `diff-report.json`.
+- Directory output writes both `diff-report.md` and `diff-report.json`, even when `--format json` is provided.
 - A non-existing `--out` path with no extension is treated as a directory.
 - Output path resolution follows the existing combined report/path writer convention: an existing directory is a directory output; a non-existing leaf with no extension is a directory output; a file extension selects file output.
 - The command opens both SQLite files read-only.
@@ -112,6 +113,14 @@ Surface selector vocabulary:
 
 `--surface-name` is exact case-insensitive matching in MVP. Wildcards are deferred.
 
+Endpoint selector parsing:
+
+- Split the value on the first whitespace run.
+- The first token is the HTTP method and is normalized using existing endpoint method normalization.
+- The remaining non-empty text is the normalized path key.
+- A selector with only a method, only a path, or an empty path key is a validation error.
+- Path keys are not expected to contain unescaped leading method tokens; the parser does not support method-less endpoint matching in MVP.
+
 ## Proposed Package Layout
 
 ```text
@@ -129,7 +138,7 @@ src/dotnet/
     CombinedDependencyDiffTests.cs
 ```
 
-`TraceMap.Reporting` remains the home because this is a reporting/query layer over combined evidence. If combined report/path internals are not reusable enough, the first implementation should extract shared readers/projectors in a behavior-preserving way before adding diff-specific logic. The refactor must include a reusable path query/projection API that returns a path inventory without writing reports, plus shared safe path, hashing, and Markdown escaping helpers.
+`TraceMap.Reporting` remains the home because this is a reporting/query layer over combined evidence. Diff code must live in the same reporting assembly unless shared report/path APIs are deliberately made public. If combined report/path internals are not reusable enough, the first implementation should extract shared readers/projectors in a behavior-preserving way before adding diff-specific logic. The refactor must include a reusable path query/projection API that returns a path inventory without writing reports, plus shared safe path, hashing, Markdown escaping, output writing, format normalization, path signature hashing, endpoint stable key, property parsing, and deterministic sort helpers.
 
 ## Data Sources
 
@@ -162,9 +171,9 @@ Required schema objects:
 | `combined_symbols` | symbol identities where available |
 | `combined_dependency_edges` | dependency edge summary |
 
-Optional schema objects that improve precision when present:
+Precision schema objects that must be checked individually:
 
-| Optional object | Fallback |
+| Object | Behavior when absent |
 | --- | --- |
 | `combined_fact_symbols` | compare fact-only evidence and down-rank symbol-specific identity |
 | `combined_call_edges` | use `combined_dependency_edges` fallback |
@@ -173,7 +182,14 @@ Optional schema objects that improve precision when present:
 | `combined_argument_flows` | omit argument-flow-specific edge comparison |
 | `combined_parameter_forward_edges` | omit parameter-forward-specific edge comparison |
 
-If an optional object is absent, the diff report must record a schema or coverage gap before using a weaker fallback.
+If one of these objects is absent, the diff report must record a schema or coverage gap before using a weaker fallback. The validator must check the underlying tables individually, not only the `combined_dependency_edges` view, so older or partial combined indexes are labeled correctly.
+
+Malformed metadata handling:
+
+- Malformed `combined_facts.properties_json` must not crash the diff command.
+- The row should be retained with an empty safe metadata set where possible, a `MalformedPropertiesJson` gap, and classification no stronger than `UnknownAnalysisGap` for conclusions that depend on the malformed metadata.
+- Missing or empty `manifest_json` should emit `MissingManifestJson`; source identity, coverage, and commit-SHA-dependent conclusions for that source are classified no stronger than `UnknownAnalysisGap`.
+- Supporting IDs read from facts, edges, paths, or gaps must be sorted ordinally before output.
 
 ## Snapshot Model
 
@@ -234,6 +250,7 @@ Source pairing validation:
 - Root path hash mismatch alone is a warning when repository identity and language match, because monorepo subdirectory layout can move.
 - If identity signals are missing on either side, emit `SourceIdentityUnverified` and classify evidence diffs for that source no stronger than `NeedsReviewDiff`.
 - Commit SHAs are compared as case-insensitive full strings with no prefix matching.
+- If commit SHA is the only changed source metadata and comparable evidence is otherwise unchanged, emit one source-level `ChangedEvidence` row and do not report endpoint, surface, edge, or path churn.
 
 ### Endpoints
 
@@ -247,6 +264,13 @@ Endpoint key fields:
 - evidence rule family where necessary to avoid collisions.
 
 Method and path should be normalized using the same endpoint normalizer as combined reporting. Dynamic or unresolved endpoints should retain a hashed identity and be classified no stronger than `NeedsReviewDiff`.
+
+Endpoint key rules:
+
+- Single-side endpoint key: source label, endpoint kind, method, normalized path key, and handler/symbol identity when available.
+- Matched endpoint key: client single-side key plus server single-side key plus match classification.
+- If an endpoint changes from unmatched to matched while the single-side endpoint evidence remains stable, emit `ChangedEvidence` for match metadata rather than unrelated added/removed endpoint rows.
+- Combined fact IDs may be carried as provenance but must not be the only stable identity for endpoint comparison.
 
 ### Dependency Surfaces
 
@@ -296,7 +320,7 @@ Path signature fields:
 
 Use a deterministic hash for `pathSignature`. Preserve a debug-safe descriptor string only if it contains no unsafe source values.
 
-Node descriptors should use stable symbol IDs or fully qualified signatures where available. Display names are fallback identity only; any path signature that depends on display-name fallback is classified no stronger than `NeedsReviewDiff`.
+Node descriptors should use stable combined fact IDs, stable combined symbol IDs, source fact IDs, source symbol IDs, or fully qualified signatures where available. Display names are fallback identity only; any path signature that depends on display-name fallback is classified no stronger than `NeedsReviewDiff`.
 
 Hashes:
 
@@ -312,6 +336,7 @@ Selector semantics:
 - If a selector matches before but not after, include before evidence as `Removed`, `RemovedWithAfterGap`, or `UnknownAnalysisGap` based on coverage.
 - If a selector matches after but not before, include after evidence as `Added`, `AddedWithBeforeGap`, or `UnknownAnalysisGap` based on coverage.
 - If a selector matches neither snapshot, emit `SelectorNoMatch`.
+- If a selector is only meaningful for disabled scopes, record it in query metadata as ignored for those scopes rather than applying it globally.
 
 ## Diff Classifications
 
@@ -401,6 +426,7 @@ Suggested public model:
 
 ```csharp
 public sealed record CombinedDependencyDiffReport(
+    string ReportType,
     string Version,
     string ReportCoverage,
     IReadOnlyList<string> CoverageWarnings,
@@ -504,6 +530,44 @@ public sealed record CombinedPathEvidence(
 
 Required JSON fields should be emitted with `null` or empty arrays when data is absent.
 
+Suggested snapshot info model:
+
+```csharp
+public sealed record CombinedDiffSnapshotInfo(
+    string Side,
+    IReadOnlyList<CombinedDiffSourceInfo> Sources,
+    string ReportCoverage,
+    IReadOnlyList<string> CoverageWarnings,
+    IReadOnlyList<KeyValuePair<string, string>> ExtractorVersions);
+
+public sealed record CombinedDiffSourceInfo(
+    string SourceLabel,
+    string? Language,
+    string? ScanId,
+    string? CommitSha,
+    string? RepositoryIdentity,
+    string? RootPathHash,
+    string Coverage,
+    IReadOnlyList<string> GapCodes);
+```
+
+Suggested diff gap model:
+
+```csharp
+public sealed record CombinedDiffGap(
+    string GapId,
+    string GapKind,
+    string? SourceLabel,
+    string? EvidenceKind,
+    string RuleId,
+    string Classification,
+    string Message,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SupportingEdgeIds);
+```
+
+`CombinedDiffGap` is separate from path-specific gap models because source, schema, selector, and metadata gaps may not have path node IDs.
+
 ## Markdown Shape
 
 Sections:
@@ -537,6 +601,7 @@ Top-level fields:
 
 ```json
 {
+  "reportType": "combined-dependency-diff",
   "version": "1.0",
   "reportCoverage": "FullEvidenceAvailable",
   "coverageWarnings": [],
@@ -555,7 +620,7 @@ Top-level fields:
 }
 ```
 
-`version` is report-type-scoped. `CombinedDependencyDiffReport` version `1.0` is distinct from path/report JSON version `1.0`.
+`reportType` is required so consumers can distinguish diff JSON from report/path JSON even when each report type has version `1.0`.
 
 `reportCoverage` values are a closed set:
 
@@ -579,9 +644,12 @@ No `generatedAt`, timestamp, local machine name, or absolute local root should b
 10. For shared keys, compare normalized evidence metadata hashes and provenance summaries.
 11. Apply coverage-aware downgrade rules.
 12. Apply engine-level row caps and emit truncation gaps for omitted rows.
-13. Sort diff rows deterministically by classification rank, kind, source label, stable key, file path, line, and diff ID.
-14. Build summary counts and gaps.
-15. Write Markdown and/or JSON.
+13. Coalesce duplicate selector and schema gaps across before/after snapshots where the same normalized query failed on both sides.
+14. Sort diff rows deterministically by classification rank, kind, source label, stable key, file path, line, and diff ID.
+15. Sort gaps by gap kind, source label, evidence kind, rule ID, message, and gap ID.
+16. Use a constant ordered limitations list.
+17. Build summary counts and gaps.
+18. Write Markdown and/or JSON.
 
 ## Deterministic Sorting
 
@@ -628,6 +696,7 @@ If a value is needed for identity but unsafe to show, render a stable hash and a
 MVP should project records in memory. This is acceptable because combined indexes used by current smoke tests are modest. Add caps and clear gaps before path diffing can explode:
 
 - `--max-diff-rows` controls produced rows per non-path diff kind and defaults to 1000;
+- `--max-gaps` controls produced gaps and defaults to 1000;
 - `--max-paths` controls produced paths per snapshot;
 - `--max-frontier` controls queued path states per snapshot;
 - path diff output is capped by path added/removed/changed buckets as described above;
