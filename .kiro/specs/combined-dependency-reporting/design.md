@@ -42,7 +42,7 @@ The command reads combined tables, derives cross-source endpoint alignment, summ
 Use the existing CLI skeleton:
 
 ```bash
-tracemap report --index <combined.sqlite> --out <path> [--format <markdown|json>] [--no-write-derived]
+tracemap report --index <combined.sqlite> --out <path> [--format <markdown|json>]
 ```
 
 Behavior:
@@ -50,8 +50,10 @@ Behavior:
 - File output defaults to Markdown.
 - `--format json` with a file writes JSON.
 - Directory output writes both `dependency-report.md` and `dependency-report.json` unless a future flag narrows it.
+- A non-existing `--out` path with no file extension is treated as a directory, matching the endpoint report command shape.
 - The command rejects non-combined indexes with a message like `tracemap report currently requires a combined index produced by tracemap combine`.
-- The command validates the presence of `index_sources`, `combined_facts`, `combined_dependency_edges`, and `endpoint_matches`.
+- The command detects a combined index by requiring `index_sources` with at least one row, `combined_facts`, and the `combined_dependency_edges` view.
+- The command warns if `endpoint_matches` is missing, but does not require it for read-only MVP reporting.
 
 ## Proposed Package Layout
 
@@ -72,6 +74,8 @@ src/dotnet/
 
 `TraceMap.Reporting` already exists, so this slice should extend it rather than creating a new project.
 
+Implementation note: `TraceMap.Reporting.csproj` currently references `TraceMap.Core` only. The implementation will need `Microsoft.Data.Sqlite`. It should avoid referencing `TraceMap.Combine` unless reusing combine records clearly reduces duplication without creating circular ownership.
+
 ## Data Sources
 
 Read from combined database tables:
@@ -85,7 +89,7 @@ Read from combined database tables:
 | `combined_object_creations` | object creation details when needed |
 | `combined_argument_flows` | direct argument evidence when needed |
 | `combined_parameter_forward_edges` | parameter-forwarding evidence |
-| `endpoint_matches` | optional derived row storage |
+| `endpoint_matches` | future optional derived row storage; not required for MVP read-only reporting |
 
 The reader should treat `properties_json` as the source for language-specific optional fields.
 
@@ -117,6 +121,8 @@ Coverage values:
 
 This is report coverage, not proof of complete runtime dependency knowledge.
 
+Finding-level `UnknownAnalysisGap` is separate from report-level `UnknownAnalysisGap`: a single endpoint finding can be unknown because its evidence is incomplete, while the overall report can still be `ReducedCoverage`.
+
 ## Source Coverage Logic
 
 For each source:
@@ -128,7 +134,11 @@ For each source:
   - `commit_sha` is `unknown` or empty.
   - `language` is empty.
   - manifest known gaps are non-empty.
+- Correct language display when `scanner_version` clearly identifies an adapter but `index_sources.language` is stale or wrong.
+- Treat a corrected language as a coverage warning because provenance stored in the combined DB was inconsistent.
 - Group known gaps by stable category. A simple MVP category can use the prefix before `:` or the first sentence fragment.
+
+Small compatibility fix: update `CombinedIndexBuilder.InferLanguage` so `tracemap-jvm-*` becomes `jvm` and Python scanner versions become `python` before the generic `tracemap` -> `csharp` fallback.
 
 Do not display local absolute paths. `index_path_hash`, scan root metadata, repo name, labels, and commit SHA are enough.
 
@@ -191,16 +201,16 @@ Query-builder rows should prefer:
 
 ### Packages and Config
 
-Package/dependency facts differ by adapter. MVP should read obvious fact types and properties without overfitting:
+Package/dependency facts differ by adapter. MVP should start with explicit, conservative property extraction:
 
-- fact types containing `Package`, `Dependency`, `ProjectReference`, or equivalent existing package facts
-- properties like `packageName`, `dependencyName`, `moduleName`, `groupId`, `artifactId`, `version`, `dependencyKind`
+- fact types containing `Package`, `Dependency`, or `ProjectReference`
+- properties named `packageName`, `dependencyName`, `moduleName`, `groupId`, `artifactId`, `version`, `dependencyKind`, `name`, or `targetSymbol`
 
 If no stable package facts are present, show `No evidence found in the combined index.`
 
 ## Endpoint Alignment
 
-The combined matcher generalizes the existing two-index endpoint concept.
+The combined matcher generalizes the existing two-index endpoint concept, but matches are evaluated per `(client source, server source)` pair.
 
 Inputs:
 
@@ -213,15 +223,17 @@ Inputs:
 
 Matching:
 
-1. Exclude self-pairs where client and server facts come from the same combined fact.
-2. Normalize or read `normalizedPathKey`.
-3. If a client has `urlKind = dynamic` or no safe path key, emit `DynamicClientUrlNeedsReview`.
-4. Match exact method + path key as `MatchedEndpoint`.
-5. Match compatible optional route shapes as `OptionalSegmentMatch` when optional metadata is available.
-6. Match path key but method mismatch as `MethodMismatch`.
-7. If multiple server candidates tie with the same highest score, emit `AmbiguousMatch`.
-8. Emit client-only and server-only inventory after matched/mismatch/ambiguous findings.
-9. Emit `UnknownAnalysisGap` for source pairs where missing route/call facts plus known gaps make a clean statement unreliable.
+1. Exclude only self-pairs where client and server candidates are the exact same combined fact.
+2. Include same-source client/route pairs when the facts differ and candidate roles differ; set `sameSource = true`.
+3. Normalize or read `normalizedPathKey`.
+4. If a client has `urlKind = dynamic` or no safe path key, emit `DynamicClientUrlNeedsReview`.
+5. Match exact method + path key as `MatchedEndpoint`.
+6. Match compatible optional route shapes as `OptionalSegmentMatch` when optional metadata is available.
+7. Match path key but method mismatch as `MethodMismatch`.
+8. If one client call matches two different server sources, emit one match per server source. This is source fan-out, not ambiguity.
+9. If multiple server candidates inside the same server source tie with the same highest score, emit `AmbiguousMatch`.
+10. Emit client-only and server-only inventory after matched/mismatch/ambiguous findings.
+11. Emit `UnknownAnalysisGap` for source pairs where missing route/call facts plus known gaps make a clean statement unreliable.
 
 Static match quality:
 
@@ -231,11 +243,25 @@ Static match quality:
 
 Endpoint findings are derived evidence, not source facts.
 
+Endpoint candidate notes must use closed-set reason codes and hashes. Do not copy raw URL fragments from source properties into notes.
+
 ## `endpoint_matches` Persistence
 
-MVP should write derived endpoint rows unless `--no-write-derived` is passed.
+MVP is read-only and does not write `endpoint_matches`.
 
-Persistence strategy:
+Reason:
+
+- The current schema requires both `client_source_index_id` and `server_source_index_id` as `NOT NULL`.
+- N-way reports produce one-sided findings such as `ClientCallNoServerEndpoint`, `ServerEndpointNoClientMatch`, `DynamicClientUrlNeedsReview`, and some `UnknownAnalysisGap` rows where one side has no natural source ID.
+- Writing only some classifications by default would make the DB appear incomplete compared with the Markdown/JSON report.
+
+Future opt-in persistence can use:
+
+```bash
+tracemap report --index combined.sqlite --out report.md --write-derived
+```
+
+Future persistence strategy:
 
 - Compute deterministic `endpoint_match_id` from:
   - client source index ID
@@ -245,11 +271,11 @@ Persistence strategy:
   - classification
   - HTTP method or `unknown`
   - normalized path key or `unknown`
-- Delete rows whose `evidence_json` identifies the same algorithm/version before re-inserting, or use `insert or replace`.
+- Persist only rows that have both source IDs unless the schema is changed.
+- Delete rows whose `evidence_json` identifies the same `derivedBy` algorithm/version before re-inserting, so changed classifications do not leave orphan rows.
 - Include `derivedBy: tracemap-combined-dependency-report/1` in `evidence_json`.
+- Store full audit provenance in `evidence_json`, because the table itself only has classification, method/path, fact IDs, source IDs, and quality columns.
 - Keep raw snippets, raw URLs, raw SQL, and absolute paths out of `evidence_json`.
-
-If this mutation makes review uncomfortable, implement `--no-write-derived` first and make DB writes a second task. The spec still prefers persistence because the table already exists as a placeholder.
 
 ## Markdown Output
 
@@ -324,6 +350,29 @@ Required row provenance:
 - `startLine`
 - `endLine`
 
+Endpoint finding rows must include:
+
+- `classification`
+- `httpMethod`
+- `normalizedPathKey`
+- `clientSourceIndexId`
+- `clientSourceLabel`
+- `serverSourceIndexId`
+- `serverSourceLabel`
+- `clientCombinedFactId`
+- `serverCombinedFactId`
+- `clientOriginalFactId`
+- `serverOriginalFactId`
+- `clientFilePath`
+- `clientStartLine`
+- `serverFilePath`
+- `serverStartLine`
+- `staticMatchQuality`
+- `sameSource`
+- `notes`
+
+Use `null` for absent one-sided values.
+
 ## Evidence Boundaries
 
 Limitations to include in every report:
@@ -340,6 +389,7 @@ Test shape:
 
 - Use small temporary C# scans to produce call/object edges, then combine.
 - Use synthetic SQLite rows where necessary for cross-language endpoint combinations that are expensive to scan in a unit test.
+- Use a combined fixture with stale JVM/Python language values to prove report display correction, plus a combine test proving new combined indexes write correct language values.
 - Prefer end-to-end CLI tests for `combine -> report`.
 - Add a focused reader/matcher unit test for endpoint classifications.
 
@@ -348,12 +398,16 @@ Core test cases:
 1. Combined report rejects single-language index.
 2. Combined report writes Markdown and JSON for a combined index.
 3. Sources and coverage warnings render from `index_sources`.
-4. Matched endpoint appears in Markdown/JSON and `endpoint_matches`.
-5. Method mismatch, dynamic URL, client-only, and server-only classifications are deterministic.
-6. `--no-write-derived` does not mutate `endpoint_matches`.
-7. Dependency edges include source label and evidence.
-8. SQL/query rows do not include raw SQL text.
-9. Markdown row caps include truncation notice when triggered.
+4. Matched endpoint appears in Markdown/JSON.
+5. One client matching two server sources emits two matched findings, not `AmbiguousMatch`.
+6. Same-source client/route pairs are included and flagged.
+7. Method mismatch, dynamic URL, client-only, and server-only classifications are deterministic.
+8. Report does not mutate `endpoint_matches`.
+9. Dependency edges include source label and evidence.
+10. SQL/query rows do not include raw SQL text.
+11. `SqlTextUsed`-only rows render hash/length and `n/a` table/column fields.
+12. Dynamic URL findings do not render raw URL fragments.
+13. Markdown row caps include truncation notice when triggered.
 
 ## Validation
 

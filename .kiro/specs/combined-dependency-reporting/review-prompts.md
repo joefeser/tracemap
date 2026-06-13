@@ -26,6 +26,10 @@ Context:
 - `tracemap combine` already creates a combined SQLite database with provenance-preserving combined facts, symbols, dependency tables, `combined_dependency_edges`, and an empty `endpoint_matches` table.
 - `tracemap endpoints` already exists for exactly one client index and one server index.
 - `tracemap report` currently exists only as a CLI skeleton.
+- Post-review decision: MVP `tracemap report` is read-only and does not write `endpoint_matches`.
+- Post-review decision: N-way endpoint matching is per `(client source, server source)` pair; matching two different server sources is fan-out, not ambiguity.
+- Post-review decision: same-source client/route matches are included and flagged.
+- Post-review decision: fixing combined language inference for JVM/Python is in scope.
 
 Review goals:
 
@@ -36,6 +40,7 @@ Review goals:
 5. Verify the report model has enough provenance for audits and future diffing.
 6. Identify schema assumptions that are not true in the current combined database.
 7. Suggest test cases that would catch likely false positives, false negatives, or provenance leaks.
+8. Confirm the read-only MVP avoids the current `endpoint_matches` NOT NULL limitation for one-sided findings.
 
 Please prioritize concrete blocking issues first, then nice-to-have refinements.
 
@@ -52,6 +57,7 @@ Focus on:
 5. Whether the acceptance criteria can be validated with small fixtures instead of private repos.
 6. Whether any scanner work accidentally leaked into this reporting-only slice.
 7. Whether docs updates are scoped appropriately.
+8. Whether the language-inference compatibility fix belongs in this PR or should be a preparatory PR.
 
 Assume the implementation should pass:
 

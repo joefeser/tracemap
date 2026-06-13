@@ -27,8 +27,10 @@ This is still deterministic static analysis. The report must not claim runtime t
 - MVP does not replace per-language scan-time `report.md` files.
 - MVP output is Markdown by default and JSON when `--format json` is requested.
 - MVP can write both Markdown and JSON when `--out` is a directory.
-- MVP computes derived endpoint matches from combined facts and may persist them in `endpoint_matches` when a deterministic result is produced.
-- MVP reads existing combined tables and JSON properties; it does not require scanner changes.
+- MVP computes derived endpoint matches from combined facts in memory and is read-only by default.
+- MVP does not persist one-sided, dynamic, or gap endpoint findings into the current `endpoint_matches` table because that table requires both client and server source IDs.
+- MVP reads existing combined tables and JSON properties; it does not require language scanner changes.
+- MVP may include one small combine compatibility fix: correct `index_sources.language` inference for JVM and Python sources.
 - MVP does not implement snapshot diffing, runtime dependency resolution, call-graph path search across arbitrary nodes, or new language extractors.
 
 ## Quick Start Workflow
@@ -73,8 +75,10 @@ dependency-report.json
 4. WHEN `--out` is a file path THEN TraceMap SHALL emit only the requested format, defaulting to Markdown.
 5. WHEN the input is not a combined index THEN the command SHALL fail with a clear message and SHALL NOT silently treat a single-language index as a combined dependency report.
 6. WHEN required combined tables or views are missing THEN the command SHALL fail with a clear schema error that names the missing table or view.
-7. WHEN the report completes THEN the CLI SHALL print the output path, source count, fact count, dependency edge count, endpoint finding count, and report coverage.
-8. WHEN an output file would be overwritten THEN the command MAY overwrite it, matching existing export/report behavior; it SHALL NOT modify input indexes except for the optional derived `endpoint_matches` insert described below.
+7. WHEN `--out` names an existing directory or a path with no file extension THEN TraceMap SHALL treat it as a directory and write both Markdown and JSON outputs.
+8. WHEN the report completes THEN the CLI SHALL print the output path, source count, fact count, dependency edge count, endpoint finding count, and report coverage.
+9. WHEN an output file would be overwritten THEN the command MAY overwrite it, matching existing export/report behavior; it SHALL NOT modify input indexes in the MVP.
+10. WHEN combined-index detection runs THEN TraceMap SHALL require `index_sources` with at least one row, `combined_facts`, and `combined_dependency_edges`; missing `endpoint_matches` SHALL be a warning unless derived persistence is explicitly requested in a future slice.
 
 ### Requirement 2: Source Inventory and Coverage Summary
 
@@ -84,11 +88,13 @@ dependency-report.json
 
 1. WHEN a combined report is generated THEN it SHALL include every row from `index_sources`.
 2. WHEN sources are listed THEN each source SHALL include label, language, repo name, scan root relative path when available, branch when available, commit SHA, scanner version, analysis level, and build status.
-3. WHEN any source has reduced semantic coverage, failed build status, unknown commit SHA, missing language, or known gaps in its manifest JSON THEN report coverage SHALL be reduced.
-4. WHEN report coverage is reduced THEN the Markdown summary and JSON `coverageWarnings` SHALL describe why conclusions are partial.
-5. WHEN a source path is useful for provenance THEN the report SHALL use `index_path_hash`, `scanRootRelativePath`, `scanRootPathHash`, and labels; it SHALL NOT display local absolute paths.
-6. WHEN the combined database contains multiple sources with the same repo and commit THEN the report SHALL distinguish them by label and scan root metadata.
-7. WHEN manifest JSON contains known gaps THEN the report SHALL summarize gap categories without flooding the report with every repeated generated/cache-file gap.
+3. WHEN a source scanner version clearly indicates TypeScript, JVM, Python, or C# THEN the combined source language SHALL be correct for that ecosystem; fixing current JVM/Python mislabeling in `CombinedIndexBuilder.InferLanguage` is in scope.
+4. WHEN a pre-existing combined index has a language value that conflicts with scanner version evidence THEN the report SHALL display a corrected language with a coverage warning rather than repeating a known-wrong value as authoritative.
+5. WHEN any source has reduced semantic coverage, failed build status, unknown commit SHA, missing or corrected language, or known gaps in its manifest JSON THEN report coverage SHALL be reduced.
+6. WHEN report coverage is reduced THEN the Markdown summary and JSON `coverageWarnings` SHALL describe why conclusions are partial.
+7. WHEN a source path is useful for provenance THEN the report SHALL use `index_path_hash`, `scanRootRelativePath`, `scanRootPathHash`, and labels; it SHALL NOT display local absolute paths.
+8. WHEN the combined database contains multiple sources with the same repo and commit THEN the report SHALL distinguish them by label and scan root metadata.
+9. WHEN manifest JSON contains known gaps THEN the report SHALL summarize gap categories without flooding the report with every repeated generated/cache-file gap.
 
 ### Requirement 3: Dependency Surface Summary
 
@@ -98,12 +104,13 @@ dependency-report.json
 
 1. WHEN combined facts contain HTTP client calls THEN the report SHALL summarize them by source label, HTTP method, normalized path key when available, and dynamic/unknown URL status.
 2. WHEN combined facts contain HTTP route bindings THEN the report SHALL summarize them by source label, HTTP method, normalized path key when available, and route evidence tier.
-3. WHEN combined facts contain SQL or query-pattern evidence THEN the report SHALL summarize operation, table names, column names, source kind, shape hash, source label, evidence tier, rule ID, and file span where available.
-4. WHEN combined facts contain package/dependency evidence THEN the report SHALL summarize package/module names by source label and dependency kind where available.
-5. WHEN combined dependency edges exist THEN the report SHALL summarize calls, object creations, symbol relationships, and parameter-forwarding edges by source label and edge kind.
-6. WHEN facts lack optional normalized fields THEN the report SHALL render `unknown` or `n/a`, not crash and not invent values.
-7. WHEN the same dependency surface appears in multiple sources THEN the report SHALL preserve separate source evidence rows rather than deduplicating away provenance.
-8. WHEN tables become large THEN the report SHALL apply deterministic caps with clear truncation notices and include full rows in JSON unless a JSON cap is explicitly requested.
+3. WHEN combined facts contain structured SQL or query-pattern evidence THEN the report SHALL summarize operation, table names, column names, source kind, shape hash, source label, evidence tier, rule ID, and file span where available.
+4. WHEN combined facts contain `SqlTextUsed` evidence only THEN the report SHALL render text hash, text length, source kind when available, and `n/a` for table/column fields rather than inventing parsed SQL structure.
+5. WHEN combined facts contain package/dependency evidence THEN the report SHALL summarize package/module names by source label and dependency kind where available.
+6. WHEN combined dependency edges exist THEN the report SHALL summarize calls, object creations, symbol relationships, and parameter-forwarding edges by source label and edge kind.
+7. WHEN facts lack optional normalized fields THEN the report SHALL render `unknown` or `n/a`, not crash and not invent values.
+8. WHEN the same dependency surface appears in multiple sources THEN the report SHALL preserve separate source evidence rows rather than deduplicating away provenance.
+9. WHEN tables become large THEN Markdown SHALL show the first 200 rows per section using deterministic ordering, emit a truncation notice, and include full rows in JSON unless a JSON cap is explicitly requested.
 
 ### Requirement 4: Combined Endpoint Alignment
 
@@ -111,32 +118,36 @@ dependency-report.json
 
 #### Acceptance Criteria
 
-1. WHEN combined facts include `HttpCallDetected` and `HttpRouteBinding` facts with normalized path evidence THEN the report SHALL compute endpoint alignment across all compatible client/server source pairs.
+1. WHEN combined facts include `HttpCallDetected` and `HttpRouteBinding` facts with normalized path evidence THEN the report SHALL compute endpoint alignment per compatible `(client source, server source)` pair.
 2. WHEN a client call and server endpoint match by HTTP method and normalized path key THEN the finding SHALL be classified as `MatchedEndpoint`.
 3. WHEN a server optional segment produces a compatible path shape THEN the finding SHALL be classified as `OptionalSegmentMatch`.
 4. WHEN path keys match but HTTP methods differ THEN the finding SHALL be classified as `MethodMismatch`.
 5. WHEN a client call has no matching server endpoint in the combined index THEN the finding SHALL be classified as `ClientCallNoServerEndpoint`.
 6. WHEN a server endpoint has no matching client call in the combined index THEN the finding SHALL be classified as `ServerEndpointNoClientMatch`.
 7. WHEN a client URL is dynamic or cannot be normalized safely THEN the finding SHALL be classified as `DynamicClientUrlNeedsReview`.
-8. WHEN multiple server endpoints tie for the same best match THEN the finding SHALL be classified as `AmbiguousMatch`.
-9. WHEN analysis gaps prevent credible matching THEN the finding SHALL be classified as `UnknownAnalysisGap` and SHALL attach representative source evidence where available.
-10. WHEN no client facts or no server route facts exist THEN the report SHALL say that endpoint alignment was not computable for those sources rather than implying no dependencies.
-11. WHEN classifications like client-only or server-only are reported THEN the report SHALL state they are coverage-relative and are not proof of broken calls, unused endpoints, or dead code.
-12. WHEN derived endpoint matches are computed THEN each finding SHALL include source labels, source index IDs, combined fact IDs, original fact IDs, scan IDs, commit SHAs, rule IDs, evidence tiers, file paths, line spans, and static match quality.
+8. WHEN the same client call matches endpoints in two different server sources THEN the report SHALL emit one match per server source and SHALL NOT collapse that fan-out into `AmbiguousMatch`.
+9. WHEN multiple server endpoints inside the same server source tie for the same best match THEN the finding SHALL be classified as `AmbiguousMatch`.
+10. WHEN a single source contains both HTTP client calls and HTTP route bindings THEN same-source matches SHALL be included and flagged with `sameSource = true`.
+11. WHEN analysis gaps prevent credible matching THEN the finding SHALL be classified as `UnknownAnalysisGap` and SHALL attach representative source evidence where available.
+12. WHEN no client facts or no server route facts exist THEN the report SHALL say that endpoint alignment was not computable for those sources rather than implying no dependencies.
+13. WHEN classifications like client-only or server-only are reported THEN the report SHALL state they are coverage-relative and are not proof of broken calls, unused endpoints, or dead code.
+14. WHEN endpoint findings are computed THEN each finding SHALL include source labels, source index IDs, combined fact IDs, original fact IDs, scan IDs, commit SHAs, rule IDs, evidence tiers, file paths, line spans, and static match quality where available.
 
-### Requirement 5: Derived Rows in `endpoint_matches`
+### Requirement 5: Future Derived Rows in `endpoint_matches`
 
 **User Story:** As a data user, I want endpoint matches to be queryable from the combined database so that reports and external tools can use the same derived evidence.
 
 #### Acceptance Criteria
 
-1. WHEN `tracemap report` computes endpoint matches from a combined index THEN it MAY insert deterministic derived rows into `endpoint_matches`.
-2. WHEN rows are inserted THEN `endpoint_match_id` SHALL be deterministic from source index IDs, combined fact IDs, classification, HTTP method, and normalized path key.
-3. WHEN report runs repeatedly on the same combined index THEN `endpoint_matches` SHALL be idempotent; duplicate rows SHALL NOT accumulate.
-4. WHEN existing `endpoint_matches` rows were produced by the same deterministic algorithm THEN they MAY be reused or replaced.
-5. WHEN the user provides `--no-write-derived` THEN the report SHALL compute matches in memory and SHALL NOT mutate the combined database.
-6. WHEN endpoint matches are stored THEN `evidence_json` SHALL include enough provenance to audit the source facts and SHALL NOT include raw source snippets, raw URLs, or local absolute paths.
-7. WHEN source facts change because the combined database is rebuilt from different indexes THEN old derived rows SHALL NOT be carried over unless recomputed.
+1. WHEN the MVP `tracemap report` command computes endpoint matches THEN it SHALL keep them in memory and SHALL NOT write to `endpoint_matches`.
+2. WHEN a future opt-in write mode is added THEN it SHALL be explicit, such as `--write-derived`, not the default report behavior.
+3. WHEN future rows are inserted into the current `endpoint_matches` table THEN only two-sided findings with both client and server source IDs SHALL be persisted unless the schema is changed.
+4. WHEN one-sided, dynamic, or gap findings are produced against the current schema THEN they SHALL remain report-only because `client_source_index_id` and `server_source_index_id` are `NOT NULL`.
+5. WHEN rows are inserted in a future slice THEN `endpoint_match_id` SHALL be deterministic from source index IDs, combined fact IDs, classification, HTTP method, and normalized path key.
+6. WHEN future derived persistence runs repeatedly on the same combined index THEN it SHALL delete rows with the same `derivedBy` algorithm tag before inserting new rows, so changed classifications do not leave orphan rows.
+7. WHEN endpoint matches are stored THEN full provenance SHALL live in `evidence_json`, including source labels, source index IDs, combined fact IDs, original fact IDs, scan IDs, commit SHAs, rule IDs, evidence tiers, file paths, line spans, and static match quality.
+8. WHEN endpoint matches are stored THEN `evidence_json` SHALL NOT include raw source snippets, raw URLs, raw SQL, literal values, or local absolute paths.
+9. WHEN source facts change because the combined database is rebuilt from different indexes THEN old derived rows SHALL NOT be carried over unless recomputed.
 
 ### Requirement 6: Dependency Evidence Sections
 
@@ -162,10 +173,11 @@ dependency-report.json
 1. WHEN JSON is emitted THEN it SHALL include top-level `version`, `generatedAt`, `reportCoverage`, `coverageWarnings`, `sources`, `summary`, `endpointFindings`, `dependencySurfaces`, `dependencyEdges`, `needsReview`, `knownGaps`, and `limitations`.
 2. WHEN source rows are emitted THEN they SHALL include source label and provenance fields from `index_sources` without local absolute paths.
 3. WHEN endpoint findings are emitted THEN they SHALL include stable classification strings and deterministic evidence objects.
-4. WHEN dependency surfaces are emitted THEN each row SHALL include `surfaceKind`, source identity, display name, evidence tier, rule ID, file span, and fact IDs.
-5. WHEN dependency edges are emitted THEN each row SHALL include edge kind, source symbol, target symbol, source identity, evidence tier, rule ID, file span, and edge ID.
-6. WHEN values are missing THEN JSON SHALL use `null` or empty arrays consistently; it SHALL NOT omit required top-level arrays.
-7. WHEN the JSON schema changes in a future version THEN the top-level `version` SHALL change.
+4. WHEN an endpoint finding is emitted THEN it SHALL include `classification`, `httpMethod`, `normalizedPathKey`, `clientSourceIndexId`, `clientSourceLabel`, `serverSourceIndexId`, `serverSourceLabel`, `clientCombinedFactId`, `serverCombinedFactId`, `clientOriginalFactId`, `serverOriginalFactId`, `clientFilePath`, `clientStartLine`, `serverFilePath`, `serverStartLine`, `staticMatchQuality`, `sameSource`, and `notes`, using `null` where one side is absent.
+5. WHEN dependency surfaces are emitted THEN each row SHALL include `surfaceKind`, source identity, display name, evidence tier, rule ID, file span, and fact IDs.
+6. WHEN dependency edges are emitted THEN each row SHALL include edge kind, source symbol, target symbol, source identity, evidence tier, rule ID, file span, and edge ID.
+7. WHEN values are missing THEN JSON SHALL use `null` or empty arrays consistently; it SHALL NOT omit required top-level arrays.
+8. WHEN the JSON schema changes in a future version THEN the top-level `version` SHALL change.
 
 ### Requirement 8: Evidence Boundaries and Limitations
 
@@ -179,6 +191,7 @@ dependency-report.json
 4. WHEN parameter forwarding is reported THEN the report SHALL say it is direct static argument-to-parameter evidence and not a full taint analysis.
 5. WHEN reduced coverage exists THEN the report SHALL avoid words like `complete`, `all`, or `no dependencies` unless scoped explicitly to discovered evidence.
 6. WHEN a report section uses derived rows THEN it SHALL identify the source facts and rule IDs that support the derived classification.
+7. WHEN dynamic URL findings are rendered THEN Markdown, JSON, and any future `evidence_json` SHALL render only closed-set reason codes and hashes; raw URL fragments SHALL NOT be displayed.
 
 ### Requirement 9: Tests and Fixtures
 
@@ -187,20 +200,26 @@ dependency-report.json
 #### Acceptance Criteria
 
 1. WHEN two sample indexes are combined THEN tests SHALL prove `tracemap report` emits Markdown and JSON.
-2. WHEN a combined index contains matching HTTP client/server facts THEN tests SHALL prove a `MatchedEndpoint` row appears in Markdown, JSON, and optionally `endpoint_matches`.
-3. WHEN a combined index contains method mismatch, dynamic URL, client-only, and server-only cases THEN tests SHALL prove those classifications appear.
-4. WHEN a combined index contains call edges and object creations THEN tests SHALL prove dependency-edge rows render with source labels and evidence.
-5. WHEN a combined index contains SQL/query-pattern facts THEN tests SHALL prove SQL rows render without raw SQL text.
-6. WHEN a source has reduced coverage or known gaps THEN tests SHALL prove reduced report coverage and warnings.
-7. WHEN `--no-write-derived` is used THEN tests SHALL prove `endpoint_matches` remains unchanged.
-8. WHEN the input is a single-language index THEN tests SHALL prove `tracemap report` fails clearly.
-9. WHEN files are checked in THEN `dotnet build src/dotnet/TraceMap.sln`, `dotnet test src/dotnet/TraceMap.sln`, `./scripts/check-private-paths.sh`, and `git diff --check` SHALL pass.
+2. WHEN a combined index contains matching HTTP client/server facts THEN tests SHALL prove a `MatchedEndpoint` row appears in Markdown and JSON.
+3. WHEN one client call matches routes in two different server sources THEN tests SHALL prove one matched row per server source, not a global `AmbiguousMatch`.
+4. WHEN one source contains both client calls and route bindings THEN tests SHALL prove same-source matches are included and flagged.
+5. WHEN a combined index contains method mismatch, dynamic URL, client-only, and server-only cases THEN tests SHALL prove those classifications appear.
+6. WHEN a combined index contains call edges and object creations THEN tests SHALL prove dependency-edge rows render with source labels and evidence.
+7. WHEN a combined index contains SQL/query-pattern facts THEN tests SHALL prove SQL rows render without raw SQL text.
+8. WHEN a combined index contains `SqlTextUsed` only THEN tests SHALL prove hash/length evidence renders with `n/a` table/column fields.
+9. WHEN a source has reduced coverage, corrected language, or known gaps THEN tests SHALL prove reduced report coverage and warnings.
+10. WHEN a combined index contains JVM or Python sources THEN tests SHALL prove source language is rendered correctly.
+11. WHEN a dynamic URL finding is emitted THEN tests SHALL prove no raw URL appears in Markdown, JSON, or future persisted evidence JSON.
+12. WHEN the input is a single-language index THEN tests SHALL prove `tracemap report` fails clearly.
+13. WHEN a Markdown section exceeds 200 rows THEN tests SHALL prove deterministic truncation notice and full JSON rows.
+14. WHEN files are checked in THEN `dotnet build src/dotnet/TraceMap.sln`, `dotnet test src/dotnet/TraceMap.sln`, `./scripts/check-private-paths.sh`, and `git diff --check` SHALL pass.
 
 ## Future Work
 
 - Snapshot/diff reporting between two combined databases.
 - Cross-source call path exploration using combined dependency edges.
 - HTML report output.
+- Opt-in endpoint match persistence after deciding whether to change `endpoint_matches` nullability or persist only two-sided findings.
 - Rule-backed derived facts for endpoint matches if the rule catalog grows derived fact support.
 - Additional SQL normalization and parser-backed table/column extraction.
 - Framework-specific package dependency grouping for Maven/Gradle, NuGet, npm, and Python packaging.
