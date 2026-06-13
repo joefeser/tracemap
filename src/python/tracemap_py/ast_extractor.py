@@ -11,7 +11,7 @@ from .hashes import sha256_hex
 from .inventory import module_name
 from .models import CodeFact, ScanManifest
 from .route import combine_paths, normalize_path_key
-from .sql_text import is_sql_like, operation_name, text_hash
+from .sql_text import is_sql_like, operation_name, query_shape_properties, text_hash
 
 
 HTTP_METHODS = {"get": "GET", "post": "POST", "put": "PUT", "patch": "PATCH", "delete": "DELETE", "head": "HEAD", "options": "OPTIONS"}
@@ -455,7 +455,12 @@ class AstVisitor(ast.NodeVisitor):
             return
         source_kind = "orm-text" if call.endswith("text") else "dbapi-execute" if ".execute" in call else "literal-string"
         tier = EvidenceTiers.TIER2 if call.endswith("text") and "sqlalchemy" in self.ctx.imports else EvidenceTiers.TIER3
-        self.facts.append(create_fact(self.manifest, FactTypes.SQL_TEXT_USED, RuleIds.SQL, tier, self._span(node, "PythonAstExtractor", ScannerVersions.SQL), source_symbol=self.containing_symbol, target_symbol=self.containing_symbol or "sql-literal", properties={"textHash": text_hash(literal), "textLength": len(literal), "operationName": operation_name(literal), "sqlSourceKind": source_kind, "targetSymbol": self.containing_symbol or "sql-literal"}))
+        span = self._span(node, "PythonAstExtractor", ScannerVersions.SQL)
+        self.facts.append(create_fact(self.manifest, FactTypes.SQL_TEXT_USED, RuleIds.SQL, tier, span, source_symbol=self.containing_symbol, target_symbol=self.containing_symbol or "sql-literal", properties={"textHash": text_hash(literal), "textLength": len(literal), "operationName": operation_name(literal), "sqlSourceKind": source_kind, "targetSymbol": self.containing_symbol or "sql-literal"}))
+        pattern_props = query_shape_properties(literal, source_kind)
+        if pattern_props.get("operationName") or pattern_props.get("tableName") or pattern_props.get("columnNames"):
+            target = pattern_props.get("tableName") or self.containing_symbol or "sql-literal"
+            self.facts.append(create_fact(self.manifest, FactTypes.QUERY_PATTERN_DETECTED, RuleIds.SQL, tier, span, source_symbol=self.containing_symbol, target_symbol=target, contract_element=target, properties={**pattern_props, "targetSymbol": target}))
 
     def _record_invocation(self, node: ast.Call) -> None:
         name = self._call_name(node)

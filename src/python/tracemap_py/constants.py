@@ -30,6 +30,7 @@ class FactTypes:
     DATABASE_COLUMN_MAPPING = "DatabaseColumnMapping"
     SERIALIZER_CONTRACT_MEMBER = "SerializerContractMember"
     SQL_TEXT_USED = "SqlTextUsed"
+    QUERY_PATTERN_DETECTED = "QueryPatternDetected"
     CONFIG_KEY_DECLARED = "ConfigKeyDeclared"
     INFRASTRUCTURE_BOILERPLATE = "InfrastructureBoilerplate"
 

@@ -1097,14 +1097,17 @@ rules:
 
   - id: python.integration.sql.v1
     name: Python SQL integration
-    description: Detects SQL files and direct SQL text literals used by common DB-API or SQLAlchemy call shapes.
+    description: Detects SQL files and direct SQL text literals used by common DB-API or SQLAlchemy call shapes, and derives lightweight query-pattern metadata when statically visible.
     evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
     emits:
       - SqlFileDeclared
       - SqlTextUsed
+      - QueryPatternDetected
       - AnalysisGap
     limitations:
-      - SQL text is hashed and operation-shaped; full SQL parsing, dialect behavior, schema existence, generated SQL, and runtime execution are not proven.
+      - SQL text is hashed and operation-shaped; raw SQL text and literal values are not stored by default.
+      - Query-pattern extraction is best-effort for simple static SQL operation, table, and column shapes; full SQL parsing, dialect behavior, schema existence, generated SQL, and runtime execution are not proven.
+      - Tier2 query patterns are structural evidence only; Tier3 query patterns are review-routing evidence and should not be treated as semantic database proof.
 
   - id: python.integration.config.v1
     name: Python config integration
