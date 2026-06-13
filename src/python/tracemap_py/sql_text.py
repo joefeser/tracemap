@@ -69,11 +69,7 @@ def operation_name(value: str) -> str:
     if not text:
         return ""
     first = re.split(r"\s+", text, maxsplit=1)[0].upper()
-    if first in SQL_VERBS:
-        return first
-    if first == "WITH":
-        return "WITH"
-    return ""
+    return first if first in SQL_VERBS else ""
 
 
 def text_hash(value: str) -> str:
@@ -82,10 +78,11 @@ def text_hash(value: str) -> str:
 
 def query_shape(value: str) -> QueryShape:
     normalized = _normalized_sql(value)
-    operation = operation_name(normalized)
+    operation = _shape_operation(normalized)
     tables = _table_names(normalized, operation)
     columns = _column_names(normalized, operation)
-    return QueryShape(operation, tuple(tables), tuple(columns), sha256_hex(normalized, 32))
+    exported_operation = operation if operation in SQL_VERBS else ""
+    return QueryShape(exported_operation, tuple(tables), tuple(columns), sha256_hex(normalized, 32))
 
 
 def query_shape_properties(value: str, source_kind: str) -> dict[str, str]:
@@ -93,9 +90,10 @@ def query_shape_properties(value: str, source_kind: str) -> dict[str, str]:
     props = {
         "textHash": text_hash(value),
         "queryShapeHash": shape.query_shape_hash,
-        "operationName": shape.operation_name,
         "sqlSourceKind": source_kind,
     }
+    if shape.operation_name:
+        props["operationName"] = shape.operation_name
     if shape.primary_table:
         props["tableName"] = shape.primary_table
     if shape.table_names:
@@ -109,7 +107,17 @@ def query_shape_properties(value: str, source_kind: str) -> dict[str, str]:
 def _normalized_sql(value: str) -> str:
     value = re.sub(r"--[^\n\r]*", " ", value)
     value = re.sub(r"/\*.*?\*/", " ", value, flags=re.S)
+    value = re.sub(r"'(?:''|\\['\"]|[^'])*'", "' '", value)
+    value = re.sub(r'"(?:""|\\["\']|[^"])*"', '" "', value)
     return re.sub(r"\s+", " ", value).strip().rstrip(";")
+
+
+def _shape_operation(value: str) -> str:
+    text = value.lstrip()
+    if not text:
+        return ""
+    first = re.split(r"\s+", text, maxsplit=1)[0].upper()
+    return first if first in SQL_VERBS else ""
 
 
 def _table_names(sql: str, operation: str) -> list[str]:
