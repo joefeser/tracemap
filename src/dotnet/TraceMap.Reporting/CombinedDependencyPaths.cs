@@ -156,6 +156,8 @@ public static class CombinedDependencyPathReporter
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
     private const string FactAttachedRuleId = "combined.paths.fact-attached-to-symbol.v1";
     private const string SurfaceEvidenceRuleId = "combined.paths.surface-evidence.v1";
+    private const string QueryGapRuleId = "combined.paths.query-gap.v1";
+    private const string TruncationGapRuleId = "combined.paths.truncation-gap.v1";
 
     private static readonly HashSet<string> TerminalSurfaceKinds = new(StringComparer.Ordinal)
     {
@@ -269,8 +271,8 @@ public static class CombinedDependencyPathReporter
                 sourceFilter,
                 null,
                 null,
-                null,
-                null,
+                TruncationGapRuleId,
+                EvidenceTiers.Tier4Unknown,
                 null,
                 null,
                 "selector-candidates"));
@@ -292,8 +294,8 @@ public static class CombinedDependencyPathReporter
                 null,
                 null,
                 null,
-                null,
-                null,
+                QueryGapRuleId,
+                EvidenceTiers.Tier4Unknown,
                 null,
                 null,
                 "selector"));
@@ -547,6 +549,22 @@ public static class CombinedDependencyPathReporter
                 SafePath(fact.FilePath),
                 fact.StartLine,
                 fact.EndLine));
+            if (fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpRouteBinding)
+            {
+                graph.AddEdge(new GraphEdge(
+                    $"symbol-fact:{symbolNode.NodeId}:{combinedFactId}",
+                    "fact-attached-to-symbol",
+                    symbolNode.NodeId,
+                    factNodeId,
+                    "EvidenceEdge",
+                    FactAttachedRuleId,
+                    fact.EvidenceTier,
+                    [combinedFactId],
+                    [],
+                    SafePath(fact.FilePath),
+                    fact.StartLine,
+                    fact.EndLine));
+            }
         }
     }
 
@@ -683,7 +701,7 @@ public static class CombinedDependencyPathReporter
             var endpoint = ParseEndpointSelector(options.FromEndpoint);
             candidates = graph.Nodes.Values.Where(node =>
                 node.NodeKind is "EndpointClient" or "EndpointRoute"
-                && string.Equals(node.HttpMethod ?? "ANY", endpoint.Method, StringComparison.Ordinal)
+                && CombinedDependencyReporter.MethodsCompatible(endpoint.Method, node.HttpMethod ?? "ANY")
                 && string.Equals(node.NormalizedPathKey, endpoint.PathKey, StringComparison.Ordinal));
         }
         else if (!string.IsNullOrWhiteSpace(options.FromSymbol))
@@ -781,8 +799,8 @@ public static class CombinedDependencyPathReporter
             sourceFilter,
             null,
             null,
-            null,
-            null,
+            QueryGapRuleId,
+            EvidenceTiers.Tier4Unknown,
             null,
             null,
             "selector");
@@ -805,7 +823,7 @@ public static class CombinedDependencyPathReporter
                 reducedSource.Label,
                 starts.FirstOrDefault(node => node.SourceIndexId == reducedSource.SourceIndexId)?.NodeId,
                 null,
-                null,
+                QueryGapRuleId,
                 EvidenceTiers.Tier4Unknown,
                 null,
                 null,
@@ -926,8 +944,8 @@ public static class CombinedDependencyPathReporter
             node?.SourceLabel,
             nodeId,
             node?.CombinedFactId,
-            node?.RuleId,
-            node?.EvidenceTier,
+            TruncationGapRuleId,
+            EvidenceTiers.Tier4Unknown,
             node?.FilePath,
             node?.StartLine,
             reason);
@@ -936,12 +954,17 @@ public static class CombinedDependencyPathReporter
     private static GraphNode ToEndpointNode(CombinedFactRow fact)
     {
         var isClient = fact.FactType == FactTypes.HttpCallDetected;
-        var method = CombinedDependencyReporter.FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName") ?? fact.ContractElement ?? "ANY";
-        var key = CombinedDependencyReporter.FirstValue(fact.Properties, "normalizedPathKey", "normalizedPathTemplate", "routeTemplate", "path") ?? fact.TargetSymbol ?? "unknown";
+        var method = string.Join(",", CombinedDependencyReporter.SplitMethods(CombinedDependencyReporter.FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName") ?? fact.ContractElement));
+        var normalized = CombinedDependencyReporter.TryNormalizeEndpoint(fact.Properties);
+        var key = CombinedDependencyReporter.FirstValue(fact.Properties, "normalizedPathKey")
+            ?? normalized?.PathKey
+            ?? CombinedDependencyReporter.FirstValue(fact.Properties, "normalizedPathTemplate", "routeTemplate", "path")
+            ?? fact.TargetSymbol
+            ?? "unknown";
         return new GraphNode(
             FactNodeId(fact.CombinedFactId),
             isClient ? "EndpointClient" : "EndpointRoute",
-            $"{method.ToUpperInvariant()} {key}",
+            $"{method} {key}",
             fact.SourceIndexId,
             fact.SourceLabel,
             fact.ScanId,
@@ -955,7 +978,7 @@ public static class CombinedDependencyPathReporter
             fact.EndLine,
             null,
             null,
-            method.ToUpperInvariant(),
+            method,
             key,
             null,
             null,
@@ -1006,7 +1029,9 @@ public static class CombinedDependencyPathReporter
             throw new ArgumentException("--from-endpoint must be '<METHOD> <PATH_KEY>'.");
         }
 
-        return (trimmed[..separator].Trim().ToUpperInvariant(), trimmed[(separator + 1)..].Trim());
+        var path = trimmed[(separator + 1)..].Trim();
+        var normalized = EndpointRouteNormalizer.Normalize(path);
+        return (trimmed[..separator].Trim().ToUpperInvariant(), normalized.PathKey);
     }
 
     internal static (string Client, string Server)? ParseSourcePair(string? value)
@@ -1201,11 +1226,6 @@ public static class CombinedDependencyPathReporter
         AppendDictionary(builder, "Surfaces by kind", report.Inventory.SurfacesByKind);
         AppendDictionary(builder, "Gaps by kind", report.Inventory.GapsByKind);
         builder.AppendLine();
-        if (report.Inventory.EvidenceNodes.Count > MarkdownInventoryLimit || report.Inventory.EvidenceEdges.Count > MarkdownInventoryLimit)
-        {
-            builder.AppendLine($"Inventory rows are capped at {MarkdownInventoryLimit} in Markdown. JSON contains the full returned-path inventory.");
-            builder.AppendLine();
-        }
 
         builder.AppendLine("## Limitations");
         builder.AppendLine();
@@ -1226,9 +1246,15 @@ public static class CombinedDependencyPathReporter
             return;
         }
 
+        if (rows.Count > MarkdownInventoryLimit)
+        {
+            builder.AppendLine($"Showing first {MarkdownInventoryLimit} of {rows.Count} rows. JSON contains all returned rows.");
+            builder.AppendLine();
+        }
+
         builder.AppendLine(header);
         builder.AppendLine(separator);
-        foreach (var row in rows)
+        foreach (var row in rows.Take(MarkdownInventoryLimit))
         {
             builder.AppendLine(render(row));
         }
@@ -1414,7 +1440,7 @@ public static class CombinedDependencyPathReporter
                 sourceLabel,
                 source?.ScanId,
                 source?.CommitSha,
-                nodeId,
+                displayName,
                 null,
                 ruleId,
                 evidenceTier,
