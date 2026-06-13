@@ -14,6 +14,7 @@ Start here:
 
 - [Product requirements](docs/PRD.md)
 - [Acceptance plan](docs/ACCEPTANCE.md)
+- [Validation guide](docs/VALIDATION.md)
 - [Decision log](docs/DECISIONS.md)
 - [Build milestones](MILESTONES.md)
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
@@ -34,6 +35,14 @@ npm run check
 cd ../..
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
 ```
+
+Run the pinned public open-source smoke set when changing adapter behavior:
+
+```bash
+scripts/smoke-open-source-repos.sh /tmp/tracemap-oss-cache /tmp/tracemap-oss-smoke
+```
+
+See [Validation guide](docs/VALIDATION.md) for the language matrix, expected artifact/table checks, and pinned repository SHAs.
 
 .NET/C# scan and reduce:
 
