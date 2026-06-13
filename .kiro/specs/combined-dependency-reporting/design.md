@@ -1,0 +1,447 @@
+# Combined Dependency Reporting Design
+
+## Overview
+
+Add a deterministic report layer over combined TraceMap indexes.
+
+The workflow becomes:
+
+```bash
+tracemap combine \
+  --index client/index.sqlite --label client \
+  --index api/index.sqlite --label api \
+  --out combined.sqlite
+
+tracemap report --index combined.sqlite --out dependency-report.md
+```
+
+The command reads combined tables, derives cross-source endpoint alignment, summarizes dependency surfaces, and writes Markdown plus optional JSON. It is a reporting and correlation layer over existing evidence. It does not add LLMs, runtime tracing, or new scan-time inference.
+
+## Goals
+
+- Make combined indexes useful without hand-written SQL.
+- Convert `tracemap report` from a skeleton into a combined dependency report command.
+- Show source inventory and coverage honestly.
+- Derive N-way endpoint alignment from combined HTTP client and route facts.
+- Summarize HTTP, SQL/query, package, call, object-creation, relationship, and parameter-forwarding evidence.
+- Preserve source labels, source index IDs, scan IDs, commit SHAs, original fact IDs, combined fact IDs, rule IDs, evidence tiers, and file spans.
+- Keep output suitable for public demos without local absolute paths or raw source snippets.
+
+## Non-Goals
+
+- No single-index report rewrite in this slice.
+- No runtime traffic capture.
+- No target app restore/build.
+- No full interprocedural path search.
+- No runtime dependency injection, reflection, dynamic dispatch, serializer contract, branch feasibility, or collection-content inference.
+- No snapshot diff command.
+- No scanner changes unless review finds a small schema compatibility bug.
+
+## Command Shape
+
+Use the existing CLI skeleton:
+
+```bash
+tracemap report --index <combined.sqlite> --out <path> [--format <markdown|json>]
+```
+
+Behavior:
+
+- File output defaults to Markdown.
+- `--format json` with a file writes JSON.
+- Directory output writes both `dependency-report.md` and `dependency-report.json` unless a future flag narrows it.
+- A non-existing `--out` path with no file extension is treated as a directory, matching the endpoint report command shape.
+- The command rejects non-combined indexes with a message like `tracemap report currently requires a combined index produced by tracemap combine`.
+- The command detects a combined index by requiring `index_sources` with at least one row, `combined_facts`, and the `combined_dependency_edges` view.
+- The command warns if `endpoint_matches` is missing, but does not require it for read-only MVP reporting.
+
+## Proposed Package Layout
+
+```text
+src/dotnet/
+  TraceMap.Reporting/
+    CombinedDependencyReportEngine.cs
+    CombinedDependencyIndexReader.cs
+    CombinedDependencyModels.cs
+    CombinedEndpointMatcher.cs
+    CombinedDependencyMarkdownWriter.cs
+    CombinedDependencyJsonWriter.cs
+  TraceMap.Cli/
+    Program.cs
+  tests/TraceMap.Tests/
+    CombinedDependencyReportTests.cs
+```
+
+`TraceMap.Reporting` already exists, so this slice should extend it rather than creating a new project.
+
+Implementation note: `TraceMap.Reporting.csproj` currently references `TraceMap.Core` only. The implementation will need `Microsoft.Data.Sqlite`. It should avoid referencing `TraceMap.Combine` unless reusing combine records clearly reduces duplication without creating circular ownership.
+
+## Data Sources
+
+Read from combined database tables:
+
+| Table/View | Purpose |
+| --- | --- |
+| `index_sources` | source labels, languages, commit SHAs, scan roots, manifest JSON, coverage |
+| `combined_facts` | endpoint, SQL/query, package/config/integration facts |
+| `combined_dependency_edges` | calls, creates, relationships, parameter-forwarding summary view |
+| `combined_call_edges` | call edge details when needed |
+| `combined_object_creations` | object creation details when needed |
+| `combined_argument_flows` | direct argument evidence when needed |
+| `combined_parameter_forward_edges` | parameter-forwarding evidence |
+| `endpoint_matches` | future optional derived row storage; not required for MVP read-only reporting |
+
+The reader should treat `properties_json` as the source for language-specific optional fields.
+
+## Report Model
+
+Suggested public model:
+
+```csharp
+public sealed record CombinedDependencyReport(
+    string Version,
+    DateTimeOffset GeneratedAt,
+    string ReportCoverage,
+    IReadOnlyList<string> CoverageWarnings,
+    IReadOnlyList<CombinedReportSource> Sources,
+    CombinedReportSummary Summary,
+    IReadOnlyList<EndpointFinding> EndpointFindings,
+    IReadOnlyList<DependencySurfaceRow> DependencySurfaces,
+    IReadOnlyList<DependencyEdgeRow> DependencyEdges,
+    IReadOnlyList<NeedsReviewRow> NeedsReview,
+    IReadOnlyList<KnownGapRow> KnownGaps,
+    IReadOnlyList<string> Limitations);
+```
+
+Coverage values:
+
+- `FullEvidenceAvailable`: all sources have full semantic coverage and clean build/provenance signals.
+- `ReducedCoverage`: at least one source has reduced semantic coverage, build failure, known gaps, unknown language, or unknown commit SHA.
+- `UnknownAnalysisGap`: the combined schema or source manifests are insufficient to support a credible conclusion.
+
+This is report coverage, not proof of complete runtime dependency knowledge.
+
+Finding-level `UnknownAnalysisGap` is separate from report-level `UnknownAnalysisGap`: a single endpoint finding can be unknown because its evidence is incomplete, while the overall report can still be `ReducedCoverage`.
+
+## Source Coverage Logic
+
+For each source:
+
+- Parse `manifest_json` with the existing `ScanManifest` model when possible.
+- Flag reduced coverage when:
+  - `analysis_level` is not full semantic for that adapter.
+  - `build_status` is failed/reduced/unknown.
+  - `commit_sha` is `unknown` or empty.
+  - `language` is empty.
+  - manifest known gaps are non-empty.
+- Correct language display when `scanner_version` clearly identifies an adapter but `index_sources.language` is stale or wrong.
+- Treat a corrected language as a coverage warning because provenance stored in the combined DB was inconsistent.
+- Group known gaps by stable category. A simple MVP category can use the prefix before `:` or the first sentence fragment, falling back to the entire gap message and then `General` if no non-empty category can be derived.
+
+Small compatibility fix: update `CombinedIndexBuilder.InferLanguage` so `tracemap-jvm-*` becomes `jvm` and Python scanner versions become `python` before the generic `tracemap` -> `csharp` fallback.
+
+Do not display local absolute paths. `index_path_hash`, scan root metadata, repo name, labels, and commit SHA are enough.
+
+## Dependency Surfaces
+
+Build rows from `combined_facts`.
+
+### HTTP Client Calls
+
+Fact type: `HttpCallDetected`.
+
+Fields:
+
+- source label/source index ID
+- HTTP method from `httpMethod`, `methodName`, or `targetSymbol`
+- normalized path key/template from properties
+- `urlKind`, `dynamicReason`
+- evidence tier, rule ID, file span
+
+Dynamic calls should also create `NeedsReviewRow` entries.
+
+### HTTP Route Bindings
+
+Fact type: `HttpRouteBinding`.
+
+Fields:
+
+- source label/source index ID
+- HTTP method from `httpMethod`, `httpMethods`, or `methodName`
+- normalized path key/template from properties
+- controller/action when available
+- evidence tier, rule ID, file span
+
+### SQL and Query Patterns
+
+Fact types:
+
+- `QueryPatternDetected`
+- `SqlTextUsed`
+- `DatabaseColumnMapping`
+- `DapperCallDetected`
+- `SqlCommandDetected`
+
+SQL-shape rows should prefer:
+
+- `operationName`
+- `tableName` or `tableNames`
+- `columnNames` or `fieldNames`
+- `sqlSourceKind`
+- `queryShapeHash`
+
+Query-builder rows should prefer:
+
+- `filterFields`
+- `sortFields`
+- `selectFields`
+- `includeFields`
+- `mutationFields`
+- `patternHash`
+
+`SqlTextUsed`, `DapperCallDetected`, and `SqlCommandDetected` rows should display only hashes/lengths/source kind and visible operation/source metadata where available. They must not display raw SQL or invent table/column names.
+
+### Packages and Config
+
+Package/dependency and configuration facts differ by adapter. MVP should start with explicit, conservative property extraction:
+
+- fact types containing `Package`, `Dependency`, `ProjectReference`, `Config`, `ConnectionString`, or `EnvironmentVariable`
+- properties named `packageName`, `dependencyName`, `moduleName`, `groupId`, `artifactId`, `version`, `dependencyKind`, `name`, `targetSymbol`, `keyPath`, `configKey`, `connectionStringName`, or `environmentVariableName`
+
+If no stable package or config facts are present, show `No evidence found in the combined index.`
+
+## Endpoint Alignment
+
+The combined matcher generalizes the existing two-index endpoint concept.
+
+There are two endpoint row shapes:
+
+- Two-sided comparison findings compare a client candidate with server candidates per `(client source, server source)` pair. These include `MatchedEndpoint`, `OptionalSegmentMatch`, `MethodMismatch`, `AmbiguousMatch`, and pairwise `UnknownAnalysisGap`.
+- One-sided inventory findings are emitted once per unmatched or dynamic candidate across the whole combined index. These include `ClientCallNoServerEndpoint`, `ServerEndpointNoClientMatch`, `DynamicClientUrlNeedsReview`, and one-sided `UnknownAnalysisGap`. The absent side's JSON fields are `null`, and these rows are report-only in the MVP.
+
+Inputs:
+
+- Client candidates: `HttpCallDetected` facts.
+- Server candidates: `HttpRouteBinding` facts.
+- Candidate role hints:
+  - A fact with `clientFramework`, `urlKind`, or call-oriented properties is a client candidate.
+  - A fact with `controllerName`, `actionName`, `routeTemplates`, or route binding properties is a server candidate.
+  - Source language is not enough by itself; TypeScript can expose server routes and C# can emit HTTP calls.
+
+Matching:
+
+1. Exclude only self-pairs where client and server candidates are the exact same combined fact.
+2. Include same-source client/route pairs when the facts differ and candidate roles differ; set `sameSource = true`.
+3. Normalize or read `normalizedPathKey`.
+4. If a client has `urlKind = dynamic` or no safe path key, emit one global `DynamicClientUrlNeedsReview` inventory row for that client candidate.
+5. Match exact method + path key as `MatchedEndpoint`.
+6. Match compatible optional route shapes as `OptionalSegmentMatch` when optional metadata is available.
+7. Match path key but method mismatch as `MethodMismatch`.
+8. If one client call matches two different server sources, emit one match per server source. This is source fan-out, not ambiguity.
+9. If multiple server candidates inside the same server source match the same client call at the same match class, emit `AmbiguousMatch`.
+10. Emit one global client-only row for each client candidate with no matched, optional, method-mismatch, or ambiguous comparison anywhere in the combined index.
+11. Emit one global server-only row for each server candidate with no matched, optional, method-mismatch, or ambiguous comparison anywhere in the combined index.
+12. Emit `UnknownAnalysisGap` for source pairs or one-sided candidates where missing route/call facts plus known gaps make a clean statement unreliable.
+
+Static match quality:
+
+- `High`: method and normalized path match exactly.
+- `Medium`: optional segment or parameter-name differences.
+- `Low`: dynamic/incomplete evidence.
+
+Endpoint findings are derived evidence, not source facts.
+
+Endpoint candidate notes must use closed-set reason codes and hashes. Do not copy raw URL fragments from source properties into notes.
+
+## `endpoint_matches` Persistence
+
+MVP is read-only and does not write `endpoint_matches`.
+
+Reason:
+
+- The current schema requires both `client_source_index_id` and `server_source_index_id` as `NOT NULL`.
+- N-way reports produce one-sided findings such as `ClientCallNoServerEndpoint`, `ServerEndpointNoClientMatch`, `DynamicClientUrlNeedsReview`, and some `UnknownAnalysisGap` rows where one side has no natural source ID.
+- Writing only some classifications by default would make the DB appear incomplete compared with the Markdown/JSON report.
+
+Future opt-in persistence can use:
+
+```bash
+tracemap report --index combined.sqlite --out report.md --write-derived
+```
+
+Future persistence strategy:
+
+- Compute deterministic `endpoint_match_id` from:
+  - client source index ID
+  - server source index ID
+  - client combined fact ID or `none`
+  - server combined fact ID or `none`
+  - classification
+  - HTTP method or `unknown`
+  - normalized path key or `unknown`
+- Persist only rows that have both source IDs unless the schema is changed.
+- Delete rows whose `evidence_json` identifies the same `derivedBy` algorithm/version before re-inserting, so changed classifications do not leave orphan rows.
+- Include `derivedBy: tracemap-combined-dependency-report/1` in `evidence_json`.
+- Store full audit provenance in `evidence_json`, because the table itself only has classification, method/path, fact IDs, source IDs, and quality columns.
+- Keep raw snippets, raw URLs, raw SQL, and absolute paths out of `evidence_json`.
+
+## Markdown Output
+
+Sections:
+
+1. `# TraceMap Dependency Report`
+2. `## Summary`
+3. `## Sources`
+4. `## Endpoint Alignment`
+5. `## Dependency Surfaces`
+6. `## Dependency Edges`
+7. `## Needs Review`
+8. `## Known Gaps`
+9. `## Limitations`
+
+Keep rows compact and deterministic. Suggested sorting:
+
+- Sources by label.
+- Endpoint findings by classification priority, method, path key, client label, server label, file path, line.
+- Surfaces by surface kind, source label, display name, file path, line.
+- Edges by edge kind, source label, source symbol, target symbol, file path, line.
+
+Surface `displayName` derivation:
+
+- HTTP client/route surfaces: `normalizedPathKey`, else `normalizedPathTemplate`, else HTTP method plus `unknown`.
+- SQL/query surfaces: `tableName`, else `tableNames`, else `queryShapeHash`, else `textHash`, else `targetSymbol`, else `unknown`.
+- Package/config surfaces: `packageName`, `dependencyName`, `moduleName`, `keyPath`, `configKey`, `connectionStringName`, `environmentVariableName`, `name`, then `targetSymbol`.
+
+Classification priority:
+
+1. `UnknownAnalysisGap`
+2. `DynamicClientUrlNeedsReview`
+3. `AmbiguousMatch`
+4. `MethodMismatch`
+5. `MatchedEndpoint`
+6. `OptionalSegmentMatch`
+7. `ClientCallNoServerEndpoint`
+8. `ServerEndpointNoClientMatch`
+
+Caps:
+
+- Markdown sections may cap long tables at 200 rows per section by default.
+- If capped, include a line like `Showing first 200 of 1,245 rows. JSON contains all rows.`
+- JSON should include all rows in MVP.
+
+## JSON Output
+
+Stable top-level shape:
+
+```json
+{
+  "version": "1.0",
+  "generatedAt": "2026-06-13T00:00:00Z",
+  "reportCoverage": "ReducedCoverage",
+  "coverageWarnings": [],
+  "sources": [],
+  "summary": {},
+  "endpointFindings": [],
+  "dependencySurfaces": [],
+  "dependencyEdges": [],
+  "needsReview": [],
+  "knownGaps": [],
+  "limitations": []
+}
+```
+
+Required row provenance:
+
+- `sourceIndexId`
+- `sourceLabel`
+- `scanId`
+- `commitSha`
+- `combinedFactId` or `edgeId`
+- `originalFactId` when available
+- `ruleId`
+- `evidenceTier`
+- `filePath`
+- `startLine`
+- `endLine`
+
+Endpoint finding rows must include:
+
+- `classification`
+- `httpMethod`
+- `normalizedPathKey`
+- `clientSourceIndexId`
+- `clientSourceLabel`
+- `clientScanId`
+- `clientCommitSha`
+- `clientCombinedFactId`
+- `clientOriginalFactId`
+- `clientRuleId`
+- `clientEvidenceTier`
+- `clientFilePath`
+- `clientStartLine`
+- `clientEndLine`
+- `serverSourceIndexId`
+- `serverSourceLabel`
+- `serverScanId`
+- `serverCommitSha`
+- `serverCombinedFactId`
+- `serverOriginalFactId`
+- `serverRuleId`
+- `serverEvidenceTier`
+- `serverFilePath`
+- `serverStartLine`
+- `serverEndLine`
+- `staticMatchQuality`
+- `sameSource`
+- `notes`
+
+Use `null` for absent one-sided values. These side-specific fields intentionally repeat the common provenance fields so `endpointFindings` can stand alone as a machine-readable audit trail.
+
+## Evidence Boundaries
+
+Limitations to include in every report:
+
+- Endpoint alignment is static method/path evidence. It does not prove runtime traffic, runtime reachability, auth behavior, proxy behavior, deployment base paths, CORS behavior, or user exercise.
+- SQL/query rows are static shape or hash evidence. They do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.
+- Call and creation edges are static code evidence. They do not prove dynamic dispatch targets, runtime DI registrations, reflection targets, branch feasibility, or collection contents.
+- Parameter-forwarding rows are direct static argument-to-parameter evidence, not full taint analysis.
+- Reduced coverage means absence of evidence is not evidence of absence.
+
+## Tests
+
+Test shape:
+
+- Use small temporary C# scans to produce call/object edges, then combine.
+- Use synthetic SQLite rows where necessary for cross-language endpoint combinations that are expensive to scan in a unit test.
+- Use a combined fixture with stale JVM/Python language values to prove report display correction, plus a combine test proving new combined indexes write correct language values.
+- Prefer end-to-end CLI tests for `combine -> report`.
+- Add a focused reader/matcher unit test for endpoint classifications.
+
+Core test cases:
+
+1. Combined report rejects single-language index.
+2. Combined report writes Markdown and JSON for a combined index.
+3. Sources and coverage warnings render from `index_sources`.
+4. Matched endpoint appears in Markdown/JSON.
+5. One client matching two server sources emits two matched findings, not `AmbiguousMatch`.
+6. Same-source client/route pairs are included and flagged.
+7. Method mismatch, dynamic URL, client-only, and server-only classifications are deterministic.
+8. Report does not mutate `endpoint_matches`.
+9. Dependency edges include source label and evidence.
+10. SQL/query rows do not include raw SQL text.
+11. `SqlTextUsed`-only rows render hash/length and `n/a` table/column fields.
+12. Dynamic URL findings do not render raw URL fragments.
+13. Markdown row caps include truncation notice when triggered.
+
+## Validation
+
+Run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+If TypeScript, JVM, or Python files are changed during implementation, also run the relevant checks from `docs/VALIDATION.md`.
