@@ -810,7 +810,7 @@ public static class TraceMapCommand
             Optional:
               --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
               --scope <value>            all, sources, coverage, endpoints, surfaces, edges, or paths. Comma-separated. Default: sources,coverage,endpoints,surfaces,edges.
-              --include-paths            Include opt-in path diff evidence. Per-item path expansion is not run in this slice.
+              --include-paths            Include bounded before/after path context for changed endpoint, surface, and edge items.
               --allow-identity-mismatch  Continue when same source labels point at different source identities.
               --exit-code                Return exit code 1 when impact items are present.
               --source <label>           Filter to one source label.

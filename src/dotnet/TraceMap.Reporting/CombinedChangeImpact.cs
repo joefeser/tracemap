@@ -124,6 +124,18 @@ public sealed record CombinedImpactGap(
 
 public sealed record CombinedImpactNote(string Code, string Message);
 
+internal sealed record PathContextSelector(
+    string? FromEndpoint,
+    string? FromSymbol,
+    string? FromSource,
+    string? ToSurface,
+    string? SurfaceName);
+
+internal sealed record PathContextQueryResult(
+    IReadOnlyList<CombinedPath> Paths,
+    IReadOnlyList<CombinedPathGap> Gaps,
+    string ReportCoverage);
+
 public static class CombinedImpactClassifications
 {
     public const string StaticImpactEvidence = nameof(StaticImpactEvidence);
@@ -152,6 +164,7 @@ public static class CombinedChangeImpactReporter
     private const string SurfaceRuleId = "combined.impact.surface.v1";
     private const string EdgeRuleId = "combined.impact.edge.v1";
     private const string PathRuleId = "combined.impact.path.v1";
+    private const string PathContextRuleId = "combined.impact.path-context.v1";
     private const string SelectorRuleId = "combined.impact.selector.v1";
     private const string TruncationRuleId = "combined.impact.truncation.v1";
 
@@ -169,7 +182,7 @@ public static class CombinedChangeImpactReporter
     private static readonly IReadOnlyList<string> Limitations =
     [
         "Impact rows describe static change evidence, not runtime or business impact.",
-        "Path context is not expanded in this implementation slice; path impact items only reflect opt-in path diff rows.",
+        "Path context is opt-in, bounded static graph evidence and must not be treated as complete dependency coverage when truncated.",
         "Endpoint evidence does not prove runtime traffic, auth behavior, proxies, deployment base paths, CORS behavior, or reachability.",
         "SQL/query evidence does not prove runtime execution, schema existence, generated SQL equivalence, dialect validity, or branch feasibility.",
         "Reduced scan coverage makes absence of evidence coverage-relative."
@@ -261,7 +274,8 @@ public static class CombinedChangeImpactReporter
         }
 
         var sortedItems = SortAndCapItems(items, options.MaxImpactItems, gaps, out var itemsTruncated);
-        if (sortedItems.Count == 0
+        var contextualItems = await AddPathContextAsync(sortedItems, options, gaps, cancellationToken);
+        if (contextualItems.Count == 0
             && !gaps.Any(gap => gap.Classification == CombinedImpactClassifications.SelectorNoMatch)
             && !gaps.Any(gap => gap.Classification == CombinedImpactClassifications.NoImpactEvidence))
         {
@@ -279,7 +293,7 @@ public static class CombinedChangeImpactReporter
         }
 
         var sortedGaps = SortAndCapGaps(gaps, options.MaxGaps, out var gapsTruncated);
-        var reportCoverage = ReportCoverage(diffReport.ReportCoverage, sortedItems, sortedGaps);
+        var reportCoverage = ReportCoverage(diffReport.ReportCoverage, contextualItems, sortedGaps);
         return new CombinedChangeImpactReport(
             ReportType,
             Version,
@@ -308,16 +322,16 @@ public static class CombinedChangeImpactReporter
             diffReport.AfterSnapshot,
             new CombinedImpactSummary(
                 diffReport.Summary.SourceDiffCount + diffReport.Summary.CoverageDiffCount + diffReport.Summary.EndpointDiffCount + diffReport.Summary.SurfaceDiffCount + diffReport.Summary.EdgeDiffCount + diffReport.Summary.PathDiffCount,
-                sortedItems.Count,
-                sortedItems.Count(item => item.EvidenceKind == "source"),
-                sortedItems.Count(item => item.EvidenceKind == "coverage"),
-                sortedItems.Count(item => item.EvidenceKind == "endpoint"),
-                sortedItems.Count(item => item.EvidenceKind == "surface"),
-                sortedItems.Count(item => item.EvidenceKind == "edge"),
-                sortedItems.Count(item => item.EvidenceKind == "path"),
+                contextualItems.Count,
+                contextualItems.Count(item => item.EvidenceKind == "source"),
+                contextualItems.Count(item => item.EvidenceKind == "coverage"),
+                contextualItems.Count(item => item.EvidenceKind == "endpoint"),
+                contextualItems.Count(item => item.EvidenceKind == "surface"),
+                contextualItems.Count(item => item.EvidenceKind == "edge"),
+                contextualItems.Count(item => item.EvidenceKind == "path"),
                 sortedGaps.Count,
                 itemsTruncated || gapsTruncated || sortedGaps.Any(gap => gap.GapKind == "TruncatedByLimit")),
-            sortedItems,
+            contextualItems,
             sortedGaps,
             Limitations);
     }
@@ -417,6 +431,343 @@ public static class CombinedChangeImpactReporter
         return ignored.OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
+    private static async Task<IReadOnlyList<CombinedImpactItem>> AddPathContextAsync(
+        IReadOnlyList<CombinedImpactItem> items,
+        CombinedChangeImpactOptions options,
+        List<CombinedImpactGap> globalGaps,
+        CancellationToken cancellationToken)
+    {
+        if (!options.IncludePaths || items.Count == 0)
+        {
+            return items;
+        }
+
+        var queryCount = 0;
+        var contextual = new List<CombinedImpactItem>(items.Count);
+        foreach (var item in items)
+        {
+            if (item.EvidenceKind is "source" or "coverage" or "path")
+            {
+                contextual.Add(item);
+                continue;
+            }
+
+            var selector = TryCreatePathSelector(item);
+            if (selector is null)
+            {
+                var gap = PathContextGap(
+                    item,
+                    "PathContextUnavailable",
+                    CombinedImpactClassifications.PathContextUnavailable,
+                    "No safe path selector could be derived for this impact item.",
+                    "selector");
+                globalGaps.Add(gap);
+                contextual.Add(item with
+                {
+                    PathContext = new CombinedImpactPathContext(CombinedImpactClassifications.PathContextUnavailable, [], [], [gap])
+                });
+                continue;
+            }
+
+            if (queryCount + 2 > options.MaxPathQueries)
+            {
+                var gap = PathContextGap(
+                    item,
+                    "TruncatedByLimit",
+                    CombinedImpactClassifications.TruncatedByLimit,
+                    $"Path context query output was capped at {options.MaxPathQueries} before/after queries.",
+                    "max-path-queries");
+                globalGaps.Add(gap);
+                contextual.Add(item with
+                {
+                    PathContext = new CombinedImpactPathContext(CombinedImpactClassifications.PathContextUnavailable, [], [], [gap])
+                });
+                continue;
+            }
+
+            queryCount += 2;
+            var before = await QueryPathContextAsync(options.BeforePath, selector, options, cancellationToken);
+            var after = await QueryPathContextAsync(options.AfterPath, selector, options, cancellationToken);
+            var pathContext = ClassifyPathContext(item, before, after);
+            globalGaps.AddRange(pathContext.Gaps);
+            contextual.Add(item with { PathContext = pathContext });
+        }
+
+        return contextual;
+    }
+
+    private static PathContextSelector? TryCreatePathSelector(CombinedImpactItem item)
+    {
+        var evidence = item.After ?? item.Before;
+        if (evidence is null)
+        {
+            return null;
+        }
+
+        if (item.EvidenceKind == "endpoint")
+        {
+            var method = MetadataValue(evidence, "httpMethod") ?? evidence.DisplayName?.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            var pathKey = MetadataValue(evidence, "normalizedPathKey")
+                ?? (evidence.DisplayName?.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).Length == 2
+                    ? evidence.DisplayName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[1]
+                    : null);
+            if (string.IsNullOrWhiteSpace(method) || string.IsNullOrWhiteSpace(pathKey))
+            {
+                return null;
+            }
+
+            return new PathContextSelector($"{method.Trim()} {pathKey.Trim()}", null, evidence.SourceLabel, null, null);
+        }
+
+        if (item.EvidenceKind == "surface")
+        {
+            var surfaceKind = MetadataValue(evidence, "surfaceKind");
+            if (string.IsNullOrWhiteSpace(surfaceKind))
+            {
+                return null;
+            }
+
+            var surfaceName = MetadataValue(evidence, "tableName")
+                ?? MetadataValue(evidence, "configKey")
+                ?? MetadataValue(evidence, "packageName")
+                ?? MetadataValue(evidence, "normalizedPathKey")
+                ?? evidence.DisplayName;
+            return new PathContextSelector(null, null, evidence.SourceLabel, surfaceKind.Trim(), surfaceName);
+        }
+
+        if (item.EvidenceKind == "edge")
+        {
+            var sourceSymbol = MetadataValue(evidence, "sourceSymbol");
+            if (string.IsNullOrWhiteSpace(sourceSymbol))
+            {
+                return null;
+            }
+
+            return new PathContextSelector(null, sourceSymbol.Trim(), evidence.SourceLabel, null, null);
+        }
+
+        return null;
+    }
+
+    private static async Task<PathContextQueryResult> QueryPathContextAsync(
+        string indexPath,
+        PathContextSelector selector,
+        CombinedChangeImpactOptions options,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var report = await CombinedDependencyPathReporter.BuildReportAsync(
+                new CombinedDependencyPathOptions(
+                    indexPath,
+                    options.OutputPath,
+                    "json",
+                    selector.FromEndpoint,
+                    selector.FromSymbol,
+                    selector.FromSource,
+                    selector.ToSurface,
+                    selector.SurfaceName,
+                    null,
+                    options.MaxDepth,
+                    options.MaxPathsPerItem,
+                    options.MaxFrontier),
+                cancellationToken);
+            return new PathContextQueryResult(report.Paths, report.Gaps, report.ReportCoverage);
+        }
+        catch (ArgumentException exception)
+        {
+            return new PathContextQueryResult(
+                [],
+                [
+                    new CombinedPathGap(
+                        $"gap:impact:path-context:error:{CombinedReportHelpers.Hash(exception.Message, 16)}",
+                        "UnknownAnalysisGap",
+                        CombinedDependencyPathClassifications.UnknownAnalysisGap,
+                        exception.Message,
+                        null,
+                        selector.FromSource,
+                        null,
+                        null,
+                        PathContextRuleId,
+                        EvidenceTiers.Tier4Unknown,
+                        null,
+                        null,
+                        "path-context")
+                ],
+                "UnknownAnalysisGap");
+        }
+    }
+
+    private static CombinedImpactPathContext ClassifyPathContext(
+        CombinedImpactItem item,
+        PathContextQueryResult before,
+        PathContextQueryResult after)
+    {
+        var beforePaths = before.Paths.Select(PathSummary).ToArray();
+        var afterPaths = after.Paths.Select(PathSummary).ToArray();
+        var gaps = before.Gaps.Select(gap => FromPathGap(item, "before", gap))
+            .Concat(after.Gaps.Select(gap => FromPathGap(item, "after", gap)))
+            .GroupBy(gap => gap.GapId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
+            .ThenBy(gap => gap.Message, StringComparer.Ordinal)
+            .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+            .ToArray();
+        var classification = PathContextClassification(before, after, gaps);
+        return new CombinedImpactPathContext(classification, beforePaths, afterPaths, gaps);
+    }
+
+    private static string PathContextClassification(PathContextQueryResult before, PathContextQueryResult after, IReadOnlyList<CombinedImpactGap> gaps)
+    {
+        var hasAnyPathEvidence = before.Paths.Count > 0 || after.Paths.Count > 0;
+        if (!hasAnyPathEvidence && gaps.Any(gap => gap.Classification == CombinedImpactClassifications.TruncatedByLimit))
+        {
+            return CombinedImpactClassifications.PathContextUnavailable;
+        }
+
+        if (!hasAnyPathEvidence
+            && (before.ReportCoverage == "UnknownAnalysisGap"
+                || after.ReportCoverage == "UnknownAnalysisGap"
+                || gaps.Any(gap => gap.Classification == CombinedImpactClassifications.UnknownAnalysisGap)))
+        {
+            return CombinedImpactClassifications.UnknownAnalysisGap;
+        }
+
+        if (!hasAnyPathEvidence && (before.ReportCoverage != "FullEvidenceAvailable" || after.ReportCoverage != "FullEvidenceAvailable"))
+        {
+            return CombinedImpactClassifications.UnknownAnalysisGap;
+        }
+
+        if (gaps.Any(gap => gap.Classification == CombinedImpactClassifications.PathContextUnavailable)
+            && before.Paths.Count == 0
+            && after.Paths.Count == 0)
+        {
+            return CombinedImpactClassifications.PathContextUnavailable;
+        }
+
+        var beforeIdentity = before.Paths.Select(PathIdentity).ToHashSet(StringComparer.Ordinal);
+        var afterIdentity = after.Paths.Select(PathIdentity).ToHashSet(StringComparer.Ordinal);
+        if (!beforeIdentity.SetEquals(afterIdentity))
+        {
+            return CombinedImpactClassifications.ReachabilityChanged;
+        }
+
+        if (before.Paths.Count == 0 && after.Paths.Count == 0)
+        {
+            return CombinedImpactClassifications.NoPathEvidence;
+        }
+
+        var beforeEvidence = before.Paths.Select(PathEvidenceSignature).ToHashSet(StringComparer.Ordinal);
+        var afterEvidence = after.Paths.Select(PathEvidenceSignature).ToHashSet(StringComparer.Ordinal);
+        return beforeEvidence.SetEquals(afterEvidence)
+            ? CombinedImpactClassifications.NoPathEvidence
+            : CombinedImpactClassifications.ReachabilityEvidenceChanged;
+    }
+
+    private static CombinedImpactPathSummary PathSummary(CombinedPath path)
+    {
+        return new CombinedImpactPathSummary(
+            path.PathId,
+            path.Classification,
+            SourceTransitions(path),
+            path.SupportingFactIds,
+            path.SupportingEdgeIds,
+            TerminalMetadata(path));
+    }
+
+    private static IReadOnlyList<string> SourceTransitions(CombinedPath path)
+    {
+        return path.Nodes
+            .Select(node => node.SourceLabel)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> TerminalMetadata(CombinedPath path)
+    {
+        var terminal = path.Nodes.LastOrDefault();
+        if (terminal is null)
+        {
+            return [];
+        }
+
+        return CombinedReportHelpers.SortedMetadata([
+            Pair("surfaceKind", terminal.SurfaceKind),
+            Pair("surfaceName", terminal.SurfaceName),
+            Pair("httpMethod", terminal.HttpMethod),
+            Pair("normalizedPathKey", terminal.NormalizedPathKey),
+            Pair("shapeHash", terminal.ShapeHash),
+            Pair("textHash", terminal.TextHash),
+            Pair("packageName", terminal.PackageName),
+            Pair("configKey", terminal.ConfigKey)
+        ]);
+    }
+
+    private static CombinedImpactGap FromPathGap(CombinedImpactItem item, string side, CombinedPathGap gap)
+    {
+        var classification = gap.GapKind switch
+        {
+            "TruncatedByLimit" => CombinedImpactClassifications.TruncatedByLimit,
+            "NoPathFound" => CombinedImpactClassifications.NoPathEvidence,
+            "SelectorNoMatch" => CombinedImpactClassifications.PathContextUnavailable,
+            _ when gap.Classification == CombinedDependencyPathClassifications.UnknownAnalysisGap => CombinedImpactClassifications.UnknownAnalysisGap,
+            _ => CombinedImpactClassifications.NeedsReviewImpact
+        };
+        return new CombinedImpactGap(
+            $"gap:impact:path-context:{side}:{item.ImpactId}:{CombinedReportHelpers.Hash(gap.GapId, 16)}",
+            gap.GapKind,
+            gap.SourceLabel ?? item.SourceLabel,
+            item.EvidenceKind,
+            gap.RuleId == "combined.paths.truncation-gap.v1" ? TruncationRuleId : PathContextRuleId,
+            gap.EvidenceTier ?? EvidenceTiers.Tier4Unknown,
+            classification,
+            $"{side}: {gap.Message}",
+            item.SupportingFactIds,
+            item.SupportingEdgeIds);
+    }
+
+    private static CombinedImpactGap PathContextGap(CombinedImpactItem item, string gapKind, string classification, string message, string reason)
+    {
+        return new CombinedImpactGap(
+            $"gap:impact:path-context:{item.ImpactId}:{reason}",
+            gapKind,
+            item.SourceLabel,
+            item.EvidenceKind,
+            gapKind == "TruncatedByLimit" ? TruncationRuleId : PathContextRuleId,
+            EvidenceTiers.Tier4Unknown,
+            classification,
+            message,
+            item.SupportingFactIds,
+            item.SupportingEdgeIds);
+    }
+
+    private static string PathIdentity(CombinedPath path)
+    {
+        return string.Join("\u001f", [
+            string.Join(">", path.Nodes.Select(node => $"{node.NodeKind}:{node.SourceLabel}:{node.DisplayName}:{node.SurfaceKind}:{node.SurfaceName}:{node.HttpMethod}:{node.NormalizedPathKey}")),
+            string.Join(">", path.Edges.Select(edge => edge.EdgeKind))
+        ]);
+    }
+
+    private static string PathEvidenceSignature(CombinedPath path)
+    {
+        return string.Join("\u001f", [
+            PathIdentity(path),
+            string.Join(">", path.Edges.Select(edge => $"{edge.RuleId}:{edge.EvidenceTier}:{edge.FilePath}:{edge.StartLine}:{edge.EndLine}")),
+            string.Join(">", path.SupportingFactIds),
+            string.Join(">", path.SupportingEdgeIds)
+        ]);
+    }
+
+    private static string? MetadataValue(CombinedDiffEvidence evidence, string key)
+    {
+        return evidence.SafeMetadata.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.Ordinal)).Value;
+    }
+
+    private static KeyValuePair<string, string?> Pair(string key, string? value) => new(key, value);
+
     private static CombinedImpactItem FromDiffRow(CombinedDiffRow row, string evidenceKind, string impactRuleId, bool includePaths)
     {
         var evidence = row.After ?? row.Before;
@@ -475,7 +826,11 @@ public static class CombinedChangeImpactReporter
             null,
             null,
             new CombinedImpactPathContext(
-                includePaths ? CombinedImpactClassifications.ReachabilityEvidenceChanged : CombinedImpactClassifications.NotRequested,
+                includePaths
+                    ? row.Before is null || row.After is null
+                        ? CombinedImpactClassifications.ReachabilityChanged
+                        : CombinedImpactClassifications.ReachabilityEvidenceChanged
+                    : CombinedImpactClassifications.NotRequested,
                 row.Before is null ? [] : [PathSummary(row.Before)],
                 row.After is null ? [] : [PathSummary(row.After)],
                 []),
@@ -697,10 +1052,7 @@ public static class CombinedChangeImpactReporter
         AppendItems(builder, report.ImpactItems);
         builder.AppendLine("## Path Context");
         builder.AppendLine();
-        builder.AppendLine(report.Query.IncludePaths
-            ? "This implementation slice includes opt-in path diff evidence, but does not run additional per-item path expansion."
-            : "Path context was not requested.");
-        builder.AppendLine();
+        AppendPathContext(builder, report);
         builder.AppendLine("## Gaps");
         builder.AppendLine();
         AppendGaps(builder, report.Gaps);
@@ -737,6 +1089,35 @@ public static class CombinedChangeImpactReporter
         foreach (var item in items.Take(200))
         {
             builder.AppendLine($"| {Cell(item.Classification)} | {Cell(item.ChangeType)} | {Cell(item.EvidenceKind)} | {Cell(item.SourceLabel)} | {Cell(item.After?.DisplayName ?? item.Before?.DisplayName ?? item.StableKey)} | {Cell(item.ImpactRuleId)} | {Cell(item.EvidenceTier ?? "n/a")} | {Cell(Span(item))} |");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendPathContext(StringBuilder builder, CombinedChangeImpactReport report)
+    {
+        if (!report.Query.IncludePaths)
+        {
+            builder.AppendLine("Path context was not requested.");
+            builder.AppendLine();
+            return;
+        }
+
+        var rows = report.ImpactItems
+            .Where(item => item.PathContext.Classification != CombinedImpactClassifications.NotRequested)
+            .ToArray();
+        if (rows.Length == 0)
+        {
+            builder.AppendLine("No path-context queries were run for the returned impact items.");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine("| Classification | Kind | Source | Evidence | Before Paths | After Paths | Gaps |");
+        builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var item in rows.Take(200))
+        {
+            builder.AppendLine($"| {Cell(item.PathContext.Classification)} | {Cell(item.EvidenceKind)} | {Cell(item.SourceLabel)} | {Cell(item.After?.DisplayName ?? item.Before?.DisplayName ?? item.StableKey)} | {item.PathContext.BeforePaths.Count} | {item.PathContext.AfterPaths.Count} | {item.PathContext.Gaps.Count} |");
         }
 
         builder.AppendLine();
