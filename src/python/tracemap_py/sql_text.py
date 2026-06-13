@@ -122,7 +122,7 @@ def _shape_operation(value: str) -> str:
 
 def _table_names(sql: str, operation: str) -> list[str]:
     candidates: list[str] = []
-    if operation in {"SELECT", "WITH"}:
+    if operation == "SELECT":
         candidates.extend(_matches(sql, r"\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
         candidates.extend(_matches(sql, r"\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
     elif operation == "INSERT":
@@ -139,7 +139,7 @@ def _table_names(sql: str, operation: str) -> list[str]:
 
 
 def _column_names(sql: str, operation: str) -> list[str]:
-    if operation in {"SELECT", "WITH"}:
+    if operation == "SELECT":
         select_part = _between(sql, "SELECT", "FROM")
         return _select_columns(select_part)
     if operation == "INSERT":
