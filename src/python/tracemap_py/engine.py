@@ -97,6 +97,8 @@ def make_options(repo: str, out: str, project: list[str] | None = None, include:
 
 
 def _write_outputs(out: Path, manifest: ScanManifest, facts: list[CodeFact], gaps: list[str]) -> None:
+    if out.exists() and not _can_replace_output_directory(out):
+        raise ValueError(f"Output path already exists and is not a TraceMap output directory: {out}")
     if out.exists():
         shutil.rmtree(out)
     (out / "logs").mkdir(parents=True, exist_ok=True)
@@ -105,6 +107,16 @@ def _write_outputs(out: Path, manifest: ScanManifest, facts: list[CodeFact], gap
     write_sqlite(out / "index.sqlite", manifest, facts)
     (out / "report.md").write_text(render_report(manifest, facts), encoding="utf-8")
     (out / "logs" / "analyzer.log").write_text("\n".join(gaps) + ("\n" if gaps else ""), encoding="utf-8")
+
+
+def _can_replace_output_directory(out: Path) -> bool:
+    if not out.is_dir():
+        return False
+    children = list(out.iterdir())
+    if not children:
+        return True
+    required = {"scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md"}
+    return required.issubset({child.name for child in children})
 
 
 def _repo_facts(manifest: ScanManifest) -> list[CodeFact]:
