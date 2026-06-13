@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -267,6 +268,7 @@ public static class CombinedDependencyReporter
             endpointFindings,
             surfaces,
             read.Edges
+                .Select(SanitizeEdge)
                 .OrderBy(edge => edge.EdgeKind, StringComparer.Ordinal)
                 .ThenBy(edge => edge.SourceLabel, StringComparer.Ordinal)
                 .ThenBy(edge => edge.SourceSymbol, StringComparer.Ordinal)
@@ -669,7 +671,7 @@ public static class CombinedDependencyReporter
             client?.Fact.OriginalFactId,
             client?.Fact.RuleId,
             client?.Fact.EvidenceTier,
-            client?.Fact.FilePath,
+            client is null ? null : SafePath(client.Fact.FilePath),
             client?.Fact.StartLine,
             client?.Fact.EndLine,
             server?.Fact.SourceIndexId,
@@ -680,7 +682,7 @@ public static class CombinedDependencyReporter
             server?.Fact.OriginalFactId,
             server?.Fact.RuleId,
             server?.Fact.EvidenceTier,
-            server?.Fact.FilePath,
+            server is null ? null : SafePath(server.Fact.FilePath),
             server?.Fact.StartLine,
             server?.Fact.EndLine,
             staticMatchQuality,
@@ -720,13 +722,13 @@ public static class CombinedDependencyReporter
         var textLength = FirstValue(fact.Properties, "textLength");
         var packageName = FirstValue(fact.Properties, "packageName", "package", "dependencyName", "moduleName", "name");
         var version = FirstValue(fact.Properties, "version", "packageVersion");
-        var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "environmentVariableName") ?? (fact.FactType.Contains("Config", StringComparison.Ordinal) || fact.FactType.Contains("ConnectionString", StringComparison.Ordinal) ? fact.TargetSymbol : null);
+        var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "environmentVariableName");
         var displayName = surfaceKind switch
         {
             "http-client" or "http-route" => normalizedPathKey ?? FirstValue(fact.Properties, "normalizedPathTemplate") ?? $"{httpMethod ?? "ANY"} unknown",
-            "sql-query" => tableName ?? shapeHash ?? textHash ?? fact.TargetSymbol ?? "unknown",
-            "package-config" => packageName ?? configKey ?? fact.TargetSymbol ?? "unknown",
-            _ => fact.TargetSymbol ?? "unknown"
+            "sql-query" => tableName ?? shapeHash ?? textHash ?? $"unknown-sql:{fact.CombinedFactId}",
+            "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
+            _ => $"unknown-surface:{fact.CombinedFactId}"
         };
 
         return new CombinedDependencySurfaceRow(
@@ -741,7 +743,7 @@ public static class CombinedDependencyReporter
             fact.FactType,
             fact.RuleId,
             fact.EvidenceTier,
-            fact.FilePath,
+            SafePath(fact.FilePath),
             fact.StartLine,
             fact.EndLine,
             httpMethod,
@@ -810,7 +812,7 @@ public static class CombinedDependencyReporter
                 fact.SourceIndexId,
                 fact.SourceLabel,
                 fact.CombinedFactId,
-                fact.FilePath,
+                SafePath(fact.FilePath),
                 fact.StartLine)));
 
         return rows
@@ -819,6 +821,11 @@ public static class CombinedDependencyReporter
             .ThenBy(row => row.FilePath, StringComparer.Ordinal)
             .ThenBy(row => row.StartLine ?? 0)
             .ToArray();
+    }
+
+    private static CombinedDependencyEdgeRow SanitizeEdge(CombinedDependencyEdgeRow edge)
+    {
+        return edge with { FilePath = SafePath(edge.FilePath) };
     }
 
     private static async Task<(string? MarkdownPath, string? JsonPath)> WriteOutputsAsync(string outputPath, string format, CombinedDependencyReportDocument report, CancellationToken cancellationToken)
@@ -1247,6 +1254,25 @@ public static class CombinedDependencyReporter
             "json" => "json",
             _ => throw new ArgumentException("report --format must be markdown or json.")
         };
+    }
+
+    private static string SafePath(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return "n/a";
+        }
+
+        return Path.IsPathFullyQualified(filePath)
+            ? $"absolute-path-hash:{Hash(filePath, 16)}"
+            : filePath.Replace('\\', '/');
+    }
+
+    private static string Hash(string value, int length)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        var text = Convert.ToHexString(bytes).ToLowerInvariant();
+        return text[..Math.Min(length, text.Length)];
     }
 
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)

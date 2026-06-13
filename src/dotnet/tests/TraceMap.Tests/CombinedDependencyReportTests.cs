@@ -102,6 +102,44 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_redacts_absolute_paths_and_raw_surface_target_symbols()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "safe-report");
+        var clientManifest = Manifest("client", "tracemap-typescript/0.1.0");
+        var serverManifest = Manifest("server", "tracemap-milestone15");
+        var absoluteSqlPath = Path.GetFullPath(Path.Combine(temp.Path, "..", "outside-repo", "queries.sql"));
+        const string rawSql = "select password from users where api_key = 'secret'";
+        const string rawConfig = "Server=private;Password=secret;";
+
+        SqliteIndexWriter.Write(clientIndex, clientManifest, []);
+        SqliteIndexWriter.Write(serverIndex, serverManifest, [
+            RawSqlTextFact(serverManifest, absoluteSqlPath, 7, rawSql),
+            RawConfigFact(serverManifest, absoluteSqlPath, 9, rawConfig)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query" && surface.DisplayName.StartsWith("unknown-sql:", StringComparison.Ordinal));
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "package-config" && surface.DisplayName.StartsWith("unknown-package-config:", StringComparison.Ordinal));
+        Assert.All(result.Report.DependencySurfaces, surface => Assert.DoesNotContain(absoluteSqlPath, surface.FilePath, StringComparison.Ordinal));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
+        foreach (var text in new[] { markdown, json })
+        {
+            Assert.Contains("absolute-path-hash:", text);
+            Assert.DoesNotContain(absoluteSqlPath, text, StringComparison.Ordinal);
+            Assert.DoesNotContain(rawSql, text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(rawConfig, text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
     public async Task Report_includes_same_source_endpoint_matches_and_directory_row_caps()
     {
         using var temp = new TempDirectory();
@@ -289,6 +327,21 @@ public sealed class CombinedDependencyReportTests
             });
     }
 
+    private static CodeFact RawSqlTextFact(ScanManifest manifest, string file, int line, string rawSql)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SqlTextUsed,
+            RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: rawSql,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["sqlSourceKind"] = "literal-string"
+            });
+    }
+
     private static CodeFact QueryPatternFact(ScanManifest manifest, string file, int line)
     {
         return FactFactory.Create(
@@ -320,6 +373,21 @@ public sealed class CombinedDependencyReportTests
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["keyPath"] = "ConnectionStrings:Default",
+                ["valueHash"] = "hash-only"
+            });
+    }
+
+    private static CodeFact RawConfigFact(ScanManifest manifest, string file, int line, string rawConfig)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ConnectionStringDeclared,
+            RuleIds.ConfigKey,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: rawConfig,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
                 ["valueHash"] = "hash-only"
             });
     }

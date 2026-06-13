@@ -307,7 +307,7 @@ public static class CombinedDependencyPathReporter
             var search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
-            truncated = search.Truncated;
+            truncated = truncated || search.Truncated;
 
             if (paths.Count == 0)
             {
@@ -585,7 +585,7 @@ public static class CombinedDependencyPathReporter
         {
             var qualified = group
                 .Where(pair => pair.Alias.TypeKey is not null)
-                .GroupBy(pair => pair.Alias.TypeKey, StringComparer.Ordinal)
+                .GroupBy(pair => $"{pair.Alias.TypeKey}\0{pair.Alias.SignatureKey ?? string.Empty}", StringComparer.Ordinal)
                 .ToDictionary(pair => pair.Key!, pair => pair.Select(item => item.Node).DistinctBy(node => node.NodeId).ToArray(), StringComparer.Ordinal);
             var allQualified = qualified.Values.SelectMany(nodes => nodes).DistinctBy(node => node.NodeId).ToArray();
             var bare = group
@@ -596,7 +596,7 @@ public static class CombinedDependencyPathReporter
 
             foreach (var pair in group.Where(pair => pair.Alias.TypeKey is not null))
             {
-                if (!qualified.TryGetValue(pair.Alias.TypeKey!, out var sameType))
+                if (!qualified.TryGetValue($"{pair.Alias.TypeKey}\0{pair.Alias.SignatureKey ?? string.Empty}", out var sameType))
                 {
                     continue;
                 }
@@ -605,6 +605,21 @@ public static class CombinedDependencyPathReporter
                 {
                     AddSymbolReconciliationEdge(graph, pair.Node, target);
                 }
+            }
+
+            var signedQualifiedByType = group
+                .Where(pair => pair.Alias.TypeKey is not null && pair.Alias.SignatureKey is not null)
+                .GroupBy(pair => pair.Alias.TypeKey, StringComparer.Ordinal)
+                .ToDictionary(pair => pair.Key!, pair => pair.Select(item => item.Node).DistinctBy(node => node.NodeId).ToArray(), StringComparer.Ordinal);
+            foreach (var unsigned in group.Where(pair => pair.Alias.TypeKey is not null && pair.Alias.SignatureKey is null))
+            {
+                if (!signedQualifiedByType.TryGetValue(unsigned.Alias.TypeKey!, out var signedSameType) || signedSameType.Length != 1)
+                {
+                    continue;
+                }
+
+                AddSymbolReconciliationEdge(graph, unsigned.Node, signedSameType[0]);
+                AddSymbolReconciliationEdge(graph, signedSameType[0], unsigned.Node);
             }
 
             if (bare.Length == 0 || allQualified.Length != 1)
@@ -650,9 +665,16 @@ public static class CombinedDependencyPathReporter
             return null;
         }
 
+        string? signature = null;
         var parenIndex = normalized.IndexOf('(', StringComparison.Ordinal);
         if (parenIndex >= 0)
         {
+            var closeParenIndex = normalized.LastIndexOf(')');
+            if (closeParenIndex > parenIndex)
+            {
+                signature = CleanSignature(normalized[(parenIndex + 1)..closeParenIndex]);
+            }
+
             normalized = normalized[..parenIndex];
         }
 
@@ -680,7 +702,10 @@ public static class CombinedDependencyPathReporter
             type = null;
         }
 
-        return new SymbolAlias(MemberKey: member.ToLowerInvariant(), TypeKey: string.IsNullOrWhiteSpace(type) ? null : type.ToLowerInvariant());
+        return new SymbolAlias(
+            MemberKey: member.ToLowerInvariant(),
+            TypeKey: string.IsNullOrWhiteSpace(type) ? null : type.ToLowerInvariant(),
+            SignatureKey: signature);
     }
 
     private static string CleanSymbolPart(string value)
@@ -699,6 +724,15 @@ public static class CombinedDependencyPathReporter
         }
 
         return cleaned;
+    }
+
+    private static string? CleanSignature(string value)
+    {
+        var cleaned = string.Join(",", value
+            .Split(',', StringSplitOptions.TrimEntries)
+            .Where(part => part.Length > 0)
+            .Select(part => string.Join(" ", part.Split(' ', StringSplitOptions.RemoveEmptyEntries))));
+        return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
     }
 
     private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier)
@@ -1217,7 +1251,8 @@ public static class CombinedDependencyPathReporter
             throw new ArgumentException("paths --source-pair must be '<client>:<server>'; escape literal colons as \\:.");
         }
 
-        var server = builder.ToString();
+        client = client.Trim();
+        var server = builder.ToString().Trim();
         if (string.IsNullOrWhiteSpace(client) || string.IsNullOrWhiteSpace(server))
         {
             throw new ArgumentException("paths --source-pair client and server labels cannot be empty.");
@@ -1234,26 +1269,6 @@ public static class CombinedDependencyPathReporter
     private static async Task ValidatePathSchemaAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         await CombinedDependencyReporter.ValidateCombinedIndexAsync(connection, cancellationToken);
-        foreach (var table in new[]
-        {
-            "index_sources",
-            "combined_facts",
-            "combined_dependency_edges"
-        })
-        {
-            if (!await RelationExistsAsync(connection, table, cancellationToken))
-            {
-                throw new InvalidDataException($"Combined dependency paths require missing table or view `{table}`.");
-            }
-        }
-    }
-
-    private static async Task<bool> RelationExistsAsync(SqliteConnection connection, string relationName, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText = "select count(*) from sqlite_master where name = $name and type in ('table', 'view');";
-        command.Parameters.AddWithValue("$name", relationName);
-        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
 
     private static async Task<(string? MarkdownPath, string? JsonPath)> WriteOutputsAsync(string outputPath, string format, CombinedDependencyPathReport report, CancellationToken cancellationToken)
@@ -1663,7 +1678,7 @@ public static class CombinedDependencyPathReporter
 
     private sealed record SelectorResolution(IReadOnlyList<GraphNode> Nodes, int TotalMatchCount);
 
-    private sealed record SymbolAlias(string MemberKey, string? TypeKey);
+    private sealed record SymbolAlias(string MemberKey, string? TypeKey, string? SignatureKey);
 
     private sealed record GraphNode(
         string NodeId,
