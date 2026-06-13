@@ -15,7 +15,7 @@ Every language adapter should have:
 | reducer fixture | proves contract delta matching through shared facts/index schema |
 | SQLite relationship queries | proves `call_edges`, `object_creations`, `argument_flows`, symbols, and relationship tables are populated when facts exist |
 | integration facts | proves HTTP/API, config, SQL/DB, serializer, and package/dependency facts where supported |
-| combine/export smoke | proves shared schema compatibility across adapters |
+| combine/report/export smoke | proves shared schema compatibility and combined dependency reporting across adapters |
 | public OSS smoke | proves larger real-world repos complete without unchecked assumptions |
 | private-path guard | proves generated docs/scripts do not leak developer-local paths |
 
@@ -39,6 +39,18 @@ For JVM CLI smoke, also run:
 
 ```bash
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
+```
+
+For combined dependency report changes, run a combine/report smoke over any two existing local scan outputs:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+  --index <first>/index.sqlite --label first \
+  --index <second>/index.sqlite --label second \
+  --out <tmp>/combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sqlite --out <tmp>/combined-report
+test -f <tmp>/combined-report/dependency-report.md
+test -f <tmp>/combined-report/dependency-report.json
 ```
 
 ## Public OSS Smoke
