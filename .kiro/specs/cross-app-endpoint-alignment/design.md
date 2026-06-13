@@ -47,6 +47,7 @@ This is a report/correlation layer over evidence. It does not mutate source fact
 - ASP.NET controller endpoints reuse `HttpRouteBinding`.
 - Server syntax route fallback is required because unresolved ASP.NET references can prevent semantic route extraction.
 - Combined database work is future-facing, but endpoint result JSON and source metadata must be shaped so a future combine command can reuse it.
+- `tracemap combine` should land before or alongside JVM support so Java/Kotlin dependency analysis can use the same cross-index model instead of inventing a language-specific merger.
 
 ## Proposed Package Layout
 
@@ -251,6 +252,8 @@ Normalization steps:
 
 Client normalization is scan-time required. Server normalization may be endpoint-reader derived from stored route templates.
 
+Post-review implementation note: semantic ASP.NET route facts can store controller and action templates as comma-separated `routeTemplates`. The endpoint reader must combine those templates before normalization, and it must resolve `[controller]` from containing type metadata when available. `UnknownAnalysisGap` findings must attach representative `AnalysisGap` evidence when present.
+
 ## Matching Algorithm
 
 Input sets:
@@ -379,15 +382,15 @@ JSON should be stable and testable:
   "sources": [
     {
       "role": "client",
-      "label": "ffp-client",
+      "label": "private-client",
       "scanId": "...",
-      "repoName": "ClientApp",
+      "repoName": "client-app",
       "remoteUrl": "...",
       "branch": "main",
       "commitSha": "...",
       "scannerVersion": "tracemap-typescript/0.1.0",
       "language": "typescript",
-      "scanRootRelativePath": "backend/FFPRunningClub/FFPRunningClub.Api/ClientApp",
+      "scanRootRelativePath": "backend/server/client-app",
       "scanRootPathHash": "...",
       "gitRootHash": "...",
       "indexPathHash": "...",
@@ -417,10 +420,12 @@ Future command shape:
 
 ```bash
 tracemap combine \
-  --index <client-index.sqlite> --label ffp-client \
-  --index <server-index.sqlite> --label ffp-api \
+  --index <client-index.sqlite> --label private-client \
+  --index <server-index.sqlite> --label private-api \
   --out <combined.sqlite>
 ```
+
+Preferred JVM layout after combine: `src/jvm`. Java and Kotlin can share Gradle/Maven discovery, package/module metadata, JVM signatures, call edges, inheritance relationships, and dependency facts. Split Java/Kotlin internally only where front-end parsers or compiler integrations require it.
 
 Future combined schema candidates:
 
@@ -474,7 +479,7 @@ Single-scan manifest additions should be additive:
 
 ```json
 {
-  "scanRootRelativePath": "backend/FFPRunningClub/FFPRunningClub.Api/ClientApp",
+  "scanRootRelativePath": "backend/server/client-app",
   "scanRootPathHash": "<hash>",
   "gitRootHash": "<hash>"
 }
@@ -529,9 +534,9 @@ C# scanner updates needed by this phase:
 - Ensure scoped scan includes project files when `--project` is passed even if `--include` narrows source files.
 - Record project-load/build path gaps clearly when solution paths are broken.
 
-## FFP Expected Outcome
+## Private Fixture Expected Outcome
 
-After implementation, the FFP fixture should produce a useful smoke report. Observed counts from the discovery probe were:
+After implementation, the private fixture should produce a useful smoke report. Observed counts from the discovery probe were:
 
 - Client calls: 34 Angular HTTP call facts.
 - Server endpoints: 37 ASP.NET route facts from syntax fallback or semantic extraction.
@@ -545,7 +550,7 @@ After implementation, the FFP fixture should produce a useful smoke report. Obse
     - `GET /api/validation/is-club-name-unique`
     - one additional server-only endpoint depending on duplicate client calls and match grouping.
 
-These counts are informational smoke references only and are not test assertions. Exact-count tests belong in small in-repo fixtures because the FFP repo can change independently.
+These counts are informational smoke references only and are not test assertions. Exact-count tests belong in small in-repo fixtures because the private repo can change independently.
 
 ## Rule Catalog Entries
 

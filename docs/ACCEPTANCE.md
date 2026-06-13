@@ -9,8 +9,10 @@ This plan defines how TraceMap proves that scanner and reducer behavior is deter
 Run before finishing implementation work:
 
 ```bash
-dotnet build
-dotnet test
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+cd src/typescript
+npm run check
 ```
 
 Expected result:
@@ -72,6 +74,20 @@ For every successful `tracemap export --index <index> --out <out> --format merma
 - call edges use indexed call-edge facts and are bounded.
 
 For TypeScript indexes, `tracemap-ts export --index <index> --out <out> --format <json|mermaid>` should produce equivalent export shapes from the same SQLite tables.
+
+## Language Adapter Acceptance
+
+New language adapters should satisfy [Language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md) before language-specific depth is considered complete.
+
+Minimum checks:
+
+- required artifacts are written.
+- scan manifest includes commit SHA, scanner version, analysis/build status, and scan-root metadata when available.
+- facts include rule IDs, evidence tiers, file paths, line spans, commit SHA, and extractor versions.
+- reducer-compatible facts reuse existing fact types and matching keys when possible.
+- rule catalog entries document every new rule and limitation.
+- reduced coverage is labeled whenever compiler/project/dependency gaps exist.
+- no raw snippets or raw sensitive values are stored by default.
 
 ## Endpoint Alignment Acceptance
 
@@ -190,10 +206,10 @@ Expected:
 
 ## External Sample Repos
 
-External repos live outside this repository at:
+External repos live outside this repository at a developer-provided path:
 
 ```text
-/Users/josephfeser/src/gh-joe/c-sharp-sample-repos
+<external-csharp-sample-repos>
 ```
 
 These are opt-in smoke fixtures because they are larger, machine-local, and may depend on SDKs or packages not present on every development machine.
@@ -206,7 +222,7 @@ Recommended first-pass repos:
 Example command:
 
 ```bash
-scripts/smoke-sample-repos.sh /Users/josephfeser/src/gh-joe/c-sharp-sample-repos <tmp>/sample-smoke
+scripts/smoke-sample-repos.sh <external-csharp-sample-repos> <tmp>/sample-smoke
 ```
 
 Expected:
@@ -218,19 +234,35 @@ Expected:
 
 TypeScript external smoke, recorded June 12, 2026:
 
-- Repo: `/Users/josephfeser/src/gh-joe/scip-typescript`
-- Command: `node src/typescript/dist/src/cli.js scan --repo /Users/josephfeser/src/gh-joe/scip-typescript --out /tmp/tracemap-ts-scip`
+- Repo: `<external-scip-typescript-repo>`
+- Command: `node src/typescript/dist/src/cli.js scan --repo <external-scip-typescript-repo> --out <tmp>/tracemap-ts-scip`
 - Result: completed, 13,883 facts, `Level1SemanticAnalysisReduced`, `FailedOrPartial`.
 - Interpretation: reduced coverage is expected for external repos with TypeScript diagnostics or dependency/config gaps; no-evidence reducer findings must remain reduced.
 
-FFP endpoint smoke, recorded June 12, 2026:
+Private endpoint smoke, recorded June 12, 2026:
 
-- Client repo: `/Users/josephfeser/src/ffp/FFP%20Platform%20v2/backend/FFPRunningClub/FFPRunningClub.Api/ClientApp`
-- Server repo: `/Users/josephfeser/src/ffp/FFP%20Platform%20v2/backend/FFPRunningClub`
-- Server project: `FFPRunningClub.Api/FFPRunningClub.Api.csproj`
+- Client repo: `<private-angular-client-app>`
+- Server repo: `<private-aspnet-server-root>`
+- Server project: `<private-aspnet-server-project>`
 - Result: client scan completed with 34 `HttpCallDetected` facts and `Level1SemanticAnalysisReduced`; server scan completed with 37 `HttpRouteBinding` facts and `Level1SemanticAnalysisReduced`.
 - Endpoint report: 38 findings, `ReducedEvidenceForScannedIndexes`, with `MatchedEndpoint`, `OptionalSegmentMatch`, `ServerEndpointNoClientMatch`, and coverage-warning sections.
 - Interpretation: reduced coverage is expected because the fixture has dependency/project-load quirks; endpoint no-match findings remain coverage-relative.
+
+Repeatable command: run the local ignored private endpoint smoke helper with explicit client and server paths supplied by the developer environment.
+
+Private endpoint smoke rerun, recorded June 13, 2026 after endpoint review-loop fixes:
+
+- Command: local ignored private endpoint smoke helper with `<private-angular-client-app>`, `<private-aspnet-server-root>`, and `<tmp>/private-endpoint-smoke`.
+- Client scan: completed, 25,652 facts, 34 `HttpCallDetected` facts, 3 `AnalysisGap` facts, `Level1SemanticAnalysisReduced` / `FailedOrPartial`.
+- Server scan: completed, 7,303 facts, 37 `HttpRouteBinding` facts, 142 `AnalysisGap` facts, `Level1SemanticAnalysisReduced` / `FailedOrPartial`.
+- Endpoint report: 38 findings, `ReducedEvidenceForScannedIndexes`.
+- Endpoint classifications: 31 `MatchedEndpoint`, 3 `OptionalSegmentMatch`, 4 `ServerEndpointNoClientMatch`.
+- Server-only rows:
+  - `POST /api/account/change-password`
+  - `POST /api/account/log-off`
+  - `GET /api/admin/runner/delete`
+  - `GET /api/validation/is-club-name-unique`
+- Interpretation: all 34 statically discovered client HTTP calls matched server endpoint evidence. The 4 server-only rows remain coverage-relative and are not dead-code proof.
 
 ## Repo-Specific Delta Fixtures
 

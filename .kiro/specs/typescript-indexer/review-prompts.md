@@ -40,7 +40,7 @@ You are reviewing the TraceMap TypeScript indexer Kiro spec for implementation f
 
 Context:
 - The implementation will live under src/typescript as a sibling to src/dotnet.
-- It should borrow techniques from /Users/josephfeser/src/gh-joe/scip-typescript, especially TypeScript project loading, project references, package identity, file-size limits, source caching, and symbol descriptors.
+- It should borrow techniques from a local scip-typescript checkout, especially TypeScript project loading, project references, package identity, file-size limits, source caching, and symbol descriptors.
 - It should emit TraceMap-compatible facts and SQLite tables.
 
 Files to review:
@@ -62,4 +62,3 @@ Return:
 - MVP slice recommendation.
 - Specific design edits before coding.
 ```
-
