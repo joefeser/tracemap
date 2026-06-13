@@ -47,6 +47,8 @@ For SQL-shape facts, render compact lines like:
 - `SELECT` on `orders` columns `id;status;total` source `orm-text` shape `9858bc44eae2ff12104e17967718e5dc` (Tier2Structural) at `app/repository.py:8`
 ```
 
+The `orm-text` example is Tier2 in `samples/python-fastapi-sample` because SQLAlchemy import evidence is visible. Other literal SQL shapes may render as Tier3 when only syntax evidence is available.
+
 When optional fields are missing, keep the row honest:
 
 ```text
@@ -57,16 +59,18 @@ Use:
 
 - operation: `operationName` or `unknown`
 - table: `tableName`, else `tableNames`, else `unknown`
-- columns: `columnNames`, else `fieldNames`, else `none`
+- columns: `columnNames`, else `fieldNames`, else `none`; these properties are semicolon-delimited strings
 - source: `sqlSourceKind` or `unknown`
 - shape: `queryShapeHash` or `n/a`
 - location: `evidence.file_path:evidence.start_line`
 
 Do not display raw SQL text, source snippets, or literal values.
 
+The Python emitter currently sets `fieldNames` to the same value as `columnNames` for SQL-shape facts, so the fallback is mainly future-proofing. Render only one column list.
+
 ## Limitations in Report
 
-The Python report must include a visible SQL-shape limitation, either directly below the query-pattern section or in `## Python Limitations`.
+Place `## Query Patterns` after the `## Rules` section and before `## Known Gaps`. Put the SQL-shape limitation directly under the query-pattern section so it is visible where the evidence appears.
 
 Required limitation meaning:
 
@@ -74,13 +78,15 @@ Required limitation meaning:
 SQL query-pattern rows are static shape evidence only; they do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.
 ```
 
-Exact wording can vary, but the report must keep the evidence boundary visible.
+Exact wording can vary, but the report must include the anchor phrases `static shape evidence` and `runtime execution` so tests can assert the evidence boundary.
 
 ## Ordering and Row Count
 
 Preserve existing Python report behavior by iterating over facts in emission order. The Python scanner already discovers inventory deterministically, and this avoids introducing a new sort contract.
 
 Do not add a row cap or truncation behavior in this slice. Existing report sections do not implement truncation notices, and adding that behavior would broaden the PR.
+
+Do not deduplicate query-pattern rows. If the same table appears in ORM text, a `.sql` file, and a migration, the report should show each evidence source separately.
 
 ## Documentation
 
