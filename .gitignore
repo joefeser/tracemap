@@ -44,6 +44,13 @@ ScaffoldingReadMe.txt
 *~
 CodeCoverage/
 
+# JVM / Gradle
+.gradle/
+src/jvm/build/
+src/jvm/.gradle/
+samples/**/target/
+samples/**/build/
+
 # MSBuild Binary and Structured Log
 *.binlog
 

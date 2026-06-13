@@ -242,10 +242,10 @@ public static class CSharpIntegrationSyntaxExtractor
 
     private static void AddSqlStringFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
     {
-        foreach (var literal in root.DescendantNodes().OfType<LiteralExpressionSyntax>()
-            .Where(IsStringLiteral))
+        foreach (var token in root.DescendantTokens()
+            .Where(IsStringLiteralToken))
         {
-            var value = literal.Token.ValueText;
+            var value = token.ValueText;
             if (!SqlTextDetector.IsSqlLike(value))
             {
                 continue;
@@ -256,7 +256,7 @@ public static class CSharpIntegrationSyntaxExtractor
                 FactTypes.SqlTextUsed,
                 RuleIds.DatabaseSqlText,
                 EvidenceTiers.Tier3SyntaxOrTextual,
-                ToEvidenceSpan(filePath, literal),
+                ToEvidenceSpan(filePath, token),
                 targetSymbol: "sql-string-literal",
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -326,7 +326,7 @@ public static class CSharpIntegrationSyntaxExtractor
         }
 
         if (arguments[index].Expression is LiteralExpressionSyntax literal
-            && IsStringLiteral(literal)
+            && IsStringLiteralToken(literal.Token)
             && literal.Token.ValueText is { Length: >= 0 } literalValue)
         {
             value = literalValue;
@@ -336,9 +336,9 @@ public static class CSharpIntegrationSyntaxExtractor
         return false;
     }
 
-    private static bool IsStringLiteral(LiteralExpressionSyntax literal)
+    private static bool IsStringLiteralToken(SyntaxToken token)
     {
-        return literal.IsKind(SyntaxKind.StringLiteralExpression);
+        return token.Kind().ToString().Contains("StringLiteralToken", StringComparison.Ordinal);
     }
 
     private static bool IsDbContextTypeName(string typeName)
@@ -365,6 +365,18 @@ public static class CSharpIntegrationSyntaxExtractor
     private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node)
     {
         var span = node.SyntaxTree.GetLineSpan(node.Span);
+        return new EvidenceSpan(
+            FileInventory.NormalizeRelativePath(filePath),
+            span.StartLinePosition.Line + 1,
+            Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
+            null,
+            "CSharpIntegrationSyntaxExtractor",
+            ScannerVersions.CSharpIntegrationSyntaxExtractor);
+    }
+
+    private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxToken token)
+    {
+        var span = token.SyntaxTree!.GetLineSpan(token.Span);
         return new EvidenceSpan(
             FileInventory.NormalizeRelativePath(filePath),
             span.StartLinePosition.Line + 1,

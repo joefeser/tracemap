@@ -13,6 +13,8 @@ dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
 cd src/typescript
 npm run check
+cd ../..
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
 ```
 
 Expected result:
@@ -47,6 +49,17 @@ For every successful `tracemap-ts scan --repo <repo> --out <out>` run, verify:
 - reducer-compatible facts reuse existing fact type strings and matching keys such as `propertyName`, `methodName`, `typeName`, `keyPath`, `name`, `containingType`, and `targetSymbol`.
 - TypeScript facts store hashes/spans for source values, not raw source snippets.
 
+For every successful `tracemap-jvm scan --repo <repo> --out <out>` run, verify:
+
+- the same required artifacts are written.
+- scans outside a Git checkout with a known commit SHA fail before artifacts are written.
+- `scan-manifest.json` uses `Level1SemanticAnalysis` and `buildStatus: "Succeeded"` only when selected Java semantic scopes produce compiler evidence with no known gaps and a known commit SHA.
+- Java/Kotlin reduced scans use `Level1SemanticAnalysisReduced` or `Level3SyntaxAnalysis`.
+- Kotlin-only MVP scans are `Level3SyntaxAnalysis` because Kotlin semantic extraction is not implemented.
+- reducer-compatible facts reuse existing fact type strings and matching keys such as `propertyName`, `methodName`, `typeName`, `keyPath`, `name`, `containingType`, and `targetSymbol`.
+- JVM descriptor, group ID, artifact ID, and module metadata are stored as review/export properties and not as reducer-matching names.
+- JVM facts store hashes/spans for source values, not raw source snippets.
+
 ## Reducer Acceptance
 
 For every successful `tracemap reduce --index <index> --contract-delta <delta> --out <report>` run, verify:
@@ -75,6 +88,8 @@ For every successful `tracemap export --index <index> --out <out> --format merma
 
 For TypeScript indexes, `tracemap-ts export --index <index> --out <out> --format <json|mermaid>` should produce equivalent export shapes from the same SQLite tables.
 
+For JVM indexes, existing `.NET` `tracemap export` should read the same SQLite tables and include relationship/call/object rows when emitted.
+
 ## Combine Acceptance
 
 For every successful `tracemap combine --index <index> [--index <index>] --out <combined.sqlite>` run, verify:
@@ -90,6 +105,7 @@ For every successful `tracemap combine --index <index> [--index <index>] --out <
 - `combined_dependency_edges` view exposes calls, object creations, relationships, and parameter-forwarding edges with source labels and evidence spans.
 - the empty `endpoint_matches` table exists as a placeholder for future derived cross-index rows.
 - raw source snippets are not added by combine.
+- JVM indexes can be combined with .NET and TypeScript indexes without rewriting source fact IDs.
 
 For every successful `tracemap export --index <combined.sqlite> --out <out> --format <json|mermaid>` run, verify:
 
@@ -205,6 +221,61 @@ Expected:
 - build status is `NotRun`.
 - syntax declaration/member facts are emitted.
 - `AnalysisGap` facts are emitted.
+
+### `samples/jvm-modern-sample`
+
+Purpose: prove the JVM Java semantic path and reducer compatibility.
+
+Command:
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
+src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm scan --repo samples/jvm-modern-sample --out <tmp>/jvm-modern-sample
+dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index <tmp>/jvm-modern-sample/index.sqlite --contract-delta samples/contract-deltas/jvm-modern.order-status.json --out <tmp>/jvm-impact.md
+```
+
+Expected:
+
+- scan emits the required artifacts.
+- Java semantic `PropertyAccessed`, `MethodInvoked`, `CallEdge`, `ObjectCreated`, and `ArgumentPassed` facts are emitted when JDK compiler analysis succeeds.
+- `OrderResponse.status` is `DefiniteImpact`.
+- route, SQL, JPA, Jackson serializer, and config facts are emitted as bounded integration evidence.
+- raw SQL/config/serializer values are hashed or represented as safe normalized keys.
+
+### `samples/jvm-kotlin-sample`
+
+Purpose: prove Kotlin syntax fallback behavior.
+
+Command:
+
+```bash
+src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm scan --repo samples/jvm-kotlin-sample --out <tmp>/jvm-kotlin-sample
+```
+
+Expected:
+
+- scan completes.
+- analysis level is `Level3SyntaxAnalysis`.
+- build status is `NotRun`.
+- Kotlin declaration, invocation, object creation, and route syntax facts are emitted.
+- `KotlinSemanticNotImplemented` is recorded as an analysis gap.
+
+### `samples/jvm-broken-sample`
+
+Purpose: prove JVM reduced fallback behavior.
+
+Command:
+
+```bash
+src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm scan --repo samples/jvm-broken-sample --out <tmp>/jvm-broken-sample
+```
+
+Expected:
+
+- scan completes.
+- analysis level is reduced or syntax-only.
+- syntax facts are emitted where recoverable.
+- Java compiler diagnostics and/or parser gaps are emitted as `AnalysisGap` facts.
 
 ### `samples/endpoint-client-angular` and `samples/endpoint-server-aspnet`
 
