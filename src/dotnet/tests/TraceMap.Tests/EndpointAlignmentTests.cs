@@ -7,6 +7,25 @@ namespace TraceMap.Tests;
 public sealed class EndpointAlignmentTests
 {
     [Fact]
+    public void Route_normalizer_handles_malformed_percent_encoding_without_throwing()
+    {
+        var route = EndpointRouteNormalizer.Normalize("/api/admin/%zz/{id}");
+
+        Assert.Equal("/api/admin/%zz/{}", route.PathKey);
+        Assert.Equal("/api/admin/%zz/{id}", route.PathTemplate);
+    }
+
+    [Fact]
+    public void Optional_route_expansion_is_capped_for_large_optional_templates()
+    {
+        var route = EndpointRouteNormalizer.Normalize("/api/{a?}/{b?}/{c?}/{d?}/{e?}/{f?}");
+
+        var keys = EndpointRouteNormalizer.ExpandOptionalPathKeys(route);
+
+        Assert.Equal(["/api/{}/{}/{}/{}/{}/{}"], keys);
+    }
+
+    [Fact]
     public void Scan_extracts_aspnet_routes_with_syntax_fallback()
     {
         using var temp = new TempDirectory();
