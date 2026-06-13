@@ -225,6 +225,114 @@ public sealed class CombinedChangeImpactTests
         Assert.Contains(result.Report.Gaps, gap => gap.Classification == CombinedImpactClassifications.TruncatedByLimit);
     }
 
+    [Fact]
+    public async Task Impact_include_paths_adds_endpoint_reachability_context()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeClient = Path.Combine(temp.Path, "before-client.sqlite");
+        var beforeServer = Path.Combine(temp.Path, "before-server.sqlite");
+        var afterClient = Path.Combine(temp.Path, "after-client.sqlite");
+        var afterServer = Path.Combine(temp.Path, "after-server.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(beforeClient, client, [HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)]);
+        SqliteIndexWriter.Write(beforeServer, server, [RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10, controller)]);
+        SqliteIndexWriter.Write(afterClient, client, [HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)]);
+        SqliteIndexWriter.Write(afterServer, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 20, controller),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeClient, beforeServer], beforeCombined, ["client", "server"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterClient, afterServer], afterCombined, ["client", "server"]));
+
+        var result = await CombinedChangeImpactReporter.WriteAsync(new CombinedChangeImpactOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "impact"),
+            Scope: "endpoints",
+            IncludePaths: true,
+            MaxPathsPerItem: 5,
+            MaxPathQueries: 10));
+
+        var endpoint = Assert.Single(result.Report.ImpactItems, item => item.EvidenceKind == "endpoint");
+        Assert.Equal(CombinedImpactClassifications.ReachabilityChanged, endpoint.PathContext.Classification);
+        Assert.Empty(endpoint.PathContext.BeforePaths);
+        Assert.NotEmpty(endpoint.PathContext.AfterPaths);
+        Assert.Contains(endpoint.PathContext.AfterPaths, path => path.TerminalSurfaceMetadata.Any(pair => pair.Key == "surfaceKind" && pair.Value == "sql-query"));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "impact", "impact-report.md"));
+        Assert.Contains("## Path Context", markdown);
+        Assert.Contains("ReachabilityChanged", markdown);
+    }
+
+    [Fact]
+    public async Task Impact_include_paths_detects_edge_reachability_evidence_changed()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, [
+            CallFact(manifest, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(manifest, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            CallFact(manifest, controller, repository, "Controllers/OrdersController.cs", 22),
+            QueryPatternFact(manifest, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+
+        var result = await CombinedChangeImpactReporter.WriteAsync(new CombinedChangeImpactOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "impact"),
+            Scope: "edges",
+            IncludePaths: true,
+            MaxPathsPerItem: 5,
+            MaxPathQueries: 10));
+
+        var edge = Assert.Single(result.Report.ImpactItems, item => item.EvidenceKind == "edge");
+        Assert.Equal(CombinedImpactClassifications.ReachabilityEvidenceChanged, edge.PathContext.Classification);
+        Assert.NotEmpty(edge.PathContext.BeforePaths);
+        Assert.NotEmpty(edge.PathContext.AfterPaths);
+    }
+
+    [Fact]
+    public async Task Impact_include_paths_enforces_global_path_query_cap()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, []);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            RouteFact(manifest, "GET", "/api/orders/1", "/api/orders/1", "Controllers/OrdersController.cs", 10),
+            RouteFact(manifest, "GET", "/api/orders/2", "/api/orders/2", "Controllers/OrdersController.cs", 11)
+        ]);
+
+        var result = await CombinedChangeImpactReporter.WriteAsync(new CombinedChangeImpactOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "impact"),
+            Scope: "endpoints",
+            IncludePaths: true,
+            MaxImpactItems: 2,
+            MaxPathQueries: 1));
+
+        Assert.NotEmpty(result.Report.ImpactItems);
+        Assert.All(result.Report.ImpactItems, item => Assert.Equal(CombinedImpactClassifications.PathContextUnavailable, item.PathContext.Classification));
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.RuleId == "combined.impact.truncation.v1");
+        Assert.True(result.Report.Summary.Truncated);
+    }
+
     private static async Task WriteSimpleCombinedAsync(TempDirectory temp, string combinedPath, string prefix)
     {
         var clientIndex = Path.Combine(temp.Path, $"{prefix}-client.sqlite");
@@ -290,7 +398,7 @@ public sealed class CombinedChangeImpactTests
             });
     }
 
-    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string file, int line)
+    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string file, int line, string? methodSymbol = null)
     {
         return FactFactory.Create(
             manifest,
@@ -298,7 +406,8 @@ public sealed class CombinedChangeImpactTests
             RuleIds.CSharpSyntaxAspNetRoute,
             EvidenceTiers.Tier3SyntaxOrTextual,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
-            targetSymbol: $"{method} {template}",
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol ?? $"{method} {template}",
             contractElement: template,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -310,7 +419,28 @@ public sealed class CombinedChangeImpactTests
             });
     }
 
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callKind"] = "method"
+            });
+    }
+
     private static CodeFact QueryPatternFact(ScanManifest manifest, string file, int line)
+    {
+        return QueryPatternFact(manifest, null, file, line);
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
     {
         return FactFactory.Create(
             manifest,
@@ -318,6 +448,7 @@ public sealed class CombinedChangeImpactTests
             RuleIds.CSharpSyntaxQueryPattern,
             EvidenceTiers.Tier2Structural,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
             targetSymbol: "orders",
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {

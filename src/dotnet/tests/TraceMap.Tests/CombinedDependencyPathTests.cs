@@ -80,6 +80,29 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_build_report_does_not_write_outputs()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "paths-build-only");
+        var server = Manifest("server", "tracemap-milestone15");
+
+        SqliteIndexWriter.Write(serverIndex, server, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                outDir,
+                FromSource: "server",
+                ToSurface: "sql-query"));
+
+        Assert.Empty(report.Paths);
+        Assert.False(Directory.Exists(outDir));
+    }
+
+    [Fact]
     public async Task Paths_from_endpoint_matches_multi_method_route_without_stored_path_key()
     {
         using var temp = new TempDirectory();

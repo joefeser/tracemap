@@ -177,7 +177,9 @@ For every successful `tracemap impact --before <before.sqlite> --after <after.sq
 - `NoImpactEvidence` is emitted as a rule-backed gap when no comparable static impact items exist for the selected snapshots and scopes.
 - default scope includes sources, coverage, endpoints, surfaces, and edges; path context is off by default.
 - `coverage` scope maps to the delegated diff `sources` scope and filters the resulting report to coverage impact items.
-- `--scope paths` requires `--include-paths`; this implementation slice includes opt-in path diff evidence but does not run additional per-item path expansion.
+- `--scope paths` requires `--include-paths`; path context runs bounded before/after path queries only for impact items with safe endpoint, surface, or edge selectors.
+- source and coverage impact rows do not run path context unless a future rule defines safe mapping semantics.
+- path-context classifications distinguish `ReachabilityChanged`, `ReachabilityEvidenceChanged`, `PathContextUnavailable`, `NoPathEvidence`, `UnknownAnalysisGap`, and `TruncatedByLimit`.
 - reduced coverage or source identity uncertainty downgrades confidence rather than producing strong static impact claims.
 - `--source`, `--endpoint`, `--surface`, `--surface-name`, `--max-impact-items`, `--max-paths-per-item`, `--max-path-queries`, `--max-depth`, `--max-frontier`, `--max-gaps`, and `--exit-code` behave deterministically.
 - `--exit-code` returns a non-zero exit only when requested and impact items are present.

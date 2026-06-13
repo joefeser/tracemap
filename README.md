@@ -117,7 +117,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- impact \
   --out .tracemap-combined-impact
 ```
 
-The combined change impact command writes `impact-report.md` and `impact-report.json` when `--out` is a directory. It reuses combined diff evidence to classify changed sources, coverage, endpoints, dependency surfaces, and dependency edges as static impact evidence, probable static impact, needs review, or analysis gaps. This report is not runtime impact analysis; path context is off by default and only opt-in path diff evidence is included with `--include-paths`.
+The combined change impact command writes `impact-report.md` and `impact-report.json` when `--out` is a directory. It reuses combined diff evidence to classify changed sources, coverage, endpoints, dependency surfaces, and dependency edges as static impact evidence, probable static impact, needs review, or analysis gaps. This report is not runtime impact analysis; path context is off by default and `--include-paths` adds bounded before/after static path context for changed endpoints, surfaces, and edges when safe selectors can be derived.
 
 TypeScript scanner:
 

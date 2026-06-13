@@ -760,13 +760,12 @@ public static class CombinedDependencyDiffer
         (string Method, string PathKey)? endpointSelector,
         CancellationToken cancellationToken)
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), "tracemap-diff-paths", $"{Guid.NewGuid():N}");
         try
         {
-            var pathResult = await CombinedDependencyPathReporter.WriteAsync(
+            var pathReport = await CombinedDependencyPathReporter.BuildReportAsync(
                 new CombinedDependencyPathOptions(
                     indexPath,
-                    tempDir,
+                    options.OutputPath,
                     "json",
                     endpointSelector is null ? null : $"{endpointSelector.Value.Method} {endpointSelector.Value.PathKey}",
                     FromSource: sourceFilter,
@@ -776,7 +775,7 @@ public static class CombinedDependencyDiffer
                     MaxPaths: options.MaxPaths,
                     MaxFrontier: options.MaxFrontier),
                 cancellationToken);
-            return pathResult.Report.Paths
+            return pathReport.Paths
                 .Select(path =>
                 {
                     var signature = PathSignature(path);
@@ -814,22 +813,6 @@ public static class CombinedDependencyDiffer
                     CombinedDependencyPathClassifications.UnknownAnalysisGap,
                     true)
             ];
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir))
-            {
-                try
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
-                catch (IOException)
-                {
-                }
-                catch (UnauthorizedAccessException)
-                {
-                }
-            }
         }
     }
 
