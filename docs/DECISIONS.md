@@ -56,7 +56,7 @@ Decision: the endpoint alignment MVP reads one client index and one server index
 
 Why: separate scans preserve language ownership, keep evidence provenance intact, and let nested client/server apps be compared without a monolithic scanner.
 
-Consequence: `tracemap combine`, N-way endpoint matching, and endpoint diffing across commit SHAs remain backlog work. Endpoint matches are derived report rows, not source facts.
+Consequence: N-way endpoint matching and endpoint diffing across commit SHAs remain backlog work. Endpoint matches are derived report rows, not source facts.
 
 ## 2026-06-13: Combine before broad JVM work
 
@@ -64,7 +64,15 @@ Decision: implement `tracemap combine` before or alongside Java/Kotlin support.
 
 Why: cross-repo and cross-language dependency analysis needs a shared source-index model, namespaced facts, and derived rows. Building JVM first without combine would push multi-index behavior into language-specific code.
 
-Consequence: JVM planning should assume combined-index provenance from the start.
+Consequence: JVM planning assumes combined-index provenance from the start.
+
+## 2026-06-13: Combine imports indexes, not source trees
+
+Decision: `tracemap combine` imports existing `index.sqlite` artifacts into a new combined SQLite database with namespaced source IDs and original fact IDs preserved.
+
+Why: each language scanner owns its local extraction, coverage labeling, and schema compatibility. Combining scan artifacts lets cross-repo and cross-language queries happen without rescanning source or mixing language-specific build concerns.
+
+Consequence: the first combined database stores source rows, combined facts, symbols, relationships, and dependency tables. Derived cross-index rows such as N-way endpoint matches can be added without rewriting source facts.
 
 ## 2026-06-13: JVM language family layout
 

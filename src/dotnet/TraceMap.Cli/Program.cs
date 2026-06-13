@@ -1,4 +1,5 @@
 using TraceMap.Core;
+using TraceMap.Combine;
 using TraceMap.EndpointAlignment;
 using TraceMap.Reduction;
 using TraceMap.Reporting;
@@ -38,9 +39,10 @@ public static class TraceMapCommand
                 "relate" => RelateHelp(),
                 "export" => ExportHelp(),
                 "endpoints" => EndpointsHelp(),
+                "combine" => CombineHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" ? 0 : 1;
         }
 
         try
@@ -54,6 +56,7 @@ public static class TraceMapCommand
                 "relate" => await RunRelateAsync(rest, output, error, cancellationToken),
                 "export" => await RunExportAsync(rest, output, error, cancellationToken),
                 "endpoints" => await RunEndpointsAsync(rest, output, error, cancellationToken),
+                "combine" => await RunCombineAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -178,6 +181,42 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"TraceMap endpoints completed: {result.MarkdownPath ?? result.JsonPath}");
         await output.WriteLineAsync($"Findings written: {result.Report.Findings.Count}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return 0;
+    }
+
+    private static async Task<int> RunCombineAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        var indexPaths = values.GetMany("--index");
+        if (indexPaths.Count == 0)
+        {
+            await error.WriteLineAsync("error: combine requires at least one --index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: combine requires --out <path>.");
+            return 1;
+        }
+
+        var labels = values.GetMany("--label");
+        if (labels.Count > 0 && labels.Count != indexPaths.Count)
+        {
+            await error.WriteLineAsync("error: combine requires either no --label values or one --label value per --index.");
+            return 1;
+        }
+
+        var result = await CombinedIndexBuilder.CombineAsync(
+            new CombineOptions(indexPaths, outputPath, labels),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap combine completed: {result.OutputPath}");
+        await output.WriteLineAsync($"Sources imported: {result.Sources.Count}");
+        await output.WriteLineAsync($"Facts imported: {result.FactCount}");
+        await output.WriteLineAsync($"Symbols imported: {result.SymbolCount}");
+        await output.WriteLineAsync($"Relationships imported: {result.RelationshipCount}");
+        await output.WriteLineAsync($"Call edges imported: {result.CallEdgeCount}");
         return 0;
     }
 
@@ -404,6 +443,7 @@ public static class TraceMapCommand
               tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path>
               tracemap export --index <path> --out <path> [--format <json|mermaid>]
               tracemap endpoints --client-index <path> --server-index <path> --out <path> [--format <markdown|json>]
+              tracemap combine --index <path> [--index <path>] --out <combined.sqlite> [--label <label>]
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -413,6 +453,7 @@ public static class TraceMapCommand
               relate    Trace deterministic symbol relationship paths.
               export    Export a deterministic JSON summary or Mermaid graph from an index.
               endpoints Align client HTTP calls with server HTTP route bindings.
+              combine   Combine multiple TraceMap indexes into one queryable SQLite database.
             """;
     }
 
@@ -547,6 +588,24 @@ public static class TraceMapCommand
 
             Outputs:
               endpoint-report.md and/or endpoint-report.json
+            """;
+    }
+
+    private static string CombineHelp()
+    {
+        return """
+            Usage:
+              tracemap combine --index <path> [--index <path>] --out <combined.sqlite> [--label <label>]
+
+            Required:
+              --index <path>             Existing TraceMap index.sqlite. Repeat or comma-separate for multiple.
+              --out <path>               Output combined SQLite database path.
+
+            Optional:
+              --label <label>            Source label. Provide none, or one per --index.
+
+            Outputs:
+              combined.sqlite with index_sources, combined_facts, combined_symbols, dependency tables, and derived-row placeholders.
             """;
     }
 }

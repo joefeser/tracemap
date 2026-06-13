@@ -117,7 +117,7 @@ When available, adapters should also populate:
 - `fact_symbols`
 - derived call/object/flow tables supported by the existing schema
 
-Schema changes should be additive. A future `tracemap combine` command will import multiple indexes, keep original fact IDs, namespace source indexes, and derive cross-index rows rather than rewriting source facts.
+Schema changes should be additive. `tracemap combine` imports multiple indexes, keeps original fact IDs, namespaces source indexes, and leaves room for derived cross-index rows rather than rewriting source facts.
 
 ## Rule Catalog
 
@@ -135,4 +135,4 @@ No rule catalog entry means the scanner should not emit that fact.
 
 Future Java/Kotlin work should live under `src/jvm` unless implementation discovery shows a strong reason to split Java and Kotlin adapters. The JVM adapter can share package/module discovery, bytecode/JVM signature concepts, Gradle/Maven metadata, and classpath handling across both languages.
 
-`tracemap combine` should land before or alongside JVM work so multi-index dependency questions have a stable place to live.
+`tracemap combine` exists before JVM work so multi-index dependency questions have a stable place to live.

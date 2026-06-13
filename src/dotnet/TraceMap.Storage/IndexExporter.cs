@@ -53,6 +53,75 @@ internal sealed record ObjectCreationExportRow(
     int StartLine,
     int EndLine);
 
+internal sealed record CombinedSourceExportRow(
+    string SourceIndexId,
+    string Label,
+    string IndexPathHash,
+    string ScanId,
+    string RepoName,
+    string? RemoteUrl,
+    string? Branch,
+    string CommitSha,
+    string ScannerVersion,
+    string? Language,
+    string? ScanRootRelativePath,
+    string? ScanRootPathHash,
+    string? GitRootHash,
+    string AnalysisLevel,
+    string BuildStatus);
+
+internal sealed record CombinedFactCountRow(
+    string SourceIndexId,
+    string Label,
+    string FactType,
+    int Count);
+
+internal sealed record CombinedCallEdgeExportRow(
+    string SourceIndexId,
+    string SourceLabel,
+    string CombinedFactId,
+    string OriginalFactId,
+    string? CallerSymbol,
+    string CalleeSymbol,
+    string? CalleeContainingType,
+    string? CallKind,
+    string RuleId,
+    string EvidenceTier,
+    string FilePath,
+    int StartLine,
+    int EndLine);
+
+internal sealed record CombinedRelationshipExportRow(
+    string SourceIndexId,
+    string SourceLabel,
+    string CombinedRelationshipId,
+    string OriginalRelationshipId,
+    string SourceCombinedSymbolId,
+    string SourceDisplayName,
+    string TargetCombinedSymbolId,
+    string TargetDisplayName,
+    string RelationshipKind,
+    string RuleId,
+    string EvidenceTier,
+    string FilePath,
+    int StartLine,
+    int EndLine);
+
+internal sealed record CombinedObjectCreationExportRow(
+    string SourceIndexId,
+    string SourceLabel,
+    string CombinedFactId,
+    string OriginalFactId,
+    string? CallerSymbol,
+    string CreatedType,
+    string? ConstructorSymbol,
+    string? AssignedTo,
+    string RuleId,
+    string EvidenceTier,
+    string FilePath,
+    int StartLine,
+    int EndLine);
+
 internal sealed record IndexExportDocument(
     string Version,
     DateTimeOffset GeneratedAt,
@@ -63,6 +132,18 @@ internal sealed record IndexExportDocument(
     IReadOnlyList<RelationshipExportRow> Relationships,
     IReadOnlyList<CallEdgeExportRow> CallEdges,
     IReadOnlyList<ObjectCreationExportRow> ObjectCreations);
+
+internal sealed record CombinedIndexExportDocument(
+    string Version,
+    DateTimeOffset GeneratedAt,
+    IReadOnlyList<CombinedSourceExportRow> Sources,
+    IReadOnlyList<CountRow> FactsByType,
+    IReadOnlyList<CountRow> FactsByTier,
+    IReadOnlyList<CountRow> FactsByRule,
+    IReadOnlyList<CombinedFactCountRow> FactsBySourceAndType,
+    IReadOnlyList<CombinedRelationshipExportRow> Relationships,
+    IReadOnlyList<CombinedCallEdgeExportRow> CallEdges,
+    IReadOnlyList<CombinedObjectCreationExportRow> ObjectCreations);
 
 public static class IndexExporter
 {
@@ -81,6 +162,31 @@ public static class IndexExporter
         var format = NormalizeFormat(options.Format);
         await using var connection = new SqliteConnection($"Data Source={options.IndexPath}");
         await connection.OpenAsync(cancellationToken);
+
+        if (await IsCombinedIndexAsync(connection, cancellationToken))
+        {
+            var combinedDocument = await ReadCombinedDocumentAsync(connection, cancellationToken);
+            var combinedOutputPath = GetOutputPath(options.OutputPath, format);
+            Directory.CreateDirectory(Path.GetDirectoryName(combinedOutputPath)!);
+            if (format == "json")
+            {
+                await File.WriteAllTextAsync(
+                    combinedOutputPath,
+                    JsonSerializer.Serialize(combinedDocument, JsonOptions.Stable) + Environment.NewLine,
+                    cancellationToken);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(combinedOutputPath, RenderCombinedMermaid(combinedDocument), cancellationToken);
+            }
+
+            return new IndexExportResult(
+                combinedOutputPath,
+                format,
+                combinedDocument.FactsByType.Sum(row => row.Count),
+                combinedDocument.Relationships.Count,
+                combinedDocument.CallEdges.Count);
+        }
 
         var document = await ReadDocumentAsync(connection, cancellationToken);
         var outputPath = GetOutputPath(options.OutputPath, format);
@@ -119,6 +225,21 @@ public static class IndexExporter
             await ReadObjectCreationsAsync(connection, cancellationToken));
     }
 
+    private static async Task<CombinedIndexExportDocument> ReadCombinedDocumentAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        return new CombinedIndexExportDocument(
+            "1.0",
+            DateTimeOffset.UtcNow,
+            await ReadCombinedSourcesAsync(connection, cancellationToken),
+            await ReadCombinedCountsAsync(connection, "fact_type", cancellationToken),
+            await ReadCombinedCountsAsync(connection, "evidence_tier", cancellationToken),
+            await ReadCombinedCountsAsync(connection, "rule_id", cancellationToken),
+            await ReadCombinedFactCountsBySourceAsync(connection, cancellationToken),
+            await ReadCombinedRelationshipsAsync(connection, cancellationToken),
+            await ReadCombinedCallEdgesAsync(connection, cancellationToken),
+            await ReadCombinedObjectCreationsAsync(connection, cancellationToken));
+    }
+
     private static async Task<ScanManifest> ReadManifestAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -145,6 +266,101 @@ public static class IndexExporter
         while (await reader.ReadAsync(cancellationToken))
         {
             rows.Add(new CountRow(reader.GetString(0), reader.GetInt32(1)));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<CombinedSourceExportRow>> ReadCombinedSourcesAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select source_index_id,
+                   label,
+                   index_path_hash,
+                   scan_id,
+                   repo_name,
+                   remote_url,
+                   branch,
+                   commit_sha,
+                   scanner_version,
+                   language,
+                   scan_root_relative_path,
+                   scan_root_path_hash,
+                   git_root_hash,
+                   analysis_level,
+                   build_status
+            from index_sources
+            order by label, source_index_id;
+            """;
+        var rows = new List<CombinedSourceExportRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CombinedSourceExportRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.GetString(7),
+                reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                reader.IsDBNull(10) ? null : reader.GetString(10),
+                reader.IsDBNull(11) ? null : reader.GetString(11),
+                reader.IsDBNull(12) ? null : reader.GetString(12),
+                reader.GetString(13),
+                reader.GetString(14)));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<CountRow>> ReadCombinedCountsAsync(
+        SqliteConnection connection,
+        string columnName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"select {columnName}, count(*) from combined_facts group by {columnName} order by {columnName};";
+        var rows = new List<CountRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CountRow(reader.GetString(0), reader.GetInt32(1)));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<CombinedFactCountRow>> ReadCombinedFactCountsBySourceAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select sources.source_index_id,
+                   sources.label,
+                   facts.fact_type,
+                   count(*)
+            from combined_facts facts
+            join index_sources sources on sources.source_index_id = facts.source_index_id
+            group by sources.source_index_id, sources.label, facts.fact_type
+            order by sources.label, facts.fact_type;
+            """;
+        var rows = new List<CombinedFactCountRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CombinedFactCountRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetInt32(3)));
         }
 
         return rows;
@@ -281,6 +497,163 @@ public static class IndexExporter
         return rows;
     }
 
+    private static async Task<IReadOnlyList<CombinedCallEdgeExportRow>> ReadCombinedCallEdgesAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(connection, "combined_call_edges", cancellationToken))
+        {
+            return [];
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select sources.source_index_id,
+                   sources.label,
+                   edges.combined_fact_id,
+                   edges.original_fact_id,
+                   edges.caller_symbol,
+                   edges.callee_symbol,
+                   edges.callee_containing_type,
+                   edges.call_kind,
+                   edges.rule_id,
+                   edges.evidence_tier,
+                   edges.file_path,
+                   edges.start_line,
+                   edges.end_line
+            from combined_call_edges edges
+            join index_sources sources on sources.source_index_id = edges.source_index_id
+            order by sources.label, coalesce(edges.caller_symbol, ''), edges.callee_symbol, edges.file_path, edges.start_line;
+            """;
+        var rows = new List<CombinedCallEdgeExportRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CombinedCallEdgeExportRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.GetString(8),
+                reader.GetString(9),
+                reader.GetString(10),
+                reader.GetInt32(11),
+                reader.GetInt32(12)));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<CombinedRelationshipExportRow>> ReadCombinedRelationshipsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(connection, "combined_symbol_relationships", cancellationToken))
+        {
+            return [];
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select sources.source_index_id,
+                   sources.label,
+                   relationships.combined_relationship_id,
+                   relationships.original_relationship_id,
+                   relationships.source_combined_symbol_id,
+                   coalesce(source_symbols.display_name, relationships.source_symbol_id) as source_display_name,
+                   relationships.target_combined_symbol_id,
+                   coalesce(target_symbols.display_name, relationships.target_symbol_id) as target_display_name,
+                   relationships.relationship_kind,
+                   relationships.rule_id,
+                   relationships.evidence_tier,
+                   relationships.file_path,
+                   relationships.start_line,
+                   relationships.end_line
+            from combined_symbol_relationships relationships
+            join index_sources sources on sources.source_index_id = relationships.source_index_id
+            left join combined_symbols source_symbols on source_symbols.combined_symbol_id = relationships.source_combined_symbol_id
+            left join combined_symbols target_symbols on target_symbols.combined_symbol_id = relationships.target_combined_symbol_id
+            order by sources.label, source_display_name, relationships.relationship_kind, target_display_name, relationships.file_path, relationships.start_line;
+            """;
+        var rows = new List<CombinedRelationshipExportRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CombinedRelationshipExportRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.GetString(7),
+                reader.GetString(8),
+                reader.GetString(9),
+                reader.GetString(10),
+                reader.GetString(11),
+                reader.GetInt32(12),
+                reader.GetInt32(13)));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<CombinedObjectCreationExportRow>> ReadCombinedObjectCreationsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(connection, "combined_object_creations", cancellationToken))
+        {
+            return [];
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select sources.source_index_id,
+                   sources.label,
+                   creations.combined_fact_id,
+                   creations.original_fact_id,
+                   creations.caller_symbol,
+                   creations.created_type,
+                   creations.constructor_symbol,
+                   creations.assigned_to,
+                   creations.rule_id,
+                   creations.evidence_tier,
+                   creations.file_path,
+                   creations.start_line,
+                   creations.end_line
+            from combined_object_creations creations
+            join index_sources sources on sources.source_index_id = creations.source_index_id
+            order by sources.label, coalesce(creations.caller_symbol, ''), creations.created_type, creations.file_path, creations.start_line;
+            """;
+        var rows = new List<CombinedObjectCreationExportRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CombinedObjectCreationExportRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.GetString(8),
+                reader.GetString(9),
+                reader.GetString(10),
+                reader.GetInt32(11),
+                reader.GetInt32(12)));
+        }
+
+        return rows;
+    }
+
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -288,6 +661,12 @@ public static class IndexExporter
         command.Parameters.AddWithValue("$name", tableName);
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(value) > 0;
+    }
+
+    private static async Task<bool> IsCombinedIndexAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        return await TableExistsAsync(connection, "index_sources", cancellationToken)
+            && await TableExistsAsync(connection, "combined_facts", cancellationToken);
     }
 
     private static string RenderMermaid(IndexExportDocument document)
@@ -315,6 +694,60 @@ public static class IndexExporter
         if (document.Relationships.Count == 0 && document.CallEdges.Count == 0)
         {
             builder.AppendLine("  empty[\"No relationship or call-edge rows were exported\"]");
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderCombinedMermaid(CombinedIndexExportDocument document)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("flowchart TD");
+        builder.AppendLine("  %% TraceMap combined index export");
+
+        var ids = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var source in document.Sources)
+        {
+            var sourceNode = NodeId(ids, $"source:{source.SourceIndexId}");
+            builder.AppendLine($"  {sourceNode}[\"{EscapeLabel(source.Label)}\"]");
+        }
+
+        foreach (var row in document.CallEdges.Take(500))
+        {
+            var sourceNode = NodeId(ids, $"source:{row.SourceIndexId}");
+            var callerKey = $"{row.SourceLabel}:{row.CallerSymbol ?? "(unknown caller)"}";
+            var calleeKey = $"{row.SourceLabel}:{row.CalleeSymbol}";
+            var caller = NodeId(ids, callerKey);
+            var callee = NodeId(ids, calleeKey);
+            builder.AppendLine($"  {sourceNode} --> {caller}[\"{EscapeLabel(row.CallerSymbol ?? "(unknown caller)")}\"]");
+            builder.AppendLine($"  {caller} -.->|calls| {callee}[\"{EscapeLabel(row.CalleeSymbol)}\"]");
+        }
+
+        foreach (var row in document.Relationships.Take(500))
+        {
+            var sourceNode = NodeId(ids, $"source:{row.SourceIndexId}");
+            var sourceKey = $"{row.SourceLabel}:{row.SourceCombinedSymbolId}";
+            var targetKey = $"{row.SourceLabel}:{row.TargetCombinedSymbolId}";
+            var source = NodeId(ids, sourceKey);
+            var target = NodeId(ids, targetKey);
+            builder.AppendLine($"  {sourceNode} --> {source}[\"{EscapeLabel(row.SourceDisplayName)}\"]");
+            builder.AppendLine($"  {source} -->|{EscapeLabel(row.RelationshipKind)}| {target}[\"{EscapeLabel(row.TargetDisplayName)}\"]");
+        }
+
+        foreach (var row in document.ObjectCreations.Take(500))
+        {
+            var sourceNode = NodeId(ids, $"source:{row.SourceIndexId}");
+            var callerKey = $"{row.SourceLabel}:{row.CallerSymbol ?? "(unknown caller)"}";
+            var createdKey = $"{row.SourceLabel}:new:{row.CreatedType}";
+            var caller = NodeId(ids, callerKey);
+            var created = NodeId(ids, createdKey);
+            builder.AppendLine($"  {sourceNode} --> {caller}[\"{EscapeLabel(row.CallerSymbol ?? "(unknown caller)")}\"]");
+            builder.AppendLine($"  {caller} -.->|creates| {created}[\"{EscapeLabel(row.CreatedType)}\"]");
+        }
+
+        if (document.Sources.Count == 0 && document.CallEdges.Count == 0 && document.ObjectCreations.Count == 0 && document.Relationships.Count == 0)
+        {
+            builder.AppendLine("  empty[\"No combined rows were exported\"]");
         }
 
         return builder.ToString();

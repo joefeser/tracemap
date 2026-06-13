@@ -7,7 +7,7 @@ The current language scanners are:
 - `.NET/C#` under `src/dotnet`, including semantic Roslyn extraction, syntax fallback, flow/export commands, and contract reduction.
 - `TypeScript` under `src/typescript`, including compiler-backed facts, syntax fallback, integration facts, and reducer-compatible SQLite output.
 
-TraceMap can also align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
+TraceMap can also combine multiple indexes into one provenance-preserving SQLite database and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
 Start here:
 
@@ -46,6 +46,16 @@ Useful .NET index commands:
 dotnet run --project src/dotnet/TraceMap.Cli -- flow --index .tracemap/index.sqlite --symbol request --out .tracemap/flow-report.md
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap/index.sqlite --out .tracemap/index-export.json --format json
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap/index.sqlite --out .tracemap/relationships.mmd --format mermaid
+```
+
+Combine multiple indexes for cross-repo or cross-language dependency queries:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+  --index .tracemap/index.sqlite --label dotnet-sample \
+  --index .tracemap-ts/index.sqlite --label typescript-sample \
+  --out .tracemap-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combined.sqlite --out .tracemap-combined.json --format json
 ```
 
 TypeScript scanner:
