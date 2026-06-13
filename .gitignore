@@ -51,6 +51,13 @@ src/jvm/.gradle/
 samples/**/target/
 samples/**/build/
 
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+*.py[cod]
+*.egg-info/
+
 # MSBuild Binary and Structured Log
 *.binlog
 

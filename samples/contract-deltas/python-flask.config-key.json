@@ -1,0 +1,12 @@
+{
+  "contract": "API_URL",
+  "source": "samples/python-flask-sample",
+  "changes": [
+    {
+      "element": "API_URL",
+      "changeType": "removed",
+      "oldType": "string",
+      "newType": null
+    }
+  ]
+}
