@@ -1,4 +1,105 @@
 rules:
+  - id: combined.diff.source.v1
+    name: Combined dependency diff source comparison
+    description: Compares source inventory and source metadata between two combined indexes by exact source label and stable source identity metadata.
+    evidenceTier: Tier2Structural
+    emits:
+      - source diff row
+      - SourceIdentityChanged gap
+    limitations:
+      - Source pairing is exact-label based and does not infer renamed sources.
+      - Source identity metadata may be incomplete; unverifiable identity is review-tier evidence.
+      - Source diffs compare static scan metadata and do not prove code behavior changed.
+
+  - id: combined.diff.coverage.v1
+    name: Combined dependency diff coverage comparison
+    description: Compares scan coverage, build status, commit SHA credibility, and known coverage warnings between paired sources.
+    evidenceTier: Tier4Unknown
+    emits:
+      - coverage diff row
+      - coverage caveat
+    limitations:
+      - Coverage is source-level unless adapters emit more precise gap metadata.
+      - Reduced coverage makes absence of evidence coverage-relative, not proof that a dependency was removed.
+
+  - id: combined.diff.endpoint.v1
+    name: Combined dependency diff endpoint comparison
+    description: Compares combined endpoint alignment evidence between two snapshots using static method/path keys and side-specific endpoint provenance.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - endpoint diff row
+    limitations:
+      - Endpoint diffs are static method/path evidence and do not prove runtime traffic, auth behavior, proxies, deployment base paths, CORS behavior, or reachability.
+      - Dynamic, ambiguous, optional, and method-mismatch evidence remains review-tier.
+
+  - id: combined.diff.surface.v1
+    name: Combined dependency diff surface comparison
+    description: Compares dependency surfaces such as SQL/query, HTTP, package, and config evidence using safe structured metadata.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - surface diff row
+    limitations:
+      - Surface diffs do not prove runtime SQL execution, database schema existence, config loading, package loading, generated SQL equivalence, or branch feasibility.
+      - Raw SQL, URLs, config values, connection strings, and source snippets are not rendered by default.
+
+  - id: combined.diff.edge.v1
+    name: Combined dependency diff edge comparison
+    description: Compares combined dependency edge evidence such as calls, object creations, relationships, and parameter-forwarding edges using stable source/target metadata.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - edge diff row
+    limitations:
+      - Edge diffs are static evidence and do not prove dynamic dispatch, runtime DI registrations, reflection targets, branch feasibility, or collection contents.
+      - Syntax-only or name-only edge evidence remains review-tier.
+
+  - id: combined.diff.identity.v1
+    name: Combined dependency diff stable identity
+    description: Constructs stable identity keys for diffing and emits duplicate identity gaps when multiple records share the same stable key.
+    evidenceTier: Tier4Unknown
+    emits:
+      - DuplicateIdentity gap
+    limitations:
+      - Stable identity is label-and-metadata based; renamed labels are not inferred as the same source.
+      - Duplicate identity within one snapshot means diff comparison for affected records is review-tier only.
+      - Identity construction depends on combined fact metadata quality; malformed or incomplete metadata degrades identity.
+
+  - id: combined.diff.path.v1
+    name: Combined dependency diff path comparison
+    description: Compares opt-in dependency path signatures produced by the combined path query engine.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - path diff row
+    limitations:
+      - Path diffing is bounded by depth, path, and frontier limits and must not be treated as complete dependency coverage when truncated.
+      - Path evidence is a static trail, not runtime execution or full taint analysis.
+
+  - id: combined.diff.selector.v1
+    name: Combined dependency diff selector handling
+    description: Emits selector gaps when user-supplied source, endpoint, surface, or path filters match no comparable evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch gap
+    limitations:
+      - Selector gaps describe the current static evidence and query bounds only.
+
+  - id: combined.diff.schema.v1
+    name: Combined dependency diff schema gap
+    description: Emits gaps when optional combined-index precision tables are missing and diff comparison falls back to weaker evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SchemaMissing gap
+    limitations:
+      - Schema gaps can reduce comparison precision and may downgrade added/removed claims.
+
+  - id: combined.diff.truncation.v1
+    name: Combined dependency diff truncation gap
+    description: Emits gaps when diff row or gap caps truncate report output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - TruncatedByLimit gap
+    limitations:
+      - Truncated output is intentionally partial and must not be treated as complete evidence coverage.
+
   - id: combined.paths.endpoint-match.v1
     name: Combined dependency path endpoint match edge
     description: Derives an in-memory path edge between HTTP client and server endpoint facts using the same deterministic endpoint matcher as the combined dependency report.
