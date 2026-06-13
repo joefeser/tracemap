@@ -256,7 +256,7 @@ public static class CombinedDependencyPathReporter
         var sourceFilter = string.IsNullOrWhiteSpace(options.FromSource) ? null : options.FromSource.Trim();
         var resolvedStarts = ResolveStartNodes(options, graph, sourceFilter);
         var startNodes = resolvedStarts.Nodes;
-        var terminalNodes = ResolveTerminalNodes(options, graph);
+        var terminalNodes = ResolveTerminalNodes(options, graph, startNodes);
         var gaps = new List<CombinedPathGap>(graph.Gaps);
         var selectorCandidateCount = resolvedStarts.TotalMatchCount;
         var paths = new List<CombinedPath>();
@@ -875,15 +875,18 @@ public static class CombinedDependencyPathReporter
                 node.NodeKind is "EndpointClient" or "EndpointRoute"
                 && CombinedDependencyReporter.MethodsCompatible(endpoint.Method, node.HttpMethod ?? "ANY")
                 && string.Equals(node.NormalizedPathKey, endpoint.PathKey, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(options.FromSymbol))
+            {
+                var selector = options.FromSymbol.Trim();
+                candidates = candidates.Where(node => EndpointNodeMatchesSymbol(graph, node, selector));
+            }
         }
         else if (!string.IsNullOrWhiteSpace(options.FromSymbol))
         {
             var selector = options.FromSymbol.Trim();
             candidates = graph.Nodes.Values.Where(node =>
                 node.NodeKind is "Symbol" or "Method" or "Type"
-                && (string.Equals(node.SymbolId, selector, StringComparison.Ordinal)
-                    || string.Equals(node.DisplayName, selector, StringComparison.Ordinal)
-                    || node.DisplayName.Contains(selector, StringComparison.OrdinalIgnoreCase)));
+                && NodeMatchesSymbol(node, selector));
         }
         else if (!string.IsNullOrWhiteSpace(sourceFilter))
         {
@@ -913,16 +916,52 @@ public static class CombinedDependencyPathReporter
         return new SelectorResolution(ordered.Take(250).ToArray(), ordered.Length);
     }
 
-    private static IReadOnlySet<string> ResolveTerminalNodes(CombinedDependencyPathOptions options, EvidenceGraph graph)
+    private static bool EndpointNodeMatchesSymbol(EvidenceGraph graph, GraphNode endpointNode, string selector)
+    {
+        return graph.Outgoing.TryGetValue(endpointNode.NodeId, out var outgoing)
+            && outgoing
+                .Where(edge => edge.EdgeKind == "fact-attached-to-symbol")
+                .Select(edge => graph.Nodes.TryGetValue(edge.ToNodeId, out var node) ? node : null)
+                .OfType<GraphNode>()
+                .Any(node => NodeMatchesSymbol(node, selector));
+    }
+
+    private static bool NodeMatchesSymbol(GraphNode node, string selector)
+    {
+        return string.Equals(node.SymbolId, selector, StringComparison.Ordinal)
+            || string.Equals(node.DisplayName, selector, StringComparison.Ordinal)
+            || node.DisplayName.Contains(selector, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlySet<string> ResolveTerminalNodes(CombinedDependencyPathOptions options, EvidenceGraph graph, IReadOnlyList<GraphNode> startNodes)
     {
         var surfaceKind = string.IsNullOrWhiteSpace(options.ToSurface) ? null : options.ToSurface.Trim();
         var surfaceName = string.IsNullOrWhiteSpace(options.SurfaceName) ? null : options.SurfaceName.Trim();
+        var explicitSurfaceKind = surfaceKind is not null;
+        var startFactIds = startNodes
+            .Select(node => node.CombinedFactId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToHashSet(StringComparer.Ordinal);
         return graph.Nodes.Values
             .Where(node => node.SurfaceKind is not null)
+            .Where(node => explicitSurfaceKind || IsDefaultTerminalSurface(node, startFactIds))
             .Where(node => surfaceKind is null || string.Equals(node.SurfaceKind, surfaceKind, StringComparison.Ordinal))
             .Where(node => surfaceName is null || SurfaceNameMatches(node, surfaceName))
             .Select(node => node.NodeId)
             .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static bool IsDefaultTerminalSurface(GraphNode node, IReadOnlySet<string> startFactIds)
+    {
+        if (node.SurfaceKind == "http-route")
+        {
+            return false;
+        }
+
+        return node.SurfaceKind != "http-client"
+            || node.CombinedFactId is null
+            || !startFactIds.Contains(node.CombinedFactId);
     }
 
     private static bool SurfaceNameMatches(GraphNode node, string selector)
