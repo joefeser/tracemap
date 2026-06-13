@@ -45,16 +45,17 @@ def extract_sql_files(repo: Path, manifest: ScanManifest, files: list[Path], gap
                 )
             )
             pattern_props = query_shape_properties(text, "sql-file")
-            facts.append(
-                create_fact(
-                    manifest,
-                    FactTypes.QUERY_PATTERN_DETECTED,
-                    RuleIds.SQL,
-                    EvidenceTiers.TIER2,
-                    span,
-                    target_symbol=pattern_props.get("tableName") or rel,
-                    contract_element=pattern_props.get("tableName") or rel,
-                    properties={**pattern_props, "targetSymbol": pattern_props.get("tableName") or rel},
+            if pattern_props.get("operationName") or pattern_props.get("tableName") or pattern_props.get("columnNames"):
+                facts.append(
+                    create_fact(
+                        manifest,
+                        FactTypes.QUERY_PATTERN_DETECTED,
+                        RuleIds.SQL,
+                        EvidenceTiers.TIER2,
+                        span,
+                        target_symbol=pattern_props.get("tableName") or rel,
+                        contract_element=pattern_props.get("tableName") or rel,
+                        properties={**pattern_props, "targetSymbol": pattern_props.get("tableName") or rel},
+                    )
                 )
-            )
     return facts

@@ -16,7 +16,8 @@ from tracemap_py.inventory import discover_inventory
 from tracemap_py.metadata import read_package_metadata
 from tracemap_py.models import EvidenceSpan, ScanManifest
 from tracemap_py.route import normalize_path_key
-from tracemap_py.sql_text import query_shape
+from tracemap_py.sql_extractor import extract_sql_files
+from tracemap_py.sql_text import operation_name, query_shape
 from tracemap_py.writers import write_sqlite
 
 
@@ -37,6 +38,24 @@ def test_sql_query_shape_is_deterministic_without_raw_sql() -> None:
     assert shape.table_names == ("orders",)
     assert shape.column_names == ("id", "status", "total")
     assert len(shape.query_shape_hash) == 32
+
+
+def test_sql_query_shape_ignores_string_literal_keywords() -> None:
+    shape = query_shape("SELECT id FROM orders WHERE note = 'FROM fake JOIN shadow'")
+
+    assert operation_name("WITH recent AS (SELECT id FROM orders) SELECT id FROM recent") == ""
+    assert shape.operation_name == "SELECT"
+    assert shape.table_names == ("orders",)
+    assert shape.column_names == ("id",)
+
+
+def test_sql_file_without_visible_shape_does_not_emit_query_pattern(tmp_path: Path) -> None:
+    sql_file = tmp_path / "cte.sql"
+    sql_file.write_text("WITH recent AS (SELECT id FROM orders) SELECT id FROM recent\n", encoding="utf-8")
+    facts = extract_sql_files(tmp_path, _manifest("sql-file-cte"), [sql_file], [])
+
+    assert any(fact.fact_type == "SqlTextUsed" for fact in facts)
+    assert not any(fact.fact_type == "QueryPatternDetected" for fact in facts)
 
 
 def test_fact_id_ignores_extractor_version() -> None:
