@@ -1,0 +1,215 @@
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { describe, expect, it } from "vitest";
+import { scan } from "../src/scan/ScanEngine";
+import { FactTypes } from "../src/facts/Models";
+import { exportIndex } from "../src/export/IndexExporter";
+import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
+
+const packageRoot = process.cwd();
+const repoRoot = path.resolve(packageRoot, "../..");
+
+describe("ScanEngine", () => {
+  it("scans the modern TypeScript sample and writes reducer-compatible artifacts", async () => {
+    const out = await tempDir();
+    const result = await scan({
+      repoPath: path.join(repoRoot, "samples/typescript-modern-sample"),
+      outputPath: out,
+      projectPaths: [],
+      includeGlobs: [],
+      excludeGlobs: [],
+      maxFileByteSize: 1024 * 1024,
+      semantic: true
+    });
+
+    expect(fs.existsSync(path.join(out, "scan-manifest.json"))).toBe(true);
+    expect(fs.existsSync(path.join(out, "facts.ndjson"))).toBe(true);
+    expect(fs.existsSync(path.join(out, "index.sqlite"))).toBe(true);
+    expect(fs.existsSync(path.join(out, "report.md"))).toBe(true);
+    expect(fs.existsSync(path.join(out, "logs/analyzer.log"))).toBe(true);
+    expect(result.manifest.analysisLevel).toBe("Level1SemanticAnalysis");
+    expect(result.manifest.buildStatus).toBe("Succeeded");
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.PropertyAccessed, evidenceTier: "Tier1Semantic" }));
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.MethodInvoked, evidenceTier: "Tier1Semantic" }));
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.HttpRouteBinding }));
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ConfigKeyDeclared, targetSymbol: "CUSTOMER_ENDPOINT" }));
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.QueryPatternDetected }));
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ObjectShapeInferred }));
+    const prismaPattern = result.facts.find((fact) => fact.factType === FactTypes.QueryPatternDetected && fact.properties.orm === "prisma");
+    expect(prismaPattern?.properties.filterFields).toContain("status");
+    const entityPattern = result.facts.find((fact) => fact.factType === FactTypes.QueryPatternDetected && fact.properties.integration === "base44-entity");
+    expect(entityPattern?.properties.entityName).toBe("Customer");
+    expect(entityPattern?.properties.filterFields).toContain("organization_id");
+    expect(entityPattern?.properties.sortFields).toContain("updated_at");
+    expect(JSON.stringify(result.facts)).not.toContain("organization_id: \"org_1\"");
+  });
+
+  it("runs syntax fallback for a repo with no tsconfig and broken syntax", async () => {
+    const out = await tempDir();
+    const result = await scan({
+      repoPath: path.join(repoRoot, "samples/typescript-broken-sample"),
+      outputPath: out,
+      projectPaths: [],
+      includeGlobs: [],
+      excludeGlobs: [],
+      maxFileByteSize: 1024 * 1024,
+      semantic: true
+    });
+
+    expect(result.manifest.analysisLevel).toBe("Level3SyntaxAnalysis");
+    expect(result.manifest.buildStatus).toBe("NotRun");
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.AnalysisGap }));
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.TypeDeclared, targetSymbol: "BrokenContract" }));
+  });
+
+  it("can be reduced by the existing .NET reducer as DefiniteImpact", async () => {
+    const out = await tempDir();
+    await scan({
+      repoPath: path.join(repoRoot, "samples/typescript-modern-sample"),
+      outputPath: out,
+      projectPaths: [],
+      includeGlobs: [],
+      excludeGlobs: [],
+      maxFileByteSize: 1024 * 1024,
+      semantic: true
+    });
+
+    const report = path.join(out, "impact-report.md");
+    const reduce = spawnSync(
+      "dotnet",
+      [
+        "run",
+        "--project",
+        "src/dotnet/TraceMap.Cli",
+        "--",
+        "reduce",
+        "--index",
+        path.join(out, "index.sqlite"),
+        "--contract-delta",
+        "samples/contract-deltas/typescript-modern.status.json",
+        "--out",
+        report
+      ],
+      { cwd: repoRoot, encoding: "utf8" }
+    );
+    expect(reduce.status, reduce.stderr + reduce.stdout).toBe(0);
+    const markdown = await fsp.readFile(report, "utf8");
+    expect(markdown).toContain("DefiniteImpact");
+    expect(markdown).toContain("PropertyAccessed");
+  });
+
+  it("exports deterministic JSON and Mermaid from a TypeScript index", async () => {
+    const out = await tempDir();
+    await scan({
+      repoPath: path.join(repoRoot, "samples/typescript-modern-sample"),
+      outputPath: out,
+      projectPaths: [],
+      includeGlobs: [],
+      excludeGlobs: [],
+      maxFileByteSize: 1024 * 1024,
+      semantic: true
+    });
+
+    const jsonPath = path.join(out, "index-export.json");
+    const mermaidPath = path.join(out, "relationships.mmd");
+    const jsonResult = await exportIndex({ indexPath: path.join(out, "index.sqlite"), outputPath: jsonPath, format: "json" });
+    const mermaidResult = await exportIndex({ indexPath: path.join(out, "index.sqlite"), outputPath: mermaidPath, format: "mermaid" });
+
+    expect(jsonResult.factCount).toBeGreaterThan(0);
+    expect(mermaidResult.callEdgeCount).toBeGreaterThan(0);
+    const json = await fsp.readFile(jsonPath, "utf8");
+    expect(json).toContain('"factsByType"');
+    expect(json).toContain('"relationships"');
+    expect(json).not.toContain("export class CustomerHandler");
+    const mermaid = await fsp.readFile(mermaidPath, "utf8");
+    expect(mermaid.startsWith("flowchart TD")).toBe(true);
+  });
+
+  it("keeps scanId stable across identical repos in different parent directories", async () => {
+    const root = await tempDir();
+    const repoA = path.join(root, "a", "repo");
+    const repoB = path.join(root, "b", "repo");
+    await writeMiniRepo(repoA);
+    await writeMiniRepo(repoB);
+
+    const resultA = await scan(scanOptions(repoA, path.join(root, "out-a")));
+    const resultB = await scan(scanOptions(repoB, path.join(root, "out-b")));
+
+    expect(resultA.manifest.scanId).toBe(resultB.manifest.scanId);
+    expect(resultA.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.MethodDeclared, targetSymbol: expect.stringContaining("run") }));
+  });
+
+  it("refuses unsafe output paths before deleting anything", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+
+    await expect(scan(scanOptions(repo, repo))).rejects.toThrow(/Unsafe output path/);
+    expect(fs.existsSync(path.join(repo, "src", "sample.ts"))).toBe(true);
+  });
+
+  it("refuses scans when git commit SHA is unavailable", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "not-git");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export const value = 1;\n");
+
+    await expect(scan(scanOptions(repo, path.join(root, "out")))).rejects.toThrow(/requires git commit SHA/);
+  });
+
+  it("marks ordinary TypeScript diagnostics as reduced coverage gaps", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }, null, 2));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export const value: string = 1;\n");
+    initGitRepo(repo);
+
+    const result = await scan(scanOptions(repo, path.join(root, "out")));
+
+    expect(result.manifest.analysisLevel).toBe("Level1SemanticAnalysisReduced");
+    expect(result.manifest.buildStatus).toBe("FailedOrPartial");
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "ordinary-type-error", diagnosticCode: "2322" })
+    }));
+  });
+
+  it("resolves sql.js wasm assets to an existing file", () => {
+    const resolved = findSqlJsFile("sql-wasm.wasm");
+
+    expect(fs.existsSync(resolved)).toBe(true);
+  });
+});
+
+async function tempDir(): Promise<string> {
+  return fsp.mkdtemp(path.join(os.tmpdir(), "tracemap-ts-"));
+}
+
+function scanOptions(repoPath: string, outputPath: string) {
+  return {
+    repoPath,
+    outputPath,
+    projectPaths: [],
+    includeGlobs: [],
+    excludeGlobs: [],
+    maxFileByteSize: 1024 * 1024,
+    semantic: true
+  };
+}
+
+async function writeMiniRepo(repo: string): Promise<void> {
+  await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+  await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }, null, 2));
+  await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export interface Contract { run(value: string): void; }\nexport const value = 1;\n");
+  initGitRepo(repo);
+}
+
+function initGitRepo(repo: string): void {
+  expect(spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+  expect(spawnSync("git", ["add", "."], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+  expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "initial"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+}

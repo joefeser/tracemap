@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Tests", "tests\Tra
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Reduction", "TraceMap.Reduction\TraceMap.Reduction.csproj", "{C96681DB-F6ED-4265-AEDC-64FD8B177A38}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.EndpointAlignment", "TraceMap.EndpointAlignment\TraceMap.EndpointAlignment.csproj", "{262BBB49-D36F-4697-95F6-ED7EE2D19278}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -101,6 +103,18 @@ Global
 		{C96681DB-F6ED-4265-AEDC-64FD8B177A38}.Release|x64.Build.0 = Release|Any CPU
 		{C96681DB-F6ED-4265-AEDC-64FD8B177A38}.Release|x86.ActiveCfg = Release|Any CPU
 		{C96681DB-F6ED-4265-AEDC-64FD8B177A38}.Release|x86.Build.0 = Release|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Debug|x64.Build.0 = Debug|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Debug|x86.Build.0 = Debug|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Release|Any CPU.Build.0 = Release|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Release|x64.ActiveCfg = Release|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Release|x64.Build.0 = Release|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Release|x86.ActiveCfg = Release|Any CPU
+		{262BBB49-D36F-4697-95F6-ED7EE2D19278}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

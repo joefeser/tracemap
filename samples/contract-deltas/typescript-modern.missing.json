@@ -1,0 +1,12 @@
+{
+  "contract": "CustomerContract",
+  "source": "samples/typescript-modern-sample",
+  "changes": [
+    {
+      "element": "CustomerContract.missingValue",
+      "changeType": "removed",
+      "oldType": "string",
+      "newType": null
+    }
+  ]
+}
