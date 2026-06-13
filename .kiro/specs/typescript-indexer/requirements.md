@@ -42,7 +42,7 @@ TraceMap should not copy SCIP output as its primary product. SCIP is symbol-inde
 1. WHEN the user runs `tracemap-ts scan --repo <path> --out <path>` THEN the scanner SHALL write `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`.
 2. WHEN the repo path does not exist THEN the scanner SHALL exit non-zero and not write a partial success manifest.
 3. WHEN the repo is inside a Git checkout THEN the manifest SHALL include repo name, remote URL when available, branch when available, and commit SHA.
-4. WHEN Git metadata is unavailable THEN the manifest SHALL use `commitSha: "unknown"` and emit an `AnalysisGap` fact.
+4. WHEN Git commit metadata is unavailable THEN the scanner SHALL fail before writing scan artifacts, because TraceMap scans require a concrete commit SHA.
 5. WHEN output already exists THEN the scanner SHALL overwrite only the requested output path and SHALL not delete files outside that path.
 6. WHEN scan completes with any project-load or semantic gaps THEN the manifest SHALL set `analysisLevel` to `Level1SemanticAnalysisReduced` or `Level3SyntaxAnalysis` as appropriate and SHALL include at least one `AnalysisGap` fact.
 7. WHEN every selected TypeScript project loads semantically, `commitSha != "unknown"`, and no known gaps are emitted THEN the manifest SHALL set `analysisLevel = "Level1SemanticAnalysis"` and `buildStatus = "Succeeded"` for compatibility with the existing reducer's full-coverage gate.

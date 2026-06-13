@@ -126,8 +126,65 @@ describe("ScanEngine", () => {
     const mermaid = await fsp.readFile(mermaidPath, "utf8");
     expect(mermaid.startsWith("flowchart TD")).toBe(true);
   });
+
+  it("keeps scanId stable across identical repos in different parent directories", async () => {
+    const root = await tempDir();
+    const repoA = path.join(root, "a", "repo");
+    const repoB = path.join(root, "b", "repo");
+    await writeMiniRepo(repoA);
+    await writeMiniRepo(repoB);
+
+    const resultA = await scan(scanOptions(repoA, path.join(root, "out-a")));
+    const resultB = await scan(scanOptions(repoB, path.join(root, "out-b")));
+
+    expect(resultA.manifest.scanId).toBe(resultB.manifest.scanId);
+    expect(resultA.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.MethodDeclared, targetSymbol: expect.stringContaining("run") }));
+  });
+
+  it("refuses unsafe output paths before deleting anything", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+
+    await expect(scan(scanOptions(repo, repo))).rejects.toThrow(/Unsafe output path/);
+    expect(fs.existsSync(path.join(repo, "src", "sample.ts"))).toBe(true);
+  });
+
+  it("refuses scans when git commit SHA is unavailable", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "not-git");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export const value = 1;\n");
+
+    await expect(scan(scanOptions(repo, path.join(root, "out")))).rejects.toThrow(/requires git commit SHA/);
+  });
 });
 
 async function tempDir(): Promise<string> {
   return fsp.mkdtemp(path.join(os.tmpdir(), "tracemap-ts-"));
+}
+
+function scanOptions(repoPath: string, outputPath: string) {
+  return {
+    repoPath,
+    outputPath,
+    projectPaths: [],
+    includeGlobs: [],
+    excludeGlobs: [],
+    maxFileByteSize: 1024 * 1024,
+    semantic: true
+  };
+}
+
+async function writeMiniRepo(repo: string): Promise<void> {
+  await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+  await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }, null, 2));
+  await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export interface Contract { run(value: string): void; }\nexport const value = 1;\n");
+  initGitRepo(repo);
+}
+
+function initGitRepo(repo: string): void {
+  expect(spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+  expect(spawnSync("git", ["add", "."], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+  expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "initial"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
 }

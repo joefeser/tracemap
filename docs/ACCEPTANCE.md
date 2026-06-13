@@ -39,6 +39,7 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 For every successful `tracemap-ts scan --repo <repo> --out <out>` run, verify:
 
 - the same required artifacts are written.
+- scans outside a Git checkout with a known commit SHA fail before artifacts are written.
 - `scan-manifest.json` uses `Level1SemanticAnalysis` and `buildStatus: "Succeeded"` only when every selected TypeScript project loads semantically with no known gaps and a known commit SHA.
 - reduced TypeScript scans use `Level1SemanticAnalysisReduced` or `Level3SyntaxAnalysis`.
 - reducer-compatible facts reuse existing fact type strings and matching keys such as `propertyName`, `methodName`, `typeName`, `keyPath`, `name`, `containingType`, and `targetSymbol`.

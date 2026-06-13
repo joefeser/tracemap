@@ -15,7 +15,12 @@ export async function collectFileInventory(options: ScanOptions): Promise<FileIn
 }
 
 async function visit(root: string, current: string, outputPath: string, options: ScanOptions, files: FileInventoryItem[]): Promise<void> {
-  const entries = await fs.readdir(current, { withFileTypes: true });
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(current, { withFileTypes: true });
+  } catch {
+    return;
+  }
   for (const entry of entries) {
     const absolutePath = path.join(current, entry.name);
     if (entry.isDirectory()) {
@@ -35,7 +40,10 @@ async function visit(root: string, current: string, outputPath: string, options:
     if (!isSupported(relativePath)) {
       continue;
     }
-    const stat = await fs.stat(absolutePath);
+    const stat = await fs.stat(absolutePath).catch(() => null);
+    if (!stat) {
+      continue;
+    }
     files.push({
       relativePath: normalizePath(relativePath),
       absolutePath,
