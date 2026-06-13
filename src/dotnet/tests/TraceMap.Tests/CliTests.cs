@@ -18,6 +18,19 @@ public sealed class CliTests
     }
 
     [Fact]
+    public async Task Help_for_export_returns_usage()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["export", "--help"], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("tracemap export --index <path> --out <path>", output.ToString());
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
     public async Task Scan_against_temporary_directory_writes_required_outputs()
     {
         using var temp = new TempDirectory();
@@ -99,6 +112,58 @@ public sealed class CliTests
         var manifest = await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-manifest.json"));
         Assert.Contains("src/Keep/Keep.csproj", manifest);
         Assert.DoesNotContain("src/Skip/Skip.csproj", manifest);
+    }
+
+    [Fact]
+    public async Task Export_writes_json_and_mermaid_from_index()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var exportJson = Path.Combine(temp.Path, "index-export.json");
+        var exportMermaid = Path.Combine(temp.Path, "relationships.mmd");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Sample.cs"), """
+            namespace ExportSample;
+
+            public class BaseType { public virtual void Run() { } }
+            public class ChildType : BaseType
+            {
+                public override void Run() { }
+            }
+            """);
+
+        using var scanOutput = new StringWriter();
+        using var scanError = new StringWriter();
+        var scanExitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], scanOutput, scanError);
+        Assert.Equal(0, scanExitCode);
+        Assert.Equal(string.Empty, scanError.ToString());
+
+        using var jsonOutput = new StringWriter();
+        using var jsonError = new StringWriter();
+        var jsonExitCode = await TraceMapCommand.RunAsync(
+            ["export", "--index", Path.Combine(outputPath, "index.sqlite"), "--out", exportJson, "--format", "json"],
+            jsonOutput,
+            jsonError);
+
+        Assert.Equal(0, jsonExitCode);
+        Assert.Equal(string.Empty, jsonError.ToString());
+        var json = await File.ReadAllTextAsync(exportJson);
+        Assert.Contains("\"factsByType\"", json);
+        Assert.Contains("\"relationships\"", json);
+        Assert.DoesNotContain("public class BaseType", json);
+
+        using var mermaidOutput = new StringWriter();
+        using var mermaidError = new StringWriter();
+        var mermaidExitCode = await TraceMapCommand.RunAsync(
+            ["export", "--index", Path.Combine(outputPath, "index.sqlite"), "--out", exportMermaid, "--format", "mermaid"],
+            mermaidOutput,
+            mermaidError);
+
+        Assert.Equal(0, mermaidExitCode);
+        Assert.Equal(string.Empty, mermaidError.ToString());
+        var mermaid = await File.ReadAllTextAsync(exportMermaid);
+        Assert.StartsWith("flowchart TD", mermaid);
     }
 
     [Fact]

@@ -49,3 +49,11 @@ Decision: any reducer or extractor behavior change that affects evidence meaning
 Why: "No rule without documented limitations" is a project invariant.
 
 Consequence: behavior changes are incomplete until rule limitations and tests are updated.
+
+## 2026-06-12: Endpoint alignment compares existing indexes
+
+Decision: the endpoint alignment MVP reads one client index and one server index and emits derived Markdown/JSON reports, rather than requiring a combined multi-language database.
+
+Why: separate scans preserve language ownership, keep evidence provenance intact, and let nested client/server apps be compared without a monolithic scanner.
+
+Consequence: `tracemap combine`, N-way endpoint matching, and endpoint diffing across commit SHAs remain backlog work. Endpoint matches are derived report rows, not source facts.

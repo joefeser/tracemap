@@ -106,6 +106,28 @@ rules:
       - Calculation expressions store expression hashes, operators, and spans, not raw source snippets.
       - Boilerplate classification is path/name based and can misclassify unconventional project layouts.
 
+  - id: csharp.syntax.querypattern.v1
+    name: C# syntax query pattern
+    description: Records LINQ-style filter, sort, select, and include call shapes with field names and hashed call expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - QueryPatternDetected
+    limitations:
+      - Syntax-only evidence does not prove the query provider, database table, generated SQL, runtime branch feasibility, or whether the query executes.
+      - Field names are extracted from member access inside query arguments and can include unrelated member reads in complex expressions.
+      - Literal values and raw expressions are not stored; pattern hashes, field names, operation names, and spans are emitted.
+
+  - id: csharp.syntax.objectshape.v1
+    name: C# syntax object shape
+    description: Records object initializer and anonymous-object field shapes with field names, shape hashes, and source spans.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectShapeInferred
+    limitations:
+      - Object shape facts are review-routing evidence, not proof of DTO/schema contracts, serializer output, runtime object contents, or nullability.
+      - Nested object contents, collection element shapes, conditional construction, and mutation after initialization are not expanded in this rule.
+      - Raw object expressions are not stored; expression hashes and sorted field names are emitted.
+
   - id: csharp.semantic.propertyaccess.v1
     name: C# semantic property access
     description: Finds compiler-resolved property accesses using Roslyn semantic model.
@@ -384,3 +406,299 @@ rules:
       - NoEvidenceFullCoverage depends on a successful full semantic scan at a known commit SHA; reduced scans only support NoEvidenceReducedCoverage.
       - UnknownAnalysisGap is emitted only when analysis-gap evidence names the changed contract element; unrelated reduced coverage is reported as NoEvidenceReducedCoverage.
       - Generic or high fan-out name matches are still reported when evidence exists, but warnings mark them as review-sensitive.
+
+  - id: typescript.project.v1
+    name: TypeScript project loading
+    description: Records explicit tsconfig project evidence and project-load gaps for the TypeScript scanner.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - ProjectDeclared
+      - AnalysisGap
+    limitations:
+      - JavaScript, inferred config, and package-manager workspace discovery are follow-up work.
+      - Missing dependencies reduce semantic coverage but do not stop syntax fallback.
+
+  - id: typescript.package.v1
+    name: TypeScript package metadata
+    description: Reads package.json package identity, dependencies, and script key facts without storing raw script commands.
+    evidenceTier: Tier2Structural
+    emits:
+      - ProjectDeclared
+      - PackageReferenced
+      - ConfigKeyDeclared
+      - AnalysisGap
+    limitations:
+      - Package scripts are stored as hashes and key paths only.
+      - Package metadata is structural evidence; it does not prove runtime loading.
+
+  - id: typescript.config.v1
+    name: TypeScript config keys
+    description: Parses JSON config files and emits deterministic key-path facts with value hashes.
+    evidenceTier: Tier2Structural
+    emits:
+      - ConfigFileDeclared
+      - ConfigKeyDeclared
+      - AnalysisGap
+    limitations:
+      - JSON line spans are best-effort key locations.
+      - Runtime configuration providers, environment overrides, and secrets stores are not evaluated.
+
+  - id: typescript.syntax.declarations.v1
+    name: TypeScript syntax declarations
+    description: Finds recoverable TypeScript declaration names without requiring semantic project load.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - PropertyDeclared
+      - ParameterDeclared
+      - AnalysisGap
+    limitations:
+      - Does not prove symbol identity, overload resolution, structural type equivalence, or runtime implementation for .d.ts declarations.
+
+  - id: typescript.syntax.memberaccess.v1
+    name: TypeScript syntax member access
+    description: Finds member access names from TypeScript syntax and hashes receiver expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MemberAccessName
+    limitations:
+      - Name-only evidence may match unrelated members with the same name.
+
+  - id: typescript.syntax.invocation.v1
+    name: TypeScript syntax invocation
+    description: Finds invocation names from TypeScript syntax without compiler binding.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - InvocationName
+    limitations:
+      - Receiver type, overload target, dynamic dispatch, and runtime reachability are not proven.
+
+  - id: typescript.syntax.callgraph.v1
+    name: TypeScript syntax call graph
+    description: Emits syntax-only caller-to-callee edges from invocation expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - CallEdge
+    limitations:
+      - Caller and callee names are best-effort syntax names.
+
+  - id: typescript.syntax.objectcreation.v1
+    name: TypeScript syntax object creation
+    description: Emits syntax-only object creation facts from new expressions.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectCreated
+    limitations:
+      - Constructor overload and package identity are not proven without semantic analysis.
+
+  - id: typescript.syntax.logicshape.v1
+    name: TypeScript syntax logic shape
+    description: Emits deterministic syntax signals for calculation, branching, and boilerplate-like code.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - CalculationExpression
+      - BranchingLogic
+      - InfrastructureBoilerplate
+    limitations:
+      - Logic shape facts are review-routing signals, not proof of business intent.
+
+  - id: typescript.syntax.objectshape.v1
+    name: TypeScript syntax object shape
+    description: Records object-literal field shapes with sorted field names, shape hashes, expression hashes, and source spans.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectShapeInferred
+    limitations:
+      - Object shape facts are syntax evidence only; they do not prove DTO schemas, serializer output, runtime object contents, or nullability.
+      - Nested object semantics, spread contents, mutation after construction, and branch feasibility are not expanded in this rule.
+      - Raw object expressions and literal values are not stored.
+
+  - id: typescript.semantic.declarations.v1
+    name: TypeScript semantic declarations
+    description: Emits compiler-resolved declaration facts with TraceMap-native TypeScript symbol IDs.
+    evidenceTier: Tier1Semantic
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - PropertyDeclared
+      - ParameterDeclared
+    limitations:
+      - Requires a loadable TypeScript program and enough dependencies/path mappings for binding.
+      - Symbol IDs are stable for the same scan inputs but may change across file renames, package version changes, and compiler binding changes.
+
+  - id: typescript.semantic.propertyaccess.v1
+    name: TypeScript semantic property access
+    description: Emits compiler-resolved property access facts with reducer-compatible property keys.
+    evidenceTier: Tier1Semantic
+    emits:
+      - PropertyAccessed
+    limitations:
+      - Does not prove reflection, dynamic property construction, proxy behavior, or runtime branch reachability.
+
+  - id: typescript.semantic.methodinvocation.v1
+    name: TypeScript semantic method invocation
+    description: Emits compiler-resolved function and method invocation facts with reducer-compatible method keys.
+    evidenceTier: Tier1Semantic
+    emits:
+      - MethodInvoked
+    limitations:
+      - Dynamic dispatch targets, decorator effects, dependency injection, and runtime interface implementations are not inferred.
+
+  - id: typescript.semantic.callgraph.v1
+    name: TypeScript semantic call graph
+    description: Emits compiler-resolved call-edge facts when TypeScript exposes callee symbols.
+    evidenceTier: Tier1Semantic
+    emits:
+      - CallEdge
+    limitations:
+      - A call edge records a syntactic call site, not proof that the path executes at runtime.
+
+  - id: typescript.semantic.objectcreation.v1
+    name: TypeScript semantic object creation
+    description: Emits compiler-resolved object creation facts with created type and caller evidence.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ObjectCreated
+    limitations:
+      - Does not model factory-returned runtime types, dependency-injection activations, or deserializer-created instances.
+
+  - id: typescript.semantic.valueflow.v1
+    name: TypeScript semantic argument value flow
+    description: Records direct call-site argument-to-parameter facts with expression hashes.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ArgumentPassed
+    limitations:
+      - Tracks direct call-site arguments only; field/property aliases and interprocedural parameter-forward edges are follow-up work.
+
+  - id: typescript.semantic.localalias.v1
+    name: TypeScript semantic local alias
+    description: Records simple local aliases assigned from resolved symbols.
+    evidenceTier: Tier1Semantic
+    emits:
+      - LocalAlias
+    limitations:
+      - Does not model mutation, closure capture, collection contents, property aliases, or alias invalidation through control flow.
+
+  - id: typescript.semantic.symbolidentity.v1
+    name: TypeScript semantic symbol identity
+    description: Adds TraceMap-native TypeScript symbol IDs and symbol occurrence rows to semantic facts.
+    evidenceTier: Tier1Semantic
+    emits:
+      - symbols table rows
+      - symbol_occurrences table rows
+      - fact_symbols table rows
+    limitations:
+      - TypeScript IDs are not SCIP-compatible and are not guaranteed stable across package/file/compiler identity changes.
+
+  - id: typescript.semantic.symbolrelationship.v1
+    name: TypeScript semantic symbol relationships
+    description: Emits direct extends, implements, and explicit override relationships when TypeScript resolves the symbols.
+    evidenceTier: Tier1Semantic
+    emits:
+      - SymbolRelationship
+      - symbol_relationships table rows
+    limitations:
+      - Structural type compatibility, transitive relationships, and runtime dispatch are not inferred.
+      - Overrides are emitted only for explicit TypeScript override syntax in this MVP.
+
+  - id: typescript.integration.http.v1
+    name: TypeScript HTTP integration
+    description: Detects fetch and axios HTTP call shapes with hashed URL evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    limitations:
+      - Dynamic URL construction, interceptor behavior, and runtime client configuration are not resolved.
+
+  - id: typescript.integration.route.v1
+    name: TypeScript route integration
+    description: Detects Express-style route method calls with hashed route literals.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - HttpRouteBinding
+    limitations:
+      - Middleware, route composition, framework decorators, and runtime route registration are not expanded.
+
+  - id: typescript.integration.serializer.v1
+    name: TypeScript serializer integration
+    description: Detects JSON.parse and JSON.stringify calls as serializer boundary evidence.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SerializationLogic
+    limitations:
+      - Serializer options, replacers, revivers, and schema validation are not interpreted.
+
+  - id: typescript.integration.database.v1
+    name: TypeScript database integration
+    description: Detects Prisma client call shapes as database boundary evidence.
+    evidenceTier: Tier2Structural or Tier1Semantic
+    emits:
+      - DatabaseColumnMapping
+    limitations:
+      - Prisma schema files, migrations, query middleware, and runtime client extensions are not modeled in MVP.
+
+  - id: typescript.integration.contractmapping.v1
+    name: TypeScript contract mapping integration
+    description: Detects Zod schema call shapes as structural contract mapping evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - SerializerContractMember
+    limitations:
+      - Schema composition, refinements, transforms, and runtime validation paths are not fully expanded.
+
+  - id: typescript.integration.boundary.v1
+    name: TypeScript integration boundary
+    description: Detects process.env reads and other MVP boundary shapes without claiming runtime state.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ConfigKeyDeclared
+    limitations:
+      - Environment variable availability, provider precedence, and deployment configuration are not proven.
+
+  - id: typescript.integration.querypattern.v1
+    name: TypeScript integration query pattern
+    description: Records Prisma-style and Base44-style entity query call shapes with where, orderBy, select, include, data, filter, sort, and mutation field names plus hashed patterns.
+    evidenceTier: Tier2Structural
+    emits:
+      - QueryPatternDetected
+    limitations:
+      - Structural query evidence does not prove generated SQL, runtime execution, database schema existence, or branch feasibility.
+      - Only statically visible object-literal and simple string sort arguments are inspected in MVP; variables, spreads, helper-built filters, and dynamic keys need later flow rules.
+      - Literal values and raw object text are not stored; field names, operation names, hashes, and spans are emitted.
+
+  - id: typescript.integration.angular-httpclient.v1
+    name: TypeScript Angular HttpClient integration
+    description: Detects Angular HttpClient calls, hashes raw URL expressions, and stores normalized route templates/keys when statically visible.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    limitations:
+      - Static extraction does not prove runtime interceptor rewrites, proxy configuration, deployment base paths, auth state, CORS behavior, or whether a call executes.
+      - Environment base URL values are not stored raw; only hash evidence and cleartext relative path suffixes such as /api are stored for matching.
+      - Variables, helper functions, destructured methods, indirect receivers, and complex URL expressions are marked dynamic and require review.
+
+  - id: csharp.syntax.aspnetroute.v1
+    name: C# ASP.NET syntax route fallback
+    description: Extracts ASP.NET controller attribute route bindings from C# syntax and normalizes route templates without requiring framework references.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - HttpRouteBinding
+    limitations:
+      - Syntax fallback does not prove runtime route registration, middleware ordering, conventional routes, minimal APIs, endpoint filters, route groups, or custom route attributes.
+      - Supports literal controller/method route attributes and common Http* attributes; non-literal route constants and advanced routing are not guessed.
+      - Route constraints and optional segments are retained as evidence, but runtime constraint behavior is not evaluated.
+
+  - id: endpoint.alignment.v1
+    name: Cross-index endpoint alignment
+    description: Derives a report by matching client HttpCallDetected facts to server HttpRouteBinding facts by HTTP method and normalized route key.
+    evidenceTier: Derived report over source evidence
+    emits:
+      - endpoint-report.md
+      - endpoint-report.json
+    limitations:
+      - Endpoint findings are derived report rows, not source facts.
+      - Matching is static and coverage-relative; client-only findings are not proof of broken calls and server-only findings are not proof of dead or unused endpoints.
+      - Does not prove runtime reachability, reverse proxy behavior, auth policies, feature flags, branch feasibility, deployment routing, or generated OpenAPI behavior.
+      - MVP compares one client index and one server index; N-way combined dependency analysis and endpoint diffs are follow-up work.
