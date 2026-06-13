@@ -156,13 +156,14 @@ public sealed class CombinedDependencyPathTests
         var client = Manifest("client", "tracemap-typescript/0.1.0");
         var server = Manifest("server", "tracemap-milestone15");
         var controller = "global::EndpointServerSample.Controllers.RunnerController.GetById(string runnerId)";
+        var syntaxController = "EndpointServerSample.Controllers.RunnerController.GetById";
         var repository = "global::EndpointServerSample.Services.RunnerRepository.Query(string runnerId)";
 
         SqliteIndexWriter.Write(clientIndex, client, [
             HttpClientFact(client, "GET", "/api/admin/runner/get-by-id/{runnerId}", "/api/admin/runner/get-by-id/{}", "src/runner.ts", 5)
         ]);
         SqliteIndexWriter.Write(serverIndex, server, [
-            RouteFact(server, "GET", "/api/admin/runner/get-by-id/{runnerId:guid}", "/api/admin/runner/get-by-id/{}", controller, "Controllers/RunnerController.cs", 10),
+            RouteFact(server, "GET", "/api/admin/runner/get-by-id/{runnerId:guid}", "/api/admin/runner/get-by-id/{}", syntaxController, "Controllers/RunnerController.cs", 10),
             CallFact(server, controller, repository, "Controllers/RunnerController.cs", 14),
             QueryPatternFact(server, "Query", "Services/RunnerRepository.cs", 31)
         ]);
@@ -181,6 +182,34 @@ public sealed class CombinedDependencyPathTests
         Assert.Contains(path.Edges, edge => edge.EdgeKind == "calls");
         Assert.Contains(path.Edges, edge => edge.EdgeKind == "symbol-reconciliation" && edge.RuleId == "combined.paths.symbol-reconciliation.v1");
         Assert.Equal("NeedsReviewPath", path.Classification);
+    }
+
+    [Fact]
+    public async Task Paths_does_not_reconcile_distinct_overload_signatures()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.RunnerController.Get()";
+        var queryByNumber = "Server.RunnerRepository.Query(int runnerNumber)";
+        var queryById = "Server.RunnerRepository.Query(string runnerId)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            CallFact(server, controller, queryByNumber, "Controllers/RunnerController.cs", 14),
+            QueryPatternFact(server, queryById, "Infrastructure/RunnerRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: queryByNumber,
+                ToSurface: "sql-query"));
+
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "NoPathFound");
     }
 
     [Fact]
@@ -353,7 +382,7 @@ public sealed class CombinedDependencyPathTests
                 "paths",
                 "--index", combinedPath,
                 "--out", Path.Combine(temp.Path, "paths"),
-                "--source-pair", "client\\:v1:server\\:v1",
+                "--source-pair", " client\\:v1 : server\\:v1 ",
                 "--to-surface", "package-config"
             ],
             output,
@@ -364,6 +393,30 @@ public sealed class CombinedDependencyPathTests
         Assert.Contains("TraceMap paths completed:", output.ToString());
         Assert.Contains("Graph nodes:", output.ToString());
         Assert.True(File.Exists(Path.Combine(temp.Path, "paths", "paths-report.md")));
+    }
+
+    [Fact]
+    public async Task Paths_preserves_selector_truncation_when_search_is_not_truncated()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var facts = Enumerable.Range(0, 260)
+            .Select(index => PackageFact(manifest, $"Server.Startup.Configure{index}()", "Server.csproj", index + 1))
+            .ToArray();
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSource: "server",
+                ToSurface: "package-config"));
+
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "selector-candidates");
     }
 
     private static ScanManifest Manifest(
