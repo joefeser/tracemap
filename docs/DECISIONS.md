@@ -36,7 +36,7 @@ Consequence: acceptance fixtures include generic-name examples so future rule tu
 
 ## 2026-06-12: External sample repos are opt-in smoke fixtures
 
-Decision: repositories under `/Users/josephfeser/src/gh-joe/c-sharp-sample-repos` should be used for manual or scripted smoke tests, not required unit tests.
+Decision: repositories under a developer-provided `<external-csharp-sample-repos>` path should be used for manual or scripted smoke tests, not required unit tests.
 
 Why: they are larger, machine-local, and may depend on SDKs or packages unavailable in every environment.
 
@@ -57,3 +57,19 @@ Decision: the endpoint alignment MVP reads one client index and one server index
 Why: separate scans preserve language ownership, keep evidence provenance intact, and let nested client/server apps be compared without a monolithic scanner.
 
 Consequence: `tracemap combine`, N-way endpoint matching, and endpoint diffing across commit SHAs remain backlog work. Endpoint matches are derived report rows, not source facts.
+
+## 2026-06-13: Combine before broad JVM work
+
+Decision: implement `tracemap combine` before or alongside Java/Kotlin support.
+
+Why: cross-repo and cross-language dependency analysis needs a shared source-index model, namespaced facts, and derived rows. Building JVM first without combine would push multi-index behavior into language-specific code.
+
+Consequence: JVM planning should assume combined-index provenance from the start.
+
+## 2026-06-13: JVM language family layout
+
+Decision: plan Java/Kotlin under `src/jvm` unless implementation discovery proves separate top-level language roots are necessary.
+
+Why: Java and Kotlin share Gradle/Maven metadata, package/module identity, JVM descriptors, bytecode signatures, dependency facts, inheritance relationships, and many downstream query concepts.
+
+Consequence: language-specific parser/compiler code can live under subfolders, but shared JVM contracts should stay together.
