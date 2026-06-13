@@ -102,6 +102,23 @@ dotnet run --project src/dotnet/TraceMap.Cli -- diff \
 
 The combined dependency diff command writes `diff-report.md` and `diff-report.json` when `--out` is a directory. It compares static evidence keys for sources, coverage, endpoints, dependency surfaces, dependency edges, and opt-in path signatures. Added/removed conclusions are coverage-relative; reduced coverage or source identity uncertainty is labeled as a gap or review-tier diff rather than runtime impact.
 
+Summarize static change-impact evidence from two combined snapshots:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- impact \
+  --before .tracemap-before-combined.sqlite \
+  --after .tracemap-after-combined.sqlite \
+  --out .tracemap-combined-impact
+dotnet run --project src/dotnet/TraceMap.Cli -- impact \
+  --before .tracemap-before-combined.sqlite \
+  --after .tracemap-after-combined.sqlite \
+  --scope endpoints,surfaces \
+  --exit-code \
+  --out .tracemap-combined-impact
+```
+
+The combined change impact command writes `impact-report.md` and `impact-report.json` when `--out` is a directory. It reuses combined diff evidence to classify changed sources, coverage, endpoints, dependency surfaces, and dependency edges as static impact evidence, probable static impact, needs review, or analysis gaps. This report is not runtime impact analysis; path context is off by default and `--include-paths` adds bounded before/after static path context for changed endpoints, surfaces, and edges when safe selectors can be derived.
+
 TypeScript scanner:
 
 ```bash

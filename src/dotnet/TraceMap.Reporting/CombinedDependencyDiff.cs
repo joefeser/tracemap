@@ -243,15 +243,34 @@ public static class CombinedDependencyDiffer
 
     public static async Task<CombinedDependencyDiffResult> WriteAsync(CombinedDependencyDiffOptions options, CancellationToken cancellationToken = default)
     {
-        ValidateOptions(options);
+        var report = await BuildReportAsync(options, cancellationToken);
         var format = CombinedReportHelpers.NormalizeFormat(options.Format, "diff");
+        var (markdownPath, jsonPath) = await CombinedReportHelpers.WriteOutputsAsync(
+            options.OutputPath,
+            format,
+            "diff-report.md",
+            "diff-report.json",
+            report,
+            RenderMarkdown,
+            CombinedDependencyReporter.JsonOptions,
+            cancellationToken);
+        var diffCount = report.Summary.SourceDiffCount
+            + report.Summary.CoverageDiffCount
+            + report.Summary.EndpointDiffCount
+            + report.Summary.SurfaceDiffCount
+            + report.Summary.EdgeDiffCount
+            + report.Summary.PathDiffCount;
+        return new CombinedDependencyDiffResult(report, markdownPath, jsonPath, diffCount > 0);
+    }
+
+    public static async Task<CombinedDependencyDiffReport> BuildReportAsync(CombinedDependencyDiffOptions options, CancellationToken cancellationToken = default)
+    {
+        ValidateOptions(options);
         var scopes = NormalizeScopes(options.Scope, options.IncludePaths);
         (string Method, string PathKey)? endpointSelector = string.IsNullOrWhiteSpace(options.Endpoint) ? null : ParseEndpointSelector(options.Endpoint);
         var ignoredSelectors = IgnoredSelectors(options, scopes);
-
         var before = await ReadSnapshotAsync("before", options.BeforePath, options, scopes, endpointSelector, cancellationToken);
         var after = await ReadSnapshotAsync("after", options.AfterPath, options, scopes, endpointSelector, cancellationToken);
-
         var gaps = before.Gaps.Concat(after.Gaps).ToList();
         var sourceIdentity = ValidateSourceIdentity(before.Read.Sources, after.Read.Sources, options.AllowIdentityMismatch, gaps);
         var sourceDiffs = CompareRecords(before.Sources, after.Sources, SourceRuleId, options.MaxDiffRows, sourceIdentity, gaps);
@@ -287,7 +306,7 @@ public static class CombinedDependencyDiffer
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
-        var report = new CombinedDependencyDiffReport(
+        return new CombinedDependencyDiffReport(
             ReportType,
             Version,
             warnings.Length == 0 ? "FullEvidenceAvailable" : warnings.Any(warning => warning.Contains("unknown", StringComparison.OrdinalIgnoreCase)) ? "UnknownAnalysisGap" : "ReducedCoverage",
@@ -320,17 +339,6 @@ public static class CombinedDependencyDiffer
             pathDiffs,
             sortedGaps,
             Limitations);
-
-        var (markdownPath, jsonPath) = await CombinedReportHelpers.WriteOutputsAsync(
-            options.OutputPath,
-            format,
-            "diff-report.md",
-            "diff-report.json",
-            report,
-            RenderMarkdown,
-            CombinedDependencyReporter.JsonOptions,
-            cancellationToken);
-        return new CombinedDependencyDiffResult(report, markdownPath, jsonPath, diffCount > 0);
     }
 
     private static void ValidateOptions(CombinedDependencyDiffOptions options)
@@ -752,13 +760,12 @@ public static class CombinedDependencyDiffer
         (string Method, string PathKey)? endpointSelector,
         CancellationToken cancellationToken)
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), "tracemap-diff-paths", $"{Guid.NewGuid():N}");
         try
         {
-            var pathResult = await CombinedDependencyPathReporter.WriteAsync(
+            var pathReport = await CombinedDependencyPathReporter.BuildReportAsync(
                 new CombinedDependencyPathOptions(
                     indexPath,
-                    tempDir,
+                    options.OutputPath,
                     "json",
                     endpointSelector is null ? null : $"{endpointSelector.Value.Method} {endpointSelector.Value.PathKey}",
                     FromSource: sourceFilter,
@@ -768,7 +775,7 @@ public static class CombinedDependencyDiffer
                     MaxPaths: options.MaxPaths,
                     MaxFrontier: options.MaxFrontier),
                 cancellationToken);
-            return pathResult.Report.Paths
+            return pathReport.Paths
                 .Select(path =>
                 {
                     var signature = PathSignature(path);
@@ -806,22 +813,6 @@ public static class CombinedDependencyDiffer
                     CombinedDependencyPathClassifications.UnknownAnalysisGap,
                     true)
             ];
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir))
-            {
-                try
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
-                catch (IOException)
-                {
-                }
-                catch (UnauthorizedAccessException)
-                {
-                }
-            }
         }
     }
 
