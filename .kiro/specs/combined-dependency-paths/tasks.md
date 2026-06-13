@@ -65,6 +65,7 @@
 - [ ] Implement selector resolution.
   - [ ] Resolve endpoint selectors by method and normalized path key.
   - [ ] Resolve symbol selectors against symbol IDs, display names, fully qualified names, source symbols, and target symbols.
+  - [ ] Keep symbol selector matches as deterministic per-source candidates unless `--from-source` narrows them.
   - [ ] Resolve source selectors by label.
   - [ ] Resolve surface selectors by terminal kind and optional exact or wildcard name filter.
   - [ ] Resolve source-pair filters by splitting on the first unescaped colon and unescaping `\:`.

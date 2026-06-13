@@ -94,6 +94,8 @@ Unsupported in v1:
 - leading/trailing `*` enables prefix, suffix, or contains matching
 - exact matches sort before wildcard matches
 
+`--from-symbol` matching may return candidates from multiple source indexes. The resolver keeps deterministic per-source candidates and reports the candidate count. It must not pick an arbitrary source, and it must not merge symbols across sources. `--from-source` narrows symbol candidates to matching source labels when provided.
+
 `--source-pair` parsing splits on the first unescaped colon. Literal colons in either label must be escaped as `\:`, so `client\:v2:api\:v1` parses to `client:v2` and `api:v1`.
 
 ## Proposed Package Layout
