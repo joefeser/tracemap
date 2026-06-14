@@ -955,6 +955,88 @@ function selfTest() {
     }), "utf8");
     const diffResult = spawnSync(process.execPath, [process.argv[1], "diff-report", diffDir, "public-demo-api"], { encoding: "utf8" });
     assert(diffResult.status === 0, `diff-report should pass: ${diffResult.stderr}`);
+
+    const impactDir = path.join(tempRoot, "reports", "impact");
+    fs.mkdirSync(impactDir, { recursive: true });
+    fs.writeFileSync(path.join(impactDir, "impact-report.md"), "safe impact report\n", "utf8");
+    fs.writeFileSync(path.join(impactDir, "impact-report.json"), JSON.stringify({
+      reportType: "combined-change-impact",
+      beforeSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef1", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      afterSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef2", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      summary: { diffCount: 1, impactItemCount: 1, endpointImpactCount: 0, surfaceImpactCount: 1, edgeImpactCount: 0, gapCount: 0 },
+      impactItems: [{
+        impactId: "impact:surface",
+        changeType: "Added",
+        classification: "ProbableStaticImpact",
+        evidenceKind: "surface",
+        sourceLabel: "public-demo-api",
+        diffRuleId: "combined.diff.surface.v1",
+        impactRuleId: "combined.impact.surface.v1",
+        evidenceTier: "Tier3SyntaxOrTextual",
+        supportingFactIds: ["fact:2"],
+        supportingEdgeIds: [],
+        after: {
+          sourceLabel: "public-demo-api",
+          commitSha: "abcdef2",
+          ruleId: "csharp.syntax.query-pattern.v1",
+          evidenceTier: "Tier3SyntaxOrTextual",
+          evidenceKind: "surface",
+          supportingFactIds: ["fact:2"]
+        }
+      }],
+      gaps: []
+    }), "utf8");
+    const impactResult = spawnSync(process.execPath, [process.argv[1], "impact-report", impactDir, "public-demo-api"], { encoding: "utf8" });
+    assert(impactResult.status === 0, `impact-report should pass: ${impactResult.stderr}`);
+
+    const releaseDir = path.join(tempRoot, "reports", "release-review");
+    fs.mkdirSync(releaseDir, { recursive: true });
+    fs.writeFileSync(path.join(releaseDir, "release-review.md"), "safe release review report\n", "utf8");
+    fs.writeFileSync(path.join(releaseDir, "release-review.json"), JSON.stringify({
+      reportType: "release-review",
+      mode: "ReleaseReviewCombinedV1",
+      beforeSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef1", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      afterSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef2", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      summary: {
+        ruleId: "release.review.rollup.v1",
+        rollupClassification: "ActionableStaticEvidence",
+        topChangedSurfaceCount: 1,
+        contractFindingCount: 0,
+        gapCount: 0
+      },
+      sourceCoverage: [{
+        sourceLabel: "public-demo-api",
+        beforeCommitSha: "abcdef1",
+        afterCommitSha: "abcdef2",
+        ruleId: "release.review.source.v1",
+        evidenceTier: "Tier2Structural"
+      }],
+      topChangedSurfaces: {
+        status: "available",
+        findings: [{
+          findingId: "finding:surface",
+          section: "topChangedSurfaces",
+          sourceLabel: "public-demo-api",
+          classification: "ProbableStaticImpact",
+          ruleId: "combined.impact.surface.v1",
+          evidenceTier: "Tier3SyntaxOrTextual",
+          commitSha: "abcdef2",
+          metadata: [{ key: "evidenceKind", value: "surface" }],
+          supportingFactIds: ["fact:2"],
+          supportingEdgeIds: []
+        }]
+      },
+      contractImpact: { status: "not_requested", findings: [] },
+      apiDtoChanges: { status: "not_requested", findings: [] },
+      sqlSchemaImpact: { status: "not_requested", findings: [] },
+      packageImpact: { status: "not_requested", findings: [] },
+      pathContext: { status: "not_requested", findings: [] },
+      reverseContext: { status: "not_requested", findings: [] },
+      gaps: [],
+      reviewerChecklist: [{ checklistId: "checklist:surface", ruleId: "release.review.checklist.v1" }]
+    }), "utf8");
+    const releaseResult = spawnSync(process.execPath, [process.argv[1], "release-review", releaseDir, "public-demo-api"], { encoding: "utf8" });
+    assert(releaseResult.status === 0, `release-review should pass: ${releaseResult.stderr}`);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
