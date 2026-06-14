@@ -84,12 +84,10 @@ sourceLabel
 ecosystem
 packageName
 manifestKind
-dependencyScope
-dependencyGroup
 targetFramework or module coordinate when available
 ```
 
-Version is compared as changed metadata, not part of the stable identity, unless duplicate rows require a disambiguator. If identity is still ambiguous, add a safe line/file discriminator and downgrade the row with a caveat such as `VolatileIdentity`.
+Version, dependency scope, and dependency group are compared as changed metadata, not part of the stable identity, so version or scope changes produce `ChangedEvidence` rows rather than added/removed pairs. If identity is still ambiguous, add a safe line/file discriminator and downgrade the row with a caveat such as `VolatileIdentity`.
 
 Hash-only version evidence should use a caveat such as `HashOnlyEvidence`.
 
@@ -116,7 +114,9 @@ Sources:
 MVP behavior:
 
 - Parse XML only; do not run MSBuild evaluation unless a future rule documents it.
-- Emit `PackageReferenced` with `surfaceKind=package-config`, `ecosystem=nuget`, `manifestKind`, `dependencyGroup`, `dependencyScope`, `version`, and safe target framework metadata when visible.
+- Emit or project `.csproj` `PackageReferenced` evidence with `surfaceKind=package-config`, `ecosystem=nuget`, `manifestKind`, `dependencyGroup`, `dependencyScope`, `version`, and safe target framework metadata when visible.
+- `packages.config` evidence currently flows through config extraction; the implementation must either emit `PackageReferenced` for package rows or explicitly project the existing `ConfigKeyDeclared`/package-shaped facts into `package-config` surfaces with the same rule-backed metadata and caveats.
+- If central package management via `Directory.Packages.props` is not implemented in MVP, emit package facts with version-absent caveats or `AnalysisGap` evidence when a version is known to be externally declared.
 - For conditional properties or unresolved property references, emit structural evidence with a caveat or `AnalysisGap`.
 
 ### TypeScript
@@ -189,7 +189,7 @@ Projection fields:
 | `safeMetadata` | Allowlist only. |
 | `caveats` | Redaction, hash-only, weak identity, reduced coverage, parser limitations. |
 
-The allowlist should exclude raw command values, URLs with credentials, local absolute paths, source snippets, and arbitrary unknown keys that might contain secrets.
+The allowlist should exclude raw command values, URLs with credentials, local absolute paths, source snippets, and arbitrary unknown keys that might contain secrets. Projection should prefer exact `surfaceKind=package-config` and `factType=PackageReferenced`; broad substring checks such as any fact type containing `Package` or `Dependency` are not sufficient for new package-surface conclusions.
 
 ## Reporting
 
@@ -210,6 +210,8 @@ Add or verify a package row section with:
 
 Markdown should be compact. JSON should be complete and stable.
 
+If the existing combined dependency surface row type lacks package fields such as ecosystem, manifest kind, dependency scope, version hash, metadata hash, or caveats, extend it additively rather than overloading display strings.
+
 ### Diff
 
 For `diff --scope surfaces --surface package-config`:
@@ -219,6 +221,8 @@ For `diff --scope surfaces --surface package-config`:
 - `ChangedEvidence`: package identity exists on both sides and safe metadata differs.
 - `NeedsReviewDiff`: identity or metadata is weak, hash-only, duplicate, or coverage-reduced.
 - Gap rows: selector no-match, missing precision table, reduced coverage, truncation, or invalid selector.
+
+For package surfaces, stable-key metadata must exclude version, dependency scope, and dependency group. Those values are comparable metadata. Extend package surface caveat handling so `HashOnlyEvidence` and `VolatileIdentity` are emitted for package-config rows when version evidence is hash-only or identity requires a line/file discriminator.
 
 ### Impact
 
@@ -264,6 +268,8 @@ Reverse results must remain bounded and include rule IDs/evidence tiers for sele
 
 ### Contract Delta v2
 
+`package-config` is the canonical surface kind for package dependency surfaces across combined report, diff, impact, paths, reverse, and contract delta. Existing reducer helpers that use a shorter `package` surface kind must be updated or aliased so `package-config` selectors match package facts.
+
 Dependency-surface changes can use this shape:
 
 ```json
@@ -273,6 +279,7 @@ Dependency-surface changes can use this shape:
   "changeType": "changed",
   "reference": {
     "surfaceKind": "package-config",
+    "surfaceName": "Serilog",
     "packageName": "Serilog",
     "ecosystem": "nuget",
     "dependencyScope": "runtime",
@@ -282,7 +289,9 @@ Dependency-surface changes can use this shape:
 }
 ```
 
-Reducer matching should compare package name and ecosystem first, then optional scope, source label, manifest kind, and version fields. Version-only matches without package identity are invalid selector gaps.
+Reducer matching should compare package name and ecosystem first, then optional scope, source label, manifest kind, and version fields. For compatibility with the existing dependency-surface schema, `surfaceName` is the canonical selector for the package name and `packageName` is an additive package-specific alias. The reducer validator, specificity scoring, and matching logic must recognize `packageName`/`ecosystem` for `surfaceKind=package-config`, or callers must provide `surfaceName=<packageName>`. Version-only matches without package identity are invalid selector gaps. `oldVersion` and `newVersion` are comparison/context metadata, not sufficient selectors by themselves.
+
+The existing `kind = "package"` contract delta shape remains valid for direct package facts. `kind = "dependency-surface"` with `surfaceKind = "package-config"` is the combined-surface selector used when the reducer should align package metadata with other dependency surface workflows. The two paths must not double-report the same evidence in one reduction.
 
 ## Redaction Design
 
@@ -312,6 +321,10 @@ Hash or omit:
 
 Line spans may point to the declaration line but snippets are not stored.
 
+Unsafe version or source metadata should be detected deterministically. Treat values as unsafe when they contain URL schemes, URL credentials, local absolute path markers, home-directory expansion, environment-variable expansion, registry-auth syntax, or secret-like key names such as `token`, `secret`, `password`, `apikey`, `auth`, or `credential`. When uncertain, prefer hash-only metadata plus `redactionReason`.
+
+Hashes used for `versionHash` and `metadataHash` should use the repository's existing stable hash helper. The canonical hash input must be the normalized UTF-8 string after trimming insignificant whitespace and sorting key/value pairs ordinally; do not include timestamps, absolute paths, output directories, random IDs, or process-specific values.
+
 ## Determinism
 
 - Sort facts by existing adapter rules.
@@ -328,6 +341,7 @@ Line spans may point to the declaration line but snippets are not stored.
 | Dynamic build script | Emit literal facts only; emit gap for unresolved dynamic metadata. |
 | Unsafe value | Hash or omit value; add redaction reason. |
 | Missing package metadata | Do not invent package facts; report selector no-match or reduced coverage. |
+| Version declared externally through central package management | Emit version-absent caveat or `AnalysisGap` unless local static evidence is implemented. |
 | Duplicate package identity | Use review-tier diff/path rows with `VolatileIdentity` caveat. |
 | Missing combined graph path | Emit gap; do not infer reachability. |
 
