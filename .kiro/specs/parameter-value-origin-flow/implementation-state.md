@@ -27,9 +27,15 @@ This branch implements the first recommended slice:
 
 ## Validation
 
-- `dotnet test src/dotnet/TraceMap.sln --filter SqliteIndexWriterTests` passed.
+- `dotnet test src/dotnet/TraceMap.sln --filter SqliteIndexWriterTests` passed: 9 focused tests.
 - `dotnet build src/dotnet/TraceMap.sln` passed.
-- `dotnet test src/dotnet/TraceMap.sln --no-build` passed: 159 tests.
+- `dotnet test src/dotnet/TraceMap.sln --no-build` passed: 161 tests.
 - `./scripts/check-private-paths.sh` passed.
 - `git diff --check` passed.
 - TypeScript/JVM/Python tests were not run because this slice only changes .NET storage derivation, .NET tests, and docs.
+
+## Review Fixes
+
+- Fixed constructor fallback after alias-depth truncation: exhausting the alias bound now omits the derived edge instead of falling back to the original field's constructor origin.
+- Preserved constructor assignment multiplicity by removing constructor-origin de-duplication before the exactly-one-assignment check.
+- Added regressions for reassigned constructor fields beyond the alias bound and repeated constructor assignments from the same parameter.
