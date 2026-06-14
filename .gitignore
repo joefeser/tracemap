@@ -43,6 +43,9 @@ ScaffoldingReadMe.txt
 # Local review artifacts
 .tmp/kiro-reviews/
 
+# Local TraceMap demo output
+.tracemap-demo/
+
 # Others
 ~$*
 *~

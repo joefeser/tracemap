@@ -1,4 +1,15 @@
 rules:
+  - id: public.demo.summary.v1
+    name: Public demo summary section
+    description: Records public demo workflow section status, coverage labels, artifact references, and deterministic counts produced by checked-in validation scripts.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - demo summary section row
+    limitations:
+      - Demo summary rows describe validation workflow status and generated artifact availability; they are not scanner facts and do not prove runtime execution, deployment, production traffic, release approval, vulnerability, or compatibility.
+      - Deferred, unavailable, and failed sections are explicit analysis gaps and remain Tier4Unknown.
+      - Artifact paths are output-root-relative and public-shareable summaries must not render local absolute paths, raw SQL, source snippets, raw secrets, or credential-bearing URLs.
+
   - id: combined.diff.source.v1
     name: Combined dependency diff source comparison
     description: Compares source inventory and source metadata between two combined indexes by exact source label and stable source identity metadata.
