@@ -44,9 +44,10 @@ public static class TraceMapCommand
                 "diff" => DiffHelp(),
                 "impact" => ImpactHelp(),
                 "reverse" => ReverseHelp(),
+                "release-review" => ReleaseReviewHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "impact" or "reverse" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "impact" or "reverse" or "release-review" ? 0 : 1;
         }
 
         try
@@ -65,6 +66,7 @@ public static class TraceMapCommand
                 "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
+                "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -449,6 +451,69 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasReverseEvidence ? 1 : 0;
     }
 
+    private static async Task<int> RunReleaseReviewAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--before", out var beforePath) || string.IsNullOrWhiteSpace(beforePath))
+        {
+            await error.WriteLineAsync("error: release-review requires --before <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--after", out var afterPath) || string.IsNullOrWhiteSpace(afterPath))
+        {
+            await error.WriteLineAsync("error: release-review requires --after <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: release-review requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: release-review --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await ReleaseReviewReporter.WriteAsync(
+            new ReleaseReviewOptions(
+                beforePath,
+                afterPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--scope"),
+                values.HasFlag("--include-paths"),
+                values.HasFlag("--include-reverse"),
+                values.HasFlag("--allow-identity-mismatch"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--endpoint"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--surface-name"),
+                values.GetValueOrDefault("--contract-delta"),
+                values.GetValueOrDefault("--sql-schema-delta"),
+                values.GetValueOrDefault("--package-delta"),
+                ParsePositiveInt(values, "--max-findings", 100),
+                ParsePositiveInt(values, "--max-surface-rows", 50),
+                ParsePositiveInt(values, "--max-paths", 25),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                ParsePositiveInt(values, "--max-checklist-items", 50)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap release-review completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Mode: {result.Report.Mode}");
+        await output.WriteLineAsync($"Rollup: {result.Report.Summary.RollupClassification}");
+        await output.WriteLineAsync($"Top changed surfaces: {result.Report.Summary.TopChangedSurfaceCount}");
+        await output.WriteLineAsync($"Contract findings: {result.Report.Summary.ContractFindingCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        return 0;
+    }
+
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
@@ -757,6 +822,7 @@ public static class TraceMapCommand
               tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
+              tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -771,6 +837,7 @@ public static class TraceMapCommand
               diff      Compare two combined indexes and report static evidence changes.
               impact    Explain static change evidence between two combined indexes.
               reverse   Trace reverse static reachability from dependency surfaces.
+              release-review Assemble a deterministic before/after release evidence packet.
             """;
     }
 
@@ -938,6 +1005,41 @@ public static class TraceMapCommand
 
             Outputs:
               reverse-report.md and/or reverse-report.json
+            """;
+    }
+
+    private static string ReleaseReviewHelp()
+    {
+        return """
+            Usage:
+              tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --before <path>            Earlier TraceMap index, single-language or combined.
+              --after <path>             Later TraceMap index of the same mode.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+              --scope <value>            all, sources, coverage, surfaces, contracts, api-dto, sql-schema, packages, paths, reverse, gaps, or checklist.
+              --contract-delta <path>    Include contract delta impact context.
+              --sql-schema-delta <path>  Validate SQL/schema delta input and report workflow status.
+              --package-delta <path>     Validate package delta input and report deferred package-upgrade status.
+              --include-paths            Include bounded path context where combined indexes support it.
+              --include-reverse          Include bounded reverse context where combined indexes support it.
+              --allow-identity-mismatch  Continue when combined source labels point at different source identities.
+              --source <label>           Filter to one source label.
+              --endpoint "<M> <P>"       Filter endpoint/path evidence to method/path key where compatible.
+              --surface <kind>           sql-query, http-route, http-client, or package-config.
+              --surface-name <text>      Exact case-insensitive surface name where compatible.
+              --max-findings <n>         Release findings. Default: 100.
+              --max-surface-rows <n>     Top changed surface rows. Default: 50.
+              --max-paths <n>            Path/reverse rows exposed by release review. Default: 25.
+              --max-gaps <n>             Gap rows. Default: 1000.
+              --max-checklist-items <n>  Checklist rows. Default: 50.
+
+            Outputs:
+              release-review.md and/or release-review.json
             """;
     }
 
