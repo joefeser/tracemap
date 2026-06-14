@@ -954,6 +954,14 @@ public static class CombinedDependencyDiffer
         var nodeSourceById = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (var node in path.Nodes)
         {
+            if (nodeSourceById.TryGetValue(node.NodeId, out var existingSourceLabel))
+            {
+                nodeSourceById[node.NodeId] = string.Equals(existingSourceLabel, node.SourceLabel, StringComparison.Ordinal)
+                    ? existingSourceLabel
+                    : null;
+                continue;
+            }
+
             nodeSourceById[node.NodeId] = node.SourceLabel;
         }
 

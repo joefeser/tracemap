@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using TraceMap.Cli;
 using TraceMap.Combine;
@@ -320,6 +321,35 @@ public sealed class CombinedDependencyDiffTests
 
         Assert.Contains(result.Report.PathDiffs, row => row.Classification == CombinedDependencyDiffClassifications.RemovedWithAfterGap);
         Assert.DoesNotContain(result.Report.PathDiffs, row => row.Classification == CombinedDependencyDiffClassifications.Removed);
+    }
+
+    [Fact]
+    public void Diff_path_file_spans_do_not_guess_source_for_conflicting_duplicate_node_ids()
+    {
+        var method = typeof(CombinedDependencyDiffer).GetMethod("PathFileSpans", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var path = new CombinedPath(
+            "path-1",
+            "NeedsReviewPath",
+            "Review",
+            2,
+            "node-1",
+            "node-2",
+            [
+                PathNode("node-1", "api", "Controllers/OrdersController.cs", 10),
+                PathNode("node-1", "worker", "Workers/OrdersWorker.cs", 20),
+                PathNode("node-2", "db", "Infrastructure/Orders.sql", 1)
+            ],
+            [
+                new CombinedPathEdge("edge-1", "CallEdge", "node-1", "node-2", "NeedsReviewPath", RuleIds.CSharpSyntaxCallGraph, EvidenceTiers.Tier3SyntaxOrTextual, [], [], "Edges/edge.cs", 30, 30)
+            ],
+            [],
+            [],
+            []);
+
+        var spans = Assert.IsAssignableFrom<IReadOnlyList<CombinedPathFileSpan>>(method.Invoke(null, [path]));
+
+        Assert.Contains(spans, span => span.FilePath == "Edges/edge.cs" && span.SourceLabel is null);
     }
 
     [Fact]
@@ -651,5 +681,37 @@ public sealed class CombinedDependencyDiffTests
                 ["surfaceKind"] = "package-config",
                 ["version"] = version
             });
+    }
+
+    private static CombinedPathNode PathNode(string nodeId, string sourceLabel, string filePath, int line)
+    {
+        return new CombinedPathNode(
+            nodeId,
+            "Symbol",
+            nodeId,
+            $"source-{sourceLabel}",
+            sourceLabel,
+            $"scan-{sourceLabel}",
+            "abc1234567890",
+            null,
+            null,
+            RuleIds.CSharpSyntaxCallGraph,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            filePath,
+            line,
+            line,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     }
 }
