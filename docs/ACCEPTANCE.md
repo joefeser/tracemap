@@ -618,7 +618,7 @@ Each fixture should document:
 | parameter flow report | `tracemap flow` chains direct forwarding, same-method aliases, and unique constructor field initialization while labeling limitations |
 | relationship report | `tracemap relate` chains direct symbol relationships while labeling limitations |
 | scoped scan | `tracemap scan --project`, `--solution`, `--include`, `--exclude`, `--target-framework`, and explicit `--restore` constrain scan/load behavior deterministically |
-| flow boundary | Tier1 semantic boundary fact for DI, deserialization, reflection, dynamic invocation, mutation, branch condition, callback/delegate/event, await/task scheduling, or iterator yield without claiming runtime flow |
+| flow boundary | Tier1 semantic boundary fact for DI, deserialization, reflection, dynamic invocation, mutation, branch condition, callback/delegate/event/expression tree, await/await foreach/await using/task scheduling, or iterator yield without claiming runtime flow |
 | runtime evidence | Tier1 semantic fact for statically visible DI registration, serializer contract member, reflection target, dynamic dispatch candidate, collection element input, mutation semantics, or simple branch feasibility |
 | contract mapping | Tier1 semantic fact for attribute route binding, table/column mapping, or literal configuration section binding |
 | calculation expression | `CalculationExpression` with operator, line span, and expression hash |
