@@ -1629,3 +1629,137 @@ rules:
     limitations:
       - Truncated reports are incomplete by construction and must not be interpreted as comprehensive.
       - Omitted counts are deterministic for the selected scope and caps, but not evidence of lower importance.
+
+  - id: portfolio.identity.v1
+    name: Portfolio source identity
+    description: Emits portfolio source identity rows and gaps from TraceMap scan metadata, commit SHAs, labels, and manifest expectations.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioSource
+      - PortfolioGap
+    limitations:
+      - Repository identity is hash-based and cannot prove runtime deployment, ownership, or service equivalence.
+      - Duplicate source identity is excluded from cross-source grouping to avoid double-counting evidence.
+      - Manifest expected identity is a validation hint, not a replacement for indexed source provenance.
+
+  - id: portfolio.coverage.v1
+    name: Portfolio coverage summary
+    description: Emits portfolio source coverage rows from analysis level, build status, commit SHA availability, and known analysis gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioSourceCoverage
+      - PortfolioGap
+    limitations:
+      - Reduced coverage makes absence of evidence coverage-relative.
+      - Coverage is static analysis coverage, not runtime exercise or test coverage.
+
+  - id: portfolio.schema.v1
+    name: Portfolio schema gap
+    description: Emits portfolio gaps when an input index lacks required or optional TraceMap schema objects.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Missing schema prevents only the affected portfolio section from making stronger claims.
+      - Schema gaps are not evidence that dependencies are absent.
+
+  - id: portfolio.endpoint.alignment.v1
+    name: Portfolio endpoint alignment
+    description: Emits cross-source endpoint findings by reusing TraceMap static method/path matching over indexed HTTP client and route facts.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - PortfolioEndpointFinding
+    limitations:
+      - Endpoint alignment is static method/path evidence and does not prove runtime traffic, deployment paths, auth, proxy, CORS, or reachability.
+      - Dynamic or unnormalized URLs are review-tier evidence only.
+      - Source-local ambiguity prevents stronger endpoint conclusions.
+
+  - id: portfolio.surface.inventory.v1
+    name: Portfolio dependency surface inventory
+    description: Emits source-scoped portfolio dependency surface rows from indexed HTTP, SQL, package, config, resource, and persistence evidence.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - PortfolioSurface
+    limitations:
+      - Surface rows are static evidence and do not prove runtime use, compatibility, schema existence, package restore, or deployment topology.
+      - Raw SQL, snippets, config values, URLs, local paths, and secret-looking values must be omitted, redacted, or hashed.
+
+  - id: portfolio.surface.group.v1
+    name: Portfolio shared surface grouping
+    description: Groups safe portfolio surface identities across sources while preserving all supporting source evidence.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - PortfolioSharedSurface
+    limitations:
+      - Shared surface identity does not prove runtime coupling, ownership, traffic, or business dependency.
+      - Tier3, dynamic, hash-only, duplicate, or reduced-coverage support keeps the group review-tier.
+
+  - id: portfolio.edge.inventory.v1
+    name: Portfolio dependency edge inventory
+    description: Emits source-scoped static call, object creation, symbol relationship, argument-flow, and parameter-forwarding edge rows.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - PortfolioEdge
+    limitations:
+      - Static edges do not prove dynamic dispatch targets, runtime DI registrations, reflection targets, branch feasibility, or collection contents.
+
+  - id: portfolio.diff.v1
+    name: Portfolio source diff
+    description: Emits source-level before/after portfolio comparison rows from manifest labels and source identity evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioDiffRow
+    limitations:
+      - V1 source diff does not replace combined diff, impact, path, or reverse workflows.
+      - Identity ambiguity downgrades comparisons to review-tier evidence.
+
+  - id: portfolio.impact.context.v1
+    name: Portfolio impact context status
+    description: Emits portfolio impact context status and deferred/unavailable gaps when impact composition is requested but not available in v1.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Deferred impact context is an explicit analysis gap, not a clean result.
+      - Portfolio impact does not introduce a competing impact classifier.
+
+  - id: portfolio.optional-context.v1
+    name: Portfolio optional context status
+    description: Emits path, reverse, and release-review context statuses for portfolio reports.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Not-requested sections did not run and must not be interpreted as no evidence.
+      - Deferred or unavailable sections are explicit analysis gaps for that context.
+
+  - id: portfolio.selector.v1
+    name: Portfolio selector handling
+    description: Emits portfolio selector no-match and ignored-selector gaps for source, group, surface, and surface-name filters.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Selector no-match reflects indexed static evidence only.
+      - Dynamic evidence, reduced coverage, or unavailable sections can hide otherwise relevant evidence.
+
+  - id: portfolio.truncation.v1
+    name: Portfolio truncation
+    description: Emits gaps and omitted counts when portfolio row caps truncate sources, endpoints, surfaces, edges, groups, diffs, paths, roots, or gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Truncated portfolio reports are incomplete by construction.
+      - Omitted counts are deterministic for selected caps and scope, but not evidence of lower importance.
+
+  - id: portfolio.redaction.v1
+    name: Portfolio redaction
+    description: Documents portfolio safe-rendering behavior for paths, URLs, SQL, snippets, config values, and secret-looking metadata.
+    evidenceTier: Tier4Unknown
+    emits:
+      - RedactedValue
+      - UnsafePropertyOmitted
+    limitations:
+      - Redaction preserves review safety at the cost of losing raw values.
+      - Hashes are comparison aids only and must not be treated as decoded or verified secrets.
