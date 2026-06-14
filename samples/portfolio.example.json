@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "portfolioId": "sample-portfolio",
+  "snapshotId": "local-demo",
+  "inputs": [
+    {
+      "label": "web-client",
+      "indexPath": "../.tracemap-ts/index.sqlite",
+      "group": "frontend",
+      "roleTags": ["client"]
+    },
+    {
+      "label": "orders-api",
+      "indexPath": "../.tracemap/index.sqlite",
+      "group": "backend",
+      "roleTags": ["api"]
+    }
+  ]
+}
