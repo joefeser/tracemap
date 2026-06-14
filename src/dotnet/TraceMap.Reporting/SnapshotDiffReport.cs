@@ -397,11 +397,6 @@ public static class SnapshotDiffReporter
 
     private static void ValidateSelectorCompatibility(SnapshotDiffOptions options, IReadOnlyList<string> scopes)
     {
-        if (options.IncludePaths && scopes.Contains("paths", StringComparer.Ordinal) && scopes.Count == 1)
-        {
-            return;
-        }
-
         if (scopes.Contains("paths", StringComparer.Ordinal) && !options.IncludePaths)
         {
             throw new ArgumentException("snapshot-diff --scope paths requires --include-paths.");
@@ -481,7 +476,7 @@ public static class SnapshotDiffReporter
         }
 
         var warnings = CoverageWarnings(sources);
-        return new SnapshotDiffSnapshot(side, "combined", sources, warnings.Count == 0 ? "Full" : "Reduced", warnings, extractorVersions.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray());
+        return new SnapshotDiffSnapshot(side, "combined", sources, warnings.Count == 0 ? "Full" : "Reduced", warnings, extractorVersions.ToArray());
     }
 
     private static async Task<SnapshotDiffSnapshot> ReadSingleSnapshotAsync(SqliteConnection connection, string side, CancellationToken cancellationToken)
@@ -528,15 +523,18 @@ public static class SnapshotDiffReporter
 
     private static IReadOnlyList<SnapshotSourcePair> PairSources(SnapshotDiffSnapshot before, SnapshotDiffSnapshot after, string? sourceSelector)
     {
-        return before.Sources.Select(source => source.SourceLabel)
-            .Concat(after.Sources.Select(source => source.SourceLabel))
+        var beforeSources = before.Sources.ToLookup(source => source.SourceLabel, StringComparer.Ordinal);
+        var afterSources = after.Sources.ToLookup(source => source.SourceLabel, StringComparer.Ordinal);
+
+        return beforeSources.Select(group => group.Key)
+            .Concat(afterSources.Select(group => group.Key))
             .Distinct(StringComparer.Ordinal)
             .Where(label => string.IsNullOrWhiteSpace(sourceSelector) || label.Equals(sourceSelector, StringComparison.Ordinal))
             .OrderBy(label => label, StringComparer.Ordinal)
             .Select(label => new SnapshotSourcePair(
                 label,
-                before.Sources.FirstOrDefault(source => source.SourceLabel == label),
-                after.Sources.FirstOrDefault(source => source.SourceLabel == label)))
+                beforeSources[label].FirstOrDefault(),
+                afterSources[label].FirstOrDefault()))
             .ToArray();
     }
 
@@ -573,8 +571,7 @@ public static class SnapshotDiffReporter
     {
         return pairs
             .Select(pair => SourceDiff(pair, gaps))
-            .Where(row => row is not null)
-            .Cast<SnapshotDiffRow>()
+            .OfType<SnapshotDiffRow>()
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
             .Take(maxRows)
             .ToArray();
@@ -684,22 +681,23 @@ public static class SnapshotDiffReporter
 
     private static string Classify(string label, IReadOnlyList<SnapshotDiffGap> gaps)
     {
-        if (gaps.Any(gap => gap.SourceLabel == label && gap.Classification == SnapshotDiffClassifications.UnknownAnalysisGap))
+        var labelGaps = gaps.Where(gap => gap.SourceLabel == label).ToArray();
+        if (labelGaps.Length == 0)
+        {
+            return SnapshotDiffClassifications.ChangedEvidence;
+        }
+
+        if (labelGaps.Any(gap => gap.Classification == SnapshotDiffClassifications.UnknownAnalysisGap))
         {
             return SnapshotDiffClassifications.UnknownAnalysisGap;
         }
 
-        if (gaps.Any(gap => gap.SourceLabel == label && gap.GapKind == "ReducedCoverage"))
+        if (labelGaps.Any(gap => gap.GapKind == "ReducedCoverage"))
         {
             return SnapshotDiffClassifications.ChangedWithReducedCoverage;
         }
 
-        if (gaps.Any(gap => gap.SourceLabel == label))
-        {
-            return SnapshotDiffClassifications.NeedsReview;
-        }
-
-        return SnapshotDiffClassifications.ChangedEvidence;
+        return SnapshotDiffClassifications.NeedsReview;
     }
 
     private static string ChangeType(SnapshotDiffSourceInfo? before, SnapshotDiffSourceInfo? after)
@@ -966,7 +964,7 @@ public static class SnapshotDiffReporter
         command.CommandText = "select count(*) from sqlite_master where type = 'table' and name = $table;";
         command.Parameters.AddWithValue("$table", tableName);
         var result = await command.ExecuteScalarAsync(cancellationToken);
-        return result is long count && count > 0;
+        return Convert.ToInt64(result) > 0;
     }
 
     private static string ReadOnlyConnectionString(string path)

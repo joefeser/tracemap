@@ -139,6 +139,35 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_validates_endpoint_selector_even_for_paths_scope()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        SqliteIndexWriter.Write(beforeIndex, Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111"), []);
+        SqliteIndexWriter.Write(afterIndex, Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222"), []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeIndex], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterIndex], afterCombined, ["api"]));
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync([
+            "snapshot-diff",
+            "--before", beforeCombined,
+            "--after", afterCombined,
+            "--out", Path.Combine(temp.Path, "report"),
+            "--scope", "paths",
+            "--include-paths",
+            "--endpoint", "bad-selector"
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("--endpoint must be formatted", error.ToString());
+    }
+
+    [Fact]
     public async Task Snapshot_diff_identity_conflict_fails_unless_explicitly_allowed()
     {
         using var temp = new TempDirectory();
