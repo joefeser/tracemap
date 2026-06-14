@@ -161,7 +161,7 @@ Recommended properties:
 | `operationName` | Uppercase visible leading verb when the literal starts with an allowed verb; empty or omitted otherwise |
 | `sqlSourceKind` | One of the shared source-kind values below |
 
-Allowed leading verbs are `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `CALL`, `EXEC`, and `EXECUTE`. Adapters should trim leading whitespace only for `operationName`. `WITH`/CTE text should leave `operationName` empty in v1 while still allowing shape-hash-only `QueryPatternDetected` when the text is SQL-like.
+Allowed leading verbs are `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `CALL`, `EXEC`, and `EXECUTE`. Adapters should trim leading whitespace only for `operationName`. `WITH`/CTE text should leave `operationName` empty in v1 while still allowing shape-hash-only `QueryPatternDetected` when the text is SQL-like. `CALL`/`EXEC`/`EXECUTE` should expose the operation only and must not place routine names in table fields. `SELECT` table extraction should only claim visible top-level `FROM`/`JOIN` identifiers; subquery table positions should remain without table metadata in v1.
 
 Shared `sqlSourceKind` values:
 

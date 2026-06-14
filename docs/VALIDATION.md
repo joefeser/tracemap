@@ -87,6 +87,7 @@ The smoke is sample-only and does not clone repositories or read external applic
 - the combined report has exactly `sample-client` and `sample-server`
 - the sample endpoint `/api/admin/runner/get-by-id/{}` has endpoint alignment evidence; duplicate syntax/semantic server route facts may classify this as review-tier `AmbiguousMatch`
 - a targeted path reaches a `sql-query` terminal from the client through an endpoint match, server call edge, source-local symbol reconciliation edge, and surface evidence edge
+- `DatabaseColumnMapping` facts, when present, are selectable as `sql-persistence` terminal surfaces rather than `sql-query` terminal surfaces
 - path edges and gaps carry rule IDs and evidence tiers
 - a reverse SQL-surface query finds endpoint roots and path evidence with rule IDs and evidence tiers
 - a bogus endpoint selector returns a valid zero-path report with a rule-backed gap
@@ -210,3 +211,5 @@ sqlite3 <combined>/combined.sqlite "select sources.label, facts.fact_type, facts
 dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <before-combined.sqlite> --after <after-combined.sqlite> --out <tmp>/sql-diff --scope surfaces --surface sql-query --format json
 grep -E "HashOnlyEvidence|VolatileIdentity" <tmp>/sql-diff/diff-report.json
 ```
+
+When checking mapping-only persistence evidence, use `--to-surface sql-persistence`, `--surface sql-persistence`, or `--scope surfaces --surface sql-persistence`; these surfaces do not claim that a SQL query executes.

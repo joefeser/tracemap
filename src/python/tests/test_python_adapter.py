@@ -56,8 +56,9 @@ def test_sql_file_with_cte_emits_shape_hash_only_query_pattern(tmp_path: Path) -
     sql_file.write_text("WITH recent AS (SELECT id FROM orders) SELECT id FROM recent\n", encoding="utf-8")
     facts = extract_sql_files(tmp_path, _manifest("sql-file-cte"), [sql_file], [])
     patterns = [fact for fact in facts if fact.fact_type == "QueryPatternDetected"]
+    sql_text = next(fact for fact in facts if fact.fact_type == "SqlTextUsed")
 
-    assert any(fact.fact_type == "SqlTextUsed" for fact in facts)
+    assert "operationName" not in sql_text.properties
     assert len(patterns) == 1
     assert patterns[0].properties["queryShapeHash"]
     assert patterns[0].properties["sqlSourceKind"] == "sql-file"
@@ -76,6 +77,17 @@ def test_sql_shape_matches_python_v1_golden_fixture() -> None:
         assert (shape.operation_name or None) == case.get("operationName")
         assert (";".join(shape.table_names) or None) == case.get("tableNames")
         assert (";".join(shape.column_names) or None) == case.get("columnNames")
+
+
+def test_sql_shape_unsupported_subquery_does_not_overclaim_table_metadata() -> None:
+    fixture = json.loads((ROOT / "samples/sql-shape-fixtures/sql-shape-v1.json").read_text(encoding="utf-8"))
+    sql = next(case["sql"] for case in fixture["unsupportedCases"] if case["name"] == "subquery-table-position")
+
+    shape = query_shape(sql)
+
+    assert shape.operation_name == "SELECT"
+    assert shape.table_names == ()
+    assert shape.column_names == ("id",)
 
 
 def test_fact_id_ignores_extractor_version() -> None:

@@ -13,11 +13,11 @@ import org.junit.jupiter.api.Test;
 
 final class SqlShapeExtractorTest {
     @Test
-    void matchesPythonV1GoldenFixtureForRepresentativeCases() throws IOException {
+    void matchesPythonV1GoldenFixtureForAllCases() throws IOException {
         String json = Files.readString(repoRoot().resolve("samples/sql-shape-fixtures/sql-shape-v1.json"));
-        assertFixture(json, "simple-select");
-        assertFixture(json, "escaped-quote");
-        assertFixture(json, "crlf-tabs");
+        for (String name : fixtureNames(json)) {
+            assertFixture(json, name);
+        }
     }
 
     @Test
@@ -29,6 +29,16 @@ final class SqlShapeExtractorTest {
         assertEquals("", shape.operationName());
         assertTrue(shape.tableNames().isEmpty());
         assertTrue(shape.columnNames().isEmpty());
+    }
+
+    @Test
+    void unsupportedSubqueryTablePositionDoesNotOverclaimTableMetadata() throws IOException {
+        String sql = unsupportedSql(Files.readString(repoRoot().resolve("samples/sql-shape-fixtures/sql-shape-v1.json")), "subquery-table-position");
+        SqlShapeExtractor.Shape shape = SqlShapeExtractor.queryShape(sql);
+
+        assertEquals("SELECT", shape.operationName());
+        assertTrue(shape.tableNames().isEmpty());
+        assertEquals("id", String.join(";", shape.columnNames()));
     }
 
     private static void assertFixture(String json, String name) {
@@ -56,6 +66,23 @@ final class SqlShapeExtractorTest {
             stringProperty(object, "operationName"),
             stringProperty(object, "tableNames"),
             stringProperty(object, "columnNames"));
+    }
+
+    private static String[] fixtureNames(String json) {
+        var casesPattern = Pattern.compile("\"cases\"\\s*:\\s*\\[(.*?)]\\s*,\\s*\"unsupportedCases\"", Pattern.DOTALL);
+        var casesMatcher = casesPattern.matcher(json);
+        if (!casesMatcher.find()) {
+            throw new IllegalArgumentException("Missing SQL fixture cases");
+        }
+        return Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"")
+            .matcher(casesMatcher.group(1))
+            .results()
+            .map(match -> match.group(1))
+            .toArray(String[]::new);
+    }
+
+    private static String unsupportedSql(String json, String name) {
+        return fixture(json, name).sql();
     }
 
     private static String stringProperty(String json, String key) {

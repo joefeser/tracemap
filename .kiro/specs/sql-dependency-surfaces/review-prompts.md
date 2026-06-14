@@ -48,7 +48,7 @@ Review questions:
 4. Is the lightweight SQL-shape extraction conservative enough?
 5. Is Python's existing normalized masked SQL text `queryShapeHash` behavior acceptable as the v1 cross-adapter contract?
 6. Are the adapter-specific requirements realistic for current .NET, TypeScript, JVM, and Python code?
-7. Are combined `sql-query` display/grouping labels and diff/reverse identity keys safe and deterministic, especially preserving full-metadata identity while preferring shape hash for display?
+7. Are combined `sql-query` and `sql-persistence` display/grouping labels and diff/reverse identity keys safe and deterministic, especially preserving full-metadata identity while preferring shape hash for SQL query display?
 8. Are path/reverse semantics correct for reachable vs unlinked SQL surfaces?
 9. Are evidence tiers and rule catalog expectations complete, including `typescript.integration.sql.v1`?
 10. Are safety rules strong enough to prevent raw SQL/private-data leakage?

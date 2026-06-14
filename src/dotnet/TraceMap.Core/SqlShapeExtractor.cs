@@ -155,8 +155,8 @@ public static class SqlShapeExtractor
         switch (operation)
         {
             case "SELECT":
-                candidates.AddRange(Matches(sql, @"\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]""`]*)"));
-                candidates.AddRange(Matches(sql, @"\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]""`]*)"));
+                candidates.AddRange(TopLevelMatches(sql, @"\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]""`]*)"));
+                candidates.AddRange(TopLevelMatches(sql, @"\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]""`]*)"));
                 break;
             case "INSERT":
                 candidates.AddRange(Matches(sql, @"\bINSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_.$\[\]""`]*)"));
@@ -177,6 +177,7 @@ public static class SqlShapeExtractor
                 break;
         }
 
+        // CALL/EXEC routine names are intentionally not table candidates in v1.
         return Unique(candidates.Select(CleanIdentifier));
     }
 
@@ -197,6 +198,32 @@ public static class SqlShapeExtractor
         return Regex.Matches(sql, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))
             .Select(match => match.Groups[1].Value)
             .ToArray();
+    }
+
+    private static IReadOnlyList<string> TopLevelMatches(string sql, string pattern)
+    {
+        return Regex.Matches(sql, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))
+            .Where(match => ParenthesisDepthBefore(sql, match.Index) == 0)
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+    }
+
+    private static int ParenthesisDepthBefore(string sql, int index)
+    {
+        var depth = 0;
+        for (var offset = 0; offset < index && offset < sql.Length; offset++)
+        {
+            if (sql[offset] == '(')
+            {
+                depth++;
+            }
+            else if (sql[offset] == ')' && depth > 0)
+            {
+                depth--;
+            }
+        }
+
+        return depth;
     }
 
     private static string MatchGroup(string sql, string pattern, RegexOptions options = RegexOptions.IgnoreCase)

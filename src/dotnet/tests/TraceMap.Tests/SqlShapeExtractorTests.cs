@@ -33,6 +33,16 @@ public sealed class SqlShapeExtractorTests
         Assert.DoesNotContain("columnNames", props.Keys);
     }
 
+    [Fact]
+    public void Unsupported_subquery_table_position_does_not_overclaim_table_metadata()
+    {
+        var shape = SqlShapeExtractor.QueryShape(ReadUnsupportedSql("subquery-table-position"));
+
+        Assert.Equal("SELECT", shape.OperationName);
+        Assert.Empty(shape.TableNames);
+        Assert.Equal(new[] { "id" }, shape.ColumnNames);
+    }
+
     private static IReadOnlyList<SqlShapeFixture> ReadFixtures()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(FindRepoRoot(), "samples/sql-shape-fixtures/sql-shape-v1.json")));
@@ -48,6 +58,16 @@ public sealed class SqlShapeExtractorTests
                 item.TryGetProperty("tableNames", out var tables) ? tables.GetString() : null,
                 item.TryGetProperty("columnNames", out var columns) ? columns.GetString() : null))
             .ToArray();
+    }
+
+    private static string ReadUnsupportedSql(string name)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(FindRepoRoot(), "samples/sql-shape-fixtures/sql-shape-v1.json")));
+        return document.RootElement.GetProperty("unsupportedCases")
+            .EnumerateArray()
+            .Where(item => item.GetProperty("name").GetString() == name)
+            .Select(item => item.GetProperty("sql").GetString()!)
+            .Single();
     }
 
     private static string FindRepoRoot()

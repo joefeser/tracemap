@@ -91,8 +91,8 @@ public final class SqlShapeExtractor {
         List<String> candidates = new ArrayList<>();
         switch (operation) {
             case "SELECT" -> {
-                candidates.addAll(matches(sql, "\\bFROM\\s+([A-Za-z_][A-Za-z0-9_.$\\[\\]\"`]*)"));
-                candidates.addAll(matches(sql, "\\bJOIN\\s+([A-Za-z_][A-Za-z0-9_.$\\[\\]\"`]*)"));
+                candidates.addAll(topLevelMatches(sql, "\\bFROM\\s+([A-Za-z_][A-Za-z0-9_.$\\[\\]\"`]*)"));
+                candidates.addAll(topLevelMatches(sql, "\\bJOIN\\s+([A-Za-z_][A-Za-z0-9_.$\\[\\]\"`]*)"));
             }
             case "INSERT" -> candidates.addAll(matches(sql, "\\bINSERT\\s+INTO\\s+([A-Za-z_][A-Za-z0-9_.$\\[\\]\"`]*)"));
             case "UPDATE" -> candidates.addAll(matches(sql, "\\bUPDATE\\s+([A-Za-z_][A-Za-z0-9_.$\\[\\]\"`]*)"));
@@ -102,6 +102,7 @@ public final class SqlShapeExtractor {
             default -> {
             }
         }
+        // CALL/EXEC routine names are intentionally not table candidates in v1.
         return unique(candidates.stream().map(SqlShapeExtractor::cleanIdentifier).toList());
     }
 
@@ -122,6 +123,30 @@ public final class SqlShapeExtractor {
             result.add(matcher.group(1));
         }
         return result;
+    }
+
+    private static List<String> topLevelMatches(String sql, String pattern) {
+        Matcher matcher = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE).matcher(sql);
+        List<String> result = new ArrayList<>();
+        while (matcher.find()) {
+            if (parenthesisDepthBefore(sql, matcher.start()) == 0) {
+                result.add(matcher.group(1));
+            }
+        }
+        return result;
+    }
+
+    private static int parenthesisDepthBefore(String sql, int index) {
+        int depth = 0;
+        for (int offset = 0; offset < index && offset < sql.length(); offset++) {
+            char current = sql.charAt(offset);
+            if (current == '(') {
+                depth++;
+            } else if (current == ')' && depth > 0) {
+                depth--;
+            }
+        }
+        return depth;
     }
 
     private static String matchGroup(String sql, String pattern, int flags) {

@@ -32,6 +32,10 @@ def extract_sql_files(repo: Path, manifest: ScanManifest, files: list[Path], gap
         )
         if is_sql_like(text):
             span = evidence(rel, 1, lines, "PythonSqlExtractor", ScannerVersions.SQL, text_hash(text))
+            operation = operation_name(text)
+            sql_text_props = {"textHash": text_hash(text), "textLength": len(text), "sqlSourceKind": "sql-file"}
+            if operation:
+                sql_text_props["operationName"] = operation
             facts.append(
                 create_fact(
                     manifest,
@@ -41,7 +45,7 @@ def extract_sql_files(repo: Path, manifest: ScanManifest, files: list[Path], gap
                     span,
                     target_symbol=rel,
                     contract_element=rel,
-                    properties={"textHash": text_hash(text), "textLength": len(text), "operationName": operation_name(text), "sqlSourceKind": "sql-file"},
+                    properties=sql_text_props,
                 )
             )
             pattern_props = query_shape_properties(text, "sql-file")

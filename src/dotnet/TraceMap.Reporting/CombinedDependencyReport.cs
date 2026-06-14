@@ -218,7 +218,7 @@ public static class CombinedDependencyReporter
     internal static readonly IReadOnlyList<string> Limitations =
     [
         "Endpoint alignment is static method/path evidence. It does not prove runtime traffic, runtime reachability, auth behavior, proxy behavior, deployment base paths, CORS behavior, or user exercise.",
-        "SQL/query rows are static shape or hash evidence. They do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.",
+        "SQL query/persistence rows are static shape, hash, or mapping evidence. They do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.",
         "Call and creation edges are static code evidence. They do not prove dynamic dispatch targets, runtime DI registrations, reflection targets, branch feasibility, or collection contents.",
         "Parameter-forwarding rows are direct static argument-to-parameter evidence, not full taint analysis.",
         "Reduced coverage means absence of evidence is not evidence of absence."
@@ -715,8 +715,16 @@ public static class CombinedDependencyReporter
         var httpMethod = FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName");
         var normalizedPathKey = FirstValue(fact.Properties, "normalizedPathKey");
         var operationName = FirstValue(fact.Properties, "operationName");
-        var tableName = SafeSqlIdentifierList(FirstValue(fact.Properties, "tableName", "tableNames"), 100, allowSpaces: true);
-        var columns = SafeSqlIdentifierList(FirstValue(fact.Properties, "columnNames", "fieldNames"), 80, allowSpaces: false);
+        var mappingKind = FirstValue(fact.Properties, "mappingKind");
+        var mappedName = FirstValue(fact.Properties, "mappedName");
+        var tableName = SafeSqlIdentifierList(
+            FirstValue(fact.Properties, "tableName", "tableNames") ?? (IsTableMappingKind(mappingKind) ? mappedName : null),
+            100,
+            allowSpaces: true);
+        var columns = SafeSqlIdentifierList(
+            FirstValue(fact.Properties, "columnNames", "fieldNames", "columnName") ?? (IsColumnMappingKind(mappingKind) ? mappedName : null),
+            80,
+            allowSpaces: false);
         var sourceKind = FirstValue(fact.Properties, "sqlSourceKind", "sourceKind");
         var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash");
         var textHash = FirstValue(fact.Properties, "textHash");
@@ -728,6 +736,7 @@ public static class CombinedDependencyReporter
         {
             "http-client" or "http-route" => normalizedPathKey ?? FirstValue(fact.Properties, "normalizedPathTemplate") ?? $"{httpMethod ?? "ANY"} unknown",
             "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash),
+            "sql-persistence" => SqlPersistenceDisplayName(fact, tableName, columns, mappedName),
             "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
             _ => $"unknown-surface:{fact.CombinedFactId}"
         };
@@ -773,7 +782,12 @@ public static class CombinedDependencyReporter
             return "http-route";
         }
 
-        if (fact.FactType is FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.DatabaseColumnMapping or FactTypes.DapperCallDetected or FactTypes.SqlCommandDetected)
+        if (fact.FactType == FactTypes.DatabaseColumnMapping)
+        {
+            return "sql-persistence";
+        }
+
+        if (fact.FactType is FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.DapperCallDetected or FactTypes.SqlCommandDetected)
         {
             return "sql-query";
         }
@@ -972,6 +986,7 @@ public static class CombinedDependencyReporter
         {
             "http-client" or "http-route" => $"{surface.HttpMethod ?? "ANY"} {surface.NormalizedPathKey ?? "unknown"}",
             "sql-query" => $"op {surface.OperationName ?? "unknown"} table {surface.TableName ?? "n/a"} columns {surface.ColumnNames ?? "n/a"} source {surface.SourceKind ?? "unknown"} shape {surface.ShapeHash ?? surface.TextHash ?? "n/a"}",
+            "sql-persistence" => $"table {surface.TableName ?? "n/a"} columns {surface.ColumnNames ?? "n/a"}",
             "package-config" => $"package {surface.PackageName ?? "n/a"} version {surface.Version ?? "n/a"} key {surface.ConfigKey ?? "n/a"}",
             _ => string.Empty
         };
@@ -1012,6 +1027,37 @@ public static class CombinedDependencyReporter
         }
 
         return $"unknown-sql:{Hash(fact.OriginalFactId ?? fact.CombinedFactId, 16)}";
+    }
+
+    private static string SqlPersistenceDisplayName(CombinedFactRow fact, string? tableName, string? columns, string? mappedName)
+    {
+        if (!string.IsNullOrWhiteSpace(tableName))
+        {
+            return $"table:{tableName}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(columns))
+        {
+            return $"columns:{columns}";
+        }
+
+        var safeMappedName = SafeSqlIdentifierList(mappedName, 80, allowSpaces: true);
+        if (!string.IsNullOrWhiteSpace(safeMappedName))
+        {
+            return $"mapping:{safeMappedName}";
+        }
+
+        return $"unknown-persistence:{Hash(fact.OriginalFactId ?? fact.CombinedFactId, 16)}";
+    }
+
+    private static bool IsTableMappingKind(string? mappingKind)
+    {
+        return mappingKind is not null && mappingKind.Contains("Table", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsColumnMappingKind(string? mappingKind)
+    {
+        return mappingKind is not null && mappingKind.Contains("Column", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? SafeSqlIdentifierList(string? value, int maxIdentifierLength, bool allowSpaces)
