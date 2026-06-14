@@ -168,6 +168,42 @@ public sealed class MarkdownReportWriterTests
         Assert.DoesNotContain("table `unknown`", report);
     }
 
+    [Fact]
+    public void Build_renders_callback_and_async_boundaries()
+    {
+        var manifest = CreateManifest();
+        var callbackFact = FactFactory.Create(
+            manifest,
+            FactTypes.CallbackBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("src/Handler.cs", 18, 18, null, "test", "test/1.0"),
+            targetSymbol: "System.Action<Request>",
+            contractElement: "CallbackBoundary",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "CallbackBoundary"
+            });
+        var asyncFact = FactFactory.Create(
+            manifest,
+            FactTypes.AsyncBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("src/Handler.cs", 24, 24, null, "test", "test/1.0"),
+            targetSymbol: "System.Threading.Tasks.Task",
+            contractElement: "AwaitBoundary",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "AwaitBoundary"
+            });
+
+        var report = MarkdownReportWriter.Build(new ScanResult(manifest, [callbackFact, asyncFact], []));
+
+        Assert.Contains("## Flow Boundaries", report);
+        Assert.Contains("`CallbackBoundary` `CallbackBoundary`", report);
+        Assert.Contains("`AsyncBoundary` `AwaitBoundary`", report);
+    }
+
     private static ScanManifest CreateManifest()
     {
         return new ScanManifest(

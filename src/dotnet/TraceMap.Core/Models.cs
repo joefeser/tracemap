@@ -218,7 +218,7 @@ public static class ScannerVersions
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.11.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.11.1";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
