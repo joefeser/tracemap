@@ -420,7 +420,7 @@ public static class SnapshotDiffReporter
             .ToArray();
         if (scopes.Contains("all", StringComparer.Ordinal))
         {
-            return includePaths || scope.Contains("paths", StringComparison.OrdinalIgnoreCase)
+            return includePaths || scopes.Contains("paths", StringComparer.Ordinal)
                 ? ["all", "sources", "coverage", "endpoints", "contract-shapes", "surfaces", "graph", "gaps", "extractors", "paths"]
                 : ["all", "sources", "coverage", "endpoints", "contract-shapes", "surfaces", "graph", "gaps", "extractors"];
         }
@@ -989,32 +989,33 @@ public static class SnapshotDiffReporter
 
     private static string MapCombinedGapSection(CombinedDiffGap gap)
     {
-        if (gap.Message.Contains("combined.diff.source.v1", StringComparison.Ordinal))
+        var message = gap.Message ?? string.Empty;
+        if (message.Contains("combined.diff.source.v1", StringComparison.Ordinal))
         {
             return "sourceDiffs";
         }
 
-        if (gap.Message.Contains("combined.diff.coverage.v1", StringComparison.Ordinal))
+        if (message.Contains("combined.diff.coverage.v1", StringComparison.Ordinal))
         {
             return "coverageDiffs";
         }
 
-        if (gap.Message.Contains("combined.diff.endpoint.v1", StringComparison.Ordinal))
+        if (message.Contains("combined.diff.endpoint.v1", StringComparison.Ordinal))
         {
             return "endpointDiffs";
         }
 
-        if (gap.Message.Contains("combined.diff.surface.v1", StringComparison.Ordinal))
+        if (message.Contains("combined.diff.surface.v1", StringComparison.Ordinal))
         {
             return "surfaceDiffs";
         }
 
-        if (gap.Message.Contains("combined.diff.edge.v1", StringComparison.Ordinal))
+        if (message.Contains("combined.diff.edge.v1", StringComparison.Ordinal))
         {
             return "graphDiffs";
         }
 
-        if (gap.Message.Contains("combined.diff.path.v1", StringComparison.Ordinal))
+        if (message.Contains("combined.diff.path.v1", StringComparison.Ordinal))
         {
             return "pathDiffs";
         }
