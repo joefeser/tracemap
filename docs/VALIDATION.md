@@ -55,16 +55,21 @@ Current default behavior:
 - scans `samples/endpoint-server-aspnet`
 - scans `samples/typescript-modern-sample`
 - scans `samples/endpoint-client-angular`
+- scans `samples/public-demo/before`
+- scans `samples/public-demo/after`
 - combines the endpoint stack with labels `public-ts-client` and `public-dotnet-server`
 - combines a mixed stack with labels `public-dotnet-modern`, `public-dotnet-server`, `public-ts-modern`, and `public-ts-client`
+- combines before/after public-demo snapshots with label `public-demo-api`
 - runs the combined dependency report and asserts endpoint evidence from the combined report
 - runs targeted `tracemap paths` and `tracemap reverse` over the generated endpoint stack
 - generates `portfolio-manifest.json` from generated combined indexes and runs `tracemap portfolio`
+- runs `tracemap diff`, `tracemap impact`, and `tracemap release-review` over the generated public-demo before/after snapshots
 - writes `demo-summary.md` and `demo-summary.json`
 - runs a generated-output sentinel scan over public-shareable summaries and reports
 - marks Python as `not_requested` unless `--include-python` is passed; requested Python scanning is currently `deferred` to a follow-up slice
 - marks JVM as `unavailable` when Java 21 is absent
-- marks diff, impact, and release-review as `deferred` until compatible before/after fixtures and contract deltas are checked in
+
+The release-review section is available as a deterministic static evidence packet over the public-demo before/after snapshots. Contract-delta, SQL/schema, package compatibility, path context, and reverse context sections remain not requested, unavailable, or deferred inside the release-review report unless compatible inputs are explicitly supplied.
 
 Troubleshooting:
 

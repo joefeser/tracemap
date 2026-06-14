@@ -426,6 +426,209 @@ function portfolioReport() {
   }));
 }
 
+function assertSnapshotSources(snapshot, expectedLabelsCsv, label) {
+  assert(snapshot, `${label} snapshot is missing.`);
+  assertExactLabels((snapshot.sources ?? []).map(source => source.sourceLabel), expectedLabelsCsv, `${label} snapshot sources`);
+  for (const source of snapshot.sources ?? []) {
+    assertShaLike(source.commitSha, `${label} source ${source.sourceLabel} commitSha`);
+    assertNonEmptyString(source.coverage, `${label} source ${source.sourceLabel} coverage`);
+  }
+}
+
+function assertDiffEvidence(evidence, label) {
+  assert(evidence, `${label} evidence is missing.`);
+  assertNonEmptyString(evidence.sourceLabel, `${label} sourceLabel`);
+  assertShaLike(evidence.commitSha, `${label} commitSha`);
+  assertNonEmptyString(evidence.ruleId, `${label} ruleId`);
+  assertNonEmptyString(evidence.evidenceTier, `${label} evidenceTier`);
+  assertNonEmptyString(evidence.evidenceKind, `${label} evidenceKind`);
+}
+
+function assertGapShape(gap, label) {
+  assertNonEmptyString(gap.ruleId, `${label} ruleId`);
+  assertNonEmptyString(gap.evidenceTier, `${label} evidenceTier`);
+  assertNonEmptyString(gap.classification, `${label} classification`);
+}
+
+function diffReport() {
+  const [reportDir, expectedLabelsCsv] = args;
+  assert(reportDir && expectedLabelsCsv, "diff-report requires report dir and expected labels.");
+  const { json } = publicReportFiles(reportDir, "diff-report.md", "diff-report.json");
+  const report = readJson(json) ?? {};
+  assert(report.reportType === "combined-dependency-diff", `Unexpected diff report type: ${report.reportType}`);
+  assertNoVolatileKeys(report, "diff-report.json");
+  assertSnapshotSources(report.beforeSnapshot, expectedLabelsCsv, "diff before");
+  assertSnapshotSources(report.afterSnapshot, expectedLabelsCsv, "diff after");
+
+  const endpointDiffs = report.endpointDiffs ?? [];
+  const surfaceDiffs = report.surfaceDiffs ?? [];
+  const edgeDiffs = report.edgeDiffs ?? [];
+  const gaps = report.gaps ?? [];
+  assert((report.summary?.surfaceDiffCount ?? surfaceDiffs.length) > 0, "Expected public demo surface diff evidence.");
+
+  const allRows = [...endpointDiffs, ...surfaceDiffs, ...edgeDiffs];
+  for (const row of allRows) {
+    assertNonEmptyString(row.diffId, "diff row diffId");
+    assertNonEmptyString(row.changeType, `diff row ${row.diffId} changeType`);
+    assert(["Added", "Removed", "Changed"].includes(row.changeType), `Unexpected diff changeType ${row.changeType}.`);
+    assertNonEmptyString(row.classification, `diff row ${row.diffId} classification`);
+    assertNonEmptyString(row.diffRuleId, `diff row ${row.diffId} diffRuleId`);
+    assert(row.before || row.after, `diff row ${row.diffId} must include before or after evidence.`);
+    if (row.before) {
+      assertDiffEvidence(row.before, `diff row ${row.diffId} before`);
+    }
+    if (row.after) {
+      assertDiffEvidence(row.after, `diff row ${row.diffId} after`);
+    }
+    const supportingFactIds = [
+      ...(row.before?.supportingFactIds ?? []),
+      ...(row.after?.supportingFactIds ?? [])
+    ];
+    const supportingEdgeIds = [
+      ...(row.before?.supportingEdgeIds ?? []),
+      ...(row.after?.supportingEdgeIds ?? [])
+    ];
+    if ((row.before?.evidenceKind ?? row.after?.evidenceKind) !== "source") {
+      assert(supportingFactIds.length > 0 || supportingEdgeIds.length > 0,
+        `diff row ${row.diffId} is missing supporting fact or edge IDs.`);
+    }
+  }
+
+  assert(surfaceDiffs.some(row =>
+    (row.after?.displayName ?? "").includes("/api/public/orders/{}/cancel")
+      && (row.after?.safeMetadata ?? []).some(pair => pair.key === "surfaceKind" && pair.value === "http-route")),
+    "Expected added public demo cancel route surface diff.");
+  assert(surfaceDiffs.some(row => (row.after?.safeMetadata ?? row.before?.safeMetadata ?? [])
+    .some(pair => pair.key === "surfaceKind" && pair.value === "sql-query")),
+    "Expected public demo SQL surface diff.");
+
+  for (const gap of gaps) {
+    assertGapShape(gap, `diff gap ${gap.gapId}`);
+  }
+
+  process.stdout.write(JSON.stringify({
+    diffRows: (report.summary?.endpointDiffCount ?? endpointDiffs.length)
+      + (report.summary?.surfaceDiffCount ?? surfaceDiffs.length)
+      + (report.summary?.edgeDiffCount ?? edgeDiffs.length)
+      + (report.summary?.sourceDiffCount ?? 0)
+      + (report.summary?.coverageDiffCount ?? 0)
+      + (report.summary?.pathDiffCount ?? 0),
+    endpointDiffs: report.summary?.endpointDiffCount ?? endpointDiffs.length,
+    surfaceDiffs: report.summary?.surfaceDiffCount ?? surfaceDiffs.length,
+    edgeDiffs: report.summary?.edgeDiffCount ?? edgeDiffs.length,
+    gaps: report.summary?.gapCount ?? gaps.length
+  }));
+}
+
+function impactReport() {
+  const [reportDir, expectedLabelsCsv] = args;
+  assert(reportDir && expectedLabelsCsv, "impact-report requires report dir and expected labels.");
+  const { json } = publicReportFiles(reportDir, "impact-report.md", "impact-report.json");
+  const report = readJson(json) ?? {};
+  assert(report.reportType === "combined-change-impact", `Unexpected impact report type: ${report.reportType}`);
+  assertNoVolatileKeys(report, "impact-report.json");
+  assertSnapshotSources(report.beforeSnapshot, expectedLabelsCsv, "impact before");
+  assertSnapshotSources(report.afterSnapshot, expectedLabelsCsv, "impact after");
+
+  const items = report.impactItems ?? [];
+  const gaps = report.gaps ?? [];
+  assert((report.summary?.impactItemCount ?? items.length) > 0, "Expected public demo impact items.");
+  assert(items.some(item => item.evidenceKind === "surface"), "Expected surface impact evidence.");
+
+  for (const item of items) {
+    assertNonEmptyString(item.impactId, "impact item impactId");
+    assertNonEmptyString(item.changeType, `impact item ${item.impactId} changeType`);
+    assertNonEmptyString(item.classification, `impact item ${item.impactId} classification`);
+    assertNonEmptyString(item.diffRuleId, `impact item ${item.impactId} diffRuleId`);
+    assertNonEmptyString(item.impactRuleId, `impact item ${item.impactId} impactRuleId`);
+    assertNonEmptyString(item.evidenceTier, `impact item ${item.impactId} evidenceTier`);
+    assertNonEmptyString(item.sourceLabel, `impact item ${item.impactId} sourceLabel`);
+    assertShaLike((item.after ?? item.before)?.commitSha, `impact item ${item.impactId} commitSha`);
+    if (item.evidenceKind !== "source" && item.evidenceKind !== "coverage") {
+      assert((item.supportingFactIds ?? []).length > 0 || (item.supportingEdgeIds ?? []).length > 0,
+        `impact item ${item.impactId} is missing supporting fact or edge IDs.`);
+    }
+    assert(item.classification !== "StaticImpactEvidence",
+      `impact item ${item.impactId} overclaims static evidence as runtime impact.`);
+  }
+
+  for (const gap of gaps) {
+    assertGapShape(gap, `impact gap ${gap.gapId}`);
+  }
+
+  process.stdout.write(JSON.stringify({
+    diffRows: report.summary?.diffCount ?? 0,
+    impactItems: report.summary?.impactItemCount ?? items.length,
+    endpointImpacts: report.summary?.endpointImpactCount ?? items.filter(item => item.evidenceKind === "endpoint").length,
+    surfaceImpacts: report.summary?.surfaceImpactCount ?? items.filter(item => item.evidenceKind === "surface").length,
+    edgeImpacts: report.summary?.edgeImpactCount ?? items.filter(item => item.evidenceKind === "edge").length,
+    gaps: report.summary?.gapCount ?? gaps.length
+  }));
+}
+
+function releaseReview() {
+  const [reportDir, expectedLabelsCsv] = args;
+  assert(reportDir && expectedLabelsCsv, "release-review requires report dir and expected labels.");
+  const { json } = publicReportFiles(reportDir, "release-review.md", "release-review.json");
+  const report = readJson(json) ?? {};
+  assert(report.reportType === "release-review", `Unexpected release-review report type: ${report.reportType}`);
+  assert(report.mode === "ReleaseReviewCombinedV1", `Unexpected release-review mode: ${report.mode}`);
+  assertNoVolatileKeys(report, "release-review.json");
+  assertSnapshotSources(report.beforeSnapshot, expectedLabelsCsv, "release-review before");
+  assertSnapshotSources(report.afterSnapshot, expectedLabelsCsv, "release-review after");
+  assertNonEmptyString(report.summary?.ruleId, "release-review summary ruleId");
+  assert((report.summary?.topChangedSurfaceCount ?? 0) > 0, "Expected release-review top changed surface findings.");
+  assert(["ActionableStaticEvidence", "ReviewRecommended", "PartialAnalysis"].includes(report.summary?.rollupClassification),
+    `Unexpected release-review rollup ${report.summary?.rollupClassification}.`);
+
+  for (const row of report.sourceCoverage ?? []) {
+    assertNonEmptyString(row.ruleId, `release-review source coverage ${row.sourceLabel} ruleId`);
+    assertNonEmptyString(row.evidenceTier, `release-review source coverage ${row.sourceLabel} evidenceTier`);
+    assertShaLike(row.beforeCommitSha, `release-review source coverage ${row.sourceLabel} beforeCommitSha`);
+    assertShaLike(row.afterCommitSha, `release-review source coverage ${row.sourceLabel} afterCommitSha`);
+  }
+
+  const topChanged = report.topChangedSurfaces ?? {};
+  assert(["available", "truncated"].includes(topChanged.status),
+    `Unexpected topChangedSurfaces status ${topChanged.status}.`);
+  const findings = topChanged.findings ?? [];
+  assert(findings.length > 0, "Expected release-review findings.");
+  assert(findings.some(finding => finding.section === "topChangedSurfaces" && finding.sourceLabel === "public-demo-api"),
+    "Expected release-review public-demo-api finding.");
+  for (const finding of findings) {
+    assertNonEmptyString(finding.ruleId, `release-review finding ${finding.findingId} ruleId`);
+    assertNonEmptyString(finding.evidenceTier, `release-review finding ${finding.findingId} evidenceTier`);
+    assertShaLike(finding.commitSha, `release-review finding ${finding.findingId} commitSha`);
+    if ((finding.metadata ?? []).some(pair => pair.key === "evidenceKind" && pair.value !== "source" && pair.value !== "coverage")) {
+      assert((finding.supportingFactIds ?? []).length > 0 || (finding.supportingEdgeIds ?? []).length > 0,
+        `release-review finding ${finding.findingId} is missing supporting fact or edge IDs.`);
+    }
+  }
+
+  assert((report.contractImpact?.status ?? "") === "not_requested",
+    "release-review contractImpact should stay not_requested without a contract delta.");
+  for (const gap of report.gaps ?? []) {
+    assertGapShape(gap, `release-review gap ${gap.gapId}`);
+  }
+  for (const item of report.reviewerChecklist ?? []) {
+    assertNonEmptyString(item.ruleId, `release-review checklist ${item.checklistId} ruleId`);
+  }
+
+  process.stdout.write(JSON.stringify({
+    findings: (report.topChangedSurfaces?.findings ?? []).length
+      + (report.contractImpact?.findings ?? []).length
+      + (report.apiDtoChanges?.findings ?? []).length
+      + (report.sqlSchemaImpact?.findings ?? []).length
+      + (report.packageImpact?.findings ?? []).length
+      + (report.pathContext?.findings ?? []).length
+      + (report.reverseContext?.findings ?? []).length,
+    topChangedSurfaces: report.summary?.topChangedSurfaceCount ?? (report.topChangedSurfaces?.findings ?? []).length,
+    contractFindings: report.summary?.contractFindingCount ?? 0,
+    gaps: report.summary?.gapCount ?? (report.gaps ?? []).length,
+    checklistItems: (report.reviewerChecklist ?? []).length
+  }));
+}
+
 function assertScanArtifactShape(label, scanDir) {
   for (const relative of [
     "scan-manifest.json",
@@ -692,6 +895,148 @@ function selfTest() {
       "/api/demo/{}"
     ], { encoding: "utf8" });
     assert(dependencyResult.status === 0, `dependency-report should pass: ${dependencyResult.stderr}`);
+
+    const diffDir = path.join(tempRoot, "reports", "diff");
+    fs.mkdirSync(diffDir, { recursive: true });
+    fs.writeFileSync(path.join(diffDir, "diff-report.md"), "safe diff report\n", "utf8");
+    fs.writeFileSync(path.join(diffDir, "diff-report.json"), JSON.stringify({
+      reportType: "combined-dependency-diff",
+      beforeSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef1", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      afterSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef2", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      summary: { endpointDiffCount: 1, surfaceDiffCount: 2, edgeDiffCount: 0, sourceDiffCount: 0, coverageDiffCount: 0, pathDiffCount: 0, gapCount: 0 },
+      endpointDiffs: [{
+        diffId: "diff:endpoint",
+        changeType: "Added",
+        classification: "Added",
+        diffRuleId: "combined.diff.endpoint.v1",
+        after: {
+          sourceLabel: "public-demo-api",
+          commitSha: "abcdef2",
+          ruleId: "csharp.syntax.aspnet.route.v1",
+          evidenceTier: "Tier3SyntaxOrTextual",
+          evidenceKind: "endpoint",
+          displayName: "POST /api/public/orders/{}/cancel",
+          supportingFactIds: ["fact:1"]
+        }
+      }],
+      surfaceDiffs: [{
+        diffId: "diff:route-surface",
+        changeType: "Added",
+        classification: "Added",
+        diffRuleId: "combined.diff.surface.v1",
+        after: {
+          sourceLabel: "public-demo-api",
+          commitSha: "abcdef2",
+          ruleId: "csharp.syntax.aspnetroute.v1",
+          evidenceTier: "Tier3SyntaxOrTextual",
+          evidenceKind: "surface",
+          displayName: "/api/public/orders/{}/cancel",
+          safeMetadata: [{ key: "surfaceKind", value: "http-route" }],
+          supportingFactIds: ["fact:3"]
+        }
+      }, {
+        diffId: "diff:surface",
+        changeType: "Added",
+        classification: "NeedsReviewDiff",
+        diffRuleId: "combined.diff.surface.v1",
+        after: {
+          sourceLabel: "public-demo-api",
+          commitSha: "abcdef2",
+          ruleId: "csharp.syntax.query-pattern.v1",
+          evidenceTier: "Tier3SyntaxOrTextual",
+          evidenceKind: "surface",
+          displayName: "sql-query",
+          safeMetadata: [{ key: "surfaceKind", value: "sql-query" }],
+          supportingFactIds: ["fact:2"]
+        }
+      }],
+      edgeDiffs: [],
+      gaps: []
+    }), "utf8");
+    const diffResult = spawnSync(process.execPath, [process.argv[1], "diff-report", diffDir, "public-demo-api"], { encoding: "utf8" });
+    assert(diffResult.status === 0, `diff-report should pass: ${diffResult.stderr}`);
+
+    const impactDir = path.join(tempRoot, "reports", "impact");
+    fs.mkdirSync(impactDir, { recursive: true });
+    fs.writeFileSync(path.join(impactDir, "impact-report.md"), "safe impact report\n", "utf8");
+    fs.writeFileSync(path.join(impactDir, "impact-report.json"), JSON.stringify({
+      reportType: "combined-change-impact",
+      beforeSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef1", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      afterSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef2", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      summary: { diffCount: 1, impactItemCount: 1, endpointImpactCount: 0, surfaceImpactCount: 1, edgeImpactCount: 0, gapCount: 0 },
+      impactItems: [{
+        impactId: "impact:surface",
+        changeType: "Added",
+        classification: "ProbableStaticImpact",
+        evidenceKind: "surface",
+        sourceLabel: "public-demo-api",
+        diffRuleId: "combined.diff.surface.v1",
+        impactRuleId: "combined.impact.surface.v1",
+        evidenceTier: "Tier3SyntaxOrTextual",
+        supportingFactIds: ["fact:2"],
+        supportingEdgeIds: [],
+        after: {
+          sourceLabel: "public-demo-api",
+          commitSha: "abcdef2",
+          ruleId: "csharp.syntax.query-pattern.v1",
+          evidenceTier: "Tier3SyntaxOrTextual",
+          evidenceKind: "surface",
+          supportingFactIds: ["fact:2"]
+        }
+      }],
+      gaps: []
+    }), "utf8");
+    const impactResult = spawnSync(process.execPath, [process.argv[1], "impact-report", impactDir, "public-demo-api"], { encoding: "utf8" });
+    assert(impactResult.status === 0, `impact-report should pass: ${impactResult.stderr}`);
+
+    const releaseDir = path.join(tempRoot, "reports", "release-review");
+    fs.mkdirSync(releaseDir, { recursive: true });
+    fs.writeFileSync(path.join(releaseDir, "release-review.md"), "safe release review report\n", "utf8");
+    fs.writeFileSync(path.join(releaseDir, "release-review.json"), JSON.stringify({
+      reportType: "release-review",
+      mode: "ReleaseReviewCombinedV1",
+      beforeSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef1", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      afterSnapshot: { sources: [{ sourceLabel: "public-demo-api", commitSha: "abcdef2", coverage: "Level1SemanticAnalysis/Succeeded" }] },
+      summary: {
+        ruleId: "release.review.rollup.v1",
+        rollupClassification: "ActionableStaticEvidence",
+        topChangedSurfaceCount: 1,
+        contractFindingCount: 0,
+        gapCount: 0
+      },
+      sourceCoverage: [{
+        sourceLabel: "public-demo-api",
+        beforeCommitSha: "abcdef1",
+        afterCommitSha: "abcdef2",
+        ruleId: "release.review.source.v1",
+        evidenceTier: "Tier2Structural"
+      }],
+      topChangedSurfaces: {
+        status: "available",
+        findings: [{
+          findingId: "finding:surface",
+          section: "topChangedSurfaces",
+          sourceLabel: "public-demo-api",
+          classification: "ProbableStaticImpact",
+          ruleId: "combined.impact.surface.v1",
+          evidenceTier: "Tier3SyntaxOrTextual",
+          commitSha: "abcdef2",
+          metadata: [{ key: "evidenceKind", value: "surface" }],
+          supportingFactIds: ["fact:2"],
+          supportingEdgeIds: []
+        }]
+      },
+      contractImpact: { status: "not_requested", findings: [] },
+      apiDtoChanges: { status: "not_requested", findings: [] },
+      sqlSchemaImpact: { status: "not_requested", findings: [] },
+      packageImpact: { status: "not_requested", findings: [] },
+      pathContext: { status: "not_requested", findings: [] },
+      reverseContext: { status: "not_requested", findings: [] },
+      gaps: [],
+      reviewerChecklist: [{ checklistId: "checklist:surface", ruleId: "release.review.checklist.v1" }]
+    }), "utf8");
+    const releaseResult = spawnSync(process.execPath, [process.argv[1], "release-review", releaseDir, "public-demo-api"], { encoding: "utf8" });
+    assert(releaseResult.status === 0, `release-review should pass: ${releaseResult.stderr}`);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -721,6 +1066,15 @@ switch (command) {
     break;
   case "portfolio-report":
     portfolioReport();
+    break;
+  case "diff-report":
+    diffReport();
+    break;
+  case "impact-report":
+    impactReport();
+    break;
+  case "release-review":
+    releaseReview();
     break;
   case "write-summary":
     writeSummary();
