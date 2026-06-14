@@ -130,8 +130,15 @@ public sealed record SnapshotDiffRow(
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
     IReadOnlyList<string> SupportingPathIds,
+    IReadOnlyList<SnapshotDiffFileSpan> FileSpans,
     IReadOnlyList<string> CoverageCaveats,
     IReadOnlyList<string> Notes);
+
+public sealed record SnapshotDiffFileSpan(
+    string FilePath,
+    int? StartLine,
+    int? EndLine,
+    string? SourceLabel);
 
 public sealed record SnapshotDiffEvidence(
     string? SourceLabel,
@@ -156,6 +163,7 @@ public sealed record SnapshotDiffGap(
     string Classification,
     string Message,
     IReadOnlyList<string> SupportingDiffIds,
+    IReadOnlyList<SnapshotDiffFileSpan> FileSpans,
     IReadOnlyList<KeyValuePair<string, string>> Metadata);
 
 internal sealed record SnapshotIndexInfo(string Kind, SnapshotDiffSnapshot Snapshot);
@@ -253,7 +261,7 @@ public static class SnapshotDiffReporter
 
         var allGaps = new List<SnapshotDiffGap>();
         var sourcePairs = PairSources(before.Snapshot, after.Snapshot, options.Source);
-        AddIdentityGaps(sourcePairs, allGaps);
+        AddIdentityGaps(sourcePairs, allGaps, before.Kind == "combined");
         if (allGaps.Any(gap => gap.GapKind == "SourceIdentityConflict") && !options.AllowIdentityMismatch)
         {
             var label = allGaps.First(gap => gap.GapKind == "SourceIdentityConflict").SourceLabel ?? "unknown";
@@ -283,14 +291,15 @@ public static class SnapshotDiffReporter
             .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
             .Take(options.MaxGaps)
             .ToArray();
-        var truncated = allGaps.Count > gaps.Length;
-        if (truncated)
+        var gapsTruncated = allGaps.Count > gaps.Length;
+        if (gapsTruncated)
         {
             gaps = gaps.Append(Gap("truncation", "TruncatedByLimit", "gaps", null, EvidenceRuleId, SnapshotDiffClassifications.TruncatedByLimit, $"Gap output was truncated at --max-gaps {options.MaxGaps}.")).ToArray();
         }
 
         var diffCount = sourceDiffs.Count + coverageDiffs.Count + extractorVersionDiffs.Count;
-        var rollup = Rollup(diffCount, gaps);
+        var allRows = sourceDiffs.Concat(coverageDiffs).Concat(extractorVersionDiffs).ToArray();
+        var rollup = Rollup(diffCount, allRows, gaps);
         var coverage = gaps.Any(gap => gap.Classification == SnapshotDiffClassifications.UnknownAnalysisGap || gap.GapKind == "UnavailableEvidence" || gap.GapKind == "ReducedCoverage")
             ? "Partial"
             : "Full";
@@ -308,7 +317,7 @@ public static class SnapshotDiffReporter
             extractorVersionDiffs.Count,
             0,
             gaps.Length,
-            truncated,
+            gapsTruncated || gaps.Any(gap => gap.GapKind == "TruncatedByLimit"),
             diffCount == 0
                 ? "No source, coverage, or extractor-version differences were found in the currently implemented snapshot-diff shell."
                 : "Snapshot source, coverage, or extractor-version evidence changed.");
@@ -538,7 +547,7 @@ public static class SnapshotDiffReporter
             .ToArray();
     }
 
-    private static void AddIdentityGaps(IReadOnlyList<SnapshotSourcePair> pairs, List<SnapshotDiffGap> gaps)
+    private static void AddIdentityGaps(IReadOnlyList<SnapshotSourcePair> pairs, List<SnapshotDiffGap> gaps, bool strictLanguage)
     {
         foreach (var pair in pairs)
         {
@@ -550,11 +559,16 @@ public static class SnapshotDiffReporter
 
             if (string.IsNullOrWhiteSpace(pair.Before.CommitSha) || string.IsNullOrWhiteSpace(pair.After.CommitSha))
             {
-                gaps.Add(Gap("identity", "UnknownCommitSha", "sources", pair.Label, IdentityRuleId, SnapshotDiffClassifications.NeedsReview, $"Source `{pair.Label}` has an unknown commit SHA on one or both sides."));
+                gaps.Add(Gap("identity", "UnknownCommitSha", "sources", pair.Label, IdentityRuleId, SnapshotDiffClassifications.UnknownAnalysisGap, $"Source `{pair.Label}` has an unknown commit SHA on one or both sides."));
             }
 
+            var languageConflict = strictLanguage
+                ? !string.Equals(pair.Before.Language, pair.After.Language, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(pair.Before.Language)
+                  && !string.IsNullOrWhiteSpace(pair.After.Language)
+                  && !string.Equals(pair.Before.Language, pair.After.Language, StringComparison.OrdinalIgnoreCase);
             if (!string.Equals(pair.Before.RepositoryIdentityHash, pair.After.RepositoryIdentityHash, StringComparison.Ordinal)
-                || !string.Equals(pair.Before.Language, pair.After.Language, StringComparison.OrdinalIgnoreCase))
+                || languageConflict)
             {
                 gaps.Add(Gap("identity", "SourceIdentityConflict", "sources", pair.Label, IdentityRuleId, SnapshotDiffClassifications.UnknownAnalysisGap, $"Source `{pair.Label}` identity differs between snapshots."));
             }
@@ -567,14 +581,14 @@ public static class SnapshotDiffReporter
         }
     }
 
-    private static IReadOnlyList<SnapshotDiffRow> BuildSourceDiffs(IReadOnlyList<SnapshotSourcePair> pairs, IReadOnlyList<SnapshotDiffGap> gaps, int maxRows)
+    private static IReadOnlyList<SnapshotDiffRow> BuildSourceDiffs(IReadOnlyList<SnapshotSourcePair> pairs, List<SnapshotDiffGap> gaps, int maxRows)
     {
-        return pairs
+        var rows = pairs
             .Select(pair => SourceDiff(pair, gaps))
             .OfType<SnapshotDiffRow>()
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
-            .Take(maxRows)
             .ToArray();
+        return TruncateRows("sourceDiffs", rows, maxRows, gaps);
     }
 
     private static SnapshotDiffRow? SourceDiff(SnapshotSourcePair pair, IReadOnlyList<SnapshotDiffGap> gaps)
@@ -602,9 +616,9 @@ public static class SnapshotDiffReporter
         return Row("source", pair.Label, Classify(pair.Label, gaps), "source", pair.Before, pair.After, SourceRuleId, EvidenceTiers.Tier2Structural, gaps);
     }
 
-    private static IReadOnlyList<SnapshotDiffRow> BuildCoverageDiffs(IReadOnlyList<SnapshotSourcePair> pairs, IReadOnlyList<SnapshotDiffGap> gaps, int maxRows)
+    private static IReadOnlyList<SnapshotDiffRow> BuildCoverageDiffs(IReadOnlyList<SnapshotSourcePair> pairs, List<SnapshotDiffGap> gaps, int maxRows)
     {
-        return pairs
+        var rows = pairs
             .Where(pair => pair.Before is not null && pair.After is not null)
             .Where(pair =>
                 !string.Equals(pair.Before!.Coverage, pair.After!.Coverage, StringComparison.Ordinal)
@@ -613,19 +627,30 @@ public static class SnapshotDiffReporter
                 || !pair.Before.GapCodes.SequenceEqual(pair.After.GapCodes, StringComparer.Ordinal))
             .Select(pair => Row("coverage", pair.Label, Classify(pair.Label, gaps), "coverage", pair.Before, pair.After, CoverageRuleId, EvidenceTiers.Tier4Unknown, gaps))
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
-            .Take(maxRows)
             .ToArray();
+        return TruncateRows("coverageDiffs", rows, maxRows, gaps);
     }
 
-    private static IReadOnlyList<SnapshotDiffRow> BuildExtractorDiffs(IReadOnlyList<SnapshotSourcePair> pairs, IReadOnlyList<SnapshotDiffGap> gaps, int maxRows)
+    private static IReadOnlyList<SnapshotDiffRow> BuildExtractorDiffs(IReadOnlyList<SnapshotSourcePair> pairs, List<SnapshotDiffGap> gaps, int maxRows)
     {
-        return pairs
+        var rows = pairs
             .Where(pair => pair.Before is not null && pair.After is not null)
             .Where(pair => !string.Equals(pair.Before!.ScannerVersion, pair.After!.ScannerVersion, StringComparison.Ordinal))
             .Select(pair => Row("extractor", pair.Label, Classify(pair.Label, gaps), "extractor-version", pair.Before, pair.After, EvidenceRuleId, EvidenceTiers.Tier2Structural, gaps))
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
-            .Take(maxRows)
             .ToArray();
+        return TruncateRows("extractorVersionDiffs", rows, maxRows, gaps);
+    }
+
+    private static IReadOnlyList<SnapshotDiffRow> TruncateRows(string section, IReadOnlyList<SnapshotDiffRow> rows, int maxRows, List<SnapshotDiffGap> gaps)
+    {
+        if (rows.Count <= maxRows)
+        {
+            return rows;
+        }
+
+        gaps.Add(Gap("truncation", "TruncatedByLimit", section, null, EvidenceRuleId, SnapshotDiffClassifications.TruncatedByLimit, $"{section} output was truncated at --max-diff-rows {maxRows}; {rows.Count - maxRows} rows were omitted."));
+        return rows.Take(maxRows).ToArray();
     }
 
     private static SnapshotDiffRow Row(
@@ -656,6 +681,7 @@ public static class SnapshotDiffReporter
             after is null ? null : Evidence(after),
             [ruleId],
             [evidenceTier],
+            [],
             [],
             [],
             [],
@@ -751,11 +777,23 @@ public static class SnapshotDiffReporter
         }
     }
 
-    private static string Rollup(int diffCount, IReadOnlyList<SnapshotDiffGap> gaps)
+    private static string Rollup(int diffCount, IReadOnlyList<SnapshotDiffRow> rows, IReadOnlyList<SnapshotDiffGap> gaps)
     {
-        if (gaps.Any(gap => gap.Classification == SnapshotDiffClassifications.UnknownAnalysisGap))
+        if (gaps.Any(gap => gap.Classification == SnapshotDiffClassifications.UnknownAnalysisGap)
+            || rows.Any(row => row.Classification == SnapshotDiffClassifications.UnknownAnalysisGap))
         {
             return SnapshotDiffClassifications.UnknownAnalysisGap;
+        }
+
+        if (gaps.Any(gap => gap.Classification == SnapshotDiffClassifications.TruncatedByLimit))
+        {
+            return SnapshotDiffClassifications.TruncatedByLimit;
+        }
+
+        if (gaps.Any(gap => gap.Classification == SnapshotDiffClassifications.NeedsReview || gap.Classification == SnapshotDiffClassifications.SelectorNoMatch)
+            || rows.Any(row => row.Classification == SnapshotDiffClassifications.NeedsReview || row.Classification == SnapshotDiffClassifications.ChangedWithReducedCoverage))
+        {
+            return SnapshotDiffClassifications.NeedsReview;
         }
 
         return diffCount == 0
@@ -774,6 +812,7 @@ public static class SnapshotDiffReporter
             EvidenceTiers.Tier4Unknown,
             classification,
             message,
+            [],
             [],
             CombinedReportHelpers.SortedMetadata([
                 Pair("section", section),
