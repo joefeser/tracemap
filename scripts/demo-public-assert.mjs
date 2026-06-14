@@ -572,7 +572,8 @@ function collectPublicFiles(dir, files) {
     const relative = path.relative(dir, fullPath);
     const isSummary = entry.name === "demo-summary.md" || entry.name === "demo-summary.json";
     const isReport = fullPath.includes(`${path.sep}reports${path.sep}`) && /\.(md|json)$/i.test(entry.name);
-    if (isSummary || isReport || relative === "demo-summary.md" || relative === "demo-summary.json") {
+    const isPortfolioManifest = relative === "portfolio-manifest.json";
+    if (isSummary || isReport || isPortfolioManifest || relative === "demo-summary.md" || relative === "demo-summary.json") {
       files.push(fullPath);
     }
   }
@@ -602,6 +603,7 @@ function selfTest() {
     fs.mkdirSync(path.join(tempRoot, "reports", "sample"), { recursive: true });
     fs.writeFileSync(path.join(tempRoot, "demo-summary.md"), "safe summary /api/public\n", "utf8");
     fs.writeFileSync(path.join(tempRoot, "demo-summary.json"), "{\"version\":\"1.0\"}\n", "utf8");
+    fs.writeFileSync(path.join(tempRoot, "portfolio-manifest.json"), "{\"inputs\":[{\"indexPath\":\"combined/endpoint-stack.sqlite\"}]}\n", "utf8");
     assert(findSentinelFailures(tempRoot).length === 0, "clean sentinel fixture should pass.");
 
     const plantedHomePath = `${String.fromCharCode(47)}Users/example/private`;
@@ -616,6 +618,13 @@ function selfTest() {
     fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), "leak /tmp/tmp.public-demo/report.json\n", "utf8");
     failures = findSentinelFailures(tempRoot);
     assert(failures.some(failure => failure.includes("local-absolute-path")), "sentinel fixture should catch temp-path leak.");
+
+    fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), "safe report\n", "utf8");
+    fs.writeFileSync(path.join(tempRoot, "portfolio-manifest.json"), `{"inputs":[{"indexPath":"${plantedHomePath}"}]}\n`, "utf8");
+    failures = findSentinelFailures(tempRoot);
+    assert(failures.some(failure => failure.includes("portfolio-manifest.json") && failure.includes("local-absolute-path")),
+      "sentinel fixture should catch portfolio manifest path leak.");
+    fs.writeFileSync(path.join(tempRoot, "portfolio-manifest.json"), "{\"inputs\":[{\"indexPath\":\"combined/endpoint-stack.sqlite\"}]}\n", "utf8");
 
     const sectionsJsonl = path.join(tempRoot, "sections.jsonl");
     const appendSectionResult = spawnSync(process.execPath, [

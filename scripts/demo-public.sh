@@ -274,13 +274,38 @@ ENDPOINT_REPORT_COUNTS="$(
     "public-ts-client,public-dotnet-server" \
     "$TARGET_PATH_KEY"
 )"
-node "$ASSERT_HELPER" dependency-report "$MIXED_REPORT" \
-  "public-dotnet-modern,public-dotnet-server,public-ts-modern,public-ts-client" \
-  "$TARGET_PATH_KEY" >/dev/null
+MIXED_REPORT_COUNTS="$(
+  node "$ASSERT_HELPER" dependency-report "$MIXED_REPORT" \
+    "public-dotnet-modern,public-dotnet-server,public-ts-modern,public-ts-client" \
+    "$TARGET_PATH_KEY"
+)"
+DEPENDENCY_REPORT_COUNTS="$(
+  node -e '
+    const endpoint = JSON.parse(process.argv[1]);
+    const mixed = JSON.parse(process.argv[2]);
+    console.log(JSON.stringify({
+      endpointStackSources: endpoint.sources ?? 0,
+      mixedStackSources: mixed.sources ?? 0,
+      sources: (endpoint.sources ?? 0) + (mixed.sources ?? 0),
+      endpointStackEndpointFindings: endpoint.endpointFindings ?? 0,
+      mixedStackEndpointFindings: mixed.endpointFindings ?? 0,
+      endpointFindings: (endpoint.endpointFindings ?? 0) + (mixed.endpointFindings ?? 0),
+      endpointStackDependencySurfaces: endpoint.dependencySurfaces ?? 0,
+      mixedStackDependencySurfaces: mixed.dependencySurfaces ?? 0,
+      dependencySurfaces: (endpoint.dependencySurfaces ?? 0) + (mixed.dependencySurfaces ?? 0),
+      endpointStackDependencyEdges: endpoint.dependencyEdges ?? 0,
+      mixedStackDependencyEdges: mixed.dependencyEdges ?? 0,
+      dependencyEdges: (endpoint.dependencyEdges ?? 0) + (mixed.dependencyEdges ?? 0),
+      endpointStackGaps: endpoint.gaps ?? 0,
+      mixedStackGaps: mixed.gaps ?? 0,
+      gaps: (endpoint.gaps ?? 0) + (mixed.gaps ?? 0)
+    }));
+  ' "$ENDPOINT_REPORT_COUNTS" "$MIXED_REPORT_COUNTS"
+)"
 
 add_section "combine-and-dependency-report" "available" "PartialAnalysis" "PartialAnalysis" "" \
   "reports/dependency/endpoint-stack/dependency-report.md,reports/dependency/endpoint-stack/dependency-report.json,reports/dependency/mixed-stack/dependency-report.md,reports/dependency/mixed-stack/dependency-report.json" \
-  "$ENDPOINT_REPORT_COUNTS"
+  "$DEPENDENCY_REPORT_COUNTS"
 
 echo "== Run paths and reverse queries =="
 PATHS_REPORT="$REPORTS_DIR/paths/endpoint-to-sql"
