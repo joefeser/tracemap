@@ -32,7 +32,7 @@ Run the public demo from a clean checkout:
 ./scripts/demo-public.sh .tracemap-demo
 ```
 
-The demo scans checked-in .NET and TypeScript samples, combines endpoint and mixed-stack indexes with deterministic labels, runs dependency, path, reverse, and portfolio reports, then writes `demo-summary.md` plus `demo-summary.json`. Diff, impact, and release-review remain `deferred` until a concrete checked-in before/after fixture pair exists. Generated scan artifacts are local-only; public-shareable summaries and reports use relative paths or hashes and run a generated-output sentinel scan.
+The demo scans checked-in .NET and TypeScript samples, including a synthetic before/after fixture pair, combines endpoint, mixed-stack, and before/after indexes with deterministic labels, runs dependency, path, reverse, diff, impact, portfolio, and release-review reports, then writes `demo-summary.md` plus `demo-summary.json`. Generated scan artifacts are local-only; public-shareable summaries and reports use relative paths or hashes and run a generated-output sentinel scan.
 
 Build and test everything:
 
