@@ -1,0 +1,107 @@
+<p>
+  TraceMap has a strict boundary: the core scanner and reducer do not
+  use LLM calls, embeddings, vector databases, or prompt-based impact
+  classification. The output has to come from deterministic
+  extractors, rule IDs, evidence tiers, file paths, line spans, commit
+  SHAs, extractor versions, and documented limitations.
+</p>
+
+<p>
+  That boundary makes the engineering workflow more important, not
+  less. When a tool is supposed to preserve evidence, the project
+  building it should preserve its own evidence too: what was planned,
+  what changed, what was validated, what reviewers found, and what
+  still needs attention.
+</p>
+
+<h2>Kiro specs keep the intent discoverable.</h2>
+
+<p>
+  TraceMap work starts from specs instead of scattered notes. A Kiro
+  spec describes the goal, acceptance boundaries, and task list for a
+  slice of work. For longer specs, an implementation-state note records
+  the current branch, scope decisions, validation, oddities, and
+  follow-up items.
+</p>
+
+<p>
+  That matters because this project often moves through multiple
+  focused branches. A future agent or reviewer should be able to open
+  the spec folder and learn whether a feature is not started,
+  partially implemented, or complete without reconstructing the story
+  from commit history alone.
+</p>
+
+<h2>Codex turns those specs into small reviewable branches.</h2>
+
+<p>
+  Codex is useful here because it can work in a separate worktree,
+  read the existing shape of the repository, make scoped edits, run
+  local validation, and keep the spec status up to date as tasks move.
+  The site work has followed that pattern: one branch for discovery,
+  another for examples, another for guided demos, and small article
+  branches after that.
+</p>
+
+<p>
+  The size of the branch matters. TraceMap should be easy to review
+  because each PR has a narrow purpose, an obvious diff, and a clear
+  validation story. When a change touches docs, site pages, examples,
+  or scanner behavior, the branch should make the evidence visible
+  enough for another person to say yes, ask for changes, or find the
+  next better slice.
+</p>
+
+<h2>Qodo strengthens the PR review loop.</h2>
+
+<p>
+  Qodo has been helpful as a PR review agent because it looks at the
+  submitted change and reports concrete issues that might be easy to
+  miss during fast iteration. In the site work, that kind of feedback
+  helps catch practical review concerns such as navigation state,
+  accessibility details, and places where examples or metadata drift
+  from the surrounding page contract.
+</p>
+
+<p>
+  The point is not to outsource judgment. The point is to give the PR
+  another reviewer with a different angle, then let the project decide
+  what is actionable. When the feedback is right, the branch gets
+  better. When it is not applicable, the review trail still records why
+  the change was left alone.
+</p>
+
+<h2>The workflow mirrors the product.</h2>
+
+<p>
+  TraceMap is built around the idea that conclusions should point back
+  to evidence. The development workflow uses the same habit. Specs
+  explain intent. Task checkboxes show progress. Implementation-state
+  files describe the current facts. Pull requests preserve the diff,
+  validation, and review feedback. Browser smoke checks and build logs
+  make site changes less hand-wavy.
+</p>
+
+<p>
+  That trail is especially valuable because the project is moving
+  quickly. Agents can help build and review, but they need current
+  state to do useful work. Keeping that state in the repository makes
+  the next pass less dependent on memory, chat context, or the one
+  person who happened to work on the last branch.
+</p>
+
+<h2>The scanner stays deterministic.</h2>
+
+<p>
+  Codex, Kiro, and Qodo help with project coordination,
+  implementation, review, and documentation. They are not runtime
+  dependencies for TraceMap analysis. The scanner and reducer still
+  have to earn their claims through deterministic extractors and
+  evidence-backed rules.
+</p>
+
+<p>
+  That separation is the whole shape of the project: use strong tools
+  to build faster and review better, while keeping the product's
+  conclusions grounded in inspectable static evidence.
+</p>

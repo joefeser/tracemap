@@ -1,0 +1,47 @@
+[
+  {
+    "slug": "building-tracemap-with-codex-kiro-qodo",
+    "category": "Project workflow",
+    "title": "Building TraceMap With Codex, Kiro, and Qodo",
+    "h1": "Building TraceMap with Codex, Kiro, and Qodo",
+    "description": "How TraceMap is built with Codex worktrees, Kiro specs, implementation-state notes, PR review loops, and Qodo feedback while keeping the core scanner deterministic.",
+    "ogDescription": "TraceMap uses specs, worktrees, review loops, and PR feedback to keep deterministic analysis work small, auditable, and easy to resume.",
+    "cardDescription": "How specs, worktrees, review loops, and PR feedback keep a deterministic analysis project reviewable and resumable.",
+    "hero": "TraceMap is a deterministic analysis tool, but the project still benefits from a workflow that makes intent, implementation state, and review feedback visible to humans and agents.",
+    "published": "2026-06-14",
+    "publishedDisplay": "June 14, 2026",
+    "body": "articles/building-tracemap-with-codex-kiro-qodo.html",
+    "calloutHeading": "Want the product boundary first?",
+    "calloutHtml": "Read <a href=\"/blog/why-tracemap-exists/\">why TraceMap exists</a> or inspect the <a href=\"/examples/\">example evidence packets</a>."
+  },
+  {
+    "slug": "why-tracemap-exists",
+    "category": "Origin story",
+    "title": "Why TraceMap Exists",
+    "h1": "Why TraceMap exists",
+    "description": "Why TraceMap exists: dependency and contract-impact review should start from deterministic evidence instead of manual indexing, memory, or broad search.",
+    "ogDescription": "TraceMap was built to turn manual dependency indexing and contract-impact review into deterministic static evidence.",
+    "cardDescription": "How dependency and contract-impact review turns into manual indexing work, and why TraceMap makes that work evidence-backed.",
+    "hero": "TraceMap started from a practical review problem: teams need to understand unfamiliar systems, contract changes, and dependency surfaces without turning every investigation into hand-built maps.",
+    "published": "2026-06-14",
+    "publishedDisplay": "June 14, 2026",
+    "body": "articles/why-tracemap-exists.html",
+    "calloutHeading": "Want to see the shape of the evidence?",
+    "calloutHtml": "Review the <a href=\"/examples/scan-packet/\">scan packet example</a> or read what TraceMap <a href=\"/blog/what-tracemap-solves-for-engineering-teams/\">solves for engineering teams</a>."
+  },
+  {
+    "slug": "what-tracemap-solves-for-engineering-teams",
+    "category": "Engineering teams",
+    "title": "What TraceMap Solves for Engineering Teams",
+    "h1": "What TraceMap solves for engineering teams",
+    "description": "What TraceMap solves for engineering teams: less manual indexing, better handoff, auditable review evidence, and coverage-aware decisions.",
+    "ogDescription": "TraceMap turns dependency and contract-impact questions into auditable static evidence packets.",
+    "cardDescription": "Why manual dependency indexing does not scale, and how static evidence packets make review work easier to hand off and revisit.",
+    "hero": "TraceMap exists for the moments when a team needs to understand dependency and contract-impact risk across code that is too large, too unfamiliar, or too fragmented for manual indexing to be reliable.",
+    "published": "2026-06-14",
+    "publishedDisplay": "June 14, 2026",
+    "body": "articles/what-tracemap-solves-for-engineering-teams.html",
+    "calloutHeading": "Want to inspect the artifacts first?",
+    "calloutHtml": "Start with the <a href=\"/examples/\">examples</a>, then run the <a href=\"/demo/\">public demo</a> against checked-in samples."
+  }
+]
