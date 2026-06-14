@@ -121,7 +121,7 @@ Out of scope:
 2. WHEN DTO type rows are compared THEN stable identity SHALL include source identity, language, fully qualified type name or symbol ID, and assembly/package/module where available.
 3. WHEN DTO property rows are compared THEN stable identity SHALL include source identity, containing type identity, property/member name, and JSON/schema alias only as supporting metadata unless alias is the contract identity.
 4. WHEN method signature rows are compared THEN stable identity SHALL include source identity, containing type, method name, arity, fully qualified parameter types where available, and return type where available.
-5. WHEN route shape rows are compared THEN stable identity SHALL include source identity, method, normalized path key, and route parameter signature.
+5. WHEN route shape rows are compared THEN stable identity SHALL include source identity, method, and normalized path key; route parameter signature SHALL be compared as metadata so parameter renames/additions/removals can be classified as changed evidence rather than removed plus added rows.
 6. WHEN a stable identity cannot be built without volatile row IDs or unsafe source text THEN TraceMap SHALL use a deterministic hash over safe metadata and classify the row no stronger than review-tier.
 7. WHEN duplicate stable identities appear within one snapshot THEN TraceMap SHALL emit `DuplicateContractIdentity`, preserve duplicate provenance in JSON, and downgrade affected rows.
 8. WHEN same display name but different source label, language, assembly, or package identity appears THEN TraceMap SHALL keep those rows distinct.
@@ -154,7 +154,7 @@ Out of scope:
 1. WHEN `--scope` is omitted THEN TraceMap SHALL compare `endpoints`, `dto-types`, `dto-properties`, `methods`, `request-response`, and `route-shapes` where evidence exists.
 2. WHEN `--scope` is provided THEN it SHALL accept a comma-separated list of `all`, `endpoints`, `dto-types`, `dto-properties`, `methods`, `request-response`, and `route-shapes`.
 3. WHEN `--source <label>` is provided with a combined index THEN comparison SHALL be limited to the source label on both sides.
-4. WHEN `--endpoint "<METHOD> <PATH_KEY>"` is provided THEN TraceMap SHALL parse exactly one ASCII space between the uppercase method token and non-empty normalized path key; normalized path keys SHALL NOT contain unescaped whitespace, and invalid selectors SHALL fail clearly.
+4. WHEN `--endpoint "<METHOD> <PATH_KEY>"` is provided THEN TraceMap SHALL parse the method token and non-empty normalized path key separated by whitespace, normalize the method to uppercase, reject whitespace inside normalized path keys, and fail clearly for invalid selectors.
 5. WHEN `--type <fully-qualified-or-display-name>` is provided THEN TraceMap SHALL filter DTO/type rows by safe exact identity or display name matching.
 6. WHEN `--property <name>` is provided THEN TraceMap SHALL filter property rows by exact property/member name and SHALL label generic property-only filters as review-tier.
 7. WHEN `--change-kind <kind>` is provided THEN TraceMap SHALL filter rows by contract row kind using the closed values `endpoint`, `dto-type`, `dto-property`, `method`, `request-response`, and `route-shape`.
@@ -170,7 +170,7 @@ Out of scope:
 #### Acceptance Criteria
 
 1. WHEN Markdown is emitted THEN sections SHALL appear in this order: Summary, Compared Snapshots, Sources and Coverage, Endpoint Contract Diffs, DTO Type Diffs, DTO Property Diffs, Method Signature Diffs, Request/Response Attachment Diffs, Route Shape Diffs, Gaps, Limitations.
-2. WHEN JSON is emitted THEN it SHALL include `reportType`, `version`, `query`, `beforeSnapshot`, `afterSnapshot`, `summary`, `sourcePairs`, `endpointDiffs`, `dtoTypeDiffs`, `dtoPropertyDiffs`, `methodDiffs`, `requestResponseDiffs`, `routeShapeDiffs`, `gaps`, `coverageWarnings`, and `limitations`.
+2. WHEN JSON is emitted THEN it SHALL include `reportType`, `version`, `reportCoverage`, `coverageWarnings`, `query`, `beforeSnapshot`, `afterSnapshot`, `summary`, `sourcePairs`, `endpointDiffs`, `dtoTypeDiffs`, `dtoPropertyDiffs`, `methodDiffs`, `requestResponseDiffs`, `routeShapeDiffs`, `gaps`, and `limitations`.
 3. WHEN a diff row is emitted THEN it SHALL include stable ID, row kind, classification, confidence, rule ID, before evidence, after evidence, source label, commit SHAs, evidence tiers, fact rule IDs, file spans, extractor versions, supporting fact IDs, and safe display metadata.
 4. WHEN a field has no values THEN JSON SHALL use empty arrays or `null` consistently.
 5. WHEN arrays or metadata maps are emitted THEN ordering SHALL be deterministic and metadata keys SHALL be sorted.
@@ -195,8 +195,9 @@ Out of scope:
 9. WHEN identity gaps are emitted THEN they SHALL cite `api.dto.contract.diff.identity.v1` or the implementation's documented equivalent.
 10. WHEN coverage gaps are emitted THEN they SHALL cite `api.dto.contract.diff.coverage.v1` or the implementation's documented equivalent.
 11. WHEN selector gaps are emitted THEN they SHALL cite `api.dto.contract.diff.selector.v1` or the implementation's documented equivalent.
-12. WHEN truncation gaps are emitted THEN they SHALL cite `api.dto.contract.diff.truncation.v1` or the implementation's documented equivalent.
-13. WHEN the first implementation PR emits any `api.dto.contract.diff.*` row or gap THEN the same PR or an earlier merged PR SHALL include rule catalog entries and limitations for every emitted rule ID.
+12. WHEN schema or optional precision table gaps are emitted THEN they SHALL cite `api.dto.contract.diff.schema.v1` or the implementation's documented equivalent.
+13. WHEN truncation gaps are emitted THEN they SHALL cite `api.dto.contract.diff.truncation.v1` or the implementation's documented equivalent.
+14. WHEN the first implementation PR emits any `api.dto.contract.diff.*` row or gap THEN the same PR or an earlier merged PR SHALL include rule catalog entries and limitations for every emitted rule ID.
 
 ### Requirement 11: Validation and Tests
 

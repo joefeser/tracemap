@@ -15,7 +15,7 @@
 - [ ] 2. Define report models and rule IDs. Requirements: 6, 7, 9, 10.
   - [ ] Add API/DTO contract diff report models.
   - [ ] Define closed classification set and confidence mapping.
-  - [ ] Add rule catalog entries for endpoint, DTO, attachment, identity, coverage, selector, and truncation rules.
+  - [ ] Add rule catalog entries for endpoint, DTO, attachment, identity, coverage, schema, selector, and truncation rules.
   - [ ] Treat rule catalog entries as a merge gate for the first PR that emits any `api.dto.contract.diff.*` row or gap.
   - [ ] Document limitations for OpenAPI, runtime traffic, serializer mapping, binary compatibility, deployment, and auth.
 
@@ -68,7 +68,7 @@
   - [ ] Parse endpoint selectors with method and path key.
   - [ ] Implement source/type/property/scope filters.
   - [ ] Implement closed `--change-kind` parsing and invalid-value errors.
-  - [ ] Parse endpoint selectors as `METHOD<single-space>NORMALIZED_PATH_KEY`; reject whitespace inside normalized path keys.
+  - [ ] Parse endpoint selectors as `METHOD<whitespace>NORMALIZED_PATH_KEY`; normalize method casing and reject whitespace inside normalized path keys.
   - [ ] Emit selector metadata and `SelectorNoMatch` gaps.
   - [ ] Emit `TruncatedByLimit` when caps are hit.
   - [ ] Implement `--exit-code` semantics for `Added`, `Removed`, and `ChangedEvidence` only.
