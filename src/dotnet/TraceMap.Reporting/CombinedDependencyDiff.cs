@@ -138,10 +138,20 @@ public sealed record CombinedPathEvidence(
     string PathClassification,
     string StartIdentity,
     string EndIdentity,
+    string? SourceLabel,
+    string? ScanId,
+    string? CommitSha,
     IReadOnlyList<string> SourceTransitions,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
+    IReadOnlyList<CombinedPathFileSpan> FileSpans,
     IReadOnlyList<KeyValuePair<string, string>> TerminalSurfaceMetadata);
+
+public sealed record CombinedPathFileSpan(
+    string FilePath,
+    int? StartLine,
+    int? EndLine,
+    string? SourceLabel);
 
 public sealed record CombinedCoverageCaveat(string SourceLabel, string Code, string Message);
 
@@ -898,9 +908,13 @@ public static class CombinedDependencyDiffer
                             path.Classification,
                             path.StartNodeId,
                             path.EndNodeId,
+                            JoinedDistinct(path.Nodes.Select(node => node.SourceLabel)),
+                            JoinedDistinct(path.Nodes.Select(node => node.ScanId)),
+                            JoinedDistinct(path.Nodes.Select(node => node.CommitSha)),
                             SourceTransitions(path),
                             path.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                             path.SupportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                            PathFileSpans(path),
                             TerminalMetadata(path)),
                         path.Classification,
                         path.Classification != CombinedDependencyPathClassifications.StrongStaticPath);
@@ -917,11 +931,44 @@ public static class CombinedDependencyDiffer
                 new ComparablePathRecord(
                     $"path-error:{side}:{CombinedReportHelpers.Hash(exception.Message, 16)}",
                     CombinedReportHelpers.Hash(exception.Message),
-                    new CombinedPathEvidence("path-error", CombinedDependencyPathClassifications.UnknownAnalysisGap, "n/a", "n/a", [], [], [], []),
+                    new CombinedPathEvidence("path-error", CombinedDependencyPathClassifications.UnknownAnalysisGap, "n/a", "n/a", null, null, null, [], [], [], [], []),
                     CombinedDependencyPathClassifications.UnknownAnalysisGap,
                     true)
             ];
         }
+    }
+
+    private static string? JoinedDistinct(IEnumerable<string?> values)
+    {
+        var distinct = values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        return distinct.Length == 0 ? null : string.Join(";", distinct);
+    }
+
+    private static IReadOnlyList<CombinedPathFileSpan> PathFileSpans(CombinedPath path)
+    {
+        var nodeSourceById = path.Nodes.ToDictionary(node => node.NodeId, node => node.SourceLabel, StringComparer.Ordinal);
+        return path.Nodes
+            .Where(node => !string.IsNullOrWhiteSpace(node.FilePath))
+            .Select(node => new CombinedPathFileSpan(CombinedReportHelpers.SafePath(node.FilePath!), node.StartLine, node.EndLine, node.SourceLabel))
+            .Concat(path.Edges
+                .Where(edge => !string.IsNullOrWhiteSpace(edge.FilePath))
+                .Select(edge => new CombinedPathFileSpan(
+                    CombinedReportHelpers.SafePath(edge.FilePath!),
+                    edge.StartLine,
+                    edge.EndLine,
+                    nodeSourceById.TryGetValue(edge.FromNodeId, out var sourceLabel) ? sourceLabel : null)))
+            .GroupBy(span => $"{span.SourceLabel}:{span.FilePath}:{span.StartLine}:{span.EndLine}", StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(span => span.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(span => span.FilePath, StringComparer.Ordinal)
+            .ThenBy(span => span.StartLine)
+            .ThenBy(span => span.EndLine)
+            .ToArray();
     }
 
     private static IReadOnlyList<string> SourceTransitions(CombinedPath path)
