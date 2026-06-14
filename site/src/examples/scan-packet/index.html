@@ -50,20 +50,29 @@
       <section class="section split-section">
         <div>
           <p class="section-kicker">Manifest</p>
-          <h2>The manifest names the repository state and coverage.</h2>
+          <h2>The manifest names the repository state, scan scope, and gaps.</h2>
         </div>
         <pre class="command-block"><code>{
-  "repo": "orders-api-sample",
+  "scanId": "scan-orders-api-sample-5e7fe17",
+  "repoName": "orders-api-sample",
+  "remoteUrl": null,
+  "branch": "main",
   "commitSha": "5e7fe17",
   "scannerVersion": "tracemap-dotnet/0.1.0",
+  "scannedAt": "2026-06-14T00:00:00+00:00",
   "analysisLevel": "Level1SemanticAnalysisReduced",
-  "buildStatus": "Failed",
-  "coverage": "Reduced",
-  "outputs": [
-    "facts.ndjson",
-    "index.sqlite",
-    "report.md",
-    "logs/analyzer.log"
+  "buildStatus": "FailedOrPartial",
+  "solutions": [
+    "Orders.Api.sln"
+  ],
+  "projects": [
+    "src/Orders.Api/Orders.Api.csproj"
+  ],
+  "targetFrameworks": [
+    "net8.0"
+  ],
+  "knownGaps": [
+    "MSBuildWorkspace project load or Roslyn compilation reported gaps; syntax fallback still ran."
   ]
 }</code></pre>
       </section>
@@ -73,9 +82,9 @@
           <p class="section-kicker">Facts</p>
           <h2>Each fact carries a rule and evidence tier.</h2>
         </div>
-        <pre class="command-block"><code>{"factType":"HttpRouteBinding","ruleId":"dotnet.aspnet.route.v1","evidenceTier":"Tier2Structural","file":"src/Orders.Api/OrdersController.cs","lineStart":42,"lineEnd":42,"commitSha":"5e7fe17"}
-{"factType":"PropertyAccessed","ruleId":"dotnet.semantic.property-access.v1","evidenceTier":"Tier1Semantic","targetSymbol":"Orders.Contracts.OrderDto.Status","file":"src/Orders.Api/OrderMapper.cs","lineStart":77,"lineEnd":77,"commitSha":"5e7fe17"}
-{"factType":"AnalysisGap","ruleId":"dotnet.msbuild.load-gap.v1","evidenceTier":"Tier4Unknown","file":"src/Orders.Api/Orders.Api.csproj","lineStart":1,"lineEnd":1,"commitSha":"5e7fe17"}</code></pre>
+        <pre class="command-block"><code>{"factId":"fact-route-orders-get","scanId":"scan-orders-api-sample-5e7fe17","repo":"orders-api-sample","commitSha":"5e7fe17","projectPath":"src/Orders.Api/Orders.Api.csproj","factType":"HttpRouteBinding","ruleId":"csharp.syntax.aspnetroute.v1","evidenceTier":"Tier3SyntaxOrTextual","sourceSymbol":"Orders.Api.OrdersController","targetSymbol":"Orders.Api.OrdersController.Get","contractElement":"GET /api/orders/{id}","evidence":{"filePath":"src/Orders.Api/OrdersController.cs","startLine":42,"endLine":42,"snippetHash":"sha256:route-example","extractorId":"CSharpSyntaxExtractor","extractorVersion":"tracemap-dotnet/0.1.0"},"properties":{"httpMethod":"GET","routeTemplate":"/api/orders/{id}"}}
+{"factId":"fact-property-order-status","scanId":"scan-orders-api-sample-5e7fe17","repo":"orders-api-sample","commitSha":"5e7fe17","projectPath":"src/Orders.Api/Orders.Api.csproj","factType":"PropertyAccessed","ruleId":"csharp.semantic.propertyaccess.v1","evidenceTier":"Tier1Semantic","sourceSymbol":"Orders.Api.OrderMapper.Map","targetSymbol":"Orders.Contracts.OrderDto.Status","contractElement":"Status","evidence":{"filePath":"src/Orders.Api/OrderMapper.cs","startLine":77,"endLine":77,"snippetHash":"sha256:property-example","extractorId":"CSharpSemanticExtractor","extractorVersion":"tracemap-dotnet/0.1.0"},"properties":{"propertyName":"Status"}}
+{"factId":"fact-gap-workspace","scanId":"scan-orders-api-sample-5e7fe17","repo":"orders-api-sample","commitSha":"5e7fe17","projectPath":"src/Orders.Api/Orders.Api.csproj","factType":"AnalysisGap","ruleId":"csharp.semantic.workspace.v1","evidenceTier":"Tier4Unknown","sourceSymbol":null,"targetSymbol":null,"contractElement":null,"evidence":{"filePath":"src/Orders.Api/Orders.Api.csproj","startLine":1,"endLine":1,"snippetHash":null,"extractorId":"CSharpSemanticExtractor","extractorVersion":"tracemap-dotnet/0.1.0"},"properties":{"message":"MSBuildWorkspace project load reported gaps; syntax fallback continued."}}</code></pre>
       </section>
 
       <section class="section split-section">
@@ -86,19 +95,19 @@
         <pre class="command-block"><code>## Coverage
 
 - Analysis level: Level1SemanticAnalysisReduced
-- Build status: Failed
-- Coverage: Reduced
+- Build status: FailedOrPartial
+- Coverage note: reduced semantic coverage; syntax fallback still ran.
 
 ## Known Gaps
 
-- dotnet.msbuild.load-gap.v1
+- csharp.semantic.workspace.v1
   - Project load failed, syntax fallback continued.
 
 ## Dependency Surfaces
 
 - HTTP route: GET /api/orders/{id}
-  - Rule: dotnet.aspnet.route.v1
-  - Tier: Tier2Structural
+  - Rule: csharp.syntax.aspnetroute.v1
+  - Tier: Tier3SyntaxOrTextual
   - File: src/Orders.Api/OrdersController.cs:42</code></pre>
       </section>
 
