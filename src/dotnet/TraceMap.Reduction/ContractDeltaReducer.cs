@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -819,7 +820,8 @@ public static class ContractDeltaReducer
         if (matchedItems.Length == 0)
         {
             var noEvidenceClassification = NoEvidenceClassification(index, isCombined);
-            return BuildFinding(input, change, noEvidenceClassification, BuildReason(noEvidenceClassification, isCombined), [], [], options, isCombined);
+            var coverageEvidence = BuildNoMatchEvidence(index, change, options, noEvidenceClassification);
+            return BuildFinding(input, change, noEvidenceClassification, BuildReason(noEvidenceClassification, isCombined), [], [coverageEvidence], options, isCombined);
         }
 
         var matchesTruncated = matchedItems.Length > evidenceBudget;
@@ -1401,6 +1403,54 @@ public static class ContractDeltaReducer
             SourceIndexId = fact.SourceIndexId,
             SourceSymbol = SafeSymbol(fact.SourceSymbol),
             Metadata = SafeMetadata(fact.Properties, match.EvidenceKind)
+        };
+    }
+
+    private static ImpactEvidence BuildNoMatchEvidence(IndexData index, NormalizedChange change, ReduceOptions options, string classification)
+    {
+        var selectedSource = !string.IsNullOrWhiteSpace(options.Source)
+            ? index.Summary.Sources.FirstOrDefault(source => string.Equals(source.Label, options.Source, StringComparison.Ordinal))
+            : index.Summary.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).FirstOrDefault();
+        var commitSha = index.Manifest?.CommitSha
+            ?? selectedSource?.CommitSha
+            ?? index.Summary.CommitSha
+            ?? "unknown";
+        var analysisLevel = index.Manifest?.AnalysisLevel
+            ?? selectedSource?.AnalysisLevel
+            ?? index.Summary.AnalysisLevel
+            ?? "unknown";
+        var buildStatus = index.Manifest?.BuildStatus
+            ?? selectedSource?.BuildStatus
+            ?? index.Summary.BuildStatus
+            ?? "unknown";
+        var evidenceTier = classification is ImpactClassifications.NoEvidenceFullCoverage or ImpactClassifications.NoImpactEvidence
+            ? EvidenceTiers.Tier2Structural
+            : EvidenceTiers.Tier4Unknown;
+
+        return new ImpactEvidence(
+            $"evidence:no-match:{Hash($"{change.Id}:{options.Source}:{analysisLevel}:{buildStatus}:{commitSha}", 24)}",
+            FactTypes.RepoScanned,
+            RuleIds.RepoManifest,
+            evidenceTier,
+            "scan-manifest.json",
+            1,
+            1,
+            "No matching facts",
+            change.DisplayName,
+            commitSha)
+        {
+            SourceLabel = options.Source ?? selectedSource?.Label,
+            SourceIndexId = selectedSource?.SourceIndexId,
+            Metadata = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["evidenceKind"] = "coverage-no-match",
+                ["analysisLevel"] = analysisLevel,
+                ["buildStatus"] = buildStatus,
+                ["changeKind"] = change.Kind,
+                ["classificationBasis"] = classification,
+                ["matchedFactCount"] = "0",
+                ["sourceCount"] = index.Summary.SourceCount.ToString(CultureInfo.InvariantCulture)
+            }
         };
     }
 
@@ -2461,6 +2511,12 @@ public static class ImpactMarkdownWriter
                 }
                 else
                 {
+                    if (finding.Evidence.Any(evidence => evidence.Metadata.TryGetValue("evidenceKind", out var kind) && kind == "coverage-no-match"))
+                    {
+                        lines.Add($"- Manifest coverage evidence: analysis `{Cell(report.Manifest.AnalysisLevel)}`, build `{Cell(report.Manifest.BuildStatus)}`, commit `{Cell(report.Manifest.CommitSha)}`.");
+                        lines.Add("");
+                    }
+
                     lines.Add("| Source | Fact type | Rule | Tier | Location | Target | Commit |");
                     lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
                     foreach (var evidence in finding.Evidence)
