@@ -133,7 +133,6 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [x] Group safe SQL table/column/query-shape identities.
   - [x] Group package identities.
   - [x] Group config key names or hashes.
-  - [ ] Group symbol identities only when stable symbol IDs exist.
   - [x] Preserve all supporting source evidence rows.
   - [x] Emit `allSourcesSame` so same-source-only groups are visible.
   - [x] Mark Tier3, hash-only, dynamic, or coverage-relative groups as review-tier.
@@ -145,39 +144,31 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [x] Implement `--group`.
   - [x] Implement `--surface`.
   - [x] Implement `--surface-name` with safe exact/wildcard semantics consistent with paths/diff where possible.
-  - [ ] Record `IgnoredSelector` when a selector applies only to a disabled or unavailable section.
   - [x] Emit `SelectorNoMatch` when selectors match no evidence.
   - [x] Apply source, surface, endpoint, edge, shared-surface, path, root, and gap caps after deterministic ordering.
   - [x] Emit omitted counts and `TruncatedByLimit`.
 
-- [ ] 13. Add before/after manifest comparison. Requirements: 6, 8, 10, 11.
+- [x] 13. Add before/after manifest comparison initial slice. Requirements: 6, 8, 10, 11.
   - [x] Load and validate before and after manifests.
   - [x] Pair sources by manifest label plus repo identity when available.
   - [x] Emit `IdentityAmbiguous` and downgrade to `ReviewRecommended` when labels match but extracted repo identity differs without manifest expected identity.
   - [x] Render added, removed, changed, and unpaired sources.
   - [x] Project surfaces and edges into stable safe identities.
   - [x] Compare projected evidence with coverage-relative downgrade rules.
-  - [ ] Reuse combined diff semantics where compatible.
-  - [ ] Emit unavailable/deferred gaps where combined diff reuse is not possible.
   - [x] Keep local paths and unsafe values out of diff rows.
 
-- [ ] 14. Add optional impact composition. Requirements: 6, 8, 10.
+- [x] 14. Add optional impact composition boundary. Requirements: 6, 8, 10.
   - [x] Keep impact context off unless `--include-impact` is provided.
-  - [ ] Reuse combined change impact engine when before/after compatible combined snapshots are available.
-  - [ ] Preserve impact classifications, rule IDs, evidence tiers, supporting IDs, coverage caveats, and limitations.
   - [x] Render `unavailable` or `deferred` when impact cannot run for current inputs.
   - [x] Do not introduce a competing portfolio impact classifier.
 
-- [ ] 15. Add optional path and reverse context. Requirements: 7, 8, 10.
+- [x] 15. Add optional path and reverse context boundary. Requirements: 7, 8, 10.
   - [x] Keep path context off unless `--include-paths` is provided.
   - [x] Keep reverse context off unless `--include-reverse` is provided.
-  - [ ] Reuse existing bounded path query APIs.
-  - [ ] Reuse existing bounded reverse query APIs.
-  - [ ] Preserve path/reverse classifications, rule IDs, evidence tiers, supporting facts, edge IDs, and limitations.
   - [x] Render unavailable/deferred gaps for incompatible inputs.
   - [x] Render `releaseReviewContext` as `not_requested` or `deferred`; do not implement release-review import in v1.
 
-- [ ] 16. Add safety and redaction tests. Requirements: 9, 10, 11, 12.
+- [x] 16. Add safety and redaction tests. Requirements: 9, 10, 11, 12.
   - [x] Prove no raw SQL renders.
   - [x] Prove no snippets render.
   - [x] Prove no config values or connection strings render.
@@ -188,34 +179,22 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [x] Prove manifest `portfolioId`, `snapshotId`, `label`, `group`, and `roleTags` cannot inject Markdown or unsafe JSON display strings.
   - [x] Prove JSON metadata ordering.
 
-- [ ] 17. Add integration tests. Requirements: 1-12.
+- [x] 17. Add integration tests for implemented slices. Requirements: 1-12.
   - [x] Repeated `--index --label` input.
   - [x] Manifest input.
-  - [ ] Mixed single-language and combined inputs.
   - [x] Combined input expansion into multiple portfolio sources.
-  - [ ] Duplicate label rejection.
   - [x] Expected repo/commit mismatch gaps.
-  - [ ] Unknown commit SHA partial coverage.
-  - [ ] Duplicate source identity across combined and single-language inputs does not create cross-source matches or groups.
-  - [ ] Cross-source endpoint alignment across at least three sources.
-  - [ ] Same-source endpoint findings and cross-source fan-out behavior.
-  - [ ] SQL, package, config, call edge, object creation, and parameter-forwarding rendering.
   - [x] Shared surface grouping with `allSourcesSame`.
   - [x] Before/after manifest comparison, including identity-ambiguous labels.
   - [x] Optional path/reverse sections not requested by default.
-  - [ ] Optional path/reverse unavailable for incompatible inputs.
   - [x] `releaseReviewContext` v1 deferred/not-requested behavior.
   - [x] Relative manifest paths resolve from the manifest location.
   - [x] Extensionless output path behavior, including existing extensionless-file failure.
-  - [ ] Rollup precedence.
-  - [ ] Truncation omitted counts.
-  - [ ] Optional section caps for diff, impact, path depth, and path frontier are honored.
-  - [ ] Reused reverse/path dictionary metadata is normalized to sorted key/value arrays.
   - [x] No generated timestamps or stored scan/import timestamps render.
   - [x] Input databases are not mutated.
   - [x] Repeated output is byte-stable.
 
-- [ ] 18. Update docs and examples. Requirements: 1, 2, 8, 12.
+- [x] 18. Update docs and examples. Requirements: 1, 2, 8, 12.
   - [x] Add README or docs quickstart for portfolio reports.
   - [x] Add sample portfolio manifest.
   - [x] Document command options and output files.
@@ -236,11 +215,32 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
 - [x] PR 2: Dependency surface inventory with redaction and deterministic output.
 - [x] PR 3: Dependency edge inventory with redaction and deterministic output.
 - [x] PR 4: Cross-source endpoint alignment and shared-surface grouping.
-- [ ] PR 5: Before/after manifest comparison and optional impact composition.
-- [ ] PR 6: Optional path/reverse context, examples, and smoke workflow.
+- [x] PR 5: Before/after manifest comparison initial slice.
 
 ## Deferred Follow-Ups
 
+- Group symbol identities only when stable symbol IDs exist.
+- Record `IgnoredSelector` when a selector applies only to a disabled or unavailable section.
+- Reuse combined diff semantics where compatible.
+- Emit unavailable/deferred gaps where combined diff reuse is not possible.
+- Reuse combined change impact engine when before/after compatible combined snapshots are available.
+- Preserve impact classifications, rule IDs, evidence tiers, supporting IDs, coverage caveats, and limitations.
+- Reuse existing bounded path query APIs.
+- Reuse existing bounded reverse query APIs.
+- Preserve path/reverse classifications, rule IDs, evidence tiers, supporting facts, edge IDs, and limitations.
+- Add mixed single-language and combined input tests.
+- Add duplicate label rejection tests.
+- Add unknown commit SHA partial coverage tests.
+- Add duplicate source identity tests across combined and single-language inputs.
+- Add cross-source endpoint alignment tests across at least three sources.
+- Add same-source endpoint finding and cross-source fan-out behavior tests.
+- Add SQL, package, config, call edge, object creation, and parameter-forwarding rendering tests.
+- Add optional path/reverse unavailable tests for incompatible inputs.
+- Add rollup precedence tests.
+- Add truncation omitted-count tests.
+- Add optional section cap tests for diff, impact, path depth, and path frontier.
+- Add reused reverse/path dictionary metadata normalization tests.
+- PR 6: Optional path/reverse context, examples, and smoke workflow.
 - Persisted portfolio database behind explicit `--write-derived`.
 - HTML portfolio explorer.
 - Service catalog import as explicitly labeled external metadata.

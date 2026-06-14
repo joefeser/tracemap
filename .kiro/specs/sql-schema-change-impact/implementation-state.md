@@ -4,6 +4,10 @@
 
 `codex/sql-schema-change-impact`
 
+## Current State
+
+Implemented SQL/schema impact v1 in `dev`. Remaining task checkboxes were reconciled after merge; deferred precision and traversal work is tracked as plain follow-up bullets.
+
 ## Shipped Scope
 
 - Added `tracemap reduce --sql-schema-delta <delta.json>` as a mutually exclusive alternative to `--contract-delta`.
