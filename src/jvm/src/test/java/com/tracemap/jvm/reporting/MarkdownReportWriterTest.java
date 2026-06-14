@@ -109,6 +109,63 @@ final class MarkdownReportWriterTest {
         assertFalse(report.contains("WHERE tenant_id"));
     }
 
+    @Test
+    void hashesMalformedPathsAndKeepsSnakeCaseIdentifiers() throws Exception {
+        Path reportPath = temp.resolve("report.md");
+        // Synthetic query-pattern fact: this tests report rendering only.
+        CodeFact fact = fact(
+            "fact-malformed-path",
+            "bad\u0000path",
+            51,
+            Map.of(
+                "operationName", "SELECT",
+                "tableName", "orders",
+                "columnNames", "order_id,created_by",
+                "sqlSourceKind", "jdbc-literal",
+                "queryShapeHash", "abcdef0123456789abcdef0123456789"));
+
+        MarkdownReportWriter.write(reportPath, manifest(), List.of(fact));
+
+        String report = Files.readString(reportPath);
+        assertTrue(report.contains("columns `order_id;created_by`"));
+        assertTrue(report.contains("absolute-path-hash:"));
+        assertFalse(report.contains("bad\u0000path"));
+        assertFalse(report.contains("unsafe-identifier-hash:"));
+    }
+
+    @Test
+    void hashesUrlLikeAndWindowsStylePaths() throws Exception {
+        Path reportPath = temp.resolve("report.md");
+        // Synthetic query-pattern fact: this tests report rendering only.
+        CodeFact urlFact = fact(
+            "fact-url-path",
+            "webpack://private/app/Orders.java",
+            61,
+            Map.of(
+                "operationName", "SELECT",
+                "tableName", "orders",
+                "columnNames", "order_id",
+                "sqlSourceKind", "jdbc-literal",
+                "queryShapeHash", "abcdef0123456789abcdef0123456789"));
+        CodeFact windowsFact = fact(
+            "fact-windows-path",
+            "C:\\private\\Orders.java",
+            62,
+            Map.of(
+                "operationName", "SELECT",
+                "tableName", "orders",
+                "columnNames", "created_by",
+                "sqlSourceKind", "jdbc-literal",
+                "queryShapeHash", "abcdef0123456789abcdef0123456789"));
+
+        MarkdownReportWriter.write(reportPath, manifest(), List.of(urlFact, windowsFact));
+
+        String report = Files.readString(reportPath);
+        assertTrue(report.contains("absolute-path-hash:"));
+        assertFalse(report.contains("webpack://private"));
+        assertFalse(report.contains("C:\\private"));
+    }
+
     private static CodeFact fact(String factId, String filePath, int line, Map<String, String> properties) {
         return new CodeFact(
             factId,

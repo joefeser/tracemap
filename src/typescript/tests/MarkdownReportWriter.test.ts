@@ -64,12 +64,48 @@ describe("MarkdownReportWriter", () => {
     expect(report).not.toContain("WHERE tenant_id");
   });
 
+  it("hashes URL-like evidence paths without flagging snake_case identifiers", async () => {
+    const fact = factWithProperties(
+      {
+        operationName: "SELECT",
+        tableName: "orders",
+        columnNames: "order_id,created_by",
+        sqlSourceKind: "orm-text",
+        queryShapeHash: "abcdef0123456789abcdef0123456789"
+      },
+      "webpack://private/app/orders.ts"
+    );
+
+    const report = await renderReport([fact]);
+
+    expect(report).toContain("columns `order_id;created_by`");
+    expect(report).toContain("absolute-path-hash:");
+    expect(report).not.toContain("webpack://private");
+    expect(report).not.toContain("unsafe-identifier-hash:");
+  });
+
   it("uses SQL-shape placeholders for missing optional metadata", async () => {
     const fact = factWithProperties({ sqlSourceKind: "orm-text" });
 
     const report = await renderReport([fact]);
 
     expect(report).toContain("SQL shape `unknown` table `unknown` columns `none` source `orm-text` shape `n/a`");
+  });
+
+  it("treats empty SQL-shape properties as missing", async () => {
+    const fact = factWithProperties({
+      tableName: "",
+      tableNames: "orders;order_items",
+      columnNames: "",
+      fieldNames: "order_id,created_by",
+      sqlSourceKind: "orm-text",
+      queryShapeHash: "abcdef0123456789abcdef0123456789"
+    });
+
+    const report = await renderReport([fact]);
+
+    expect(report).toContain("table `orders;order_items` columns `order_id;created_by`");
+    expect(report).not.toContain("table `unknown`");
   });
 });
 

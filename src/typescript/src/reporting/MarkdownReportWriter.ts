@@ -112,8 +112,8 @@ function isSqlShapeQueryPattern(fact: CodeFact): boolean {
 
 function formatSqlShapeQueryPattern(fact: CodeFact): string {
   const operation = displayCodeValue(fact.properties.operationName ?? "unknown");
-  const table = displayIdentifierValue(fact.properties.tableName ?? fact.properties.tableNames, "table", "unknown");
-  const columns = displayIdentifierValue(fact.properties.columnNames ?? fact.properties.fieldNames, "column", "none");
+  const table = displayIdentifierValue(firstPresent(fact.properties.tableName, fact.properties.tableNames), "table", "unknown");
+  const columns = displayIdentifierValue(firstPresent(fact.properties.columnNames, fact.properties.fieldNames), "column", "none");
   const sourceKind = displayCodeValue(fact.properties.sqlSourceKind ?? "unknown");
   const shapeHash = displayCodeValue(fact.properties.queryShapeHash ?? "n/a");
   const evidencePath = safePath(fact.evidence.filePath);
@@ -169,7 +169,7 @@ function isSafeIdentifier(value: string, kind: IdentifierKind): boolean {
     }
   }
 
-  const tokens = value.split(/[ ._-]+/).filter((token) => token.length > 0);
+  const tokens = value.split(/[ .-]+/).filter((token) => token.length > 0);
   return !tokens.some((token) => sqlKeywords.has(token.toLowerCase()));
 }
 
@@ -178,11 +178,18 @@ function maxIdentifierLength(kind: IdentifierKind): number {
 }
 
 function safePath(filePath: string): string {
-  return path.isAbsolute(filePath) ? `absolute-path-hash:${hash(filePath, 16)}` : filePath.replace(/\\/g, "/");
+  if (!filePath || filePath.trim().length === 0) {
+    return "n/a";
+  }
+  return path.isAbsolute(filePath) || filePath.includes("://") ? `absolute-path-hash:${hash(filePath, 16)}` : filePath.replace(/\\/g, "/");
 }
 
 function displayCodeValue(value: string): string {
   return value.replace(/`/g, "'").replace(/\r?\n/g, " ");
+}
+
+function firstPresent(first: string | undefined, second: string | undefined): string | undefined {
+  return first && first.trim().length > 0 ? first : second;
 }
 
 const sqlKeywords = new Set([

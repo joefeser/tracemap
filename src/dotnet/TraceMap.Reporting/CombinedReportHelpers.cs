@@ -61,6 +61,11 @@ internal static class CombinedReportHelpers
         }
 
         return Path.IsPathFullyQualified(filePath)
+            || filePath.StartsWith("/", StringComparison.Ordinal)
+            || filePath.StartsWith("\\", StringComparison.Ordinal)
+            || filePath.Contains("://", StringComparison.Ordinal)
+            || filePath.Contains(":/", StringComparison.Ordinal)
+            || filePath.Contains(":\\", StringComparison.Ordinal)
             ? $"absolute-path-hash:{Hash(filePath, 16)}"
             : filePath.Replace('\\', '/');
     }
