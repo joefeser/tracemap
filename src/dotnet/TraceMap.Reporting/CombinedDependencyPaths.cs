@@ -91,8 +91,13 @@ public sealed record CombinedPathNode(
     string? SurfaceName,
     string? HttpMethod,
     string? NormalizedPathKey,
+    string? OperationName,
+    string? TableName,
+    string? ColumnNames,
+    string? SourceKind,
     string? ShapeHash,
     string? TextHash,
+    string? TextLength,
     string? PackageName,
     string? ConfigKey);
 
@@ -1021,7 +1026,13 @@ public static class CombinedDependencyPathReporter
 
     private static bool SurfaceNameMatches(GraphNode node, string selector)
     {
-        var value = node.SurfaceName ?? node.DisplayName;
+        var values = new[]
+        {
+            node.SurfaceName ?? node.DisplayName,
+            node.TableName,
+            node.ShapeHash,
+            node.TextHash
+        }.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!).ToArray();
         if (selector == "*")
         {
             return true;
@@ -1032,20 +1043,20 @@ public static class CombinedDependencyPathReporter
         var trimmed = selector.Trim('*');
         if (starts && ends)
         {
-            return value.Contains(trimmed, StringComparison.OrdinalIgnoreCase);
+            return values.Any(value => value.Contains(trimmed, StringComparison.OrdinalIgnoreCase));
         }
 
         if (starts)
         {
-            return value.EndsWith(trimmed, StringComparison.OrdinalIgnoreCase);
+            return values.Any(value => value.EndsWith(trimmed, StringComparison.OrdinalIgnoreCase));
         }
 
         if (ends)
         {
-            return value.StartsWith(trimmed, StringComparison.OrdinalIgnoreCase);
+            return values.Any(value => value.StartsWith(trimmed, StringComparison.OrdinalIgnoreCase));
         }
 
-        return string.Equals(value, selector, StringComparison.OrdinalIgnoreCase);
+        return values.Any(value => string.Equals(value, selector, StringComparison.OrdinalIgnoreCase));
     }
 
     private static CombinedPathGap CreateSelectorGap(CombinedReadResult read, CombinedDependencyPathOptions options, string? sourceFilter)
@@ -1249,6 +1260,11 @@ public static class CombinedDependencyPathReporter
             null,
             null,
             null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
     }
 
@@ -1280,8 +1296,13 @@ public static class CombinedDependencyPathReporter
             surface.DisplayName,
             surface.HttpMethod,
             surface.NormalizedPathKey,
+            surface.OperationName,
+            surface.TableName,
+            surface.ColumnNames,
+            surface.SourceKind,
             surface.ShapeHash,
             surface.TextHash,
+            surface.TextLength,
             surface.PackageName,
             surface.ConfigKey);
     }
@@ -1702,6 +1723,11 @@ public static class CombinedDependencyPathReporter
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
             Nodes[nodeId] = node;
             return node;
@@ -1793,8 +1819,13 @@ public static class CombinedDependencyPathReporter
         string? SurfaceName,
         string? HttpMethod,
         string? NormalizedPathKey,
+        string? OperationName,
+        string? TableName,
+        string? ColumnNames,
+        string? SourceKind,
         string? ShapeHash,
         string? TextHash,
+        string? TextLength,
         string? PackageName,
         string? ConfigKey)
     {
@@ -1819,8 +1850,13 @@ public static class CombinedDependencyPathReporter
                 SurfaceName,
                 HttpMethod,
                 NormalizedPathKey,
+                OperationName,
+                TableName,
+                ColumnNames,
+                SourceKind,
                 ShapeHash,
                 TextHash,
+                TextLength,
                 PackageName,
                 ConfigKey);
         }

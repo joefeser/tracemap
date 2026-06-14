@@ -232,6 +232,51 @@ final class ScanEngineIntegrationTest {
                 && "example.parent:parent-artifact".equals(fact.targetSymbol())));
     }
 
+    @Test
+    void emitsSqlShapeFactsForResourcesJdbcAndJpaLiterals() throws Exception {
+        Path repo = temp.resolve("sql-surfaces");
+        Files.createDirectories(repo.resolve("src/main/java/example"));
+        Files.createDirectories(repo.resolve("src/main/resources"));
+        Files.writeString(repo.resolve("src/main/resources/orders.sql"), "SELECT id, status FROM orders;\n");
+        Files.writeString(repo.resolve("src/main/java/example/OrderRepository.java"), """
+            package example;
+
+            public class OrderRepository {
+                @Query("SELECT id, status FROM orders")
+                public void annotated() {
+                }
+
+                public void load(java.sql.Connection connection, String table) throws Exception {
+                    connection.prepareStatement("SELECT id, status FROM orders WHERE id = ?");
+                    connection.prepareStatement("SELECT id FROM " + table);
+                }
+            }
+            """);
+        initGit(repo);
+
+        ScanResult result = new ScanEngine().scan(new ScanOptions(repo, temp.resolve("sql-out"), List.of(), List.of(), List.of(), 1024 * 1024, false, "all"));
+
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.SQL_TEXT_USED.equals(fact.factType())
+                && "sql-file".equals(fact.properties().get("sqlSourceKind"))
+                && "SELECT".equals(fact.properties().get("operationName"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.SQL_TEXT_USED.equals(fact.factType())
+                && "SqlResource".equals(fact.properties().get("operationName"))));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.QUERY_PATTERN_DETECTED.equals(fact.factType())
+                && "sql-file".equals(fact.properties().get("sqlSourceKind"))
+                && "orders".equals(fact.properties().get("tableName"))
+                && "id;status".equals(fact.properties().get("columnNames"))));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.QUERY_PATTERN_DETECTED.equals(fact.factType())
+                && "literal-string".equals(fact.properties().get("sqlSourceKind"))
+                && "SELECT".equals(fact.properties().get("operationName"))));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.QUERY_PATTERN_DETECTED.equals(fact.factType())
+                && "orm-text".equals(fact.properties().get("sqlSourceKind"))));
+    }
+
     private static Path repoRoot() {
         return Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize().getParent().getParent();
     }

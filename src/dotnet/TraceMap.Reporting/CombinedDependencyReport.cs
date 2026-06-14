@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 
@@ -714,8 +715,8 @@ public static class CombinedDependencyReporter
         var httpMethod = FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName");
         var normalizedPathKey = FirstValue(fact.Properties, "normalizedPathKey");
         var operationName = FirstValue(fact.Properties, "operationName");
-        var tableName = FirstValue(fact.Properties, "tableName", "tableNames");
-        var columns = FirstValue(fact.Properties, "columnNames", "fieldNames");
+        var tableName = SafeSqlIdentifierList(FirstValue(fact.Properties, "tableName", "tableNames"), 100, allowSpaces: true);
+        var columns = SafeSqlIdentifierList(FirstValue(fact.Properties, "columnNames", "fieldNames"), 80, allowSpaces: false);
         var sourceKind = FirstValue(fact.Properties, "sqlSourceKind", "sourceKind");
         var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash");
         var textHash = FirstValue(fact.Properties, "textHash");
@@ -726,7 +727,7 @@ public static class CombinedDependencyReporter
         var displayName = surfaceKind switch
         {
             "http-client" or "http-route" => normalizedPathKey ?? FirstValue(fact.Properties, "normalizedPathTemplate") ?? $"{httpMethod ?? "ANY"} unknown",
-            "sql-query" => tableName ?? shapeHash ?? textHash ?? $"unknown-sql:{fact.CombinedFactId}",
+            "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash),
             "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
             _ => $"unknown-surface:{fact.CombinedFactId}"
         };
@@ -974,6 +975,86 @@ public static class CombinedDependencyReporter
             "package-config" => $"package {surface.PackageName ?? "n/a"} version {surface.Version ?? "n/a"} key {surface.ConfigKey ?? "n/a"}",
             _ => string.Empty
         };
+    }
+
+    private static string SqlSurfaceDisplayName(
+        CombinedFactRow fact,
+        string? operationName,
+        string? tableName,
+        string? columns,
+        string? sourceKind,
+        string? shapeHash,
+        string? textHash)
+    {
+        if (!string.IsNullOrWhiteSpace(shapeHash))
+        {
+            return $"shape:{shapeHash}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(operationName)
+            || !string.IsNullOrWhiteSpace(tableName)
+            || !string.IsNullOrWhiteSpace(columns))
+        {
+            return string.Join(
+                " ",
+                new[]
+                {
+                    operationName,
+                    tableName is null ? null : $"table:{tableName}",
+                    columns is null ? null : $"columns:{columns}",
+                    sourceKind is null ? null : $"source:{sourceKind}"
+                }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(textHash))
+        {
+            return $"text:{textHash}";
+        }
+
+        return $"unknown-sql:{Hash(fact.OriginalFactId ?? fact.CombinedFactId, 16)}";
+    }
+
+    private static string? SafeSqlIdentifierList(string? value, int maxIdentifierLength, bool allowSpaces)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var identifiers = value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(identifier => IsSafeSqlIdentifier(identifier, maxIdentifierLength, allowSpaces))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(identifier => identifier, StringComparer.Ordinal)
+            .ToArray();
+        return identifiers.Length == 0 ? null : string.Join(';', identifiers);
+    }
+
+    private static bool IsSafeSqlIdentifier(string value, int maxIdentifierLength, bool allowSpaces)
+    {
+        if (value.Length == 0 || value.Length > maxIdentifierLength)
+        {
+            return false;
+        }
+
+        if (value.Contains("://", StringComparison.Ordinal)
+            || value.Contains("--", StringComparison.Ordinal)
+            || value.Contains("/*", StringComparison.Ordinal)
+            || value.Contains("*/", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var pattern = allowSpaces
+            ? "^[A-Za-z0-9_. -]+$"
+            : "^[A-Za-z0-9_.-]+$";
+        if (!Regex.IsMatch(value, pattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+        {
+            return false;
+        }
+
+        var token = value.Trim().ToUpperInvariant();
+        return token is not ("SELECT" or "INSERT" or "UPDATE" or "DELETE" or "CREATE" or "ALTER" or "DROP" or "TRUNCATE" or "MERGE" or "CALL" or "EXEC" or "EXECUTE" or "WHERE" or "FROM" or "JOIN");
     }
 
     private static string EvidenceLabel(string? sourceLabel, string? filePath, int? startLine)

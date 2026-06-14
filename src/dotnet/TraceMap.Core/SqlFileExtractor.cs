@@ -18,19 +18,43 @@ public static class SqlFileExtractor
                     continue;
                 }
 
+                var lineCount = CountLines(text);
+                var textHash = FactFactory.Hash(text, 32);
+                var operationName = SqlShapeExtractor.OperationName(text);
+                var textProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["path"] = file.RelativePath,
+                    ["textHash"] = textHash,
+                    ["textLength"] = text.Length.ToString(),
+                    ["sqlSourceKind"] = "sql-file"
+                };
+                if (!string.IsNullOrWhiteSpace(operationName))
+                {
+                    textProperties["operationName"] = operationName;
+                }
+
+                var span = new EvidenceSpan(file.RelativePath, 1, lineCount, textHash, "SqlFileExtractor", ScannerVersions.SqlTextExtractor);
                 facts.Add(FactFactory.Create(
                     manifest,
                     FactTypes.SqlTextUsed,
                     RuleIds.DatabaseSqlText,
-                    EvidenceTiers.Tier3SyntaxOrTextual,
-                    new EvidenceSpan(file.RelativePath, 1, CountLines(text), FactFactory.Hash(text, 32), "SqlFileExtractor", ScannerVersions.SqlTextExtractor),
+                    EvidenceTiers.Tier2Structural,
+                    span,
                     targetSymbol: Path.GetFileName(file.RelativePath),
-                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["path"] = file.RelativePath,
-                        ["textHash"] = FactFactory.Hash(text, 32),
-                        ["textLength"] = text.Length.ToString()
-                    }));
+                    properties: textProperties));
+
+                var shapeProperties = SqlShapeExtractor.QueryShapeProperties(text, "sql-file");
+                var target = shapeProperties.GetValueOrDefault("tableName") ?? file.RelativePath;
+                shapeProperties["targetSymbol"] = target;
+                facts.Add(FactFactory.Create(
+                    manifest,
+                    FactTypes.QueryPatternDetected,
+                    RuleIds.DatabaseSqlShape,
+                    EvidenceTiers.Tier2Structural,
+                    new EvidenceSpan(file.RelativePath, 1, lineCount, textHash, "SqlFileExtractor", ScannerVersions.SqlShapeExtractor),
+                    targetSymbol: target,
+                    contractElement: target,
+                    properties: shapeProperties));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

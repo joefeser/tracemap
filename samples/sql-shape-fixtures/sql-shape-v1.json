@@ -1,0 +1,169 @@
+{
+  "version": "database.sql.shape.v1",
+  "hashAlgorithm": "sha256-32-lower-hex",
+  "normalization": "python-normalized-masked-sql-text-v1",
+  "cases": [
+    {
+      "name": "simple-select",
+      "sql": "SELECT id, status FROM orders WHERE id = 42;",
+      "sqlSourceKind": "literal-string",
+      "textHash": "bbaea739061a58e9c74c97cf579e4c1d",
+      "queryShapeHash": "e025a4cee731e53f34e17a86a417e2bd",
+      "operationName": "SELECT",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id;status"
+    },
+    {
+      "name": "insert-columns",
+      "sql": "INSERT INTO orders (id, status) VALUES (1, 'pending');",
+      "sqlSourceKind": "literal-string",
+      "textHash": "b1b2cdd92cc64298c932b533b93b48be",
+      "queryShapeHash": "bce589abfee50fc206984a5cc940ccf4",
+      "operationName": "INSERT",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id;status"
+    },
+    {
+      "name": "update-set",
+      "sql": "UPDATE orders SET status = 'shipped', total = 10 WHERE id = 1;",
+      "sqlSourceKind": "literal-string",
+      "textHash": "a7c678e6e5e6ff5744edf11c236b822f",
+      "queryShapeHash": "4c07c535e8f2757372eb1b0fc3d9164e",
+      "operationName": "UPDATE",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "status;total"
+    },
+    {
+      "name": "delete-from",
+      "sql": "DELETE FROM orders WHERE id = 1;",
+      "sqlSourceKind": "literal-string",
+      "textHash": "2f60b071a8718d79a372babaf9a72164",
+      "queryShapeHash": "7a36d75aedb0d96ae43b8dd78c042ce3",
+      "operationName": "DELETE",
+      "tableName": "orders",
+      "tableNames": "orders"
+    },
+    {
+      "name": "create-table",
+      "sql": "CREATE TABLE orders (id int, status varchar(20), total decimal);",
+      "sqlSourceKind": "sql-file",
+      "textHash": "af96a85b47df07f4145d0c094923f355",
+      "queryShapeHash": "5e86a45b46b2098a9ac9f23e32a21617",
+      "operationName": "CREATE",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id;status;total"
+    },
+    {
+      "name": "alter-table",
+      "sql": "ALTER TABLE orders ADD COLUMN archived_at timestamp;",
+      "sqlSourceKind": "sql-file",
+      "textHash": "3933d8cc687e13e549a035f47b6d0329",
+      "queryShapeHash": "630435935677244761358c85bcf997dc",
+      "operationName": "ALTER",
+      "tableName": "orders",
+      "tableNames": "orders"
+    },
+    {
+      "name": "drop-table",
+      "sql": "DROP TABLE orders;",
+      "sqlSourceKind": "sql-file",
+      "textHash": "c0b5474289f45aa5413a80f0d5a039db",
+      "queryShapeHash": "fd0ca7112b4eedf9a353f0e0baf22cbd",
+      "operationName": "DROP",
+      "tableName": "orders",
+      "tableNames": "orders"
+    },
+    {
+      "name": "truncate-table",
+      "sql": "TRUNCATE TABLE orders;",
+      "sqlSourceKind": "sql-file",
+      "textHash": "a1a650ce874536c158b14af1d03ac1e1",
+      "queryShapeHash": "035a3f3ebf7a357cc212c8d26f0217df",
+      "operationName": "TRUNCATE",
+      "tableName": "orders",
+      "tableNames": "orders"
+    },
+    {
+      "name": "call-proc",
+      "sql": "CALL refresh_orders('daily');",
+      "sqlSourceKind": "literal-string",
+      "textHash": "5fd88a742922ef548c09613f988bfa40",
+      "queryShapeHash": "09faabd6fc790b68828086c73a855645",
+      "operationName": "CALL"
+    },
+    {
+      "name": "with-cte",
+      "sql": "WITH recent AS (SELECT id FROM orders) SELECT id FROM recent;",
+      "sqlSourceKind": "sql-file",
+      "textHash": "9a18875addc8e7dcf7b9807ea413ce77",
+      "queryShapeHash": "7b596157f57c2da017c6581b3ed7791b"
+    },
+    {
+      "name": "escaped-quote",
+      "sql": "SELECT id FROM orders WHERE note = 'it\\'s ok';",
+      "sqlSourceKind": "literal-string",
+      "textHash": "4bd613e26b7cfc6bc5a0a2ec3daabfe4",
+      "queryShapeHash": "8bb29d1fd75e2420b8a45a3ba8666901",
+      "operationName": "SELECT",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id"
+    },
+    {
+      "name": "multiline-comment",
+      "sql": "SELECT id /* ignored FROM fake */ FROM orders WHERE status = 'open';",
+      "sqlSourceKind": "literal-string",
+      "textHash": "215867e8f8b7a2f9ced42c3d165652e5",
+      "queryShapeHash": "aef47c18c4e2d4d3a121d98c234de971",
+      "operationName": "SELECT",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id"
+    },
+    {
+      "name": "crlf-tabs",
+      "sql": "SELECT\tid,\r\nstatus FROM\torders;",
+      "sqlSourceKind": "literal-string",
+      "textHash": "3fdc5478d69be561f59c7d7d7101c118",
+      "queryShapeHash": "186f88eaa762d68b7745fc7ffb49df20",
+      "operationName": "SELECT",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id;status"
+    },
+    {
+      "name": "dashdash-in-string",
+      "sql": "SELECT id FROM orders WHERE note = '-- not comment';",
+      "sqlSourceKind": "literal-string",
+      "textHash": "309941d7b813e30a24820d1f5a404b75",
+      "queryShapeHash": "aaae1f26e47c86bbbb41fa9c8873679e",
+      "operationName": "SELECT",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id"
+    },
+    {
+      "name": "double-quoted-identifiers",
+      "sql": "SELECT \"id\" FROM \"orders\";",
+      "sqlSourceKind": "literal-string",
+      "textHash": "d46dcba13f51601465a9e29b0c7e2049",
+      "queryShapeHash": "ab304830dfc6db9ba4fe4755bc5afb39",
+      "operationName": "SELECT"
+    }
+  ],
+  "unsupportedCases": [
+    {
+      "name": "dynamic-concat",
+      "description": "Adapters should emit a dynamic boundary or gap instead of complete SqlTextUsed or table metadata when concatenation hides the full SQL text."
+    },
+    {
+      "name": "subquery-table-position",
+      "sql": "SELECT id FROM (SELECT id FROM orders) recent;",
+      "description": "Simple extractors should avoid table overclaims for subqueries."
+    }
+  ]
+}

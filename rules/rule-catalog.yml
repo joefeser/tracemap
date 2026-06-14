@@ -41,6 +41,8 @@ rules:
     limitations:
       - Surface diffs do not prove runtime SQL execution, database schema existence, config loading, package loading, generated SQL equivalence, or branch feasibility.
       - Raw SQL, URLs, config values, connection strings, and source snippets are not rendered by default.
+      - Hash-only SQL text surfaces emit a HashOnlyEvidence caveat and remain review-tier evidence.
+      - SQL surfaces that fall back to fact-hash identity emit a VolatileIdentity caveat and remain review-tier evidence.
 
   - id: combined.diff.edge.v1
     name: Combined dependency diff edge comparison
@@ -141,6 +143,7 @@ rules:
     limitations:
       - Surface impact items do not prove runtime SQL execution, database schema existence, config loading, package loading, generated SQL equivalence, or branch feasibility.
       - Raw SQL, URLs, config values, connection strings, and source snippets are not rendered by default.
+      - HashOnlyEvidence and VolatileIdentity caveats from combined.diff.surface.v1 carry through as review-tier impact evidence.
 
   - id: combined.impact.edge.v1
     name: Combined change impact dependency edge item
@@ -707,14 +710,29 @@ rules:
   - id: database.sql.text.v1
     name: SQL text detection
     description: Finds ADO.NET SqlCommand construction, SQL-like files, and SQL-like string literals.
-    evidenceTier: Tier3SyntaxOrTextual
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
     emits:
       - SqlCommandDetected
       - SqlTextUsed
+      - AnalysisGap
     limitations:
-      - SQL parsing is approximate in MVP.
-      - Identifier matches are not proof of contract usage.
+      - SQL text evidence stores hashes and lengths only; table and column guesses belong on database.sql.shape.v1 QueryPatternDetected facts.
+      - Dynamic SQL construction emits reduced-coverage boundary evidence instead of complete SQL text.
       - Raw SQL text is not stored by default; hashes and spans are emitted instead.
+
+  - id: database.sql.shape.v1
+    name: Shared SQL shape detection
+    description: Derives Python-v1-compatible SQL query shape hashes and safe operation/table/column metadata from simple static SQL text.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - QueryPatternDetected
+    limitations:
+      - The v1 queryShapeHash is the Python normalized masked SQL text hash, not a full SQL parser or dialect-aware structural hash.
+      - Normalization strips comments before masking strings; `--` inside string literals follows the v1 reference behavior.
+      - Double-quoted contents are masked like strings, so quoted SQL identifiers may be omitted or collapse until a parser-backed version exists.
+      - Shape-hash-only facts are allowed for SQL-like WITH/CTE text and omit unsupported operation/table/column fields.
+      - Static SQL shape evidence does not prove runtime execution, schema existence, dialect validity, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
+      - Raw SQL text, predicate literal values, source snippets, connection strings, raw URLs, and unsafe identifiers are not rendered.
 
   - id: config.key.v1
     name: Configuration key extraction
@@ -975,6 +993,22 @@ rules:
     limitations:
       - Prisma schema files, migrations, query middleware, and runtime client extensions are not modeled in MVP.
 
+  - id: typescript.integration.sql.v1
+    name: TypeScript direct SQL integration
+    description: Detects direct SQL client literals and tagged SQL templates, emitting hash-only SQL text evidence and SQL-shape query patterns when complete static SQL text is visible.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SqlTextUsed
+      - QueryPatternDetected
+      - AnalysisGap
+    limitations:
+      - Detection is syntax-only for supported direct SQL call and tag shapes; unrelated APIs named query or execute may be missed or require SQL-like first arguments to avoid overclaiming.
+      - Template literals with non-static expressions emit dynamic-boundary gaps rather than complete SQL text evidence.
+      - Prisma/Base44 query-builder facts remain under typescript.integration.querypattern.v1 and are not SQL-shape evidence unless direct SQL text is present.
+      - The v1 queryShapeHash follows Python normalized masked SQL text semantics, including comment-before-string masking and double-quoted-content caveats.
+      - Static SQL shape evidence does not prove runtime execution, schema existence, dialect validity, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
+      - Raw SQL text, predicate literal values, source snippets, connection strings, raw URLs, and unsafe identifiers are not rendered.
+
   - id: typescript.integration.contractmapping.v1
     name: TypeScript contract mapping integration
     description: Detects Zod schema call shapes as structural contract mapping evidence.
@@ -1001,6 +1035,7 @@ rules:
       - QueryPatternDetected
     limitations:
       - Structural query evidence does not prove generated SQL, runtime execution, database schema existence, or branch feasibility.
+      - Prisma/Base44 query-builder facts are not SQL-shape facts and do not emit sqlSourceKind.
       - Only statically visible object-literal and simple string sort arguments are inspected in MVP; variables, spreads, helper-built filters, and dynamic keys need later flow rules.
       - Literal values and raw object text are not stored; field names, operation names, hashes, and spans are emitted.
       - Reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
@@ -1260,8 +1295,10 @@ rules:
       - SqlTextUsed
       - QueryPatternDetected
     limitations:
-      - SQL hashes do not participate in reducer matching unless paired with a reducer-recognized contract element or symbol.
-      - Runtime query execution, database schema existence, generated SQL, and branch feasibility are not proven.
+      - SQL text hashes and SQL-shape hashes do not prove runtime execution, database schema existence, generated SQL, dialect validity, permissions, transaction behavior, or branch feasibility.
+      - The v1 queryShapeHash follows Python normalized masked SQL text semantics, including comment-before-string masking and double-quoted-content caveats.
+      - SQL-like WITH/CTE text may emit shape-hash-only QueryPatternDetected without operation/table/column metadata.
+      - Dynamic or concatenated SQL literals are not complete SQL text evidence.
       - When JVM query-pattern facts are emitted, reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 
   - id: jvm.integration.jpa.v1
@@ -1445,6 +1482,8 @@ rules:
     limitations:
       - SQL text is hashed and operation-shaped; raw SQL text and literal values are not stored by default.
       - Query-pattern extraction is best-effort for simple static SQL operation, table, and column shapes; full SQL parsing, dialect behavior, schema existence, generated SQL, and runtime execution are not proven.
+      - The v1 queryShapeHash is the Python normalized masked SQL text reference; comment-before-string masking and double-quoted-content masking are known caveats.
+      - SQL-like WITH/CTE text may emit shape-hash-only QueryPatternDetected without operation/table/column metadata.
       - Reports may display safe derived table, column, source-kind, and shape-hash metadata, but must not display raw SQL text, literal values, or unsafe identifiers.
       - Quoted identifiers may be treated conservatively as string literals by lightweight SQL shape extraction and missed until a shared SQL parser exists.
       - Tier2 query patterns are structural evidence only; Tier3 query patterns are review-routing evidence and should not be treated as semantic database proof.

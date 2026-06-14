@@ -458,7 +458,7 @@ class AstVisitor(ast.NodeVisitor):
         span = self._span(node, "PythonAstExtractor", ScannerVersions.SQL)
         self.facts.append(create_fact(self.manifest, FactTypes.SQL_TEXT_USED, RuleIds.SQL, tier, span, source_symbol=self.containing_symbol, target_symbol=self.containing_symbol or "sql-literal", properties={"textHash": text_hash(literal), "textLength": len(literal), "operationName": operation_name(literal), "sqlSourceKind": source_kind, "targetSymbol": self.containing_symbol or "sql-literal"}))
         pattern_props = query_shape_properties(literal, source_kind)
-        if pattern_props.get("operationName") or pattern_props.get("tableName") or pattern_props.get("columnNames"):
+        if pattern_props.get("queryShapeHash"):
             target = pattern_props.get("tableName") or self.containing_symbol or "sql-literal"
             self.facts.append(create_fact(self.manifest, FactTypes.QUERY_PATTERN_DETECTED, RuleIds.SQL, tier, span, source_symbol=self.containing_symbol, target_symbol=target, contract_element=target, properties={**pattern_props, "targetSymbol": target}))
 

@@ -45,7 +45,7 @@ def extract_sql_files(repo: Path, manifest: ScanManifest, files: list[Path], gap
                 )
             )
             pattern_props = query_shape_properties(text, "sql-file")
-            if pattern_props.get("operationName") or pattern_props.get("tableName") or pattern_props.get("columnNames"):
+            if pattern_props.get("queryShapeHash"):
                 facts.append(
                     create_fact(
                         manifest,
