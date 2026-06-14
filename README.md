@@ -109,9 +109,13 @@ dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
 dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
   --manifest samples/portfolio.example.json \
   --out .tracemap-portfolio
+dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
+  --before-manifest .tracemap-before/portfolio.json \
+  --after-manifest .tracemap-after/portfolio.json \
+  --out .tracemap-portfolio-comparison
 ```
 
-The portfolio command writes `portfolio-report.md` and `portfolio-report.json` when `--out` is a directory. It expands combined indexes into source records, reads single-language indexes directly, and reports source coverage, endpoint alignment, dependency surfaces, dependency edges, shared static surfaces, gaps, and limitations across many repositories. Portfolio reports are static evidence inventories; they do not infer runtime topology, ownership, deployment, production traffic, package compatibility, vulnerabilities, or release approval.
+The portfolio command writes `portfolio-report.md` and `portfolio-report.json` when `--out` is a directory. It expands combined indexes into source records, reads single-language indexes directly, and reports source coverage, endpoint alignment, dependency surfaces, dependency edges, shared static surfaces, gaps, and limitations across many repositories. Before/after portfolio comparison reports source changes plus projected safe surface and edge changes from manifest-paired snapshots. Portfolio reports are static evidence inventories; they do not infer runtime topology, ownership, deployment, production traffic, package compatibility, vulnerabilities, or release approval.
 
 The combined dependency paths command writes `paths-report.md` and `paths-report.json` when `--out` is a directory. It follows static evidence from endpoint, symbol, or source selectors to terminal dependency surfaces such as `sql-query`, `http-client`, `http-route`, and `package-config`. Paths are evidence trails, not runtime traces.
 
