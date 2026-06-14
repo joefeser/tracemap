@@ -1557,3 +1557,66 @@ rules:
       - InfrastructureBoilerplate
     limitations:
       - Boilerplate classification is a review-routing heuristic and not proof of business intent.
+
+  - id: release.review.rollup.v1
+    name: Release review rollup
+    description: Emits deterministic release-review summary classifications from underlying TraceMap findings and gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewSummary
+    limitations:
+      - Rollups summarize static evidence only and are not release approval, CI policy, runtime risk prediction, or production usage proof.
+      - Rollup strength is bounded by source identity, commit SHA availability, coverage, truncation, and unavailable workflow gaps.
+      - Underlying classifications, rule IDs, evidence tiers, and limitations remain authoritative.
+
+  - id: release.review.checklist.v1
+    name: Release review checklist
+    description: Emits deterministic checklist items derived only from release-review findings and gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewChecklistItem
+    limitations:
+      - Checklist items are review-routing prompts, not generated advice or release decisions.
+      - Items are derived from static findings and gaps and may omit runtime, deployment, and business context.
+
+  - id: release.review.source.v1
+    name: Release review source identity and coverage
+    description: Emits source pairing, commit SHA, identity, and coverage gaps for release-review comparisons.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewSourceCoverage
+      - ReleaseReviewGap
+    limitations:
+      - Repository identity is hash-based and cannot prove ownership or runtime deployment equivalence.
+      - Missing or reduced coverage makes absence of evidence coverage-relative.
+      - Unknown commit SHAs prevent history-completeness claims.
+
+  - id: release.review.section.v1
+    name: Release review section status
+    description: Emits unavailable, deferred, unsupported-mode, and workflow-status gaps for release-review sections.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewGap
+    limitations:
+      - Unavailable or deferred sections are explicit analysis gaps, not clean results.
+      - Section status does not imply an underlying workflow ran unless the status is available with findings or gaps from that workflow.
+
+  - id: release.review.selector.v1
+    name: Release review selector handling
+    description: Emits gaps when release-review selectors are ignored or cannot apply to enabled scopes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewGap
+    limitations:
+      - Selector no-match or ignored-selector output reflects static indexed evidence only.
+      - Dynamic routes, generated configuration, reduced coverage, or unavailable sections can hide otherwise relevant evidence.
+
+  - id: release.review.truncation.v1
+    name: Release review truncation
+    description: Emits gaps when release-review caps omit findings, path rows, reverse rows, checklist items, or gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewGap
+    limitations:
+      - Truncated reports are incomplete by construction and must not be interpreted as comprehensive.
+      - Omitted counts are deterministic for the selected scope and caps, but not evidence of lower importance.

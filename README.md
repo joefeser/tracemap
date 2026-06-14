@@ -128,6 +128,18 @@ dotnet run --project src/dotnet/TraceMap.Cli -- impact \
 
 The combined change impact command writes `impact-report.md` and `impact-report.json` when `--out` is a directory. It reuses combined diff evidence to classify changed sources, coverage, endpoints, dependency surfaces, and dependency edges as static impact evidence, probable static impact, needs review, or analysis gaps. This report is not runtime impact analysis; path context is off by default and `--include-paths` adds bounded before/after static path context for changed endpoints, surfaces, and edges when safe selectors can be derived.
 
+Assemble a release-oriented evidence packet from two snapshots:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- release-review \
+  --before .tracemap-before-combined.sqlite \
+  --after .tracemap-after-combined.sqlite \
+  --contract-delta samples/contract-deltas/contract-delta-v2.example.json \
+  --out .tracemap-release-review
+```
+
+The release review command writes `release-review.md` and `release-review.json` when `--out` is a directory. It composes available TraceMap evidence from source coverage, combined change impact, contract delta impact, optional path/reverse context, section gaps, and a deterministic reviewer checklist. It is a static evidence packet, not release approval, CI policy, runtime risk prediction, deployment verification, or production usage proof. Future API/DTO, SQL/schema, and package-upgrade workflows are rendered as explicit unavailable or deferred sections until those workflows exist.
+
 TypeScript scanner:
 
 ```bash
