@@ -57,18 +57,12 @@ class QueryShape:
 
 
 def is_sql_like(value: str) -> bool:
-    text = value.lstrip()
-    if not text:
-        return False
-    first = re.split(r"\s+", text, maxsplit=1)[0].upper()
+    first = _first_token(value)
     return first in SQL_VERBS or first == "WITH"
 
 
 def operation_name(value: str) -> str:
-    text = value.lstrip()
-    if not text:
-        return ""
-    first = re.split(r"\s+", text, maxsplit=1)[0].upper()
+    first = _first_token(value)
     return first if first in SQL_VERBS else ""
 
 
@@ -113,18 +107,45 @@ def _normalized_sql(value: str) -> str:
 
 
 def _shape_operation(value: str) -> str:
-    text = value.lstrip()
+    text = _strip_leading_comments(value)
     if not text:
         return ""
     first = re.split(r"\s+", text, maxsplit=1)[0].upper()
     return first if first in SQL_VERBS else ""
 
 
+def _first_token(value: str) -> str:
+    text = _strip_leading_comments(value)
+    if not text:
+        return ""
+    return re.split(r"\s+", text, maxsplit=1)[0].upper()
+
+
+def _strip_leading_comments(value: str) -> str:
+    offset = 0
+    while offset < len(value):
+        while offset < len(value) and value[offset].isspace():
+            offset += 1
+        if value.startswith("--", offset):
+            offset += 2
+            while offset < len(value) and value[offset] not in "\n\r":
+                offset += 1
+            continue
+        if value.startswith("/*", offset):
+            end = value.find("*/", offset + 2)
+            if end < 0:
+                return ""
+            offset = end + 2
+            continue
+        break
+    return value[offset:]
+
+
 def _table_names(sql: str, operation: str) -> list[str]:
     candidates: list[str] = []
     if operation == "SELECT":
-        candidates.extend(_matches(sql, r"\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
-        candidates.extend(_matches(sql, r"\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
+        candidates.extend(_top_level_matches(sql, r"\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
+        candidates.extend(_top_level_matches(sql, r"\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
     elif operation == "INSERT":
         candidates.extend(_matches(sql, r"\bINSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
     elif operation == "UPDATE":
@@ -135,6 +156,7 @@ def _table_names(sql: str, operation: str) -> list[str]:
         candidates.extend(_matches(sql, r"\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
     elif operation in {"DROP", "TRUNCATE", "ALTER"}:
         candidates.extend(_matches(sql, rf"\b{operation}\s+(?:TABLE\s+)?([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
+    # CALL/EXEC routine names are intentionally not table candidates in v1.
     return _unique(_clean_identifier(value) for value in candidates)
 
 
@@ -156,6 +178,24 @@ def _column_names(sql: str, operation: str) -> list[str]:
 
 def _matches(sql: str, pattern: str) -> list[str]:
     return [match.group(1) for match in re.finditer(pattern, sql, flags=re.I)]
+
+
+def _top_level_matches(sql: str, pattern: str) -> list[str]:
+    return [
+        match.group(1)
+        for match in re.finditer(pattern, sql, flags=re.I)
+        if _parenthesis_depth_before(sql, match.start()) == 0
+    ]
+
+
+def _parenthesis_depth_before(sql: str, index: int) -> int:
+    depth = 0
+    for char in sql[:index]:
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth > 0:
+            depth -= 1
+    return depth
 
 
 def _between(sql: str, start: str, end: str) -> str:

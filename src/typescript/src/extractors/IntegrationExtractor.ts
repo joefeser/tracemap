@@ -8,6 +8,7 @@ import { hash } from "../util/Hash";
 import { repoRelative } from "../util/Paths";
 import { LoadedProject } from "./TypeScriptProjectLoader";
 import { normalizeEndpointRoute } from "../endpoints/RouteTemplateNormalizer";
+import { isSqlLike, operationName, queryShapeProperties } from "../sql/SqlShape";
 
 interface VisitContext {
   httpClientNames: Set<string>;
@@ -48,11 +49,166 @@ function visit(repoPath: string, manifest: ScanManifest, project: LoadedProject,
     addZodFact(repoPath, manifest, project, sourceFile, node, facts);
     addPrismaFact(repoPath, manifest, project, sourceFile, node, facts);
     addEntityApiFact(repoPath, manifest, project, sourceFile, node, facts);
+    addDirectSqlFact(repoPath, manifest, project, sourceFile, node, facts);
+  }
+  if (ts.isTaggedTemplateExpression(node)) {
+    addTaggedSqlFact(repoPath, manifest, project, sourceFile, node, facts);
   }
   if (ts.isPropertyAccessExpression(node)) {
     addProcessEnvFact(repoPath, manifest, project, sourceFile, node, facts);
   }
   ts.forEachChild(node, (child) => visit(repoPath, manifest, project, sourceFile, child, facts, context));
+}
+
+function addDirectSqlFact(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.CallExpression, facts: CodeFact[]): void {
+  const methodName = callName(node.expression, sourceFile);
+  if (!["query", "execute", "raw", "executeRaw", "$queryRaw", "$executeRaw"].includes(methodName)) {
+    return;
+  }
+  const firstArg = node.arguments[0];
+  if (!firstArg) {
+    return;
+  }
+  const literal = staticSqlText(firstArg);
+  if (literal !== null) {
+    if (isSqlLike(literal)) {
+      emitSqlFacts(repoPath, manifest, project, sourceFile, node, facts, literal, "literal-string", methodName);
+    }
+    return;
+  }
+  if (isDynamicSqlBoundary(firstArg)) {
+    emitDynamicSqlBoundary(repoPath, manifest, project, sourceFile, node, facts, methodName);
+  }
+}
+
+function addTaggedSqlFact(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.TaggedTemplateExpression, facts: CodeFact[]): void {
+  const tag = node.tag.getText(sourceFile);
+  if (!isSqlTag(tag)) {
+    return;
+  }
+  if (ts.isNoSubstitutionTemplateLiteral(node.template)) {
+    const literal = node.template.text;
+    if (isSqlLike(literal)) {
+      emitSqlFacts(repoPath, manifest, project, sourceFile, node, facts, literal, "literal-string", tag);
+    }
+    return;
+  }
+  if (ts.isTemplateExpression(node.template) && isSqlLike(node.template.head.text)) {
+    emitDynamicSqlBoundary(repoPath, manifest, project, sourceFile, node, facts, tag);
+  }
+}
+
+function emitSqlFacts(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.Node, facts: CodeFact[], sql: string, sourceKind: string, methodName: string): void {
+  const cls = containingClass(sourceFile, node);
+  const fn = containingFunction(sourceFile, node);
+  const containing = fn || cls || repoRelative(repoPath, sourceFile.fileName);
+  const op = operationName(sql);
+  const textProperties: Record<string, string> = {
+    textHash: hash(sql, 32),
+    textLength: String(sql.length),
+    sqlSourceKind: sourceKind,
+    methodName,
+    targetSymbol: containing
+  };
+  if (op) {
+    textProperties.operationName = op;
+  }
+  if (cls) {
+    textProperties.containingType = cls;
+  }
+  if (fn) {
+    textProperties.containingMethod = fn;
+  }
+  facts.push(
+    createFact(
+      manifest,
+      FactTypes.SqlTextUsed,
+      RuleIds.TypeScriptIntegrationSql,
+      EvidenceTiers.Tier3SyntaxOrTextual,
+      evidence(repoPath, sourceFile, node),
+      {
+        projectPath: project.projectPath,
+        sourceSymbol: fn || null,
+        targetSymbol: containing,
+        properties: textProperties
+      }
+    )
+  );
+
+  const shapeProperties = queryShapeProperties(sql, sourceKind);
+  if (cls) {
+    shapeProperties.containingType = cls;
+  }
+  if (fn) {
+    shapeProperties.containingMethod = fn;
+  }
+  const target = shapeProperties.tableName ?? containing;
+  shapeProperties.targetSymbol = target;
+  facts.push(
+    createFact(
+      manifest,
+      FactTypes.QueryPatternDetected,
+      RuleIds.TypeScriptIntegrationSql,
+      EvidenceTiers.Tier3SyntaxOrTextual,
+      evidence(repoPath, sourceFile, node),
+      {
+        projectPath: project.projectPath,
+        sourceSymbol: fn || null,
+        targetSymbol: target,
+        contractElement: target,
+        properties: shapeProperties
+      }
+    )
+  );
+}
+
+function emitDynamicSqlBoundary(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.Node, facts: CodeFact[], methodName: string): void {
+  const cls = containingClass(sourceFile, node);
+  const fn = containingFunction(sourceFile, node);
+  const containing = fn || cls || repoRelative(repoPath, sourceFile.fileName);
+  facts.push(
+    createFact(
+      manifest,
+      FactTypes.AnalysisGap,
+      RuleIds.TypeScriptIntegrationSql,
+      EvidenceTiers.Tier4Unknown,
+      evidence(repoPath, sourceFile, node),
+      {
+        projectPath: project.projectPath,
+        sourceSymbol: fn || null,
+        targetSymbol: containing,
+        properties: {
+          gapKind: "dynamic-sql-boundary",
+          dynamicReason: "non-literal-sql-argument",
+          methodName,
+          sqlSourceKind: "dynamic-boundary",
+          targetSymbol: containing,
+          expressionHash: hash(node.getText(sourceFile), 32)
+        }
+      }
+    )
+  );
+}
+
+function staticSqlText(expression: ts.Expression): string | null {
+  if (ts.isStringLiteralLike(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
+    return expression.text;
+  }
+  return null;
+}
+
+function isDynamicSqlBoundary(expression: ts.Expression): boolean {
+  if (ts.isTemplateExpression(expression)) {
+    return isSqlLike(expression.head.text);
+  }
+  if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    return flattenPlusExpression(expression).some((part) => staticSqlText(part) !== null && isSqlLike(staticSqlText(part) ?? ""));
+  }
+  return false;
+}
+
+function isSqlTag(tag: string): boolean {
+  return tag === "sql" || tag.endsWith(".sql") || tag.endsWith("$queryRaw") || tag.endsWith("$executeRaw");
 }
 
 function addAngularHttpClientFact(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.CallExpression, facts: CodeFact[], context: VisitContext): void {

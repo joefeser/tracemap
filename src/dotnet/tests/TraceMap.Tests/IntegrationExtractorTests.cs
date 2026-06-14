@@ -156,4 +156,46 @@ public sealed class IntegrationExtractorTests
         Assert.Contains("textLength", sqlFact.Properties.Keys);
         Assert.DoesNotContain("text", sqlFact.Properties.Keys);
     }
+
+    [Fact]
+    public void Scan_emits_sql_shape_facts_for_dotnet_literals_and_sql_files()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Repository.cs"), """
+            public sealed class Repository
+            {
+                public void Load(dynamic connection, dynamic db, string table)
+                {
+                    connection.Query("SELECT id, status FROM orders WHERE id = @id");
+                    connection.Execute("UPDATE orders SET status = @status WHERE id = @id");
+                    db.Orders.FromSqlRaw("SELECT id, status FROM orders");
+                    using var command = new SqlCommand($"SELECT id FROM {table}");
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "orders.sql"), "SELECT id, status FROM orders;\n");
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+        var shapeFacts = result.Facts
+            .Where(fact => fact.FactType == FactTypes.QueryPatternDetected && fact.RuleId == RuleIds.DatabaseSqlShape)
+            .ToArray();
+
+        Assert.Contains(shapeFacts, fact =>
+            fact.Properties["sqlSourceKind"] == "literal-string"
+            && fact.Properties["operationName"] == "SELECT"
+            && fact.Properties["tableName"] == "orders"
+            && fact.Properties["columnNames"] == "id;status"
+            && fact.SourceSymbol == "Load");
+        Assert.Contains(shapeFacts, fact =>
+            fact.Properties["sqlSourceKind"] == "orm-text"
+            && fact.Properties["queryShapeHash"].Length == 32);
+        Assert.Contains(shapeFacts, fact =>
+            fact.Evidence.FilePath == "orders.sql"
+            && fact.Properties["sqlSourceKind"] == "sql-file");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("sqlSourceKind") == "dynamic-boundary"
+            && fact.Properties.GetValueOrDefault("methodName") == "SqlCommand");
+        Assert.DoesNotContain(result.Facts, fact => fact.Properties.ContainsKey("rawSql") || fact.Properties.ContainsKey("text"));
+    }
 }

@@ -144,7 +144,7 @@ This key is for deterministic matching, not proof of runtime reachability.
 
 ## SQL Evidence Contract
 
-SQL evidence is shared cross-language data dependency evidence. Current adapters all support the minimum `textHash`/`textLength` shape for SQL text evidence where SQL text is detected. Additional properties such as `operationName` and `sqlSourceKind` are additive convergence targets until all adapters backfill them.
+SQL evidence is shared cross-language data dependency evidence. Adapters emit `SqlTextUsed` as hash/length evidence for complete statically visible SQL text, and emit SQL-shape `QueryPatternDetected` as separate static shape evidence when a lightweight deterministic extractor can safely derive a query shape.
 
 Current shared minimum:
 
@@ -154,14 +154,14 @@ Current shared minimum:
 | `textLength` | Length of the raw SQL string |
 | `targetSymbol` | Reducer-friendly display symbol for the containing SQL boundary |
 
-Recommended additive properties:
+Recommended properties:
 
 | Property | Meaning |
 | --- | --- |
 | `operationName` | Uppercase visible leading verb when the literal starts with an allowed verb; empty or omitted otherwise |
 | `sqlSourceKind` | One of the shared source-kind values below |
 
-Allowed leading verbs are `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `CALL`, `EXEC`, and `EXECUTE`. Adapters should trim leading whitespace only and should not implement comment stripping or dialect parsing for this field. `WITH`/CTE text and non-verb starts should leave `operationName` empty until a shared SQL parser exists.
+Allowed leading verbs are `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `CALL`, `EXEC`, and `EXECUTE`. Adapters should trim leading whitespace only for `operationName`. `WITH`/CTE text should leave `operationName` empty in v1 while still allowing shape-hash-only `QueryPatternDetected` when the text is SQL-like. `CALL`/`EXEC`/`EXECUTE` should expose the operation only and must not place routine names in table fields. `SELECT` table extraction should only claim visible top-level `FROM`/`JOIN` identifiers; subquery table positions should remain without table metadata in v1.
 
 Shared `sqlSourceKind` values:
 
@@ -174,9 +174,11 @@ Shared `sqlSourceKind` values:
 | `dbapi-execute` | Direct DB API execute call with literal SQL |
 | `dynamic-boundary` | Dynamic SQL construction was detected and concrete SQL was not claimed |
 
-`SqlTextUsed` should remain hash/text-length evidence and should not carry guessed table or column fields. Adapters may emit `QueryPatternDetected` with best-effort `tableName`, `tableNames`, `columnNames`, `fieldNames`, and `queryShapeHash` when a lightweight deterministic extractor finds a simple static SQL shape. Those fields are structural review-routing evidence, not proof of dialect validity, generated SQL, runtime execution, or database schema existence. Adapters should omit `QueryPatternDetected` when no operation/table/column shape is statically visible. Lightweight extractors may treat quoted identifiers conservatively as string literals and miss those table/column names until a shared parser exists.
+`SqlTextUsed` should remain hash/text-length evidence and should not carry guessed table or column fields. SQL-shape `QueryPatternDetected` uses `queryShapeHash`, `sqlSourceKind`, and the safest available `operationName`, `tableName`, `tableNames`, `columnNames`, or `fieldNames`. Shape-hash-only facts are valid for SQL-like `WITH`/CTE text and must omit unsupported operation/table/column properties rather than inventing them.
 
-Cross-language SQL matching must not require `operationName` or `sqlSourceKind` until the existing adapters emit those properties consistently.
+The v1 `queryShapeHash` reference is Python's normalized masked SQL text: strip `--` and `/* */` comments, mask single- and double-quoted contents, collapse whitespace, trim, strip trailing semicolons, SHA-256 hash, and truncate to 32 lowercase hex chars. Caveats: double-quoted identifiers may collapse like strings, `--` inside string literals follows the reference comment-stripping behavior, and static SQL-shape evidence does not prove dialect validity, runtime execution, schema existence, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
+
+Dynamic SQL construction where complete static text is not visible should emit an `AnalysisGap` or adapter-equivalent reduced-coverage fact with `sqlSourceKind=dynamic-boundary`, not complete `SqlTextUsed`.
 
 ## SQLite Contract
 

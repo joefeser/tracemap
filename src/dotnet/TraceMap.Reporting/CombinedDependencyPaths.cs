@@ -91,8 +91,13 @@ public sealed record CombinedPathNode(
     string? SurfaceName,
     string? HttpMethod,
     string? NormalizedPathKey,
+    string? OperationName,
+    string? TableName,
+    string? ColumnNames,
+    string? SourceKind,
     string? ShapeHash,
     string? TextHash,
+    string? TextLength,
     string? PackageName,
     string? ConfigKey);
 
@@ -136,6 +141,13 @@ public sealed record CombinedPathInventory(
     IReadOnlyList<CombinedPathNode> EvidenceNodes,
     IReadOnlyList<CombinedPathEdge> EvidenceEdges);
 
+internal sealed record CombinedPathGraphInventory(
+    IReadOnlyList<CombinedReportSource> Sources,
+    IReadOnlyList<string> CoverageWarnings,
+    IReadOnlyList<CombinedPathNode> Nodes,
+    IReadOnlyList<CombinedPathEdge> Edges,
+    IReadOnlyList<CombinedPathGap> Gaps);
+
 public static class CombinedDependencyPathClassifications
 {
     public const string StrongStaticPath = nameof(StrongStaticPath);
@@ -163,6 +175,7 @@ public static class CombinedDependencyPathReporter
     private static readonly HashSet<string> TerminalSurfaceKinds = new(StringComparer.Ordinal)
     {
         "sql-query",
+        "sql-persistence",
         "http-route",
         "http-client",
         "package-config"
@@ -184,12 +197,62 @@ public static class CombinedDependencyPathReporter
 
     public static async Task<CombinedDependencyPathResult> WriteAsync(CombinedDependencyPathOptions options, CancellationToken cancellationToken = default)
     {
-        ValidateOptions(options);
+        var report = await BuildReportAsync(options, cancellationToken);
         var format = NormalizeFormat(options.Format);
+        var (markdownPath, jsonPath) = await WriteOutputsAsync(options.OutputPath, format, report, cancellationToken);
+        return new CombinedDependencyPathResult(report, markdownPath, jsonPath);
+    }
+
+    public static async Task<CombinedDependencyPathReport> BuildReportAsync(CombinedDependencyPathOptions options, CancellationToken cancellationToken = default)
+    {
+        ValidateOptions(options);
         var sourcePair = ParseSourcePair(options.SourcePair);
+        var (read, graph) = await BuildGraphAsync(options.IndexPath, sourcePair, cancellationToken);
+        return BuildReport(options, read, graph, sourcePair);
+    }
+
+    internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
+        string indexPath,
+        string? sourcePair = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(indexPath))
+        {
+            throw new ArgumentException("paths requires --index <combined.sqlite>.");
+        }
+
+        var parsedSourcePair = ParseSourcePair(sourcePair);
+        var (read, graph) = await BuildGraphAsync(indexPath, parsedSourcePair, cancellationToken);
+        return new CombinedPathGraphInventory(
+            read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
+            read.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            graph.Nodes.Values
+                .Select(node => node.ToReportNode())
+                .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
+                .ThenBy(node => node.NodeKind, StringComparer.Ordinal)
+                .ThenBy(node => node.DisplayName, StringComparer.Ordinal)
+                .ThenBy(node => node.NodeId, StringComparer.Ordinal)
+                .ToArray(),
+            graph.Edges
+                .Select(edge => edge.ToReportEdge())
+                .ToArray(),
+            graph.Gaps
+                .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
+                .ThenBy(gap => gap.SourceLabel, StringComparer.Ordinal)
+                .ThenBy(gap => gap.FilePath, StringComparer.Ordinal)
+                .ThenBy(gap => gap.StartLine ?? 0)
+                .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    private static async Task<(CombinedReadResult Read, EvidenceGraph Graph)> BuildGraphAsync(
+        string indexPath,
+        (string Client, string Server)? sourcePair,
+        CancellationToken cancellationToken)
+    {
         var connectionString = new SqliteConnectionStringBuilder
         {
-            DataSource = options.IndexPath,
+            DataSource = indexPath,
             Mode = SqliteOpenMode.ReadOnly
         }.ToString();
         await using var connection = new SqliteConnection(connectionString);
@@ -200,9 +263,7 @@ public static class CombinedDependencyPathReporter
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts);
         var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair);
-        var report = BuildReport(options, read, graph, sourcePair);
-        var (markdownPath, jsonPath) = await WriteOutputsAsync(options.OutputPath, format, report, cancellationToken);
-        return new CombinedDependencyPathResult(report, markdownPath, jsonPath);
+        return (read, graph);
     }
 
     private static void ValidateOptions(CombinedDependencyPathOptions options)
@@ -242,7 +303,7 @@ public static class CombinedDependencyPathReporter
 
             if (!TerminalSurfaceKinds.Contains(surfaceKind))
             {
-                throw new ArgumentException("paths --to-surface must be one of sql-query, http-route, http-client, or package-config.");
+                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, or package-config.");
             }
         }
     }
@@ -966,7 +1027,13 @@ public static class CombinedDependencyPathReporter
 
     private static bool SurfaceNameMatches(GraphNode node, string selector)
     {
-        var value = node.SurfaceName ?? node.DisplayName;
+        var values = new[]
+        {
+            node.SurfaceName ?? node.DisplayName,
+            node.TableName,
+            node.ShapeHash,
+            node.TextHash
+        }.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!).ToArray();
         if (selector == "*")
         {
             return true;
@@ -977,20 +1044,20 @@ public static class CombinedDependencyPathReporter
         var trimmed = selector.Trim('*');
         if (starts && ends)
         {
-            return value.Contains(trimmed, StringComparison.OrdinalIgnoreCase);
+            return values.Any(value => value.Contains(trimmed, StringComparison.OrdinalIgnoreCase));
         }
 
         if (starts)
         {
-            return value.EndsWith(trimmed, StringComparison.OrdinalIgnoreCase);
+            return values.Any(value => value.EndsWith(trimmed, StringComparison.OrdinalIgnoreCase));
         }
 
         if (ends)
         {
-            return value.StartsWith(trimmed, StringComparison.OrdinalIgnoreCase);
+            return values.Any(value => value.StartsWith(trimmed, StringComparison.OrdinalIgnoreCase));
         }
 
-        return string.Equals(value, selector, StringComparison.OrdinalIgnoreCase);
+        return values.Any(value => string.Equals(value, selector, StringComparison.OrdinalIgnoreCase));
     }
 
     private static CombinedPathGap CreateSelectorGap(CombinedReadResult read, CombinedDependencyPathOptions options, string? sourceFilter)
@@ -1194,6 +1261,11 @@ public static class CombinedDependencyPathReporter
             null,
             null,
             null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
     }
 
@@ -1204,6 +1276,7 @@ public static class CombinedDependencyPathReporter
             surface.SurfaceKind switch
             {
                 "sql-query" => "SqlSurface",
+                "sql-persistence" => "SqlPersistenceSurface",
                 "http-client" => "HttpClientSurface",
                 "http-route" => "HttpRouteSurface",
                 "package-config" => surface.ConfigKey is not null ? "ConfigSurface" : "PackageSurface",
@@ -1225,8 +1298,13 @@ public static class CombinedDependencyPathReporter
             surface.DisplayName,
             surface.HttpMethod,
             surface.NormalizedPathKey,
+            surface.OperationName,
+            surface.TableName,
+            surface.ColumnNames,
+            surface.SourceKind,
             surface.ShapeHash,
             surface.TextHash,
+            surface.TextLength,
             surface.PackageName,
             surface.ConfigKey);
     }
@@ -1647,6 +1725,11 @@ public static class CombinedDependencyPathReporter
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
             Nodes[nodeId] = node;
             return node;
@@ -1738,8 +1821,13 @@ public static class CombinedDependencyPathReporter
         string? SurfaceName,
         string? HttpMethod,
         string? NormalizedPathKey,
+        string? OperationName,
+        string? TableName,
+        string? ColumnNames,
+        string? SourceKind,
         string? ShapeHash,
         string? TextHash,
+        string? TextLength,
         string? PackageName,
         string? ConfigKey)
     {
@@ -1764,8 +1852,13 @@ public static class CombinedDependencyPathReporter
                 SurfaceName,
                 HttpMethod,
                 NormalizedPathKey,
+                OperationName,
+                TableName,
+                ColumnNames,
+                SourceKind,
                 ShapeHash,
                 TextHash,
+                TextLength,
                 PackageName,
                 ConfigKey);
         }
@@ -1795,8 +1888,8 @@ public static class CombinedDependencyPathReporter
                 Classification,
                 RuleId,
                 EvidenceTier,
-                SupportingFactIds,
-                SupportingCombinedEdgeIds,
+                SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                SupportingCombinedEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 FilePath,
                 StartLine,
                 EndLine);

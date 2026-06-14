@@ -1,4 +1,279 @@
 rules:
+  - id: combined.diff.source.v1
+    name: Combined dependency diff source comparison
+    description: Compares source inventory and source metadata between two combined indexes by exact source label and stable source identity metadata.
+    evidenceTier: Tier2Structural
+    emits:
+      - source diff row
+      - SourceIdentityChanged gap
+    limitations:
+      - Source pairing is exact-label based and does not infer renamed sources.
+      - Source identity metadata may be incomplete; unverifiable identity is review-tier evidence.
+      - Source diffs compare static scan metadata and do not prove code behavior changed.
+
+  - id: combined.diff.coverage.v1
+    name: Combined dependency diff coverage comparison
+    description: Compares scan coverage, build status, commit SHA credibility, and known coverage warnings between paired sources.
+    evidenceTier: Tier4Unknown
+    emits:
+      - coverage diff row
+      - coverage caveat
+    limitations:
+      - Coverage is source-level unless adapters emit more precise gap metadata.
+      - Reduced coverage makes absence of evidence coverage-relative, not proof that a dependency was removed.
+
+  - id: combined.diff.endpoint.v1
+    name: Combined dependency diff endpoint comparison
+    description: Compares combined endpoint alignment evidence between two snapshots using static method/path keys and side-specific endpoint provenance.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - endpoint diff row
+    limitations:
+      - Endpoint diffs are static method/path evidence and do not prove runtime traffic, auth behavior, proxies, deployment base paths, CORS behavior, or reachability.
+      - Dynamic, ambiguous, optional, and method-mismatch evidence remains review-tier.
+
+  - id: combined.diff.surface.v1
+    name: Combined dependency diff surface comparison
+    description: Compares dependency surfaces such as SQL query/persistence, HTTP, package, and config evidence using safe structured metadata.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - surface diff row
+    limitations:
+      - Surface diffs do not prove runtime SQL execution, database schema existence, config loading, package loading, generated SQL equivalence, or branch feasibility.
+      - Raw SQL, URLs, config values, connection strings, and source snippets are not rendered by default.
+      - Hash-only SQL text surfaces emit a HashOnlyEvidence caveat and remain review-tier evidence.
+      - SQL surfaces that fall back to fact-hash identity emit a VolatileIdentity caveat and remain review-tier evidence.
+
+  - id: combined.diff.edge.v1
+    name: Combined dependency diff edge comparison
+    description: Compares combined dependency edge evidence such as calls, object creations, relationships, and parameter-forwarding edges using stable source/target metadata.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - edge diff row
+    limitations:
+      - Edge diffs are static evidence and do not prove dynamic dispatch, runtime DI registrations, reflection targets, branch feasibility, or collection contents.
+      - Syntax-only or name-only edge evidence remains review-tier.
+
+  - id: combined.diff.identity.v1
+    name: Combined dependency diff stable identity
+    description: Constructs stable identity keys for diffing and emits duplicate identity gaps when multiple records share the same stable key.
+    evidenceTier: Tier4Unknown
+    emits:
+      - DuplicateIdentity gap
+    limitations:
+      - Stable identity is label-and-metadata based; renamed labels are not inferred as the same source.
+      - Duplicate identity within one snapshot means diff comparison for affected records is review-tier only.
+      - Identity construction depends on combined fact metadata quality; malformed or incomplete metadata degrades identity.
+
+  - id: combined.diff.path.v1
+    name: Combined dependency diff path comparison
+    description: Compares opt-in dependency path signatures produced by the combined path query engine.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - path diff row
+    limitations:
+      - Path diffing is bounded by depth, path, and frontier limits and must not be treated as complete dependency coverage when truncated.
+      - Path evidence is a static trail, not runtime execution or full taint analysis.
+
+  - id: combined.diff.selector.v1
+    name: Combined dependency diff selector handling
+    description: Emits selector gaps when user-supplied source, endpoint, surface, or path filters match no comparable evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch gap
+    limitations:
+      - Selector gaps describe the current static evidence and query bounds only.
+
+  - id: combined.diff.schema.v1
+    name: Combined dependency diff schema gap
+    description: Emits gaps when optional combined-index precision tables are missing and diff comparison falls back to weaker evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SchemaMissing gap
+    limitations:
+      - Schema gaps can reduce comparison precision and may downgrade added/removed claims.
+
+  - id: combined.diff.truncation.v1
+    name: Combined dependency diff truncation gap
+    description: Emits gaps when diff row or gap caps truncate report output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - TruncatedByLimit gap
+    limitations:
+      - Truncated output is intentionally partial and must not be treated as complete evidence coverage.
+
+  - id: combined.impact.source.v1
+    name: Combined change impact source item
+    description: Projects combined source diff rows into static change-impact source items with source identity, coverage, and rule-backed evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - source impact item
+      - NoImpactEvidence gap
+    limitations:
+      - Source impact items describe changed static source metadata, not runtime behavior.
+      - Source pairing is exact-label based and does not infer renamed sources.
+      - Missing or conflicting source identity metadata downgrades confidence.
+
+  - id: combined.impact.coverage.v1
+    name: Combined change impact coverage item
+    description: Projects combined coverage diff rows into static change-impact coverage items so reduced scans and build-status changes are visible in impact reports.
+    evidenceTier: Tier4Unknown
+    emits:
+      - coverage impact item
+    limitations:
+      - Coverage is source-level unless adapters emit more precise gap metadata.
+      - Reduced coverage makes absence of impact evidence coverage-relative, not proof that a dependency was unaffected.
+
+  - id: combined.impact.endpoint.v1
+    name: Combined change impact endpoint item
+    description: Projects combined endpoint diff rows into static change-impact endpoint items using method/path keys and side-specific endpoint provenance.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - endpoint impact item
+    limitations:
+      - Endpoint impact items do not prove runtime traffic, auth behavior, proxies, deployment base paths, CORS behavior, or reachability.
+      - Dynamic, ambiguous, optional, and method-mismatch evidence remains review-tier.
+
+  - id: combined.impact.surface.v1
+    name: Combined change impact dependency surface item
+    description: Projects dependency-surface diff rows into static change-impact items for SQL query/persistence, HTTP, package, and config surfaces using safe structured metadata.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - surface impact item
+    limitations:
+      - Surface impact items do not prove runtime SQL execution, database schema existence, config loading, package loading, generated SQL equivalence, or branch feasibility.
+      - Raw SQL, URLs, config values, connection strings, and source snippets are not rendered by default.
+      - HashOnlyEvidence and VolatileIdentity caveats from combined.diff.surface.v1 carry through as review-tier impact evidence.
+
+  - id: combined.impact.edge.v1
+    name: Combined change impact dependency edge item
+    description: Projects dependency-edge diff rows into static change-impact items for calls, object creations, relationships, and parameter-forwarding evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - edge impact item
+    limitations:
+      - Edge impact items do not prove dynamic dispatch, runtime dependency injection registrations, reflection targets, branch feasibility, or collection contents.
+      - Syntax-only or name-only edge evidence remains review-tier.
+
+  - id: combined.impact.path.v1
+    name: Combined change impact path item
+    description: Projects opt-in combined path diff rows into static change-impact path items and path context summaries.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - path impact item
+      - path context summary
+    limitations:
+      - Path context is opt-in, bounded, and must not be treated as complete dependency coverage when truncated.
+      - Path evidence is a static trail, not runtime execution, full taint analysis, or proof of business impact.
+
+  - id: combined.impact.path-context.v1
+    name: Combined change impact path context
+    description: Classifies optional per-item path context when the impact planner can safely map a changed endpoint, surface, or edge to bounded before/after path queries.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - ReachabilityChanged path context
+      - ReachabilityEvidenceChanged path context
+      - ReachabilityUnchanged path context
+      - PathContextUnavailable gap
+      - NoPathEvidence gap
+    limitations:
+      - Path context is static graph evidence and does not prove runtime reachability, branch feasibility, dynamic dispatch, dependency injection binding, or data flow.
+      - Unsupported selector mappings must emit review or unknown gaps rather than guessed paths.
+      - Reduced coverage and traversal truncation make no-path conclusions coverage-relative.
+
+  - id: combined.impact.selector.v1
+    name: Combined change impact selector handling
+    description: Emits selector and ignored-selector gaps when user-supplied source, endpoint, surface, or path filters match no comparable evidence or are outside the selected scope.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch gap
+      - IgnoredSelector gap
+    limitations:
+      - Selector gaps describe only the current static evidence and query bounds.
+      - Ignored selector gaps do not prove matching evidence exists outside the selected scope.
+
+  - id: combined.impact.truncation.v1
+    name: Combined change impact truncation gap
+    description: Emits gaps when impact item, path-query, or gap caps truncate report output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - TruncatedByLimit gap
+    limitations:
+      - Truncated output is intentionally partial and must not be treated as complete impact coverage.
+
+  - id: combined.reverse.surface.v1
+    name: Combined reverse selected dependency surface
+    description: Selects terminal dependency surfaces for reverse static reachability queries using safe structured surface metadata.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - selected reverse surface row
+      - NeedsReviewSurfaceEvidence row
+      - UnknownAnalysisGap row
+    limitations:
+      - Surface selection is static evidence and does not prove runtime SQL execution, database schema existence, config loading, package loading, outbound traffic, or API route deployment.
+      - Raw SQL, raw URLs, config values, connection strings, source snippets, raw repository remotes, and local absolute paths must not be rendered.
+      - Ambiguous, syntax-only, textual, or duplicate-identity surface matches remain review-tier evidence.
+
+  - id: combined.reverse.root.v1
+    name: Combined reverse upstream root grouping
+    description: Groups reverse traversal results by upstream endpoint, symbol, or source roots that can statically reach selected dependency surfaces.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - reverse endpoint root row
+      - reverse symbol root row
+      - reverse source root row
+      - NoReversePathEvidence gap
+    limitations:
+      - Root grouping is bounded static graph evidence and does not prove runtime traffic, runtime dispatch, dependency injection binding, branch feasibility, or production usage.
+      - Missing or reduced source coverage makes no-path conclusions unknown rather than proof that no caller exists.
+      - Endpoint roots must not be substituted with symbol or source roots unless the requested target mode permits them.
+
+  - id: combined.reverse.path.v1
+    name: Combined reverse static path evidence
+    description: Emits bounded reverse static paths from upstream roots to selected dependency surfaces by reusing the combined dependency path graph inventory.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - StrongStaticReversePath row
+      - ProbableStaticReversePath row
+      - NeedsReviewReversePath row
+    limitations:
+      - Reverse paths are static evidence trails, not runtime execution, full taint analysis, mutation semantics, or proof of business impact.
+      - Traversal is bounded by surface, depth, frontier, root, and per-root path limits.
+      - Fallback, name-only, syntax-only, dynamic, duplicate-identity, or ambiguous path evidence must be downgraded to review-tier or unknown classifications.
+
+  - id: combined.reverse.selector.v1
+    name: Combined reverse selector handling
+    description: Emits gaps for reverse query selectors that match no eligible evidence or request a valid target mode that is not implemented in the current release.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch gap
+      - UnsupportedSelector gap
+    limitations:
+      - Selector gaps describe only the current static evidence, selector semantics, and query bounds.
+      - A selector no-match result is not proof that runtime dependencies or callers do not exist.
+
+  - id: combined.reverse.truncation.v1
+    name: Combined reverse traversal truncation gap
+    description: Emits gaps when reverse surface, depth, frontier, root, path, or gap caps truncate report output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - TruncatedByLimit gap
+    limitations:
+      - Truncated output is intentionally partial and must not be treated as complete reverse dependency coverage.
+      - Truncation can coexist with coverage gaps; it must not suppress UnknownAnalysisGap evidence.
+
+  - id: combined.reverse.identity.v1
+    name: Combined reverse stable identity caveat
+    description: Emits reverse-query caveats when selected surfaces, roots, path nodes, source identity, or commit SHA metadata are duplicate, missing, or unverified.
+    evidenceTier: Tier4Unknown
+    emits:
+      - DuplicateIdentity gap
+      - IdentityUnverified gap
+    limitations:
+      - Stable identity construction depends on combined source, fact, symbol, and path metadata quality.
+      - Duplicate or unverified identities downgrade affected reverse rows and must not produce strong static classifications.
+      - Missing commit SHA or source identity means provenance is incomplete; it does not prove evidence is wrong or absent.
+
   - id: combined.paths.endpoint-match.v1
     name: Combined dependency path endpoint match edge
     description: Derives an in-memory path edge between HTTP client and server endpoint facts using the same deterministic endpoint matcher as the combined dependency report.
@@ -179,6 +454,7 @@ rules:
       - Syntax-only evidence does not prove the query provider, database table, generated SQL, runtime branch feasibility, or whether the query executes.
       - Field names are extracted from member access inside query arguments and can include unrelated member reads in complex expressions.
       - Literal values and raw expressions are not stored; pattern hashes, field names, operation names, and spans are emitted.
+      - Reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 
   - id: csharp.syntax.objectshape.v1
     name: C# syntax object shape
@@ -434,14 +710,31 @@ rules:
   - id: database.sql.text.v1
     name: SQL text detection
     description: Finds ADO.NET SqlCommand construction, SQL-like files, and SQL-like string literals.
-    evidenceTier: Tier3SyntaxOrTextual
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
     emits:
       - SqlCommandDetected
       - SqlTextUsed
+      - AnalysisGap
     limitations:
-      - SQL parsing is approximate in MVP.
-      - Identifier matches are not proof of contract usage.
+      - SQL text evidence stores hashes and lengths only; table and column guesses belong on database.sql.shape.v1 QueryPatternDetected facts.
+      - C# syntax fallback may classify any complete SQL-like string literal whose first token is a supported SQL verb, even outside a recognized framework call shape.
+      - Dynamic SQL construction emits reduced-coverage boundary evidence instead of complete SQL text.
       - Raw SQL text is not stored by default; hashes and spans are emitted instead.
+
+  - id: database.sql.shape.v1
+    name: Shared SQL shape detection
+    description: Derives Python-v1-compatible SQL query shape hashes and safe operation/table/column metadata from simple static SQL text.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - QueryPatternDetected
+    limitations:
+      - The v1 queryShapeHash is the Python normalized masked SQL text hash, not a full SQL parser or dialect-aware structural hash.
+      - Normalization strips comments before masking strings; `--` inside string literals follows the v1 reference behavior.
+      - Double-quoted contents are masked like strings, so quoted SQL identifiers may be omitted or collapse until a parser-backed version exists.
+      - Shape-hash-only facts are allowed for SQL-like WITH/CTE text and omit unsupported operation/table/column fields.
+      - SELECT table extraction only claims visible top-level FROM/JOIN identifiers; subquery table positions may be left without table metadata to avoid overclaiming.
+      - Static SQL shape evidence does not prove runtime execution, schema existence, dialect validity, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
+      - Raw SQL text, predicate literal values, source snippets, connection strings, raw URLs, and unsafe identifiers are not rendered.
 
   - id: config.key.v1
     name: Configuration key extraction
@@ -702,6 +995,22 @@ rules:
     limitations:
       - Prisma schema files, migrations, query middleware, and runtime client extensions are not modeled in MVP.
 
+  - id: typescript.integration.sql.v1
+    name: TypeScript direct SQL integration
+    description: Detects direct SQL client literals and tagged SQL templates, emitting hash-only SQL text evidence and SQL-shape query patterns when complete static SQL text is visible.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SqlTextUsed
+      - QueryPatternDetected
+      - AnalysisGap
+    limitations:
+      - Detection is syntax-only for supported direct SQL call and tag shapes; supported method names are query, execute, raw, executeRaw, $queryRaw, and $executeRaw, and unrelated APIs with those names may be missed or require SQL-like first arguments to avoid overclaiming.
+      - Template literals with non-static expressions emit dynamic-boundary gaps rather than complete SQL text evidence.
+      - Prisma/Base44 query-builder facts remain under typescript.integration.querypattern.v1 and are not SQL-shape evidence unless direct SQL text is present.
+      - The v1 queryShapeHash follows Python normalized masked SQL text semantics, including comment-before-string masking and double-quoted-content caveats.
+      - Static SQL shape evidence does not prove runtime execution, schema existence, dialect validity, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
+      - Raw SQL text, predicate literal values, source snippets, connection strings, raw URLs, and unsafe identifiers are not rendered.
+
   - id: typescript.integration.contractmapping.v1
     name: TypeScript contract mapping integration
     description: Detects Zod schema call shapes as structural contract mapping evidence.
@@ -728,8 +1037,10 @@ rules:
       - QueryPatternDetected
     limitations:
       - Structural query evidence does not prove generated SQL, runtime execution, database schema existence, or branch feasibility.
+      - Prisma/Base44 query-builder facts are not SQL-shape facts and do not emit sqlSourceKind.
       - Only statically visible object-literal and simple string sort arguments are inspected in MVP; variables, spreads, helper-built filters, and dynamic keys need later flow rules.
       - Literal values and raw object text are not stored; field names, operation names, hashes, and spans are emitted.
+      - Reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 
   - id: typescript.integration.angular-httpclient.v1
     name: TypeScript Angular HttpClient integration
@@ -986,8 +1297,12 @@ rules:
       - SqlTextUsed
       - QueryPatternDetected
     limitations:
-      - SQL hashes do not participate in reducer matching unless paired with a reducer-recognized contract element or symbol.
-      - Runtime query execution, database schema existence, generated SQL, and branch feasibility are not proven.
+      - SQL text hashes and SQL-shape hashes do not prove runtime execution, database schema existence, generated SQL, dialect validity, permissions, transaction behavior, or branch feasibility.
+      - The v1 queryShapeHash follows Python normalized masked SQL text semantics, including comment-before-string masking and double-quoted-content caveats.
+      - SQL-like WITH/CTE text may emit shape-hash-only QueryPatternDetected without operation/table/column metadata.
+      - Dynamic or concatenated SQL literals are not complete SQL text evidence.
+      - JDBC/JPA literal detection is conservative and may miss overloaded calls with trailing non-SQL arguments when the visible SQL shape cannot be isolated safely.
+      - When JVM query-pattern facts are emitted, reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 
   - id: jvm.integration.jpa.v1
     name: JVM JPA mapping integration
@@ -1170,7 +1485,9 @@ rules:
     limitations:
       - SQL text is hashed and operation-shaped; raw SQL text and literal values are not stored by default.
       - Query-pattern extraction is best-effort for simple static SQL operation, table, and column shapes; full SQL parsing, dialect behavior, schema existence, generated SQL, and runtime execution are not proven.
-      - Reports may display derived table, column, source-kind, and shape-hash metadata, but must not display raw SQL text or literal values.
+      - The v1 queryShapeHash is the Python normalized masked SQL text reference; comment-before-string masking and double-quoted-content masking are known caveats.
+      - SQL-like WITH/CTE text may emit shape-hash-only QueryPatternDetected without operation/table/column metadata.
+      - Reports may display safe derived table, column, source-kind, and shape-hash metadata, but must not display raw SQL text, literal values, or unsafe identifiers.
       - Quoted identifiers may be treated conservatively as string literals by lightweight SQL shape extraction and missed until a shared SQL parser exists.
       - Tier2 query patterns are structural evidence only; Tier3 query patterns are review-routing evidence and should not be treated as semantic database proof.
 

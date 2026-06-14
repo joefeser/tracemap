@@ -41,6 +41,14 @@ public final class SqlResourceExtractor {
                     file.relativePath(),
                     file.relativePath(),
                     props("name", file.relativePath(), "fileKind", "Sql")));
+                if (!SqlShapeExtractor.isSqlLike(sql)) {
+                    continue;
+                }
+                Map<String, String> textProps = props("textHash", Hashes.sha256(sql, 32), "textLength", String.valueOf(sql.length()), "sqlSourceKind", "sql-file", "targetSymbol", file.relativePath());
+                String operation = SqlShapeExtractor.operationName(sql);
+                if (!operation.isBlank()) {
+                    textProps.put("operationName", operation);
+                }
                 facts.add(FactFactory.create(
                     manifest,
                     FactTypes.SQL_TEXT_USED,
@@ -51,7 +59,21 @@ public final class SqlResourceExtractor {
                     null,
                     file.relativePath(),
                     file.relativePath(),
-                    props("operationName", "SqlResource", "textHash", Hashes.sha256(sql, 32), "textLength", String.valueOf(sql.length()), "targetSymbol", file.relativePath())));
+                    textProps));
+                Map<String, String> shapeProps = new LinkedHashMap<>(SqlShapeExtractor.queryShapeProperties(sql, "sql-file"));
+                String target = shapeProps.getOrDefault("tableName", file.relativePath());
+                shapeProps.put("targetSymbol", target);
+                facts.add(FactFactory.create(
+                    manifest,
+                    FactTypes.QUERY_PATTERN_DETECTED,
+                    RuleIds.SQL,
+                    EvidenceTiers.TIER2_STRUCTURAL,
+                    FactFactory.evidence(file.relativePath(), 1, lines, Hashes.sha256(sql, 32), "SqlResourceExtractor", ScannerVersions.INTEGRATION),
+                    file.relativePath(),
+                    null,
+                    target,
+                    target,
+                    shapeProps));
             } catch (IOException exception) {
                 gaps.add("SqlFileReadFailed: " + file.relativePath());
             }
