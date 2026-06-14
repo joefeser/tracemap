@@ -728,8 +728,12 @@ public static class ReleaseReviewReporter
 
     private static ReleaseReviewSection BuildUnavailableSection(string section, string message, bool requested)
     {
-        var classification = requested ? ReleaseReviewClassifications.UnknownAnalysisGap : ReleaseReviewClassifications.PartialAnalysis;
-        var gap = Gap("section", "WorkflowUnavailable", section, null, SectionRuleId, classification, message);
+        if (!requested)
+        {
+            return new ReleaseReviewSection(ReleaseReviewStatuses.NotRequested, [], [], ["Section is outside the requested release-review scope."]);
+        }
+
+        var gap = Gap("section", "WorkflowUnavailable", section, null, SectionRuleId, ReleaseReviewClassifications.UnknownAnalysisGap, message);
         return new ReleaseReviewSection(ReleaseReviewStatuses.Unavailable, [], [gap], FutureWorkflowLimitations);
     }
 

@@ -637,7 +637,7 @@ public static class ContractDeltaReducer
             "type" => Has(reference, "typeName", "fullyQualifiedName", "symbolId", "name"),
             "property" => Has(reference, "propertyName", "memberName", "jsonName", "columnName", "symbolId", "name"),
             "method" => Has(reference, "methodName", "signature", "symbolId", "name"),
-            "endpoint" => Has(reference, "path", "pathKey", "normalizedPathKey", "routeTemplate", "method"),
+            "endpoint" => Has(reference, "path", "pathKey", "normalizedPathKey", "routeTemplate"),
             "package" => Has(reference, "packageName", "name"),
             "schema" => Has(reference, "schemaName", "tableName", "columnName", "name"),
             "sql-table" => Has(reference, "tableName", "name"),
