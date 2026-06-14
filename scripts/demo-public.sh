@@ -72,15 +72,6 @@ is_inside_repo() {
   [[ "$candidate" == "$ROOT_DIR" || "$candidate" == "$ROOT_DIR/"* ]]
 }
 
-require_file() {
-  local path="$1"
-  local label="$2"
-  test -f "$path" || {
-    echo "error: missing $label: $path" >&2
-    exit 1
-  }
-}
-
 add_section() {
   local name="$1"
   local status="$2"
@@ -96,7 +87,7 @@ run_dotnet_scan() {
   local repo_path="$1"
   local out_path="$2"
   local label="$3"
-  dotnet run --project "$DOTNET_CLI" -- scan --repo "$repo_path" --out "$out_path"
+  dotnet run --no-build --project "$DOTNET_CLI" -- scan --repo "$repo_path" --out "$out_path"
   node "$ASSERT_HELPER" scan-artifacts "$label" "$out_path"
 }
 

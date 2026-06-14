@@ -94,7 +94,7 @@ function assertScanArtifacts() {
     fail(`${label} facts.ndjson first line is not valid JSON: ${error.message}`);
   }
 
-  const manifest = readJson(path.join(scanDir, "scan-manifest.json"));
+  const manifest = readJson(path.join(scanDir, "scan-manifest.json")) ?? {};
   const commitSha = manifest.commitSha ?? manifest.gitCommitSha ?? "";
   assert(/^[0-9a-f]{7,40}$/i.test(commitSha), `${label} scan manifest is missing a SHA-like commit value.`);
 }
@@ -114,7 +114,7 @@ function scanSummary() {
     const label = spec.slice(0, separator);
     const scanDir = spec.slice(separator + 1);
     assertScanArtifactShape(label, scanDir);
-    const manifest = readJson(path.join(scanDir, "scan-manifest.json"));
+    const manifest = readJson(path.join(scanDir, "scan-manifest.json")) ?? {};
     const analysisLevel = String(manifest.analysisLevel ?? "");
     const buildStatus = String(manifest.buildStatus ?? "");
     const gaps = Array.isArray(manifest.knownGaps) ? manifest.knownGaps.length : 0;
@@ -262,7 +262,7 @@ function collectPublicFiles(dir, files) {
 
 function validateSummary() {
   const [summaryJson] = args;
-  const summary = readJson(summaryJson);
+  const summary = readJson(summaryJson) ?? {};
   assert(summary.version === "1.0", "demo-summary.json version must be 1.0.");
   assert(/^path-hash:[0-9a-f]{24}$/i.test(summary.outputRootHash ?? ""), "demo-summary.json must include outputRootHash and not an absolute root.");
   assert(Array.isArray(summary.sections), "demo-summary.json sections must be an array.");
