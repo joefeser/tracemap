@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A representative TraceMap scan packet with manifest, facts, report, and coverage examples."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Scan Packet Example | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/examples/scan-packet/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Scan Packet Example">
+    <meta property="og:description" content="Representative manifest, fact, and report excerpts from a TraceMap scan.">
+    <meta property="og:url" content="https://tracemap.tools/examples/scan-packet/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/" aria-current="page">Examples</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Scan packet example</p>
+        <h1>A scan packet is a snapshot of static evidence.</h1>
+        <p class="hero-subhead">
+          This representative packet shows how TraceMap records coverage,
+          deterministic facts, and human-readable summaries without storing raw
+          source snippets by default.
+        </p>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Manifest</p>
+          <h2>The manifest names the repository state and coverage.</h2>
+        </div>
+        <pre class="command-block"><code>{
+  "repo": "orders-api-sample",
+  "commitSha": "5e7fe17",
+  "scannerVersion": "tracemap-dotnet/0.1.0",
+  "analysisLevel": "Level1SemanticAnalysisReduced",
+  "buildStatus": "Failed",
+  "coverage": "Reduced",
+  "outputs": [
+    "facts.ndjson",
+    "index.sqlite",
+    "report.md",
+    "logs/analyzer.log"
+  ]
+}</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Facts</p>
+          <h2>Each fact carries a rule and evidence tier.</h2>
+        </div>
+        <pre class="command-block"><code>{"factType":"HttpRouteBinding","ruleId":"dotnet.aspnet.route.v1","evidenceTier":"Tier2Structural","file":"src/Orders.Api/OrdersController.cs","lineStart":42,"lineEnd":42,"commitSha":"5e7fe17"}
+{"factType":"PropertyAccessed","ruleId":"dotnet.semantic.property-access.v1","evidenceTier":"Tier1Semantic","targetSymbol":"Orders.Contracts.OrderDto.Status","file":"src/Orders.Api/OrderMapper.cs","lineStart":77,"lineEnd":77,"commitSha":"5e7fe17"}
+{"factType":"AnalysisGap","ruleId":"dotnet.msbuild.load-gap.v1","evidenceTier":"Tier4Unknown","file":"src/Orders.Api/Orders.Api.csproj","lineStart":1,"lineEnd":1,"commitSha":"5e7fe17"}</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Report excerpt</p>
+          <h2>The Markdown report is for review, not proof of runtime behavior.</h2>
+        </div>
+        <pre class="command-block"><code>## Coverage
+
+- Analysis level: Level1SemanticAnalysisReduced
+- Build status: Failed
+- Coverage: Reduced
+
+## Known Gaps
+
+- dotnet.msbuild.load-gap.v1
+  - Project load failed, syntax fallback continued.
+
+## Dependency Surfaces
+
+- HTTP route: GET /api/orders/{id}
+  - Rule: dotnet.aspnet.route.v1
+  - Tier: Tier2Structural
+  - File: src/Orders.Api/OrdersController.cs:42</code></pre>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Reduced coverage changes the conclusion.</h2>
+        <p>
+          A reduced scan can still route useful review work. It cannot prove that
+          no matching evidence exists across the whole repository.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        See the
+        <a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">acceptance plan</a>
+        for required scan artifacts.
+      </p>
+    </footer>
+  </body>
+</html>

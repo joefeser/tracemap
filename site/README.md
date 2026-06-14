@@ -26,6 +26,10 @@ Validation URLs:
 - `https://tracemap.tools/robots.txt`
 - `https://tracemap.tools/sitemap.xml`
 - `https://tracemap.tools/evidence/`
+- `https://tracemap.tools/examples/`
+- `https://tracemap.tools/examples/scan-packet/`
+- `https://tracemap.tools/examples/contract-impact/`
+- `https://tracemap.tools/use-cases/`
 - `https://tracemap.tools/demo/`
 
 ## Local Development
