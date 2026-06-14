@@ -147,6 +147,19 @@ For every successful `tracemap report --index <combined.sqlite> --out <out>` run
 - SQL and dynamic URL rows do not display raw SQL text, raw URLs, source snippets, or local absolute paths.
 - `endpoint_matches` is not mutated by report generation.
 
+For every successful `tracemap portfolio --out <out>` run, verify:
+
+- inputs are single-language indexes, combined indexes, or a manifest that references them, and all input indexes are opened read-only.
+- directory or extensionless output writes `portfolio-report.md` and `portfolio-report.json`.
+- JSON includes `reportType: multi-index-portfolio-report`, required empty arrays, stable query metadata, source snapshots, source coverage, endpoint alignment, dependency surfaces, dependency edges, shared surfaces, optional context sections, portfolio diff/impact sections, gaps, and limitations.
+- source rows preserve source labels, combined container labels when applicable, commit SHA, scanner/extractor version, analysis level, build status, coverage status, and repository identity hashes without local absolute paths.
+- single-snapshot reports compute endpoint alignment and shared surfaces only from deterministic static evidence and never imply runtime topology, ownership, traffic, deployment, package compatibility, vulnerability, or release approval.
+- before/after manifest comparison pairs sources by manifest label plus source identity, emits source changes, and projects safe surface/edge changes into `PortfolioDiffRow` rows with `portfolio.diff.v1`.
+- projected surface/edge diff rows use stable safe identities, carry rule IDs, evidence tiers, supporting fact or edge IDs where available, and downgrade to review/partial classifications for Tier3, hash-only, ambiguous, duplicate, or reduced-coverage evidence.
+- optional impact, path, reverse, and release-review context is `not_requested`, `unavailable`, or `deferred` until the compatible composition workflows are implemented.
+- caps such as `--max-sources`, `--max-surface-rows`, `--max-endpoint-findings`, `--max-shared-surfaces`, `--max-edge-rows`, `--max-diff-rows`, and `--max-gaps` apply deterministically and emit truncation gaps when rows are omitted.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, secret-looking values, repository remotes, or local absolute paths.
+
 For every successful `tracemap paths --index <combined.sqlite> --out <out>` run, verify:
 
 - path reports reject single-language indexes with a clear combined-index error.

@@ -355,12 +355,12 @@ public static class PortfolioReporter
         var before = await ReadSnapshotAsync(beforeManifest, options, "before", cancellationToken);
         var after = await ReadSnapshotAsync(afterManifest, options, "after", cancellationToken);
         var gaps = before.Gaps.Concat(after.Gaps).ToList();
-        var diffRows = BuildSourceDiffRows(before.Sources, after.Sources, gaps, options.MaxDiffRows);
-        var diffSection = Section(
+        var diffRows = BuildComparisonDiffRows(before, after, gaps, options.MaxDiffRows);
+        var diffSection = DiffSection(
             diffRows.Rows,
             diffRows.OmittedCount,
             gaps.Where(gap => gap.Section == "portfolioDiff").ToArray(),
-            ["Portfolio diff v1 compares source labels and source identity only. Surface and edge diff composition is deferred to a follow-up."]);
+            ["Portfolio diff v1 compares source labels, source identity, projected safe dependency surfaces, and projected safe dependency edges."]);
         var endpointSection = UnavailableEndpointSection();
         var pathContext = OptionalContextSection(options.IncludePaths, "pathContext", "Path context requires a single portfolio snapshot in v1.");
         var reverseContext = OptionalContextSection(options.IncludeReverse, "reverseContext", "Reverse context requires a single portfolio snapshot in v1.");
@@ -388,7 +388,7 @@ public static class PortfolioReporter
             null,
             Snapshot(beforeManifest, before, "before"),
             Snapshot(afterManifest, after, "after"),
-            Summary(options, before.Inputs.Concat(after.Inputs).ToArray(), before.Sources.Concat(after.Sources).ToArray(), [], [], [], [], diffRows.OmittedCount > 0, allGaps),
+            Summary(options, before.Inputs.Concat(after.Inputs).ToArray(), before.Sources.Concat(after.Sources).ToArray(), [], [], [], [], diffRows.Rows, diffRows.OmittedCount > 0, allGaps),
             before.Inputs.Concat(after.Inputs).OrderBy(input => input.Label, StringComparer.Ordinal).ThenBy(input => input.InputId, StringComparer.Ordinal).ToArray(),
             before.Sources.Concat(after.Sources).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceId, StringComparer.Ordinal).ToArray(),
             SourceCoverageSection(before.Sources.Concat(after.Sources).ToArray(), allGaps, 0),
@@ -495,7 +495,7 @@ public static class PortfolioReporter
             Snapshot(manifestInfo, read, "portfolio"),
             null,
             null,
-            Summary(options, read.Inputs, filteredSources, cappedEndpoints.Rows, cappedSurfaces.Rows, cappedEdges.Rows, cappedShared.Rows, cappedSources.OmittedCount + cappedEndpoints.OmittedCount + cappedSurfaces.OmittedCount + cappedEdges.OmittedCount + cappedShared.OmittedCount > 0, allGaps),
+            Summary(options, read.Inputs, filteredSources, cappedEndpoints.Rows, cappedSurfaces.Rows, cappedEdges.Rows, cappedShared.Rows, [], cappedSources.OmittedCount + cappedEndpoints.OmittedCount + cappedSurfaces.OmittedCount + cappedEdges.OmittedCount + cappedShared.OmittedCount > 0, allGaps),
             read.Inputs.OrderBy(input => input.Label, StringComparer.Ordinal).ThenBy(input => input.InputId, StringComparer.Ordinal).ToArray(),
             filteredSources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceId, StringComparer.Ordinal).ToArray(),
             SourceCoverageSection(filteredSources, allGaps, cappedSources.OmittedCount),
@@ -857,6 +857,7 @@ public static class PortfolioReporter
         IReadOnlyList<PortfolioSurfaceRow> surfaces,
         IReadOnlyList<PortfolioEdgeRow> edges,
         IReadOnlyList<PortfolioSharedSurfaceRow> shared,
+        IReadOnlyList<PortfolioDiffRow> diffs,
         bool truncated,
         IReadOnlyList<PortfolioGap> gaps)
     {
@@ -868,9 +869,15 @@ public static class PortfolioReporter
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var coverage = warnings.Length == 0 && !truncated ? "FullEvidenceAvailable" : "ReducedCoverage";
+        var rowClassifications = diffs.Select(row => row.Classification).ToList();
+        if (endpoints.Count + surfaces.Count + edges.Count + shared.Count > 0)
+        {
+            rowClassifications.Add(PortfolioReportClassifications.ActionableStaticEvidence);
+        }
+
         return new PortfolioSummary(
             coverage,
-            SelectRollup(gaps, endpoints.Count + surfaces.Count + edges.Count + shared.Count > 0, truncated),
+            SelectRollup(gaps, rowClassifications, truncated),
             inputs.Count,
             sources.Count,
             endpoints.Count,
@@ -898,6 +905,22 @@ public static class PortfolioReporter
                 source.GapCategories))
             .ToArray();
         return Section(rows, omittedCount, gaps.Where(gap => gap.Section == "sourceCoverage").ToArray(), ["Coverage is static scan coverage, not runtime exercise coverage."]);
+    }
+
+    private static PortfolioSection<PortfolioDiffRow> DiffSection(
+        IReadOnlyList<PortfolioDiffRow> rows,
+        int omittedCount,
+        IReadOnlyList<PortfolioGap> gaps,
+        IReadOnlyList<string> limitations)
+    {
+        var status = omittedCount > 0 ? PortfolioReportStatuses.Truncated : PortfolioReportStatuses.Available;
+        return new PortfolioSection<PortfolioDiffRow>(
+            status,
+            SelectRollup(gaps, rows.Select(row => row.Classification).ToArray(), omittedCount > 0),
+            rows,
+            gaps,
+            omittedCount,
+            limitations);
     }
 
     private static PortfolioSection<T> Section<T>(IReadOnlyList<T> rows, int omittedCount, IReadOnlyList<PortfolioGap> gaps, IReadOnlyList<string> limitations)
@@ -1138,10 +1161,41 @@ public static class PortfolioReporter
             ]));
     }
 
-    private static Capped<PortfolioDiffRow> BuildSourceDiffRows(IReadOnlyList<PortfolioSourceRow> before, IReadOnlyList<PortfolioSourceRow> after, List<PortfolioGap> gaps, int maxRows)
+    private static Capped<PortfolioDiffRow> BuildComparisonDiffRows(PortfolioReadResult before, PortfolioReadResult after, List<PortfolioGap> gaps, int maxRows)
     {
-        var beforeByKey = SourceComparisonMap(before, "before", gaps);
-        var afterByKey = SourceComparisonMap(after, "after", gaps);
+        var beforeByKey = SourceComparisonMap(before.Sources, "before", gaps);
+        var afterByKey = SourceComparisonMap(after.Sources, "after", gaps);
+        var sourceRows = BuildSourceDiffRows(beforeByKey, afterByKey, gaps);
+        var surfaceRows = CompareProjectedEvidence(
+            ProjectSurfaces(before.Facts, before.Sources),
+            ProjectSurfaces(after.Facts, after.Sources),
+            beforeByKey,
+            afterByKey,
+            "SurfaceEvidence",
+            gaps);
+        var edgeRows = CompareProjectedEvidence(
+            ProjectEdges(before.Edges, before.Sources),
+            ProjectEdges(after.Edges, after.Sources),
+            beforeByKey,
+            afterByKey,
+            "EdgeEvidence",
+            gaps);
+        var rows = sourceRows
+            .Concat(surfaceRows)
+            .Concat(edgeRows)
+            .OrderBy(row => DiffClassificationRank(row.Classification))
+            .ThenBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(row => row.ChangeKind, StringComparer.Ordinal)
+            .ThenBy(row => row.DiffId, StringComparer.Ordinal)
+            .ToArray();
+        return Cap(rows, maxRows, gaps, "portfolioDiff");
+    }
+
+    private static IReadOnlyList<PortfolioDiffRow> BuildSourceDiffRows(
+        IReadOnlyDictionary<string, PortfolioSourceRow> beforeByKey,
+        IReadOnlyDictionary<string, PortfolioSourceRow> afterByKey,
+        List<PortfolioGap> gaps)
+    {
         var keys = beforeByKey.Keys.Concat(afterByKey.Keys).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal);
         var rows = new List<PortfolioDiffRow>();
         foreach (var key in keys)
@@ -1168,7 +1222,126 @@ public static class PortfolioReporter
             }
         }
 
-        return Cap(rows.OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.ChangeKind, StringComparer.Ordinal).ToArray(), maxRows, gaps, "portfolioDiff");
+        return rows
+            .OrderBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(row => row.ChangeKind, StringComparer.Ordinal)
+            .ThenBy(row => row.DiffId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<PortfolioComparableDiffRecord> ProjectSurfaces(IReadOnlyList<CombinedFactRow> facts, IReadOnlyList<PortfolioSourceRow> sources)
+    {
+        var sourceById = sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
+        return CombinedDependencyReporter.BuildSurfaces(facts)
+            .Where(surface => sourceById.ContainsKey(surface.SourceIndexId))
+            .Select(surface =>
+            {
+                var source = sourceById[surface.SourceIndexId];
+                var metadata = SurfaceDiffMetadata(surface);
+                var identity = SurfaceDiffIdentityMetadata(surface);
+                return new PortfolioComparableDiffRecord(
+                    "surface",
+                    SourceComparisonKey(source),
+                    DiffSourceLabel(source),
+                    $"surface:{SourceComparisonKey(source)}:{MetadataHash(identity)}",
+                    MetadataHash(metadata),
+                    EvidenceHash(metadata, surface.RuleId, surface.EvidenceTier, surface.FilePath, surface.StartLine, surface.EndLine, [surface.OriginalFactId], []),
+                    SafeToken(surface.DisplayName),
+                    surface.RuleId,
+                    surface.EvidenceTier,
+                    source.CoverageStatus,
+                    [surface.OriginalFactId],
+                    [],
+                    metadata,
+                    surface.EvidenceTier is EvidenceTiers.Tier3SyntaxOrTextual or EvidenceTiers.Tier4Unknown
+                        || HasReviewTierSurfaceIdentity(surface));
+            })
+            .OrderBy(record => record.StableKey, StringComparer.Ordinal)
+            .ThenBy(record => record.MetadataHash, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<PortfolioComparableDiffRecord> ProjectEdges(IReadOnlyList<CombinedDependencyEdgeRow> edges, IReadOnlyList<PortfolioSourceRow> sources)
+    {
+        var sourceById = sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
+        return edges
+            .Where(edge => sourceById.ContainsKey(edge.SourceIndexId))
+            .Select(edge =>
+            {
+                var source = sourceById[edge.SourceIndexId];
+                var metadata = EdgeDiffMetadata(edge);
+                return new PortfolioComparableDiffRecord(
+                    "edge",
+                    SourceComparisonKey(source),
+                    DiffSourceLabel(source),
+                    $"edge:{SourceComparisonKey(source)}:{MetadataHash(metadata)}",
+                    MetadataHash(metadata),
+                    EvidenceHash(metadata, edge.RuleId, edge.EvidenceTier, edge.FilePath, edge.StartLine, edge.EndLine, [], [edge.EdgeId]),
+                    SafeToken($"{edge.SourceSymbol ?? "unknown"} -> {edge.TargetSymbol ?? "unknown"}"),
+                    edge.RuleId,
+                    edge.EvidenceTier,
+                    source.CoverageStatus,
+                    [],
+                    [edge.EdgeId],
+                    metadata,
+                    edge.EvidenceTier is EvidenceTiers.Tier3SyntaxOrTextual or EvidenceTiers.Tier4Unknown
+                        || string.IsNullOrWhiteSpace(edge.SourceSymbol)
+                        || string.IsNullOrWhiteSpace(edge.TargetSymbol));
+            })
+            .OrderBy(record => record.StableKey, StringComparer.Ordinal)
+            .ThenBy(record => record.MetadataHash, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<PortfolioDiffRow> CompareProjectedEvidence(
+        IReadOnlyList<PortfolioComparableDiffRecord> before,
+        IReadOnlyList<PortfolioComparableDiffRecord> after,
+        IReadOnlyDictionary<string, PortfolioSourceRow> beforeSources,
+        IReadOnlyDictionary<string, PortfolioSourceRow> afterSources,
+        string changeKindSuffix,
+        List<PortfolioGap> gaps)
+    {
+        var rows = new List<PortfolioDiffRow>();
+        var beforeGroups = before.GroupBy(record => record.StableKey, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var afterGroups = after.GroupBy(record => record.StableKey, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        foreach (var duplicate in beforeGroups.Where(group => group.Value.Length > 1).Concat(afterGroups.Where(group => group.Value.Length > 1)))
+        {
+            var first = duplicate.Value.OrderBy(record => record.SourceLabel, StringComparer.Ordinal).First();
+            gaps.Add(Gap("DuplicateProjectedIdentity", "portfolioDiff", DiffRuleId, PortfolioReportClassifications.ReviewRecommended, $"{first.EvidenceKind} comparison identity matched multiple evidence rows; review provenance before treating it as one change.", first.SourceLabel));
+        }
+
+        foreach (var key in beforeGroups.Keys.Concat(afterGroups.Keys).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+        {
+            beforeGroups.TryGetValue(key, out var beforeRows);
+            afterGroups.TryGetValue(key, out var afterRows);
+            var beforeRecord = beforeRows?.OrderBy(row => row.MetadataHash, StringComparer.Ordinal).ThenBy(row => row.EvidenceHash, StringComparer.Ordinal).FirstOrDefault();
+            var afterRecord = afterRows?.OrderBy(row => row.MetadataHash, StringComparer.Ordinal).ThenBy(row => row.EvidenceHash, StringComparer.Ordinal).FirstOrDefault();
+            if (beforeRecord is not null
+                && afterRecord is not null
+                && beforeRecord.MetadataHash == afterRecord.MetadataHash
+                && beforeRecord.EvidenceHash == afterRecord.EvidenceHash
+                && beforeRows!.Length == afterRows!.Length)
+            {
+                continue;
+            }
+
+            var changeKind = beforeRecord is null
+                ? $"Added{changeKindSuffix}"
+                : afterRecord is null
+                    ? $"Removed{changeKindSuffix}"
+                    : $"Changed{changeKindSuffix}";
+            rows.Add(ProjectedDiffRow(
+                changeKind,
+                ClassifyProjectedDiff(beforeRecord, afterRecord, beforeRows?.Length ?? 0, afterRows?.Length ?? 0, beforeSources, afterSources),
+                beforeRecord,
+                afterRecord));
+        }
+
+        return rows
+            .OrderBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(row => row.ChangeKind, StringComparer.Ordinal)
+            .ThenBy(row => row.DiffId, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static IReadOnlyDictionary<string, PortfolioSourceRow> SourceComparisonMap(IReadOnlyList<PortfolioSourceRow> sources, string side, List<PortfolioGap> gaps)
@@ -1214,6 +1387,233 @@ public static class PortfolioReporter
                 new("commitSha", source.CommitSha),
                 new("repoIdentityHash", source.RepoIdentityHash)
             ]));
+    }
+
+    private static PortfolioDiffRow ProjectedDiffRow(
+        string changeKind,
+        string classification,
+        PortfolioComparableDiffRecord? before,
+        PortfolioComparableDiffRecord? after)
+    {
+        var evidence = after ?? before!;
+        var beforeFactIds = before is null ? string.Empty : string.Join(",", before.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal));
+        var afterFactIds = after is null ? string.Empty : string.Join(",", after.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal));
+        var beforeEdgeIds = before is null ? string.Empty : string.Join(",", before.SupportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal));
+        var afterEdgeIds = after is null ? string.Empty : string.Join(",", after.SupportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal));
+        return new PortfolioDiffRow(
+            $"diff:{CombinedReportHelpers.Hash($"{changeKind}:{classification}:{evidence.StableKey}:{before?.EvidenceHash}:{after?.EvidenceHash}", 20)}",
+            classification,
+            DiffRuleId,
+            DiffEvidenceTier(classification, before, after),
+            SafeToken(evidence.SourceLabel),
+            changeKind,
+            CombinedReportHelpers.SortedMetadata([
+                new("evidenceKind", evidence.EvidenceKind),
+                new("displayName", evidence.DisplayName),
+                new("stableKeyHash", CombinedReportHelpers.Hash(evidence.StableKey, 20)),
+                new("beforeMetadataHash", before?.MetadataHash),
+                new("afterMetadataHash", after?.MetadataHash),
+                new("beforeRuleId", before?.RuleId),
+                new("afterRuleId", after?.RuleId),
+                new("beforeEvidenceTier", before?.EvidenceTier),
+                new("afterEvidenceTier", after?.EvidenceTier),
+                new("beforeSupportingFactIds", beforeFactIds),
+                new("afterSupportingFactIds", afterFactIds),
+                new("beforeSupportingEdgeIds", beforeEdgeIds),
+                new("afterSupportingEdgeIds", afterEdgeIds)
+            ]));
+    }
+
+    private static string ClassifyProjectedDiff(
+        PortfolioComparableDiffRecord? before,
+        PortfolioComparableDiffRecord? after,
+        int beforeCount,
+        int afterCount,
+        IReadOnlyDictionary<string, PortfolioSourceRow> beforeSources,
+        IReadOnlyDictionary<string, PortfolioSourceRow> afterSources)
+    {
+        var sourceKey = before?.SourceKey ?? after?.SourceKey ?? string.Empty;
+        var sourceCoverage = new[] { before?.CoverageStatus, after?.CoverageStatus }
+            .Concat(beforeSources.TryGetValue(sourceKey, out var beforeSource) ? [beforeSource.CoverageStatus] : [])
+            .Concat(afterSources.TryGetValue(sourceKey, out var afterSource) ? [afterSource.CoverageStatus] : [])
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+        if (sourceCoverage.Any(value => value != "FullEvidenceAvailable"))
+        {
+            return PortfolioReportClassifications.PartialAnalysis;
+        }
+
+        if (beforeCount > 1 || afterCount > 1 || before?.NeedsReview == true || after?.NeedsReview == true)
+        {
+            return PortfolioReportClassifications.ReviewRecommended;
+        }
+
+        return PortfolioReportClassifications.ActionableStaticEvidence;
+    }
+
+    private static string DiffEvidenceTier(string classification, PortfolioComparableDiffRecord? before, PortfolioComparableDiffRecord? after)
+    {
+        if (classification == PortfolioReportClassifications.PartialAnalysis)
+        {
+            return EvidenceTiers.Tier4Unknown;
+        }
+
+        var tiers = new[] { before?.EvidenceTier, after?.EvidenceTier }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToArray();
+        if (tiers.Contains(EvidenceTiers.Tier4Unknown, StringComparer.Ordinal))
+        {
+            return EvidenceTiers.Tier4Unknown;
+        }
+
+        if (classification == PortfolioReportClassifications.ReviewRecommended
+            || tiers.Contains(EvidenceTiers.Tier3SyntaxOrTextual, StringComparer.Ordinal))
+        {
+            return EvidenceTiers.Tier3SyntaxOrTextual;
+        }
+
+        if (tiers.Contains(EvidenceTiers.Tier2Structural, StringComparer.Ordinal))
+        {
+            return EvidenceTiers.Tier2Structural;
+        }
+
+        return tiers.FirstOrDefault() ?? EvidenceTiers.Tier4Unknown;
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> SurfaceDiffMetadata(CombinedDependencySurfaceRow surface)
+    {
+        return CombinedReportHelpers.SortedMetadata([
+            new("surfaceKind", surface.SurfaceKind),
+            new("httpMethod", surface.HttpMethod),
+            new("normalizedPathKey", surface.NormalizedPathKey),
+            new("operationName", surface.OperationName),
+            new("tableName", surface.TableName),
+            new("columnNames", surface.ColumnNames),
+            new("sourceKind", surface.SourceKind),
+            new("shapeHash", surface.ShapeHash),
+            new("textHash", surface.TextHash),
+            new("textLength", surface.TextLength),
+            new("ecosystem", surface.Ecosystem),
+            new("manifestKind", surface.ManifestKind),
+            new("packageName", surface.PackageName),
+            new("packageManager", surface.PackageManager),
+            new("dependencyScope", surface.DependencyScope),
+            new("dependencyGroup", surface.DependencyGroup),
+            new("version", surface.Version),
+            new("versionHash", surface.VersionHash),
+            new("redactionReason", surface.RedactionReason),
+            new("configKey", surface.ConfigKey),
+            new("identityFallbackHash", IsVolatileSqlIdentity(surface) ? CombinedReportHelpers.Hash(surface.OriginalFactId ?? surface.CombinedFactId, 24) : null)
+        ]);
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> SurfaceDiffIdentityMetadata(CombinedDependencySurfaceRow surface)
+    {
+        if (surface.SurfaceKind == "package-config" && !string.IsNullOrWhiteSpace(surface.PackageName))
+        {
+            return CombinedReportHelpers.SortedMetadata([
+                new("surfaceKind", surface.SurfaceKind),
+                new("ecosystem", surface.Ecosystem),
+                new("manifestKind", surface.ManifestKind),
+                new("packageName", surface.PackageName),
+                new("manifestPath", surface.FilePath),
+                new("configKey", surface.ConfigKey)
+            ]);
+        }
+
+        if (surface.SurfaceKind is "http-client" or "http-route")
+        {
+            return CombinedReportHelpers.SortedMetadata([
+                new("surfaceKind", surface.SurfaceKind),
+                new("httpMethod", surface.HttpMethod),
+                new("normalizedPathKey", surface.NormalizedPathKey)
+            ]);
+        }
+
+        return SurfaceDiffMetadata(surface);
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> EdgeDiffMetadata(CombinedDependencyEdgeRow edge)
+    {
+        return CombinedReportHelpers.SortedMetadata([
+            new("edgeKind", NormalizeEdgeKind(edge.EdgeKind)),
+            new("sourceSymbol", edge.SourceSymbol),
+            new("targetSymbol", edge.TargetSymbol),
+            new("targetAssemblyName", edge.TargetAssemblyName),
+            new("targetAssemblyVersion", edge.TargetAssemblyVersion),
+            new("ruleFamily", RuleFamily(edge.RuleId))
+        ]);
+    }
+
+    private static bool HasReviewTierSurfaceIdentity(CombinedDependencySurfaceRow surface)
+    {
+        return (surface.SurfaceKind == "sql-query" && (IsHashOnlySqlEvidence(surface) || IsVolatileSqlIdentity(surface)))
+            || (surface.SurfaceKind == "package-config" && (string.IsNullOrWhiteSpace(surface.PackageName) || !string.IsNullOrWhiteSpace(surface.VersionHash) && string.IsNullOrWhiteSpace(surface.Version)));
+    }
+
+    private static bool IsHashOnlySqlEvidence(CombinedDependencySurfaceRow surface)
+    {
+        return surface.SurfaceKind == "sql-query"
+            && HasSqlValue(surface.TextHash)
+            && !HasSqlValue(surface.ShapeHash)
+            && !HasSqlValue(surface.OperationName)
+            && !HasSqlValue(surface.TableName)
+            && !HasSqlValue(surface.ColumnNames);
+    }
+
+    private static bool IsVolatileSqlIdentity(CombinedDependencySurfaceRow surface)
+    {
+        return surface.SurfaceKind == "sql-query"
+            && !HasSqlValue(surface.ShapeHash)
+            && !HasSqlValue(surface.TextHash)
+            && !HasSqlValue(surface.OperationName)
+            && !HasSqlValue(surface.TableName)
+            && !HasSqlValue(surface.ColumnNames);
+    }
+
+    private static bool HasSqlValue(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && !value.Equals("n/a", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeEdgeKind(string edgeKind)
+    {
+        return edgeKind.Trim().ToLowerInvariant();
+    }
+
+    private static string RuleFamily(string ruleId)
+    {
+        var index = ruleId.LastIndexOf(".", StringComparison.Ordinal);
+        return index > 0 ? ruleId[..index] : ruleId;
+    }
+
+    private static string MetadataHash(IReadOnlyList<KeyValuePair<string, string>> metadata)
+    {
+        return CombinedReportHelpers.Hash(string.Join("\u001f", metadata.Select(pair => $"{pair.Key}={pair.Value}")), 24);
+    }
+
+    private static string EvidenceHash(
+        IReadOnlyList<KeyValuePair<string, string>> metadata,
+        string ruleId,
+        string evidenceTier,
+        string filePath,
+        int startLine,
+        int endLine,
+        IReadOnlyList<string> supportingFactIds,
+        IReadOnlyList<string> supportingEdgeIds)
+    {
+        var key = string.Join("\u001f", [
+            MetadataHash(metadata),
+            ruleId,
+            evidenceTier,
+            filePath,
+            startLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            endLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            string.Join(",", supportingFactIds.OrderBy(value => value, StringComparer.Ordinal)),
+            string.Join(",", supportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal))
+        ]);
+        return CombinedReportHelpers.Hash(key, 24);
     }
 
     private static void AddExpectedIdentityGaps(PortfolioInputSpec input, PortfolioSourceRow source, List<PortfolioGap> gaps)
@@ -1632,6 +2032,11 @@ public static class PortfolioReporter
 
     private static string SelectRollup(IReadOnlyList<PortfolioGap> gaps, bool hasEvidence, bool truncated)
     {
+        return SelectRollup(gaps, hasEvidence ? [PortfolioReportClassifications.ActionableStaticEvidence] : [], truncated);
+    }
+
+    private static string SelectRollup(IReadOnlyList<PortfolioGap> gaps, IReadOnlyList<string> rowClassifications, bool truncated)
+    {
         if (gaps.Any(gap => gap.Classification == PortfolioReportClassifications.UnknownAnalysisGap))
         {
             return PortfolioReportClassifications.UnknownAnalysisGap;
@@ -1642,12 +2047,19 @@ public static class PortfolioReporter
             return PortfolioReportClassifications.TruncatedByLimit;
         }
 
-        if (hasEvidence)
+        if (rowClassifications.Contains(PortfolioReportClassifications.ActionableStaticEvidence, StringComparer.Ordinal))
         {
             return PortfolioReportClassifications.ActionableStaticEvidence;
         }
 
-        if (gaps.Any(gap => gap.Classification == PortfolioReportClassifications.PartialAnalysis))
+        if (rowClassifications.Contains(PortfolioReportClassifications.ReviewRecommended, StringComparer.Ordinal)
+            || gaps.Any(gap => gap.Classification == PortfolioReportClassifications.ReviewRecommended))
+        {
+            return PortfolioReportClassifications.ReviewRecommended;
+        }
+
+        if (rowClassifications.Contains(PortfolioReportClassifications.PartialAnalysis, StringComparer.Ordinal)
+            || gaps.Any(gap => gap.Classification == PortfolioReportClassifications.PartialAnalysis))
         {
             return PortfolioReportClassifications.PartialAnalysis;
         }
@@ -1841,6 +2253,20 @@ public static class PortfolioReporter
         };
     }
 
+    private static int DiffClassificationRank(string classification)
+    {
+        return classification switch
+        {
+            PortfolioReportClassifications.UnknownAnalysisGap => 0,
+            PortfolioReportClassifications.TruncatedByLimit => 1,
+            PortfolioReportClassifications.ActionableStaticEvidence => 2,
+            PortfolioReportClassifications.ReviewRecommended => 3,
+            PortfolioReportClassifications.PartialAnalysis => 4,
+            PortfolioReportClassifications.SelectorNoMatch => 5,
+            _ => 6
+        };
+    }
+
     private static string RequiredString(JsonElement element, string property, string message)
     {
         if (element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
@@ -1886,4 +2312,19 @@ public static class PortfolioReporter
     private sealed record PortfolioReadResult(IReadOnlyList<PortfolioInputRow> Inputs, IReadOnlyList<PortfolioSourceRow> Sources, IReadOnlyList<CombinedFactRow> Facts, IReadOnlyList<CombinedDependencyEdgeRow> Edges, IReadOnlyList<PortfolioGap> Gaps);
     private sealed record SingleIndexReadResult(PortfolioSourceRow Source, IReadOnlyList<CombinedFactRow> Facts, IReadOnlyList<CombinedDependencyEdgeRow> Edges, IReadOnlyList<PortfolioGap> Gaps);
     private sealed record Capped<T>(IReadOnlyList<T> Rows, int OmittedCount);
+    private sealed record PortfolioComparableDiffRecord(
+        string EvidenceKind,
+        string SourceKey,
+        string SourceLabel,
+        string StableKey,
+        string MetadataHash,
+        string EvidenceHash,
+        string DisplayName,
+        string RuleId,
+        string EvidenceTier,
+        string CoverageStatus,
+        IReadOnlyList<string> SupportingFactIds,
+        IReadOnlyList<string> SupportingEdgeIds,
+        IReadOnlyList<KeyValuePair<string, string>> Metadata,
+        bool NeedsReview);
 }
