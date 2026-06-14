@@ -165,7 +165,7 @@ V2-native inputs are stricter than the legacy adapter. Ambiguous or missing stru
 | Kind | Minimum required fields |
 | --- | --- |
 | `type` | one of `fullyQualifiedName`, `typeName` |
-| `property` | `propertyName` plus one of `typeName`, `fullyQualifiedName`, `schemaName`, or `jsonName`; name-only property references are review-tier |
+| `property` | `propertyName`; add `typeName`, `fullyQualifiedName`, `schemaName`, or `jsonName` for strong matches. Property-name-only references are allowed but always review-tier and cannot seed path/reverse traversal. |
 | `method` | `methodName` plus optional `typeName` or `signature`; method-name-only is review-tier |
 | `endpoint` | `normalizedPathKey` or `path`; `method` is required for strong endpoint matches and path-only matches are review-tier |
 | `package` | `ecosystem` and `packageName` for strong matches; `packageName` alone is review-tier |
@@ -301,6 +301,7 @@ Classification vocabulary is selected by report type.
 | `NeedsReview` | Tier3 syntax/textual, name-only, ambiguous, generic, duplicate, or high-fan-out evidence matches. |
 | `NoEvidenceFullCoverage` | No match and full semantic coverage is credible. |
 | `NoEvidenceReducedCoverage` | No match and coverage is reduced or partial. |
+| `TruncatedByLimit` | Findings, evidence rows, gaps, or context were capped. |
 | `UnknownAnalysisGap` | Relevant gaps prevent credible conclusion. |
 
 `ContractDeltaImpactCombinedV2` uses the combined-impact vocabulary already established by `tracemap impact`:
@@ -323,7 +324,7 @@ Confidence mapping:
 | --- | --- |
 | `DefiniteImpact`, `StaticImpactEvidence` | High |
 | `ProbableImpact`, `ProbableStaticImpact` | Medium |
-| everything else | Low |
+| `TruncatedByLimit`, everything else | Low |
 
 Do not expose both vocabularies as peer classifications in one finding. If compatibility information is useful, include it as metadata such as `legacyClassification`, not as a second authoritative classification.
 

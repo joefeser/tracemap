@@ -98,7 +98,7 @@ Out of scope:
 
 #### Acceptance Criteria
 
-1. WHEN `--include-paths` is omitted THEN TraceMap SHALL NOT run path or reverse traversal and SHALL state that reachability context was not requested.
+1. WHEN neither `--include-paths` nor `--include-reverse` is provided THEN TraceMap SHALL NOT run path or reverse traversal and SHALL state that reachability context was not requested.
 2. WHEN `--include-paths` is provided with a combined index THEN TraceMap SHALL gather bounded path context for matched endpoints, symbols, and dependency surfaces where selectors can be derived.
 3. WHEN `--include-reverse` is provided with a combined index THEN TraceMap SHALL gather bounded reverse context from matched surfaces to endpoint/symbol/source roots where supported.
 4. WHEN `--include-paths` or `--include-reverse` is provided with a single-language index THEN TraceMap SHALL reject the option with a clear message in v2 unless a future single-index traversal layer is specified.
@@ -115,7 +115,7 @@ Out of scope:
 
 #### Acceptance Criteria
 
-1. WHEN the target index is a single-language index THEN report type `ContractDeltaImpactSingleV2` SHALL use the closed v1-compatible classification set: `DefiniteImpact`, `ProbableImpact`, `NeedsReview`, `NoEvidenceFullCoverage`, `NoEvidenceReducedCoverage`, and `UnknownAnalysisGap`.
+1. WHEN the target index is a single-language index THEN report type `ContractDeltaImpactSingleV2` SHALL use the closed v1-compatible classification set: `DefiniteImpact`, `ProbableImpact`, `NeedsReview`, `NoEvidenceFullCoverage`, `NoEvidenceReducedCoverage`, `TruncatedByLimit`, and `UnknownAnalysisGap`.
 2. WHEN the target index is a combined index THEN report type `ContractDeltaImpactCombinedV2` SHALL use the closed combined-impact classification set: `StaticImpactEvidence`, `ProbableStaticImpact`, `NeedsReviewImpact`, `NoImpactEvidence`, `SelectorNoMatch`, `TruncatedByLimit`, `PathContextUnavailable`, `ReverseContextUnavailable`, and `UnknownAnalysisGap`.
 3. WHEN a changed contract element matches Tier1 semantic usage/declaration evidence directly in single-index mode THEN TraceMap SHALL classify it as `DefiniteImpact` unless coverage or identity caveats require a downgrade.
 4. WHEN a changed contract element matches Tier1/Tier2 static evidence in combined mode with credible source identity and optional requested path/reverse context THEN TraceMap MAY classify it as `StaticImpactEvidence`; otherwise strong structural evidence SHALL be `ProbableStaticImpact`.
