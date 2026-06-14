@@ -223,8 +223,13 @@ function resolveAuthMode(env, loadedEnvFiles, sourceByKey = {}, baseEnv = proces
   }
 
   const profileAvailable = profileProbe(env);
+  const mode = profileAvailable === null
+    ? "not-checked"
+    : profileAvailable
+      ? "profile"
+      : "missing";
   return {
-    mode: profileAvailable ? "profile" : "missing",
+    mode,
     kiroApiKeyPresent: false,
     profileAvailable,
     loadedEnvFiles,
@@ -293,6 +298,10 @@ function runSelfTests() {
     const missingAuth = resolveAuthMode({}, [], {}, {}, () => false);
     assert.equal(missingAuth.mode, "missing");
     assert.equal(missingAuth.profileAvailable, false);
+
+    const notCheckedAuth = resolveAuthMode({}, [], {}, {}, () => null);
+    assert.equal(notCheckedAuth.mode, "not-checked");
+    assert.equal(notCheckedAuth.profileAvailable, null);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -553,7 +562,13 @@ function main() {
 
   const { values: envFileValues, loaded: loadedEnvFiles, sourceByKey } = loadConfiguredEnvFiles();
   const env = { ...envFileValues, ...process.env };
-  const auth = resolveAuthMode(env, loadedEnvFiles, sourceByKey, process.env);
+  const auth = resolveAuthMode(
+    env,
+    loadedEnvFiles,
+    sourceByKey,
+    process.env,
+    options.dryRun ? () => null : kiroProfileAvailable,
+  );
   const prompt = buildPrompt(options);
   if (options.saveReviewText) {
     writeFileSync(promptPath, prompt, "utf8");
