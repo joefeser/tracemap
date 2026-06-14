@@ -210,6 +210,50 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_treats_blank_package_version_as_missing_not_unsafe()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.PackageReferenced,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/App.csproj", 9, 9, null, "test", "test/1.0"),
+                targetSymbol: "Versionless.Package",
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["dependencyGroup"] = "PackageReference",
+                    ["dependencyScope"] = "runtime",
+                    ["ecosystem"] = "nuget",
+                    ["manifestKind"] = "csproj",
+                    ["packageName"] = "Versionless.Package",
+                    ["surfaceKind"] = "package-config",
+                    ["version"] = ""
+                })
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["api"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "package-config");
+        Assert.Equal("Versionless.Package", surface.PackageName);
+        Assert.Null(surface.Version);
+        Assert.Null(surface.VersionHash);
+        Assert.Null(surface.RedactionReason);
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
+        Assert.Contains("version n/a", markdown);
+        Assert.DoesNotContain("unsafe-package-version", json);
+        Assert.Contains("\"versionHash\": null", json);
+        Assert.Contains("\"redactionReason\": null", json);
+    }
+
+    [Fact]
     public async Task Report_normalizes_legacy_package_surface_kind()
     {
         using var temp = new TempDirectory();

@@ -2,7 +2,7 @@
 
 ## Implementation Tasks
 
-- [ ] Confirm MVP query shape.
+- [x] Confirm MVP query shape.
   - [ ] Confirm no-selector default runs endpoint-matched-pairs to terminal surfaces.
   - [ ] Confirm `--from-endpoint`, `--from-symbol`, `--from-source`, `--to-surface`, `--surface-name`, `--source-pair`, `--max-depth`, `--max-paths`, and `--max-frontier` are the MVP flags.
   - [ ] Confirm `--to-endpoint`, `--to-symbol`, `--to-source`, and reverse traversal are deferred.
@@ -11,7 +11,7 @@
   - [ ] Document selector matching rules and ambiguity behavior.
   - [ ] Document that `endpoint_matches` is reserved/unused and both report and paths use one shared in-memory matcher.
 
-- [ ] Refactor combined report internals without behavior changes.
+- [x] Refactor combined report internals without behavior changes.
   - [ ] Extract combined index validation from the current report implementation.
   - [ ] Extract source inventory and coverage reading.
   - [ ] Extract combined endpoint candidate/matching behavior into `TraceMap.Reporting` internal `CombinedEndpointMatcher`.
@@ -21,7 +21,7 @@
   - [ ] Prove report output remains byte-stable before adding path code.
   - [ ] Add endpoint-match parity coverage for the shared matcher.
 
-- [ ] Add path report models.
+- [x] Add path report models.
   - [ ] Define query, summary, node, edge, path, gap, inventory, and limitation models.
   - [ ] Define JSON shape version `1.0`.
   - [ ] Ensure no generated timestamp is emitted by default.
@@ -31,7 +31,7 @@
   - [ ] Pin classification ordering ranks.
   - [ ] Pin nullable fields and required arrays.
 
-- [ ] Add graph reader.
+- [x] Add graph reader.
   - [ ] Read `index_sources`.
   - [ ] Read `combined_facts`.
   - [ ] Read `combined_symbols`.
@@ -46,7 +46,7 @@
   - [ ] Open SQLite with `Mode=ReadOnly`.
   - [ ] Emit schema errors naming missing required tables/views.
 
-- [ ] Build evidence graph.
+- [x] Build evidence graph.
   - [ ] Add endpoint client and route nodes.
   - [ ] Add endpoint match edges from shared endpoint alignment behavior.
   - [ ] Add source-local symbol nodes using deterministic symbol keys.
@@ -62,7 +62,7 @@
   - [ ] Ensure the only cross-source edge in MVP is `EndpointMatch`.
   - [ ] Preserve full provenance on nodes and edges.
 
-- [ ] Implement selector resolution.
+- [x] Implement selector resolution.
   - [ ] Resolve endpoint selectors by method and normalized path key.
   - [ ] Resolve symbol selectors against symbol IDs, display names, fully qualified names, source symbols, and target symbols.
   - [ ] Keep symbol selector matches as deterministic per-source candidates unless `--from-source` narrows them.
@@ -72,7 +72,7 @@
   - [ ] Reject unsupported reverse selectors with clear errors.
   - [ ] Emit `SelectorNoMatch` gaps for empty selector matches.
 
-- [ ] Implement deterministic path search.
+- [x] Implement deterministic path search.
   - [ ] Use bounded breadth-first search.
   - [ ] Support default `maxDepth`, `maxPaths`, and `maxFrontier`.
   - [ ] Traverse outbound edges only.
@@ -85,7 +85,7 @@
   - [ ] Emit `UnknownAnalysisGap` instead of `NoPathFound` when contributing sources have reduced coverage or known gaps.
   - [ ] Define contributing sources as resolved start-node sources plus outbound-reachable sources within search bounds.
 
-- [ ] Add Markdown writer.
+- [x] Add Markdown writer.
   - [ ] Sections: Summary, Query, Sources, Paths, Path Gaps, Evidence Inventory, Limitations.
   - [ ] Render one evidence trail per path.
   - [ ] Mark source boundary crossings.
@@ -94,7 +94,7 @@
   - [ ] Use shared safe path rendering for file paths.
   - [ ] Avoid raw snippets, raw SQL, raw URLs, config values, connection strings, and local absolute paths.
 
-- [ ] Add JSON writer.
+- [x] Add JSON writer.
   - [ ] Emit stable top-level shape.
   - [ ] Include query metadata and algorithm/version identifiers.
   - [ ] Include paths with full node and edge evidence.
@@ -102,7 +102,7 @@
   - [ ] Exclude `generatedAt`, `timestamp`, and raw input property bags.
   - [ ] Use `null` and empty arrays consistently.
 
-- [ ] Wire CLI.
+- [x] Wire CLI.
   - [ ] Add `tracemap paths --help`.
   - [ ] Parse path query flags.
   - [ ] Validate selector combinations.
@@ -110,7 +110,7 @@
   - [ ] Treat missing-extension output paths as directories.
   - [ ] Print useful completion summary.
 
-- [ ] Add tests.
+- [x] Add tests.
   - [ ] Non-combined index rejection.
   - [ ] Markdown and JSON output.
   - [ ] Byte-stable repeated output.
@@ -145,14 +145,14 @@
   - [ ] Unlinked surface gap.
   - [ ] No raw SQL, raw URL, config value, snippet, or local absolute path output.
 
-- [ ] Update docs.
+- [x] Update docs.
   - [ ] README quickstart for `combine -> report -> paths`.
   - [ ] `docs/ACCEPTANCE.md` path query acceptance.
   - [ ] `docs/VALIDATION.md` smoke command.
   - [ ] `docs/LANGUAGE_ADAPTER_CONTRACT.md` if path search reveals adapter contract gaps.
   - [ ] Rule catalog only if new derived rule IDs are formalized.
 
-- [ ] Validate.
+- [x] Validate.
   - [ ] `dotnet build src/dotnet/TraceMap.sln`
   - [ ] `dotnet test src/dotnet/TraceMap.sln`
   - [ ] `./scripts/check-private-paths.sh`

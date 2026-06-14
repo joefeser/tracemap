@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
-import { extname, join, normalize, resolve } from "node:path";
+import { extname, join, normalize, resolve, sep } from "node:path";
 import { createServer } from "node:http";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,7 +34,8 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (!requestedPath.startsWith(root)) {
+  const safeRoot = root.endsWith(sep) ? root : root + sep;
+  if (requestedPath !== root && !requestedPath.startsWith(safeRoot)) {
     response.writeHead(403);
     response.end("Forbidden");
     return;

@@ -361,10 +361,25 @@ public static class PortfolioReporter
             diffRows.OmittedCount,
             gaps.Where(gap => gap.Section == "portfolioDiff").ToArray(),
             ["Portfolio diff v1 compares source labels and source identity only. Surface and edge diff composition is deferred to a follow-up."]);
-        var impactSection = options.IncludeImpact
+        var endpointSection = UnavailableEndpointSection();
+        var pathContext = OptionalContextSection(options.IncludePaths, "pathContext", "Path context requires a single portfolio snapshot in v1.");
+        var reverseContext = OptionalContextSection(options.IncludeReverse, "reverseContext", "Reverse context requires a single portfolio snapshot in v1.");
+        var portfolioImpact = options.IncludeImpact
             ? DeferredContextSection("portfolioImpact", ImpactRuleId, "Portfolio impact composition is deferred unless compatible combined before/after snapshots are provided in a follow-up.")
             : NotRequestedContextSection("portfolioImpact", ImpactRuleId, "Portfolio impact context is off by default.");
+        var releaseReviewContext = NotRequestedContextSection("releaseReviewContext", OptionalContextRuleId, "Release-review import is deferred in portfolio v1.");
+        gaps.AddRange(endpointSection.Gaps);
+        gaps.AddRange(pathContext.Gaps);
+        gaps.AddRange(reverseContext.Gaps);
+        gaps.AddRange(portfolioImpact.Gaps);
+        gaps.AddRange(releaseReviewContext.Gaps);
+
         var allGaps = CapGaps(gaps, options.MaxGaps);
+        endpointSection = WithCappedGaps(endpointSection, allGaps);
+        pathContext = WithCappedGaps(pathContext, allGaps);
+        reverseContext = WithCappedGaps(reverseContext, allGaps);
+        portfolioImpact = WithCappedGaps(portfolioImpact, allGaps);
+        releaseReviewContext = WithCappedGaps(releaseReviewContext, allGaps);
         return new PortfolioReportDocument(
             ReportType,
             Version,
@@ -377,15 +392,15 @@ public static class PortfolioReporter
             before.Inputs.Concat(after.Inputs).OrderBy(input => input.Label, StringComparer.Ordinal).ThenBy(input => input.InputId, StringComparer.Ordinal).ToArray(),
             before.Sources.Concat(after.Sources).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceId, StringComparer.Ordinal).ToArray(),
             SourceCoverageSection(before.Sources.Concat(after.Sources).ToArray(), allGaps, 0),
-            UnavailableEndpointSection(),
+            endpointSection,
             EmptySection<PortfolioSurfaceRow>("dependencySurfaces", "Portfolio surface inventory is not emitted for before/after comparison v1."),
             EmptySection<PortfolioEdgeRow>("dependencyEdges", "Portfolio edge inventory is not emitted for before/after comparison v1."),
             EmptySection<PortfolioSharedSurfaceRow>("sharedSurfaces", "Shared surface grouping is not emitted for before/after comparison v1."),
-            OptionalContextSection(options.IncludePaths, "pathContext", "Path context requires a single portfolio snapshot in v1."),
-            OptionalContextSection(options.IncludeReverse, "reverseContext", "Reverse context requires a single portfolio snapshot in v1."),
+            pathContext,
+            reverseContext,
             diffSection,
-            impactSection,
-            NotRequestedContextSection("releaseReviewContext", OptionalContextRuleId, "Release-review import is deferred in portfolio v1."),
+            portfolioImpact,
+            releaseReviewContext,
             allGaps,
             Limitations);
     }
@@ -456,7 +471,22 @@ public static class PortfolioReporter
             .ToArray();
         var cappedShared = Cap(shared, options.MaxSharedSurfaces, gaps, "sharedSurfaces");
 
+        var pathContext = OptionalContextSection(options.IncludePaths, "pathContext", "Path traversal is deferred in portfolio v1; run tracemap paths on a combined index for bounded path evidence.");
+        var reverseContext = OptionalContextSection(options.IncludeReverse, "reverseContext", "Reverse traversal is deferred in portfolio v1; run tracemap reverse on a combined index for bounded reverse evidence.");
+        var portfolioImpact = options.IncludeImpact
+            ? DeferredContextSection("portfolioImpact", ImpactRuleId, "Portfolio impact composition is deferred in v1; run tracemap impact or release-review for compatible before/after indexes.")
+            : NotRequestedContextSection("portfolioImpact", ImpactRuleId, "Portfolio impact context is off by default.");
+        var releaseReviewContext = NotRequestedContextSection("releaseReviewContext", OptionalContextRuleId, "Release-review import is deferred in portfolio v1.");
+        gaps.AddRange(pathContext.Gaps);
+        gaps.AddRange(reverseContext.Gaps);
+        gaps.AddRange(portfolioImpact.Gaps);
+        gaps.AddRange(releaseReviewContext.Gaps);
+
         var allGaps = CapGaps(gaps, options.MaxGaps);
+        pathContext = WithCappedGaps(pathContext, allGaps);
+        reverseContext = WithCappedGaps(reverseContext, allGaps);
+        portfolioImpact = WithCappedGaps(portfolioImpact, allGaps);
+        releaseReviewContext = WithCappedGaps(releaseReviewContext, allGaps);
         return new PortfolioReportDocument(
             ReportType,
             Version,
@@ -473,13 +503,11 @@ public static class PortfolioReporter
             Section(cappedSurfaces.Rows, cappedSurfaces.OmittedCount, allGaps.Where(gap => gap.Section == "dependencySurfaces").ToArray(), ["Dependency surfaces preserve source provenance and safe metadata only."]),
             Section(cappedEdges.Rows, cappedEdges.OmittedCount, allGaps.Where(gap => gap.Section == "dependencyEdges").ToArray(), ["Dependency edges are static code evidence."]),
             Section(cappedShared.Rows, cappedShared.OmittedCount, allGaps.Where(gap => gap.Section == "sharedSurfaces").ToArray(), ["Shared surfaces are grouped by safe static identity and do not prove runtime coupling."]),
-            OptionalContextSection(options.IncludePaths, "pathContext", "Path traversal is deferred in portfolio v1; run tracemap paths on a combined index for bounded path evidence."),
-            OptionalContextSection(options.IncludeReverse, "reverseContext", "Reverse traversal is deferred in portfolio v1; run tracemap reverse on a combined index for bounded reverse evidence."),
+            pathContext,
+            reverseContext,
             NotRequestedDiffSection(),
-            options.IncludeImpact
-                ? DeferredContextSection("portfolioImpact", ImpactRuleId, "Portfolio impact composition is deferred in v1; run tracemap impact or release-review for compatible before/after indexes.")
-                : NotRequestedContextSection("portfolioImpact", ImpactRuleId, "Portfolio impact context is off by default."),
-            NotRequestedContextSection("releaseReviewContext", OptionalContextRuleId, "Release-review import is deferred in portfolio v1."),
+            portfolioImpact,
+            releaseReviewContext,
             allGaps,
             Limitations);
     }
@@ -915,6 +943,15 @@ public static class PortfolioReporter
     private static PortfolioSection<PortfolioDiffRow> NotRequestedDiffSection()
     {
         return new PortfolioSection<PortfolioDiffRow>(PortfolioReportStatuses.NotRequested, PortfolioReportClassifications.NoActionableEvidence, [], [], 0, ["Portfolio diff requires --before-manifest and --after-manifest."]);
+    }
+
+    private static PortfolioSection<T> WithCappedGaps<T>(PortfolioSection<T> section, IReadOnlyList<PortfolioGap> allGaps)
+    {
+        var visibleGapIds = allGaps.Select(gap => gap.GapId).ToHashSet(StringComparer.Ordinal);
+        return section with
+        {
+            Gaps = section.Gaps.Where(gap => visibleGapIds.Contains(gap.GapId)).ToArray()
+        };
     }
 
     private static Capped<T> Cap<T>(IReadOnlyList<T> rows, int maxRows, List<PortfolioGap> gaps, string section)
