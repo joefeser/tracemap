@@ -38,6 +38,10 @@ ScaffoldingReadMe.txt
 
 # dotenv environment variables file
 .env
+.env.kiro.local
+
+# Local review artifacts
+.tmp/kiro-reviews/
 
 # Others
 ~$*
