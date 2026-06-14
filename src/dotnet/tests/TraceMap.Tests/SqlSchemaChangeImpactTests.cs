@@ -292,6 +292,246 @@ public sealed class SqlSchemaChangeImpactTests
         Assert.Contains("\"changeCount\": 0", first);
     }
 
+    [Fact]
+    public async Task Reduce_sql_schema_delta_kind_filter_keeps_sql_input_kinds_distinct()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteSqlSchemaDelta(temp.Path, """
+            {
+              "id": "chg-query-shape",
+              "kind": "query-shape",
+              "changeType": "shape_changed",
+              "reference": {
+                "queryShapeHash": "shape123"
+              }
+            },
+            {
+              "id": "chg-sql-file",
+              "kind": "sql-file",
+              "changeType": "behavior_changed",
+              "reference": {
+                "sqlResourceName": "orders-report.sql"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.QueryPatternDetected,
+                RuleIds.DatabaseSqlShape,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/OrdersRepository.cs", 21, 21, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["queryShapeHash"] = "shape123"
+                }),
+            FactFactory.Create(
+                manifest,
+                FactTypes.SqlFileDeclared,
+                RuleIds.FileInventory,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("sql/orders-report.sql", 1, 1, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["sqlResourceName"] = "orders-report.sql"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--sql-schema-delta", deltaPath, "--out", outputPath, "--kind", "query-shape"
+        ]));
+
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-impact-report.json"));
+        Assert.Contains("\"changeCount\": 1", json);
+        Assert.Contains("\"changeId\": \"chg-query-shape\"", json);
+        Assert.DoesNotContain("\"changeId\": \"chg-sql-file\"", json);
+    }
+
+    [Fact]
+    public async Task Reduce_sql_schema_delta_matches_accepted_table_column_aliases()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteSqlSchemaDelta(temp.Path, """
+            {
+              "id": "chg-table-alias",
+              "kind": "table",
+              "changeType": "removed",
+              "reference": {
+                "tableNames": "Invoices;Orders"
+              }
+            },
+            {
+              "id": "chg-column-alias",
+              "kind": "column",
+              "changeType": "type_changed",
+              "reference": {
+                "tableName": "Orders",
+                "columnNames": "State;Status"
+              }
+            },
+            {
+              "id": "chg-mapped-alias",
+              "kind": "column",
+              "changeType": "nullable_changed",
+              "reference": {
+                "tableName": "Orders",
+                "mappedName": "Status"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.QueryPatternDetected,
+                RuleIds.DatabaseSqlShape,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/OrdersRepository.cs", 21, 21, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["columnNames"] = "Id;Status",
+                    ["tableNames"] = "Orders;OrderLines"
+                }),
+            FactFactory.Create(
+                manifest,
+                FactTypes.DatabaseColumnMapping,
+                RuleIds.DatabaseEntityFramework,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/Order.cs", 8, 8, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["mappedName"] = "Status",
+                    ["tableName"] = "Orders"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--sql-schema-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-impact-report.json"));
+        Assert.Contains("\"changeId\": \"chg-table-alias\"", json);
+        Assert.Contains("\"changeId\": \"chg-column-alias\"", json);
+        Assert.Contains("\"changeId\": \"chg-mapped-alias\"", json);
+        Assert.DoesNotContain("\"classification\": \"NoEvidenceFullCoverage\"", json);
+    }
+
+    [Fact]
+    public async Task Reduce_sql_schema_delta_persistence_surface_requires_all_supplied_mapping_keys()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteSqlSchemaDelta(temp.Path, """
+            {
+              "id": "chg-orders-status",
+              "kind": "mapping",
+              "changeType": "nullable_changed",
+              "reference": {
+                "tableName": "Orders",
+                "columnName": "Status"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.DatabaseColumnMapping,
+                RuleIds.DatabaseEntityFramework,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/Order.cs", 8, 8, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["columnName"] = "Total",
+                    ["surfaceKind"] = "sql-persistence",
+                    ["tableName"] = "Orders"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--sql-schema-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-impact-report.json"));
+        Assert.Contains("\"classification\": \"NoEvidenceFullCoverage\"", json);
+        Assert.DoesNotContain("\"factType\": \"DatabaseColumnMapping\"", json);
+    }
+
+    [Fact]
+    public async Task Reduce_sql_schema_delta_exit_code_does_not_fail_for_review_tier_only()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteSqlSchemaDelta(temp.Path, """
+            {
+              "id": "chg-table-orders",
+              "kind": "table",
+              "changeType": "removed",
+              "reference": {
+                "tableName": "Orders"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.QueryPatternDetected,
+                RuleIds.DatabaseSqlShape,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/OrdersRepository.cs", 21, 21, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["tableName"] = "Orders"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--sql-schema-delta", deltaPath, "--out", outputPath, "--exit-code"
+        ]));
+
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-impact-report.json"));
+        Assert.Contains("\"classification\": \"NeedsReview\"", json);
+    }
+
+    [Fact]
+    public async Task Reduce_contract_delta_keeps_legacy_confidence_strings()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteContractDelta(temp.Path);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.PropertyAccessed,
+                RuleIds.CSharpSemanticPropertyAccess,
+                EvidenceTiers.Tier1Semantic,
+                new EvidenceSpan("src/OrderReader.cs", 10, 10, null, "test", "test/1.0"),
+                contractElement: "Status",
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["propertyName"] = "Status"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--contract-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.json"));
+        Assert.Contains("\"confidence\": \"high\"", json);
+        Assert.DoesNotContain("\"confidence\": \"High\"", json);
+    }
+
     private static async Task<int> RunCliAsync(string[] args)
     {
         using var output = new StringWriter();

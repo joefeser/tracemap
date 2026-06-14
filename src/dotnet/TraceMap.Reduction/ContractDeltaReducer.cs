@@ -782,7 +782,7 @@ public static class ContractDeltaReducer
             _ => new HashSet<string>(StringComparer.Ordinal)
         };
         var safe = new SortedDictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (key, value) in raw.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        foreach (var (key, value) in raw)
         {
             if (!allowed.Contains(key))
             {
@@ -932,6 +932,20 @@ public static class ContractDeltaReducer
         return null;
     }
 
+    private static IEnumerable<string> ReferenceValues(IReadOnlyDictionary<string, string> reference, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (reference.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                foreach (var part in SplitValue(value))
+                {
+                    yield return part;
+                }
+            }
+        }
+    }
+
     private static IReadOnlyDictionary<string, string> ParseSource(JsonElement root)
     {
         if (!root.TryGetProperty("source", out var sourceElement))
@@ -970,7 +984,8 @@ public static class ContractDeltaReducer
             selected = selected.Where(change => string.Equals(change.Id, options.ChangeId, StringComparison.Ordinal));
         }
 
-        var kindFilter = NormalizeKindFilter(options.Kind);
+        var requestedKind = options.Kind?.Trim();
+        var kindFilter = NormalizeKindFilter(requestedKind);
         if (!string.IsNullOrWhiteSpace(kindFilter))
         {
             if (!ValidKinds.Contains(kindFilter))
@@ -978,8 +993,9 @@ public static class ContractDeltaReducer
                 throw new ArgumentException("reduce --kind must be a supported contract delta kind.");
             }
 
-            selected = selected.Where(change => string.Equals(change.Kind, kindFilter, StringComparison.Ordinal)
-                || string.Equals(change.InputKind, options.Kind, StringComparison.Ordinal));
+            selected = string.Equals(requestedKind, kindFilter, StringComparison.Ordinal)
+                ? selected.Where(change => string.Equals(change.Kind, kindFilter, StringComparison.Ordinal))
+                : selected.Where(change => string.Equals(change.InputKind, requestedKind, StringComparison.Ordinal));
         }
 
         if (!string.IsNullOrWhiteSpace(options.Endpoint))
@@ -1000,14 +1016,14 @@ public static class ContractDeltaReducer
 
         if (!string.IsNullOrWhiteSpace(options.Table))
         {
-            selected = selected.Where(change => Value(change.Reference, "tableName", "tableNames", "name")
-                is { } tableName && NamesMatch(options.Table, tableName));
+            selected = selected.Where(change => ReferenceValues(change.Reference, "tableName", "tableNames", "name")
+                .Any(tableName => NamesMatch(options.Table, tableName)));
         }
 
         if (!string.IsNullOrWhiteSpace(options.Column))
         {
-            selected = selected.Where(change => Value(change.Reference, "columnName", "columnNames", "mappedName", "propertyName", "name")
-                is { } columnName && NamesMatch(options.Column, columnName));
+            selected = selected.Where(change => ReferenceValues(change.Reference, "columnName", "columnNames", "mappedName", "propertyName", "name")
+                .Any(columnName => NamesMatch(options.Column, columnName)));
         }
 
         if (!string.IsNullOrWhiteSpace(options.QueryShape))
@@ -1165,7 +1181,7 @@ public static class ContractDeltaReducer
             FindingId = $"finding:{findingPrefix}:{Hash($"{change.Id}:{classification}:{change.DisplayName}", 24)}",
             ChangeId = change.Id,
             ChangeKind = change.InputKind,
-            Confidence = ConfidenceFor(classification),
+            Confidence = ConfidenceFor(classification, input.IsSqlSchemaDelta),
             EvidenceTier = evidenceTier,
             SourceLabel = sourceLabel,
             Reference = change.Reference
@@ -1465,14 +1481,14 @@ public static class ContractDeltaReducer
             return EvidenceMatch.None;
         }
 
-        var expectedTable = Value(change.Reference, "tableName", "schemaName", "name");
-        if (expectedTable is null)
+        var expectedTables = ReferenceValues(change.Reference, "tableName", "tableNames", "schemaName", "name").ToArray();
+        if (expectedTables.Length == 0)
         {
             return EvidenceMatch.None;
         }
 
         var tableMatches = PropertyValues(fact, "tableName", "tableNames", "schemaName", "entityName", "name")
-            .Any(value => NamesMatch(expectedTable, value));
+            .Any(value => expectedTables.Any(expectedTable => NamesMatch(expectedTable, value)));
         return tableMatches ? new EvidenceMatch(MatchStrength.Member, false, SqlEvidenceKind(fact, "sql-schema-metadata")) : EvidenceMatch.None;
     }
 
@@ -1483,20 +1499,20 @@ public static class ContractDeltaReducer
             return EvidenceMatch.None;
         }
 
-        var expectedColumn = Value(change.Reference, "columnName", "name");
-        var expectedTable = Value(change.Reference, "tableName");
-        if (expectedColumn is null)
+        var expectedColumns = ReferenceValues(change.Reference, "columnName", "columnNames", "mappedName", "propertyName", "name").ToArray();
+        var expectedTables = ReferenceValues(change.Reference, "tableName", "tableNames").ToArray();
+        if (expectedColumns.Length == 0)
         {
             return EvidenceMatch.None;
         }
 
-        var columnMatches = PropertyValues(fact, "columnName", "columnNames", "fieldName", "fieldNames", "propertyName")
-            .Any(value => NamesMatch(expectedColumn, value));
-        var tableMatches = expectedTable is null
+        var columnMatches = PropertyValues(fact, "columnName", "columnNames", "fieldName", "fieldNames", "propertyName", "mappedName")
+            .Any(value => expectedColumns.Any(expectedColumn => NamesMatch(expectedColumn, value)));
+        var tableMatches = expectedTables.Length == 0
             || PropertyValues(fact, "tableName", "tableNames", "schemaName", "entityName")
-                .Any(value => NamesMatch(expectedTable, value));
+                .Any(value => expectedTables.Any(expectedTable => NamesMatch(expectedTable, value)));
         return columnMatches && tableMatches
-            ? new EvidenceMatch(expectedTable is null ? MatchStrength.Member : MatchStrength.TypeAndMember, expectedTable is null, SqlEvidenceKind(fact, "sql-schema-metadata"))
+            ? new EvidenceMatch(expectedTables.Length == 0 ? MatchStrength.Member : MatchStrength.TypeAndMember, expectedTables.Length == 0, SqlEvidenceKind(fact, "sql-schema-metadata"))
             : EvidenceMatch.None;
     }
 
@@ -1552,7 +1568,6 @@ public static class ContractDeltaReducer
     private static EvidenceMatch MatchDependencySurface(NormalizedChange change, IndexedFact fact)
     {
         var expectedKind = NormalizeSurfaceKind(Value(change.Reference, "surfaceKind", "kind"));
-        var expectedName = Value(change.Reference, "surfaceName", "packageName", "name", "stableKey", "tableName", "columnName", "mappedName");
         var expectedEcosystem = Value(change.Reference, "ecosystem");
         var actualKind = SurfaceKind(fact);
         if (expectedKind is null)
@@ -1561,7 +1576,18 @@ public static class ContractDeltaReducer
         }
 
         var kindMatches = string.Equals(expectedKind, actualKind, StringComparison.OrdinalIgnoreCase);
-        if (!kindMatches || expectedName is null)
+        if (!kindMatches)
+        {
+            return EvidenceMatch.None;
+        }
+
+        if (string.Equals(expectedKind, "sql-persistence", StringComparison.OrdinalIgnoreCase))
+        {
+            return MatchSqlPersistenceSurface(change, fact);
+        }
+
+        var expectedName = Value(change.Reference, "surfaceName", "packageName", "name", "stableKey", "tableName", "columnName", "mappedName");
+        if (expectedName is null)
         {
             return EvidenceMatch.None;
         }
@@ -1575,12 +1601,72 @@ public static class ContractDeltaReducer
                 .Any(value => string.Equals(expectedEcosystem, value, StringComparison.OrdinalIgnoreCase));
         return nameMatches
             && ecosystemMatches
-            ? new EvidenceMatch(
-                MatchStrength.TypeAndMember,
-                string.Equals(expectedKind, "sql-persistence", StringComparison.OrdinalIgnoreCase)
-                    && Value(change.Reference, "tableName", "columnName") is null,
-                string.Equals(expectedKind, "sql-persistence", StringComparison.OrdinalIgnoreCase) ? "sql-persistence-mapping" : "dependency-surface")
+            ? new EvidenceMatch(MatchStrength.TypeAndMember, false, "dependency-surface")
             : EvidenceMatch.None;
+    }
+
+    private static EvidenceMatch MatchSqlPersistenceSurface(NormalizedChange change, IndexedFact fact)
+    {
+        var hasIdentity = Has(
+            change.Reference,
+            "surfaceName",
+            "stableKey",
+            "name",
+            "tableName",
+            "tableNames",
+            "columnName",
+            "columnNames",
+            "mappedName",
+            "propertyName");
+        if (!hasIdentity)
+        {
+            return EvidenceMatch.None;
+        }
+
+        var surfaceMatches = ReferenceMatchesFactOrAbsent(
+            change.Reference,
+            fact,
+            ["surfaceName", "stableKey", "name"],
+            ["surfaceName", "stableKey", "name", "tableName", "columnName", "mappedName"]);
+        var tableMatches = ReferenceMatchesFactOrAbsent(
+            change.Reference,
+            fact,
+            ["tableName", "tableNames"],
+            ["tableName", "tableNames", "schemaName", "entityName"]);
+        var columnMatches = ReferenceMatchesFactOrAbsent(
+            change.Reference,
+            fact,
+            ["columnName", "columnNames", "propertyName"],
+            ["columnName", "columnNames", "fieldName", "fieldNames", "propertyName"]);
+        var mappedMatches = ReferenceMatchesFactOrAbsent(
+            change.Reference,
+            fact,
+            ["mappedName"],
+            ["mappedName", "propertyName", "columnName"]);
+        if (!surfaceMatches || !tableMatches || !columnMatches || !mappedMatches)
+        {
+            return EvidenceMatch.None;
+        }
+
+        var reviewOnly = !Has(change.Reference, "tableName", "tableNames")
+            || !Has(change.Reference, "columnName", "columnNames", "mappedName", "propertyName");
+        return new EvidenceMatch(MatchStrength.TypeAndMember, reviewOnly, "sql-persistence-mapping");
+    }
+
+    private static bool ReferenceMatchesFactOrAbsent(
+        IReadOnlyDictionary<string, string> reference,
+        IndexedFact fact,
+        IReadOnlyList<string> referenceKeys,
+        IReadOnlyList<string> factKeys)
+    {
+        var expectedValues = ReferenceValues(reference, referenceKeys.ToArray()).ToArray();
+        if (expectedValues.Length == 0)
+        {
+            return true;
+        }
+
+        return PropertyValues(fact, factKeys.ToArray())
+            .Any(actual => expectedValues.Any(expected => NamesMatch(expected, actual) || string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool IsSqlFact(IndexedFact fact)
@@ -2063,8 +2149,20 @@ public static class ContractDeltaReducer
             or ImpactClassifications.NeedsReviewImpact);
     }
 
-    private static string ConfidenceFor(string classification)
+    private static string ConfidenceFor(string classification, bool isSqlSchemaDelta)
     {
+        if (!isSqlSchemaDelta)
+        {
+            return classification switch
+            {
+                ImpactClassifications.DefiniteImpact or ImpactClassifications.StaticImpactEvidence => "high",
+                ImpactClassifications.ProbableImpact or ImpactClassifications.ProbableStaticImpact => "medium",
+                ImpactClassifications.NeedsReview or ImpactClassifications.NeedsReviewImpact => "review",
+                ImpactClassifications.NoEvidenceFullCoverage or ImpactClassifications.NoImpactEvidence => "coverage-relative-none",
+                _ => "unknown"
+            };
+        }
+
         return classification switch
         {
             ImpactClassifications.DefiniteImpact or ImpactClassifications.StaticImpactEvidence => "High",
