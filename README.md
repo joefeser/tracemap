@@ -25,6 +25,15 @@ TraceMap is not an AI impact-analysis tool. The scanner and reducer do not use L
 
 ## Quick Start
 
+Run the public demo from a clean checkout:
+
+```bash
+./scripts/demo-public.sh
+./scripts/demo-public.sh .tracemap-demo
+```
+
+The demo scans checked-in .NET and TypeScript samples, writes a generated artifact bundle, and produces `demo-summary.md` plus `demo-summary.json`. The first implementation slice intentionally marks combine/report paths, reverse, portfolio, diff, impact, and release-review sections as `deferred` until their demo assertions land. Generated scan artifacts are local-only; public-shareable summaries and reports use relative paths or hashes and run a generated-output sentinel scan.
+
 Build and test everything:
 
 ```bash

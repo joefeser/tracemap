@@ -35,6 +35,42 @@ PYTHON_BIN=/tmp/tracemap-python-venv/bin/python ./scripts/smoke-python-endpoints
 ./scripts/check-private-paths.sh
 ```
 
+## Public Demo Workflow
+
+Run the public demo when validating the open-source walkthrough or generated public artifacts:
+
+```bash
+./scripts/demo-public.sh
+./scripts/demo-public.sh .tracemap-demo
+```
+
+The default demo uses only checked-in samples. It does not clone public repositories, read private repositories, call external analysis services, query package registries, or run vulnerability/license/compatibility analysis. First-run build restore may still need network access for local toolchains such as NuGet or npm.
+
+Current first-slice behavior:
+
+- checks `git`, `.NET`, `node`, and `npm`
+- builds the .NET solution and TypeScript adapter
+- scans `samples/modern-sample`
+- scans `samples/endpoint-server-aspnet`
+- scans `samples/typescript-modern-sample`
+- scans `samples/endpoint-client-angular`
+- writes `demo-summary.md` and `demo-summary.json`
+- runs a generated-output sentinel scan over public-shareable summaries and reports
+- marks Python as `not_requested` unless `--include-python` is passed; requested Python scanning is currently `deferred` to a follow-up slice
+- marks JVM as `unavailable` when Java 21 is absent
+- marks combine/report, paths/reverse, portfolio, diff, impact, and release-review as `deferred` until follow-up demo slices add their assertions
+
+Troubleshooting:
+
+- If the demo refuses an in-repo output directory, use `.tracemap-demo/` or add a generic ignored output path before running the script.
+- If .NET or TypeScript build restore fails, run the build/test commands above directly to restore local toolchain dependencies and inspect their native diagnostics.
+- Reduced sample scan coverage is expected in the first public-demo slice for samples that intentionally rely on syntax fallback or missing framework packages. The summary reports full and reduced scan counts so follow-up report assertions can stay coverage-aware.
+- If the generated public-report sentinel fails, inspect the relative file paths and category it prints. Keep scan manifests, SQLite files, facts, and logs local-only; public summaries and reports must use hashes, labels, or relative paths.
+
+Generated outputs under `scans/**`, SQLite files, facts, manifests, and logs are local-only artifacts and may contain temporary execution details. Public-shareable `demo-summary.*` and future `reports/**/*.md|json` artifacts must not contain raw scripts, SQL, snippets, config values, connection strings, raw URLs with credentials, private paths, or local absolute paths.
+
+Use `.tracemap-demo/` for an in-repo output root; it is ignored by git. Other in-repo output directories are rejected unless `git check-ignore` proves they are ignored.
+
 For JVM CLI smoke, also run:
 
 ```bash

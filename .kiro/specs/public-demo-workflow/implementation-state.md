@@ -2,11 +2,11 @@
 
 ## Current Branch
 
-`codex/one-command-public-demo-spec`
+`codex/implement-public-demo-workflow`
 
 ## Spec Status
 
-Spec-only branch. No implementation files are changed in this branch. `scripts/demo-public.sh` is intentionally not added here; implementation begins in the follow-up PR 1a slice after this spec is merged.
+Implementation branch for PR 1a. This branch adds the public demo script, assertion helper, ignore rule, and documentation for the first public-demo slice.
 
 ## Scope Decisions
 
@@ -43,16 +43,32 @@ Local ignored scripts or developer-specific smoke helpers may exist in a checkou
 
 ## Expected First Implementation Boundary
 
-Start with PR 1a:
+PR 1a scope:
 
 - `scripts/demo-public.sh`
-- output-root handling,
-- tool checks,
-- .NET and TypeScript sample scans,
-- summary skeleton,
-- public-report sentinel scan,
-- no Python/JVM requirement by default,
-- no diff/impact/release-review execution yet.
+- `scripts/demo-public-assert.mjs`
+- output-root handling and in-repo ignored-path guard
+- tool checks with Homebrew guidance where useful
+- .NET and TypeScript build/scans over checked-in samples
+- summary skeleton with `demo-summary.md` and `demo-summary.json`
+- generated public-report sentinel scan
+- Python marked `not_requested` by default
+- Python marked `deferred` when explicitly requested in this first slice; it does not create a virtual environment until Python scanning is implemented
+- JVM marked `unavailable` when Java 21 is absent
+- combine/report, paths/reverse, portfolio, diff, impact, and release-review marked `deferred`
+
+Validation run on this branch:
+
+- `./scripts/demo-public.sh /tmp/tracemap-public-demo-test`
+- rejected unignored in-repo output path
+- generated sentinel scan caught a planted home-path leak
+- `./scripts/demo-public.sh .tracemap-demo`
+- `node scripts/demo-public-assert.mjs self-test`
+- `dotnet test src/dotnet/TraceMap.sln`
+- `npm run check --prefix src/typescript`
+- `./scripts/check-private-paths.sh`
+- `./scripts/smoke-combined-paths.sh /tmp/tracemap-demo-combined-smoke`
+- `git diff --check`
 
 ## Follow-Up Boundary
 
