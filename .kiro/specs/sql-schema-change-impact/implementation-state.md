@@ -1,5 +1,7 @@
 # SQL Schema Change Impact Implementation State
 
+Status: implemented
+
 ## Branch
 
 `codex/sql-schema-change-impact`
