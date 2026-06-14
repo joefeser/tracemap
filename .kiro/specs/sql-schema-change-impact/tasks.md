@@ -5,29 +5,29 @@
 - [ ] 1. Confirm current SQL impact inputs and evidence seams. Requirements: 1, 2, 3, 4.
   - [ ] Inspect SQL-shape fact properties across .NET, TypeScript, JVM, and Python.
   - [ ] Inspect `DatabaseColumnMapping`, mapped-name properties, and ORM mapping facts across adapters.
-  - [ ] Inspect combined `sql-query` and `sql-persistence` surface readers.
-  - [ ] Inspect existing contract-delta v2 and combined impact readers for reusable input/report models.
-  - [ ] Record seam gaps in the first implementation PR body under a "Seams checked" section before adding new behavior.
+  - [x] Inspect combined `sql-query` and `sql-persistence` surface readers.
+  - [x] Inspect existing contract-delta v2 and combined impact readers for reusable input/report models.
+  - [x] Record seam gaps in the first implementation PR body under a "Seams checked" section before adding new behavior.
 
 - [ ] 2. Add SQL/schema delta input model and validator. Requirements: 1, 7, 8, 9.
   - [ ] Define `version`, `source`, `changes`, `reference`, `old`, `new`, and metadata contracts.
-  - [ ] Require explicit change `id` values in v1.
-  - [ ] Validate allowed `kind` and `changeType` values.
-  - [ ] Validate unknown version, duplicate IDs, missing IDs, and empty changes.
-  - [ ] Reject or gap unsafe raw SQL/free-text references without echoing unsafe values.
-  - [ ] Normalize valid SQL/schema changes into contract-delta impact selectors.
+  - [x] Require explicit change `id` values in v1.
+  - [x] Validate allowed `kind` and `changeType` values.
+  - [x] Validate unknown version, duplicate IDs, missing IDs, and empty changes.
+  - [x] Reject or gap unsafe raw SQL/free-text references without echoing unsafe values.
+  - [x] Normalize valid SQL/schema changes into contract-delta impact selectors.
   - [ ] Add SQL-to-contract selector normalization tests for every SQL/schema kind.
-  - [ ] Reject `--contract-delta` and `--sql-schema-delta` together with a clear mutual-exclusion error.
+  - [x] Reject `--contract-delta` and `--sql-schema-delta` together with a clear mutual-exclusion error.
   - [ ] Add tests for valid schema, table, column, query-shape, mapping, sql-file, persistence-surface, missing-ID, and invalid input.
 
 - [ ] 3. Implement single-index SQL/schema matching. Requirements: 2, 4, 6, 8.
   - [ ] Match schema references against safe schema metadata where available.
-  - [ ] Match table references against SQL-shape and mapping facts.
-  - [ ] Match column references against column/field/mapped/member metadata.
-  - [ ] Match query-shape references against `queryShapeHash` and `textHash`.
-  - [ ] Match sql-file references against `SqlFileDeclared`, `SqlTextUsed`, and SQL-shape source-kind metadata.
-  - [ ] Separate query evidence, text-hash evidence, SQL resource evidence, and mapping evidence.
-  - [ ] Keep schema-only, table-only, mappedName-only, and hash-only matches review-tier.
+  - [x] Match table references against SQL-shape and mapping facts.
+  - [x] Match column references against column/field/mapped/member metadata.
+  - [x] Match query-shape references against `queryShapeHash` and `textHash`.
+  - [x] Match sql-file references against `SqlFileDeclared`, `SqlTextUsed`, and SQL-shape source-kind metadata.
+  - [x] Separate query evidence, text-hash evidence, SQL resource evidence, and mapping evidence.
+  - [x] Keep schema-only, table-only, mappedName-only, and hash-only matches review-tier.
   - [ ] Cover `added` with no evidence and `removed` with multiple evidence rows.
   - [ ] Deduplicate matched facts deterministically.
   - [ ] Add reduced/full coverage no-evidence tests.
@@ -35,56 +35,56 @@
 - [ ] 4. Implement combined-index SQL/schema matching. Requirements: 3, 4, 6, 8.
   - [ ] Reuse combined surface projection for `sql-query`.
   - [ ] Reuse combined surface projection for `sql-persistence`.
-  - [ ] Include `sql-persistence` by default for table, column, mapping, and persistence-surface changes.
-  - [ ] Preserve source labels, commit SHAs, scan IDs, and coverage warnings.
+  - [x] Include `sql-persistence` by default for table, column, mapping, and persistence-surface changes.
+  - [x] Preserve source labels, commit SHAs, scan IDs, and coverage warnings.
   - [ ] Preserve hash-only, volatile identity, duplicate identity, and schema caveats.
-  - [ ] Verify `--sql-schema-delta` accepts combined indexes through `--index`.
+  - [x] Verify `--sql-schema-delta` accepts combined indexes through `--index`.
   - [ ] Add tests for schema/table/column/query-shape matches across multiple source labels.
 
 - [ ] 5. Add optional path and reverse context. Requirements: 5, 6, 8.
   - [ ] Derive stable path/reverse selectors only from safe SQL surface identity.
   - [ ] Reuse existing combined paths/reverse readers.
-  - [ ] Reject path/reverse flags against single-language indexes.
-  - [ ] Emit `PathContextUnavailable` or `ReverseContextUnavailable` for unstable matches.
+  - [x] Reject path/reverse flags against single-language indexes.
+  - [x] Emit `PathContextUnavailable` or `ReverseContextUnavailable` for unstable matches.
   - [ ] Emit per-finding context gaps and summary partial coverage when only some changes have stable selectors.
   - [ ] Emit `UnknownAnalysisGap` when no path exists under reduced coverage.
   - [ ] Add cap/truncation tests.
 
 - [ ] 6. Add classifications and confidence mapping. Requirements: 4, 6, 9.
-  - [ ] Implement single-index classifications.
-  - [ ] Implement combined-index classifications.
+  - [x] Implement single-index classifications.
+  - [x] Implement combined-index classifications.
   - [ ] Downgrade schema-only, hash-only, table-only, mappedName-only, unlinked, duplicate, volatile, and reduced-coverage evidence.
-  - [ ] Add fixed confidence mapping from classification.
+  - [x] Add fixed confidence mapping from classification.
   - [ ] Add tests for `sql-schema-metadata` evidence labels and mapping identity fallback when any key component is unsafe.
   - [ ] Add tests proving no overclaiming from mapping-only evidence.
   - [ ] Add tests proving languages without Tier1 SQL mapping evidence do not emit `DefiniteImpact`.
 
 - [ ] 7. Add Markdown and JSON reports. Requirements: 7, 8, 9.
-  - [ ] Emit deterministic Markdown sections.
-  - [ ] Emit deterministic JSON schema.
-  - [ ] Use `sql-impact-report.md` and `sql-impact-report.json` for SQL/schema directory output while preserving existing contract-delta file names.
-  - [ ] Introduce `SqlSchemaChangeImpactSingleV1` and `SqlSchemaChangeImpactCombinedV1` as new JSON models rather than changing the current Markdown-only impact record.
+  - [x] Emit deterministic Markdown sections.
+  - [x] Emit deterministic JSON schema.
+  - [x] Use `sql-impact-report.md` and `sql-impact-report.json` for SQL/schema directory output while preserving existing contract-delta file names.
+  - [x] Introduce `SqlSchemaChangeImpactSingleV1` and `SqlSchemaChangeImpactCombinedV1` as new JSON models rather than changing the current Markdown-only impact record.
   - [ ] Add path resolution tests for file output, default directory output, and directory `--format json` precedence.
-  - [ ] Include rule IDs, evidence tiers, file spans, commit SHAs, extractor versions, supporting IDs, and limitations.
-  - [ ] Omit or hash unsafe metadata.
-  - [ ] Add byte-stability tests, including volatile identity caveats.
+  - [x] Include rule IDs, evidence tiers, file spans, commit SHAs, extractor versions, supporting IDs, and limitations.
+  - [x] Omit or hash unsafe metadata.
+  - [x] Add byte-stability tests, including volatile identity caveats.
 
 - [ ] 8. Update rules and documentation during implementation. Requirements: 9.
-  - [ ] Add `contract.delta.input.v2`, `contract.delta.impact.v2`, and `contract.delta.context.v2` to `rules/rule-catalog.yml` if they are not already present.
-  - [ ] Reuse `contract.delta.input.v2`, `contract.delta.impact.v2`, and `contract.delta.context.v2` by default.
+  - [x] Add `contract.delta.input.v2`, `contract.delta.impact.v2`, and `contract.delta.context.v2` to `rules/rule-catalog.yml` if they are not already present.
+  - [x] Reuse `contract.delta.input.v2`, `contract.delta.impact.v2`, and `contract.delta.context.v2` by default.
   - [ ] Fail tests if any emitted finding or gap cites a missing rule ID.
-  - [ ] Add `sql.schema.*` rules only if implementation proves dedicated rules are needed.
-  - [ ] Document limitations for any new rule before code merges.
-  - [ ] Ensure supporting adapter and combined rule IDs are preserved.
-  - [ ] Document static SQL/schema impact limitations in the command help or report output.
+  - [x] Add `sql.schema.*` rules only if implementation proves dedicated rules are needed.
+  - [x] Document limitations for any new rule before code merges.
+  - [x] Ensure supporting adapter and combined rule IDs are preserved.
+  - [x] Document static SQL/schema impact limitations in the command help or report output.
 
 - [ ] 9. Validate implementation. Requirements: 10.
-  - [ ] `dotnet build src/dotnet/TraceMap.sln`
-  - [ ] `dotnet test src/dotnet/TraceMap.sln`
+  - [x] `dotnet build src/dotnet/TraceMap.sln`
+  - [x] `dotnet test src/dotnet/TraceMap.sln`
   - [ ] Run affected TypeScript/JVM/Python tests only if their adapter facts or fixtures change.
   - [ ] Run relevant combined path/reverse smoke checks if path/reverse behavior changes.
-  - [ ] `./scripts/check-private-paths.sh`
-  - [ ] `git diff --check`
+  - [x] `./scripts/check-private-paths.sh`
+  - [x] `git diff --check`
 
 ## Spec PR Tasks
 
