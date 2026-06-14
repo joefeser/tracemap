@@ -70,7 +70,7 @@ require_cmd() {
 }
 
 abs_path() {
-  node -e 'const path = require("node:path"); console.log(path.resolve(process.argv[1]));' "$1"
+  node -e 'const path = require("node:path"); console.log(path.resolve(process.argv[2]));' "$1"
 }
 
 is_inside_repo() {
@@ -230,7 +230,7 @@ SCAN_COUNTS="$(
     "typescript-modern=$TS_MODERN" \
     "typescript-endpoint-client=$TS_ENDPOINT"
 )"
-SCAN_REDUCED_COUNT="$(node -e 'const counts = JSON.parse(process.argv[1]); console.log(counts.reducedCoverageScans ?? 0);' "$SCAN_COUNTS")"
+SCAN_REDUCED_COUNT="$(node -e 'const counts = JSON.parse(process.argv[2]); console.log(counts.reducedCoverageScans ?? 0);' "$SCAN_COUNTS")"
 SCAN_COVERAGE="FullEvidenceAvailable"
 SCAN_CLASSIFICATION="ActionableStaticEvidence"
 if [[ "$SCAN_REDUCED_COUNT" != "0" ]]; then

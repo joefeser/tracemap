@@ -34,7 +34,8 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (!requestedPath.startsWith(root)) {
+  const safeRoot = root.endsWith("/") || root.endsWith("\\") ? root : root + (root.includes("\\") ? "\\" : "/");
+  if (requestedPath !== root && !requestedPath.startsWith(safeRoot)) {
     response.writeHead(403);
     response.end("Forbidden");
     return;

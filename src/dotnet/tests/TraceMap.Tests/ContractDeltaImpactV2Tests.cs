@@ -439,6 +439,38 @@ public sealed class ContractDeltaImpactV2Tests
     }
 
     [Fact]
+    public async Task Reduce_v2_rejects_endpoint_reference_without_path_identity()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, []);
+        var badDeltaPath = WriteV2Delta(temp.Path, """
+            {
+              "id": "chg-endpoint-method-only",
+              "kind": "endpoint",
+              "changeType": "changed",
+              "reference": {
+                "method": "GET"
+              }
+            }
+            """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync([
+            "reduce",
+            "--index", indexPath,
+            "--contract-delta", badDeltaPath,
+            "--out", outputPath
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("reference is missing required identity fields", error.ToString());
+    }
+
+    [Fact]
     public async Task Reduce_v2_exit_code_is_opt_in_and_json_is_deterministic()
     {
         using var temp = new TempDirectory();

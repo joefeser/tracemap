@@ -724,7 +724,7 @@ public static class CombinedDependencyDiffer
             Pair("versionHash", surface.VersionHash),
             Pair("redactionReason", surface.RedactionReason),
             Pair("configKey", surface.ConfigKey),
-            Pair("identityFallbackHash", IsVolatileSqlIdentity(surface) ? CombinedReportHelpers.Hash(surface.OriginalFactId, 24) : null)
+            Pair("identityFallbackHash", IsVolatileSqlIdentity(surface) ? CombinedReportHelpers.Hash(surface.OriginalFactId ?? surface.CombinedFactId, 24) : null)
         ]);
     }
 
@@ -951,7 +951,12 @@ public static class CombinedDependencyDiffer
 
     private static IReadOnlyList<CombinedPathFileSpan> PathFileSpans(CombinedPath path)
     {
-        var nodeSourceById = path.Nodes.ToDictionary(node => node.NodeId, node => node.SourceLabel, StringComparer.Ordinal);
+        var nodeSourceById = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var node in path.Nodes)
+        {
+            nodeSourceById[node.NodeId] = node.SourceLabel;
+        }
+
         return path.Nodes
             .Where(node => !string.IsNullOrWhiteSpace(node.FilePath))
             .Select(node => new CombinedPathFileSpan(CombinedReportHelpers.SafePath(node.FilePath!), node.StartLine, node.EndLine, node.SourceLabel))
