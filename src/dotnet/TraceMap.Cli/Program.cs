@@ -43,9 +43,10 @@ public static class TraceMapCommand
                 "paths" => PathsHelp(),
                 "diff" => DiffHelp(),
                 "impact" => ImpactHelp(),
+                "reverse" => ReverseHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "impact" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "impact" or "reverse" ? 0 : 1;
         }
 
         try
@@ -63,6 +64,7 @@ public static class TraceMapCommand
                 "paths" => await RunPathsAsync(rest, output, error, cancellationToken),
                 "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
+                "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -366,6 +368,58 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.HasImpactItems ? 1 : 0;
+    }
+
+    private static async Task<int> RunReverseAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: reverse requires --index <combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: reverse requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: reverse --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await CombinedReverseReporter.WriteAsync(
+            new CombinedReverseOptions(
+                indexPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--surface-name"),
+                values.GetValueOrDefault("--to") ?? "endpoints",
+                ParsePositiveInt(values, "--max-depth", 8),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-surfaces", 200),
+                ParsePositiveInt(values, "--max-roots", 100),
+                ParsePositiveInt(values, "--max-paths-per-root", 5),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                values.HasFlag("--exit-code")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap reverse completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
+        await output.WriteLineAsync($"Selected surfaces: {result.Report.Summary.SelectedSurfaceCount}");
+        await output.WriteLineAsync($"Reverse roots: {result.Report.Summary.ReverseRootCount}");
+        await output.WriteLineAsync($"Paths: {result.Report.Summary.PathCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasReverseEvidence ? 1 : 0;
     }
 
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -675,6 +729,7 @@ public static class TraceMapCommand
               tracemap paths --index <combined.sqlite> --out <path> [selectors]
               tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
+              tracemap reverse --index <combined.sqlite> --out <path> [selectors]
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -688,6 +743,7 @@ public static class TraceMapCommand
               paths     Trace deterministic dependency paths through a combined index.
               diff      Compare two combined indexes and report static evidence changes.
               impact    Explain static change evidence between two combined indexes.
+              reverse   Trace reverse static reachability from dependency surfaces.
             """;
     }
 
@@ -826,6 +882,35 @@ public static class TraceMapCommand
 
             Outputs:
               impact-report.md and/or impact-report.json
+            """;
+    }
+
+    private static string ReverseHelp()
+    {
+        return """
+            Usage:
+              tracemap reverse --index <combined.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --index <path>             Combined TraceMap index from tracemap combine.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+              --exit-code                Return exit code 1 when reverse roots or paths are present.
+              --source <label>           Filter selected surfaces and requested roots to one source label.
+              --surface <kind>           sql-query, http-route, http-client, or package-config.
+              --surface-name <text>      Exact case-insensitive surface name.
+              --to <target>              endpoints, symbols, sources, or all. Default: endpoints.
+              --max-surfaces <n>         Selected surfaces. Default: 200.
+              --max-roots <n>            Reverse roots. Default: 100.
+              --max-paths-per-root <n>   Paths per root. Default: 5.
+              --max-depth <n>            Reverse traversal depth. Default: 8.
+              --max-frontier <n>         Reverse traversal frontier cap. Default: 10000.
+              --max-gaps <n>             Gap rows. Default: 1000.
+
+            Outputs:
+              reverse-report.md and/or reverse-report.json
             """;
     }
 

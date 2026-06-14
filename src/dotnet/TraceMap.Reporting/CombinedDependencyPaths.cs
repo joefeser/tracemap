@@ -136,6 +136,13 @@ public sealed record CombinedPathInventory(
     IReadOnlyList<CombinedPathNode> EvidenceNodes,
     IReadOnlyList<CombinedPathEdge> EvidenceEdges);
 
+internal sealed record CombinedPathGraphInventory(
+    IReadOnlyList<CombinedReportSource> Sources,
+    IReadOnlyList<string> CoverageWarnings,
+    IReadOnlyList<CombinedPathNode> Nodes,
+    IReadOnlyList<CombinedPathEdge> Edges,
+    IReadOnlyList<CombinedPathGap> Gaps);
+
 public static class CombinedDependencyPathClassifications
 {
     public const string StrongStaticPath = nameof(StrongStaticPath);
@@ -194,9 +201,52 @@ public static class CombinedDependencyPathReporter
     {
         ValidateOptions(options);
         var sourcePair = ParseSourcePair(options.SourcePair);
+        var (read, graph) = await BuildGraphAsync(options.IndexPath, sourcePair, cancellationToken);
+        return BuildReport(options, read, graph, sourcePair);
+    }
+
+    internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
+        string indexPath,
+        string? sourcePair = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(indexPath))
+        {
+            throw new ArgumentException("paths requires --index <combined.sqlite>.");
+        }
+
+        var parsedSourcePair = ParseSourcePair(sourcePair);
+        var (read, graph) = await BuildGraphAsync(indexPath, parsedSourcePair, cancellationToken);
+        return new CombinedPathGraphInventory(
+            read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
+            read.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            graph.Nodes.Values
+                .Select(node => node.ToReportNode())
+                .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
+                .ThenBy(node => node.NodeKind, StringComparer.Ordinal)
+                .ThenBy(node => node.DisplayName, StringComparer.Ordinal)
+                .ThenBy(node => node.NodeId, StringComparer.Ordinal)
+                .ToArray(),
+            graph.Edges
+                .Select(edge => edge.ToReportEdge())
+                .ToArray(),
+            graph.Gaps
+                .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
+                .ThenBy(gap => gap.SourceLabel, StringComparer.Ordinal)
+                .ThenBy(gap => gap.FilePath, StringComparer.Ordinal)
+                .ThenBy(gap => gap.StartLine ?? 0)
+                .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    private static async Task<(CombinedReadResult Read, EvidenceGraph Graph)> BuildGraphAsync(
+        string indexPath,
+        (string Client, string Server)? sourcePair,
+        CancellationToken cancellationToken)
+    {
         var connectionString = new SqliteConnectionStringBuilder
         {
-            DataSource = options.IndexPath,
+            DataSource = indexPath,
             Mode = SqliteOpenMode.ReadOnly
         }.ToString();
         await using var connection = new SqliteConnection(connectionString);
@@ -207,7 +257,7 @@ public static class CombinedDependencyPathReporter
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts);
         var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair);
-        return BuildReport(options, read, graph, sourcePair);
+        return (read, graph);
     }
 
     private static void ValidateOptions(CombinedDependencyPathOptions options)
@@ -1800,8 +1850,8 @@ public static class CombinedDependencyPathReporter
                 Classification,
                 RuleId,
                 EvidenceTier,
-                SupportingFactIds,
-                SupportingCombinedEdgeIds,
+                SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                SupportingCombinedEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 FilePath,
                 StartLine,
                 EndLine);

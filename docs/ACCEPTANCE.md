@@ -154,6 +154,21 @@ For every successful `tracemap paths --index <combined.sqlite> --out <out>` run,
 - no-path conclusions are coverage-relative when contributing sources have reduced coverage.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, or local absolute paths.
 
+For every successful `tracemap reverse --index <combined.sqlite> --out <out>` run, verify:
+
+- reverse reports reject single-language indexes with a clear combined-index error.
+- directory output writes `reverse-report.md` and `reverse-report.json`.
+- the command opens the combined database read-only and does not mutate `endpoint_matches` or source evidence tables.
+- JSON includes `reportType: combined-reverse-query`, required empty arrays, stable query metadata, source snapshots, selected surfaces, reverse roots, paths, gaps, and limitations.
+- selected surfaces are limited to dependency surfaces such as `sql-query`, `http-route`, `http-client`, and `package-config`.
+- `--source` matches source labels case-insensitively, `--surface-name` uses exact case-insensitive matching, and `--surface`, `--to`, `--max-depth`, `--max-frontier`, `--max-surfaces`, `--max-roots`, `--max-paths-per-root`, and `--max-gaps` behave deterministically.
+- `--to endpoints`, `--to symbols`, `--to sources`, and `--to all` select the requested reverse root families without implying runtime reachability.
+- selected surfaces, reverse roots, paths, and gaps carry rule IDs, evidence tiers, source labels, stable keys, file spans, and supporting fact or edge IDs where available.
+- classifications use `SelectedSurfaceEvidence`, `NeedsReviewSurfaceEvidence`, `StrongStaticReversePath`, `ProbableStaticReversePath`, `NeedsReviewReversePath`, `UnknownAnalysisGap`, `NoReversePathEvidence`, `SelectorNoMatch`, and `TruncatedByLimit`.
+- no-reverse-path conclusions are coverage-relative; reduced coverage emits an `UnknownAnalysisGap` instead of proof that no roots exist.
+- `--exit-code` returns a non-zero exit only when requested and reverse roots or paths are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
+
 For every successful `tracemap diff --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
 
 - both inputs are combined indexes and are opened read-only.

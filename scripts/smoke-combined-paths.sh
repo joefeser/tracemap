@@ -63,7 +63,7 @@ require_cmd dotnet
 require_cmd npm
 require_cmd node
 
-echo "TraceMap combined paths smoke output: $OUT_ROOT"
+echo "TraceMap combined paths/reverse smoke output: $OUT_ROOT"
 mkdir -p "$OUT_ROOT"
 
 npm --prefix "$TS_DIR" run build
@@ -76,6 +76,7 @@ PATHS_OUT="$OUT_ROOT/paths"
 TARGET_PATHS_OUT="$OUT_ROOT/paths-runner-sql"
 TARGET_PATHS_OUT_SECOND="$OUT_ROOT/paths-runner-sql-second"
 BOGUS_PATHS_OUT="$OUT_ROOT/paths-bogus"
+REVERSE_OUT="$OUT_ROOT/reverse-sql-endpoints"
 
 run_ts_scan "$ROOT_DIR/samples/endpoint-client-angular" "$CLIENT_OUT"
 run_dotnet_scan "$ROOT_DIR/samples/endpoint-server-aspnet" "$SERVER_OUT"
@@ -116,12 +117,21 @@ dotnet run --project "$DOTNET_CLI" -- paths \
   --out "$BOGUS_PATHS_OUT"
 require_file "$BOGUS_PATHS_OUT/paths-report.json"
 
-node - "$REPORT_OUT/dependency-report.json" "$TARGET_PATHS_OUT/paths-report.json" "$BOGUS_PATHS_OUT/paths-report.json" <<'NODE'
+dotnet run --project "$DOTNET_CLI" -- reverse \
+  --index "$COMBINED_INDEX" \
+  --surface sql-query \
+  --to endpoints \
+  --out "$REVERSE_OUT"
+require_file "$REVERSE_OUT/reverse-report.md"
+require_file "$REVERSE_OUT/reverse-report.json"
+
+node - "$REPORT_OUT/dependency-report.json" "$TARGET_PATHS_OUT/paths-report.json" "$BOGUS_PATHS_OUT/paths-report.json" "$REVERSE_OUT/reverse-report.json" <<'NODE'
 const fs = require("node:fs");
-const [dependencyPath, pathsPath, bogusPath] = process.argv.slice(2);
+const [dependencyPath, pathsPath, bogusPath, reversePath] = process.argv.slice(2);
 const dependency = JSON.parse(fs.readFileSync(dependencyPath, "utf8"));
 const paths = JSON.parse(fs.readFileSync(pathsPath, "utf8"));
 const bogus = JSON.parse(fs.readFileSync(bogusPath, "utf8"));
+const reverse = JSON.parse(fs.readFileSync(reversePath, "utf8"));
 const targetKey = "/api/admin/runner/get-by-id/{}";
 
 function fail(message) {
@@ -195,14 +205,37 @@ assert((bogus.summary?.pathCount ?? 0) === 0, "Bogus endpoint query should retur
 assert((bogus.gaps ?? []).some(gap => ["SelectorNoMatch", "NoPathFound", "UnknownAnalysisGap"].includes(gap.gapKind)),
   "Bogus endpoint query should include a selector/no-path/coverage gap");
 
+assert(reverse.reportType === "combined-reverse-query", `Unexpected reverse report type: ${reverse.reportType}`);
+assert(!hasVolatileKey(reverse), "Reverse JSON contains a volatile generatedAt/timestamp field");
+assert((reverse.summary?.selectedSurfaceCount ?? 0) > 0, "Expected reverse query to select sql-query surfaces");
+assert((reverse.summary?.pathCount ?? 0) > 0, "Expected reverse query to find at least one endpoint path to sql-query evidence");
+assert((reverse.reverseRoots ?? []).some(root => root.rootKind === "EndpointClient" || root.rootKind === "EndpointRoute"),
+  "Expected reverse query to include an endpoint root");
+for (const surface of reverse.selectedSurfaces ?? []) {
+  assert(surface.ruleId, `Selected surface ${surface.surfaceId} is missing ruleId`);
+  assert(surface.evidenceTier, `Selected surface ${surface.surfaceId} is missing evidenceTier`);
+}
+for (const path of reverse.paths ?? []) {
+  assert((path.nodes ?? []).length > 0, `Reverse path ${path.pathId} has no nodes`);
+  assert((path.edges ?? []).length > 0, `Reverse path ${path.pathId} has no edges`);
+  assert((path.ruleIds ?? []).length > 0, `Reverse path ${path.pathId} is missing ruleIds`);
+  assert((path.evidenceTiers ?? []).length > 0, `Reverse path ${path.pathId} is missing evidenceTiers`);
+}
+for (const gap of reverse.gaps ?? []) {
+  assert(gap.ruleId, `Reverse gap ${gap.gapId} is missing ruleId`);
+  assert(gap.evidenceTier, `Reverse gap ${gap.gapId} is missing evidenceTier`);
+}
+
 console.log(`coverage=${paths.reportCoverage}`);
 console.log(`endpoint=${targetFinding.classification}:${targetFinding.staticMatchQuality}`);
 console.log(`paths=${paths.summary.pathCount}`);
 console.log(`gaps=${paths.summary.gapCount}`);
 console.log(`connectedPath=${connectedSqlPath.pathId}:${connectedSqlPath.classification}`);
+console.log(`reversePaths=${reverse.summary.pathCount}`);
 NODE
 
 assert_no_markdown_leaks "$TARGET_PATHS_OUT/paths-report.md"
+assert_no_markdown_leaks "$REVERSE_OUT/reverse-report.md"
 
 echo
-echo "Combined paths smoke complete: $OUT_ROOT"
+echo "Combined paths/reverse smoke complete: $OUT_ROOT"
