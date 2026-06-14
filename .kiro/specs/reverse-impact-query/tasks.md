@@ -2,7 +2,7 @@
 
 ## First PR Boundary
 
-Recommended first implementation PR: complete tasks 1 through 8 plus task 11 for selected surfaces and endpoint roots. Rule catalog updates must land with the first PR that emits reverse rule IDs. Tasks 9 and 10 can land in the same PR if the graph refactor stays small; otherwise ship symbol/source/all targets in a follow-up. If task 2 requires non-trivial changes to shared path infrastructure, open a refactor-only PR for task 2 with byte-stable regression tests and smoke validation before opening the reverse feature PR.
+Recommended first implementation PR: complete tasks 1 through 8 plus the identity checks from task 10 for selected surfaces and endpoint roots. Rule catalog updates are already introduced by this spec PR and must stay current with the first implementation PR. Tasks 9 and the remaining task 10 caveats can land in the same PR if the graph refactor stays small; otherwise ship symbol/source/all targets in a follow-up. If task 2 requires non-trivial changes to shared path infrastructure, open a refactor-only PR for task 2 with byte-stable regression tests and smoke validation before opening the reverse feature PR.
 
 ## Implementation Tasks
 
@@ -38,7 +38,7 @@ Recommended first implementation PR: complete tasks 1 through 8 plus task 11 for
   - [ ] Validate allowed surface kinds.
   - [ ] Validate allowed target kinds.
   - [ ] Fail clearly for valid `--to` modes that are not implemented in the current release.
-  - [ ] Use existing safe surface-name matching rules.
+  - [ ] Use exact case-insensitive reverse surface-name matching rules for MVP.
   - [ ] Emit `SelectorNoMatch` for empty selector results.
   - [ ] Record broad selectors in query metadata when `--surface-name` is used without `--surface`.
 
@@ -94,20 +94,20 @@ Recommended first implementation PR: complete tasks 1 through 8 plus task 11 for
   - [ ] Ensure `--to endpoints` does not silently return symbols when endpoint roots are unavailable.
 
 - [ ] 10. Add identity and schema caveats. Requirements: 2, 5, 9.
-  - [ ] Detect duplicate stable selected surfaces.
-  - [ ] Detect duplicate stable roots.
-  - [ ] Detect duplicate stable path nodes where relevant.
-  - [ ] Detect unverified source identity or missing commit SHA.
+  - [ ] Detect duplicate stable selected surfaces in the first PR that emits selected surfaces.
+  - [ ] Detect duplicate stable roots in the first PR that emits reverse roots.
+  - [ ] Detect duplicate stable path nodes in the first PR that emits reverse paths.
+  - [ ] Detect unverified source identity or missing commit SHA in the first PR that emits reverse roots or paths.
   - [ ] Preserve missing optional precision schema gaps.
   - [ ] Downgrade affected rows and paths.
 
 - [ ] 11. Update rule catalog and docs. Requirements: 7, 9.
-  - [ ] Add `combined.reverse.surface.v1`.
-  - [ ] Add `combined.reverse.root.v1`.
-  - [ ] Add `combined.reverse.path.v1`.
-  - [ ] Add `combined.reverse.selector.v1`.
-  - [ ] Add `combined.reverse.truncation.v1`.
-  - [ ] Add `combined.reverse.identity.v1`.
+  - [ ] Verify `combined.reverse.surface.v1`.
+  - [ ] Verify `combined.reverse.root.v1`.
+  - [ ] Verify `combined.reverse.path.v1`.
+  - [ ] Verify `combined.reverse.selector.v1`.
+  - [ ] Verify `combined.reverse.truncation.v1`.
+  - [ ] Verify `combined.reverse.identity.v1`.
   - [ ] Document propagated `combined.paths.*.v1` supporting rule IDs.
   - [ ] Document propagated `combined.diff.identity.v1` identity caveats.
   - [ ] Document limitations for every new rule.

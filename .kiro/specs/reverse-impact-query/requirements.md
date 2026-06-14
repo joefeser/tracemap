@@ -79,7 +79,7 @@ reverse-report.json
 #### Acceptance Criteria
 
 1. WHEN `--surface <kind>` is provided THEN TraceMap SHALL select dependency surfaces of that kind.
-2. WHEN `--surface-name <text>` is provided THEN TraceMap SHALL use the same safe surface-name matching rules as `tracemap paths`, `tracemap diff`, and `tracemap impact`: case-insensitive exact match by default, with `*` allowed as a leading and/or trailing wildcard.
+2. WHEN `--surface-name <text>` is provided THEN TraceMap SHALL use the same MVP-safe surface-name matching rules as `tracemap diff` and `tracemap impact`: case-insensitive exact match across safe display names, package names, config keys, table names, or normalized path keys. Wildcard matching remains a `tracemap paths` feature and is deferred for reverse unless diff/impact adopt the same wildcard semantics.
 3. WHEN `--source <label>` is provided THEN TraceMap SHALL limit selected surfaces and requested roots to matching source labels where applicable, but SHALL NOT prune traversed mid-path evidence solely because it crosses another source label.
 4. WHEN no surface selector is provided THEN TraceMap SHALL use terminal dependency surfaces as the start set and SHALL cap output deterministically.
 5. WHEN multiple surfaces share the same stable identity THEN TraceMap SHALL emit a duplicate-identity gap and SHALL NOT select an arbitrary winner for strong classification.
@@ -136,7 +136,7 @@ reverse-report.json
 
 #### Acceptance Criteria
 
-1. WHEN `--source <label>` is provided THEN matching SHALL be ordinal and deterministic.
+1. WHEN `--source <label>` is provided THEN matching SHALL be deterministic case-insensitive exact matching equivalent to `StringComparison.OrdinalIgnoreCase`, consistent with `tracemap paths`, `tracemap diff`, and `tracemap impact`.
 2. WHEN `--surface <kind>` is provided THEN allowed values SHALL be `sql-query`, `http-route`, `http-client`, and `package-config`.
 3. WHEN `--surface-name <text>` is provided without `--surface` THEN TraceMap SHALL apply the name filter across all supported surface kinds and record the broad selector in query metadata.
 4. WHEN `--to <target>` is provided THEN allowed values SHALL be `endpoints`, `symbols`, `sources`, and `all`; the default SHALL be `endpoints`.
@@ -149,6 +149,7 @@ reverse-report.json
 11. WHEN a cap is hit THEN output SHALL be capped deterministically with a truncation gap.
 12. WHEN `--to <target>` is valid but not implemented in the current release THEN TraceMap SHALL fail with a clear unsupported-selector message rather than silently returning empty results.
 13. WHEN `--exit-code` is provided THEN TraceMap SHALL return `1` only when reverse roots or paths are present, and `0` when only gaps/no-evidence rows are present.
+14. WHEN validation, argument parsing, file access, schema validation, database connection, or system errors occur THEN standard non-zero error exit codes SHALL take precedence over the result-based `--exit-code` behavior.
 
 ### Requirement 7: Markdown Report
 

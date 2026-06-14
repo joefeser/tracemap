@@ -198,6 +198,79 @@ rules:
     limitations:
       - Truncated output is intentionally partial and must not be treated as complete impact coverage.
 
+  - id: combined.reverse.surface.v1
+    name: Combined reverse selected dependency surface
+    description: Selects terminal dependency surfaces for reverse static reachability queries using safe structured surface metadata.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - selected reverse surface row
+      - NeedsReviewSurfaceEvidence row
+      - UnknownAnalysisGap row
+    limitations:
+      - Surface selection is static evidence and does not prove runtime SQL execution, database schema existence, config loading, package loading, outbound traffic, or API route deployment.
+      - Raw SQL, raw URLs, config values, connection strings, source snippets, raw repository remotes, and local absolute paths must not be rendered.
+      - Ambiguous, syntax-only, textual, or duplicate-identity surface matches remain review-tier evidence.
+
+  - id: combined.reverse.root.v1
+    name: Combined reverse upstream root grouping
+    description: Groups reverse traversal results by upstream endpoint, symbol, or source roots that can statically reach selected dependency surfaces.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - reverse endpoint root row
+      - reverse symbol root row
+      - reverse source root row
+      - NoReversePathEvidence gap
+    limitations:
+      - Root grouping is bounded static graph evidence and does not prove runtime traffic, runtime dispatch, dependency injection binding, branch feasibility, or production usage.
+      - Missing or reduced source coverage makes no-path conclusions unknown rather than proof that no caller exists.
+      - Endpoint roots must not be substituted with symbol or source roots unless the requested target mode permits them.
+
+  - id: combined.reverse.path.v1
+    name: Combined reverse static path evidence
+    description: Emits bounded reverse static paths from upstream roots to selected dependency surfaces by reusing the combined dependency path graph inventory.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - StrongStaticReversePath row
+      - ProbableStaticReversePath row
+      - NeedsReviewReversePath row
+    limitations:
+      - Reverse paths are static evidence trails, not runtime execution, full taint analysis, mutation semantics, or proof of business impact.
+      - Traversal is bounded by surface, depth, frontier, root, and per-root path limits.
+      - Fallback, name-only, syntax-only, dynamic, duplicate-identity, or ambiguous path evidence must be downgraded to review-tier or unknown classifications.
+
+  - id: combined.reverse.selector.v1
+    name: Combined reverse selector handling
+    description: Emits gaps for reverse query selectors that match no eligible evidence or request a valid target mode that is not implemented in the current release.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch gap
+      - UnsupportedSelector gap
+    limitations:
+      - Selector gaps describe only the current static evidence, selector semantics, and query bounds.
+      - A selector no-match result is not proof that runtime dependencies or callers do not exist.
+
+  - id: combined.reverse.truncation.v1
+    name: Combined reverse traversal truncation gap
+    description: Emits gaps when reverse surface, depth, frontier, root, path, or gap caps truncate report output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - TruncatedByLimit gap
+    limitations:
+      - Truncated output is intentionally partial and must not be treated as complete reverse dependency coverage.
+      - Truncation can coexist with coverage gaps; it must not suppress UnknownAnalysisGap evidence.
+
+  - id: combined.reverse.identity.v1
+    name: Combined reverse stable identity caveat
+    description: Emits reverse-query caveats when selected surfaces, roots, path nodes, source identity, or commit SHA metadata are duplicate, missing, or unverified.
+    evidenceTier: Tier4Unknown
+    emits:
+      - DuplicateIdentity gap
+      - IdentityUnverified gap
+    limitations:
+      - Stable identity construction depends on combined source, fact, symbol, and path metadata quality.
+      - Duplicate or unverified identities downgrade affected reverse rows and must not produce strong static classifications.
+      - Missing commit SHA or source identity means provenance is incomplete; it does not prove evidence is wrong or absent.
+
   - id: combined.paths.endpoint-match.v1
     name: Combined dependency path endpoint match edge
     description: Derives an in-memory path edge between HTTP client and server endpoint facts using the same deterministic endpoint matcher as the combined dependency report.

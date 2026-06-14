@@ -191,6 +191,61 @@ public sealed record CombinedReverseReport(
 ```
 
 ```csharp
+public sealed record CombinedReverseQuery(
+    string IndexPath,
+    string OutputPath,
+    string Format,
+    string? Source,
+    string? SurfaceKind,
+    string? SurfaceName,
+    string SurfaceNameMatchMode,
+    string To,
+    int MaxDepth,
+    int MaxFrontier,
+    int MaxSurfaces,
+    int MaxRoots,
+    int MaxPathsPerRoot,
+    int MaxGaps,
+    bool ExitCode);
+```
+
+`IndexPath` and `OutputPath` must be rendered with safe path rules and must not contain local absolute paths in JSON or Markdown. `SurfaceNameMatchMode` is `CaseInsensitiveExact` for MVP reverse queries.
+
+```csharp
+public sealed record CombinedReverseSnapshotInfo(
+    string IndexKind,
+    int SourceCount,
+    IReadOnlyList<CombinedReverseSourceInfo> Sources);
+```
+
+```csharp
+public sealed record CombinedReverseSourceInfo(
+    string SourceLabel,
+    string? SourceIndexId,
+    string? ScanId,
+    string? CommitSha,
+    string Language,
+    string AnalysisLevel,
+    string BuildStatus,
+    string RepositoryIdentityHash,
+    bool IdentityVerified,
+    IReadOnlyList<string> CoverageWarnings);
+```
+
+`CombinedReverseSourceInfo` may reuse safe source projection helpers from combined reports. Repository names, repository remotes, and scan roots must be omitted or hashed; local absolute paths and raw remotes must not be rendered.
+
+```csharp
+public sealed record CombinedReverseSummary(
+    int SourceCount,
+    int SelectedSurfaceCount,
+    int ReverseRootCount,
+    int PathCount,
+    int GapCount,
+    bool Truncated,
+    string ReportCoverage);
+```
+
+```csharp
 public sealed record CombinedReverseSurface(
     string SurfaceId,
     string SurfaceKind,
@@ -245,14 +300,26 @@ public sealed record CombinedReversePath(
 ```csharp
 public sealed record CombinedReverseGap(
     string GapId,
+    string GapKind,
     string Classification,
     string RuleId,
     string EvidenceTier,
     string Message,
+    string? SourceIndexId,
+    string? SourceLabel,
+    string? SurfaceId,
+    string? RootId,
+    string? PathId,
+    string? NodeId,
+    string? CombinedFactId,
+    string? FilePath,
+    int? StartLine,
+    int? EndLine,
+    string? Reason,
     IReadOnlyDictionary<string, string> Metadata);
 ```
 
-The implementation can reuse existing path node/edge models if their JSON shape is already safe and stable. New reverse-specific models should avoid leaking local absolute paths, raw SQL, raw URLs, snippets, or config values.
+The implementation can reuse existing path node/edge models if their JSON shape is already safe and stable. New reverse-specific models should avoid leaking local absolute paths, raw SQL, raw URLs, snippets, config values, repository remotes, or raw repository names. Gap fields mirror `CombinedPathGap` where possible so sorting and rendering do not require parsing generic metadata.
 
 ## Stable Identity
 
@@ -299,17 +366,15 @@ Contributing sources for no-path credibility are the sources of selected surface
 
 ### Reverse Adjacency Ordering
 
-Reverse traversal must reuse the `tracemap paths` edge rank and deterministic node ordering when building the graph inventory. Reverse adjacency is sorted by:
+Reverse traversal must reuse the `tracemap paths` edge rank and deterministic node ordering when building the graph inventory. Incoming reverse adjacency is sorted by the shared path graph edge comparison over the original directed edge:
 
 1. path edge rank from the shared path graph inventory,
-2. source label,
-3. edge kind,
-4. from-node stable key,
-5. to-node stable key,
-6. file path after safe path normalization,
-7. start line,
-8. supporting edge ID,
-9. supporting fact ID.
+2. original `ToNode` display name,
+3. file path after safe path normalization,
+4. start line,
+5. graph edge ID.
+
+If reverse grouping needs additional tie-breakers after the shared path edge comparison, it may use source label, edge kind, original from-node stable key, and original to-node stable key in that order. Supporting ID lists must be sorted with `StringComparer.Ordinal` before output and before any derived sort key is computed. A canonical supporting edge key is the lexicographically first sorted supporting edge ID, or the empty string when no edge IDs exist. A canonical supporting fact key is the lexicographically first sorted supporting fact ID, or the empty string when no fact IDs exist. If a future implementation needs a composite supporting-ID key, it must use the deterministic hash of the newline-joined sorted list, not enumeration order.
 
 Selected surfaces are sorted by classification rank, source label, surface kind, safe display name, file path, start line, and stable surface ID before `--max-surfaces` is applied.
 
