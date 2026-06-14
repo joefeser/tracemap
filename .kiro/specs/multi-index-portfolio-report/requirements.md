@@ -2,13 +2,13 @@
 
 ## Introduction
 
-TraceMap can scan individual repositories, combine indexes, summarize combined dependency evidence, diff combined snapshots, compute static impact context, query bounded paths, run reverse dependency queries, and assemble release-review packets. The next portfolio layer is a deterministic report over many indexes or combined indexes that answers:
+TraceMap can scan individual repositories, combine indexes, summarize combined dependency evidence, diff combined snapshots, compute static impact context, query bounded paths, and run reverse dependency queries. The next portfolio layer is a deterministic report over many indexes or combined indexes that answers:
 
 - What dependency surfaces exist across this portfolio of apps, packages, services, and libraries?
 - Which sources call, expose, depend on, or can statically reach the same endpoints, SQL surfaces, packages, symbols, and configuration surfaces?
 - Which portfolio surfaces changed between two portfolio snapshots?
 - Which dependencies need human review because evidence is dynamic, ambiguous, coverage-reduced, or blocked by an analysis gap?
-- Where can release-review output reuse portfolio evidence without inventing a stronger conclusion?
+- Where can future release-review output reuse portfolio evidence without inventing a stronger conclusion?
 
 This is still static evidence reporting. It is not runtime topology discovery, production traffic analysis, deployment mapping, service catalog ownership inference, package compatibility analysis, vulnerability analysis, release approval, or AI-generated classification.
 
@@ -18,7 +18,7 @@ In scope:
 
 - Add a portfolio report workflow over N single-language indexes, N combined indexes, or a manifest that references them.
 - Preserve source labels, repo identity, commit SHA, scanner/extractor versions, scan IDs, analysis level, build status, rule IDs, evidence tiers, file paths, line spans, fact IDs, edge IDs, and limitations.
-- Reuse combined report, dependency surfaces, endpoint alignment, paths, diff, impact, reverse query, and release-review concepts where they are available.
+- Reuse combined report, dependency surfaces, endpoint alignment, paths, diff, impact, and reverse query concepts where they are available.
 - Emit deterministic Markdown and JSON portfolio reports.
 - Include MVP source inventory, dependency surface inventory, cross-source endpoint/dependency summary, portfolio gaps, limitations, and optional before/after portfolio diff context.
 - Keep report output safe for public review by redacting raw snippets, raw SQL, raw URLs, secrets, private paths, and local absolute paths.
@@ -30,7 +30,7 @@ Out of scope:
 - No generated service ownership, runtime topology, production traffic, SLO, deployment, auth, CORS, proxy, DI binding, reflection, dynamic dispatch, branch-feasibility, SQL execution, database schema existence, or package compatibility claims.
 - No LLM calls, embeddings, vector databases, prompt-based classification, generated risk scoring, or AI summaries in core.
 - No raw source snippets, raw SQL, literal values, config values, connection strings, raw URLs, raw secrets, private checkout paths, or local absolute paths in public outputs.
-- No replacement for `tracemap combine`, `report`, `diff`, `impact`, `paths`, `reverse`, or `release-review`.
+- No replacement for `tracemap combine`, `report`, `diff`, `impact`, `paths`, `reverse`, or any future release-review workflow.
 
 ## MVP Scope Decisions
 
@@ -39,9 +39,11 @@ Out of scope:
 - MVP may accept combined indexes directly and must expand their `index_sources` metadata without losing provenance.
 - MVP output is Markdown by default, JSON with `--format json`, and both files for directory or extensionless output paths.
 - MVP opens all input SQLite databases read-only and does not persist derived rows.
-- MVP derives cross-source summaries in memory from existing facts and edges.
+- MVP derives cross-source summaries in memory from existing facts and edges. Combined indexes use combined tables; single-language indexes require a first-class reader over `facts`, symbol, and edge tables rather than silently pretending combined-only readers support them.
 - MVP can optionally compare two portfolio manifests with `--before-manifest` and `--after-manifest`; direct before/after repeated indexes are deferred unless specified in a follow-up.
 - MVP does not perform path or reverse traversal by default. Optional path/reverse context is requested explicitly and bounded.
+- MVP does not include `--release-review` or release-review packet import because no shipping release-review report workflow exists yet.
+- MVP does not include `--exit-code`; deterministic CI policy is deferred to a follow-up spec.
 - MVP does not require a separate portfolio database, graph database, or web UI.
 
 ## Example Workflows
@@ -93,9 +95,9 @@ portfolio-report.json
 1. WHEN the user runs `tracemap portfolio --index <index.sqlite> --label <label> --out <path>` THEN TraceMap SHALL emit a deterministic portfolio dependency report.
 2. WHEN multiple `--index` arguments are provided THEN each input SHALL have exactly one user-provided label or a manifest-provided label.
 3. WHEN `--manifest <portfolio.json>` is provided THEN TraceMap SHALL read index entries from the manifest and SHALL reject malformed entries with sanitized errors.
-4. WHEN `--manifest` is combined with direct `--index` arguments THEN the command SHALL fail unless a future explicit merge flag is specified.
+4. WHEN `--manifest` is combined with direct `--index` arguments THEN the command SHALL fail unless a future explicit merge flag named `--allow-mixed-inputs` is specified by a follow-up spec.
 5. WHEN any input is a combined index THEN TraceMap SHALL expand its `index_sources` rows into portfolio source records while preserving the combined index label as container provenance.
-6. WHEN any input is a single-language index THEN TraceMap SHALL include it as one portfolio source.
+6. WHEN any input is a single-language index THEN TraceMap SHALL include it as one portfolio source and SHALL read identity, coverage, surface, and edge evidence through a single-language index reader over the source index schema.
 7. WHEN an input is not a valid TraceMap index THEN TraceMap SHALL fail with a sanitized schema error naming the input label and missing object, without echoing raw local paths.
 8. WHEN an index lacks repo or commit SHA identity THEN TraceMap SHALL emit `UnknownCommitSha` or source identity gaps and SHALL mark coverage partial.
 9. WHEN the command runs THEN it SHALL open all input indexes read-only and SHALL NOT mutate them.
@@ -130,11 +132,13 @@ portfolio-report.json
 2. WHEN source data comes from a combined index THEN the source record SHALL include both the combined input label and the original `index_sources` label.
 3. WHEN a source has failed build status, reduced semantic coverage, unknown commit SHA, missing scanner version, missing language, or analysis gaps THEN report coverage SHALL be reduced.
 4. WHEN duplicate repo/commit/source labels create ambiguous identity THEN the report SHALL emit an identity gap and SHALL NOT merge their evidence.
-5. WHEN a source has known gaps in manifest JSON THEN the report SHALL summarize gap categories deterministically.
-6. WHEN evidence is compared across sources with different commits THEN the report SHALL state that it is cross-snapshot portfolio evidence, not a single coherent release state, unless the manifest declares an expected portfolio snapshot.
-7. WHEN a section depends on unavailable schema objects or optional precision tables THEN the section SHALL emit schema gaps rather than silently omitting evidence.
-8. WHEN report coverage is reduced THEN the Summary and JSON `coverageWarnings` SHALL say conclusions are partial and coverage-relative.
-9. WHEN file paths are rendered THEN they SHALL be repository-relative or safe normalized paths only, never local absolute paths.
+5. WHEN the same underlying scan identity, or the same repo identity plus commit SHA, appears through more than one portfolio input THEN the report SHALL emit a `DuplicateSourceIdentity` gap and SHALL exclude duplicate copies from cross-source endpoint alignment and shared-surface grouping.
+6. WHEN a source has known gaps in manifest JSON THEN the report SHALL summarize gap categories deterministically.
+7. WHEN evidence is compared across sources with different commits THEN the report SHALL state that it is cross-snapshot portfolio evidence, not a single coherent release state, unless the manifest declares an expected portfolio snapshot.
+8. WHEN a section depends on unavailable schema objects or optional precision tables THEN the section SHALL emit schema gaps rather than silently omitting evidence.
+9. WHEN report coverage is reduced THEN the Summary and JSON `coverageWarnings` SHALL say conclusions are partial and coverage-relative.
+10. WHEN coverage status is rendered THEN it SHALL use only `FullEvidenceAvailable`, `ReducedCoverage`, or `UnknownAnalysisGap`.
+11. WHEN file paths are rendered THEN they SHALL be repository-relative or safe normalized paths only, never local absolute paths.
 
 ### Requirement 4: Dependency Surface Inventory
 
@@ -166,9 +170,10 @@ portfolio-report.json
 5. WHEN a source contains both client calls and routes THEN same-source matches SHALL be included and flagged with `sameSource = true`.
 6. WHEN dynamic or unnormalized URLs prevent matching THEN the report SHALL emit review findings with closed-set reason codes and hashes, not raw URL fragments.
 7. WHEN dependency surfaces have shared safe identities across sources, such as package names, SQL table names, or config keys, THEN the report MAY group them as portfolio shared surfaces with a grouping rule ID and limitations.
-8. WHEN grouped shared surfaces are emitted THEN each group SHALL include supporting source evidence rows and SHALL NOT claim runtime coupling or ownership.
+8. WHEN grouped shared surfaces are emitted THEN each group SHALL include supporting source evidence rows, SHALL expose whether all supporting rows came from the same source, and SHALL NOT claim runtime coupling or ownership.
 9. WHEN no client or route evidence exists for a source THEN the report SHALL say endpoint alignment is not computable for that source rather than implying no dependencies.
 10. WHEN analysis gaps affect cross-source matching THEN the report SHALL emit `UnknownAnalysisGap` findings with representative evidence where available.
+11. WHEN duplicate source identity gaps affect candidate evidence THEN duplicate copies SHALL not create cross-source endpoint matches or shared-surface groups.
 
 ### Requirement 6: Before/After Portfolio Comparison
 
@@ -179,15 +184,16 @@ portfolio-report.json
 1. WHEN the user provides `--before-manifest` and `--after-manifest` THEN TraceMap SHALL compare the two portfolio snapshots and include portfolio diff context.
 2. WHEN before/after manifests have source label mismatches THEN the report SHALL emit added/removed/unpaired source evidence rather than matching arbitrary sources.
 3. WHEN matching source labels have different repo identity than expected THEN the report SHALL emit identity gaps and downgrade affected comparisons.
-4. WHEN combined indexes are present in before or after manifests THEN the comparison SHALL pair expanded source records by declared source labels and identity, not by local file path.
-5. WHEN `--include-impact` is provided THEN the report SHALL reuse existing combined change impact semantics where possible and SHALL NOT add a competing impact classifier.
-6. WHEN impact context cannot run because inputs are not compatible combined snapshots THEN the section SHALL be `unavailable` or `deferred` with gaps.
-7. WHEN coverage is reduced on either side THEN added, removed, and missing evidence SHALL be labeled coverage-relative.
-8. WHEN no comparable changes exist under full requested coverage THEN the report MAY emit `NoPortfolioChangeEvidence`; under reduced coverage it SHALL emit a partial/gap result instead.
-9. WHEN before/after comparison is not requested THEN diff and impact sections SHALL be present in JSON with `status: "not_requested"` and SHALL NOT be silently omitted.
-10. WHEN comparison caps are hit THEN the report SHALL emit truncation gaps and SHALL NOT imply complete portfolio comparison.
+4. WHEN matching source labels have different extracted repo identity and no manifest `expectedRepoIdentity` resolves the pair THEN the report SHALL emit an `IdentityAmbiguous` gap, downgrade affected comparisons to `ReviewRecommended`, and continue without treating the pair as a strong same-source comparison.
+5. WHEN combined indexes are present in before or after manifests THEN the comparison SHALL pair expanded source records by declared source labels and identity, not by local file path.
+6. WHEN `--include-impact` is provided THEN the report SHALL reuse existing combined change impact semantics where possible and SHALL NOT add a competing impact classifier.
+7. WHEN impact context cannot run because inputs are not compatible combined snapshots THEN the section SHALL be `unavailable` or `deferred` with gaps.
+8. WHEN coverage is reduced on either side THEN added, removed, and missing evidence SHALL be labeled coverage-relative.
+9. WHEN no comparable changes exist under full requested coverage THEN the report MAY emit `NoPortfolioChangeEvidence`; under reduced coverage it SHALL emit a partial/gap result instead.
+10. WHEN before/after comparison is not requested THEN diff and impact sections SHALL be present in JSON with `status: "not_requested"` and SHALL NOT be silently omitted.
+11. WHEN comparison caps are hit THEN the report SHALL emit truncation gaps and SHALL NOT imply complete portfolio comparison.
 
-### Requirement 7: Optional Path, Reverse, and Release-Review Context
+### Requirement 7: Optional Path and Reverse Context
 
 **User Story:** As an investigator, I want deeper context only when I ask for it, with clear bounds and caveats.
 
@@ -199,9 +205,8 @@ portfolio-report.json
 4. WHEN `--include-reverse` is provided THEN the report SHALL reuse existing bounded reverse query logic and SHALL preserve reverse classifications, rule IDs, evidence tiers, supporting facts, edge IDs, and limitations.
 5. WHEN path or reverse context is requested for inputs that cannot provide a compatible combined graph THEN the section SHALL be `unavailable` or `deferred` with a gap.
 6. WHEN path or reverse traversal hits depth, frontier, source, path, root, or gap caps THEN the report SHALL emit `TruncatedByLimit` and mark the affected section as truncated.
-7. WHEN `--release-review <path>` is provided THEN the portfolio report MAY include release-review packet references and summary counts, but SHALL NOT reclassify release-review findings into stronger portfolio conclusions.
-8. WHEN release-review context is unavailable or incompatible THEN the section SHALL be `unavailable` or `deferred` with a gap.
-9. WHEN optional context is not requested THEN JSON SHALL include the section with `status: "not_requested"`.
+7. WHEN release-review context is represented in v1 output THEN it SHALL be `not_requested` or `deferred` because release-review import is a follow-up after a release-review report workflow exists.
+8. WHEN optional context is not requested THEN JSON SHALL include the section with `status: "not_requested"`.
 
 ### Requirement 8: Classifications, Rules, and Limitations
 
@@ -211,13 +216,14 @@ portfolio-report.json
 
 1. WHEN a portfolio finding, group, gap, summary rollup, or checklist item is emitted THEN it SHALL include a rule ID.
 2. WHEN a finding uses underlying evidence from scan, report, diff, impact, path, reverse, or release-review workflows THEN it SHALL preserve underlying rule IDs, evidence tiers, file spans, and limitations.
-3. WHEN portfolio-specific grouping is introduced THEN implementation SHALL document rule IDs such as `portfolio.surface.group.v1`, `portfolio.endpoint.alignment.v1`, `portfolio.identity.v1`, `portfolio.coverage.v1`, `portfolio.truncation.v1`, and `portfolio.schema.v1` before emitting them.
+3. WHEN portfolio-specific grouping is introduced THEN implementation SHALL document rule IDs such as `portfolio.surface.group.v1`, `portfolio.endpoint.alignment.v1`, `portfolio.identity.v1`, `portfolio.coverage.v1`, `portfolio.truncation.v1`, `portfolio.schema.v1`, and `portfolio.redaction.v1` before emitting them.
 4. WHEN portfolio report emits rollup classifications THEN the closed vocabulary SHALL include only `ActionableStaticEvidence`, `ReviewRecommended`, `NoActionableEvidence`, `PartialAnalysis`, `SelectorNoMatch`, `UnknownAnalysisGap`, and `TruncatedByLimit`.
 5. WHEN rollup classification is selected THEN it SHALL use fixed precedence: `UnknownAnalysisGap`, `TruncatedByLimit`, `ActionableStaticEvidence`, `ReviewRecommended`, `PartialAnalysis`, `SelectorNoMatch`, `NoActionableEvidence`.
 6. WHEN evidence is Tier3, dynamic, ambiguous, hash-only, coverage-relative, identity-unverified, or truncated THEN portfolio rollup SHALL be no stronger than `ReviewRecommended` unless a higher-precedence gap applies.
 7. WHEN requested evidence is missing because schema or coverage prevents credible analysis THEN rollup SHALL be `UnknownAnalysisGap` or `PartialAnalysis`, not `NoActionableEvidence`.
-8. WHEN limitations are rendered THEN they SHALL document static-analysis boundaries, grouping limitations, endpoint matching limitations, SQL limitations, package limitations, path/reverse bounds, and redaction policy.
-9. WHEN rules are added or changed THEN the rule catalog SHALL include documented limitations before implementation is considered complete.
+8. WHEN a section contains multiple row classifications THEN the section rollup SHALL be a summary label only; reviewers must inspect detail rows because a single higher-precedence row can dominate the rollup.
+9. WHEN limitations are rendered THEN they SHALL document static-analysis boundaries, grouping limitations, endpoint matching limitations, SQL limitations, package limitations, path/reverse bounds, and redaction policy.
+10. WHEN rules are added or changed THEN the rule catalog SHALL include documented limitations before implementation is considered complete.
 
 ### Requirement 9: Markdown Output
 
@@ -230,7 +236,7 @@ portfolio-report.json
 3. WHEN a section has no evidence because the workflow or index support is unavailable THEN it SHALL say `unavailable` or `deferred` and include a gap.
 4. WHEN a section has evidence but only review-tier findings or gaps THEN it SHALL not be summarized as safe, clean, approved, or low risk.
 5. WHEN findings are rendered THEN Markdown SHALL show safe display name, classification, source label, rule ID, evidence tier, commit SHA, file span, supporting IDs, and coverage caveats.
-6. WHEN table cells contain user-controlled strings THEN Markdown SHALL escape or omit pipe characters, line endings, brackets, parentheses, backticks, angle brackets, and link-like syntax.
+6. WHEN table cells contain user-controlled strings, including manifest `portfolioId`, `snapshotId`, `label`, `group`, and `roleTags`, THEN Markdown SHALL escape or omit pipe characters, line endings, brackets, parentheses, backticks, angle brackets, and link-like syntax.
 7. WHEN no evidence is found for a section under full coverage THEN the section SHALL say `No evidence found under requested scope`; under reduced coverage it SHALL say the result is coverage-relative.
 8. WHEN output is partial or truncated THEN Markdown SHALL show that status near the Summary and affected sections.
 
@@ -240,7 +246,7 @@ portfolio-report.json
 
 #### Acceptance Criteria
 
-1. WHEN JSON is emitted THEN it SHALL include top-level `reportType`, `version`, `mode`, `query`, `portfolioSnapshot`, `summary`, `inputs`, `sources`, `sourceCoverage`, `endpointAlignment`, `dependencySurfaces`, `dependencyEdges`, `sharedSurfaces`, `pathContext`, `reverseContext`, `portfolioDiff`, `portfolioImpact`, `releaseReviewContext`, `gaps`, and `limitations`.
+1. WHEN JSON is emitted THEN it SHALL include top-level `reportType`, `version`, `mode`, `query`, `portfolioSnapshot`, `beforeSnapshot`, `afterSnapshot`, `summary`, `inputs`, `sources`, `sourceCoverage`, `endpointAlignment`, `dependencySurfaces`, `dependencyEdges`, `sharedSurfaces`, `pathContext`, `reverseContext`, `portfolioDiff`, `portfolioImpact`, `releaseReviewContext`, `gaps`, and `limitations`.
 2. WHEN before/after comparison is requested THEN JSON SHALL include `beforeSnapshot` and `afterSnapshot`; otherwise those fields SHALL be `null`.
 3. WHEN optional sections are unavailable, deferred, not requested, or truncated THEN each section SHALL include a `status` field using the closed vocabulary `available`, `not_requested`, `unavailable`, `deferred`, and `truncated`.
 4. WHEN findings are included THEN each finding SHALL preserve stable ID, source label, source identity, classification, rule ID, evidence tier, file span, commit SHA, supporting facts, supporting edges, safe display metadata, and limitations.
@@ -249,6 +255,7 @@ portfolio-report.json
 7. WHEN a field has no values THEN JSON SHALL use empty arrays or `null` consistently.
 8. WHEN identical inputs and options are run twice THEN Markdown and JSON SHALL be byte-stable.
 9. WHEN the JSON schema changes in a future version THEN top-level `version` SHALL change.
+10. WHEN `PortfolioSnapshot` or nested objects are serialized THEN they SHALL NOT include generated timestamps, wall-clock dates, process IDs, imported timestamps, scanned timestamps, or other run-specific values.
 
 ### Requirement 11: Safety and Redaction
 
@@ -264,7 +271,7 @@ portfolio-report.json
 6. WHEN config evidence is rendered THEN it SHALL display key names or hashes only, not values.
 7. WHEN package evidence is rendered THEN it SHALL display safe ecosystem/package/version metadata only and SHALL NOT claim vulnerability, license, or compatibility impact.
 8. WHEN an error is emitted THEN it SHALL be sanitized and SHALL NOT include raw local absolute paths or secret-looking values.
-9. WHEN tests inject unsafe values into fact properties THEN Markdown, JSON, and stderr SHALL not leak those values.
+9. WHEN tests inject unsafe values into fact properties or manifest string fields THEN Markdown, JSON, and stderr SHALL not leak those values.
 
 ### Requirement 12: Tests and Validation
 
@@ -279,16 +286,20 @@ portfolio-report.json
 5. Tests SHALL cover duplicate label rejection.
 6. Tests SHALL cover expected repo/commit mismatch gaps.
 7. Tests SHALL cover unknown commit SHA producing partial coverage.
-8. Tests SHALL cover HTTP endpoint alignment classifications across at least three sources.
-9. Tests SHALL cover dynamic URL findings without raw URL leakage.
-10. Tests SHALL cover SQL, package, config, call edge, object creation, and parameter-forwarding surface rendering without unsafe values.
-11. Tests SHALL cover shared portfolio surface grouping preserving all supporting source evidence.
-12. Tests SHALL cover before/after manifest comparison with added, removed, changed, and unpaired sources.
-13. Tests SHALL cover `--include-impact` unavailable/deferred behavior when compatible combined snapshots are not available.
-14. Tests SHALL cover path and reverse sections as `not_requested` by default and unavailable/deferred when requested against incompatible inputs.
-15. Tests SHALL cover truncation caps, omitted counts, and `TruncatedByLimit`.
-16. Tests SHALL prove Markdown and JSON are byte-stable for identical inputs.
-17. Tests SHALL prove input databases are not mutated.
-18. Tests SHALL prove rule IDs and evidence tiers appear on portfolio findings, groups, gaps, and rollups.
-19. Tests SHALL prove no raw SQL, snippets, config values, connection strings, raw URLs, raw secrets, or local absolute paths render in Markdown, JSON, or stderr.
-20. Validation SHALL include `dotnet build src/dotnet/TraceMap.sln`, `dotnet test src/dotnet/TraceMap.sln`, `./scripts/check-private-paths.sh`, `git diff --check`, and relevant pinned smoke checks from `docs/VALIDATION.md` when implementation touches language adapters or combined/path/reverse/report behavior.
+8. Tests SHALL cover duplicate source identity across combined and single-language inputs and SHALL prove duplicates do not create cross-source matches or shared-surface groups.
+9. Tests SHALL cover HTTP endpoint alignment classifications across at least three sources.
+10. Tests SHALL cover same-source endpoint findings and cross-source fan-out as one finding per source.
+11. Tests SHALL cover dynamic URL findings without raw URL leakage.
+12. Tests SHALL cover SQL, package, config, call edge, object creation, and parameter-forwarding surface rendering without unsafe values.
+13. Tests SHALL cover shared portfolio surface grouping preserving all supporting source evidence and `allSourcesSame`.
+14. Tests SHALL cover before/after manifest comparison with added, removed, changed, unpaired, and identity-ambiguous sources.
+15. Tests SHALL cover `--include-impact` unavailable/deferred behavior when compatible combined snapshots are not available.
+16. Tests SHALL cover path and reverse sections as `not_requested` by default and unavailable/deferred when requested against incompatible inputs.
+17. Tests SHALL cover truncation caps, omitted counts, and `TruncatedByLimit`.
+18. Tests SHALL cover rollup precedence.
+19. Tests SHALL cover relative manifest paths resolving from the manifest location.
+20. Tests SHALL prove Markdown and JSON are byte-stable for identical inputs and do not include generated or stored scan/import timestamps.
+21. Tests SHALL prove input databases are not mutated.
+22. Tests SHALL prove rule IDs and evidence tiers appear on portfolio findings, groups, gaps, and rollups.
+23. Tests SHALL prove no raw SQL, snippets, config values, connection strings, raw URLs, raw secrets, manifest-injected Markdown, or local absolute paths render in Markdown, JSON, or stderr.
+24. Validation SHALL include `dotnet build src/dotnet/TraceMap.sln`, `dotnet test src/dotnet/TraceMap.sln`, `./scripts/check-private-paths.sh`, `git diff --check`, and relevant pinned smoke checks from `docs/VALIDATION.md` when implementation touches language adapters or combined/path/reverse/report behavior.

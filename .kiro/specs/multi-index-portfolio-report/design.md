@@ -10,7 +10,7 @@ N single-language indexes and/or N combined indexes
   -> dependency surface inventory
   -> cross-source endpoint and shared-surface grouping
   -> optional before/after portfolio diff and impact context
-  -> optional bounded path/reverse/release-review context
+  -> optional bounded path/reverse context
   -> portfolio-report.md + portfolio-report.json
 ```
 
@@ -20,7 +20,7 @@ The portfolio report is a composition and reporting layer over existing TraceMap
 
 - Make multi-index TraceMap evidence reviewable without hand-written SQL or one-off scripts.
 - Preserve source labels, repo identity, commit SHAs, scan IDs, extractor versions, rule IDs, evidence tiers, file spans, fact IDs, edge IDs, and limitations.
-- Reuse existing combined report, dependency surfaces, endpoint alignment, diff, impact, paths, reverse, and release-review semantics.
+- Reuse existing combined report, dependency surfaces, endpoint alignment, diff, impact, paths, and reverse semantics.
 - Provide a safe portfolio-wide dependency inventory and cross-source summary.
 - Support reproducible manifest-driven portfolio snapshots.
 - Keep Markdown and JSON deterministic and safe for public review.
@@ -33,7 +33,7 @@ The portfolio report is a composition and reporting layer over existing TraceMap
 - No release approval, CI gate, or merge recommendation.
 - No LLM calls, embeddings, vector databases, prompt-based classification, generated summaries, or hidden risk scores.
 - No raw SQL, raw snippets, literal values, config values, connection strings, raw URLs, raw secrets, private paths, or local absolute paths in public output.
-- No replacement for existing `combine`, `report`, `diff`, `impact`, `paths`, `reverse`, or `release-review` commands.
+- No replacement for existing `combine`, `report`, `diff`, `impact`, `paths`, `reverse`, or future release-review commands.
 
 ## Command Shape
 
@@ -70,7 +70,6 @@ Options:
 --include-impact
 --include-paths
 --include-reverse
---release-review <path>
 --max-sources <n>
 --max-surface-rows <n>
 --max-endpoint-findings <n>
@@ -79,7 +78,6 @@ Options:
 --max-paths <n>
 --max-roots <n>
 --max-gaps <n>
---exit-code
 ```
 
 Output behavior:
@@ -89,11 +87,12 @@ Output behavior:
 - Directory output writes both `portfolio-report.md` and `portfolio-report.json`.
 - A non-existing output path with no extension is treated as a directory.
 - Input indexes are opened read-only.
-- `--exit-code` is deferred or conservative in v1: it may return non-zero only for command/input errors unless implementation explicitly documents a deterministic portfolio finding policy.
+- `--exit-code` is not part of v1. Deterministic CI exit policy is deferred to a follow-up spec.
 
 Input constraints:
 
 - `--manifest` and direct `--index` inputs are mutually exclusive in v1.
+- A future mixed-input flag, if added, is named `--allow-mixed-inputs`.
 - `--before-manifest` and `--after-manifest` are paired and mutually exclusive with single-snapshot inputs.
 - Repeated `--index` inputs require paired `--label` values.
 - Duplicate labels are rejected.
@@ -163,6 +162,8 @@ For single-language indexes:
 | facts table or NDJSON-imported fact storage | dependency surface evidence |
 | symbol and edge tables where available | symbols, calls, creates, relationships, argument flow |
 
+Single-language indexes are first-class v1 inputs. Portfolio implementation must add a source-index reader that projects `facts`, symbol, and edge tables into portfolio source-scoped rows. It must not pretend combined-only readers support single-language inventory; if a required single-language table is missing, emit `portfolio.schema.v1` gaps for the affected section.
+
 For combined indexes:
 
 | Source | Purpose |
@@ -178,7 +179,7 @@ For combined indexes:
 | `combined_parameter_forward_edges` | parameter-forwarding evidence |
 | `combined_dependency_edges` | edge summary fallback |
 
-`endpoint_matches` should not be treated as source of truth in v1. The report should compute endpoint alignment in memory through the shared matcher used by combined reporting and paths.
+`endpoint_matches` should not be treated as source of truth in v1. The report should compute endpoint alignment in memory through an extracted internal endpoint matching helper shared with combined reporting. PR 3 must extract or wrap the current combined report matcher before portfolio alignment is implemented; duplicating endpoint matching logic is out of scope.
 
 ## High-Level Flow
 
@@ -194,7 +195,7 @@ For combined indexes:
 10. Run endpoint alignment over normalized HTTP candidates.
 11. Group shared portfolio surfaces using deterministic, documented grouping rules.
 12. If before/after manifests are provided, run portfolio diff context and optional impact composition.
-13. If requested, run bounded path/reverse/release-review context through existing workflow APIs.
+13. If requested, run bounded path/reverse context through existing workflow APIs.
 14. Apply caps, truncation gaps, rollup classification, and deterministic ordering.
 15. Render Markdown and JSON.
 
@@ -227,6 +228,8 @@ public sealed record PortfolioReport(
     IReadOnlyList<PortfolioGap> Gaps,
     IReadOnlyList<string> Limitations);
 ```
+
+`Inputs` are the raw direct-index or manifest entries. `Sources` are expanded portfolio sources: a combined index is one input but may produce many sources from `index_sources`.
 
 Section status vocabulary:
 
@@ -270,6 +273,8 @@ Rollup precedence:
 
 The rollup is a report summary label. It must not replace underlying classifications or imply release approval.
 
+A single higher-precedence row can determine a section rollup even when other rows are review-tier or gap rows. Reports must keep the detail rows visible and limitations must tell reviewers not to rely only on rollup labels.
+
 ## Identity and Coverage Logic
 
 Each `PortfolioSource` should carry:
@@ -300,6 +305,13 @@ Coverage is reduced when:
 - caps truncate evidence.
 
 Do not merge sources just because labels, repo names, or package names match. Grouping is an additional view over evidence, not a provenance rewrite.
+
+Duplicate source identity handling:
+
+- If the same scan ID appears through more than one input, emit `DuplicateSourceIdentity`.
+- If scan ID is unavailable but repo identity plus commit SHA matches across inputs, emit `DuplicateSourceIdentity`.
+- Duplicate copies are excluded from cross-source endpoint alignment and shared-surface grouping so a combined index plus one of its constituent single-language indexes cannot fabricate cross-source coupling.
+- Duplicate evidence may still appear as source inventory rows with identity caveats.
 
 ## Dependency Surface Normalization
 
@@ -382,6 +394,7 @@ Grouping limitations:
 - Shared surface grouping is static name/shape evidence only.
 - It does not prove runtime coupling, ownership, deployment topology, schema existence, package compatibility, or production usage.
 - Groups must list supporting source evidence rows and rule IDs.
+- Groups must expose `allSourcesSame` so same-source-only evidence is not mistaken for cross-source evidence.
 - Groups based on Tier3 or hash-only evidence must be review-tier.
 
 ## Before/After Portfolio Comparison
@@ -393,11 +406,12 @@ Comparison steps:
 1. Load before and after manifests.
 2. Validate source labels, repo identity, expected commit SHA, and schema.
 3. Pair sources by manifest label plus repo identity when available.
-4. Treat unmatched sources as added/removed/unpaired source rows.
-5. Project surfaces and edges into stable safe identities.
-6. Compare projected evidence with coverage-relative downgrade rules.
-7. Reuse combined diff and impact engines when inputs are compatible combined snapshots.
-8. Render unavailable/deferred sections when reuse is not possible.
+4. If labels match but extracted repo identity differs and no manifest `expectedRepoIdentity` resolves the pair, emit `IdentityAmbiguous`, downgrade affected comparisons to `ReviewRecommended`, and continue without a strong same-source claim.
+5. Treat unmatched sources as added/removed/unpaired source rows.
+6. Project surfaces and edges into stable safe identities.
+7. Compare projected evidence with coverage-relative downgrade rules.
+8. Reuse combined diff and impact engines when inputs are compatible combined snapshots.
+9. Render unavailable/deferred sections when reuse is not possible.
 
 Do not compare local file paths or raw snippets. Do not promote evidence from reduced coverage into strong added/removed claims.
 
@@ -424,12 +438,7 @@ Do not compare local file paths or raw snippets. Do not promote evidence from re
 
 ### Release Review Context
 
-`--release-review <path>` can attach references or summary counts from an existing release-review report:
-
-- validate the file is readable and schema version is supported;
-- preserve underlying release-review classifications and gaps;
-- do not reclassify release-review findings into stronger portfolio conclusions;
-- do not import unsafe metadata.
+Release-review packet import is deferred until a release-review report workflow exists in the .NET codebase. In v1, `releaseReviewContext` remains present for JSON shape stability with `status: "not_requested"` or `status: "deferred"` and a `portfolio.optional-context.v1` gap if a future caller requests unsupported release-review import.
 
 ## Markdown Report
 
@@ -495,11 +504,12 @@ Rules:
 - absent optional objects are `null`;
 - arbitrary metadata is represented as sorted `[{ "key": "...", "value": "..." }]`;
 - generated timestamps are omitted unless a future version explicitly accepts non-byte-stable output;
+- `PortfolioSnapshot` and nested objects must not include generated timestamps, wall-clock dates, process IDs, stored scan timestamps, or stored import timestamps;
 - identical inputs and options must produce byte-identical JSON and Markdown.
 
 ## Rule IDs
 
-Implementation should document portfolio rules before emitting findings:
+Implementation must document portfolio rules in `rules/rule-catalog.yml` before emitting findings:
 
 | Rule ID | Purpose |
 | --- | --- |
@@ -512,12 +522,12 @@ Implementation should document portfolio rules before emitting findings:
 | `portfolio.edge.inventory.v1` | dependency edge inventory rows |
 | `portfolio.diff.v1` | portfolio before/after projected diff rows |
 | `portfolio.impact.context.v1` | reused or unavailable impact context rows |
-| `portfolio.optional-context.v1` | path/reverse/release-review requested/not-requested/unavailable rows |
+| `portfolio.optional-context.v1` | path/reverse requested/not-requested/unavailable rows and v1 release-review deferred rows |
 | `portfolio.selector.v1` | selector no-match or ignored selector gaps |
 | `portfolio.truncation.v1` | deterministic caps and omitted counts |
 | `portfolio.redaction.v1` | unsafe value omission/hash/redaction findings or gaps |
 
-Each rule catalog entry must include limitations. Portfolio-specific rules should cite underlying TraceMap rule IDs where they compose existing evidence.
+Each rule catalog entry must include emitted row/gap types and limitations. Portfolio-specific rules should cite underlying TraceMap rule IDs where they compose existing evidence. `portfolio.redaction.v1` must document at least `RedactedValue` and `UnsafePropertyOmitted` gaps and must state that redaction cannot prove arbitrary user-provided names are non-sensitive; it only applies the configured safe-rendering policy.
 
 ## Safety and Redaction
 
@@ -535,6 +545,8 @@ Never emit:
 - private checkout paths;
 - local absolute paths;
 - unchecked fact property bags.
+
+Manifest string fields are user-controlled too. `portfolioId`, `snapshotId`, `label`, `group`, and `roleTags` must be escaped, omitted, or rendered through safe helpers before Markdown, JSON display metadata, or stderr output.
 
 Allowed safe output:
 
@@ -575,9 +587,10 @@ Integration tests:
 - before/after manifest comparison;
 - mixed single/combined portfolio input;
 - optional path/reverse requested and not requested states;
-- release-review context unavailable/deferred behavior;
+- release-review context v1 deferred/not-requested behavior;
 - read-only input mutation check;
 - byte-stable repeated output.
+- absence of generated and stored scan/import timestamps from output.
 
 Validation for implementation PRs:
 
@@ -592,15 +605,16 @@ When implementation touches language adapters, combined indexes, paths, reverse,
 
 ## Suggested PR Slices
 
-1. Command shell, manifest parsing, read-only index detection, source identity/coverage model, JSON/Markdown skeleton, unavailable optional sections.
-2. Surface and edge inventory over single and combined inputs, safe rendering, rule catalog entries.
-3. Cross-source endpoint alignment and shared-surface grouping.
-4. Before/after manifest comparison and optional impact composition.
-5. Optional path/reverse/release-review context and public sample workflow.
+1. Command shell, manifest parsing, read-only index detection, source identity/coverage model, rule catalog entries, JSON/Markdown skeleton, unavailable optional sections.
+2. Surface inventory over single and combined inputs with safe rendering.
+3. Edge inventory over single and combined inputs with safe rendering.
+4. Cross-source endpoint alignment after extracting the shared endpoint matcher, plus shared-surface grouping.
+5. Before/after manifest comparison and optional impact composition.
+6. Optional path/reverse context and public sample workflow.
 
 ## Open Assumptions
 
-- Existing combined report endpoint matching can be extracted or reused without changing output.
-- Single-language indexes expose enough manifest/fact metadata to support an MVP inventory; otherwise MVP can render schema gaps for missing sections.
+- The current combined report endpoint matching logic can be extracted into a shared internal helper without changing combined report output; if not, PR 3 must stop and update this spec.
+- Single-language indexes expose enough manifest/fact metadata to support v1 identity, surface, and edge inventory through a new reader; missing required tables become `portfolio.schema.v1` gaps for affected sections.
 - Portfolio comparison can start with manifest-based before/after input to avoid ambiguous direct command-line source pairing.
 - Existing safe rendering helpers can be shared across portfolio Markdown, JSON, and stderr.
