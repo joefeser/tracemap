@@ -105,7 +105,8 @@ portfolio-report.json
 11. WHEN output path is a file and `--format json` is provided THEN TraceMap SHALL write deterministic JSON to that file.
 12. WHEN output path is a file and `--format markdown` or no format is provided THEN TraceMap SHALL write Markdown to that file.
 13. WHEN output path is a directory or has no extension THEN `--format` SHALL NOT suppress paired Markdown and JSON outputs in v1.
-14. WHEN the command completes THEN the CLI SHALL print sanitized output location, portfolio source count, input index count, surface count, edge count, gap count, truncation state, and report coverage.
+14. WHEN an extensionless output path already exists as a file THEN the command SHALL fail with a sanitized output-path error rather than overwriting it or treating it as a report file.
+15. WHEN the command completes THEN the CLI SHALL print sanitized output location, portfolio source count, input index count, surface count, edge count, gap count, truncation state, and report coverage.
 
 ### Requirement 2: Portfolio Manifest
 
@@ -119,8 +120,9 @@ portfolio-report.json
 4. WHEN expected repo identity or expected commit SHA is provided THEN TraceMap SHALL compare it to index metadata and emit identity gaps on mismatch.
 5. WHEN role tags are provided THEN the report MAY group sources by safe role tags, but SHALL NOT infer runtime ownership or service topology from tags.
 6. WHEN manifest values include absolute paths THEN those paths MAY be used for local input resolution but SHALL NOT be emitted in Markdown or JSON.
-7. WHEN duplicate labels are present THEN the command SHALL fail unless a future explicit duplicate-label policy is specified.
-8. WHEN a manifest references an unreadable file THEN the command SHALL fail with the entry label and a sanitized reason.
+7. WHEN manifest values include relative paths THEN those paths SHALL be resolved relative to the manifest file's directory location.
+8. WHEN duplicate labels are present THEN the command SHALL fail unless a future explicit duplicate-label policy is specified.
+9. WHEN a manifest references an unreadable file THEN the command SHALL fail with the entry label and a sanitized reason.
 
 ### Requirement 3: Source Identity and Coverage
 
@@ -150,12 +152,13 @@ portfolio-report.json
 2. WHEN HTTP route binding facts exist THEN the report SHALL summarize them by source label, method, normalized path key when available, route metadata, evidence tier, rule ID, and file span.
 3. WHEN SQL or query-pattern facts exist THEN the report SHALL summarize operation, table names, column names, source kind, shape hash, source label, evidence tier, rule ID, and file span where available.
 4. WHEN SQL evidence is only `SqlTextUsed`, `DapperCallDetected`, or `SqlCommandDetected` THEN the report SHALL display hashes, lengths, source kind, operation metadata when available, and `n/a` for table/column fields rather than inventing parsed SQL structure.
-5. WHEN package, project reference, import, module, or dependency facts exist THEN the report SHALL summarize safe package/module identity, ecosystem when available, dependency kind, source label, evidence tier, rule ID, and file span.
-6. WHEN config, environment variable, connection string name, or resource identifier facts exist THEN the report SHALL summarize only stable key/name/hash metadata and SHALL NOT display raw values.
-7. WHEN dependency edges exist THEN the report SHALL summarize calls, object creations, symbol relationships, argument flows, and parameter-forwarding edges by source label, edge kind, source symbol, target symbol, evidence tier, rule ID, and file span.
-8. WHEN optional fields are missing THEN Markdown SHALL render `unknown` or `n/a`, and JSON SHALL use `null` or empty arrays consistently.
-9. WHEN the same surface appears in multiple sources THEN the report SHALL preserve separate evidence rows and MAY add a grouped portfolio view without removing provenance.
-10. WHEN a section exceeds configured row caps THEN Markdown SHALL show deterministic truncation notices, JSON SHALL expose omitted counts, and report coverage SHALL include `TruncatedByLimit`.
+5. WHEN database column or persistence mapping facts such as `DatabaseColumnMapping` exist THEN the report SHALL summarize them as `sql-persistence` surface rows with table/column/mapping metadata where available.
+6. WHEN package, project reference, import, module, config, environment variable, connection string name, resource identifier, or dependency facts exist THEN the report SHALL summarize them as `package-config` surface rows with safe package/module/key identity, ecosystem when available, dependency kind, source label, evidence tier, rule ID, and file span.
+7. WHEN config, environment variable, connection string name, or resource identifier facts exist THEN the report SHALL summarize only stable key/name/hash metadata and SHALL NOT display raw values.
+8. WHEN dependency edges exist THEN the report SHALL summarize calls, object creations, symbol relationships, argument flows, and parameter-forwarding edges by source label, edge kind, source symbol, target symbol, evidence tier, rule ID, and file span.
+9. WHEN optional fields are missing THEN Markdown SHALL render `unknown` or `n/a`, and JSON SHALL use `null` or empty arrays consistently.
+10. WHEN the same surface appears in multiple sources THEN the report SHALL preserve separate evidence rows and MAY add a grouped portfolio view without removing provenance.
+11. WHEN a section exceeds configured row caps THEN Markdown SHALL show deterministic truncation notices, JSON SHALL expose omitted counts, and report coverage SHALL include `TruncatedByLimit`.
 
 ### Requirement 5: Cross-Source Dependency Summary
 
@@ -251,11 +254,12 @@ portfolio-report.json
 3. WHEN optional sections are unavailable, deferred, not requested, or truncated THEN each section SHALL include a `status` field using the closed vocabulary `available`, `not_requested`, `unavailable`, `deferred`, and `truncated`.
 4. WHEN findings are included THEN each finding SHALL preserve stable ID, source label, source identity, classification, rule ID, evidence tier, file span, commit SHA, supporting facts, supporting edges, safe display metadata, and limitations.
 5. WHEN arbitrary metadata is emitted THEN JSON SHALL encode it as `metadata: [{ "key": "...", "value": "..." }]`, sorted by key and value using ordinal comparison.
-6. WHEN arrays are emitted THEN they SHALL be sorted deterministically.
-7. WHEN a field has no values THEN JSON SHALL use empty arrays or `null` consistently.
-8. WHEN identical inputs and options are run twice THEN Markdown and JSON SHALL be byte-stable.
-9. WHEN the JSON schema changes in a future version THEN top-level `version` SHALL change.
-10. WHEN `PortfolioSnapshot` or nested objects are serialized THEN they SHALL NOT include generated timestamps, wall-clock dates, process IDs, imported timestamps, scanned timestamps, or other run-specific values.
+6. WHEN reused path, reverse, impact, or diff evidence carries dictionary metadata THEN portfolio JSON SHALL normalize it to sorted `metadata` key/value arrays rather than embedding conflicting metadata shapes.
+7. WHEN arrays are emitted THEN they SHALL be sorted deterministically.
+8. WHEN a field has no values THEN JSON SHALL use empty arrays or `null` consistently.
+9. WHEN identical inputs and options are run twice THEN Markdown and JSON SHALL be byte-stable.
+10. WHEN the JSON schema changes in a future version THEN top-level `version` SHALL change.
+11. WHEN `PortfolioSnapshot` or nested objects are serialized THEN they SHALL NOT include generated timestamps, wall-clock dates, process IDs, imported timestamps, scanned timestamps, or other run-specific values.
 
 ### Requirement 11: Safety and Redaction
 
