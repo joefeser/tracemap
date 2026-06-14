@@ -284,8 +284,8 @@ public static class ApiDtoContractDiffReporter
         ValidateOptions(options);
         var scopes = ParseScopes(options.Scope);
         var ignoredSelectors = IgnoredSelectors(options, scopes);
-        var before = await ReadIndexAsync(options.BeforePath, "before", cancellationToken);
-        var after = await ReadIndexAsync(options.AfterPath, "after", cancellationToken);
+        var before = await ReadIndexAsync(options.BeforePath, "before", scopes, options.Source, cancellationToken);
+        var after = await ReadIndexAsync(options.AfterPath, "after", scopes, options.Source, cancellationToken);
         if (!string.Equals(before.Kind, after.Kind, StringComparison.Ordinal))
         {
             throw new InvalidDataException("contract-diff mixed single and combined indexes are not supported in v1.");
@@ -454,7 +454,7 @@ public static class ApiDtoContractDiffReporter
         return ignored.OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
-    private static async Task<ApiDtoIndexRead> ReadIndexAsync(string path, string side, CancellationToken cancellationToken)
+    private static async Task<ApiDtoIndexRead> ReadIndexAsync(string path, string side, IReadOnlyList<string> scopes, string? sourceSelector, CancellationToken cancellationToken)
     {
         await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
         await connection.OpenAsync(cancellationToken);
@@ -465,14 +465,14 @@ public static class ApiDtoContractDiffReporter
         if (hasSources && hasCombinedFacts)
         {
             var snapshot = await ReadCombinedSnapshotAsync(connection, side, cancellationToken);
-            var facts = await ReadCombinedFactsAsync(connection, cancellationToken);
+            var facts = await ReadCombinedFactsAsync(connection, scopes, sourceSelector, cancellationToken);
             return new ApiDtoIndexRead("combined", snapshot, facts);
         }
 
         if (hasScanManifest && hasFacts)
         {
             var snapshot = await ReadSingleSnapshotAsync(connection, side, cancellationToken);
-            var facts = await ReadSingleFactsAsync(connection, snapshot.Sources.Single(), cancellationToken);
+            var facts = await ReadSingleFactsAsync(connection, snapshot.Sources.Single(), scopes, cancellationToken);
             return new ApiDtoIndexRead("single", snapshot, facts);
         }
 
@@ -555,14 +555,16 @@ public static class ApiDtoContractDiffReporter
         return new ApiDtoContractDiffSnapshot(side, "single", [source], warnings.Count == 0 ? "FullEvidenceAvailable" : "ReducedCoverage", warnings, [new KeyValuePair<string, string>($"self:{scannerVersion}", scannerVersion)]);
     }
 
-    private static async Task<IReadOnlyList<ApiDtoFactRow>> ReadSingleFactsAsync(SqliteConnection connection, ApiDtoContractSourceInfo source, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<ApiDtoFactRow>> ReadSingleFactsAsync(SqliteConnection connection, ApiDtoContractSourceInfo source, IReadOnlyList<string> scopes, CancellationToken cancellationToken)
     {
         var rows = new List<ApiDtoFactRow>();
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        var where = BuildFactWhereClause(command, "fact_type", "properties_json", null, scopes, null);
+        command.CommandText = $"""
             select fact_id, scan_id, commit_sha, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element,
                    file_path, start_line, end_line, properties_json
             from facts
+            {where}
             order by file_path, start_line, fact_type, fact_id;
             """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -590,16 +592,18 @@ public static class ApiDtoContractDiffReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<ApiDtoFactRow>> ReadCombinedFactsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<ApiDtoFactRow>> ReadCombinedFactsAsync(SqliteConnection connection, IReadOnlyList<string> scopes, string? sourceSelector, CancellationToken cancellationToken)
     {
         var rows = new List<ApiDtoFactRow>();
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        var where = BuildFactWhereClause(command, "cf.fact_type", "cf.properties_json", "s.label", scopes, sourceSelector);
+        command.CommandText = $"""
             select cf.combined_fact_id, cf.source_index_id, s.label, s.language, cf.scan_id, cf.commit_sha, cf.fact_type,
                    cf.rule_id, cf.evidence_tier, cf.source_symbol, cf.target_symbol, cf.contract_element,
                    cf.file_path, cf.start_line, cf.end_line, cf.properties_json
             from combined_facts cf
             join index_sources s on s.source_index_id = cf.source_index_id
+            {where}
             order by s.label, cf.file_path, cf.start_line, cf.fact_type, cf.combined_fact_id;
             """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -625,6 +629,81 @@ public static class ApiDtoContractDiffReporter
         }
 
         return rows;
+    }
+
+    private static string BuildFactWhereClause(
+        SqliteCommand command,
+        string factTypeColumn,
+        string propertiesColumn,
+        string? sourceLabelColumn,
+        IReadOnlyList<string> scopes,
+        string? sourceSelector)
+    {
+        var clauses = new List<string>();
+        var factTypes = CandidateFactTypes(scopes);
+        var candidateClauses = new List<string>();
+        if (factTypes.Count > 0)
+        {
+            var parameterNames = new List<string>();
+            for (var i = 0; i < factTypes.Count; i++)
+            {
+                var parameterName = $"$factType{i}";
+                parameterNames.Add(parameterName);
+                command.Parameters.AddWithValue(parameterName, factTypes[i]);
+            }
+
+            candidateClauses.Add($"{factTypeColumn} in ({string.Join(", ", parameterNames)})");
+        }
+
+        if (scopes.Contains("request-response"))
+        {
+            candidateClauses.Add($"({propertiesColumn} like '%\"attachmentKind\"%' or {propertiesColumn} like '%\"requestResponseKind\"%' or {propertiesColumn} like '%\"bodyKind\"%')");
+        }
+
+        if (candidateClauses.Count > 0)
+        {
+            clauses.Add($"({string.Join(" or ", candidateClauses)})");
+        }
+
+        if (!string.IsNullOrWhiteSpace(sourceSelector) && !string.IsNullOrWhiteSpace(sourceLabelColumn))
+        {
+            command.Parameters.AddWithValue("$sourceLabel", sourceSelector.Trim());
+            clauses.Add($"{sourceLabelColumn} = $sourceLabel");
+        }
+
+        return clauses.Count == 0 ? string.Empty : $"where {string.Join(" and ", clauses)}";
+    }
+
+    private static IReadOnlyList<string> CandidateFactTypes(IReadOnlyList<string> scopes)
+    {
+        var factTypes = new SortedSet<string>(StringComparer.Ordinal);
+        if (scopes.Contains("endpoints") || scopes.Contains("route-shapes"))
+        {
+            factTypes.Add(FactTypes.HttpRouteBinding);
+        }
+
+        if (scopes.Contains("dto-types"))
+        {
+            factTypes.Add(FactTypes.TypeDeclared);
+            factTypes.Add(FactTypes.EnumDeclared);
+            factTypes.Add(FactTypes.ObjectShapeInferred);
+            factTypes.Add(FactTypes.DeserializedObject);
+        }
+
+        if (scopes.Contains("dto-properties"))
+        {
+            factTypes.Add(FactTypes.PropertyDeclared);
+            factTypes.Add(FactTypes.FieldDeclared);
+            factTypes.Add(FactTypes.SerializerContractMember);
+            factTypes.Add(FactTypes.DatabaseColumnMapping);
+        }
+
+        if (scopes.Contains("methods"))
+        {
+            factTypes.Add(FactTypes.MethodDeclared);
+        }
+
+        return factTypes.ToArray();
     }
 
     private static IReadOnlyList<ApiDtoContractSourcePair> PairSources(ApiDtoContractDiffSnapshot before, ApiDtoContractDiffSnapshot after, string? sourceSelector, List<ApiDtoContractDiffGap> gaps)
@@ -770,8 +849,8 @@ public static class ApiDtoContractDiffReporter
             return false;
         }
 
-        var method = FirstValue(fact.Properties, "httpMethod", "httpMethods", "method") ?? HttpMethodFromEndpointKey(FirstValue(fact.Properties, "normalizedPathKey", "pathKey", "routeTemplate"));
-        var pathKey = NormalizeEndpointPath(FirstValue(fact.Properties, "normalizedPathKey", "pathKey", "path", "routeTemplate", "normalizedPathTemplate"));
+        var method = EndpointMethod(fact);
+        var pathKey = EndpointPathKey(fact);
         if (!EndpointSelectorMatches(options.Endpoint, method, pathKey))
         {
             return false;
@@ -791,6 +870,8 @@ public static class ApiDtoContractDiffReporter
             Pair("httpMethod", method),
             Pair("normalizedPathKey", pathKey),
             Pair("routeTemplateHash", SafeMaybeHash(FirstValue(fact.Properties, "routeTemplate", "path"))),
+            Pair("routePatternHash", SafeMaybeHash(FirstValue(fact.Properties, "routePatternHash"))),
+            Pair("routePatternLength", FirstValue(fact.Properties, "routePatternLength")),
             Pair("routeParameters", routeParameters.Names),
             Pair("handlerSymbol", SafeSymbol(handler)),
             Pair("containingType", SafeSymbol(FirstValue(fact.Properties, "containingType", "controllerName"))),
@@ -811,8 +892,8 @@ public static class ApiDtoContractDiffReporter
             return false;
         }
 
-        var method = FirstValue(fact.Properties, "httpMethod", "httpMethods", "method") ?? HttpMethodFromEndpointKey(FirstValue(fact.Properties, "normalizedPathKey", "pathKey", "routeTemplate"));
-        var pathKey = NormalizeEndpointPath(FirstValue(fact.Properties, "normalizedPathKey", "pathKey", "path", "routeTemplate", "normalizedPathTemplate"));
+        var method = EndpointMethod(fact);
+        var pathKey = EndpointPathKey(fact);
         if (!EndpointSelectorMatches(options.Endpoint, method, pathKey) || !KindMatches(options, "route-shape"))
         {
             return false;
@@ -823,6 +904,8 @@ public static class ApiDtoContractDiffReporter
         var metadata = CombinedReportHelpers.SortedMetadata([
             Pair("httpMethod", method),
             Pair("normalizedPathKey", pathKey),
+            Pair("routePatternHash", SafeMaybeHash(FirstValue(fact.Properties, "routePatternHash"))),
+            Pair("routePatternLength", FirstValue(fact.Properties, "routePatternLength")),
             Pair("routeParameters", parameters.Names),
             Pair("routeParameterCount", parameters.Count.ToString())
         ]);
@@ -897,8 +980,8 @@ public static class ApiDtoContractDiffReporter
             return false;
         }
 
-        var alias = FirstValue(fact.Properties, "jsonName", "jsonPropertyName", "schemaAlias", "alias");
-        var declaredType = FirstValue(fact.Properties, "declaredType", "propertyType", "fieldType", "type");
+        var alias = FirstValue(fact.Properties, "jsonName", "jsonPropertyName", "schemaAlias", "alias", "contractName");
+        var declaredType = FirstValue(fact.Properties, "declaredType", "propertyType", "fieldType", "memberType", "type");
         var strongIdentity = !string.IsNullOrWhiteSpace(containingType) && !string.IsNullOrWhiteSpace(propertyName);
         var genericOnly = string.IsNullOrWhiteSpace(containingType) && !string.IsNullOrWhiteSpace(propertyName) && GenericPropertyNames.Contains(propertyName);
         var metadata = CombinedReportHelpers.SortedMetadata([
@@ -927,7 +1010,7 @@ public static class ApiDtoContractDiffReporter
 
         var methodName = FirstValue(fact.Properties, "methodName", "name") ?? MemberName(fact.TargetSymbol) ?? fact.ContractElement;
         var containingType = FirstValue(fact.Properties, "containingType", "declaringType") ?? ContainingType(fact.TargetSymbol) ?? fact.SourceSymbol;
-        if (!TextSelectorMatches(options.Type, containingType) || !TextSelectorMatches(options.Property, methodName))
+        if (!TextSelectorMatches(options.Type, containingType))
         {
             return false;
         }
@@ -1436,6 +1519,37 @@ public static class ApiDtoContractDiffReporter
             || !string.IsNullOrWhiteSpace(options.Type)
             || !string.IsNullOrWhiteSpace(options.Property)
             || !string.IsNullOrWhiteSpace(options.ChangeKind);
+    }
+
+    private static string? EndpointMethod(ApiDtoFactRow fact)
+    {
+        return FirstValue(fact.Properties, "httpMethod", "httpMethods", "method", "methodName")
+            ?? HttpMethodFromEndpointKey(FirstValue(fact.Properties, "normalizedPathKey", "pathKey", "routeTemplate"));
+    }
+
+    private static string? EndpointPathKey(ApiDtoFactRow fact)
+    {
+        var pathKey = NormalizeEndpointPath(FirstValue(fact.Properties, "normalizedPathKey", "pathKey", "path", "routeTemplate", "normalizedPathTemplate"));
+        if (!string.IsNullOrWhiteSpace(pathKey))
+        {
+            return pathKey;
+        }
+
+        var routePatternHash = FirstValue(fact.Properties, "routePatternHash");
+        if (string.IsNullOrWhiteSpace(routePatternHash))
+        {
+            return null;
+        }
+
+        return $"hash:{SafeHashToken(routePatternHash)}";
+    }
+
+    private static string SafeHashToken(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            ? trimmed
+            : CombinedReportHelpers.Hash(trimmed, 24);
     }
 
     private static string? NormalizeEndpointPath(string? value)

@@ -246,6 +246,68 @@ public sealed class ApiDtoContractDiffTests
     }
 
     [Fact]
+    public async Task Contract_diff_preserves_typescript_route_hash_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-typescript");
+        SqliteIndexWriter.Write(beforeIndex, manifest, []);
+        SqliteIndexWriter.Write(afterIndex, manifest, [
+            TypeScriptRouteFact(manifest, "GET", "abc123", "Controllers/routes.ts", 10)
+        ]);
+
+        var result = await ApiDtoContractDiffReporter.WriteAsync(new ApiDtoContractDiffOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "diff"), Scope: "endpoints"));
+
+        var row = Assert.Single(result.Report.EndpointDiffs);
+        Assert.Equal(ApiDtoContractDiffClassifications.Added, row.Classification);
+        Assert.Equal("endpoint:self:GET:hash:abc123", row.StableKey);
+        Assert.Equal("abc123", Assert.Single(row.After!.Metadata, item => item.Key == "routePatternHash").Value);
+    }
+
+    [Fact]
+    public async Task Contract_diff_serializer_alias_changes_are_property_diffs()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(beforeIndex, manifest, [
+            SerializerMemberFact(manifest, "Api.Contracts.OrderResponse", "Status", "old_status", "System.String", "Contracts/OrderResponse.cs", 6)
+        ]);
+        SqliteIndexWriter.Write(afterIndex, manifest, [
+            SerializerMemberFact(manifest, "Api.Contracts.OrderResponse", "Status", "new_status", "System.String", "Contracts/OrderResponse.cs", 6)
+        ]);
+
+        var result = await ApiDtoContractDiffReporter.WriteAsync(new ApiDtoContractDiffOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "diff"), Scope: "dto-properties"));
+
+        var row = Assert.Single(result.Report.DtoPropertyDiffs);
+        Assert.Equal(ApiDtoContractDiffClassifications.ChangedEvidence, row.Classification);
+        Assert.Equal("old_status", Assert.Single(row.Before!.Metadata, item => item.Key == "jsonOrSchemaAlias").Value);
+        Assert.Equal("new_status", Assert.Single(row.After!.Metadata, item => item.Key == "jsonOrSchemaAlias").Value);
+        Assert.Equal("System.String", Assert.Single(row.After.Metadata, item => item.Key == "declaredType").Value);
+    }
+
+    [Fact]
+    public async Task Contract_diff_property_selector_is_ignored_for_methods_scope()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(beforeIndex, manifest, []);
+        SqliteIndexWriter.Write(afterIndex, manifest, [
+            MethodFact(manifest, "Api.Services.OrderService", "Send", "System.Void", "Services/OrderService.cs", 10)
+        ]);
+
+        var result = await ApiDtoContractDiffReporter.WriteAsync(new ApiDtoContractDiffOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "diff"), Scope: "methods", Property: "Status"));
+
+        var row = Assert.Single(result.Report.MethodDiffs);
+        Assert.Equal(ApiDtoContractDiffClassifications.Added, row.Classification);
+        Assert.Contains(result.Report.Query.IgnoredSelectors, selector => selector.Contains("--property", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Contract_diff_mixed_index_modes_fail_without_writing_output()
     {
         using var temp = new TempDirectory();
@@ -438,6 +500,24 @@ public sealed class ApiDtoContractDiffTests
             });
     }
 
+    private static CodeFact TypeScriptRouteFact(ScanManifest manifest, string method, string routePatternHash, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            "typescript.integration.route.v1",
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: $"{method} {routePatternHash}",
+            contractElement: $"{method} route",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["methodName"] = method,
+                ["routePatternHash"] = routePatternHash,
+                ["routePatternLength"] = "11"
+            });
+    }
+
     private static CodeFact DtoTypeFact(ScanManifest manifest, string typeName, string file, int line)
     {
         return FactFactory.Create(
@@ -475,6 +555,48 @@ public sealed class ApiDtoContractDiffTests
                 ["declaredType"] = declaredType,
                 ["nullability"] = "non-null",
                 ["required"] = "true"
+            });
+    }
+
+    private static CodeFact SerializerMemberFact(ScanManifest manifest, string containingType, string memberName, string contractName, string memberType, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SerializerContractMember,
+            RuleIds.CSharpSemanticRuntimeEvidence,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: containingType,
+            targetSymbol: $"{containingType}.{memberName}",
+            contractElement: contractName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["attributeName"] = "JsonPropertyName",
+                ["contractName"] = contractName,
+                ["memberName"] = memberName,
+                ["memberType"] = memberType,
+                ["containingType"] = containingType
+            });
+    }
+
+    private static CodeFact MethodFact(ScanManifest manifest, string containingType, string methodName, string returnType, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.MethodDeclared,
+            RuleIds.CSharpSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: containingType,
+            targetSymbol: $"{containingType}.{methodName}()",
+            contractElement: methodName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = containingType,
+                ["methodName"] = methodName,
+                ["arity"] = "0",
+                ["parameterTypes"] = string.Empty,
+                ["returnType"] = returnType
             });
     }
 
