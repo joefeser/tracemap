@@ -156,7 +156,7 @@ public final class MarkdownReportWriter {
             }
         }
 
-        for (String token : value.split("[ ._-]+")) {
+        for (String token : value.split("[ .-]+")) {
             if (SQL_KEYWORDS.contains(token.toLowerCase())) {
                 return false;
             }
@@ -178,8 +178,19 @@ public final class MarkdownReportWriter {
             return "absolute-path-hash:" + Hashes.sha256(filePath, 16);
         }
 
-        Path path = Path.of(filePath);
-        return path.isAbsolute()
+        boolean absolute = filePath.startsWith("/")
+            || filePath.startsWith("\\")
+            || filePath.contains(":/")
+            || filePath.contains(":\\");
+        if (!absolute) {
+            try {
+                absolute = Path.of(filePath).isAbsolute();
+            } catch (RuntimeException exception) {
+                return "absolute-path-hash:" + Hashes.sha256(filePath, 16);
+            }
+        }
+
+        return absolute
             ? "absolute-path-hash:" + Hashes.sha256(filePath, 16)
             : filePath.replace('\\', '/');
     }

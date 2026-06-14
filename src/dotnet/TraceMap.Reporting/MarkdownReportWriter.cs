@@ -268,11 +268,11 @@ public static class MarkdownReportWriter
     {
         var operation = DisplayCodeValue(fact.Properties.GetValueOrDefault("operationName") ?? "unknown");
         var table = DisplayIdentifierValue(
-            fact.Properties.GetValueOrDefault("tableName") ?? fact.Properties.GetValueOrDefault("tableNames"),
+            FirstPresent(fact.Properties.GetValueOrDefault("tableName"), fact.Properties.GetValueOrDefault("tableNames")),
             IdentifierKind.Table,
             "unknown");
         var columns = DisplayIdentifierValue(
-            fact.Properties.GetValueOrDefault("columnNames") ?? fact.Properties.GetValueOrDefault("fieldNames"),
+            FirstPresent(fact.Properties.GetValueOrDefault("columnNames"), fact.Properties.GetValueOrDefault("fieldNames")),
             IdentifierKind.Column,
             "none");
         var sourceKind = DisplayCodeValue(fact.Properties.GetValueOrDefault("sqlSourceKind") ?? "unknown");
@@ -357,7 +357,7 @@ public static class MarkdownReportWriter
         }
 
         var tokens = value
-            .Split([' ', '.', '-', '_'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            .Split([' ', '.', '-'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         return !tokens.Any(token => SqlKeywords.Contains(token));
     }
@@ -370,6 +370,11 @@ public static class MarkdownReportWriter
     private static string DisplayCodeValue(string value)
     {
         return value.Replace('`', '\'').ReplaceLineEndings(" ");
+    }
+
+    private static string? FirstPresent(string? first, string? second)
+    {
+        return string.IsNullOrWhiteSpace(first) ? second : first;
     }
 
     private enum IdentifierKind

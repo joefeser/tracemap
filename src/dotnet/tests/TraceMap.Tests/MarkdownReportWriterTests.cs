@@ -93,6 +93,34 @@ public sealed class MarkdownReportWriterTests
     }
 
     [Fact]
+    public void Build_hashes_url_like_evidence_paths()
+    {
+        var manifest = CreateManifest();
+        // This tests report rendering only; the .NET extractor does not currently emit SQL-shape facts.
+        var fact = FactFactory.Create(
+            manifest,
+            FactTypes.QueryPatternDetected,
+            RuleIds.CSharpSyntaxQueryPattern,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("webpack://private/app/orders.cs", 18, 18, null, "test", "test/1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["operationName"] = "SELECT",
+                ["tableName"] = "orders",
+                ["columnNames"] = "order_id,created_by",
+                ["sqlSourceKind"] = "orm-text",
+                ["queryShapeHash"] = "abcdef0123456789abcdef0123456789"
+            });
+
+        var report = MarkdownReportWriter.Build(new ScanResult(manifest, [fact], []));
+
+        Assert.Contains("columns `order_id;created_by`", report);
+        Assert.Contains("absolute-path-hash:", report);
+        Assert.DoesNotContain("webpack://private", report);
+        Assert.DoesNotContain("unsafe-identifier-hash:", report);
+    }
+
+    [Fact]
     public void Build_uses_sql_shape_placeholders_for_missing_optional_metadata()
     {
         var manifest = CreateManifest();
@@ -111,6 +139,33 @@ public sealed class MarkdownReportWriterTests
         var report = MarkdownReportWriter.Build(new ScanResult(manifest, [fact], []));
 
         Assert.Contains("SQL shape `unknown` table `unknown` columns `none` source `orm-text` shape `n/a`", report);
+    }
+
+    [Fact]
+    public void Build_treats_empty_sql_shape_properties_as_missing()
+    {
+        var manifest = CreateManifest();
+        // This tests report rendering only; the .NET extractor does not currently emit SQL-shape facts.
+        var fact = FactFactory.Create(
+            manifest,
+            FactTypes.QueryPatternDetected,
+            RuleIds.CSharpSyntaxQueryPattern,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("src/Orders.cs", 18, 18, null, "test", "test/1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["tableName"] = "",
+                ["tableNames"] = "orders;order_items",
+                ["columnNames"] = "",
+                ["fieldNames"] = "order_id,created_by",
+                ["sqlSourceKind"] = "orm-text",
+                ["queryShapeHash"] = "abcdef0123456789abcdef0123456789"
+            });
+
+        var report = MarkdownReportWriter.Build(new ScanResult(manifest, [fact], []));
+
+        Assert.Contains("table `orders;order_items` columns `order_id;created_by`", report);
+        Assert.DoesNotContain("table `unknown`", report);
     }
 
     private static ScanManifest CreateManifest()
