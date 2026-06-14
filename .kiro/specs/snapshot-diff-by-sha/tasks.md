@@ -8,11 +8,11 @@
   - [x] Confirm existing `tracemap diff` and `tracemap impact` output contracts.
   - [x] Identify reusable safe-path, Markdown, JSON, metadata sorting, and output writer helpers.
 
-- [ ] 2. Add command and option model. Requirements: 1, 7, 9, 10.
+- [x] 2. Add command and option model. Requirements: 1, 7, 9, 10.
   - [x] Add `tracemap snapshot-diff --before <path> --after <path> --out <path>`.
   - [x] Add `--format`, `--scope`, selectors, caps, `--include-paths`, `--allow-identity-mismatch`, and `--exit-code`.
-  - [ ] Implement snapshot-to-combined scope mapping for `coverage` and `graph`.
-  - [ ] Validate and translate snapshot-only scopes before invoking combined diff helpers.
+  - [x] Implement snapshot-to-combined scope mapping for `coverage` and `graph`.
+  - [x] Validate and translate snapshot-only scopes before invoking combined diff helpers.
   - [x] Emit availability gaps for unavailable `contract-shapes`, `gaps`, and `extractors` scopes.
   - [x] Validate mixed single/combined inputs fail clearly in v1.
   - [x] Preserve read-only SQLite input handling.
@@ -41,13 +41,13 @@
   - [ ] Use single-index endpoint keys shaped as `endpoint:{sourceLabel}:{endpointKind}:{normalizedMethod}:{normalizedPathKey}:{handlerIdentityOrNone}`.
 
 - [ ] 5. Reuse combined diff for combined indexes. Requirements: 3, 4, 5, 6.
-  - [ ] Expose or reuse no-write combined read/comparison helpers rather than copying comparison logic.
-  - [ ] Delegate endpoint/surface/edge/path comparison to existing combined diff where possible.
-  - [ ] Map combined `SourceDiffs`, `CoverageDiffs`, `EndpointDiffs`, `SurfaceDiffs`, `EdgeDiffs`, `PathDiffs`, and `Gaps` into snapshot sections.
-  - [ ] Reapply snapshot redaction rules to delegated metadata before rendering Markdown or JSON.
-  - [ ] Add snapshot-specific source/commit/extractor validation around delegated output.
-  - [ ] Preserve combined diff rule IDs as supporting rules.
-  - [ ] Ensure `--allow-identity-mismatch` downgrades affected rows.
+  - [x] Expose or reuse no-write combined read/comparison helpers rather than copying comparison logic.
+  - [x] Delegate endpoint/surface/edge/path comparison to existing combined diff where possible.
+  - [x] Map combined `SourceDiffs`, `CoverageDiffs`, `EndpointDiffs`, `SurfaceDiffs`, `EdgeDiffs`, `PathDiffs`, and `Gaps` into snapshot sections.
+  - [x] Reapply snapshot redaction rules to delegated metadata before rendering Markdown or JSON.
+  - [x] Add snapshot-specific source/commit/extractor validation around delegated output.
+  - [x] Preserve combined diff rule IDs as supporting rules.
+  - [x] Ensure `--allow-identity-mismatch` downgrades affected rows.
 
 - [ ] 6. Implement stable keys and classifications. Requirements: 5, 8.
   - [x] Add stable key helpers for source, coverage, and extractor-version evidence.
@@ -76,13 +76,13 @@
 
 - [ ] 9. Add focused tests. Requirements: 12.
   - [x] Single-index evidence change.
-  - [ ] Combined-index delegation.
+  - [x] Combined-index delegation.
   - [x] Single-index manifest JSON identity derivation.
   - [x] Single-index source label is the constant `single` and never derived from path or raw repo metadata.
   - [ ] Single-index comparison with missing language metadata.
   - [x] Mixed single/combined rejection.
-  - [ ] Combined edge-to-graph output mapping.
-  - [ ] Delegated combined metadata is re-redacted before snapshot output.
+  - [x] Combined edge-to-graph output mapping.
+  - [x] Delegated combined metadata is re-redacted before snapshot output.
   - [x] Unavailable snapshot-specific arrays emitting availability gaps.
   - [x] Source identity conflict and allowed mismatch downgrade.
   - [x] Redacted identity conflict errors and reports.
@@ -94,7 +94,7 @@
   - [ ] Malformed metadata gap.
   - [x] Unsafe value redaction.
   - [x] Path comparison opt-in.
-  - [ ] `--scope` mapping for `coverage`, `graph`, `contract-shapes`, `gaps`, and `extractors`.
+  - [x] `--scope` mapping for `coverage`, `graph`, `contract-shapes`, `gaps`, and `extractors`.
   - [x] Deterministic confidence mapping.
   - [x] Byte-stable Markdown/JSON.
   - [x] Read-only input databases.
@@ -115,7 +115,7 @@
 ## Recommended PR Slices
 
 - [x] PR 1: Command shell, input detection, source/commit validation, rule catalog, and no-op report.
-- [ ] PR 2: Combined-index delegation, section mapping, scope mapping, and availability gaps.
+- [x] PR 2: Combined-index delegation, section mapping, scope mapping, and availability gaps.
 - [ ] PR 3: Single-index projector and evidence diff output.
 - [ ] PR 4: Graph/surface/contract-shape expansion, extractor rows, and redaction hardening.
 - [ ] PR 5: Optional path comparison and release-review integration.

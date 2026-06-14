@@ -199,7 +199,8 @@ For every successful `tracemap snapshot-diff --before <before.sqlite> --after <a
 - single-language indexes use the synthetic source label `single`; reports do not render raw repository URLs, raw repository names, raw local roots, or local absolute paths.
 - conflicting source identity fails by default and can only continue with `--allow-identity-mismatch`, which emits rule-backed review/unknown gaps.
 - reduced coverage and unknown commit SHAs produce gaps instead of clean history-dependent conclusions.
-- endpoint, contract-shape, surface, graph, gap, and path sections emit explicit availability gaps until their projector/delegation slices are implemented.
+- combined-index endpoint, surface, graph, and opt-in path sections delegate to the combined diff engine and preserve combined rule IDs as supporting evidence.
+- single-index endpoint/surface/graph projectors, contract-shape comparison, and snapshot-specific gap-diff rows emit explicit availability gaps until their projector slices are implemented.
 - `--include-paths` requires combined indexes; `--scope paths` requires `--include-paths`.
 - `--max-diff-rows` and `--max-gaps` cap output deterministically.
 - `--exit-code` returns a non-zero exit only when requested and diff rows are present.
