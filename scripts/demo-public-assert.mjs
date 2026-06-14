@@ -26,6 +26,56 @@ function readJson(file) {
   }
 }
 
+function requireFile(file, label = file) {
+  assert(fs.existsSync(file), `Missing ${label}: ${safeDisplayPath(file)}`);
+}
+
+function assertShaLike(value, label) {
+  assert(/^[0-9a-f]{7,40}$/i.test(String(value ?? "")), `${label} is missing a SHA-like commit value.`);
+}
+
+function assertNonEmptyString(value, label) {
+  assert(typeof value === "string" && value.trim().length > 0, `${label} is missing.`);
+}
+
+function sortedStrings(values) {
+  return [...values].map(value => String(value)).sort((left, right) => left.localeCompare(right));
+}
+
+function assertExactLabels(actualLabels, expectedCsv, label) {
+  const expected = sortedStrings(expectedCsv.split(",").map(item => item.trim()).filter(Boolean));
+  const actual = sortedStrings(actualLabels);
+  assert(expected.length > 0, `${label} requires at least one expected label.`);
+  assert(
+    actual.length === expected.length && actual.every((value, index) => value === expected[index]),
+    `${label} expected labels ${expected.join(",")}, got ${actual.join(",")}`);
+}
+
+function hasVolatileKey(value) {
+  if (Array.isArray(value)) {
+    return value.some(hasVolatileKey);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value).some(([key, child]) =>
+      /generatedAt|timestamp|scannedAt/i.test(key) || hasVolatileKey(child));
+  }
+
+  return false;
+}
+
+function assertNoVolatileKeys(value, label) {
+  assert(!hasVolatileKey(value), `${label} contains a volatile generatedAt/timestamp/scannedAt field.`);
+}
+
+function publicReportFiles(reportDir, markdownName, jsonName) {
+  const markdown = path.join(reportDir, markdownName);
+  const json = path.join(reportDir, jsonName);
+  requireFile(markdown, markdownName);
+  requireFile(json, jsonName);
+  return { markdown, json };
+}
+
 function safeDisplayPath(file) {
   return path.relative(process.cwd(), file) || path.basename(file);
 }
@@ -144,6 +194,236 @@ function scanSummary() {
   }
 
   process.stdout.write(JSON.stringify(counts));
+}
+
+function dependencyReport() {
+  const [reportDir, expectedLabelsCsv, targetPathKey] = args;
+  assert(reportDir && expectedLabelsCsv && targetPathKey, "dependency-report requires report dir, expected labels, and target path key.");
+  const { json } = publicReportFiles(reportDir, "dependency-report.md", "dependency-report.json");
+  const report = readJson(json) ?? {};
+  assertNoVolatileKeys(report, "dependency-report.json");
+  assertExactLabels((report.sources ?? []).map(source => source.label), expectedLabelsCsv, "dependency report sources");
+  for (const source of report.sources ?? []) {
+    assertNonEmptyString(source.sourceIndexId, `source ${source.label} sourceIndexId`);
+    assertShaLike(source.commitSha, `source ${source.label} commitSha`);
+  }
+
+  const findings = report.endpointFindings ?? [];
+  const targetFinding = findings.find(finding =>
+    finding.normalizedPathKey === targetPathKey
+      && finding.clientSourceLabel
+      && finding.serverSourceLabel);
+  assert(targetFinding, `Expected endpoint finding for ${targetPathKey}.`);
+  assert(["MatchedEndpoint", "AmbiguousMatch", "OptionalSegmentMatch"].includes(targetFinding.classification),
+    `Unexpected endpoint classification for ${targetPathKey}: ${targetFinding.classification}`);
+  assertNonEmptyString(targetFinding.clientRuleId, "target endpoint client ruleId");
+  assertNonEmptyString(targetFinding.clientEvidenceTier, "target endpoint client evidenceTier");
+  assertNonEmptyString(targetFinding.serverRuleId, "target endpoint server ruleId");
+  assertNonEmptyString(targetFinding.serverEvidenceTier, "target endpoint server evidenceTier");
+  assertShaLike(targetFinding.clientCommitSha, "target endpoint clientCommitSha");
+  assertShaLike(targetFinding.serverCommitSha, "target endpoint serverCommitSha");
+
+  for (const surface of report.dependencySurfaces ?? []) {
+    assertNonEmptyString(surface.ruleId, `surface ${surface.displayName} ruleId`);
+    assertNonEmptyString(surface.evidenceTier, `surface ${surface.displayName} evidenceTier`);
+    assertShaLike(surface.commitSha, `surface ${surface.displayName} commitSha`);
+  }
+
+  for (const edge of report.dependencyEdges ?? []) {
+    assertNonEmptyString(edge.ruleId, `edge ${edge.edgeId} ruleId`);
+    assertNonEmptyString(edge.evidenceTier, `edge ${edge.edgeId} evidenceTier`);
+  }
+
+  process.stdout.write(JSON.stringify({
+    sources: report.summary?.sourceCount ?? (report.sources ?? []).length,
+    endpointFindings: report.summary?.endpointFindingCount ?? findings.length,
+    dependencySurfaces: (report.dependencySurfaces ?? []).length,
+    dependencyEdges: report.summary?.dependencyEdgeCount ?? (report.dependencyEdges ?? []).length,
+    gaps: (report.knownGaps ?? []).length
+  }));
+}
+
+function pathsReport() {
+  const [reportDir, expectedLabelsCsv] = args;
+  assert(reportDir && expectedLabelsCsv, "paths-report requires report dir and expected labels.");
+  const { json } = publicReportFiles(reportDir, "paths-report.md", "paths-report.json");
+  const report = readJson(json) ?? {};
+  assertNoVolatileKeys(report, "paths-report.json");
+  assertExactLabels((report.sources ?? []).map(source => source.label), expectedLabelsCsv, "paths report sources");
+
+  const paths = report.paths ?? [];
+  const gaps = report.gaps ?? [];
+  assert((report.summary?.pathCount ?? paths.length) > 0, "Expected at least one default public demo path.");
+
+  for (const row of paths) {
+    assertNonEmptyString(row.pathId, "path pathId");
+    assert((row.nodes ?? []).length > 0, `Path ${row.pathId} has no nodes.`);
+    assert((row.edges ?? []).length > 0, `Path ${row.pathId} has no edges.`);
+    assert((row.supportingFactIds ?? []).length > 0 || (row.supportingEdgeIds ?? []).length > 0,
+      `Path ${row.pathId} is missing supporting fact or edge IDs.`);
+    for (const node of row.nodes ?? []) {
+      assertNonEmptyString(node.sourceLabel, `path ${row.pathId} node sourceLabel`);
+      if (node.ruleId || node.evidenceTier) {
+        assertNonEmptyString(node.ruleId, `path ${row.pathId} node ruleId`);
+        assertNonEmptyString(node.evidenceTier, `path ${row.pathId} node evidenceTier`);
+      }
+    }
+    for (const edge of row.edges ?? []) {
+      assertNonEmptyString(edge.ruleId, `path ${row.pathId} edge ${edge.edgeId} ruleId`);
+      assertNonEmptyString(edge.evidenceTier, `path ${row.pathId} edge ${edge.edgeId} evidenceTier`);
+    }
+  }
+
+  const usefulClassifications = new Set(["StrongStaticPath", "ProbableStaticPath", "NeedsReviewPath"]);
+  const connectedSqlPath = paths.find(row => {
+    const sources = new Set((row.nodes ?? []).map(node => node.sourceLabel));
+    const edgeKinds = new Set((row.edges ?? []).map(edge => edge.edgeKind));
+    const terminal = row.nodes?.[row.nodes.length - 1];
+    return sources.has("public-ts-client")
+      && sources.has("public-dotnet-server")
+      && terminal?.surfaceKind === "sql-query"
+      && edgeKinds.has("endpoint-match")
+      && edgeKinds.has("calls")
+      && edgeKinds.has("symbol-reconciliation")
+      && edgeKinds.has("surface-evidence")
+      && usefulClassifications.has(row.classification);
+  });
+  assert(connectedSqlPath, "Expected a connected public-ts-client -> public-dotnet-server -> sql-query path.");
+
+  for (const gap of gaps) {
+    assertNonEmptyString(gap.ruleId, `path gap ${gap.gapId} ruleId`);
+    assertNonEmptyString(gap.evidenceTier, `path gap ${gap.gapId} evidenceTier`);
+  }
+
+  process.stdout.write(JSON.stringify({
+    paths: report.summary?.pathCount ?? paths.length,
+    gaps: report.summary?.gapCount ?? gaps.length,
+    sources: report.summary?.sourceCount ?? (report.sources ?? []).length
+  }));
+}
+
+function reverseReport() {
+  const [reportDir] = args;
+  assert(reportDir, "reverse-report requires report dir.");
+  const { json } = publicReportFiles(reportDir, "reverse-report.md", "reverse-report.json");
+  const report = readJson(json) ?? {};
+  assert(report.reportType === "combined-reverse-query", `Unexpected reverse report type: ${report.reportType}`);
+  assertNoVolatileKeys(report, "reverse-report.json");
+  assert((report.summary?.selectedSurfaceCount ?? 0) > 0, "Expected reverse query to select at least one surface.");
+  assert((report.summary?.pathCount ?? 0) > 0, "Expected reverse query to produce at least one path.");
+  assert((report.reverseRoots ?? []).some(root => root.rootKind === "EndpointClient" || root.rootKind === "EndpointRoute"),
+    "Expected reverse query to include an endpoint root.");
+
+  for (const source of report.snapshot?.sources ?? []) {
+    assertShaLike(source.commitSha, `reverse source ${source.sourceLabel} commitSha`);
+  }
+  for (const surface of report.selectedSurfaces ?? []) {
+    assertNonEmptyString(surface.ruleId, `reverse surface ${surface.surfaceId} ruleId`);
+    assertNonEmptyString(surface.evidenceTier, `reverse surface ${surface.surfaceId} evidenceTier`);
+    assert((surface.supportingFactIds ?? []).length > 0, `reverse surface ${surface.surfaceId} missing supportingFactIds`);
+  }
+  for (const root of report.reverseRoots ?? []) {
+    assert((root.ruleIds ?? []).length > 0, `reverse root ${root.rootId} missing ruleIds`);
+    assert((root.evidenceTiers ?? []).length > 0, `reverse root ${root.rootId} missing evidenceTiers`);
+  }
+  for (const row of report.paths ?? []) {
+    assert((row.nodes ?? []).length > 0, `Reverse path ${row.pathId} has no nodes.`);
+    assert((row.edges ?? []).length > 0, `Reverse path ${row.pathId} has no edges.`);
+    assert((row.ruleIds ?? []).length > 0, `Reverse path ${row.pathId} is missing ruleIds.`);
+    assert((row.evidenceTiers ?? []).length > 0, `Reverse path ${row.pathId} is missing evidenceTiers.`);
+    assert((row.supportingFactIds ?? []).length > 0 || (row.supportingEdgeIds ?? []).length > 0,
+      `Reverse path ${row.pathId} is missing supporting fact or edge IDs.`);
+  }
+  for (const gap of report.gaps ?? []) {
+    assertNonEmptyString(gap.ruleId, `reverse gap ${gap.gapId} ruleId`);
+    assertNonEmptyString(gap.evidenceTier, `reverse gap ${gap.gapId} evidenceTier`);
+  }
+
+  process.stdout.write(JSON.stringify({
+    reverseRoots: report.summary?.reverseRootCount ?? (report.reverseRoots ?? []).length,
+    paths: report.summary?.pathCount ?? (report.paths ?? []).length,
+    gaps: report.summary?.gapCount ?? (report.gaps ?? []).length,
+    selectedSurfaces: report.summary?.selectedSurfaceCount ?? (report.selectedSurfaces ?? []).length
+  }));
+}
+
+function portfolioManifest() {
+  const [outRoot, manifestPath, ...inputSpecs] = args;
+  assert(outRoot && manifestPath && inputSpecs.length > 0, "portfolio-manifest requires output root, manifest path, and label=relative-index inputs.");
+  const root = path.resolve(outRoot);
+  const inputs = inputSpecs.map(spec => {
+    const separator = spec.indexOf("=");
+    assert(separator > 0, "portfolio-manifest inputs must be label=relative-index.");
+    const label = spec.slice(0, separator);
+    const indexPath = spec.slice(separator + 1);
+    assert(/^[a-z0-9][a-z0-9-]*$/i.test(label), `Invalid portfolio label: ${label}`);
+    assert(!path.isAbsolute(indexPath), `portfolio manifest index path must be relative: ${label}`);
+    requireFile(path.join(root, indexPath), `portfolio input ${label}`);
+    return {
+      label,
+      indexPath,
+      group: label.includes("endpoint") ? "endpoint-stack" : "mixed-stack",
+      roleTags: label.includes("endpoint") ? ["endpoint-demo"] : ["mixed-demo"]
+    };
+  });
+
+  fs.writeFileSync(manifestPath, `${JSON.stringify({
+    version: "1.0",
+    portfolioId: "public-demo",
+    snapshotId: "generated-current",
+    inputs
+  }, null, 2)}\n`, "utf8");
+}
+
+function portfolioReport() {
+  const [reportDir, expectedInputLabelsCsv] = args;
+  assert(reportDir && expectedInputLabelsCsv, "portfolio-report requires report dir and expected input labels.");
+  const { json } = publicReportFiles(reportDir, "portfolio-report.md", "portfolio-report.json");
+  const report = readJson(json) ?? {};
+  assert(report.reportType === "multi-index-portfolio-report", `Unexpected portfolio report type: ${report.reportType}`);
+  assertNoVolatileKeys(report, "portfolio-report.json");
+  assertExactLabels((report.inputs ?? []).map(input => input.label), expectedInputLabelsCsv, "portfolio inputs");
+  assert((report.summary?.sourceCount ?? 0) > 0, "Expected portfolio source coverage.");
+  assert((report.summary?.surfaceCount ?? 0) > 0, "Expected portfolio dependency surfaces.");
+
+  for (const source of report.sources ?? []) {
+    assertNonEmptyString(source.label, "portfolio source label");
+    assertShaLike(source.commitSha, `portfolio source ${source.label} commitSha`);
+  }
+
+  const sourceCoverageRows = report.sourceCoverage?.rows ?? [];
+  assert(sourceCoverageRows.length > 0, "Expected portfolio source coverage rows.");
+  for (const row of sourceCoverageRows) {
+    assertNonEmptyString(row.ruleId, `portfolio source coverage ${row.sourceLabel} ruleId`);
+    assertNonEmptyString(row.evidenceTier, `portfolio source coverage ${row.sourceLabel} evidenceTier`);
+    assertShaLike(row.commitSha, `portfolio source coverage ${row.sourceLabel} commitSha`);
+  }
+
+  for (const sectionName of ["endpointAlignment", "dependencySurfaces", "dependencyEdges", "sharedSurfaces"]) {
+    const section = report[sectionName];
+    assert(section, `portfolio section ${sectionName} is missing.`);
+    for (const gap of section.gaps ?? []) {
+      assertNonEmptyString(gap.ruleId, `portfolio ${sectionName} gap ruleId`);
+      assertNonEmptyString(gap.evidenceTier, `portfolio ${sectionName} gap evidenceTier`);
+    }
+  }
+
+  for (const row of report.dependencySurfaces?.rows ?? []) {
+    assertNonEmptyString(row.ruleId, `portfolio surface ${row.surfaceId} ruleId`);
+    assertNonEmptyString(row.evidenceTier, `portfolio surface ${row.surfaceId} evidenceTier`);
+    assertShaLike(row.commitSha, `portfolio surface ${row.surfaceId} commitSha`);
+    assert((row.supportingFactIds ?? []).length > 0, `portfolio surface ${row.surfaceId} missing supportingFactIds`);
+  }
+
+  process.stdout.write(JSON.stringify({
+    portfolioInputs: report.summary?.inputCount ?? (report.inputs ?? []).length,
+    portfolioSources: report.summary?.sourceCount ?? (report.sources ?? []).length,
+    dependencySurfaces: report.summary?.surfaceCount ?? (report.dependencySurfaces?.rows ?? []).length,
+    dependencyEdges: report.summary?.edgeCount ?? (report.dependencyEdges?.rows ?? []).length,
+    endpointFindings: report.summary?.endpointFindingCount ?? (report.endpointAlignment?.rows ?? []).length,
+    sharedSurfaces: report.summary?.sharedSurfaceCount ?? (report.sharedSurfaces?.rows ?? []).length,
+    gaps: report.summary?.gapCount ?? (report.gaps ?? []).length
+  }));
 }
 
 function assertScanArtifactShape(label, scanDir) {
@@ -292,7 +572,8 @@ function collectPublicFiles(dir, files) {
     const relative = path.relative(dir, fullPath);
     const isSummary = entry.name === "demo-summary.md" || entry.name === "demo-summary.json";
     const isReport = fullPath.includes(`${path.sep}reports${path.sep}`) && /\.(md|json)$/i.test(entry.name);
-    if (isSummary || isReport || relative === "demo-summary.md" || relative === "demo-summary.json") {
+    const isPortfolioManifest = relative === "portfolio-manifest.json";
+    if (isSummary || isReport || isPortfolioManifest || relative === "demo-summary.md" || relative === "demo-summary.json") {
       files.push(fullPath);
     }
   }
@@ -322,6 +603,7 @@ function selfTest() {
     fs.mkdirSync(path.join(tempRoot, "reports", "sample"), { recursive: true });
     fs.writeFileSync(path.join(tempRoot, "demo-summary.md"), "safe summary /api/public\n", "utf8");
     fs.writeFileSync(path.join(tempRoot, "demo-summary.json"), "{\"version\":\"1.0\"}\n", "utf8");
+    fs.writeFileSync(path.join(tempRoot, "portfolio-manifest.json"), "{\"inputs\":[{\"indexPath\":\"combined/endpoint-stack.sqlite\"}]}\n", "utf8");
     assert(findSentinelFailures(tempRoot).length === 0, "clean sentinel fixture should pass.");
 
     const plantedHomePath = `${String.fromCharCode(47)}Users/example/private`;
@@ -336,6 +618,13 @@ function selfTest() {
     fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), "leak /tmp/tmp.public-demo/report.json\n", "utf8");
     failures = findSentinelFailures(tempRoot);
     assert(failures.some(failure => failure.includes("local-absolute-path")), "sentinel fixture should catch temp-path leak.");
+
+    fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), "safe report\n", "utf8");
+    fs.writeFileSync(path.join(tempRoot, "portfolio-manifest.json"), `{"inputs":[{"indexPath":"${plantedHomePath}"}]}\n`, "utf8");
+    failures = findSentinelFailures(tempRoot);
+    assert(failures.some(failure => failure.includes("portfolio-manifest.json") && failure.includes("local-absolute-path")),
+      "sentinel fixture should catch portfolio manifest path leak.");
+    fs.writeFileSync(path.join(tempRoot, "portfolio-manifest.json"), "{\"inputs\":[{\"indexPath\":\"combined/endpoint-stack.sqlite\"}]}\n", "utf8");
 
     const sectionsJsonl = path.join(tempRoot, "sections.jsonl");
     const appendSectionResult = spawnSync(process.execPath, [
@@ -364,6 +653,45 @@ function selfTest() {
     fs.writeFileSync(invalidSummary, "{\"version\":\"1.0\",\"sections\":[]}\n", "utf8");
     const invalidSummaryResult = spawnSync(process.execPath, [process.argv[1], "validate-summary", invalidSummary], { encoding: "utf8" });
     assert(invalidSummaryResult.status !== 0, "validate-summary should fail when outputRootHash is missing.");
+
+    const dependencyDir = path.join(tempRoot, "reports", "dependency");
+    fs.mkdirSync(dependencyDir, { recursive: true });
+    fs.writeFileSync(path.join(dependencyDir, "dependency-report.md"), "safe dependency report\n", "utf8");
+    fs.writeFileSync(path.join(dependencyDir, "dependency-report.json"), JSON.stringify({
+      sources: [
+        { label: "public-dotnet-server", sourceIndexId: "src-server", commitSha: "abcdef1" },
+        { label: "public-ts-client", sourceIndexId: "src-client", commitSha: "abcdef2" }
+      ],
+      summary: { sourceCount: 2, endpointFindingCount: 1, dependencyEdgeCount: 1 },
+      endpointFindings: [{
+        classification: "MatchedEndpoint",
+        normalizedPathKey: "/api/demo/{}",
+        clientSourceLabel: "public-ts-client",
+        serverSourceLabel: "public-dotnet-server",
+        clientRuleId: "ts.http.client.v1",
+        clientEvidenceTier: "Tier1Semantic",
+        serverRuleId: "aspnet.route.v1",
+        serverEvidenceTier: "Tier1Semantic",
+        clientCommitSha: "abcdef2",
+        serverCommitSha: "abcdef1"
+      }],
+      dependencySurfaces: [{
+        displayName: "shape:demo",
+        ruleId: "sql.query.shape.v1",
+        evidenceTier: "Tier2Structural",
+        commitSha: "abcdef1"
+      }],
+      dependencyEdges: [{ edgeId: "edge:1", ruleId: "call.edge.v1", evidenceTier: "Tier1Semantic" }],
+      knownGaps: []
+    }), "utf8");
+    const dependencyResult = spawnSync(process.execPath, [
+      process.argv[1],
+      "dependency-report",
+      dependencyDir,
+      "public-dotnet-server,public-ts-client",
+      "/api/demo/{}"
+    ], { encoding: "utf8" });
+    assert(dependencyResult.status === 0, `dependency-report should pass: ${dependencyResult.stderr}`);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -378,6 +706,21 @@ switch (command) {
     break;
   case "scan-summary":
     scanSummary();
+    break;
+  case "dependency-report":
+    dependencyReport();
+    break;
+  case "paths-report":
+    pathsReport();
+    break;
+  case "reverse-report":
+    reverseReport();
+    break;
+  case "portfolio-manifest":
+    portfolioManifest();
+    break;
+  case "portfolio-report":
+    portfolioReport();
     break;
   case "write-summary":
     writeSummary();
