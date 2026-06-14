@@ -15,7 +15,7 @@
   - Connect the story to deterministic evidence, coverage labels, and reviewer
     confidence.
 
-- [ ] 3. Draft the build-process article.
+- [x] 3. Draft the build-process article.
   - Working title: `Building TraceMap With Codex, Kiro, and Qodo`.
   - Describe Codex worktrees, Kiro specs, implementation-state files, PR review
     loops, and Qodo feedback.
