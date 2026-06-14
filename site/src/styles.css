@@ -399,7 +399,8 @@ h3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.path-grid a {
+.path-grid a,
+.path-grid article {
   display: grid;
   min-height: 230px;
   align-content: start;
