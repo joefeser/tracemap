@@ -163,6 +163,7 @@ The default workflow must not clone repositories, fetch external sample data, or
 - CI workflow wiring for the public demo.
 - Hosted demo artifacts or screenshots.
 - Static HTML evidence explorer integration.
+- Optional Obsidian/vault export demo for manager-friendly dependency exploration; this must remain an export/view layer over existing rule-backed evidence, not a new analyzer.
 - Optional pinned OSS demo mode with cache reuse.
 - Optional private-enterprise validation guide outside the open-source repository.
 - Performance budgets across large real repositories.
