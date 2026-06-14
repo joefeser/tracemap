@@ -5,9 +5,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
-import { FactTypes } from "../src/facts/Models";
+import { FactTypes, ScanManifest } from "../src/facts/Models";
 import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
+import { extractPackageFacts } from "../src/extractors/PackageJsonExtractor";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
 
 const packageRoot = process.cwd();
@@ -85,6 +86,39 @@ describe("ScanEngine", () => {
     expect(result.manifest.buildStatus).toBe("NotRun");
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.AnalysisGap }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.TypeDeclared, targetSymbol: "BrokenContract" }));
+  });
+
+  it("redacts non-string package scripts without crashing", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const packagePath = path.join(repo, "package.json");
+    await fsp.mkdir(repo, { recursive: true });
+    await fsp.writeFile(packagePath, JSON.stringify({ name: "demo", scripts: { empty: null, object: { command: "build" } } }, null, 2));
+
+    const facts = await extractPackageFacts(manifest("demo"), repo, [{
+      absolutePath: packagePath,
+      kind: "package-json",
+      relativePath: "package.json",
+      sizeBytes: (await fsp.stat(packagePath)).size,
+      skipped: false
+    }]);
+
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.ConfigKeyDeclared,
+      targetSymbol: "scripts:empty",
+      properties: expect.objectContaining({
+        valueKind: "object",
+        valueLength: "4"
+      })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.ConfigKeyDeclared,
+      targetSymbol: "scripts:object",
+      properties: expect.objectContaining({
+        valueKind: "object",
+        valueLength: "19"
+      })
+    }));
   });
 
   it("can be reduced by the existing .NET reducer with review-tier fan-out handling", async () => {
@@ -259,6 +293,24 @@ function scanOptions(repoPath: string, outputPath: string) {
     excludeGlobs: [],
     maxFileByteSize: 1024 * 1024,
     semantic: true
+  };
+}
+
+function manifest(repoName: string): ScanManifest {
+  return {
+    analysisLevel: "Level1SemanticAnalysis",
+    branch: "main",
+    buildStatus: "Succeeded",
+    commitSha: "0".repeat(40),
+    knownGaps: [],
+    projects: [],
+    remoteUrl: null,
+    repoName,
+    scanId: `scan-${repoName}`,
+    scannedAt: "2026-06-13T00:00:00+00:00",
+    scannerVersion: "tracemap-typescript/0.1.0",
+    solutions: [],
+    targetFrameworks: []
   };
 }
 

@@ -242,6 +242,36 @@ final class ScanEngineIntegrationTest {
     }
 
     @Test
+    void gradlePackageExtractionIgnoresLineAndBlockCommentMatches() throws Exception {
+        Path repo = temp.resolve("gradle-comments");
+        Files.createDirectories(repo);
+        Files.writeString(repo.resolve("build.gradle"), """
+            plugins {
+                id 'java'
+            }
+
+            dependencies {
+                // implementation 'com.example:commented-line:1.0.0'
+                * implementation 'com.example:commented-block:1.0.0'
+                implementation 'com.example:active:1.0.0'
+            }
+            """);
+        initGit(repo);
+
+        ScanResult result = new ScanEngine().scan(new ScanOptions(repo, temp.resolve("gradle-comments-out"), List.of(), List.of(), List.of(), 1024 * 1024, false, "all"));
+
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
+                && "com.example:active".equals(fact.properties().get("packageName"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
+                && "com.example:commented-line".equals(fact.properties().get("packageName"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
+                && "com.example:commented-block".equals(fact.properties().get("packageName"))));
+    }
+
+    @Test
     void emitsSqlShapeFactsForResourcesJdbcAndJpaLiterals() throws Exception {
         Path repo = temp.resolve("sql-surfaces");
         Files.createDirectories(repo.resolve("src/main/java/example"));

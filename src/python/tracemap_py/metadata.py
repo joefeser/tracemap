@@ -20,11 +20,17 @@ def read_package_metadata(repo: Path, manifest: ScanManifest, files: list[Path],
             if path.name == "pyproject.toml":
                 parsed = tomllib.loads(path.read_text(encoding="utf-8"))
                 project = parsed.get("project", {})
-                deps.update(_deps_from_list(project.get("dependencies", [])))
-                for optional in project.get("optional-dependencies", {}).values():
-                    deps.update(_deps_from_list(optional))
+                project_deps = _deps_from_list(project.get("dependencies", []))
+                deps.update(project_deps)
+                _append_dependency_facts(manifest, facts, rel, project_deps, "pyproject.toml", "project.dependencies", "runtime", "pyproject")
+                for optional_name, optional in project.get("optional-dependencies", {}).items():
+                    optional_deps = _deps_from_list(optional)
+                    deps.update(optional_deps)
+                    _append_dependency_facts(manifest, facts, rel, optional_deps, "pyproject.toml", f"project.optional-dependencies.{optional_name}", "optional", "pyproject")
                 poetry = parsed.get("tool", {}).get("poetry", {})
-                deps.update(_deps_from_mapping(poetry.get("dependencies", {})))
+                poetry_deps = _deps_from_mapping(poetry.get("dependencies", {}))
+                deps.update(poetry_deps)
+                _append_dependency_facts(manifest, facts, rel, poetry_deps, "pyproject.toml", "tool.poetry.dependencies", "runtime", "poetry")
                 name = project.get("name") or poetry.get("name") or ""
                 version = project.get("version") or poetry.get("version") or ""
                 facts.append(_package_fact(manifest, rel, 1, name, version, "pyproject.toml"))
@@ -35,7 +41,9 @@ def read_package_metadata(repo: Path, manifest: ScanManifest, files: list[Path],
                 version = parser.get("metadata", "version", fallback="")
                 facts.append(_package_fact(manifest, rel, 1, name, version, "setup.cfg"))
                 install_requires = parser.get("options", "install_requires", fallback="")
-                deps.update(_deps_from_list(install_requires.splitlines()))
+                setup_deps = _deps_from_list(install_requires.splitlines())
+                deps.update(setup_deps)
+                _append_dependency_facts(manifest, facts, rel, setup_deps, "setup.cfg", "options.install_requires", "runtime", "setuptools")
             elif path.name.startswith("requirements") and path.suffix == ".txt":
                 deps.update(_deps_from_requirements(path, repo, manifest, facts))
             elif path.name == "setup.py":
@@ -44,26 +52,6 @@ def read_package_metadata(repo: Path, manifest: ScanManifest, files: list[Path],
         except Exception as exc:
             gaps.append(f"PythonMetadataParseFailed: {rel}: {type(exc).__name__}")
             facts.append(_gap_fact(manifest, rel, "metadata-parse", type(exc).__name__))
-    emitted_dependencies = {
-        fact.target_symbol
-        for fact in facts
-        if fact.fact_type == FactTypes.PACKAGE_REFERENCED and fact.target_symbol
-    }
-    for name, version in sorted(deps.items()):
-        if name in emitted_dependencies:
-            continue
-        facts.append(
-            create_fact(
-                manifest,
-                FactTypes.PACKAGE_REFERENCED,
-                RuleIds.PY_PACKAGE,
-                EvidenceTiers.TIER2,
-                evidence("pyproject.toml" if Path(repo, "pyproject.toml").exists() else ".", 1, 1, "PythonMetadataExtractor", ScannerVersions.METADATA),
-                target_symbol=name,
-                contract_element=name,
-                properties=_package_properties(name, version, "pyproject.toml", "project.dependencies", "runtime", "pyproject"),
-            )
-        )
     return deps, facts
 
 
@@ -90,6 +78,31 @@ def _gap_fact(manifest: ScanManifest, rel: str, kind: str, message: str) -> Code
         target_symbol=rel,
         properties={"gapKind": kind, "messageHash": sha256_hex(message, 32)},
     )
+
+
+def _append_dependency_facts(
+    manifest: ScanManifest,
+    facts: list[CodeFact],
+    rel: str,
+    deps: dict[str, str],
+    manifest_kind: str,
+    dependency_group: str,
+    dependency_scope: str,
+    package_manager: str,
+) -> None:
+    for name, version in sorted(deps.items()):
+        facts.append(
+            create_fact(
+                manifest,
+                FactTypes.PACKAGE_REFERENCED,
+                RuleIds.PY_PACKAGE,
+                EvidenceTiers.TIER2,
+                evidence(rel, 1, 1, "PythonMetadataExtractor", ScannerVersions.METADATA),
+                target_symbol=name,
+                contract_element=name,
+                properties=_package_properties(name, version, manifest_kind, dependency_group, dependency_scope, package_manager),
+            )
+        )
 
 
 def _deps_from_list(values: object) -> dict[str, str]:

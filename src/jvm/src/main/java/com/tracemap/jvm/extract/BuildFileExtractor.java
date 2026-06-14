@@ -141,6 +141,10 @@ public final class BuildFileExtractor {
                 props("buildTool", "gradle", "ecosystem", "gradle", "groupId", safe(group), "artifactId", projectName, "version", safe(version), "name", projectName, "manifestKind", "gradle", "packageManager", "gradle", "sourceKind", "build-file")));
             Matcher dependencyMatcher = GRADLE_COORDINATE.matcher(text);
             while (dependencyMatcher.find()) {
+                if (isCommentedGradleMatch(text, dependencyMatcher.start())) {
+                    continue;
+                }
+
                 String configuration = dependencyMatcher.group(1);
                 String dependencyName = dependencyMatcher.group(2) + ":" + dependencyMatcher.group(3);
                 int line = lineOf(text, dependencyMatcher.start());
@@ -249,6 +253,12 @@ public final class BuildFileExtractor {
             return "runtime";
         }
         return "unknown";
+    }
+
+    private static boolean isCommentedGradleMatch(String text, int offset) {
+        int startOfLine = text.lastIndexOf('\n', offset) + 1;
+        String prefix = text.substring(startOfLine, offset);
+        return prefix.contains("//") || prefix.trim().startsWith("*");
     }
 
     private static void putVersion(Map<String, String> props, String version) {

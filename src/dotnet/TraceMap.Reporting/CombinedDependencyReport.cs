@@ -819,7 +819,10 @@ public static class CombinedDependencyReporter
         if (fact.Properties.TryGetValue("surfaceKind", out var declaredSurfaceKind)
             && !string.IsNullOrWhiteSpace(declaredSurfaceKind))
         {
-            return declaredSurfaceKind.Trim();
+            var trimmed = declaredSurfaceKind.Trim();
+            return string.Equals(trimmed, "package", StringComparison.OrdinalIgnoreCase)
+                ? "package-config"
+                : trimmed;
         }
 
         if (fact.FactType == FactTypes.PackageReferenced)

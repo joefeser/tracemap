@@ -210,6 +210,42 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_normalizes_legacy_package_surface_kind()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.PackageReferenced,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/App.csproj", 9, 9, null, "test", "test/1.0"),
+                targetSymbol: "Legacy.Package",
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["ecosystem"] = "nuget",
+                    ["manifestKind"] = "csproj",
+                    ["packageName"] = "Legacy.Package",
+                    ["surfaceKind"] = "package"
+                })
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["api"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces);
+        Assert.Equal("package-config", surface.SurfaceKind);
+        Assert.Equal("Legacy.Package", surface.PackageName);
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
+        Assert.Contains("\"surfaceKind\": \"package-config\"", json);
+        Assert.DoesNotContain("\"surfaceKind\": \"package\"", json);
+    }
+
+    [Fact]
     public async Task Report_includes_same_source_endpoint_matches_and_directory_row_caps()
     {
         using var temp = new TempDirectory();

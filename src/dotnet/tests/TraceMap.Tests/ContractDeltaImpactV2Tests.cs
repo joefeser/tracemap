@@ -189,6 +189,64 @@ public sealed class ContractDeltaImpactV2Tests
     }
 
     [Fact]
+    public async Task Reduce_v2_dependency_surface_selector_honors_ecosystem()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteV2Delta(temp.Path, """
+            {
+              "id": "chg-shared-package-name",
+              "kind": "dependency-surface",
+              "changeType": "changed",
+              "reference": {
+                "surfaceKind": "package-config",
+                "packageName": "logging",
+                "ecosystem": "nuget"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.PackageReferenced,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/App.csproj", 5, 5, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["ecosystem"] = "nuget",
+                    ["packageName"] = "logging",
+                    ["surfaceKind"] = "package-config"
+                }),
+            FactFactory.Create(
+                manifest,
+                FactTypes.PackageReferenced,
+                "typescript.package-json.v1",
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("web/package.json", 8, 8, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["ecosystem"] = "npm",
+                    ["packageName"] = "logging",
+                    ["surfaceKind"] = "package-config"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--contract-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.json"));
+        Assert.Contains("src/App.csproj", markdown);
+        Assert.DoesNotContain("web/package.json", markdown);
+        Assert.Contains("\"ecosystem\": \"nuget\"", json);
+        Assert.DoesNotContain("\"ecosystem\": \"npm\"", json);
+    }
+
+    [Fact]
     public async Task Reduce_v2_combined_index_reports_combined_classification_and_source()
     {
         using var temp = new TempDirectory();
@@ -331,6 +389,38 @@ public sealed class ContractDeltaImpactV2Tests
                 "surfaceKind": "package-config",
                 "oldVersion": "1.0.0",
                 "newVersion": "2.0.0"
+              }
+            }
+            """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync([
+            "reduce",
+            "--index", indexPath,
+            "--contract-delta", badDeltaPath,
+            "--out", outputPath
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("reference is missing required identity fields", error.ToString());
+    }
+
+    [Fact]
+    public async Task Reduce_v2_rejects_dependency_surface_without_surface_kind()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, []);
+        var badDeltaPath = WriteV2Delta(temp.Path, """
+            {
+              "id": "chg-surface-name-only",
+              "kind": "dependency-surface",
+              "changeType": "changed",
+              "reference": {
+                "surfaceName": "Orders"
               }
             }
             """);

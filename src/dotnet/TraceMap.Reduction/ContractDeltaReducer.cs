@@ -643,7 +643,7 @@ public static class ContractDeltaReducer
             "sql-table" => Has(reference, "tableName", "name"),
             "sql-column" => Has(reference, "columnName", "name"),
             "sql-query" => Has(reference, "queryShapeHash", "textHash", "tableName", "operationName", "name"),
-            "dependency-surface" => Has(reference, "surfaceKind", "surfaceName", "stableKey", "packageName", "name"),
+            "dependency-surface" => Has(reference, "surfaceKind", "kind") && Has(reference, "surfaceName", "stableKey", "packageName", "name"),
             _ => hasAny
         };
         if (kind == "dependency-surface"
@@ -1260,8 +1260,14 @@ public static class ContractDeltaReducer
     {
         var expectedKind = NormalizeSurfaceKind(Value(change.Reference, "surfaceKind", "kind"));
         var expectedName = Value(change.Reference, "surfaceName", "packageName", "name", "stableKey");
+        var expectedEcosystem = Value(change.Reference, "ecosystem");
         var actualKind = SurfaceKind(fact);
-        var kindMatches = expectedKind is null || string.Equals(expectedKind, actualKind, StringComparison.OrdinalIgnoreCase);
+        if (expectedKind is null)
+        {
+            return EvidenceMatch.None;
+        }
+
+        var kindMatches = string.Equals(expectedKind, actualKind, StringComparison.OrdinalIgnoreCase);
         if (!kindMatches || expectedName is null)
         {
             return EvidenceMatch.None;
@@ -1270,8 +1276,13 @@ public static class ContractDeltaReducer
         var nameMatches = fact.SearchTextCandidates.Any(candidate => NamesMatch(expectedName, candidate))
             || PropertyValues(fact, "surfaceName", "stableKey", "name", "tableName", "packageName", "package", "path", "normalizedPathKey", "routeTemplate")
                 .Any(value => NamesMatch(expectedName, value) || string.Equals(expectedName, value, StringComparison.OrdinalIgnoreCase));
+        var ecosystemMatches = expectedEcosystem is null
+            || !string.Equals(actualKind, "package-config", StringComparison.OrdinalIgnoreCase)
+            || PropertyValues(fact, "ecosystem", "packageEcosystem", "packageManager")
+                .Any(value => string.Equals(expectedEcosystem, value, StringComparison.OrdinalIgnoreCase));
         return nameMatches
-            ? new EvidenceMatch(expectedKind is null ? MatchStrength.Member : MatchStrength.TypeAndMember, expectedKind is null, "dependency-surface")
+            && ecosystemMatches
+            ? new EvidenceMatch(MatchStrength.TypeAndMember, false, "dependency-surface")
             : EvidenceMatch.None;
     }
 
