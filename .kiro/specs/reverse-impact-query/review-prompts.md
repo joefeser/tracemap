@@ -31,7 +31,7 @@ Review questions:
 
 1. Is `tracemap reverse` product-distinct from `tracemap paths` and `tracemap impact`, or does the spec overlap too much?
 2. Does the spec avoid overclaiming runtime usage, business impact, SQL execution, or production traffic?
-3. Are selectors (`--surface`, `--surface-name`, `--source`, `--to`) precise enough to implement without drift?
+3. Are selectors (`--surface`, exact-case-insensitive `--surface-name`, case-insensitive `--source`, `--to`) precise enough to implement without drift?
 4. Are default caps (`--max-depth`, `--max-frontier`, `--max-surfaces`, `--max-roots`, `--max-paths-per-root`, `--max-gaps`) bounded enough for large combined indexes?
 5. Are `NoReversePathEvidence`, `UnknownAnalysisGap`, `SelectorNoMatch`, and `TruncatedByLimit` clearly separated?
 6. Does reduced coverage correctly prevent strong no-path conclusions?
