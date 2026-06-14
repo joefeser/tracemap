@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap limitations: static evidence is not runtime proof, reduced coverage is partial, and scanner/reducer logic avoids LLM-based claims."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Limitations | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/limitations/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Limitations">
+    <meta property="og:description" content="TraceMap keeps static-analysis claims bounded and coverage-relative.">
+    <meta property="og:url" content="https://tracemap.tools/limitations/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/" aria-current="page">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Limitations</p>
+        <h1>TraceMap keeps the claim narrow.</h1>
+        <p class="hero-subhead">
+          The useful part of TraceMap is not that it claims certainty. It is that
+          it names the evidence, the rule, the coverage, and the places where the
+          analysis cannot prove a conclusion.
+        </p>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>What TraceMap does not prove.</h2>
+        </div>
+        <ul>
+          <li>No runtime traffic or production usage is inferred.</li>
+          <li>No deployment state, release approval, or operational safety is inferred.</li>
+          <li>No failed or partial scan is reported as clean.</li>
+          <li>No absence-of-impact claim is made under reduced coverage.</li>
+          <li>No raw source snippets are stored by default.</li>
+          <li>No LLM calls, embeddings, vector databases, or prompt-based classification are used in the scanner or reducer.</li>
+        </ul>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Partial analysis is still useful.</h2>
+        <p>
+          When semantic loading fails, TraceMap can still scan syntax, config,
+          project, package, and SQL evidence. Those rows route review, but reports
+          must label the reduced coverage.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        See the
+        <a href="https://github.com/joefeser/tracemap/blob/main/docs/PRD.md">product requirements</a>
+        for goals and non-goals.
+      </p>
+    </footer>
+  </body>
+</html>
