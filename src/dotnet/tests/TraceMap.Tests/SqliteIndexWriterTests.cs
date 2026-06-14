@@ -601,6 +601,193 @@ public sealed class SqliteIndexWriterTests
         Assert.Equal(0L, constructorForwardCount);
     }
 
+    [Fact]
+    public async Task Callback_boundaries_keep_lambda_body_argument_evidence_reviewable()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "CallbackFlowSample", """
+            using System;
+
+            namespace CallbackFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                public event Action<Request>? Received;
+
+                public void DirectCallback(Request request)
+                {
+                    Execute(request, callbackValue => new Sink().Send(callbackValue));
+                }
+
+                public void CapturedCallback(Request request)
+                {
+                    Execute(request, _ => new Sink().Send(request));
+                }
+
+                public void EventCallback()
+                {
+                    Received += payload => new Sink().Send(payload);
+                }
+
+                private static void Execute(Request request, Action<Request> callback)
+                {
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        var directLambdaArgumentCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from argument_flows
+            where callee_symbol like '%Sink.Send%'
+              and parameter_name = 'input'
+              and argument_symbol_kind = 'Parameter'
+              and argument_symbol like '%Request callbackValue%';
+            """);
+        Assert.Equal(1L, directLambdaArgumentCount);
+
+        var callbackBoundaryCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from facts
+            where fact_type = 'CallbackBoundary'
+              and rule_id = 'csharp.semantic.flowboundary.v1'
+              and properties_json like '%"boundaryKind":"CallbackBoundary"%'
+              and properties_json like '%"callbackBoundaryKind":"SimpleLambda"%';
+            """);
+        Assert.True(callbackBoundaryCount >= 3);
+
+        var capturedBoundaryCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from facts
+            where fact_type = 'CallbackBoundary'
+              and properties_json like '%"boundaryKind":"CapturedValueCallbackBoundary"%'
+              and properties_json like '%"flowClassification":"NeedsReviewValuePath"%'
+              and target_symbol like '%Request request%';
+            """);
+        Assert.Equal(1L, capturedBoundaryCount);
+
+        var eventBoundaryCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from facts
+            where fact_type = 'CallbackBoundary'
+              and properties_json like '%"boundaryKind":"EventSubscriptionBoundary"%'
+              and target_symbol like '%Handler.Received%';
+            """);
+        Assert.Equal(1L, eventBoundaryCount);
+    }
+
+    [Fact]
+    public async Task Async_boundaries_preserve_direct_call_evidence_without_scheduling_claims()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "AsyncFlowSample", """
+            using System.Threading.Tasks;
+
+            namespace AsyncFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                public async Task AwaitSend(Request request)
+                {
+                    await SendAsync(request);
+                }
+
+                public Task Scheduled(Request request)
+                {
+                    return Task.Run(() => new Sink().Send(request));
+                }
+
+                private static Task SendAsync(Request input)
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        var directAsyncArgumentCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from argument_flows
+            where callee_symbol like '%Handler.SendAsync%'
+              and parameter_name = 'input'
+              and argument_symbol_kind = 'Parameter'
+              and argument_symbol like '%Request request%';
+            """);
+        Assert.Equal(1L, directAsyncArgumentCount);
+
+        var awaitBoundaryCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from facts
+            where fact_type = 'AsyncBoundary'
+              and rule_id = 'csharp.semantic.flowboundary.v1'
+              and properties_json like '%"boundaryKind":"AwaitBoundary"%'
+              and properties_json like '%"flowClassification":"NeedsReviewValuePath"%';
+            """);
+        Assert.Equal(1L, awaitBoundaryCount);
+
+        var taskSchedulingBoundaryCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from facts
+            where fact_type = 'AsyncBoundary'
+              and rule_id = 'csharp.semantic.flowboundary.v1'
+              and properties_json like '%"boundaryKind":"TaskSchedulingBoundary"%'
+              and target_symbol like '%Task.Run%';
+            """);
+        Assert.Equal(1L, taskSchedulingBoundaryCount);
+
+        var scheduledCaptureBoundaryCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from facts
+            where fact_type = 'CallbackBoundary'
+              and properties_json like '%"boundaryKind":"CapturedValueCallbackBoundary"%'
+              and properties_json like '%"flowClassification":"NeedsReviewValuePath"%'
+              and target_symbol like '%Request request%';
+            """);
+        Assert.Equal(1L, scheduledCaptureBoundaryCount);
+    }
+
     private static async Task<string> ScanSemanticProjectAsync(TempDirectory temp, string projectName, string source)
     {
         var repo = Path.Combine(temp.Path, "repo");

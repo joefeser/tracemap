@@ -141,6 +141,8 @@ sqlite3 <out>/index.sqlite "select source_method_symbol, source_parameter_symbol
 
 Expected behavior: direct parameter forwarding is present, same-method aliases are bounded to 3 hops, and ambiguous constructor/member origins are omitted or represented as gaps by future reporting slices rather than being promoted to forwarding edges.
 
+For callback/lambda/async boundary changes, inspect semantic .NET fixtures for `CallbackBoundary` and `AsyncBoundary` facts under `csharp.semantic.flowboundary.v1`. Expected behavior: direct calls inside callback bodies may still emit normal `ArgumentPassed` rows, captured outer parameters/locals are labeled review-tier boundary evidence, and event subscriptions, delegate arguments, `await`, task scheduling/continuation calls, thread-pool queueing calls, and iterator `yield` are boundaries rather than proof of runtime invocation, ordering, or task completion.
+
 For changes to `combine`, `report`, `paths`, `reverse`, endpoint extraction, call edges, SQL/query extraction, or dependency-surface projection, run the public combined-path smoke:
 
 ```bash
