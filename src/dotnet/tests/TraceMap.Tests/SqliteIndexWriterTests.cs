@@ -497,6 +497,110 @@ public sealed class SqliteIndexWriterTests
         Assert.Equal(0L, constructorForwardCount);
     }
 
+    [Fact]
+    public async Task Parameter_forwarding_omits_reassigned_constructor_field_origin_beyond_bound()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "ReassignedConstructorFlowSample", """
+            namespace ReassignedConstructorFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                private Request cached;
+
+                public Handler(Request request)
+                {
+                    cached = request;
+                }
+
+                public void UseCached(Request other)
+                {
+                    var first = other;
+                    var second = first;
+                    var third = second;
+                    var fourth = third;
+                    cached = fourth;
+                    new Sink().Send(cached);
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        var constructorForwardCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from parameter_forward_edges
+            where source_parameter_symbol like '%Request%'
+              and target_method_symbol like '%Sink.Send%'
+              and target_parameter_name = 'input';
+            """);
+        Assert.Equal(0L, constructorForwardCount);
+    }
+
+    [Fact]
+    public async Task Parameter_forwarding_omits_repeated_constructor_field_assignment()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "RepeatedConstructorAssignmentFlowSample", """
+            namespace RepeatedConstructorAssignmentFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                private readonly Request cached;
+
+                public Handler(Request request)
+                {
+                    cached = request;
+                    cached = request;
+                }
+
+                public void UseCached()
+                {
+                    new Sink().Send(cached);
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        var constructorForwardCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from parameter_forward_edges
+            where source_parameter_symbol like '%Request request%'
+              and target_method_symbol like '%Sink.Send%'
+              and target_parameter_name = 'input';
+            """);
+        Assert.Equal(0L, constructorForwardCount);
+    }
+
     private static async Task<string> ScanSemanticProjectAsync(TempDirectory temp, string projectName, string source)
     {
         var repo = Path.Combine(temp.Path, "repo");

@@ -910,9 +910,7 @@ public static class SqliteIndexWriter
             currentKind = origin.Value.Kind;
         }
 
-        return string.Equals(argumentSymbolKind, "Field", StringComparison.Ordinal)
-            ? ResolveConstructorFieldSource(connection, transaction, callerSymbol, argumentSymbol)
-            : null;
+        return null;
     }
 
     private static ResolvedForwardSource? ResolveConstructorFieldSource(
@@ -966,7 +964,6 @@ public static class SqliteIndexWriter
 
         return candidates
             .Where(candidate => IsConstructorSymbol(candidate.ContainingSymbol))
-            .Distinct()
             .ToArray();
     }
 
