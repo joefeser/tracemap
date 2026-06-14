@@ -17,5 +17,6 @@
 
 - [x] 4. Validate.
   - Run `npm run build` from `site/`.
+  - Run `npm test` from `site/`.
   - Smoke the generated blog URLs locally.
   - Check desktop and mobile browser layout.

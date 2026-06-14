@@ -1,26 +1,39 @@
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const src = resolve(root, "src");
-const dist = resolve(root, "dist");
-const blogSource = resolve(src, "_blog");
+const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-export async function buildSite() {
-  await rm(dist, { recursive: true, force: true });
-  await mkdir(dist, { recursive: true });
-  await copyPublicSource(src, dist);
-  await generateBlog();
+export async function buildSite(options = {}) {
+  const context = createBuildContext(options);
 
-  console.log("Built static site to dist/");
+  await rm(context.dist, { recursive: true, force: true });
+  await mkdir(context.dist, { recursive: true });
+  await copyPublicSource(context.src, context.dist);
+  await generateBlog(context);
+
+  context.log("Built static site to dist/");
+}
+
+function createBuildContext({ log = console.log, root = defaultRoot } = {}) {
+  const siteRoot = resolve(root);
+  const src = resolve(siteRoot, "src");
+  const dist = resolve(siteRoot, "dist");
+
+  return {
+    blogSource: resolve(src, "_blog"),
+    dist,
+    log,
+    root: siteRoot,
+    src
+  };
 }
 
 async function copyPublicSource(from, to) {
   await mkdir(to, { recursive: true });
 
   for (const entry of await readdir(from, { withFileTypes: true })) {
-    if (entry.name.startsWith("_")) {
+    if (entry.isDirectory() && entry.name.startsWith("_")) {
       continue;
     }
 
@@ -38,19 +51,27 @@ async function copyPublicSource(from, to) {
   }
 }
 
-async function generateBlog() {
-  const articles = await readArticles();
+async function generateBlog(context) {
+  const articles = await readArticles(context);
 
-  await writeOutput("blog/index.html", renderBlogIndex(articles));
+  await writeOutput(context, "blog/index.html", renderBlogIndex(articles));
 
   for (const article of articles) {
-    const body = await readFile(resolve(blogSource, article.body), "utf8");
-    await writeOutput(`blog/${article.slug}/index.html`, renderBlogArticle(article, body.trim()));
+    const body = await readBlogSourceFile(
+      context,
+      article.body,
+      `Missing blog body for slug "${article.slug}": ${article.body}`
+    );
+    await writeOutput(context, `blog/${article.slug}/index.html`, renderBlogArticle(article, body.trim()));
   }
 }
 
-async function readArticles() {
-  const raw = await readFile(resolve(blogSource, "articles.json"), "utf8");
+async function readArticles(context) {
+  const raw = await readBlogSourceFile(
+    context,
+    "articles.json",
+    `Missing blog metadata file: ${formatSitePath(context, resolve(context.blogSource, "articles.json"))}`
+  );
   let articles;
 
   try {
@@ -70,6 +91,18 @@ async function readArticles() {
   }
 
   return articles;
+}
+
+async function readBlogSourceFile(context, relativePath, missingMessage) {
+  try {
+    return await readFile(resolve(context.blogSource, relativePath), "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error(missingMessage, { cause: error });
+    }
+
+    throw new Error(`Unable to read blog source file: ${relativePath}`, { cause: error });
+  }
 }
 
 function validateArticle(article, slugs) {
@@ -112,10 +145,14 @@ function validateArticle(article, slugs) {
   }
 }
 
-async function writeOutput(pathname, html) {
-  const outputPath = resolve(dist, pathname);
+async function writeOutput(context, pathname, html) {
+  const outputPath = resolve(context.dist, pathname);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${html}\n`, "utf8");
+}
+
+function formatSitePath(context, absolutePath) {
+  return relative(context.root, absolutePath).split("\\").join("/");
 }
 
 function renderBlogIndex(articles) {
