@@ -11,7 +11,7 @@
 - Checked-in fixtures under `samples/endpoint-client-angular` and `samples/endpoint-server-aspnet` provide a matched client/server route and reachable SQL evidence.
 - The smoke builds the TypeScript CLI, scans client and server samples, combines indexes as `sample-client` and `sample-server`, runs dependency report, default paths, targeted endpoint-to-`sql-query` paths, a deterministic rerun comparison, a bogus selector query, and reverse SQL-to-endpoint query.
 - JSON assertions verify endpoint alignment, source labels, endpoint-match edges, source transitions, SQL terminal evidence, code traversal/reconciliation/surface edges, rule IDs, evidence tiers, gaps, deterministic path output, and reverse query evidence.
-- Markdown safety assertions verify the synthetic SQL sentinel and developer-local absolute path patterns are not rendered in generated path/reverse Markdown.
+- Markdown safety assertions verify the synthetic SQL sentinel, common local/CI absolute path patterns, Windows drive paths, and UNC paths are not rendered in generated path/reverse Markdown.
 - Source-local symbol reconciliation is implemented in `TraceMap.Reporting` with rule ID `combined.paths.symbol-reconciliation.v1`, review-tier classification, same-source scoping, and documented limitations in `rules/rule-catalog.yml`.
 - Focused path tests cover scanned route/call/query symbol mismatch and overload ambiguity behavior.
 - README and `docs/VALIDATION.md` document the public combined path workflow, separate OSS smoke role, reduced coverage interpretation, and static-evidence limitations.
@@ -34,7 +34,7 @@
 ## Validation
 
 - `./scripts/smoke-combined-paths.sh` passed locally on this branch after installing `src/typescript` npm dependencies.
-- Latest smoke summary: `coverage=ReducedCoverage`, endpoint `AmbiguousMatch:Medium`, targeted paths `12`, gaps `43`, connected path `NeedsReviewPath`, reverse paths `25`.
+- Latest smoke summary: `coverage=ReducedCoverage`, endpoint `AmbiguousMatch:Medium`, targeted paths `12`, gaps `37`, connected path `NeedsReviewPath`, reverse paths `29`.
 - `dotnet build src/dotnet/TraceMap.sln` passed.
 - `dotnet test src/dotnet/TraceMap.sln` passed with 199 tests.
 - `npm --prefix src/typescript run check` passed with 6 test files and 27 tests.

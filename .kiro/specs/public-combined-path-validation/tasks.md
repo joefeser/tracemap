@@ -8,7 +8,7 @@
   - [x] Confirm optional external repo mode is deferred.
   - [x] Confirm generated outputs are not committed.
   - [x] Confirm path-search behavior changes are allowed only if the real-scanned linkage spike proves they are required.
-  - [x] Confirm the new script stays independent from `scripts/smoke-typescript-endpoints.sh`.
+  - [x] Confirm the new script stays independent from `scripts/demo-public.sh`.
   - [x] Decide after the spike whether to split into two PRs: path-graph reconciliation first, smoke/docs second.
 
 ### PR 1: Real-Scanned Path Linkage
@@ -104,7 +104,7 @@
   - [x] Update `docs/VALIDATION.md` with the new script.
   - [x] Document expected outputs and assertions.
   - [x] Document prerequisites.
-  - [x] Document the separate role of `scripts/smoke-typescript-endpoints.sh`.
+  - [x] Document the separate role of `scripts/demo-public.sh`.
   - [x] Document reserved external repo env vars generically as a follow-up, not current behavior.
   - [x] Document reduced coverage interpretation.
   - [x] Document troubleshooting for missing endpoint matches, missing surfaces, reduced coverage, and unlinked surfaces.
