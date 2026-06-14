@@ -7,13 +7,25 @@ Source of truth: pending PR
 
 ## Summary
 
-This spec captures blog/editorial ideas for `tracemap.tools`. The first blog
-slice adds a plain static `/blog/` index and publishes the manager-facing article
+This spec captures blog/editorial ideas for `tracemap.tools`. The blog now has a
+plain static `/blog/` index, the origin-story article
+`/blog/why-tracemap-exists/`, and the manager-facing article
 `/blog/what-tracemap-solves-for-engineering-teams/`.
 
-Origin-story and build-process articles remain planned and not implemented.
+The build-process article remains planned and not implemented.
 
 ## Published Articles
+
+### Why TraceMap Exists
+
+Status: implemented
+
+URL: `/blog/why-tracemap-exists/`
+
+Purpose: tell the practical origin story without workplace blame. The article
+explains that dependency and contract-impact questions often turn into manual
+indexing work and frames TraceMap as a deterministic static-evidence packet with
+documented limits.
 
 ### What TraceMap Solves for Engineering Teams
 
@@ -27,22 +39,6 @@ questions into auditable evidence packets that can be reviewed, handed off, and
 revisited when scope or coverage changes.
 
 ## Planned Articles
-
-### Why TraceMap Exists
-
-Purpose: tell the practical origin story without workplace blame. The article
-should explain that dependency and contract-impact questions often get pushed
-onto individual reviewers as manual indexing work. TraceMap exists to turn that
-work into deterministic, evidence-backed artifacts: facts, indexes, reports,
-coverage labels, source spans, rule IDs, and reducer outputs.
-
-Tone: candid, professional, problem-focused.
-
-Avoid:
-
-- naming or criticizing consultants, employers, coworkers, or teams
-- implying TraceMap proves runtime usage or release safety
-- framing TraceMap as AI impact analysis
 
 ### Building TraceMap With Codex, Kiro, and Qodo
 
@@ -64,7 +60,6 @@ Avoid:
 
 ## Follow-ups
 
-- Draft `Why TraceMap Exists`.
 - Draft `Building TraceMap With Codex, Kiro, and Qodo`.
 - Consider a tiny template/layout build step before the blog grows beyond a few
   static pages.
