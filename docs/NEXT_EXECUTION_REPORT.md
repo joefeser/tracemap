@@ -138,7 +138,8 @@ Future demo/export concept:
 
 - Add an optional Obsidian/vault export demo so managers and skeptical reviewers can browse TraceMap dependency evidence visually.
 - Treat Obsidian as a human exploration layer over existing facts, reports, paths, reverse queries, and portfolio evidence.
-- Candidate shape: `Start Here.md`, one note per source/endpoint/symbol/dependency surface, wikilinks for evidence-backed edges, and frontmatter for rule IDs, evidence tiers, commit SHAs, coverage labels, supporting IDs, and limitations.
+- Candidate shape: `reports/obsidian/Start Here.md`, one note per source/endpoint/symbol/dependency surface, wikilinks for evidence-backed edges, and frontmatter for rule IDs, evidence tiers, commit SHAs, coverage labels, supporting IDs, and limitations.
+- Treat generated vault files as public-shareable artifacts that must be covered by the generated-output sentinel scan before the demo succeeds.
 - Keep SQLite, facts, reports, and rule catalog as source of truth. Do not introduce a new analyzer, runtime topology claim, LLM classification, raw source snippets, raw SQL/config values, local absolute paths, raw remotes, or secrets.
 
 ## Cleanup Done In This Branch
