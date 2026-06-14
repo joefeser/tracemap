@@ -674,7 +674,7 @@ rules:
 
   - id: csharp.semantic.flowboundary.v1
     name: C# semantic flow boundary
-    description: Records deterministic evidence for runtime-sensitive flow boundaries such as DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, and branch conditions.
+    description: Records deterministic evidence for runtime-sensitive flow boundaries such as DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, branch conditions, callbacks, and async scheduling points.
     evidenceTier: Tier1Semantic
     emits:
       - DependencyResolved
@@ -684,9 +684,13 @@ rules:
       - CollectionMutation
       - ObjectMutation
       - BranchCondition
+      - CallbackBoundary
+      - AsyncBoundary
     limitations:
       - Requires Roslyn semantic binding except for dynamic invocations where Roslyn intentionally cannot bind a static callee.
-      - These facts mark review-routing boundaries and do not prove runtime execution, concrete runtime types, branch feasibility, collection contents, object identity, dependency injection registrations, reflection targets, or serializer contract mappings.
+      - Callback boundary facts cover syntactically visible lambdas, anonymous methods, delegate arguments, delegate creation, captured outer parameters/locals, and event subscriptions; they do not prove delegate invocation, event firing, subscriber ordering, callback target execution, closure lifetime, or mutation safety.
+      - Async boundary facts cover syntactically visible `await`, task scheduling/continuation calls, thread-pool queueing calls, and iterator `yield` statements; they do not prove runtime scheduling, execution ordering, thread interleaving, task completion, or continuation reachability.
+      - These facts mark review-routing boundaries and do not prove runtime execution, concrete runtime types, branch feasibility, collection contents, object identity, dependency injection registrations, reflection targets, serializer contract mappings, callback invocation, event firing, or async ordering.
       - Use `csharp.semantic.runtimeevidence.v1` facts for statically visible registrations, reflection targets, serializer member names, collection element inputs, mutation semantics, and simple branch feasibility evidence.
       - Raw expressions are not stored; expression hashes, expression kinds, resolved symbols, and line spans are emitted.
       - Specialized flow rules are still required before TraceMap can carry value provenance across these boundaries.

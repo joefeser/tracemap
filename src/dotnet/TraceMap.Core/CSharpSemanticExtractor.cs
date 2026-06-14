@@ -1104,6 +1104,8 @@ public static class CSharpSemanticExtractor
         AddBranchConditionFacts(projectPath, filePath, root, model, facts);
         AddMutationBoundaryFacts(projectPath, filePath, root, model, facts);
         AddInvocationBoundaryFacts(projectPath, filePath, root, model, facts);
+        AddCallbackBoundaryFacts(projectPath, filePath, root, model, facts);
+        AddAsyncBoundaryFacts(projectPath, filePath, root, model, facts);
     }
 
     private static void AddBranchConditionFacts(
@@ -1227,6 +1229,407 @@ public static class CSharpSemanticExtractor
                 facts.Add(CreateDynamicInvocationFact(projectPath, filePath, invocation, model, expression.ToString(), receiverType));
             }
         }
+    }
+
+    private static void AddCallbackBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var callback in root.DescendantNodes().OfType<AnonymousFunctionExpressionSyntax>())
+        {
+            facts.Add(CreateCallbackBoundaryFact(projectPath, filePath, callback, model));
+            foreach (var capturedSymbol in GetCapturedParameterOrLocalSymbols(callback, model))
+            {
+                facts.Add(CreateCapturedValueCallbackBoundaryFact(projectPath, filePath, callback, model, capturedSymbol));
+            }
+        }
+
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression)
+                && !assignment.IsKind(SyntaxKind.SubtractAssignmentExpression))
+            {
+                continue;
+            }
+
+            if (model.GetSymbolInfo(assignment.Left).Symbol is IEventSymbol eventSymbol)
+            {
+                facts.Add(CreateEventSubscriptionBoundaryFact(projectPath, filePath, assignment, model, eventSymbol));
+            }
+        }
+
+        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+        {
+            if (model.GetTypeInfo(creation).Type is INamedTypeSymbol { TypeKind: TypeKind.Delegate } delegateType)
+            {
+                facts.Add(CreateDelegateCreationBoundaryFact(projectPath, filePath, creation, model, delegateType));
+            }
+        }
+
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            foreach (var argument in invocation.ArgumentList.Arguments)
+            {
+                var convertedType = model.GetTypeInfo(argument.Expression).ConvertedType;
+                if (convertedType is INamedTypeSymbol { TypeKind: TypeKind.Delegate } delegateType
+                    && argument.Expression is not AnonymousFunctionExpressionSyntax)
+                {
+                    facts.Add(CreateDelegateArgumentBoundaryFact(projectPath, filePath, argument, model, delegateType));
+                }
+            }
+        }
+    }
+
+    private static SemanticFactCandidate CreateCallbackBoundaryFact(
+        string? projectPath,
+        string filePath,
+        AnonymousFunctionExpressionSyntax callback,
+        SemanticModel model)
+    {
+        var enclosing = model.GetEnclosingSymbol(callback.SpanStart);
+        var delegateType = model.GetTypeInfo(callback).ConvertedType;
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "CallbackBoundary",
+                ["callbackBoundaryKind"] = callback switch
+                {
+                    SimpleLambdaExpressionSyntax => "SimpleLambda",
+                    ParenthesizedLambdaExpressionSyntax => "ParenthesizedLambda",
+                    AnonymousMethodExpressionSyntax => "AnonymousMethod",
+                    _ => callback.Kind().ToString()
+                },
+                ["callbackExpressionKind"] = GetExpressionKind(callback),
+                ["callbackExpressionHash"] = FactFactory.Hash(callback.ToString(), 32),
+                ["callbackParameterCount"] = GetCallbackParameterCount(callback).ToString(),
+                ["convertedDelegateType"] = delegateType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                ["isAsync"] = callback.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword).ToString()
+            },
+            enclosing?.ContainingAssembly,
+            delegateType?.ContainingAssembly);
+        AddSymbolProperties(properties, "source", enclosing);
+        AddSymbolProperties(properties, "target", delegateType);
+
+        return CreateSemanticFact(
+            FactTypes.CallbackBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            callback,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: delegateType?.ToDisplayString(SymbolFormat) ?? "callback",
+            contractElement: "CallbackBoundary",
+            properties: properties);
+    }
+
+    private static SemanticFactCandidate CreateCapturedValueCallbackBoundaryFact(
+        string? projectPath,
+        string filePath,
+        AnonymousFunctionExpressionSyntax callback,
+        SemanticModel model,
+        ISymbol capturedSymbol)
+    {
+        var enclosing = model.GetEnclosingSymbol(callback.SpanStart);
+        var delegateType = model.GetTypeInfo(callback).ConvertedType;
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "CapturedValueCallbackBoundary",
+                ["callbackExpressionKind"] = GetExpressionKind(callback),
+                ["callbackExpressionHash"] = FactFactory.Hash(callback.ToString(), 32),
+                ["capturedSymbol"] = capturedSymbol.ToDisplayString(SymbolFormat),
+                ["capturedSymbolKind"] = capturedSymbol.Kind.ToString(),
+                ["convertedDelegateType"] = delegateType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                ["flowClassification"] = "NeedsReviewValuePath",
+                ["isAsync"] = callback.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword).ToString()
+            },
+            enclosing?.ContainingAssembly,
+            capturedSymbol.ContainingAssembly);
+        AddSymbolProperties(properties, "source", enclosing);
+        AddSymbolProperties(properties, "target", delegateType);
+        AddSymbolProperties(properties, "origin", capturedSymbol);
+
+        return CreateSemanticFact(
+            FactTypes.CallbackBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            callback,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: capturedSymbol.ToDisplayString(SymbolFormat),
+            contractElement: capturedSymbol.Name,
+            properties: properties);
+    }
+
+    private static SemanticFactCandidate CreateEventSubscriptionBoundaryFact(
+        string? projectPath,
+        string filePath,
+        AssignmentExpressionSyntax assignment,
+        SemanticModel model,
+        IEventSymbol eventSymbol)
+    {
+        var enclosing = model.GetEnclosingSymbol(assignment.SpanStart);
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "EventSubscriptionBoundary",
+                ["eventSymbol"] = eventSymbol.ToDisplayString(SymbolFormat),
+                ["eventType"] = eventSymbol.Type.ToDisplayString(SymbolFormat),
+                ["subscriptionKind"] = assignment.IsKind(SyntaxKind.AddAssignmentExpression) ? "Subscribe" : "Unsubscribe",
+                ["handlerExpressionKind"] = GetExpressionKind(assignment.Right),
+                ["handlerExpressionHash"] = FactFactory.Hash(assignment.Right.ToString(), 32),
+                ["flowClassification"] = "NeedsReviewValuePath"
+            },
+            enclosing?.ContainingAssembly,
+            eventSymbol.ContainingAssembly);
+        AddSymbolProperties(properties, "source", enclosing);
+        AddSymbolProperties(properties, "target", eventSymbol);
+
+        return CreateSemanticFact(
+            FactTypes.CallbackBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            assignment,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: eventSymbol.ToDisplayString(SymbolFormat),
+            contractElement: eventSymbol.Name,
+            properties: properties);
+    }
+
+    private static SemanticFactCandidate CreateDelegateCreationBoundaryFact(
+        string? projectPath,
+        string filePath,
+        ObjectCreationExpressionSyntax creation,
+        SemanticModel model,
+        INamedTypeSymbol delegateType)
+    {
+        var enclosing = model.GetEnclosingSymbol(creation.SpanStart);
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "DelegateCreationBoundary",
+                ["delegateType"] = delegateType.ToDisplayString(SymbolFormat),
+                ["creationExpressionHash"] = FactFactory.Hash(creation.ToString(), 32),
+                ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+                ["flowClassification"] = "NeedsReviewValuePath"
+            },
+            enclosing?.ContainingAssembly,
+            delegateType.ContainingAssembly);
+        AddSymbolProperties(properties, "source", enclosing);
+        AddSymbolProperties(properties, "target", delegateType);
+
+        return CreateSemanticFact(
+            FactTypes.CallbackBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            creation,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: delegateType.ToDisplayString(SymbolFormat),
+            contractElement: delegateType.Name,
+            properties: properties);
+    }
+
+    private static SemanticFactCandidate CreateDelegateArgumentBoundaryFact(
+        string? projectPath,
+        string filePath,
+        ArgumentSyntax argument,
+        SemanticModel model,
+        INamedTypeSymbol delegateType)
+    {
+        var enclosing = model.GetEnclosingSymbol(argument.SpanStart);
+        var argumentSymbol = model.GetSymbolInfo(argument.Expression).Symbol;
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "DelegateArgumentBoundary",
+                ["delegateType"] = delegateType.ToDisplayString(SymbolFormat),
+                ["handlerExpressionKind"] = GetExpressionKind(argument.Expression),
+                ["handlerExpressionHash"] = FactFactory.Hash(argument.Expression.ToString(), 32),
+                ["handlerSymbol"] = argumentSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                ["handlerSymbolKind"] = argumentSymbol?.Kind.ToString() ?? string.Empty,
+                ["flowClassification"] = "NeedsReviewValuePath"
+            },
+            enclosing?.ContainingAssembly,
+            delegateType.ContainingAssembly);
+        AddSymbolProperties(properties, "source", enclosing);
+        AddSymbolProperties(properties, "target", delegateType);
+        AddSymbolProperties(properties, "argument", argumentSymbol);
+
+        return CreateSemanticFact(
+            FactTypes.CallbackBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            argument,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: delegateType.ToDisplayString(SymbolFormat),
+            contractElement: delegateType.Name,
+            properties: properties);
+    }
+
+    private static int GetCallbackParameterCount(AnonymousFunctionExpressionSyntax callback)
+    {
+        return callback switch
+        {
+            SimpleLambdaExpressionSyntax => 1,
+            ParenthesizedLambdaExpressionSyntax parenthesized => parenthesized.ParameterList.Parameters.Count,
+            AnonymousMethodExpressionSyntax anonymous when anonymous.ParameterList is not null
+                => anonymous.ParameterList.Parameters.Count,
+            _ => 0
+        };
+    }
+
+    private static IReadOnlyList<ISymbol> GetCapturedParameterOrLocalSymbols(
+        AnonymousFunctionExpressionSyntax callback,
+        SemanticModel model)
+    {
+        var captures = new SortedDictionary<string, ISymbol>(StringComparer.Ordinal);
+        foreach (var identifier in callback.DescendantNodes().OfType<IdentifierNameSyntax>())
+        {
+            var symbol = model.GetSymbolInfo(identifier).Symbol;
+            if (symbol is not IParameterSymbol and not ILocalSymbol)
+            {
+                continue;
+            }
+
+            var location = symbol.Locations.FirstOrDefault(location => location.IsInSource);
+            if (location is null || callback.Span.Contains(location.SourceSpan))
+            {
+                continue;
+            }
+
+            var identity = CSharpSymbolIdentityProvider.TryCreate(symbol);
+            captures[identity?.SymbolId ?? symbol.ToDisplayString(SymbolFormat)] = symbol;
+        }
+
+        return captures.Values.ToArray();
+    }
+
+    private static void AddAsyncBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var awaitExpression in root.DescendantNodes().OfType<AwaitExpressionSyntax>())
+        {
+            facts.Add(CreateAwaitBoundaryFact(projectPath, filePath, awaitExpression, model));
+        }
+
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is IMethodSymbol method && IsTaskSchedulingMethod(method))
+            {
+                facts.Add(CreateTaskSchedulingBoundaryFact(projectPath, filePath, invocation, model, method));
+            }
+        }
+
+        foreach (var yield in root.DescendantNodes().OfType<YieldStatementSyntax>())
+        {
+            facts.Add(CreateIteratorBoundaryFact(projectPath, filePath, yield, model));
+        }
+    }
+
+    private static SemanticFactCandidate CreateAwaitBoundaryFact(
+        string? projectPath,
+        string filePath,
+        AwaitExpressionSyntax awaitExpression,
+        SemanticModel model)
+    {
+        var enclosing = model.GetEnclosingSymbol(awaitExpression.SpanStart);
+        var awaitedType = model.GetTypeInfo(awaitExpression.Expression).Type;
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "AwaitBoundary",
+                ["awaitedExpressionKind"] = GetExpressionKind(awaitExpression.Expression),
+                ["awaitedExpressionHash"] = FactFactory.Hash(awaitExpression.Expression.ToString(), 32),
+                ["awaitedType"] = awaitedType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                ["flowClassification"] = "NeedsReviewValuePath"
+            },
+            enclosing?.ContainingAssembly,
+            awaitedType?.ContainingAssembly);
+        AddSymbolProperties(properties, "source", enclosing);
+        AddSymbolProperties(properties, "target", awaitedType);
+
+        return CreateSemanticFact(
+            FactTypes.AsyncBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            awaitExpression,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: awaitedType?.ToDisplayString(SymbolFormat) ?? "await",
+            contractElement: "AwaitBoundary",
+            properties: properties);
+    }
+
+    private static SemanticFactCandidate CreateTaskSchedulingBoundaryFact(
+        string? projectPath,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method)
+    {
+        var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = "TaskSchedulingBoundary",
+                ["methodSymbol"] = method.ToDisplayString(SymbolFormat),
+                ["methodName"] = method.Name,
+                ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                ["argumentCount"] = invocation.ArgumentList.Arguments.Count.ToString(),
+                ["flowClassification"] = "NeedsReviewValuePath"
+            },
+            enclosing?.ContainingAssembly,
+            method.ContainingAssembly);
+        AddSymbolProperties(properties, "source", enclosing);
+        AddSymbolProperties(properties, "target", method);
+
+        return CreateSemanticFact(
+            FactTypes.AsyncBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            invocation,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: method.ToDisplayString(SymbolFormat),
+            contractElement: method.Name,
+            properties: properties);
+    }
+
+    private static SemanticFactCandidate CreateIteratorBoundaryFact(
+        string? projectPath,
+        string filePath,
+        YieldStatementSyntax yield,
+        SemanticModel model)
+    {
+        var enclosing = model.GetEnclosingSymbol(yield.SpanStart);
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["boundaryKind"] = "IteratorBoundary",
+            ["yieldKind"] = yield.Kind().ToString(),
+            ["flowClassification"] = "NeedsReviewValuePath"
+        };
+        AddSymbolProperties(properties, "source", enclosing);
+
+        return CreateSemanticFact(
+            FactTypes.AsyncBoundary,
+            RuleIds.CSharpSemanticFlowBoundary,
+            projectPath,
+            filePath,
+            yield,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: "iterator",
+            contractElement: "IteratorBoundary",
+            properties: properties);
     }
 
     private static void AddResolvedInvocationBoundaryFacts(
@@ -2932,6 +3335,16 @@ public static class CSharpSemanticExtractor
             || type.Name.Contains("Stack", StringComparison.Ordinal)
             || type.Name.Contains("Set", StringComparison.Ordinal)
             || type.Name.Contains("List", StringComparison.Ordinal);
+    }
+
+    private static bool IsTaskSchedulingMethod(IMethodSymbol method)
+    {
+        var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+        return (method.Name is "Run" or "Start" or "StartNew" or "ContinueWith"
+                && (containingType.Contains("System.Threading.Tasks.Task", StringComparison.Ordinal)
+                    || containingType.Contains("System.Threading.Tasks.TaskFactory", StringComparison.Ordinal)))
+            || (method.Name is "QueueUserWorkItem" or "UnsafeQueueUserWorkItem"
+                && containingType.Contains("System.Threading.ThreadPool", StringComparison.Ordinal));
     }
 
     private static bool IsCollectionLikeType(INamedTypeSymbol type)
