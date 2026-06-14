@@ -111,16 +111,19 @@
 - PR 4: Graph/surface/contract-shape expansion, extractor rows, and redaction hardening.
 - PR 5: Optional path comparison and release-review integration.
 
+## Completed Follow-Up Slices
+
+- [x] `codex/snapshot-diff-single-index-followups`: single-index endpoint projection for `HttpRouteBinding` and `HttpCallDetected` facts, single-index dependency-surface projection for safe surface facts already supported by combined surface readers, malformed manifest/properties metadata gaps, and same-SHA divergent evidence notes.
+- [x] Added focused tests for single-index endpoint/surface projection, same-SHA changed endpoint notes, malformed metadata gaps, and updated endpoint availability expectations.
+- [x] Kept graph and contract-shape projectors deferred to avoid widening this PR beyond the endpoint/surface follow-up slice.
+
 ## Deferred Follow-Ups
 
-- Emit malformed metadata gaps.
-- Project endpoint records for single-index snapshots.
 - Project contract-shape records for type/property/method/DTO evidence.
-- Project dependency-surface records for SQL, package, HTTP, config, storage, and event/message evidence where available.
 - Project graph records for call edges, object creations, symbol relationships, argument flows, and parameter forwarding where available.
-- Use single-index endpoint keys shaped as `endpoint:{sourceLabel}:{endpointKind}:{normalizedMethod}:{normalizedPathKey}:{handlerIdentityOrNone}`.
-- Add same-SHA-with-changed-evidence warning tests.
-- Add malformed metadata gap tests.
+- Expand dependency-surface projection if future adapters add storage or event/message facts beyond the current combined surface reader vocabulary.
+- Project single-index analysis-gap diffs from `AnalysisGap` facts rather than only emitting coverage and malformed metadata gaps.
+- Add duplicate-identity edge-case tests for single-index endpoint and surface records.
 - Run relevant adapter tests if projector behavior touches language-specific outputs.
 - Git checkout orchestration from commit SHAs.
 - Source patch summarization.
