@@ -78,12 +78,15 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --out .tracemap-combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index .tracemap-combined.sqlite --out .tracemap-combined-report
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index .tracemap-combined.sqlite --from-endpoint "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out .tracemap-combined-paths
+dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index .tracemap-combined.sqlite --surface sql-query --surface-name ClubMemberships --to endpoints --out .tracemap-combined-reverse
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combined.sqlite --out .tracemap-combined.json --format json
 ```
 
 The combined dependency report writes `dependency-report.md` and `dependency-report.json` when `--out` is a directory. It summarizes source coverage, endpoint alignment, HTTP/SQL/package/config surfaces, dependency edges, needs-review rows, known gaps, and static-analysis limitations without mutating the combined database.
 
 The combined dependency paths command writes `paths-report.md` and `paths-report.json` when `--out` is a directory. It follows static evidence from endpoint, symbol, or source selectors to terminal dependency surfaces such as `sql-query`, `http-client`, `http-route`, and `package-config`. Paths are evidence trails, not runtime traces.
+
+The combined reverse query command writes `reverse-report.md` and `reverse-report.json` when `--out` is a directory. It starts from dependency surfaces and walks static evidence backward to endpoints, symbols, sources, or all supported roots. Reverse paths answer "what static roots can reach this dependency evidence?" and remain coverage-relative rather than runtime usage proof.
 
 Compare two combined snapshots:
 
