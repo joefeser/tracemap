@@ -323,9 +323,7 @@ public static class MarkdownReportWriter
         var trimmed = value.Trim();
         if (IsSafeIdentifier(trimmed, kind))
         {
-            return trimmed.Length <= MaxIdentifierLength(kind)
-                ? trimmed
-                : $"unsafe-identifier-hash:{CombinedReportHelpers.Hash(trimmed, 32)}";
+            return trimmed;
         }
 
         return $"unsafe-identifier-hash:{CombinedReportHelpers.Hash(trimmed, 32)}";
