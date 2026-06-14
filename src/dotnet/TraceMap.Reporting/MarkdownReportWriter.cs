@@ -144,7 +144,7 @@ public static class MarkdownReportWriter
             lines,
             "Query Patterns",
             result.Facts.Where(fact => fact.FactType == FactTypes.QueryPatternDetected),
-            fact => $"- `{fact.Properties.GetValueOrDefault("operationName") ?? DisplayFactName(fact)}` fields `{DisplayFields(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+            FormatQueryPattern);
 
         AddFactSection(
             lines,
@@ -197,6 +197,14 @@ public static class MarkdownReportWriter
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
 
+        if (result.Facts.Any(fact => fact.FactType == FactTypes.QueryPatternDetected))
+        {
+            lines.Add("");
+            lines.Add("## Query Pattern Limitations");
+            lines.Add("");
+            lines.Add("- Query-pattern rows are static shape evidence. They do not prove runtime execution, database schema existence, SQL dialect validity, generated SQL equivalence, or branch feasibility.");
+        }
+
         lines.Add("");
         return string.Join(Environment.NewLine, lines);
     }
@@ -243,4 +251,157 @@ public static class MarkdownReportWriter
         var joined = string.Join(";", fields);
         return string.IsNullOrWhiteSpace(joined) ? "none" : joined;
     }
+
+    private static string FormatQueryPattern(CodeFact fact)
+    {
+        return IsSqlShapeQueryPattern(fact)
+            ? FormatSqlShapeQueryPattern(fact)
+            : FormatQueryBuilderPattern(fact);
+    }
+
+    private static bool IsSqlShapeQueryPattern(CodeFact fact)
+    {
+        return fact.Properties.TryGetValue("sqlSourceKind", out var value) && !string.IsNullOrWhiteSpace(value);
+    }
+
+    private static string FormatSqlShapeQueryPattern(CodeFact fact)
+    {
+        var operation = DisplayCodeValue(fact.Properties.GetValueOrDefault("operationName") ?? "unknown");
+        var table = DisplayIdentifierValue(
+            fact.Properties.GetValueOrDefault("tableName") ?? fact.Properties.GetValueOrDefault("tableNames"),
+            IdentifierKind.Table,
+            "unknown");
+        var columns = DisplayIdentifierValue(
+            fact.Properties.GetValueOrDefault("columnNames") ?? fact.Properties.GetValueOrDefault("fieldNames"),
+            IdentifierKind.Column,
+            "none");
+        var sourceKind = DisplayCodeValue(fact.Properties.GetValueOrDefault("sqlSourceKind") ?? "unknown");
+        var shapeHash = DisplayCodeValue(fact.Properties.GetValueOrDefault("queryShapeHash") ?? "n/a");
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+
+        return $"- SQL shape `{operation}` table `{table}` columns `{columns}` source `{sourceKind}` shape `{shapeHash}` rule `{fact.RuleId}` ({fact.EvidenceTier}) at `{path}:{fact.Evidence.StartLine}`";
+    }
+
+    private static string FormatQueryBuilderPattern(CodeFact fact)
+    {
+        var operation = DisplayCodeValue(fact.Properties.GetValueOrDefault("operationName") ?? DisplayFactName(fact));
+        var patternHash = fact.Properties.GetValueOrDefault("patternHash");
+        var hashPart = string.IsNullOrWhiteSpace(patternHash) ? string.Empty : $" pattern `{DisplayCodeValue(patternHash)}`";
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return $"- Query builder `{operation}` fields `{DisplayFields(fact)}`{hashPart} rule `{fact.RuleId}` ({fact.EvidenceTier}) at `{path}:{fact.Evidence.StartLine}`";
+    }
+
+    private static string DisplayIdentifierValue(string? rawValue, IdentifierKind kind, string missingValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return missingValue;
+        }
+
+        var allParts = rawValue
+            .Split([',', ';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => DisplayIdentifier(value, kind))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (allParts.Length == 0)
+        {
+            return missingValue;
+        }
+
+        if (allParts.Length <= 20)
+        {
+            return string.Join(";", allParts);
+        }
+
+        return string.Join(";", allParts.Take(20)) + $";... and {allParts.Length - 20} more";
+    }
+
+    private static string DisplayIdentifier(string value, IdentifierKind kind)
+    {
+        var trimmed = value.Trim();
+        if (IsSafeIdentifier(trimmed, kind))
+        {
+            return trimmed.Length <= MaxIdentifierLength(kind)
+                ? trimmed
+                : $"unsafe-identifier-hash:{CombinedReportHelpers.Hash(trimmed, 32)}";
+        }
+
+        return $"unsafe-identifier-hash:{CombinedReportHelpers.Hash(trimmed, 32)}";
+    }
+
+    private static bool IsSafeIdentifier(string value, IdentifierKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > MaxIdentifierLength(kind))
+        {
+            return false;
+        }
+
+        if (value.Contains("://", StringComparison.Ordinal)
+            || value.Contains("--", StringComparison.Ordinal)
+            || value.Contains("/*", StringComparison.Ordinal)
+            || value.Contains("*/", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (var ch in value)
+        {
+            var allowed = char.IsLetterOrDigit(ch)
+                || ch is '_' or '.' or '-'
+                || (kind == IdentifierKind.Table && ch == ' ');
+
+            if (!allowed)
+            {
+                return false;
+            }
+        }
+
+        var tokens = value
+            .Split([' ', '.', '-', '_'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return !tokens.Any(token => SqlKeywords.Contains(token));
+    }
+
+    private static int MaxIdentifierLength(IdentifierKind kind)
+    {
+        return kind == IdentifierKind.Table ? 100 : 80;
+    }
+
+    private static string DisplayCodeValue(string value)
+    {
+        return value.Replace('`', '\'').ReplaceLineEndings(" ");
+    }
+
+    private enum IdentifierKind
+    {
+        Table,
+        Column
+    }
+
+    private static readonly HashSet<string> SqlKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "select",
+        "from",
+        "insert",
+        "into",
+        "values",
+        "update",
+        "set",
+        "delete",
+        "where",
+        "join",
+        "having",
+        "group",
+        "order",
+        "by",
+        "union",
+        "create",
+        "alter",
+        "drop",
+        "truncate",
+        "merge",
+        "exec"
+    };
 }
