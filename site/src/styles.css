@@ -312,6 +312,7 @@ h3 {
 
 .tier-grid,
 .workflow-grid,
+.path-grid,
 .link-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -319,7 +320,8 @@ h3 {
 }
 
 .tier-grid article,
-.workflow-grid article {
+.workflow-grid article,
+.audience-grid article {
   min-height: 190px;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -391,6 +393,60 @@ h3 {
 
 .workflow-grid article {
   min-height: 170px;
+}
+
+.path-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.path-grid a {
+  display: grid;
+  min-height: 230px;
+  align-content: start;
+  gap: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 24px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.path-grid a:hover {
+  border-color: var(--accent);
+}
+
+.path-grid span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  background: var(--accent-strong);
+  color: white;
+  font-weight: 850;
+}
+
+.path-grid strong {
+  font-size: 1.2rem;
+  line-height: 1.25;
+}
+
+.path-grid p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.audience-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.audience-grid article {
+  min-height: auto;
+}
+
+.audience-grid p {
+  margin-bottom: 0;
+  color: var(--muted);
 }
 
 .example-grid {
@@ -568,6 +624,7 @@ h3 {
 
   .tier-grid,
   .workflow-grid,
+  .path-grid,
   .example-grid,
   .link-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -589,6 +646,7 @@ h3 {
 
   .tier-grid,
   .workflow-grid,
+  .path-grid,
   .example-grid,
   .link-grid,
   .preview-stats,
@@ -597,7 +655,8 @@ h3 {
   }
 
   .tier-grid article,
-  .workflow-grid article {
+  .workflow-grid article,
+  .path-grid a {
     min-height: auto;
   }
 
