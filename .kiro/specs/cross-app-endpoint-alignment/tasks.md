@@ -40,15 +40,15 @@ This spec has been implemented as the first endpoint-alignment slice. The checkl
 ### Intentionally Partial or Deferred
 
 - [x] `tracemap combine` baseline for N indexes with source-index namespacing and source fact/table imports.
-- [ ] Derived cross-index rows on top of combined databases.
-- [ ] `tracemap endpoint-diff` for comparing endpoint reports across commit SHAs.
-- [ ] N-client-to-N-server endpoint alignment.
-- [ ] React, Next.js, Remix, Nest, Fastify, Koa, GraphQL, OpenAPI, and other non-Angular/ASP.NET endpoint families.
-- [ ] ASP.NET minimal APIs, conventional routes, route groups, endpoint filters, `AcceptVerbs`, `[Area]`, custom route attributes, and `[ApiController]` implicit route conventions.
-- [ ] Angular interceptor URL rewrite evidence.
-- [ ] Proxy config, deployment base path, CORS, auth, feature-flag, middleware, and runtime route-table evidence.
-- [ ] Response generic type and request body field extraction for endpoint matching.
-- [ ] Working-tree dirty state or content snapshot hash.
+- Derived cross-index rows on top of combined databases.
+- `tracemap endpoint-diff` for comparing endpoint reports across commit SHAs.
+- N-client-to-N-server endpoint alignment.
+- React, Next.js, Remix, Nest, Fastify, Koa, GraphQL, OpenAPI, and other non-Angular/ASP.NET endpoint families.
+- ASP.NET minimal APIs, conventional routes, route groups, endpoint filters, `AcceptVerbs`, `[Area]`, custom route attributes, and `[ApiController]` implicit route conventions.
+- Angular interceptor URL rewrite evidence.
+- Proxy config, deployment base path, CORS, auth, feature-flag, middleware, and runtime route-table evidence.
+- Response generic type and request body field extraction for endpoint matching.
+- Working-tree dirty state or content snapshot hash.
 
 ## Definition of Done
 

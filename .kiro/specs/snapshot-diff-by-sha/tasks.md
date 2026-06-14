@@ -18,7 +18,7 @@
   - [x] Preserve read-only SQLite input handling.
   - [x] Add initial snapshot diff rule catalog entries before any implementation PR past command/input validation merges.
 
-- [ ] 3. Implement snapshot input detection and validation. Requirements: 1, 2, 3.
+- 3. Implement snapshot input detection and validation. Requirements: 1, 2, 3.
   - [x] Detect single-language indexes.
   - [x] Detect combined indexes.
   - [x] Parse single-index manifest JSON for `RemoteUrl`, `RepoName`, `ScanRootPathHash`, `GitRootHash`, commit SHA, and extractor metadata.
@@ -29,16 +29,16 @@
   - [x] Redact raw URLs, repository names, local roots, and private paths from identity errors and reports.
   - [x] Validate known commit SHAs for history-dependent conclusions.
   - [x] Emit identity, schema, and coverage gaps.
-  - [ ] Emit malformed metadata gaps.
+  - Emit malformed metadata gaps.
 
-- [ ] 4. Build single-index projector. Requirements: 4, 5, 8.
+- 4. Build single-index projector. Requirements: 4, 5, 8.
   - [x] Project source and coverage records.
-  - [ ] Project endpoint records.
-  - [ ] Project contract-shape records for type/property/method/DTO evidence.
-  - [ ] Project dependency-surface records for SQL, package, HTTP, config, storage, and event/message evidence where available.
-  - [ ] Project graph records for call edges, object creations, symbol relationships, argument flows, and parameter forwarding where available.
+  - Project endpoint records.
+  - Project contract-shape records for type/property/method/DTO evidence.
+  - Project dependency-surface records for SQL, package, HTTP, config, storage, and event/message evidence where available.
+  - Project graph records for call edges, object creations, symbol relationships, argument flows, and parameter forwarding where available.
   - [x] Project analysis-gap availability and extractor-version records.
-  - [ ] Use single-index endpoint keys shaped as `endpoint:{sourceLabel}:{endpointKind}:{normalizedMethod}:{normalizedPathKey}:{handlerIdentityOrNone}`.
+  - Use single-index endpoint keys shaped as `endpoint:{sourceLabel}:{endpointKind}:{normalizedMethod}:{normalizedPathKey}:{handlerIdentityOrNone}`.
 
 - [x] 5. Reuse combined diff for combined indexes. Requirements: 3, 4, 5, 6.
   - [x] Expose or reuse no-write combined read/comparison helpers rather than copying comparison logic.
@@ -74,7 +74,7 @@
   - [x] Document limitations for static evidence, coverage, identity, schema, and extractor-version caveats.
   - [x] Document availability gaps for evidence kinds not exposed by an input schema or delegated engine.
 
-- [ ] 9. Add focused tests. Requirements: 12.
+- 9. Add focused tests. Requirements: 12.
   - [x] Single-index evidence change.
   - [x] Combined-index delegation.
   - [x] Single-index manifest JSON identity derivation.
@@ -87,11 +87,11 @@
   - [x] Source identity conflict and allowed mismatch downgrade.
   - [x] Redacted identity conflict errors and reports.
   - [x] Unknown commit SHA.
-  - [ ] Same SHA with changed evidence warning.
+  - Same SHA with changed evidence warning.
   - [x] Reduced coverage downgrade.
   - [x] Row ID churn avoidance.
   - [x] Extractor-version change.
-  - [ ] Malformed metadata gap.
+  - Malformed metadata gap.
   - [x] Unsafe value redaction.
   - [x] Path comparison opt-in.
   - [x] `--scope` mapping for `coverage`, `graph`, `contract-shapes`, `gaps`, and `extractors`.
@@ -105,10 +105,10 @@
   - [x] Document relationship to `tracemap diff`, `impact`, and future release review.
   - [x] Include examples that use existing index artifacts rather than Git checkout orchestration.
 
-- [ ] 11. Validate implementation. Requirements: 12.
+- 11. Validate implementation. Requirements: 12.
   - [x] `dotnet build src/dotnet/TraceMap.sln`
   - [x] `dotnet test src/dotnet/TraceMap.sln`
-  - [ ] Relevant adapter tests if projector behavior touches language-specific outputs.
+  - Relevant adapter tests if projector behavior touches language-specific outputs.
   - [x] `./scripts/check-private-paths.sh`
   - [x] `git diff --check`
 
@@ -116,9 +116,9 @@
 
 - [x] PR 1: Command shell, input detection, source/commit validation, rule catalog, and no-op report.
 - [x] PR 2: Combined-index delegation, section mapping, scope mapping, and availability gaps.
-- [ ] PR 3: Single-index projector and evidence diff output.
-- [ ] PR 4: Graph/surface/contract-shape expansion, extractor rows, and redaction hardening.
-- [ ] PR 5: Optional path comparison and release-review integration.
+- PR 3: Single-index projector and evidence diff output.
+- PR 4: Graph/surface/contract-shape expansion, extractor rows, and redaction hardening.
+- PR 5: Optional path comparison and release-review integration.
 
 ## Deferred Follow-Ups
 

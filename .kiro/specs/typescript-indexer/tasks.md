@@ -132,13 +132,13 @@
 
 ## Follow-Up Backlog
 
-- [ ] JavaScript and inferred config support.
-- [ ] Workspace discovery from package-json, pnpm, and Yarn workspace files.
-- [ ] Root `tracemap` CLI language dispatch.
-- [ ] Nest, Fastify, Koa, Next.js, Remix, GraphQL, Yup, io-ts, class-validator, TypeBox, OpenAPI, TypeORM, Sequelize, Knex, Drizzle, and SQL template detectors.
-- [ ] Field/property aliasing.
-- [ ] Derived `parameter_forward_edges`.
-- [ ] Multi-index cross-language reducer workflow.
+- JavaScript and inferred config support.
+- Workspace discovery from package-json, pnpm, and Yarn workspace files.
+- Root `tracemap` CLI language dispatch.
+- Nest, Fastify, Koa, Next.js, Remix, GraphQL, Yup, io-ts, class-validator, TypeBox, OpenAPI, TypeORM, Sequelize, Knex, Drizzle, and SQL template detectors.
+- Field/property aliasing.
+- Derived `parameter_forward_edges`.
+- Multi-index cross-language reducer workflow.
 
 ## Definition of Done
 
