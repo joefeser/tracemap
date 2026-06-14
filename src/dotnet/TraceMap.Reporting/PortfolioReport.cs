@@ -168,8 +168,18 @@ public sealed record PortfolioEndpointFindingRow(
     string EvidenceTier,
     string HttpMethod,
     string? NormalizedPathKey,
+    string? ClientSourceId,
     string? ClientSourceLabel,
+    string? ClientCommitSha,
+    string? ClientFilePath,
+    int? ClientStartLine,
+    int? ClientEndLine,
+    string? ServerSourceId,
     string? ServerSourceLabel,
+    string? ServerCommitSha,
+    string? ServerFilePath,
+    int? ServerStartLine,
+    int? ServerEndLine,
     bool SameSource,
     string StaticMatchQuality,
     IReadOnlyList<string> SupportingFactIds,
@@ -179,10 +189,12 @@ public sealed record PortfolioSurfaceRow(
     string SurfaceId,
     string SurfaceKind,
     string DisplayName,
+    string SourceId,
     string SourceLabel,
     string RuleId,
     string EvidenceTier,
     string CommitSha,
+    string ExtractorVersion,
     string FilePath,
     int StartLine,
     int EndLine,
@@ -192,9 +204,12 @@ public sealed record PortfolioSurfaceRow(
 public sealed record PortfolioEdgeRow(
     string EdgeId,
     string EdgeKind,
+    string SourceId,
     string SourceLabel,
     string RuleId,
     string EvidenceTier,
+    string CommitSha,
+    string ExtractorVersion,
     string FilePath,
     int StartLine,
     int EndLine,
@@ -361,7 +376,7 @@ public static class PortfolioReporter
             Summary(options, before.Inputs.Concat(after.Inputs).ToArray(), before.Sources.Concat(after.Sources).ToArray(), [], [], [], [], diffRows.OmittedCount > 0, allGaps),
             before.Inputs.Concat(after.Inputs).OrderBy(input => input.Label, StringComparer.Ordinal).ThenBy(input => input.InputId, StringComparer.Ordinal).ToArray(),
             before.Sources.Concat(after.Sources).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceId, StringComparer.Ordinal).ToArray(),
-            SourceCoverageSection(before.Sources.Concat(after.Sources).ToArray(), allGaps),
+            SourceCoverageSection(before.Sources.Concat(after.Sources).ToArray(), allGaps, 0),
             UnavailableEndpointSection(),
             EmptySection<PortfolioSurfaceRow>("dependencySurfaces", "Portfolio surface inventory is not emitted for before/after comparison v1."),
             EmptySection<PortfolioEdgeRow>("dependencyEdges", "Portfolio edge inventory is not emitted for before/after comparison v1."),
@@ -379,18 +394,23 @@ public static class PortfolioReporter
     {
         var gaps = read.Gaps.ToList();
         var activeSourceIds = DuplicateSourceIds(read.Sources, gaps);
-        var filteredSources = ApplySourceFilters(read.Sources, options);
+        var cappedSources = ApplySourceFilters(read.Sources, options, gaps);
+        var filteredSources = cappedSources.Rows;
+        var filteredSourceIds = filteredSources.Select(source => source.SourceId).ToHashSet(StringComparer.Ordinal);
+        var activeFilteredSourceIds = filteredSourceIds.Where(activeSourceIds.Contains).ToHashSet(StringComparer.Ordinal);
+        var activeSources = filteredSources.Where(source => activeFilteredSourceIds.Contains(source.SourceId)).ToArray();
+        var sourceById = filteredSources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
         var filteredFacts = read.Facts
-            .Where(fact => filteredSources.Any(source => source.SourceId == fact.SourceIndexId || source.Label == fact.SourceLabel))
+            .Where(fact => activeFilteredSourceIds.Contains(fact.SourceIndexId))
             .ToArray();
         if (!string.IsNullOrWhiteSpace(options.Source) && filteredSources.Count == 0)
         {
             gaps.Add(Gap("SelectorNoMatch", "sourceCoverage", SelectorRuleId, PortfolioReportClassifications.SelectorNoMatch, "Source selector matched no portfolio sources."));
         }
 
-        var endpointFindings = CombinedDependencyReporter.MatchEndpoints(ToCombinedSources(filteredSources), filteredFacts.Where(fact => activeSourceIds.Contains(fact.SourceIndexId)).ToArray())
+        var endpointFindings = CombinedDependencyReporter.MatchEndpoints(ToCombinedSources(activeSources), filteredFacts)
             .Where(finding => EndpointMatchesSelector(finding, options))
-            .Select(ToPortfolioEndpointFinding)
+            .Select(finding => ToPortfolioEndpointFinding(finding, sourceById))
             .OrderBy(row => row.Classification, StringComparer.Ordinal)
             .ThenBy(row => row.HttpMethod, StringComparer.Ordinal)
             .ThenBy(row => row.NormalizedPathKey, StringComparer.Ordinal)
@@ -402,7 +422,7 @@ public static class PortfolioReporter
 
         var surfaces = CombinedDependencyReporter.BuildSurfaces(filteredFacts)
             .Where(surface => SurfaceMatchesSelector(surface, options))
-            .Select(ToPortfolioSurface)
+            .Select(surface => ToPortfolioSurface(surface, sourceById))
             .OrderBy(row => row.SurfaceKind, StringComparer.Ordinal)
             .ThenBy(row => row.SourceLabel, StringComparer.Ordinal)
             .ThenBy(row => row.DisplayName, StringComparer.Ordinal)
@@ -417,8 +437,8 @@ public static class PortfolioReporter
         var cappedSurfaces = Cap(surfaces, options.MaxSurfaceRows, gaps, "dependencySurfaces");
 
         var edges = read.Edges
-            .Where(edge => filteredSources.Any(source => source.SourceId == edge.SourceIndexId || source.Label == edge.SourceLabel))
-            .Select(ToPortfolioEdge)
+            .Where(edge => activeFilteredSourceIds.Contains(edge.SourceIndexId))
+            .Select(edge => ToPortfolioEdge(edge, sourceById))
             .OrderBy(row => row.EdgeKind, StringComparer.Ordinal)
             .ThenBy(row => row.SourceLabel, StringComparer.Ordinal)
             .ThenBy(row => row.SourceSymbol, StringComparer.Ordinal)
@@ -445,10 +465,10 @@ public static class PortfolioReporter
             Snapshot(manifestInfo, read, "portfolio"),
             null,
             null,
-            Summary(options, read.Inputs, filteredSources, cappedEndpoints.Rows, cappedSurfaces.Rows, cappedEdges.Rows, cappedShared.Rows, cappedEndpoints.OmittedCount + cappedSurfaces.OmittedCount + cappedEdges.OmittedCount + cappedShared.OmittedCount > 0, allGaps),
+            Summary(options, read.Inputs, filteredSources, cappedEndpoints.Rows, cappedSurfaces.Rows, cappedEdges.Rows, cappedShared.Rows, cappedSources.OmittedCount + cappedEndpoints.OmittedCount + cappedSurfaces.OmittedCount + cappedEdges.OmittedCount + cappedShared.OmittedCount > 0, allGaps),
             read.Inputs.OrderBy(input => input.Label, StringComparer.Ordinal).ThenBy(input => input.InputId, StringComparer.Ordinal).ToArray(),
             filteredSources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceId, StringComparer.Ordinal).ToArray(),
-            SourceCoverageSection(filteredSources, allGaps),
+            SourceCoverageSection(filteredSources, allGaps, cappedSources.OmittedCount),
             Section(cappedEndpoints.Rows, cappedEndpoints.OmittedCount, allGaps.Where(gap => gap.Section == "endpointAlignment").ToArray(), ["Endpoint alignment is static method/path matching."]),
             Section(cappedSurfaces.Rows, cappedSurfaces.OmittedCount, allGaps.Where(gap => gap.Section == "dependencySurfaces").ToArray(), ["Dependency surfaces preserve source provenance and safe metadata only."]),
             Section(cappedEdges.Rows, cappedEdges.OmittedCount, allGaps.Where(gap => gap.Section == "dependencyEdges").ToArray(), ["Dependency edges are static code evidence."]),
@@ -484,9 +504,9 @@ public static class PortfolioReporter
             {
                 await connection.OpenAsync(cancellationToken);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                throw new InvalidDataException($"portfolio could not read input `{SafeToken(input.Label)}`.");
+                throw new InvalidDataException($"portfolio could not read input `{SafeToken(input.Label)}`.", ex);
             }
 
             var isCombined = await TableExistsAsync(connection, "index_sources", cancellationToken)
@@ -506,9 +526,16 @@ public static class PortfolioReporter
             if (isCombined)
             {
                 var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
+                var knownGapsBySource = read.KnownGaps
+                    .GroupBy(gap => gap.SourceIndexId, StringComparer.Ordinal)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => group.Select(gap => gap.Category).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                        StringComparer.Ordinal);
                 foreach (var source in read.Sources)
                 {
-                    var row = ToPortfolioSource(source, input, side);
+                    knownGapsBySource.TryGetValue(source.SourceIndexId, out var knownGapCategories);
+                    var row = ToPortfolioSource(source, input, side, knownGapCategories ?? []);
                     sources.Add(row);
                     AddExpectedIdentityGaps(input, row, gaps);
                 }
@@ -578,7 +605,7 @@ public static class PortfolioReporter
             SafeCommit(commitSha),
             scanId,
             scannerVersion,
-            null,
+            scannerVersion,
             analysisLevel,
             buildStatus,
             CoverageStatus(analysisLevel, buildStatus, commitSha, manifest.KnownGaps),
@@ -626,7 +653,7 @@ public static class PortfolioReporter
                 CombinedReportHelpers.SafePath(reader.GetString(10)),
                 reader.GetInt32(11),
                 reader.GetInt32(12),
-                ParseProperties(reader.GetString(13))));
+                ParseProperties(reader.IsDBNull(13) ? string.Empty : reader.GetString(13))));
         }
 
         return rows;
@@ -709,9 +736,9 @@ public static class PortfolioReporter
         {
             document = JsonDocument.Parse(File.ReadAllText(manifestPath), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            throw new InvalidDataException("portfolio manifest could not be parsed.");
+            throw new InvalidDataException("portfolio manifest could not be parsed.", ex);
         }
 
         using (document)
@@ -827,7 +854,7 @@ public static class PortfolioReporter
             warnings);
     }
 
-    private static PortfolioSection<PortfolioSourceCoverageRow> SourceCoverageSection(IReadOnlyList<PortfolioSourceRow> sources, IReadOnlyList<PortfolioGap> gaps)
+    private static PortfolioSection<PortfolioSourceCoverageRow> SourceCoverageSection(IReadOnlyList<PortfolioSourceRow> sources, IReadOnlyList<PortfolioGap> gaps, int omittedCount)
     {
         var rows = sources
             .OrderBy(source => source.Label, StringComparer.Ordinal)
@@ -842,7 +869,7 @@ public static class PortfolioReporter
                 source.CommitSha,
                 source.GapCategories))
             .ToArray();
-        return Section(rows, 0, gaps.Where(gap => gap.Section == "sourceCoverage").ToArray(), ["Coverage is static scan coverage, not runtime exercise coverage."]);
+        return Section(rows, omittedCount, gaps.Where(gap => gap.Section == "sourceCoverage").ToArray(), ["Coverage is static scan coverage, not runtime exercise coverage."]);
     }
 
     private static PortfolioSection<T> Section<T>(IReadOnlyList<T> rows, int omittedCount, IReadOnlyList<PortfolioGap> gaps, IReadOnlyList<string> limitations)
@@ -926,9 +953,10 @@ public static class PortfolioReporter
     private static IReadOnlyList<PortfolioSharedSurfaceRow> BuildSharedSurfaces(IReadOnlyList<PortfolioSurfaceRow> surfaces, IReadOnlySet<string> activeSourceIds)
     {
         return surfaces
+            .Where(surface => activeSourceIds.Contains(surface.SourceId))
             .Where(surface => SharedKey(surface) is not null)
             .GroupBy(surface => SharedKey(surface)!, StringComparer.Ordinal)
-            .Where(group => group.Select(surface => surface.SourceLabel).Distinct(StringComparer.Ordinal).Count() > 1)
+            .Where(group => group.Count() > 1)
             .Select(group =>
             {
                 var rows = group.OrderBy(surface => surface.SourceLabel, StringComparer.Ordinal).ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal).ToArray();
@@ -968,16 +996,19 @@ public static class PortfolioReporter
         return string.IsNullOrWhiteSpace(value) || value == "n/a" || value == "unknown" ? null : $"{kind}:{value}";
     }
 
-    private static PortfolioSurfaceRow ToPortfolioSurface(CombinedDependencySurfaceRow surface)
+    private static PortfolioSurfaceRow ToPortfolioSurface(CombinedDependencySurfaceRow surface, IReadOnlyDictionary<string, PortfolioSourceRow> sourceById)
     {
+        sourceById.TryGetValue(surface.SourceIndexId, out var source);
         return new PortfolioSurfaceRow(
             $"surface:{CombinedReportHelpers.Hash($"{surface.SourceLabel}:{surface.SurfaceKind}:{surface.DisplayName}:{surface.CombinedFactId}", 20)}",
             surface.SurfaceKind,
             SafeToken(surface.DisplayName),
+            surface.SourceIndexId,
             SafeToken(surface.SourceLabel),
             surface.RuleId,
             surface.EvidenceTier,
             SafeCommit(surface.CommitSha),
+            source?.ExtractorVersion ?? source?.ScannerVersion ?? string.Empty,
             CombinedReportHelpers.SafePath(surface.FilePath),
             surface.StartLine,
             surface.EndLine,
@@ -1006,13 +1037,15 @@ public static class PortfolioReporter
             ]));
     }
 
-    private static PortfolioEndpointFindingRow ToPortfolioEndpointFinding(CombinedEndpointFinding finding)
+    private static PortfolioEndpointFindingRow ToPortfolioEndpointFinding(CombinedEndpointFinding finding, IReadOnlyDictionary<string, PortfolioSourceRow> sourceById)
     {
         var factIds = new[] { finding.ClientOriginalFactId, finding.ServerOriginalFactId }
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+        var clientSource = finding.ClientSourceIndexId is not null && sourceById.TryGetValue(finding.ClientSourceIndexId, out var client) ? client : null;
+        var serverSource = finding.ServerSourceIndexId is not null && sourceById.TryGetValue(finding.ServerSourceIndexId, out var server) ? server : null;
         return new PortfolioEndpointFindingRow(
             $"endpoint:{CombinedReportHelpers.Hash($"{finding.Classification}:{finding.HttpMethod}:{finding.NormalizedPathKey}:{finding.ClientSourceLabel}:{finding.ServerSourceLabel}:{string.Join(":", factIds)}", 20)}",
             finding.Classification,
@@ -1020,28 +1053,42 @@ public static class PortfolioReporter
             finding.ClientEvidenceTier ?? finding.ServerEvidenceTier ?? EvidenceTiers.Tier4Unknown,
             finding.HttpMethod,
             finding.NormalizedPathKey,
+            finding.ClientSourceIndexId,
             finding.ClientSourceLabel is null ? null : SafeToken(finding.ClientSourceLabel),
+            SafeOptional(finding.ClientCommitSha),
+            CombinedReportHelpers.SafePath(finding.ClientFilePath),
+            finding.ClientStartLine,
+            finding.ClientEndLine,
+            finding.ServerSourceIndexId,
             finding.ServerSourceLabel is null ? null : SafeToken(finding.ServerSourceLabel),
+            SafeOptional(finding.ServerCommitSha),
+            CombinedReportHelpers.SafePath(finding.ServerFilePath),
+            finding.ServerStartLine,
+            finding.ServerEndLine,
             finding.SameSource,
             finding.StaticMatchQuality,
             factIds,
             CombinedReportHelpers.SortedMetadata([
                 new("clientRuleId", finding.ClientRuleId),
                 new("serverRuleId", finding.ServerRuleId),
-                new("clientFilePath", CombinedReportHelpers.SafePath(finding.ClientFilePath)),
-                new("serverFilePath", CombinedReportHelpers.SafePath(finding.ServerFilePath)),
+                new("clientExtractorVersion", clientSource?.ExtractorVersion ?? clientSource?.ScannerVersion),
+                new("serverExtractorVersion", serverSource?.ExtractorVersion ?? serverSource?.ScannerVersion),
                 new("notes", string.Join("; ", finding.Notes.Select(SafeToken)))
             ]));
     }
 
-    private static PortfolioEdgeRow ToPortfolioEdge(CombinedDependencyEdgeRow edge)
+    private static PortfolioEdgeRow ToPortfolioEdge(CombinedDependencyEdgeRow edge, IReadOnlyDictionary<string, PortfolioSourceRow> sourceById)
     {
+        sourceById.TryGetValue(edge.SourceIndexId, out var source);
         return new PortfolioEdgeRow(
             $"edge:{CombinedReportHelpers.Hash($"{edge.SourceLabel}:{edge.EdgeKind}:{edge.EdgeId}", 20)}",
             edge.EdgeKind,
+            edge.SourceIndexId,
             SafeToken(edge.SourceLabel),
             edge.RuleId,
             edge.EvidenceTier,
+            source?.CommitSha ?? "unknown",
+            source?.ExtractorVersion ?? source?.ScannerVersion ?? string.Empty,
             CombinedReportHelpers.SafePath(edge.FilePath),
             edge.StartLine,
             edge.EndLine,
@@ -1056,14 +1103,15 @@ public static class PortfolioReporter
 
     private static Capped<PortfolioDiffRow> BuildSourceDiffRows(IReadOnlyList<PortfolioSourceRow> before, IReadOnlyList<PortfolioSourceRow> after, List<PortfolioGap> gaps, int maxRows)
     {
-        var beforeByLabel = before.ToDictionary(source => source.Label, StringComparer.Ordinal);
-        var afterByLabel = after.ToDictionary(source => source.Label, StringComparer.Ordinal);
-        var labels = beforeByLabel.Keys.Concat(afterByLabel.Keys).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal);
+        var beforeByKey = SourceComparisonMap(before, "before", gaps);
+        var afterByKey = SourceComparisonMap(after, "after", gaps);
+        var keys = beforeByKey.Keys.Concat(afterByKey.Keys).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal);
         var rows = new List<PortfolioDiffRow>();
-        foreach (var label in labels)
+        foreach (var key in keys)
         {
-            var hasBefore = beforeByLabel.TryGetValue(label, out var b);
-            var hasAfter = afterByLabel.TryGetValue(label, out var a);
+            var hasBefore = beforeByKey.TryGetValue(key, out var b);
+            var hasAfter = afterByKey.TryGetValue(key, out var a);
+            var label = DiffSourceLabel(b ?? a!);
             if (!hasBefore && hasAfter)
             {
                 rows.Add(DiffRow(label, "AddedSource", a!, "after"));
@@ -1084,6 +1132,35 @@ public static class PortfolioReporter
         }
 
         return Cap(rows.OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.ChangeKind, StringComparer.Ordinal).ToArray(), maxRows, gaps, "portfolioDiff");
+    }
+
+    private static IReadOnlyDictionary<string, PortfolioSourceRow> SourceComparisonMap(IReadOnlyList<PortfolioSourceRow> sources, string side, List<PortfolioGap> gaps)
+    {
+        var result = new SortedDictionary<string, PortfolioSourceRow>(StringComparer.Ordinal);
+        foreach (var group in sources.GroupBy(SourceComparisonKey, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            var rows = group.OrderBy(source => source.SourceId, StringComparer.Ordinal).ToArray();
+            if (rows.Length > 1)
+            {
+                gaps.Add(Gap("DuplicateSourceLabel", "portfolioDiff", IdentityRuleId, PortfolioReportClassifications.ReviewRecommended, $"{side} portfolio snapshot has duplicate source label `{DiffSourceLabel(rows[0])}`.", DiffSourceLabel(rows[0])));
+            }
+
+            result[group.Key] = rows[0];
+        }
+
+        return result;
+    }
+
+    private static string SourceComparisonKey(PortfolioSourceRow source)
+    {
+        return $"{source.ContainerLabel}:{source.Label}";
+    }
+
+    private static string DiffSourceLabel(PortfolioSourceRow source)
+    {
+        return string.IsNullOrWhiteSpace(source.ContainerLabel)
+            ? source.Label
+            : $"{source.ContainerLabel}/{source.Label}";
     }
 
     private static PortfolioDiffRow DiffRow(string label, string changeKind, PortfolioSourceRow source, string side)
@@ -1152,7 +1229,7 @@ public static class PortfolioReporter
         return gaps;
     }
 
-    private static PortfolioSourceRow ToPortfolioSource(CombinedReportSource source, PortfolioInputSpec input, string side)
+    private static PortfolioSourceRow ToPortfolioSource(CombinedReportSource source, PortfolioInputSpec input, string side, IReadOnlyList<string> knownGapCategories)
     {
         var id = SourceId(input.Label, side, source.Label);
         var row = new PortfolioSourceRow(
@@ -1168,11 +1245,11 @@ public static class PortfolioReporter
             SafeCommit(source.CommitSha),
             source.ScanId,
             source.ScannerVersion,
-            null,
+            source.ScannerVersion,
             source.AnalysisLevel,
             source.BuildStatus,
-            CoverageStatus(source.AnalysisLevel, source.BuildStatus, source.CommitSha, []),
-            [],
+            CoverageStatus(source.AnalysisLevel, source.BuildStatus, source.CommitSha, knownGapCategories),
+            knownGapCategories.Select(SafeToken).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             CombinedReportHelpers.SortedMetadata([
                 new("containerLabel", input.Label),
                 new("originalSourceLabel", source.Label),
@@ -1180,7 +1257,12 @@ public static class PortfolioReporter
                 new("scanRootPathHash", source.ScanRootPathHash),
                 new("gitRootHash", source.GitRootHash)
             ]));
-        return row with { GapCategories = SourceGaps(row).Select(gap => gap.GapKind).OrderBy(value => value, StringComparer.Ordinal).ToArray() };
+        var gapCategories = row.GapCategories
+            .Concat(SourceGaps(row).Select(gap => gap.GapKind))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        return row with { GapCategories = gapCategories };
     }
 
     private static CombinedFactRow PrefixFact(CombinedFactRow fact, string inputLabel, string side)
@@ -1205,13 +1287,13 @@ public static class PortfolioReporter
         };
     }
 
-    private static IReadOnlyList<PortfolioSourceRow> ApplySourceFilters(IReadOnlyList<PortfolioSourceRow> sources, PortfolioReportOptions options)
+    private static Capped<PortfolioSourceRow> ApplySourceFilters(IReadOnlyList<PortfolioSourceRow> sources, PortfolioReportOptions options, List<PortfolioGap> gaps)
     {
-        return sources
+        var rows = sources
             .Where(source => string.IsNullOrWhiteSpace(options.Source) || string.Equals(source.Label, options.Source, StringComparison.Ordinal) || string.Equals(source.ContainerLabel, options.Source, StringComparison.Ordinal))
             .Where(source => string.IsNullOrWhiteSpace(options.Group) || string.Equals(source.Group, options.Group, StringComparison.Ordinal) || source.RoleTags.Contains(options.Group, StringComparer.Ordinal))
-            .Take(options.MaxSources)
             .ToArray();
+        return Cap(rows, options.MaxSources, gaps, "sourceCoverage");
     }
 
     private static bool EndpointMatchesSelector(CombinedEndpointFinding finding, PortfolioReportOptions options)
@@ -1346,8 +1428,8 @@ public static class PortfolioReporter
         builder.AppendLine("## Cross-Source Endpoint Alignment");
         builder.AppendLine();
         builder.AppendLine($"Status: `{section.Status}`");
-        AppendRows(builder, section.Rows, "| Classification | Method | Path | Client | Server | Same source | Evidence |", "| --- | --- | --- | --- | --- | --- | --- |",
-            row => $"| {CombinedReportHelpers.Cell(row.Classification)} | {CombinedReportHelpers.Cell(row.HttpMethod)} | {CombinedReportHelpers.Cell(row.NormalizedPathKey)} | {CombinedReportHelpers.Cell(row.ClientSourceLabel)} | {CombinedReportHelpers.Cell(row.ServerSourceLabel)} | {row.SameSource} | {CombinedReportHelpers.Cell(row.EvidenceTier)} `{CombinedReportHelpers.Cell(row.RuleId)}` |");
+        AppendRows(builder, section.Rows, "| Classification | Method | Path | Client | Server | Client evidence | Server evidence | Same source | Evidence |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            row => $"| {CombinedReportHelpers.Cell(row.Classification)} | {CombinedReportHelpers.Cell(row.HttpMethod)} | {CombinedReportHelpers.Cell(row.NormalizedPathKey)} | {CombinedReportHelpers.Cell(row.ClientSourceLabel)} | {CombinedReportHelpers.Cell(row.ServerSourceLabel)} | {CombinedReportHelpers.Cell(LocationText(row.ClientCommitSha, row.ClientFilePath, row.ClientStartLine, row.ClientEndLine))} | {CombinedReportHelpers.Cell(LocationText(row.ServerCommitSha, row.ServerFilePath, row.ServerStartLine, row.ServerEndLine))} | {row.SameSource} | {CombinedReportHelpers.Cell(row.EvidenceTier)} `{CombinedReportHelpers.Cell(row.RuleId)}` |");
     }
 
     private static void RenderSurfaces(StringBuilder builder, PortfolioSection<PortfolioSurfaceRow> section)
@@ -1366,8 +1448,8 @@ public static class PortfolioReporter
         builder.AppendLine("## Dependency Edges");
         builder.AppendLine();
         builder.AppendLine($"Status: `{section.Status}`");
-        AppendRows(builder, section.Rows, "| Kind | Source | From | To | Evidence | Location |", "| --- | --- | --- | --- | --- | --- |",
-            row => $"| {CombinedReportHelpers.Cell(row.EdgeKind)} | {CombinedReportHelpers.Cell(row.SourceLabel)} | {CombinedReportHelpers.Cell(row.SourceSymbol)} | {CombinedReportHelpers.Cell(row.TargetSymbol)} | {CombinedReportHelpers.Cell(row.EvidenceTier)} `{CombinedReportHelpers.Cell(row.RuleId)}` | {CombinedReportHelpers.Cell(row.FilePath)}:{row.StartLine} |");
+        AppendRows(builder, section.Rows, "| Kind | Source | From | To | Evidence | Commit | Extractor | Location |", "| --- | --- | --- | --- | --- | --- | --- | --- |",
+            row => $"| {CombinedReportHelpers.Cell(row.EdgeKind)} | {CombinedReportHelpers.Cell(row.SourceLabel)} | {CombinedReportHelpers.Cell(row.SourceSymbol)} | {CombinedReportHelpers.Cell(row.TargetSymbol)} | {CombinedReportHelpers.Cell(row.EvidenceTier)} `{CombinedReportHelpers.Cell(row.RuleId)}` | {CombinedReportHelpers.Cell(row.CommitSha)} | {CombinedReportHelpers.Cell(row.ExtractorVersion)} | {CombinedReportHelpers.Cell(row.FilePath)}:{row.StartLine} |");
     }
 
     private static void RenderShared(StringBuilder builder, PortfolioSection<PortfolioSharedSurfaceRow> section)
@@ -1678,6 +1760,21 @@ public static class PortfolioReporter
     private static string MetadataText(IReadOnlyList<KeyValuePair<string, string>> metadata)
     {
         return string.Join("; ", metadata.Select(pair => $"{pair.Key}={pair.Value}"));
+    }
+
+    private static string LocationText(string? commitSha, string? filePath, int? startLine, int? endLine)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return string.IsNullOrWhiteSpace(commitSha) ? string.Empty : commitSha;
+        }
+
+        var line = startLine is null
+            ? string.Empty
+            : endLine is not null && endLine != startLine
+                ? $":{startLine}-{endLine}"
+                : $":{startLine}";
+        return string.IsNullOrWhiteSpace(commitSha) ? $"{filePath}{line}" : $"{commitSha} {filePath}{line}";
     }
 
     private static string InputId(string label, string side)
