@@ -1,12 +1,12 @@
 # Multi-Index Portfolio Report Implementation State
 
-## Current Branch
+## Current State
 
-`codex/multi-index-portfolio-report`
+Implemented v1 portfolio report in `dev`.
 
 ## Intended Implementation Boundary
 
-Implement a useful v1 portfolio command in this branch:
+Implemented a useful v1 portfolio command:
 
 - `tracemap portfolio --index <path> --label <label> --out <path>`
 - `tracemap portfolio --manifest <portfolio.json> --out <path>`
@@ -36,7 +36,7 @@ Implement a useful v1 portfolio command in this branch:
 - Combined indexes are expanded through `index_sources` and `combined_facts`.
 - Single-language indexes are projected from `scan_manifest`, `facts`, and available edge tables.
 - Output must not include raw local paths, raw URLs, raw SQL, snippets, config values, connection strings, or secret-looking values.
-- Task checkboxes in `tasks.md` should be updated before finishing the branch.
+- Task checkboxes in `tasks.md` distinguish the implemented v1 from remaining follow-up slices.
 
 ## Implemented In This Branch
 

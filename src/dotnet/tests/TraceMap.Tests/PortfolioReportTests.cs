@@ -181,6 +181,51 @@ public sealed class PortfolioReportTests
     }
 
     [Fact]
+    public async Task Portfolio_requested_deferred_context_gaps_are_in_top_level_rollup()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var outDir = Path.Combine(temp.Path, "portfolio");
+        SqliteIndexWriter.Write(indexPath, Manifest("api", ScannerVersions.TraceMap, "git-api"), []);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("api", indexPath)
+        ], outDir, IncludeImpact: true, IncludePaths: true, IncludeReverse: true));
+
+        Assert.Equal(PortfolioReportStatuses.Deferred, result.Report.PathContext.Status);
+        Assert.Equal(PortfolioReportStatuses.Deferred, result.Report.ReverseContext.Status);
+        Assert.Equal(PortfolioReportStatuses.Deferred, result.Report.PortfolioImpact.Status);
+        Assert.Contains(result.Report.Gaps, gap => gap.Section == "pathContext" && gap.GapKind == "Deferred");
+        Assert.Contains(result.Report.Gaps, gap => gap.Section == "reverseContext" && gap.GapKind == "Deferred");
+        Assert.Contains(result.Report.Gaps, gap => gap.Section == "portfolioImpact" && gap.GapKind == "Deferred");
+        Assert.Equal(result.Report.Gaps.Count, result.Report.Summary.GapCount);
+        Assert.Contains(result.Report.Summary.CoverageWarnings, warning => warning.Contains("Path traversal is deferred", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Portfolio_requested_deferred_context_section_gaps_obey_top_level_gap_cap()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var outDir = Path.Combine(temp.Path, "portfolio");
+        SqliteIndexWriter.Write(indexPath, Manifest("api", ScannerVersions.TraceMap, "git-api"), []);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("api", indexPath)
+        ], outDir, IncludeImpact: true, IncludePaths: true, IncludeReverse: true, MaxGaps: 1));
+
+        var topLevelGapIds = result.Report.Gaps.Select(gap => gap.GapId).ToHashSet(StringComparer.Ordinal);
+        var sectionGaps = result.Report.PathContext.Gaps
+            .Concat(result.Report.ReverseContext.Gaps)
+            .Concat(result.Report.PortfolioImpact.Gaps)
+            .Concat(result.Report.ReleaseReviewContext.Gaps)
+            .ToArray();
+
+        Assert.All(sectionGaps, gap => Assert.Contains(gap.GapId, topLevelGapIds));
+        Assert.Equal(result.Report.Gaps.Count, result.Report.Summary.GapCount);
+    }
+
+    [Fact]
     public async Task Portfolio_before_after_manifests_compare_duplicate_inner_source_labels_by_container()
     {
         using var temp = new TempDirectory();
@@ -265,6 +310,74 @@ public sealed class PortfolioReportTests
         Assert.Contains(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "ChangedSourceEvidence" && row.SourceLabel == "api");
         Assert.Equal(PortfolioReportStatuses.NotRequested, result.Report.PathContext.Status);
         Assert.Equal(PortfolioReportStatuses.NotRequested, result.Report.ReverseContext.Status);
+    }
+
+    [Fact]
+    public async Task Portfolio_comparison_requested_deferred_context_gaps_are_in_top_level_rollup()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        SqliteIndexWriter.Write(beforeIndex, Manifest("api", ScannerVersions.TraceMap, "git-api-before"), []);
+        SqliteIndexWriter.Write(afterIndex, Manifest("api", ScannerVersions.TraceMap, "git-api-after"), []);
+        await WriteManifestAsync(beforeManifest, [("api", beforeIndex)]);
+        await WriteManifestAsync(afterManifest, [("api", afterIndex)]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest,
+            IncludeImpact: true,
+            IncludePaths: true,
+            IncludeReverse: true));
+
+        Assert.Equal(PortfolioReportStatuses.Deferred, result.Report.PathContext.Status);
+        Assert.Equal(PortfolioReportStatuses.Deferred, result.Report.ReverseContext.Status);
+        Assert.Equal(PortfolioReportStatuses.Deferred, result.Report.PortfolioImpact.Status);
+        Assert.Contains(result.Report.Gaps, gap => gap.Section == "pathContext" && gap.GapKind == "Deferred");
+        Assert.Contains(result.Report.Gaps, gap => gap.Section == "reverseContext" && gap.GapKind == "Deferred");
+        Assert.Contains(result.Report.Gaps, gap => gap.Section == "portfolioImpact" && gap.GapKind == "Deferred");
+        Assert.Equal(result.Report.Gaps.Count, result.Report.Summary.GapCount);
+    }
+
+    [Fact]
+    public async Task Portfolio_comparison_section_gaps_obey_top_level_gap_cap()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        SqliteIndexWriter.Write(beforeIndex, Manifest("api", ScannerVersions.TraceMap, "git-api-before"), []);
+        SqliteIndexWriter.Write(afterIndex, Manifest("api", ScannerVersions.TraceMap, "git-api-after"), []);
+        await WriteManifestAsync(beforeManifest, [("api", beforeIndex)]);
+        await WriteManifestAsync(afterManifest, [("api", afterIndex)]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest,
+            IncludeImpact: true,
+            IncludePaths: true,
+            IncludeReverse: true,
+            MaxGaps: 1));
+
+        var topLevelGapIds = result.Report.Gaps.Select(gap => gap.GapId).ToHashSet(StringComparer.Ordinal);
+        var sectionGaps = result.Report.EndpointAlignment.Gaps
+            .Concat(result.Report.PathContext.Gaps)
+            .Concat(result.Report.ReverseContext.Gaps)
+            .Concat(result.Report.PortfolioImpact.Gaps)
+            .Concat(result.Report.ReleaseReviewContext.Gaps)
+            .ToArray();
+
+        Assert.All(sectionGaps, gap => Assert.Contains(gap.GapId, topLevelGapIds));
+        Assert.Equal(result.Report.Gaps.Count, result.Report.Summary.GapCount);
     }
 
     [Fact]

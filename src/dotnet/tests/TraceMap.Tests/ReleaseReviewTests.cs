@@ -224,6 +224,9 @@ public sealed class ReleaseReviewTests
 
         Assert.Equal(ReleaseReviewStatuses.NotRequested, result.Report.TopChangedSurfaces.Status);
         Assert.Empty(result.Report.TopChangedSurfaces.Findings);
+        Assert.Equal(ReleaseReviewStatuses.NotRequested, result.Report.ApiDtoChanges.Status);
+        Assert.Empty(result.Report.ApiDtoChanges.Gaps);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.Section == "apiDtoChanges");
     }
 
     [Fact]
