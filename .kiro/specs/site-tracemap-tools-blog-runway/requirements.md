@@ -65,3 +65,21 @@ rest of the site and avoid drifting into unsupported claims.
 3. WHEN blog pages mention AI-assisted development THEN they SHALL distinguish
    project coordination and development assistance from TraceMap core scanner or
    reducer behavior.
+
+### Requirement 4: Manager Value Article
+
+**User Story:** As an engineering manager, I want a higher-level explanation of
+what TraceMap solves for a team so I can decide whether the evidence packet helps
+review, planning, and handoff work.
+
+#### Acceptance Criteria
+
+1. WHEN the manager value article is drafted THEN it SHALL explain that TraceMap
+   reduces manual indexing work for dependency and contract-impact questions.
+2. WHEN the article discusses team value THEN it SHALL emphasize auditability,
+   repeatability, coverage-aware decisions, and review handoff.
+3. WHEN the article discusses limitations THEN it SHALL say TraceMap supports
+   engineering judgment with static evidence and does not prove runtime behavior,
+   production usage, or release safety.
+4. WHEN the article addresses leadership concerns THEN it SHALL use plain
+   business and delivery language without hiding the technical evidence model.
