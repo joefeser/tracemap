@@ -3,7 +3,7 @@
 Status: implemented
 Last verified: 2026-06-14
 Branch: codex/site-tracemap-tools-next
-Source of truth: pending PR
+Source of truth: merged site discovery PR
 
 ## Summary
 

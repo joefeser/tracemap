@@ -2,7 +2,7 @@
 
 ## Current State
 
-Implemented v1 portfolio report in `dev`; follow-up surface/edge comparison slice is implemented on `codex/portfolio-report-followups`.
+Implemented v1 portfolio report in `dev`; follow-up surface/edge comparison slice is also merged into `dev`.
 
 ## Intended Implementation Boundary
 
@@ -36,7 +36,7 @@ Implemented a useful v1 portfolio command:
 - Combined indexes are expanded through `index_sources` and `combined_facts`.
 - Single-language indexes are projected from `scan_manifest`, `facts`, and available edge tables.
 - Output must not include raw local paths, raw URLs, raw SQL, snippets, config values, connection strings, or secret-looking values.
-- Task checkboxes in `tasks.md` distinguish the implemented v1 from remaining follow-up slices.
+- Task checkboxes in `tasks.md` represent shipped implementation slices. Remaining follow-ups are plain bullets.
 
 ## Implemented In This Branch
 
