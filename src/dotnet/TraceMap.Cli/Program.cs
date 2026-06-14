@@ -96,16 +96,43 @@ public static class TraceMapCommand
             return 1;
         }
 
-        var report = await ContractDeltaReducer.ReduceAsync(
-            new ReduceOptions(indexPath, contractDeltaPath, outputPath),
-            cancellationToken);
-        var reportPath = Path.GetExtension(Path.GetFullPath(outputPath)).Equals(".md", StringComparison.OrdinalIgnoreCase)
-            ? Path.GetFullPath(outputPath)
-            : Path.Combine(Path.GetFullPath(outputPath), "impact-report.md");
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: reduce --format must be markdown or json.");
+            return 1;
+        }
 
-        await output.WriteLineAsync($"TraceMap reduce completed: {reportPath}");
-        await output.WriteLineAsync($"Findings written: {report.Findings.Count}");
-        return 0;
+        var result = await ContractDeltaReducer.ReduceAsync(
+            new ReduceOptions(
+                indexPath,
+                contractDeltaPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--scope"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--change-id"),
+                values.GetValueOrDefault("--kind"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--endpoint"),
+                values.HasFlag("--include-paths"),
+                values.HasFlag("--include-reverse"),
+                values.HasFlag("--exit-code"),
+                ParsePositiveInt(values, "--max-findings", 100),
+                ParsePositiveInt(values, "--max-evidence-rows", 500),
+                ParsePositiveInt(values, "--max-paths-per-change", 5),
+                ParsePositiveInt(values, "--max-context-queries", 50),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap reduce completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Findings written: {result.Report.Findings.Count}");
+        await output.WriteLineAsync($"Evidence rows: {result.Report.Summary.EvidenceRowCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasActionableFindings ? 1 : 0;
     }
 
     private static async Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -624,7 +651,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--allow-identity-mismatch" or "--exit-code")
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--allow-identity-mismatch" or "--exit-code")
             {
                 flags.Add(arg);
                 continue;
@@ -923,10 +950,27 @@ public static class TraceMapCommand
             Required:
               --index <path>             Existing TraceMap index.sqlite.
               --contract-delta <path>    Contract delta JSON file.
-              --out <path>               Output directory or impact-report.md path.
+              --out <path>               Output directory, impact-report.md, or impact-report.json path.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --scope <value>            all or comma-separated contract kinds. Default: all.
+              --source <label>           Combined-index source label filter.
+              --change-id <id>           v2 contract-delta change id filter.
+              --kind <kind>              Filter to one v2 contract kind.
+              --endpoint "<M> <P>"       Filter endpoint contract changes by method/path.
+              --surface <kind>           Filter dependency-surface contract changes by kind.
+              --include-paths            Request bounded combined-index path context.
+              --include-reverse          Request bounded combined-index reverse context.
+              --exit-code                Return exit code 1 when actionable findings are present.
+              --max-findings <n>         Finding rows. Default: 100.
+              --max-evidence-rows <n>    Evidence rows across all findings. Default: 500.
+              --max-paths-per-change <n> Reserved path context cap. Default: 5.
+              --max-context-queries <n>  Reserved context query cap. Default: 50.
+              --max-gaps <n>             Gap rows. Default: 1000.
 
             Outputs:
-              impact-report.md
+              impact-report.md and/or impact-report.json
             """;
     }
 
