@@ -126,22 +126,19 @@
 - [x] 10.1 Add small committed Java sample with Spring, JPA/JDBC, config, Jackson serializer member, relationship, call, object creation, and argument-flow fixtures.
 - [x] 10.2 Add small committed Kotlin sample with syntax fallback fixtures and clear reduced-coverage expectations.
 - [x] 10.3 Add broken Java/Kotlin sample for reduced coverage.
-- 10.4 Add missing-classpath fixture and verify `AnalysisGap` facts with `gapKind = "MissingDependency"`.
-- 10.5 Add cross-language fixture: Java class referencing Kotlin-shaped source and Kotlin source referencing Java source, with syntax-only expectations unless Kotlin semantic exists.
 - [x] 10.6 Add JVM sample contract deltas.
 - [x] 10.7 Add a local-only smoke script or documented command set for external sample repos using generic placeholder paths.
-- 10.8 Smoke-test at least `scip-java`, `spring-petclinic`, one Java library, one Kotlin library, and one Ktor sample from local external clones.
-- 10.9 Record smoke results without committing absolute local paths or private repo names.
-
-### Phase 11: Post-MVP Flow and Logic
-
-- 11.1 Emit simple local alias facts for Java semantic locals.
-- 11.2 Expand logic-shape facts for arithmetic, comparisons, branching, validation, transformations, retries, collection processing, and date/time logic.
-- 11.3 Emit infrastructure/boilerplate facts for generated code, Spring Boot entrypoints, dependency-injection config, DTO-only classes, and test fixtures.
-- 11.4 Add tests for local aliases, logic-shape detection, and boilerplate classification.
 
 ## Follow-Up Backlog
 
+- Add missing-classpath fixture and verify `AnalysisGap` facts with `gapKind = "MissingDependency"`.
+- Add cross-language fixture: Java class referencing Kotlin-shaped source and Kotlin source referencing Java source, with syntax-only expectations unless Kotlin semantic exists.
+- Smoke-test at least `scip-java`, `spring-petclinic`, one Java library, one Kotlin library, and one Ktor sample from local external clones.
+- Record smoke results without committing absolute local paths or private repo names.
+- Emit simple local alias facts for Java semantic locals.
+- Expand logic-shape facts for arithmetic, comparisons, branching, validation, transformations, retries, collection processing, and date/time logic.
+- Emit infrastructure/boilerplate facts for generated code, Spring Boot entrypoints, dependency-injection config, DTO-only classes, and test fixtures.
+- Add tests for local aliases, logic-shape detection, and boilerplate classification.
 - Bytecode/classpath-only dependency symbol extraction.
 - User-supplied classpath/dependency coordinate files.
 - Ktor route builders with Kotlin structural/semantic evidence.
