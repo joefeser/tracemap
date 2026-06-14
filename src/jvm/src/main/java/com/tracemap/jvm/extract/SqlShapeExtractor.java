@@ -80,11 +80,37 @@ public final class SqlShapeExtractor {
     }
 
     private static String firstToken(String value) {
-        String trimmed = value.stripLeading();
+        String trimmed = stripLeadingComments(value);
         if (trimmed.isEmpty()) {
             return "";
         }
         return trimmed.split("\\s+", 2)[0].toUpperCase(Locale.ROOT);
+    }
+
+    private static String stripLeadingComments(String value) {
+        int offset = 0;
+        while (offset < value.length()) {
+            while (offset < value.length() && Character.isWhitespace(value.charAt(offset))) {
+                offset++;
+            }
+            if (offset + 1 < value.length() && value.charAt(offset) == '-' && value.charAt(offset + 1) == '-') {
+                offset += 2;
+                while (offset < value.length() && value.charAt(offset) != '\n' && value.charAt(offset) != '\r') {
+                    offset++;
+                }
+                continue;
+            }
+            if (offset + 1 < value.length() && value.charAt(offset) == '/' && value.charAt(offset + 1) == '*') {
+                int end = value.indexOf("*/", offset + 2);
+                if (end < 0) {
+                    return "";
+                }
+                offset = end + 2;
+                continue;
+            }
+            break;
+        }
+        return offset >= value.length() ? "" : value.substring(offset);
     }
 
     private static List<String> tableNames(String sql, String operation) {

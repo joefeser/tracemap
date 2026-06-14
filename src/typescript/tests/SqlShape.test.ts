@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { hash } from "../src/util/Hash";
-import { queryShape, queryShapeProperties } from "../src/sql/SqlShape";
+import { isSqlLike, queryShape, queryShapeProperties } from "../src/sql/SqlShape";
 
 const repoRoot = path.resolve(process.cwd(), "../..");
 
@@ -44,6 +44,12 @@ describe("SqlShape", () => {
     expect(props.operationName).toBeUndefined();
     expect(props.tableName).toBeUndefined();
     expect(props.columnNames).toBeUndefined();
+  });
+
+  it("skips leading comments before checking the first SQL token", () => {
+    expect(isSqlLike("-- header\nSELECT id FROM orders;")).toBe(true);
+    expect(isSqlLike("/* header */ SELECT id FROM orders;")).toBe(true);
+    expect(isSqlLike("/* unterminated")).toBe(false);
   });
 
   it("does not overclaim table metadata for unsupported subquery table positions", () => {

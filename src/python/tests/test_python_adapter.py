@@ -19,7 +19,7 @@ from tracemap_py.models import CodeFact, EvidenceSpan, ScanManifest
 from tracemap_py.report import render_report
 from tracemap_py.route import normalize_path_key
 from tracemap_py.sql_extractor import extract_sql_files
-from tracemap_py.sql_text import operation_name, query_shape
+from tracemap_py.sql_text import is_sql_like, operation_name, query_shape
 from tracemap_py.writers import write_sqlite
 
 
@@ -49,6 +49,12 @@ def test_sql_query_shape_ignores_string_literal_keywords() -> None:
     assert shape.operation_name == "SELECT"
     assert shape.table_names == ("orders",)
     assert shape.column_names == ("id",)
+
+
+def test_sql_like_skips_leading_comments_before_checking_first_token() -> None:
+    assert is_sql_like("-- header\nSELECT id FROM orders;")
+    assert is_sql_like("/* header */ SELECT id FROM orders;")
+    assert not is_sql_like("/* unterminated")
 
 
 def test_sql_file_with_cte_emits_shape_hash_only_query_pattern(tmp_path: Path) -> None:

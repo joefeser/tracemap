@@ -32,6 +32,13 @@ final class SqlShapeExtractorTest {
     }
 
     @Test
+    void isSqlLikeSkipsLeadingCommentsBeforeCheckingFirstToken() {
+        assertTrue(SqlShapeExtractor.isSqlLike("-- header\nSELECT id FROM orders;"));
+        assertTrue(SqlShapeExtractor.isSqlLike("/* header */ SELECT id FROM orders;"));
+        assertTrue(!SqlShapeExtractor.isSqlLike("/* unterminated"));
+    }
+
+    @Test
     void unsupportedSubqueryTablePositionDoesNotOverclaimTableMetadata() throws IOException {
         String sql = unsupportedSql(Files.readString(repoRoot().resolve("samples/sql-shape-fixtures/sql-shape-v1.json")), "subquery-table-position");
         SqlShapeExtractor.Shape shape = SqlShapeExtractor.queryShape(sql);

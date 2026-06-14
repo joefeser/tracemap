@@ -98,12 +98,38 @@ export function normalizeSql(value: string): string {
 }
 
 function firstToken(value: string): string {
-  return value.trimStart().split(/\s+/, 1)[0]?.toUpperCase() ?? "";
+  return stripLeadingComments(value).split(/\s+/, 1)[0]?.toUpperCase() ?? "";
 }
 
 function shapeOperation(value: string): string {
   const first = firstToken(value);
   return SQL_VERBS.has(first) ? first : "";
+}
+
+function stripLeadingComments(value: string): string {
+  let offset = 0;
+  while (offset < value.length) {
+    while (offset < value.length && /\s/.test(value[offset])) {
+      offset += 1;
+    }
+    if (value.startsWith("--", offset)) {
+      offset += 2;
+      while (offset < value.length && value[offset] !== "\n" && value[offset] !== "\r") {
+        offset += 1;
+      }
+      continue;
+    }
+    if (value.startsWith("/*", offset)) {
+      const end = value.indexOf("*/", offset + 2);
+      if (end < 0) {
+        return "";
+      }
+      offset = end + 2;
+      continue;
+    }
+    break;
+  }
+  return value.slice(offset);
 }
 
 function tableNames(sql: string, operation: string): string[] {

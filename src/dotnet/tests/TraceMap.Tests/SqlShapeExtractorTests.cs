@@ -34,6 +34,14 @@ public sealed class SqlShapeExtractorTests
     }
 
     [Fact]
+    public void Is_sql_like_skips_leading_comments_before_checking_first_token()
+    {
+        Assert.True(SqlTextDetector.IsSqlLike("-- header\nSELECT id FROM orders;"));
+        Assert.True(SqlTextDetector.IsSqlLike("/* header */ SELECT id FROM orders;"));
+        Assert.False(SqlTextDetector.IsSqlLike("/* unterminated"));
+    }
+
+    [Fact]
     public void Unsupported_subquery_table_position_does_not_overclaim_table_metadata()
     {
         var shape = SqlShapeExtractor.QueryShape(ReadUnsupportedSql("subquery-table-position"));

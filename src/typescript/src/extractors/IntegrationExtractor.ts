@@ -99,7 +99,9 @@ function addTaggedSqlFact(repoPath: string, manifest: ScanManifest, project: Loa
 }
 
 function emitSqlFacts(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.Node, facts: CodeFact[], sql: string, sourceKind: string, methodName: string): void {
-  const containing = containingFunction(sourceFile, node) || containingClass(sourceFile, node) || repoRelative(repoPath, sourceFile.fileName);
+  const cls = containingClass(sourceFile, node);
+  const fn = containingFunction(sourceFile, node);
+  const containing = fn || cls || repoRelative(repoPath, sourceFile.fileName);
   const op = operationName(sql);
   const textProperties: Record<string, string> = {
     textHash: hash(sql, 32),
@@ -111,8 +113,6 @@ function emitSqlFacts(repoPath: string, manifest: ScanManifest, project: LoadedP
   if (op) {
     textProperties.operationName = op;
   }
-  const cls = containingClass(sourceFile, node);
-  const fn = containingFunction(sourceFile, node);
   if (cls) {
     textProperties.containingType = cls;
   }
@@ -163,7 +163,9 @@ function emitSqlFacts(repoPath: string, manifest: ScanManifest, project: LoadedP
 }
 
 function emitDynamicSqlBoundary(repoPath: string, manifest: ScanManifest, project: LoadedProject, sourceFile: ts.SourceFile, node: ts.Node, facts: CodeFact[], methodName: string): void {
-  const containing = containingFunction(sourceFile, node) || containingClass(sourceFile, node) || repoRelative(repoPath, sourceFile.fileName);
+  const cls = containingClass(sourceFile, node);
+  const fn = containingFunction(sourceFile, node);
+  const containing = fn || cls || repoRelative(repoPath, sourceFile.fileName);
   facts.push(
     createFact(
       manifest,
@@ -173,7 +175,7 @@ function emitDynamicSqlBoundary(repoPath: string, manifest: ScanManifest, projec
       evidence(repoPath, sourceFile, node),
       {
         projectPath: project.projectPath,
-        sourceSymbol: containingFunction(sourceFile, node) || null,
+        sourceSymbol: fn || null,
         targetSymbol: containing,
         properties: {
           gapKind: "dynamic-sql-boundary",

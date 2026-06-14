@@ -125,6 +125,28 @@
       "columnNames": "id"
     },
     {
+      "name": "leading-line-comment",
+      "sql": "-- migration header\nSELECT id FROM orders;",
+      "sqlSourceKind": "sql-file",
+      "textHash": "c93d90f7ac32693d0b4eda08f64cedab",
+      "queryShapeHash": "5b5272870e591c96a399663ffecae8b4",
+      "operationName": "SELECT",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id"
+    },
+    {
+      "name": "leading-block-comment",
+      "sql": "/* migration header */ SELECT id FROM orders;",
+      "sqlSourceKind": "sql-file",
+      "textHash": "e38422e8467db0743d65a4e9ca3b652b",
+      "queryShapeHash": "5b5272870e591c96a399663ffecae8b4",
+      "operationName": "SELECT",
+      "tableName": "orders",
+      "tableNames": "orders",
+      "columnNames": "id"
+    },
+    {
       "name": "crlf-tabs",
       "sql": "SELECT\tid,\r\nstatus FROM\torders;",
       "sqlSourceKind": "literal-string",
