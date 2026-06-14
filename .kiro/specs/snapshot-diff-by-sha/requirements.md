@@ -39,8 +39,8 @@ Out of scope:
 #### Acceptance Criteria
 
 1. WHEN the user runs `tracemap snapshot-diff --before <index.sqlite> --after <index.sqlite> --out <path>` THEN TraceMap SHALL read both indexes read-only and emit a deterministic snapshot diff report.
-2. WHEN either input is a single-language index THEN TraceMap SHALL compare it as a one-source snapshot.
-3. WHEN either input is a combined index THEN TraceMap SHALL compare sources by combined source label and repository identity.
+2. WHEN both inputs are single-language indexes THEN TraceMap SHALL compare them as one-source snapshots.
+3. WHEN both inputs are combined indexes THEN TraceMap SHALL compare sources by combined source label and repository identity.
 4. WHEN one input is single-language and the other is combined THEN TraceMap SHALL validate both input shapes, fail with a non-zero exit code before comparison, and write no output files unless a future explicit source selection mode is defined.
 5. WHEN either input is missing required manifest/source identity data THEN TraceMap SHALL fail closed for source-history conclusions and emit a sanitized schema or identity gap where a report can still be produced.
 6. WHEN `--format json` is provided with file output THEN TraceMap SHALL emit machine-readable JSON.
@@ -101,6 +101,7 @@ Out of scope:
 11. WHEN combined-index delegation cannot produce snapshot-specific arrays such as `contractShapeDiffs`, `gapDiffs`, or `extractorVersionDiffs` from available evidence THEN TraceMap SHALL mark those sections unavailable with a gap or limitation instead of implying no changes.
 12. WHEN comparing combined indexes in v1 THEN `contractShapeDiffs` SHALL remain empty with an availability gap unless a combined contract-shape projector is explicitly implemented.
 13. WHEN comparing single-language indexes THEN `contractShapeDiffs` SHALL be populated from declared type/member facts such as `TypeDeclared`, `PropertyDeclared`, and `MethodDeclared` when those facts are present.
+14. WHEN comparing single-language indexes THEN `gapDiffs` SHALL be populated from `AnalysisGap` facts when those facts are present, using safe gap codes, file spans, rule IDs, and path hashes or safe relative paths.
 
 ### Requirement 5: Stable Identity And Churn Control
 

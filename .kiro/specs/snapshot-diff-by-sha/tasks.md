@@ -23,6 +23,7 @@
   - [ ] Detect combined indexes.
   - [ ] Parse single-index manifest JSON for `RemoteUrl`, `RepoName`, `ScanRootPathHash`, `GitRootHash`, commit SHA, and extractor metadata.
   - [ ] Derive repository identity as `repo-hash:{Hash(RemoteUrl ?? RepoName)}` where available.
+  - [ ] Derive the single-index source label as the constant `single`.
   - [ ] Treat single-index language as optional metadata when no first-class value exists.
   - [ ] Validate combined source identity and language.
   - [ ] Redact raw URLs, repository names, local roots, and private paths from identity errors and reports.
@@ -42,6 +43,7 @@
   - [ ] Expose or reuse no-write combined read/comparison helpers rather than copying comparison logic.
   - [ ] Delegate endpoint/surface/edge/path comparison to existing combined diff where possible.
   - [ ] Map combined `SourceDiffs`, `CoverageDiffs`, `EndpointDiffs`, `SurfaceDiffs`, `EdgeDiffs`, `PathDiffs`, and `Gaps` into snapshot sections.
+  - [ ] Reapply snapshot redaction rules to delegated metadata before rendering Markdown or JSON.
   - [ ] Add snapshot-specific source/commit/extractor validation around delegated output.
   - [ ] Preserve combined diff rule IDs as supporting rules.
   - [ ] Ensure `--allow-identity-mismatch` downgrades affected rows.
@@ -75,9 +77,11 @@
   - [ ] Single-index evidence change.
   - [ ] Combined-index delegation.
   - [ ] Single-index manifest JSON identity derivation.
+  - [ ] Single-index source label is the constant `single` and never derived from path or raw repo metadata.
   - [ ] Single-index comparison with missing language metadata.
   - [ ] Mixed single/combined rejection.
   - [ ] Combined edge-to-graph output mapping.
+  - [ ] Delegated combined metadata is re-redacted before snapshot output.
   - [ ] Unavailable snapshot-specific arrays emitting availability gaps.
   - [ ] Source identity conflict and allowed mismatch downgrade.
   - [ ] Redacted identity conflict errors and reports.

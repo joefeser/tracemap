@@ -132,6 +132,8 @@ public sealed record SnapshotDiffSnapshot(
 - extractor versions;
 - gap summaries.
 
+Single-language indexes do not have `index_sources.label`. For v1, derive the one-source label as the constant `single` unless a future explicit source-selection mode is added. Do not derive the label from input paths, raw repository names, raw remote URLs, or local roots. This keeps stable keys deterministic and avoids private-data leakage.
+
 ## Source Identity Validation
 
 Source identity is strict by default.
@@ -361,6 +363,8 @@ All arrays and metadata entries must be sorted. No timestamps or machine-local p
 
 For combined inputs, this JSON shape is a stable snapshot wrapper around the delegated combined diff result. `graphDiffs` are mapped from combined edge diffs. Empty snapshot-specific arrays are allowed only when paired with an availability gap or limitation explaining why that evidence kind was unavailable.
 
+Do not copy delegated combined output into snapshot JSON without reapplying snapshot redaction rules. Delegated source metadata must be re-projected or scrubbed so raw repository names, raw remote URLs, local roots, raw SQL, snippets, config values, and absolute paths cannot appear in Markdown or JSON.
+
 ## Markdown Shape
 
 Section order:
@@ -424,8 +428,8 @@ Implementation should include focused tests for:
 Recommended implementation sequence:
 
 1. Spec and model tests for source/commit validation.
-2. Single-index projector and basic Markdown/JSON output.
-3. Combined-index delegation to existing diff.
+2. Combined-index delegation to existing diff.
+3. Single-index projector and basic Markdown/JSON output.
 4. Graph/surface/contract-shape evidence expansion.
 5. Path opt-in integration.
 6. Release-review integration follow-up.
