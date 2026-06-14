@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using TraceMap.Cli;
 using TraceMap.Combine;
 using TraceMap.Core;
@@ -79,6 +80,7 @@ public sealed class ReleaseReviewTests
         Assert.DoesNotContain("https://example.invalid", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from orders", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("generatedAt", json, StringComparison.OrdinalIgnoreCase);
 
         var secondOutDir = Path.Combine(temp.Path, "release-second");
@@ -123,10 +125,86 @@ public sealed class ReleaseReviewTests
         var document = JsonSerializer.Deserialize<ReleaseReviewDocument>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(document);
         Assert.Equal("ReleaseReviewSingleV1", document!.Mode);
+        Assert.Equal(ReleaseReviewClassifications.ReviewRecommended, document.Summary.RollupClassification);
+        Assert.Equal(0, document.Summary.ActionableFindingCount);
+        Assert.Contains(document.TopChangedSurfaces.Findings, finding =>
+            finding.Classification == CombinedDependencyDiffClassifications.Added
+            && finding.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
         Assert.Equal(ReleaseReviewStatuses.Unavailable, document.PathContext.Status);
         Assert.Equal(ReleaseReviewStatuses.Unavailable, document.ReverseContext.Status);
         Assert.Contains(document.Gaps, gap => gap.GapKind == "UnsupportedMode" && gap.Section == "pathContext");
         Assert.Contains(document.Gaps, gap => gap.GapKind == "UnsupportedMode" && gap.Section == "reverseContext");
+    }
+
+    [Fact]
+    public async Task Release_review_reduced_coverage_rolls_up_as_partial_analysis()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeApi = Path.Combine(temp.Path, "before-api.sqlite");
+        var afterApi = Path.Combine(temp.Path, "after-api.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeApi, before, []);
+        SqliteIndexWriter.Write(afterApi, after, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeApi], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterApi], afterCombined, ["api"]));
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "release"),
+            Scope: "surfaces",
+            Endpoint: "GET /missing"));
+
+        Assert.Equal(ReleaseReviewClassifications.PartialAnalysis, result.Report.Summary.RollupClassification);
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == ReleaseReviewClassifications.PartialAnalysis && gap.GapKind == "ReducedCoverage");
+    }
+
+    [Fact]
+    public void Release_review_rollup_precedence_prefers_partial_analysis_over_selector_no_match()
+    {
+        var method = typeof(ReleaseReviewReporter).GetMethod("SelectRollup", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var gaps = new[]
+        {
+            GapForTest("selector", ReleaseReviewClassifications.SelectorNoMatch),
+            GapForTest("coverage", ReleaseReviewClassifications.PartialAnalysis)
+        };
+
+        var rollup = method!.Invoke(null, [gaps, Array.Empty<ReleaseReviewFinding>(), false]);
+
+        Assert.Equal(ReleaseReviewClassifications.PartialAnalysis, rollup);
+    }
+
+    [Fact]
+    public void Release_review_selector_no_match_checklist_items_are_informational()
+    {
+        var method = typeof(ReleaseReviewReporter).GetMethod("BuildChecklist", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var summary = new ReleaseReviewSummary(
+            ReleaseReviewClassifications.SelectorNoMatch,
+            "release.review.rollup.v1",
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            false,
+            "Selectors matched no static evidence under requested scope.");
+        var gap = GapForTest("selector", ReleaseReviewClassifications.SelectorNoMatch);
+
+        var checklist = (IReadOnlyList<ReleaseReviewChecklistItem>)method!.Invoke(null, [summary, Array.Empty<ReleaseReviewFinding>(), new[] { gap }, 50])!;
+
+        var item = Assert.Single(checklist);
+        Assert.Equal("informational", item.Severity);
     }
 
     [Fact]
@@ -305,5 +383,22 @@ public sealed class ReleaseReviewTests
             }
             """);
         return path;
+    }
+
+    private static ReleaseReviewGap GapForTest(string kind, string classification)
+    {
+        return new ReleaseReviewGap(
+            $"gap:test:{kind}",
+            kind,
+            "summary",
+            null,
+            "release.review.selector.v1",
+            EvidenceTiers.Tier4Unknown,
+            classification,
+            $"{kind} gap",
+            [],
+            [],
+            [],
+            []);
     }
 }
