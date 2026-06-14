@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ASSERT_HELPER="$ROOT_DIR/scripts/demo-public-assert.mjs"
+DOTNET_CLI="$ROOT_DIR/src/dotnet/TraceMap.Cli"
+TS_DIR="$ROOT_DIR/src/typescript"
+INCLUDE_PYTHON=0
+REQUIRE_JVM=0
+OUT_ARG=""
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/demo-public.sh [out_dir] [--include-python] [--require-jvm]
+
+Runs the default public TraceMap demo over checked-in sample repositories.
+Generated artifacts are kept for inspection under out_dir or a temporary directory.
+EOF
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --include-python)
+      INCLUDE_PYTHON=1
+      ;;
+    --require-jvm)
+      REQUIRE_JVM=1
+      ;;
+    --*)
+      echo "error: unknown option $arg" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      if [[ -n "$OUT_ARG" ]]; then
+        echo "error: only one output directory may be provided." >&2
+        exit 1
+      fi
+      OUT_ARG="$arg"
+      ;;
+  esac
+done
+
+require_cmd() {
+  local name="$1"
+  if ! command -v "$name" >/dev/null 2>&1; then
+    echo "error: missing required command: $name" >&2
+    if command -v brew >/dev/null 2>&1; then
+      case "$name" in
+        dotnet) echo "hint: try 'brew install --cask dotnet-sdk' or install the .NET SDK from Microsoft." >&2 ;;
+        node|npm) echo "hint: try 'brew install node' or use the project's Node version manager." >&2 ;;
+        git) echo "hint: try 'brew install git'." >&2 ;;
+        python3) echo "hint: try 'brew install python'." >&2 ;;
+        java) echo "hint: try 'brew install openjdk@21' and set JAVA_HOME to the Java 21 home." >&2 ;;
+      esac
+    fi
+    exit 1
+  fi
+}
+
+abs_path() {
+  node -e 'const path = require("node:path"); console.log(path.resolve(process.argv[1]));' "$1"
+}
+
+is_inside_repo() {
+  local candidate="$1"
+  [[ "$candidate" == "$ROOT_DIR" || "$candidate" == "$ROOT_DIR/"* ]]
+}
+
+require_file() {
+  local path="$1"
+  local label="$2"
+  test -f "$path" || {
+    echo "error: missing $label: $path" >&2
+    exit 1
+  }
+}
+
+add_section() {
+  local name="$1"
+  local status="$2"
+  local classification="$3"
+  local coverage="$4"
+  local reason="$5"
+  local artifacts="$6"
+  local counts="$7"
+  node "$ASSERT_HELPER" append-section "$SECTIONS_JSONL" "$name" "$status" "$classification" "$coverage" "$reason" "$artifacts" "$counts"
+}
+
+run_dotnet_scan() {
+  local repo_path="$1"
+  local out_path="$2"
+  local label="$3"
+  dotnet run --project "$DOTNET_CLI" -- scan --repo "$repo_path" --out "$out_path"
+  node "$ASSERT_HELPER" scan-artifacts "$label" "$out_path"
+}
+
+run_ts_scan() {
+  local repo_path="$1"
+  local out_path="$2"
+  local label="$3"
+  node "$TS_CLI" scan --repo "$repo_path" --out "$out_path"
+  node "$ASSERT_HELPER" scan-artifacts "$label" "$out_path"
+}
+
+require_cmd git
+require_cmd node
+require_cmd npm
+require_cmd dotnet
+
+# Node is required before output path normalization because abs_path uses Node's
+# cross-platform path resolver.
+if [[ -z "$OUT_ARG" ]]; then
+  OUT_ROOT="$(mktemp -d)"
+else
+  OUT_ROOT="$(abs_path "$OUT_ARG")"
+  if is_inside_repo "$OUT_ROOT"; then
+    if [[ "$OUT_ROOT" == "$ROOT_DIR" ]]; then
+      echo "error: output directory cannot be the repository root." >&2
+      exit 1
+    fi
+    OUT_RELATIVE="${OUT_ROOT#$ROOT_DIR/}"
+    if ! git -C "$ROOT_DIR" check-ignore -q -- "$OUT_RELATIVE" \
+      && ! git -C "$ROOT_DIR" check-ignore -q -- "$OUT_RELATIVE/"; then
+      cat >&2 <<EOF
+error: output directory is inside the repository but is not ignored by git.
+
+Use an ignored directory such as:
+  $ROOT_DIR/.tracemap-demo/
+EOF
+      exit 1
+    fi
+  fi
+fi
+
+mkdir -p "$OUT_ROOT"
+SCANS_DIR="$OUT_ROOT/scans"
+REPORTS_DIR="$OUT_ROOT/reports"
+mkdir -p "$SCANS_DIR" "$REPORTS_DIR"
+SECTIONS_JSONL="$OUT_ROOT/.demo-sections.jsonl"
+: > "$SECTIONS_JSONL"
+
+echo "TraceMap public demo"
+echo "Mode: default checked-in samples"
+echo "Output root: $OUT_ROOT"
+echo "Samples: dotnet-modern, dotnet-endpoint-server, typescript-modern, typescript-endpoint-client"
+echo
+
+echo "== Toolchain checks =="
+dotnet --version >/dev/null
+node --version >/dev/null
+npm --version >/dev/null
+git --version >/dev/null
+add_section "toolchains" "available" "NoActionableEvidence" "FullEvidenceAvailable" "" "" '{"requiredTools":4}'
+
+if [[ "$INCLUDE_PYTHON" == "1" ]]; then
+  add_section "python" "deferred" "PartialAnalysis" "deferred" "Python scanning was requested, but Python sample scanning is a follow-up slice for this public demo implementation." "" '{"requested":1}'
+else
+  add_section "python" "not_requested" "NoActionableEvidence" "not_requested" "" "" '{"requested":0}'
+fi
+
+if command -v java >/dev/null 2>&1 && java -version 2>&1 | grep -q 'version "21'; then
+  add_section "jvm" "deferred" "PartialAnalysis" "deferred" "Java 21 is available, but JVM sample scanning is a follow-up slice for this public demo implementation." "" '{"java21Available":1}'
+elif [[ "$REQUIRE_JVM" == "1" ]]; then
+  echo "error: --require-jvm was supplied but Java 21 was not found." >&2
+  if command -v brew >/dev/null 2>&1; then
+    echo "hint: try 'brew install openjdk@21' and set JAVA_HOME to the Java 21 home." >&2
+  fi
+  exit 1
+else
+  add_section "jvm" "unavailable" "PartialAnalysis" "unavailable" "Java 21 was not detected; JVM demo scan is optional in this slice." "" '{"java21Available":0}'
+fi
+
+echo "== Build TraceMap CLIs =="
+dotnet build "$ROOT_DIR/src/dotnet/TraceMap.sln"
+if [[ ! -d "$TS_DIR/node_modules" ]]; then
+  npm --prefix "$TS_DIR" install
+fi
+npm --prefix "$TS_DIR" run build
+
+if [[ -f "$TS_DIR/dist/src/cli.js" ]]; then
+  TS_CLI="$TS_DIR/dist/src/cli.js"
+elif [[ -f "$TS_DIR/dist/cli.js" ]]; then
+  TS_CLI="$TS_DIR/dist/cli.js"
+else
+  echo "error: TypeScript CLI build did not produce dist/src/cli.js or dist/cli.js." >&2
+  exit 1
+fi
+add_section "build" "available" "NoActionableEvidence" "FullEvidenceAvailable" "" "" '{"dotnet":1,"typescript":1}'
+
+echo "== Scan checked-in samples =="
+DOTNET_MODERN="$SCANS_DIR/dotnet-modern"
+DOTNET_ENDPOINT="$SCANS_DIR/dotnet-endpoint-server"
+TS_MODERN="$SCANS_DIR/typescript-modern"
+TS_ENDPOINT="$SCANS_DIR/typescript-endpoint-client"
+
+run_dotnet_scan "$ROOT_DIR/samples/modern-sample" "$DOTNET_MODERN" "dotnet-modern"
+run_dotnet_scan "$ROOT_DIR/samples/endpoint-server-aspnet" "$DOTNET_ENDPOINT" "dotnet-endpoint-server"
+run_ts_scan "$ROOT_DIR/samples/typescript-modern-sample" "$TS_MODERN" "typescript-modern"
+run_ts_scan "$ROOT_DIR/samples/endpoint-client-angular" "$TS_ENDPOINT" "typescript-endpoint-client"
+
+SCAN_COUNTS="$(
+  node "$ASSERT_HELPER" scan-summary \
+    "dotnet-modern=$DOTNET_MODERN" \
+    "dotnet-endpoint-server=$DOTNET_ENDPOINT" \
+    "typescript-modern=$TS_MODERN" \
+    "typescript-endpoint-client=$TS_ENDPOINT"
+)"
+SCAN_REDUCED_COUNT="$(node -e 'const counts = JSON.parse(process.argv[1]); console.log(counts.reducedCoverageScans ?? 0);' "$SCAN_COUNTS")"
+SCAN_COVERAGE="FullEvidenceAvailable"
+SCAN_CLASSIFICATION="ActionableStaticEvidence"
+if [[ "$SCAN_REDUCED_COUNT" != "0" ]]; then
+  SCAN_COVERAGE="PartialAnalysis"
+  SCAN_CLASSIFICATION="PartialAnalysis"
+fi
+
+add_section "sample-scans" "available" "$SCAN_CLASSIFICATION" "$SCAN_COVERAGE" "" \
+  "scans/dotnet-modern/report.md,scans/dotnet-endpoint-server/report.md,scans/typescript-modern/report.md,scans/typescript-endpoint-client/report.md" \
+  "$SCAN_COUNTS"
+
+add_section "combine-and-dependency-report" "deferred" "PartialAnalysis" "deferred" "Follow-up slice will combine generated sample indexes and run dependency report assertions." "" '{"sources":4}'
+add_section "paths-and-reverse" "deferred" "PartialAnalysis" "deferred" "Follow-up slice will run path and reverse assertions after combined report wiring lands." "" '{}'
+add_section "portfolio" "deferred" "PartialAnalysis" "deferred" "Follow-up slice will generate a portfolio manifest from generated indexes." "" '{}'
+add_section "diff" "deferred" "PartialAnalysis" "deferred" "No concrete checked-in before/after fixture pair exists yet." "" '{}'
+add_section "impact" "deferred" "PartialAnalysis" "deferred" "No concrete checked-in before/after fixture pair exists yet." "" '{}'
+add_section "release-review" "deferred" "PartialAnalysis" "deferred" "Compatible before/after inputs and delta fixtures are not part of the first public demo slice." "" '{}'
+
+node "$ASSERT_HELPER" write-summary "$OUT_ROOT" "$SECTIONS_JSONL" "$OUT_ROOT/demo-summary.json" "$OUT_ROOT/demo-summary.md"
+node "$ASSERT_HELPER" validate-summary "$OUT_ROOT/demo-summary.json"
+node "$ASSERT_HELPER" sentinel-scan "$OUT_ROOT"
+
+echo
+echo "TraceMap public demo complete"
+echo "Output root: $OUT_ROOT"
+echo "Scanned sources: 4"
+echo "Combined sources: deferred"
+echo "Endpoint findings: deferred"
+echo "Paths: deferred"
+echo "Reverse results: deferred"
+echo "Diff rows: deferred"
+echo "Impact items: deferred"
+echo "Portfolio sources: deferred"
+echo "Report coverage: partial"
+echo "Gaps: deferred sections are listed in demo-summary.json"
