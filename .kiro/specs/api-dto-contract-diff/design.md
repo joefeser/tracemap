@@ -262,7 +262,8 @@ If only method name is available, classification is review-tier.
 Route shape rows compare route parameters independent of handler body:
 
 ```text
-source + method + normalized path key + sorted parameter signature
+identity: source + method + normalized path key
+metadata: sorted parameter signature
 ```
 
 Route shape changes should identify parameter additions/removals/renames when indexed. They do not prove auth, deployment, or runtime reachability.
@@ -287,14 +288,26 @@ DTO type key preference:
 
 DTO property key preference:
 
-1. source label + containing type key + property name;
-2. source label + containing type display name + property name with review-tier caveat;
-3. property-only key only for selector filtering, not strong identity.
+1. source label + containing type key + explicit JSON/schema alias when the adapter marks that alias as the external contract identity;
+2. source label + containing type key + property name, with explicit alias compared as changed metadata when it is not the identity;
+3. source label + containing type display name + property name with review-tier caveat;
+4. property-only key only for selector filtering, not strong identity.
 
 Request/response key preference:
 
 1. endpoint key + attachment kind + status/response kind + DTO key;
 2. endpoint key + attachment kind + DTO display hash with review-tier caveat.
+
+Method signature key preference:
+
+1. source label + containing type key + method name + arity + fully qualified parameter type list + return type;
+2. source label + containing type display name + method name + arity with review-tier caveat;
+3. method-name-only key only for selector/filtering, not strong identity.
+
+Route shape key preference:
+
+1. source label + HTTP method + normalized path key, with route parameter signature compared as metadata;
+2. source label + endpoint kind + route display hash with review-tier caveat when normalized path key is unavailable.
 
 Duplicate stable identities emit `DuplicateContractIdentity` and downgrade affected rows.
 
@@ -339,8 +352,10 @@ Top-level JSON:
 
 ```json
 {
-  "reportType": "ApiDtoContractDiffCombinedV1",
-  "version": "1",
+  "reportType": "api-dto-contract-diff-combined",
+  "version": "1.0",
+  "reportCoverage": "FullEvidenceAvailable",
+  "coverageWarnings": [],
   "query": {},
   "beforeSnapshot": {},
   "afterSnapshot": {},
@@ -353,14 +368,13 @@ Top-level JSON:
   "requestResponseDiffs": [],
   "routeShapeDiffs": [],
   "gaps": [],
-  "coverageWarnings": [],
   "limitations": []
 }
 ```
 
 All collections sort deterministically. Metadata maps should serialize as sorted key/value arrays when order could vary.
 
-Single-language and combined reports share the same top-level JSON shape for schema stability. `reportType` is `ApiDtoContractDiffSingleV1` for two scan indexes and `ApiDtoContractDiffCombinedV1` for two combined indexes. Single-language mode uses a synthetic `sourcePairs` entry for `self` with scan metadata, language, commit SHA, coverage, and extractor versions. Combined mode uses one `sourcePairs` entry per paired source label. Both modes keep empty arrays for unavailable row groups. JSON must not include wall-clock timestamps, imported-at times, volatile row IDs, local absolute paths, or raw source identities.
+Single-language and combined reports share the same top-level JSON shape for schema stability. `reportType` follows existing hyphenated TraceMap report conventions: `api-dto-contract-diff-single` for two scan indexes and `api-dto-contract-diff-combined` for two combined indexes. `version` uses the existing report version style, such as `1.0`. `reportCoverage` uses the existing closed coverage vocabulary, including `FullEvidenceAvailable`, `ReducedCoverage`, and `UnknownAnalysisGap`. Single-language mode uses a synthetic `sourcePairs` entry for `self` with scan metadata, language, commit SHA, coverage, and extractor versions. Combined mode uses one `sourcePairs` entry per paired source label. Both modes keep empty arrays for unavailable row groups. JSON must not include wall-clock timestamps, imported-at times, volatile row IDs, local absolute paths, or raw source identities.
 
 ## Rule Catalog Plan
 
@@ -371,6 +385,7 @@ Implementation should add or update rules:
 - `api.dto.contract.diff.attachment.v1`;
 - `api.dto.contract.diff.identity.v1`;
 - `api.dto.contract.diff.coverage.v1`;
+- `api.dto.contract.diff.schema.v1`;
 - `api.dto.contract.diff.selector.v1`;
 - `api.dto.contract.diff.truncation.v1`.
 
@@ -378,7 +393,7 @@ Rule limitations must explicitly state that static API/DTO evidence is not OpenA
 
 The `api.dto.contract.diff.*` prefix is intentionally a new contract-diff family. If implementation chooses a shorter catalog naming convention, it must preserve the same rule purposes and limitations.
 
-The first implementation PR that emits any `api.dto.contract.diff.*` rule is blocked until matching `rules/rule-catalog.yml` entries exist with documented limitations. This includes row rules and gap rules for identity, coverage, selectors, truncation, and attachment-unavailable cases.
+The first implementation PR that emits any `api.dto.contract.diff.*` rule is blocked until matching `rules/rule-catalog.yml` entries exist with documented limitations. This includes row rules and gap rules for identity, coverage, schema/optional-table gaps, selectors, truncation, and attachment-unavailable cases.
 
 ## Implementation Slices
 
