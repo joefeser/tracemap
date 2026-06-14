@@ -190,6 +190,21 @@ For every successful `tracemap diff --before <before.sqlite> --after <after.sqli
 - `--exit-code` returns a non-zero exit only when requested and diff rows are present.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
 
+For every successful `tracemap snapshot-diff --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are the same TraceMap index kind: single-language indexes or combined indexes. Mixed single/combined inputs fail clearly without writing output.
+- inputs are opened read-only.
+- directory or extensionless output writes `snapshot-diff-report.md` and `snapshot-diff-report.json`.
+- JSON includes `reportType: snapshot-diff`, required empty arrays, stable query metadata, before/after snapshots, source diffs, coverage diffs, extractor-version diffs, gaps, and limitations.
+- single-language indexes use the synthetic source label `single`; reports do not render raw repository URLs, raw repository names, raw local roots, or local absolute paths.
+- conflicting source identity fails by default and can only continue with `--allow-identity-mismatch`, which emits rule-backed review/unknown gaps.
+- reduced coverage and unknown commit SHAs produce gaps instead of clean history-dependent conclusions.
+- endpoint, contract-shape, surface, graph, gap, and path sections emit explicit availability gaps until their projector/delegation slices are implemented.
+- `--include-paths` requires combined indexes; `--scope paths` requires `--include-paths`.
+- `--max-diff-rows` and `--max-gaps` cap output deterministically.
+- `--exit-code` returns a non-zero exit only when requested and diff rows are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
+
 For every successful `tracemap impact --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
 
 - both inputs are combined indexes and are opened read-only through the shared diff pipeline.

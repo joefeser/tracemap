@@ -87,7 +87,7 @@ rg -n "fields none" <scan-output>/report.md
 
 `fields none` is acceptable for query-builder facts with no extracted field metadata. SQL-shape facts should render derived operation/table/column/source/hash metadata instead, and reports must not render raw SQL text, literal values, unsafe identifiers, or developer-local absolute paths.
 
-For combined dependency report, path-query, reverse-query, or diff changes, run a combine/report/paths/reverse/diff smoke over any two existing local scan outputs:
+For combined dependency report, path-query, reverse-query, diff, or snapshot-diff changes, run a combine/report/paths/reverse/diff/snapshot-diff smoke over any two existing local scan outputs:
 For combined change-impact changes, include the `impact` command in the same smoke.
 For release-review changes, include `release-review` in the same smoke and verify `release-review.md` plus `release-review.json` are produced.
 
@@ -100,6 +100,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sq
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
 dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index <tmp>/combined.sqlite --surface sql-query --to endpoints --out <tmp>/combined-reverse
 dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-diff
+dotnet run --project src/dotnet/TraceMap.Cli -- snapshot-diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/snapshot-diff
 dotnet run --project src/dotnet/TraceMap.Cli -- impact --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-impact
 dotnet run --project src/dotnet/TraceMap.Cli -- release-review --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/release-review
 test -f <tmp>/combined-report/dependency-report.md
@@ -110,6 +111,8 @@ test -f <tmp>/combined-reverse/reverse-report.md
 test -f <tmp>/combined-reverse/reverse-report.json
 test -f <tmp>/combined-diff/diff-report.md
 test -f <tmp>/combined-diff/diff-report.json
+test -f <tmp>/snapshot-diff/snapshot-diff-report.md
+test -f <tmp>/snapshot-diff/snapshot-diff-report.json
 test -f <tmp>/combined-impact/impact-report.md
 test -f <tmp>/combined-impact/impact-report.json
 test -f <tmp>/release-review/release-review.md

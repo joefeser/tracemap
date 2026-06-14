@@ -10,6 +10,66 @@ rules:
       - Deferred, unavailable, and failed sections are explicit analysis gaps and remain Tier4Unknown.
       - Artifact paths are output-root-relative and public-shareable summaries must not render local absolute paths, raw SQL, source snippets, raw secrets, or credential-bearing URLs.
 
+  - id: snapshot.diff.source.v1
+    name: Snapshot diff source comparison
+    description: Compares source inventory and source metadata between two TraceMap snapshots by exact source label and stable source identity metadata.
+    evidenceTier: Tier2Structural
+    emits:
+      - source diff row
+      - SourceOnlyOnOneSide gap
+    limitations:
+      - Source pairing is exact-label based and does not infer renamed repositories, source labels, branches, or merge ancestry.
+      - Source diffs compare static scan metadata and do not prove code behavior changed.
+      - Single-index snapshots use the synthetic source label `single`.
+
+  - id: snapshot.diff.coverage.v1
+    name: Snapshot diff coverage comparison
+    description: Compares source-level scan coverage, build status, analysis level, known gaps, and commit SHA credibility between paired TraceMap snapshot sources.
+    evidenceTier: Tier4Unknown
+    emits:
+      - coverage diff row
+      - ReducedCoverage gap
+      - UnknownCommitSha gap
+    limitations:
+      - Coverage is source-level unless language adapters emit more precise gap metadata.
+      - Reduced coverage makes absence of evidence coverage-relative, not proof that evidence was removed.
+      - Unknown commit SHAs prevent history-dependent conclusions.
+
+  - id: snapshot.diff.evidence.v1
+    name: Snapshot diff evidence comparison
+    description: Carries deterministic snapshot-diff evidence rows and selector/truncation gaps for implemented static evidence sections.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - extractor version diff row
+      - SelectorNoMatch gap
+      - TruncatedByLimit gap
+    limitations:
+      - Extractor version changes describe scanner metadata only and do not prove source-code behavior changed.
+      - Selector gaps describe the current static evidence and query bounds only.
+      - Truncated output is intentionally partial and must not be treated as complete evidence coverage.
+
+  - id: snapshot.diff.identity.v1
+    name: Snapshot diff source identity validation
+    description: Validates comparable source identity for snapshot diffs and emits review-tier or unknown gaps when identity is missing, partial, or conflicting.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SourceIdentityConflict gap
+      - SourceOnlyOnOneSide gap
+    limitations:
+      - Repository identity is hash-based and omits raw remote URLs, raw repository names, and local absolute paths.
+      - Identity validation cannot prove two differently labeled or renamed repositories are equivalent.
+      - Conflicting identity fails by default unless the caller explicitly allows review-tier mismatch output.
+
+  - id: snapshot.diff.schema.v1
+    name: Snapshot diff schema and availability gap
+    description: Emits gaps when snapshot-diff evidence sections are unavailable because required precision tables or implementation slices are absent.
+    evidenceTier: Tier4Unknown
+    emits:
+      - UnavailableEvidence gap
+    limitations:
+      - Availability gaps explicitly mark partial analysis and must not be interpreted as no changes.
+      - Missing optional precision tables can reduce comparison precision and downgrade conclusions.
+
   - id: combined.diff.source.v1
     name: Combined dependency diff source comparison
     description: Compares source inventory and source metadata between two combined indexes by exact source label and stable source identity metadata.

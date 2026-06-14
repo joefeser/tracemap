@@ -2,41 +2,42 @@
 
 ## Implementation Tasks
 
-- [ ] 1. Confirm current snapshot metadata and diff behavior. Requirements: 1, 2, 3, 6.
-  - [ ] Inspect single-index manifest/fact/schema metadata for repo identity, commit SHA, coverage, and extractor versions.
-  - [ ] Inspect combined `index_sources` metadata and existing combined diff source pairing.
-  - [ ] Confirm existing `tracemap diff` and `tracemap impact` output contracts.
-  - [ ] Identify reusable safe-path, Markdown, JSON, metadata sorting, and output writer helpers.
+- [x] 1. Confirm current snapshot metadata and diff behavior. Requirements: 1, 2, 3, 6.
+  - [x] Inspect single-index manifest/fact/schema metadata for repo identity, commit SHA, coverage, and extractor versions.
+  - [x] Inspect combined `index_sources` metadata and existing combined diff source pairing.
+  - [x] Confirm existing `tracemap diff` and `tracemap impact` output contracts.
+  - [x] Identify reusable safe-path, Markdown, JSON, metadata sorting, and output writer helpers.
 
 - [ ] 2. Add command and option model. Requirements: 1, 7, 9, 10.
-  - [ ] Add `tracemap snapshot-diff --before <path> --after <path> --out <path>`.
-  - [ ] Add `--format`, `--scope`, selectors, caps, `--include-paths`, `--allow-identity-mismatch`, and `--exit-code`.
+  - [x] Add `tracemap snapshot-diff --before <path> --after <path> --out <path>`.
+  - [x] Add `--format`, `--scope`, selectors, caps, `--include-paths`, `--allow-identity-mismatch`, and `--exit-code`.
   - [ ] Implement snapshot-to-combined scope mapping for `coverage` and `graph`.
   - [ ] Validate and translate snapshot-only scopes before invoking combined diff helpers.
-  - [ ] Emit availability gaps for unavailable `contract-shapes`, `gaps`, and `extractors` scopes.
-  - [ ] Validate mixed single/combined inputs fail clearly in v1.
-  - [ ] Preserve read-only SQLite input handling.
-  - [ ] Add initial snapshot diff rule catalog entries before any implementation PR past command/input validation merges.
+  - [x] Emit availability gaps for unavailable `contract-shapes`, `gaps`, and `extractors` scopes.
+  - [x] Validate mixed single/combined inputs fail clearly in v1.
+  - [x] Preserve read-only SQLite input handling.
+  - [x] Add initial snapshot diff rule catalog entries before any implementation PR past command/input validation merges.
 
 - [ ] 3. Implement snapshot input detection and validation. Requirements: 1, 2, 3.
-  - [ ] Detect single-language indexes.
-  - [ ] Detect combined indexes.
-  - [ ] Parse single-index manifest JSON for `RemoteUrl`, `RepoName`, `ScanRootPathHash`, `GitRootHash`, commit SHA, and extractor metadata.
-  - [ ] Derive repository identity as `repo-hash:{Hash(RemoteUrl ?? RepoName)}` where available.
-  - [ ] Derive the single-index source label as the constant `single`.
-  - [ ] Treat single-index language as optional metadata when no first-class value exists.
-  - [ ] Validate combined source identity and language.
-  - [ ] Redact raw URLs, repository names, local roots, and private paths from identity errors and reports.
-  - [ ] Validate known commit SHAs for history-dependent conclusions.
-  - [ ] Emit identity, schema, malformed metadata, and coverage gaps.
+  - [x] Detect single-language indexes.
+  - [x] Detect combined indexes.
+  - [x] Parse single-index manifest JSON for `RemoteUrl`, `RepoName`, `ScanRootPathHash`, `GitRootHash`, commit SHA, and extractor metadata.
+  - [x] Derive repository identity as `repo-hash:{Hash(RemoteUrl ?? RepoName)}` where available.
+  - [x] Derive the single-index source label as the constant `single`.
+  - [x] Treat single-index language as optional metadata when no first-class value exists.
+  - [x] Validate combined source identity and language.
+  - [x] Redact raw URLs, repository names, local roots, and private paths from identity errors and reports.
+  - [x] Validate known commit SHAs for history-dependent conclusions.
+  - [x] Emit identity, schema, and coverage gaps.
+  - [ ] Emit malformed metadata gaps.
 
 - [ ] 4. Build single-index projector. Requirements: 4, 5, 8.
-  - [ ] Project source and coverage records.
+  - [x] Project source and coverage records.
   - [ ] Project endpoint records.
   - [ ] Project contract-shape records for type/property/method/DTO evidence.
   - [ ] Project dependency-surface records for SQL, package, HTTP, config, storage, and event/message evidence where available.
   - [ ] Project graph records for call edges, object creations, symbol relationships, argument flows, and parameter forwarding where available.
-  - [ ] Project analysis-gap and extractor-version records.
+  - [x] Project analysis-gap availability and extractor-version records.
   - [ ] Use single-index endpoint keys shaped as `endpoint:{sourceLabel}:{endpointKind}:{normalizedMethod}:{normalizedPathKey}:{handlerIdentityOrNone}`.
 
 - [ ] 5. Reuse combined diff for combined indexes. Requirements: 3, 4, 5, 6.
@@ -49,71 +50,71 @@
   - [ ] Ensure `--allow-identity-mismatch` downgrades affected rows.
 
 - [ ] 6. Implement stable keys and classifications. Requirements: 5, 8.
-  - [ ] Add stable key helpers for each evidence kind.
-  - [ ] Ensure row ID churn alone does not emit diffs.
-  - [ ] Detect changed safe metadata under stable identity.
+  - [x] Add stable key helpers for source, coverage, and extractor-version evidence.
+  - [x] Ensure row ID churn alone does not emit diffs for source, coverage, and extractor-version evidence.
+  - [x] Detect changed safe metadata under source identity.
   - [ ] Add duplicate identity handling.
-  - [ ] Add coverage-aware classification downgrades.
-  - [ ] Add deterministic confidence mapping.
+  - [x] Add coverage-aware classification downgrades.
+  - [x] Add deterministic confidence mapping.
 
-- [ ] 7. Implement output writers. Requirements: 9, 10, 11.
-  - [ ] Emit deterministic Markdown with required section order.
-  - [ ] Emit deterministic JSON with required top-level fields.
-  - [ ] Sort all arrays and metadata.
-  - [ ] Use shared redaction and Markdown escaping helpers.
-  - [ ] Avoid timestamps and machine-local paths.
+- [x] 7. Implement output writers. Requirements: 9, 10, 11.
+  - [x] Emit deterministic Markdown with required section order.
+  - [x] Emit deterministic JSON with required top-level fields.
+  - [x] Sort all arrays and metadata.
+  - [x] Use shared redaction and Markdown escaping helpers.
+  - [x] Avoid timestamps and machine-local paths.
 
-- [ ] 8. Complete rule catalog documentation pass. Requirements: 11.
-  - [ ] Confirm PR 1 already added the initial rule catalog entries before feature behavior merged.
-  - [ ] Add `snapshot.diff.source.v1`.
-  - [ ] Add `snapshot.diff.coverage.v1`.
-  - [ ] Add `snapshot.diff.evidence.v1`.
-  - [ ] Add `snapshot.diff.identity.v1`.
-  - [ ] Add `snapshot.diff.schema.v1`.
-  - [ ] Document limitations for static evidence, coverage, identity, schema, and extractor-version caveats.
-  - [ ] Document availability gaps for evidence kinds not exposed by an input schema or delegated engine.
+- [x] 8. Complete rule catalog documentation pass. Requirements: 11.
+  - [x] Confirm PR 1 already added the initial rule catalog entries before feature behavior merged.
+  - [x] Add `snapshot.diff.source.v1`.
+  - [x] Add `snapshot.diff.coverage.v1`.
+  - [x] Add `snapshot.diff.evidence.v1`.
+  - [x] Add `snapshot.diff.identity.v1`.
+  - [x] Add `snapshot.diff.schema.v1`.
+  - [x] Document limitations for static evidence, coverage, identity, schema, and extractor-version caveats.
+  - [x] Document availability gaps for evidence kinds not exposed by an input schema or delegated engine.
 
 - [ ] 9. Add focused tests. Requirements: 12.
-  - [ ] Single-index evidence change.
+  - [x] Single-index evidence change.
   - [ ] Combined-index delegation.
-  - [ ] Single-index manifest JSON identity derivation.
-  - [ ] Single-index source label is the constant `single` and never derived from path or raw repo metadata.
+  - [x] Single-index manifest JSON identity derivation.
+  - [x] Single-index source label is the constant `single` and never derived from path or raw repo metadata.
   - [ ] Single-index comparison with missing language metadata.
-  - [ ] Mixed single/combined rejection.
+  - [x] Mixed single/combined rejection.
   - [ ] Combined edge-to-graph output mapping.
   - [ ] Delegated combined metadata is re-redacted before snapshot output.
-  - [ ] Unavailable snapshot-specific arrays emitting availability gaps.
-  - [ ] Source identity conflict and allowed mismatch downgrade.
-  - [ ] Redacted identity conflict errors and reports.
+  - [x] Unavailable snapshot-specific arrays emitting availability gaps.
+  - [x] Source identity conflict and allowed mismatch downgrade.
+  - [x] Redacted identity conflict errors and reports.
   - [ ] Unknown commit SHA.
   - [ ] Same SHA with changed evidence warning.
   - [ ] Reduced coverage downgrade.
   - [ ] Row ID churn avoidance.
   - [ ] Extractor-version change.
   - [ ] Malformed metadata gap.
-  - [ ] Unsafe value redaction.
-  - [ ] Path comparison opt-in.
+  - [x] Unsafe value redaction.
+  - [x] Path comparison opt-in.
   - [ ] `--scope` mapping for `coverage`, `graph`, `contract-shapes`, `gaps`, and `extractors`.
-  - [ ] Deterministic confidence mapping.
-  - [ ] Byte-stable Markdown/JSON.
-  - [ ] Read-only input databases.
+  - [x] Deterministic confidence mapping.
+  - [x] Byte-stable Markdown/JSON.
+  - [x] Read-only input databases.
 
 - [ ] 10. Update user-facing docs only during implementation. Requirements: 1, 6, 9.
-  - [ ] Add README/acceptance/validation notes in implementation PR, not this spec PR.
-  - [ ] Update `docs/ACCEPTANCE.md` and `docs/VALIDATION.md` when implementation merges.
-  - [ ] Document relationship to `tracemap diff`, `impact`, and future release review.
-  - [ ] Include examples that use existing index artifacts rather than Git checkout orchestration.
+  - [x] Add README/acceptance/validation notes in implementation PR, not this spec PR.
+  - [x] Update `docs/ACCEPTANCE.md` and `docs/VALIDATION.md` when implementation merges.
+  - [x] Document relationship to `tracemap diff`, `impact`, and future release review.
+  - [x] Include examples that use existing index artifacts rather than Git checkout orchestration.
 
 - [ ] 11. Validate implementation. Requirements: 12.
-  - [ ] `dotnet build src/dotnet/TraceMap.sln`
-  - [ ] `dotnet test src/dotnet/TraceMap.sln`
+  - [x] `dotnet build src/dotnet/TraceMap.sln`
+  - [x] `dotnet test src/dotnet/TraceMap.sln`
   - [ ] Relevant adapter tests if projector behavior touches language-specific outputs.
-  - [ ] `./scripts/check-private-paths.sh`
-  - [ ] `git diff --check`
+  - [x] `./scripts/check-private-paths.sh`
+  - [x] `git diff --check`
 
 ## Recommended PR Slices
 
-- [ ] PR 1: Command shell, input detection, source/commit validation, rule catalog, and no-op report.
+- [x] PR 1: Command shell, input detection, source/commit validation, rule catalog, and no-op report.
 - [ ] PR 2: Combined-index delegation, section mapping, scope mapping, and availability gaps.
 - [ ] PR 3: Single-index projector and evidence diff output.
 - [ ] PR 4: Graph/surface/contract-shape expansion, extractor rows, and redaction hardening.
