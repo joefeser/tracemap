@@ -4,8 +4,11 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { createServer } from "node:http";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildSite } from "./build.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "src");
+await buildSite();
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const port = Number.parseInt(process.env.PORT ?? "4173", 10);
 
 const contentTypes = {
