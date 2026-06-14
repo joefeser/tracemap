@@ -1,3 +1,4 @@
+using System.Globalization;
 using TraceMap.Cli;
 using TraceMap.Combine;
 using TraceMap.Core;
@@ -370,7 +371,7 @@ public sealed class ContractDeltaImpactV2Tests
             "main",
             "abc123",
             scannerVersion,
-            DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+            DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture),
             analysisLevel,
             buildStatus,
             [],
