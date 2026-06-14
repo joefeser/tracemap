@@ -15,7 +15,7 @@ Related specs:
 - `.kiro/specs/combined-change-impact/*`
 - `.kiro/specs/combined-dependency-paths/*`
 - `.kiro/specs/reverse-impact-query/*`
-- `.kiro/specs/release-review-report/*`
+- `.kiro/specs/release-review-report/*` (only to verify why release-review import remains deferred)
 - `.kiro/specs/sql-dependency-surfaces/*`
 
 TraceMap principles:
@@ -41,18 +41,18 @@ Please inspect:
 - `.kiro/specs/multi-index-portfolio-report/requirements.md`
 - `.kiro/specs/multi-index-portfolio-report/design.md`
 - `.kiro/specs/multi-index-portfolio-report/tasks.md`
-- related combined report, diff, impact, path, reverse, and release-review specs
+- related combined report, diff, impact, path, reverse, and release-review specs, with release-review treated as deferred unless shipping code exists
 - current CLI/reporting code where needed
 
 Review questions:
 
-1. Is the portfolio report distinct enough from `combine`, `report`, `diff`, `impact`, `paths`, `reverse`, and `release-review` while clearly reusing them?
+1. Is the portfolio report distinct enough from `combine`, `report`, `diff`, `impact`, `paths`, `reverse`, and future release-review workflows while clearly reusing shipping workflows?
 2. Does the MVP scope avoid building a new scanner, graph database, runtime topology system, service catalog, or impact classifier?
 3. Are single-language indexes, combined indexes, and manifest-driven inputs specified clearly enough?
 4. Are source identity, commit SHA, scanner version, build status, coverage, and extractor provenance requirements strong enough?
 5. Are cross-source endpoint alignment and shared-surface grouping safe, deterministic, and limited to static evidence?
 6. Does before/after portfolio comparison avoid arbitrary source pairing and coverage-overclaiming?
-7. Are optional path, reverse, impact, and release-review context sections bounded and clearly unavailable/deferred when incompatible?
+7. Are optional path, reverse, and impact context sections bounded, and is release-review import clearly deferred until a shipping workflow exists?
 8. Are rule ID expectations and documented limitations complete before implementation?
 9. Are Markdown and JSON contracts deterministic, byte-stable, and safe from private-data leaks?
 10. Are row caps, selector behavior, truncation, and rollup precedence clear enough?
@@ -74,7 +74,7 @@ Review the `multi-index-portfolio-report` spec as an implementation planner for 
 
 Focus on:
 
-- The cleanest code seams in `TraceMap.Reporting` for reusing combined report, diff, impact, path, reverse, and release-review behavior.
+- The cleanest code seams in `TraceMap.Reporting` for reusing combined report, diff, impact, path, and reverse behavior.
 - Whether a manifest-first MVP is the right boundary.
 - How to support both single-language and combined indexes without duplicating readers.
 - How to expand combined `index_sources` while preserving container/source provenance.
@@ -112,7 +112,7 @@ Look for:
 - Ambiguous source pairing in before/after manifests.
 - Grouping that could be mistaken for runtime dependency proof.
 - Misleading `NoActionableEvidence` or `NoPortfolioChangeEvidence` under reduced coverage.
-- Path/reverse/impact/release-review optional sections silently omitted instead of `not_requested`, `unavailable`, or `deferred`.
+- Path/reverse/impact optional sections silently omitted instead of `not_requested`, `unavailable`, or `deferred`, or release-review import presented as implemented rather than deferred.
 - Raw SQL, snippets, literal values, config values, connection strings, raw URLs, raw secrets, local paths, or private paths leaking to Markdown, JSON, or stderr.
 - Non-deterministic output risks from timestamps, unordered dictionaries, filesystem order, row order, or unstable IDs.
 - Caps that omit rows without truncation gaps and omitted counts.
