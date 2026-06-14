@@ -70,6 +70,7 @@ When semantic analysis fails:
 - Does `dotnet test` pass?
 - Can the CLI run against at least one sample repo?
 - For language-adapter changes, did we follow `docs/VALIDATION.md` and run or explicitly defer the relevant pinned smoke checks?
+- If a required local tool appears missing, check Homebrew first (`brew list`, `brew --prefix <formula>`, or `brew info <formula>`) and try the Homebrew path before stopping. Some tools may be installed outside system discovery paths, such as Java under `/opt/homebrew/opt` or Node via `nvm`. If Homebrew/path discovery does not find the tool, stop and ask instead of guessing or rewriting the workflow.
 - For Python adapter tests, prefer a temporary virtual environment, for example `python3 -m venv /tmp/tracemap-python-venv && /tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]" && /tmp/tracemap-python-venv/bin/python -m pytest src/python/tests`.
 - For JVM adapter tests, Java 21 is required. On macOS, install it with Homebrew if needed and run with `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`; `/usr/libexec/java_home -v 21` may not list Homebrew OpenJDK until the system symlink is configured.
 - Noisy contract names such as `status` may correctly downgrade reducer output to `NeedsReview` when high fan-out evidence is present; do not force `DefiniteImpact` just to satisfy stale tests.
