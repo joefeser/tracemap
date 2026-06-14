@@ -1,8 +1,14 @@
 # SQL Schema Change Impact Implementation State
 
+Status: implemented
+
 ## Branch
 
 `codex/sql-schema-change-impact`
+
+## Current State
+
+Implemented SQL/schema impact v1 in `dev`. Remaining task checkboxes were reconciled after merge; deferred precision and traversal work is tracked as plain follow-up bullets.
 
 ## Shipped Scope
 
