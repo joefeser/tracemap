@@ -30,6 +30,7 @@ Validation URLs:
 - `https://tracemap.tools/examples/scan-packet/`
 - `https://tracemap.tools/examples/contract-impact/`
 - `https://tracemap.tools/use-cases/`
+- `https://tracemap.tools/vault-export/`
 - `https://tracemap.tools/blog/`
 - `https://tracemap.tools/blog/building-tracemap-with-codex-kiro-qodo/`
 - `https://tracemap.tools/blog/why-tracemap-exists/`
