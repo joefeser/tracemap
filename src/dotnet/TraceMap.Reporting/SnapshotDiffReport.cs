@@ -164,6 +164,8 @@ public sealed record SnapshotDiffGap(
     string Classification,
     string Message,
     IReadOnlyList<string> SupportingDiffIds,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SupportingEdgeIds,
     IReadOnlyList<SnapshotDiffFileSpan> FileSpans,
     IReadOnlyList<KeyValuePair<string, string>> Metadata);
 
@@ -974,6 +976,8 @@ public static class SnapshotDiffReporter
                 MapClassification(gap.Classification),
                 gap.Message,
                 [],
+                gap.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                gap.SupportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 [],
                 CombinedReportHelpers.SortedMetadata([
                     Pair("combinedGapId", gap.GapId),
@@ -1211,6 +1215,8 @@ public static class SnapshotDiffReporter
             EvidenceTiers.Tier4Unknown,
             classification,
             message,
+            [],
+            [],
             [],
             [],
             CombinedReportHelpers.SortedMetadata([
