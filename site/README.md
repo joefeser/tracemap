@@ -30,6 +30,8 @@ Validation URLs:
 - `https://tracemap.tools/examples/scan-packet/`
 - `https://tracemap.tools/examples/contract-impact/`
 - `https://tracemap.tools/use-cases/`
+- `https://tracemap.tools/blog/`
+- `https://tracemap.tools/blog/what-tracemap-solves-for-engineering-teams/`
 - `https://tracemap.tools/demo/`
 
 ## Local Development

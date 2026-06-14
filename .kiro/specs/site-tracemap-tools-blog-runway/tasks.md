@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] 1. Decide the initial blog structure.
+- [x] 1. Decide the initial blog structure.
   - Choose URL shape, for example `/blog/why-tracemap-exists/` and
     `/blog/building-tracemap-with-codex-kiro-qodo/`.
   - Decide whether blog pages stay plain static HTML or whether a tiny template
@@ -23,18 +23,18 @@
     or endorsement.
   - Explain why the process matters for a deterministic analysis tool.
 
-- [ ] 4. Add blog pages and metadata.
+- [x] 4. Add blog pages and metadata.
   - Add canonical URLs, Open Graph metadata, and sitemap entries.
   - Add a blog index or link from the homepage/discovery pages if appropriate.
 
-- [ ] 5. Draft the manager value article.
+- [x] 5. Draft the manager value article.
   - Working title: `What TraceMap Solves for Engineering Teams`.
   - Explain manual indexing, review handoff, auditability, and coverage-aware
     decisions for a higher-level manager audience.
   - Keep the article grounded in static evidence and avoid claims about runtime
     proof, production usage, or release approval.
 
-- [ ] 6. Validate.
+- [x] 6. Validate.
   - Run `npm run build` from `site/`.
   - Smoke the new URLs locally.
   - Check desktop and mobile browser layout.
