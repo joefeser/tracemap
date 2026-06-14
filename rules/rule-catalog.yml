@@ -1835,3 +1835,90 @@ rules:
     limitations:
       - Redaction preserves review safety at the cost of losing raw values.
       - Hashes are comparison aids only and must not be treated as decoded or verified secrets.
+
+  - id: api.dto.contract.diff.endpoint.v1
+    name: API/DTO endpoint contract diff
+    description: Compares indexed static endpoint route and route-shape evidence between two TraceMap snapshots.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - ApiDtoContractDiffRow
+    limitations:
+      - Endpoint rows compare static method/path/handler/route metadata only and do not prove runtime traffic, deployment base paths, proxies, auth, CORS, or reachability.
+      - Path-only, display-only, syntax-only, duplicate, or identity-unverified endpoints are review-tier.
+      - Handler changes under a stable route identity are changed static evidence, not proof of runtime dispatch.
+
+  - id: api.dto.contract.diff.dto.v1
+    name: API/DTO type and member contract diff
+    description: Compares indexed DTO/type/member/method evidence between two TraceMap snapshots.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - ApiDtoContractDiffRow
+    limitations:
+      - DTO rows compare only metadata indexed by language adapters and do not prove OpenAPI completeness, runtime serializer mapping, binary compatibility, generated code coverage, or runtime object mutation.
+      - Missing declared type, nullability, requiredness, containing type, alias, assembly, package, or module metadata downgrades affected rows.
+      - Generic property-only identities such as id, type, name, and status are review-tier unless containing type identity is available.
+
+  - id: api.dto.contract.diff.attachment.v1
+    name: API/DTO request-response attachment diff
+    description: Compares endpoint-to-DTO request/response attachment evidence where adapters emit credible attachment facts; otherwise emits explicit attachment gaps.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - ApiDtoContractDiffRow
+      - ApiDtoContractDiffGap
+    limitations:
+      - Absence of endpoint-to-DTO attachment evidence is an analysis gap, not proof that request or response contracts did not change.
+      - Status-code and response-kind behavior is preserved only when explicitly indexed and is not inferred from framework conventions.
+      - Runtime serializer, model binding, dependency injection, filters, and dynamic response behavior are not resolved.
+
+  - id: api.dto.contract.diff.identity.v1
+    name: API/DTO contract diff source and stable identity
+    description: Emits source identity, duplicate contract identity, and stable-key downgrade gaps for API/DTO contract diffs.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractSourcePair
+      - ApiDtoContractDiffGap
+    limitations:
+      - Repository identity is hash-based and cannot prove ownership, deployment equivalence, or branch ancestry.
+      - Duplicate stable identities are preserved as review-tier evidence and TraceMap does not pick an arbitrary winner.
+      - Missing source identity, language identity, commit SHA, assembly, package, or module metadata downgrades comparisons.
+
+  - id: api.dto.contract.diff.coverage.v1
+    name: API/DTO contract diff coverage
+    description: Emits reduced coverage, no-diff evidence, and coverage-relative API/DTO contract diff gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractDiffGap
+    limitations:
+      - Reduced scan coverage makes absence of evidence coverage-relative.
+      - NoDiffEvidence means no comparable static evidence matched the selected scope, not proof that no runtime contract changed.
+      - Build failures, syntax fallback, unavailable generated artifacts, and missing adapter precision can hide otherwise relevant evidence.
+
+  - id: api.dto.contract.diff.schema.v1
+    name: API/DTO contract diff schema gap
+    description: Emits gaps when required or optional TraceMap index schema objects needed by API/DTO contract diff are absent.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractDiffGap
+    limitations:
+      - Missing schema prevents only the affected evidence projection from making stronger claims.
+      - Schema gaps are not evidence that endpoints, DTOs, properties, methods, or attachments are absent.
+
+  - id: api.dto.contract.diff.selector.v1
+    name: API/DTO contract diff selector handling
+    description: Emits selector no-match and ignored-selector metadata for API/DTO contract diff queries.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractDiffGap
+    limitations:
+      - Selector no-match reflects indexed static evidence only.
+      - Dynamic routes, generated contracts, reduced coverage, unavailable attachment evidence, or unsupported adapter metadata can hide otherwise relevant evidence.
+
+  - id: api.dto.contract.diff.truncation.v1
+    name: API/DTO contract diff truncation
+    description: Emits gaps when API/DTO contract diff row or gap caps truncate deterministic output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractDiffGap
+    limitations:
+      - Truncated reports are incomplete by construction and must not be interpreted as comprehensive.
+      - Omitted counts and retained rows are deterministic for selected scopes and caps, but not evidence of lower importance.
