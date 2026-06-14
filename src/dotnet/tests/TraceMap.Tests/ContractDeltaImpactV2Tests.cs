@@ -273,6 +273,19 @@ public sealed class ContractDeltaImpactV2Tests
 
         Assert.Equal(1, exitCode);
         Assert.Contains("require a combined TraceMap index", contextError.ToString());
+
+        using var sourceOutput = new StringWriter();
+        using var sourceError = new StringWriter();
+        exitCode = await TraceMapCommand.RunAsync([
+            "reduce",
+            "--index", indexPath,
+            "--contract-delta", goodDeltaPath,
+            "--out", outputPath,
+            "--source", "api"
+        ], sourceOutput, sourceError);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("reduce --source requires a combined TraceMap index", sourceError.ToString());
     }
 
     [Fact]
@@ -323,6 +336,208 @@ public sealed class ContractDeltaImpactV2Tests
         Assert.Equal(1, await RunCliAsync([
             "reduce", "--index", indexPath, "--contract-delta", deltaPath, "--out", outExit, "--exit-code"
         ]));
+    }
+
+    [Fact]
+    public async Task Reduce_v2_unrelated_analysis_gap_does_not_override_no_evidence()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteV2Delta(temp.Path, """
+            {
+              "id": "chg-property-primary-email",
+              "kind": "property",
+              "changeType": "removed",
+              "reference": {
+                "typeName": "CustomerProfile",
+                "propertyName": "PrimaryEmail"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.AnalysisGap,
+                RuleIds.CSharpSemanticWorkspace,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan("src/Other.cs", 1, 1, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["message"] = "Compilation failed near SomeOtherType."
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--contract-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.md"));
+        Assert.Contains("Classification: `NoEvidenceFullCoverage`", markdown);
+        Assert.DoesNotContain("Classification: `UnknownAnalysisGap`", markdown);
+    }
+
+    [Fact]
+    public async Task Reduce_v2_type_constrained_member_mismatch_is_review_only()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteV2Delta(temp.Path, """
+            {
+              "id": "chg-property-primary-email",
+              "kind": "property",
+              "changeType": "removed",
+              "reference": {
+                "typeName": "CustomerProfile",
+                "propertyName": "PrimaryEmail"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.PropertyAccessed,
+                RuleIds.CSharpSemanticPropertyAccess,
+                EvidenceTiers.Tier1Semantic,
+                new EvidenceSpan("src/OrderReader.cs", 8, 8, null, "test", "test/1.0"),
+                targetSymbol: "global::Sample.Order.PrimaryEmail",
+                contractElement: "PrimaryEmail",
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["containingType"] = "global::Sample.Order",
+                    ["propertyName"] = "PrimaryEmail"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--contract-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.md"));
+        Assert.Contains("Classification: `NeedsReview`", markdown);
+        Assert.DoesNotContain("Classification: `DefiniteImpact`", markdown);
+    }
+
+    [Fact]
+    public async Task Reduce_v2_signature_only_method_matches_exact_signature()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteV2Delta(temp.Path, """
+            {
+              "id": "chg-method-send",
+              "kind": "method",
+              "changeType": "signature_changed",
+              "reference": {
+                "signature": "Send(Order)"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.MethodInvoked,
+                RuleIds.CSharpSemanticMethodInvocation,
+                EvidenceTiers.Tier1Semantic,
+                new EvidenceSpan("src/Controller.cs", 20, 20, null, "test", "test/1.0"),
+                targetSymbol: "global::Sample.OrderSender.Send(global::Sample.Order order)",
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["signature"] = "Send(Order)"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--contract-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.md"));
+        Assert.Contains("Classification: `DefiniteImpact`", markdown);
+        Assert.Contains("`MethodInvoked`", markdown);
+    }
+
+    [Fact]
+    public async Task Reduce_v2_endpoint_matches_method_prefixed_normalized_path_key()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteV2Delta(temp.Path, """
+            {
+              "id": "chg-endpoint-orders",
+              "kind": "endpoint",
+              "changeType": "changed",
+              "reference": {
+                "method": "GET",
+                "path": "/api/orders"
+              }
+            }
+            """);
+        var manifest = Manifest("api", "tracemap-jvm/0.1.0");
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.HttpRouteBinding,
+                "jvm.integration.http.route.v1",
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/main/java/OrdersController.java", 20, 20, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["normalizedPathKey"] = "GET /api/orders"
+                })
+        ]);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--contract-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.md"));
+        Assert.Contains("Classification: `ProbableImpact`", markdown);
+        Assert.Contains("`HttpRouteBinding`", markdown);
+    }
+
+    [Fact]
+    public async Task Reduce_v2_markdown_includes_scanner_version_and_escapes_backticks()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = Path.Combine(temp.Path, "contract-delta.json");
+        File.WriteAllText(deltaPath, """
+            {
+              "version": "contract-delta-v2",
+              "contract": "Customer`Profile",
+              "source": {
+                "label": "api"
+              },
+              "changes": [
+                {
+                  "id": "chg`property",
+                  "kind": "property",
+                  "changeType": "removed",
+                  "reference": {
+                    "propertyName": "PrimaryEmail"
+                  }
+                }
+              ]
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, []);
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", indexPath, "--contract-delta", deltaPath, "--out", outputPath
+        ]));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.md"));
+        Assert.Contains("Scanner version: `tracemap-milestone15`", markdown);
+        Assert.Contains("Contract: `Customer\\`Profile`", markdown);
+        Assert.Contains("Change id: `chg\\`property`", markdown);
     }
 
     private static async Task<int> RunCliAsync(string[] args)
