@@ -292,10 +292,6 @@ public static class ApiDtoContractDiffReporter
         }
 
         var gaps = new List<ApiDtoContractDiffGap>();
-        if (!await TableExistsInIndexAsync(options.BeforePath, RequiredFactTable(before.Kind), cancellationToken))
-        {
-            gaps.Add(Gap("schema", "SchemaGap", "schema", null, SchemaRuleId, ApiDtoContractDiffClassifications.UnknownAnalysisGap, "before input is missing required fact table."));
-        }
 
         var sourcePairs = PairSources(before.Snapshot, after.Snapshot, options.Source, gaps);
         AddIdentityAndCoverageGaps(sourcePairs, gaps);
@@ -1460,7 +1456,10 @@ public static class ApiDtoContractDiffReporter
             trimmed = "/" + trimmed;
         }
 
-        return trimmed.Replace('\\', '/').TrimEnd('/');
+        var normalized = trimmed.Replace('\\', '/');
+        return normalized.Length > 1 && normalized.EndsWith("/", StringComparison.Ordinal)
+            ? normalized.TrimEnd('/')
+            : normalized;
     }
 
     private static string? HttpMethodFromEndpointKey(string? value)
@@ -1713,15 +1712,6 @@ public static class ApiDtoContractDiffReporter
     {
         return reader.IsDBNull(ordinal) ? 0 : reader.GetInt32(ordinal);
     }
-
-    private static async Task<bool> TableExistsInIndexAsync(string path, string table, CancellationToken cancellationToken)
-    {
-        await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
-        await connection.OpenAsync(cancellationToken);
-        return await TableExistsAsync(connection, table, cancellationToken);
-    }
-
-    private static string RequiredFactTable(string kind) => kind == "combined" ? "combined_facts" : "facts";
 
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
     {

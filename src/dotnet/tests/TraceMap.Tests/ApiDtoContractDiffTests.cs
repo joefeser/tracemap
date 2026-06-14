@@ -203,6 +203,25 @@ public sealed class ApiDtoContractDiffTests
     }
 
     [Fact]
+    public async Task Contract_diff_root_endpoint_keeps_strong_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(beforeIndex, manifest, []);
+        SqliteIndexWriter.Write(afterIndex, manifest, [
+            RouteFact(manifest, "GET", "/", "/", "Controllers/HomeController.cs", 10, "Api.HomeController.Get()", "")
+        ]);
+
+        var result = await ApiDtoContractDiffReporter.WriteAsync(new ApiDtoContractDiffOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "diff"), Scope: "endpoints"));
+
+        var row = Assert.Single(result.Report.EndpointDiffs);
+        Assert.Equal(ApiDtoContractDiffClassifications.Added, row.Classification);
+        Assert.Equal("endpoint:self:GET:/", row.StableKey);
+    }
+
+    [Fact]
     public async Task Contract_diff_mixed_index_modes_fail_without_writing_output()
     {
         using var temp = new TempDirectory();
