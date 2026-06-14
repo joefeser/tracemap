@@ -6,7 +6,7 @@
   - Decide whether blog pages stay plain static HTML or whether a tiny template
     step is needed before adding more repeated page chrome.
 
-- [ ] 2. Draft the origin story article.
+- [x] 2. Draft the origin story article.
   - Working title: `Why TraceMap Exists`.
   - Explain the problem of being asked to manually index unfamiliar systems for
     dependency and contract-impact review.

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Why TraceMap exists: dependency and contract-impact review should start from deterministic evidence instead of manual indexing, memory, or broad search."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Why TraceMap Exists | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/blog/why-tracemap-exists/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Why TraceMap Exists">
+    <meta
+      property="og:description"
+      content="TraceMap was built to turn manual dependency indexing and contract-impact review into deterministic static evidence."
+    >
+    <meta property="og:url" content="https://tracemap.tools/blog/why-tracemap-exists/">
+    <meta property="article:published_time" content="2026-06-14">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/" aria-current="location">Blog</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <article class="article">
+        <header class="article-header">
+          <p class="eyebrow">Origin story</p>
+          <h1>Why TraceMap exists</h1>
+          <p class="hero-subhead">
+            TraceMap started from a practical review problem: teams need to
+            understand unfamiliar systems, contract changes, and dependency
+            surfaces without turning every investigation into hand-built maps.
+          </p>
+          <p class="article-meta">Published June 14, 2026</p>
+        </header>
+
+        <div class="article-body">
+          <p>
+            Most engineering teams eventually hit the same shape of problem.
+            A contract changes. A service boundary moves. A package upgrade
+            touches more code than expected. Someone asks what depends on it,
+            which files need review, and whether the repository gives enough
+            evidence to trust the answer.
+          </p>
+
+          <p>
+            The usual first move is manual indexing. Search for a name. Follow a
+            few references. Check routes, DTOs, project files, config, SQL, and
+            package metadata. Open another repository. Keep notes. Decide which
+            matches are real evidence and which ones are just similar strings.
+            That work is valuable, but it is easy for the reasoning to disappear
+            into a spreadsheet, a chat thread, or one person's memory.
+          </p>
+
+          <h2>The hard part is not finding text. It is preserving evidence.</h2>
+
+          <p>
+            Broad search can find possible matches, but it does not tell you why
+            a match matters. It does not separate compiler-resolved symbol
+            evidence from structural framework evidence. It does not preserve
+            known gaps when a project fails to load. It does not automatically
+            say which conclusion came from which rule.
+          </p>
+
+          <p>
+            TraceMap exists to make that review work repeatable. A scan records
+            facts with rule IDs, evidence tiers, file paths, line spans, commit
+            SHAs, extractor versions, and documented limitations. If semantic
+            analysis fails, the scan does not pretend the repo is clean. It
+            continues with syntax and structural evidence, emits gaps, and marks
+            coverage as reduced.
+          </p>
+
+          <h2>The reducer keeps impact language honest.</h2>
+
+          <p>
+            Impact review is where wording matters. It is tempting to say a
+            change impacts a service because a name appears nearby. TraceMap
+            keeps that narrower. The reducer compares contract deltas against
+            indexed evidence and labels outcomes based on what the scan can
+            actually support.
+          </p>
+
+          <p>
+            A compiler-resolved property access is different from a syntax-only
+            clue. A no-match result under full coverage is different from a
+            no-match result under reduced coverage. A high fan-out name like
+            <code>status</code> may need review instead of a stronger impact
+            claim. The goal is not dramatic certainty. The goal is evidence that
+            reviewers can inspect.
+          </p>
+
+          <h2>The useful artifact is the audit trail.</h2>
+
+          <p>
+            TraceMap emits machine-readable facts and indexes, plus a
+            human-readable report. That means another reviewer can ask: what repo
+            and commit were scanned, which rule emitted this fact, what tier was
+            it, where is the file span, what scanner version produced it, and
+            what limitations apply?
+          </p>
+
+          <p>
+            That audit trail is the reason the project exists. It turns
+            dependency review from an unrepeatable indexing exercise into a
+            packet of static evidence. It helps teams hand off context, revisit
+            decisions, and be honest about uncertainty.
+          </p>
+
+          <h2>The boundary is part of the design.</h2>
+
+          <p>
+            TraceMap is not AI impact analysis. The core scanner and reducer do
+            not use LLM calls, embeddings, vector databases, or prompt-based
+            classification. TraceMap is also not runtime proof or release
+            approval. It cannot know production traffic, deployment state, or
+            whether a code path executes in a given environment.
+          </p>
+
+          <p>
+            It does one narrower job: produce deterministic static evidence for
+            review. That is enough to make a hard class of engineering questions
+            easier to discuss, easier to hand off, and easier to verify.
+          </p>
+        </div>
+      </article>
+
+      <section class="section callout-section">
+        <h2>Want to see the shape of the evidence?</h2>
+        <p>
+          Review the <a href="/examples/scan-packet/">scan packet example</a>
+          or read what TraceMap
+          <a href="/blog/what-tracemap-solves-for-engineering-teams/">solves for engineering teams</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Blog index:
+        <a href="/blog/">TraceMap Blog</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
