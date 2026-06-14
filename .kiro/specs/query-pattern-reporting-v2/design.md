@@ -61,6 +61,32 @@ Missing optional properties are rendered with deterministic placeholders:
 | Source kind | `unknown` |
 | Hash | `n/a` |
 
+## Safe Identifier Display
+
+Query-pattern reports may display derived table and column identifiers only when they look like identifiers rather than raw SQL fragments.
+
+Safe table identifiers:
+
+- contain only letters, digits, underscore, dot, dash, or a single separating space between identifier parts;
+- are capped at 100 characters before display;
+- do not contain quotes, semicolons, SQL comments, parentheses, operators, braces, brackets, newlines, tabs, or URL-like text;
+- do not contain SQL statement keywords such as `select`, `insert`, `update`, `delete`, `where`, `join`, `union`, `drop`, or `exec` as standalone words.
+
+Safe column and field identifiers:
+
+- contain only letters, digits, underscore, dot, or dash;
+- are capped at 80 characters before display;
+- are rendered as a semicolon-delimited list;
+- are truncated to the first 20 safe entries with `... and N more` when a producer supplies a longer list.
+
+Unsafe identifiers must not be displayed verbatim. They should be replaced with deterministic placeholders such as:
+
+```text
+unsafe-identifier-hash:<32-char-lowercase-hex>
+```
+
+The hash is a display hash for the unsafe identifier value, not a new evidence claim. It must not be confused with `queryShapeHash`.
+
 ## SQL-Shape Rendering
 
 SQL-shape rows should use only derived safe metadata:
@@ -92,7 +118,9 @@ Disallowed displayed properties:
 - raw URLs
 - local absolute paths
 
-The row label should use "SQL shape" rather than "SQL query executed" or similar runtime wording.
+The row label must use "SQL shape" or "Static SQL shape" rather than "SQL query", "database query", "SQL query executed", or similar runtime wording.
+
+Python intentionally keeps its existing row wording, such as `` `<operation>` on `<table>` ``, because the Python report already has a compliant query-pattern limitation. The new .NET, TypeScript, and JVM formatting should use the explicit "SQL shape" label unless Python is intentionally aligned in a separate compatibility-aware change.
 
 ## Query-Builder Rendering
 
@@ -102,13 +130,15 @@ Query-builder rows preserve the existing field-oriented behavior:
 - Query builder `<operation>` fields `<fields>` pattern `<patternHash>` (<tier>) at `<safe-path>:<line>`
 ```
 
-Field properties are combined deterministically from:
+Field properties are combined deterministically from these categories, in this order:
 
 - `filterFields`
 - `sortFields`
 - `selectFields`
 - `includeFields`
 - `mutationFields`
+
+Within each category, field values should be split on existing list delimiters where the adapter already does so, trimmed, de-duplicated, and sorted with ordinal/string comparison before joining. The final display delimiter is a semicolon. Existing adapter behavior can be preserved when it is already deterministic; if an implementation changes the behavior, tests must cover the exact category order and delimiter.
 
 If no field property is present, keep the existing `fields none` behavior for query-builder facts. That phrase should not appear for SQL-shape rows unless a SQL-shape fact truly has a rendered column list of `none`.
 
@@ -166,6 +196,8 @@ src/jvm/src/main/java/com/tracemap/jvm/reporting/MarkdownReportWriter.java
 
 Add a `## Query Patterns` section using the same flavor rules.
 
+The section should appear only when `QueryPatternDetected` facts exist. Place it after the existing evidence summary/sample sections and before limitations. Rows should be sorted by safe file path, start line, and stable fact identifier when available.
+
 The JVM writer should render:
 
 - real SQL-shape facts if the current JVM sample/extractor output contains `QueryPatternDetected`;
@@ -211,6 +243,8 @@ Update `rules/rule-catalog.yml` limitations for query-pattern rules:
 - `python.integration.sql.v1`
 
 The rule docs should state that reports may display derived metadata such as operation names, table names, column names, field names, and shape hashes, but must not display raw SQL text or literal values.
+
+The `jvm.integration.sql.v1` note should be conditional because the JVM adapter currently defines `QueryPatternDetected` but may not emit it in stable samples. Suggested phrasing: "When JVM query-pattern facts are emitted, reports may display safe derived metadata..."
 
 No new rule IDs are expected because this is report rendering over existing evidence rules.
 
@@ -271,8 +305,8 @@ Expected validation after implementation:
 ```bash
 dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
-npm test --prefix src/typescript
-./gradlew -p src/jvm test
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
 ./scripts/check-private-paths.sh
 git diff --check
 ```
