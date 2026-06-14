@@ -5,9 +5,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
-import { FactTypes } from "../src/facts/Models";
+import { FactTypes, ScanManifest } from "../src/facts/Models";
 import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
+import { extractPackageFacts } from "../src/extractors/PackageJsonExtractor";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
 
 const packageRoot = process.cwd();
@@ -38,6 +39,26 @@ describe("ScanEngine", () => {
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.HttpRouteBinding }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ConfigKeyDeclared, targetSymbol: "CUSTOMER_ENDPOINT" }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.QueryPatternDetected }));
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({
+        dependencyGroup: "dependencies",
+        dependencyScope: "runtime",
+        ecosystem: "npm",
+        manifestKind: "package.json",
+        packageName: "express",
+        surfaceKind: "package-config"
+      })
+    }));
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.ConfigKeyDeclared,
+      targetSymbol: "scripts:build",
+      properties: expect.objectContaining({
+        redactionReason: "script-command-redacted",
+        valueHash: expect.stringMatching(/^[0-9a-f]+$/),
+        valueLength: "20"
+      })
+    }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ObjectShapeInferred }));
     const prismaPattern = result.facts.find((fact) => fact.factType === FactTypes.QueryPatternDetected && fact.properties.orm === "prisma");
     expect(prismaPattern?.properties.filterFields).toContain("status");
@@ -46,6 +67,7 @@ describe("ScanEngine", () => {
     expect(entityPattern?.properties.filterFields).toContain("organization_id");
     expect(entityPattern?.properties.sortFields).toContain("updated_at");
     expect(JSON.stringify(result.facts)).not.toContain("organization_id: \"org_1\"");
+    expect(JSON.stringify(result.facts)).not.toContain("tsc -p tsconfig.json");
   });
 
   it("runs syntax fallback for a repo with no tsconfig and broken syntax", async () => {
@@ -66,7 +88,40 @@ describe("ScanEngine", () => {
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.TypeDeclared, targetSymbol: "BrokenContract" }));
   });
 
-  it("can be reduced by the existing .NET reducer as DefiniteImpact", async () => {
+  it("redacts non-string package scripts without crashing", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const packagePath = path.join(repo, "package.json");
+    await fsp.mkdir(repo, { recursive: true });
+    await fsp.writeFile(packagePath, JSON.stringify({ name: "demo", scripts: { empty: null, object: { command: "build" } } }, null, 2));
+
+    const facts = await extractPackageFacts(manifest("demo"), repo, [{
+      absolutePath: packagePath,
+      kind: "package-json",
+      relativePath: "package.json",
+      sizeBytes: (await fsp.stat(packagePath)).size,
+      skipped: false
+    }]);
+
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.ConfigKeyDeclared,
+      targetSymbol: "scripts:empty",
+      properties: expect.objectContaining({
+        valueKind: "object",
+        valueLength: "4"
+      })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.ConfigKeyDeclared,
+      targetSymbol: "scripts:object",
+      properties: expect.objectContaining({
+        valueKind: "object",
+        valueLength: "19"
+      })
+    }));
+  });
+
+  it("can be reduced by the existing .NET reducer with review-tier fan-out handling", async () => {
     const out = await tempDir();
     await scan({
       repoPath: path.join(repoRoot, "samples/typescript-modern-sample"),
@@ -98,7 +153,8 @@ describe("ScanEngine", () => {
     );
     expect(reduce.status, reduce.stderr + reduce.stdout).toBe(0);
     const markdown = await fsp.readFile(report, "utf8");
-    expect(markdown).toContain("DefiniteImpact");
+    expect(markdown).toContain("NeedsReview");
+    expect(markdown).toContain("High fan-out match set");
     expect(markdown).toContain("PropertyAccessed");
   });
 
@@ -237,6 +293,24 @@ function scanOptions(repoPath: string, outputPath: string) {
     excludeGlobs: [],
     maxFileByteSize: 1024 * 1024,
     semantic: true
+  };
+}
+
+function manifest(repoName: string): ScanManifest {
+  return {
+    analysisLevel: "Level1SemanticAnalysis",
+    branch: "main",
+    buildStatus: "Succeeded",
+    commitSha: "0".repeat(40),
+    knownGaps: [],
+    projects: [],
+    remoteUrl: null,
+    repoName,
+    scanId: `scan-${repoName}`,
+    scannedAt: "2026-06-13T00:00:00+00:00",
+    scannerVersion: "tracemap-typescript/0.1.0",
+    solutions: [],
+    targetFrameworks: []
   };
 }
 

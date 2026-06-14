@@ -336,6 +336,40 @@ def test_requirements_options_are_not_packages(tmp_path: Path) -> None:
 
     assert deps == {"requests": "==2.32.0"}
     assert all(fact.target_symbol not in {"-r", "-c"} for fact in facts)
+    package_fact = next(fact for fact in facts if fact.fact_type == "PackageReferenced" and fact.target_symbol == "requests")
+    assert package_fact.properties["ecosystem"] == "python"
+    assert package_fact.properties["manifestKind"] == "requirements.txt"
+    assert package_fact.properties["dependencyScope"] == "runtime"
+    assert package_fact.properties["surfaceKind"] == "package-config"
+    assert gaps == []
+
+
+def test_setup_cfg_dependency_facts_preserve_manifest_provenance(tmp_path: Path) -> None:
+    setup_cfg = tmp_path / "setup.cfg"
+    setup_cfg.write_text(
+        "[metadata]\n"
+        "name = demo\n"
+        "version = 0.1.0\n"
+        "[options]\n"
+        "install_requires =\n"
+        "    requests==2.32.0\n",
+        encoding="utf-8",
+    )
+    manifest = _manifest("setup-cfg")
+    gaps: list[str] = []
+
+    deps, facts = read_package_metadata(tmp_path, manifest, [setup_cfg], gaps)
+
+    assert deps == {"requests": "==2.32.0"}
+    package_fact = next(fact for fact in facts if fact.fact_type == "PackageReferenced" and fact.target_symbol == "requests")
+    assert package_fact.evidence.file_path == "setup.cfg"
+    assert package_fact.properties["ecosystem"] == "python"
+    assert package_fact.properties["manifestKind"] == "setup.cfg"
+    assert package_fact.properties["metadataSource"] == "setup.cfg"
+    assert package_fact.properties["dependencyGroup"] == "options.install_requires"
+    assert package_fact.properties["dependencyScope"] == "runtime"
+    assert package_fact.properties["packageManager"] == "setuptools"
+    assert package_fact.properties["surfaceKind"] == "package-config"
     assert gaps == []
 
 
