@@ -322,6 +322,62 @@ public sealed class CombinedDependencyDiffTests
         Assert.DoesNotContain(result.Report.PathDiffs, row => row.Classification == CombinedDependencyDiffClassifications.Removed);
     }
 
+    [Fact]
+    public async Task Diff_does_not_collapse_same_sql_shape_with_different_source_kind()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, []);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            QueryPatternFact(manifest, null, "Infrastructure/Orders.cs", 10, "literal-string", "same-shape"),
+            QueryPatternFact(manifest, null, "Infrastructure/orders.sql", 1, "sql-file", "same-shape")
+        ]);
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "surfaces",
+            Surface: "sql-query"));
+
+        Assert.Equal(2, result.Report.SurfaceDiffs.Count(row => row.Classification == CombinedDependencyDiffClassifications.Added));
+        Assert.Equal(2, result.Report.SurfaceDiffs.Select(row => row.StableKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(result.Report.SurfaceDiffs, row => row.After!.SafeMetadata.Any(pair => pair.Key == "sqlSourceKind" && pair.Value == "literal-string"));
+        Assert.Contains(result.Report.SurfaceDiffs, row => row.After!.SafeMetadata.Any(pair => pair.Key == "sqlSourceKind" && pair.Value == "sql-file"));
+    }
+
+    [Fact]
+    public async Task Diff_marks_hash_only_and_volatile_sql_identity_as_review_tier()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, []);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            HashOnlySqlTextFact(manifest, "Infrastructure/orders.sql", 1),
+            VolatileSqlTextFact(manifest, "Infrastructure/unknown.sql", 2)
+        ]);
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "surfaces",
+            Surface: "sql-query"));
+
+        Assert.Contains(result.Report.SurfaceDiffs, row =>
+            row.Classification == CombinedDependencyDiffClassifications.NeedsReviewDiff
+            && row.CoverageCaveats.Any(caveat => caveat.Code == "HashOnlyEvidence"));
+        Assert.Contains(result.Report.SurfaceDiffs, row =>
+            row.Classification == CombinedDependencyDiffClassifications.NeedsReviewDiff
+            && row.CoverageCaveats.Any(caveat => caveat.Code == "VolatileIdentity"));
+    }
+
     private static async Task WriteSimpleCombinedAsync(TempDirectory temp, string combinedPath, string prefix)
     {
         var clientIndex = Path.Combine(temp.Path, $"{prefix}-client.sqlite");
@@ -431,6 +487,11 @@ public sealed class CombinedDependencyDiffTests
 
     private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
     {
+        return QueryPatternFact(manifest, sourceSymbol, file, line, "literal-string", "shape123");
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line, string sourceKind, string shapeHash)
+    {
         return FactFactory.Create(
             manifest,
             FactTypes.QueryPatternDetected,
@@ -444,9 +505,37 @@ public sealed class CombinedDependencyDiffTests
                 ["operationName"] = "SELECT",
                 ["tableName"] = "orders",
                 ["columnNames"] = "id;status",
-                ["sqlSourceKind"] = "literal-string",
-                ["queryShapeHash"] = "shape123",
+                ["sqlSourceKind"] = sourceKind,
+                ["queryShapeHash"] = shapeHash,
                 ["rawSql"] = "select * from orders"
             });
+    }
+
+    private static CodeFact HashOnlySqlTextFact(ScanManifest manifest, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SqlTextUsed,
+            RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: "sql",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["textHash"] = "text-only-hash",
+                ["textLength"] = "42"
+            });
+    }
+
+    private static CodeFact VolatileSqlTextFact(ScanManifest manifest, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SqlTextUsed,
+            RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: "sql",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal));
     }
 }

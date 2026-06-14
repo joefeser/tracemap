@@ -51,13 +51,31 @@ def test_sql_query_shape_ignores_string_literal_keywords() -> None:
     assert shape.column_names == ("id",)
 
 
-def test_sql_file_without_visible_shape_does_not_emit_query_pattern(tmp_path: Path) -> None:
+def test_sql_file_with_cte_emits_shape_hash_only_query_pattern(tmp_path: Path) -> None:
     sql_file = tmp_path / "cte.sql"
     sql_file.write_text("WITH recent AS (SELECT id FROM orders) SELECT id FROM recent\n", encoding="utf-8")
     facts = extract_sql_files(tmp_path, _manifest("sql-file-cte"), [sql_file], [])
+    patterns = [fact for fact in facts if fact.fact_type == "QueryPatternDetected"]
 
     assert any(fact.fact_type == "SqlTextUsed" for fact in facts)
-    assert not any(fact.fact_type == "QueryPatternDetected" for fact in facts)
+    assert len(patterns) == 1
+    assert patterns[0].properties["queryShapeHash"]
+    assert patterns[0].properties["sqlSourceKind"] == "sql-file"
+    assert "operationName" not in patterns[0].properties
+    assert "tableName" not in patterns[0].properties
+    assert "columnNames" not in patterns[0].properties
+
+
+def test_sql_shape_matches_python_v1_golden_fixture() -> None:
+    fixture = json.loads((ROOT / "samples/sql-shape-fixtures/sql-shape-v1.json").read_text(encoding="utf-8"))
+    for case in fixture["cases"]:
+        shape = query_shape(case["sql"])
+
+        assert sha256_hex(case["sql"], 32) == case["textHash"]
+        assert shape.query_shape_hash == case["queryShapeHash"]
+        assert (shape.operation_name or None) == case.get("operationName")
+        assert (";".join(shape.table_names) or None) == case.get("tableNames")
+        assert (";".join(shape.column_names) or None) == case.get("columnNames")
 
 
 def test_fact_id_ignores_extractor_version() -> None:

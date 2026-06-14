@@ -708,8 +708,13 @@ public static class CombinedChangeImpactReporter
             Pair("surfaceName", terminal.SurfaceName),
             Pair("httpMethod", terminal.HttpMethod),
             Pair("normalizedPathKey", terminal.NormalizedPathKey),
+            Pair("operationName", terminal.OperationName),
+            Pair("tableName", terminal.TableName),
+            Pair("columnNames", terminal.ColumnNames),
+            Pair("sqlSourceKind", terminal.SourceKind),
             Pair("shapeHash", terminal.ShapeHash),
             Pair("textHash", terminal.TextHash),
+            Pair("textLength", terminal.TextLength),
             Pair("packageName", terminal.PackageName),
             Pair("configKey", terminal.ConfigKey)
         ]);
@@ -756,7 +761,7 @@ public static class CombinedChangeImpactReporter
     private static string PathIdentity(CombinedPath path)
     {
         return string.Join("\u001f", [
-            string.Join(">", path.Nodes.Select(node => $"{node.NodeKind}:{node.SourceLabel}:{node.DisplayName}:{node.SurfaceKind}:{node.SurfaceName}:{node.HttpMethod}:{node.NormalizedPathKey}")),
+            string.Join(">", path.Nodes.Select(node => $"{node.NodeKind}:{node.SourceLabel}:{node.DisplayName}:{node.SurfaceKind}:{node.SurfaceName}:{node.HttpMethod}:{node.NormalizedPathKey}:{node.OperationName}:{node.TableName}:{node.ColumnNames}:{node.SourceKind}:{node.ShapeHash}:{node.TextHash}:{node.TextLength}")),
             string.Join(">", path.Edges.Select(edge => edge.EdgeKind))
         ]);
     }

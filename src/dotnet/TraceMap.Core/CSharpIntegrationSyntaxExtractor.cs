@@ -38,6 +38,14 @@ public static class CSharpIntegrationSyntaxExtractor
         "ExecuteAsync"
     };
 
+    private static readonly HashSet<string> EfRawSqlMethods = new(StringComparer.Ordinal)
+    {
+        "FromSqlRaw",
+        "FromSql",
+        "ExecuteSqlRaw",
+        "SqlQueryRaw"
+    };
+
     public static IReadOnlyList<CodeFact> Extract(string repoPath, ScanManifest manifest, IEnumerable<FileInventoryItem> inventory)
     {
         var facts = new List<CodeFact>();
@@ -212,6 +220,13 @@ public static class CSharpIntegrationSyntaxExtractor
                         ["methodName"] = invocationName,
                         ["receiverName"] = receiverName ?? string.Empty
                     }));
+
+                AddDynamicSqlBoundaryIfNeeded(manifest, facts, filePath, invocation, invocationName);
+            }
+
+            if (EfRawSqlMethods.Contains(invocationName))
+            {
+                AddDynamicSqlBoundaryIfNeeded(manifest, facts, filePath, invocation, invocationName);
             }
         }
     }
@@ -237,18 +252,50 @@ public static class CSharpIntegrationSyntaxExtractor
                 {
                     ["typeName"] = typeName
                 }));
+
+            if (creation.ArgumentList is { Arguments.Count: > 0 }
+                && !IsStaticStringLiteral(creation.ArgumentList.Arguments[0].Expression))
+            {
+                AddDynamicSqlBoundary(manifest, facts, filePath, creation, "SqlCommand");
+            }
         }
     }
 
     private static void AddSqlStringFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
     {
-        foreach (var token in root.DescendantTokens()
-            .Where(IsStringLiteralToken))
+        foreach (var token in root.DescendantTokens().Where(IsStringLiteralToken))
         {
             var value = token.ValueText;
             if (!SqlTextDetector.IsSqlLike(value))
             {
                 continue;
+            }
+
+            var containingSymbol = GetContainingSymbol(token.Parent, filePath);
+            var containingType = GetContainingType(token.Parent);
+            var containingMethod = GetContainingMemberName(token.Parent);
+            var sourceKind = GetSqlSourceKind(token.Parent);
+            var operationName = SqlShapeExtractor.OperationName(value);
+            var textProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["textHash"] = FactFactory.Hash(value, 32),
+                ["textLength"] = value.Length.ToString(),
+                ["sqlSourceKind"] = sourceKind,
+                ["targetSymbol"] = containingSymbol
+            };
+            if (!string.IsNullOrWhiteSpace(operationName))
+            {
+                textProperties["operationName"] = operationName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(containingType))
+            {
+                textProperties["containingType"] = containingType;
+            }
+
+            if (!string.IsNullOrWhiteSpace(containingMethod))
+            {
+                textProperties["containingMethod"] = containingMethod;
             }
 
             facts.Add(FactFactory.Create(
@@ -257,13 +304,72 @@ public static class CSharpIntegrationSyntaxExtractor
                 RuleIds.DatabaseSqlText,
                 EvidenceTiers.Tier3SyntaxOrTextual,
                 ToEvidenceSpan(filePath, token),
-                targetSymbol: "sql-string-literal",
-                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["textHash"] = FactFactory.Hash(value, 32),
-                    ["textLength"] = value.Length.ToString()
-                }));
+                sourceSymbol: containingMethod,
+                targetSymbol: containingSymbol,
+                properties: textProperties));
+
+            var shapeProperties = SqlShapeExtractor.QueryShapeProperties(value, sourceKind);
+            if (!string.IsNullOrWhiteSpace(containingType))
+            {
+                shapeProperties["containingType"] = containingType;
+            }
+
+            if (!string.IsNullOrWhiteSpace(containingMethod))
+            {
+                shapeProperties["containingMethod"] = containingMethod;
+            }
+
+            var target = shapeProperties.GetValueOrDefault("tableName") ?? containingSymbol;
+            shapeProperties["targetSymbol"] = target;
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.QueryPatternDetected,
+                RuleIds.DatabaseSqlShape,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                ToEvidenceSpan(filePath, token),
+                sourceSymbol: containingMethod,
+                targetSymbol: target,
+                contractElement: target,
+                properties: shapeProperties));
         }
+    }
+
+    private static void AddDynamicSqlBoundaryIfNeeded(ScanManifest manifest, List<CodeFact> facts, string filePath, InvocationExpressionSyntax invocation, string methodName)
+    {
+        if (invocation.ArgumentList.Arguments.Count == 0)
+        {
+            return;
+        }
+
+        if (IsStaticStringLiteral(invocation.ArgumentList.Arguments[0].Expression))
+        {
+            return;
+        }
+
+        AddDynamicSqlBoundary(manifest, facts, filePath, invocation, methodName);
+    }
+
+    private static void AddDynamicSqlBoundary(ScanManifest manifest, List<CodeFact> facts, string filePath, SyntaxNode node, string methodName)
+    {
+        var containingSymbol = GetContainingSymbol(node, filePath);
+        var containingMethod = GetContainingMemberName(node);
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier4Unknown,
+            ToEvidenceSpan(filePath, node),
+            sourceSymbol: containingMethod,
+            targetSymbol: containingSymbol,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = "dynamic-sql-boundary",
+                ["dynamicReason"] = "non-literal-sql-argument",
+                ["methodName"] = methodName,
+                ["sqlSourceKind"] = "dynamic-boundary",
+                ["targetSymbol"] = containingSymbol,
+                ["expressionHash"] = FactFactory.Hash(node.ToString(), 32)
+            }));
     }
 
     private static string GetInvocationName(ExpressionSyntax expression)
@@ -334,6 +440,59 @@ public static class CSharpIntegrationSyntaxExtractor
         }
 
         return false;
+    }
+
+    private static bool IsStaticStringLiteral(ExpressionSyntax expression)
+    {
+        return expression is LiteralExpressionSyntax literal && IsStringLiteralToken(literal.Token);
+    }
+
+    private static string GetSqlSourceKind(SyntaxNode? node)
+    {
+        var invocation = node?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+        if (invocation is not null && EfRawSqlMethods.Contains(GetInvocationName(invocation.Expression)))
+        {
+            return "orm-text";
+        }
+
+        return "literal-string";
+    }
+
+    private static string GetContainingSymbol(SyntaxNode? node, string filePath)
+    {
+        return GetContainingMemberName(node)
+            ?? GetContainingType(node)
+            ?? FileInventory.NormalizeRelativePath(filePath);
+    }
+
+    private static string? GetContainingMemberName(SyntaxNode? node)
+    {
+        foreach (var ancestor in node?.AncestorsAndSelf() ?? [])
+        {
+            switch (ancestor)
+            {
+                case MethodDeclarationSyntax method:
+                    return method.Identifier.ValueText;
+                case ConstructorDeclarationSyntax constructor:
+                    return constructor.Identifier.ValueText;
+                case PropertyDeclarationSyntax property:
+                    return property.Identifier.ValueText;
+                case AccessorDeclarationSyntax accessor
+                    when accessor.Parent?.Parent is PropertyDeclarationSyntax property:
+                    return property.Identifier.ValueText;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? GetContainingType(SyntaxNode? node)
+    {
+        return node?.AncestorsAndSelf()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault()
+            ?.Identifier
+            .ValueText;
     }
 
     private static bool IsStringLiteralToken(SyntaxToken token)

@@ -45,7 +45,7 @@ public sealed class CombinedReverseQueryTests
         Assert.Equal(before, await Sha256Async(combinedPath));
         Assert.True(File.Exists(Path.Combine(outDir, "reverse-report.md")));
         Assert.True(File.Exists(Path.Combine(outDir, "reverse-report.json")));
-        Assert.Contains(result.Report.SelectedSurfaces, surface => surface.SurfaceKind == "sql-query" && surface.DisplayName == "orders");
+        Assert.Contains(result.Report.SelectedSurfaces, surface => surface.SurfaceKind == "sql-query" && surface.DisplayName == "shape:shape123");
         Assert.Contains(result.Report.ReverseRoots, root => root.RootKind is "EndpointClient" or "EndpointRoute");
         Assert.Contains(result.Report.Paths, path => path.Nodes.First().NodeKind is "EndpointClient" or "EndpointRoute" && path.Nodes.Last().SurfaceKind == "sql-query");
         AssertRootPathLinks(result.Report);
@@ -101,7 +101,7 @@ public sealed class CombinedReverseQueryTests
             MaxSurfaces: 1));
 
         Assert.Single(result.Report.SelectedSurfaces);
-        Assert.Equal("orders", result.Report.SelectedSurfaces[0].DisplayName);
+        Assert.Equal("shape:shape123", result.Report.SelectedSurfaces[0].DisplayName);
         Assert.Equal("SERVER", result.Report.Query.Source);
         Assert.Equal("CaseInsensitiveExact", result.Report.Query.SurfaceNameMatchMode);
 
@@ -143,6 +143,33 @@ public sealed class CombinedReverseQueryTests
         Assert.Contains(all.Report.ReverseRoots, root => root.RootKind == "Source");
         Assert.Contains(all.Report.ReverseRoots, root => root.RootKind is "Symbol" or "Method" or "Type");
         AssertRootPathLinks(all.Report);
+    }
+
+    [Fact]
+    public async Task Reverse_preserves_sql_source_kind_in_surface_identity()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        SqliteIndexWriter.Write(index, manifest, [
+            QueryPatternFact(manifest, "Server.Repo.One()", "Repo.cs", 10, "orders", "literal-string", "same-shape"),
+            QueryPatternFact(manifest, "Server.Repo.Two()", "queries/orders.sql", 1, "orders", "sql-file", "same-shape")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedReverseReporter.WriteAsync(new CombinedReverseOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "reverse"),
+            Surface: "sql-query",
+            SurfaceName: "same-shape",
+            To: "sources"));
+
+        Assert.Equal(2, result.Report.SelectedSurfaces.Count);
+        Assert.Equal(2, result.Report.SelectedSurfaces.Select(surface => surface.StableKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(result.Report.SelectedSurfaces, surface => surface.Metadata.TryGetValue("sqlSourceKind", out var value) && value == "literal-string");
+        Assert.Contains(result.Report.SelectedSurfaces, surface => surface.Metadata.TryGetValue("sqlSourceKind", out var value) && value == "sql-file");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "DuplicateIdentity");
     }
 
     [Fact]
@@ -480,6 +507,11 @@ public sealed class CombinedReverseQueryTests
 
     private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line, string tableName = "orders")
     {
+        return QueryPatternFact(manifest, sourceSymbol, file, line, tableName, "literal-string", "shape123");
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line, string tableName, string sourceKind, string shapeHash)
+    {
         return FactFactory.Create(
             manifest,
             FactTypes.QueryPatternDetected,
@@ -493,8 +525,8 @@ public sealed class CombinedReverseQueryTests
                 ["operationName"] = "SELECT",
                 ["tableName"] = tableName,
                 ["columnNames"] = "id;status",
-                ["sqlSourceKind"] = "literal-string",
-                ["queryShapeHash"] = "shape123"
+                ["sqlSourceKind"] = sourceKind,
+                ["queryShapeHash"] = shapeHash
             });
     }
 

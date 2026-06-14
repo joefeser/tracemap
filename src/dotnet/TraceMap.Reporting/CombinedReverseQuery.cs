@@ -649,6 +649,9 @@ public static class CombinedReverseReporter
             || string.Equals(node.SurfaceName, selector, StringComparison.OrdinalIgnoreCase)
             || string.Equals(node.PackageName, selector, StringComparison.OrdinalIgnoreCase)
             || string.Equals(node.ConfigKey, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(node.TableName, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(node.ShapeHash, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(node.TextHash, selector, StringComparison.OrdinalIgnoreCase)
             || string.Equals(node.NormalizedPathKey, selector, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -656,9 +659,7 @@ public static class CombinedReverseReporter
     {
         var classification = ClassifySurface(node, hasDuplicateIdentity);
         var source = sourcesById.TryGetValue(node.SourceIndexId, out var found) ? found : null;
-        var caveats = source is not null && SourceHasReducedCoverage(source)
-            ? new[] { $"Source `{source.Label}` has reduced coverage." }
-            : [];
+        var caveats = SurfaceCaveats(node, source);
         return new CombinedReverseSurface(
             SurfaceId(node),
             node.SurfaceKind ?? "unknown",
@@ -678,8 +679,14 @@ public static class CombinedReverseReporter
                 new("normalizedPathKey", node.NormalizedPathKey),
                 new("packageName", node.PackageName),
                 new("configKey", node.ConfigKey),
+                new("operationName", node.OperationName),
+                new("tableName", node.TableName),
+                new("columnNames", node.ColumnNames),
+                new("sqlSourceKind", node.SourceKind),
                 new("shapeHash", node.ShapeHash),
-                new("textHash", node.TextHash)
+                new("textHash", node.TextHash),
+                new("textLength", node.TextLength),
+                new("identityFallbackHash", IsVolatileSqlIdentity(node) ? CombinedReportHelpers.Hash(node.CombinedFactId ?? node.NodeId, 24) : null)
             ]),
             node.CombinedFactId is null ? [] : [node.CombinedFactId],
             caveats);
@@ -986,7 +993,7 @@ public static class CombinedReverseReporter
 
     private static string ClassifySurface(CombinedPathNode node, bool hasDuplicateIdentity = false)
     {
-        return hasDuplicateIdentity || node.EvidenceTier == "Tier3SyntaxOrTextual"
+        return hasDuplicateIdentity || node.EvidenceTier == "Tier3SyntaxOrTextual" || IsHashOnlySqlEvidence(node) || IsVolatileSqlIdentity(node)
             ? CombinedReverseClassifications.NeedsReviewSurfaceEvidence
             : CombinedReverseClassifications.SelectedSurfaceEvidence;
     }
@@ -1116,9 +1123,61 @@ public static class CombinedReverseReporter
             node.NormalizedPathKey ?? string.Empty,
             node.PackageName ?? string.Empty,
             node.ConfigKey ?? string.Empty,
+            node.OperationName ?? string.Empty,
+            node.TableName ?? string.Empty,
+            node.ColumnNames ?? string.Empty,
+            node.SourceKind ?? string.Empty,
             node.ShapeHash ?? string.Empty,
-            node.TextHash ?? string.Empty
+            node.TextHash ?? string.Empty,
+            node.TextLength ?? string.Empty,
+            IsVolatileSqlIdentity(node) ? CombinedReportHelpers.Hash(node.CombinedFactId ?? node.NodeId, 24) : string.Empty
         ]);
+    }
+
+    private static IReadOnlyList<string> SurfaceCaveats(CombinedPathNode node, CombinedReportSource? source)
+    {
+        var caveats = new List<string>();
+        if (source is not null && SourceHasReducedCoverage(source))
+        {
+            caveats.Add($"Source `{source.Label}` has reduced coverage.");
+        }
+
+        if (IsHashOnlySqlEvidence(node))
+        {
+            caveats.Add("HashOnlyEvidence: SQL surface has text hash evidence without credible shape metadata; reverse evidence is review-tier.");
+        }
+
+        if (IsVolatileSqlIdentity(node))
+        {
+            caveats.Add("VolatileIdentity: SQL surface identity fell back to a fact hash because stable SQL metadata was unavailable; reverse evidence is review-tier.");
+        }
+
+        return caveats.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool IsHashOnlySqlEvidence(CombinedPathNode node)
+    {
+        return node.SurfaceKind == "sql-query"
+            && HasSqlValue(node.TextHash)
+            && !HasSqlValue(node.ShapeHash)
+            && !HasSqlValue(node.OperationName)
+            && !HasSqlValue(node.TableName)
+            && !HasSqlValue(node.ColumnNames);
+    }
+
+    private static bool IsVolatileSqlIdentity(CombinedPathNode node)
+    {
+        return node.SurfaceKind == "sql-query"
+            && !HasSqlValue(node.ShapeHash)
+            && !HasSqlValue(node.TextHash)
+            && !HasSqlValue(node.OperationName)
+            && !HasSqlValue(node.TableName)
+            && !HasSqlValue(node.ColumnNames);
+    }
+
+    private static bool HasSqlValue(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && !value.Equals("n/a", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string RootId(CombinedPathNode node, string rootKind) => $"reverse-root:{CombinedReportHelpers.Hash(RootIdentity(node, rootKind), 32)}";
@@ -1164,6 +1223,11 @@ public static class CombinedReverseReporter
             null,
             null,
             null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
     }
 
@@ -1179,8 +1243,13 @@ public static class CombinedReverseReporter
             node.NormalizedPathKey ?? string.Empty,
             node.PackageName ?? string.Empty,
             node.ConfigKey ?? string.Empty,
+            node.OperationName ?? string.Empty,
+            node.TableName ?? string.Empty,
+            node.ColumnNames ?? string.Empty,
+            node.SourceKind ?? string.Empty,
             node.ShapeHash ?? string.Empty,
-            node.TextHash ?? string.Empty
+            node.TextHash ?? string.Empty,
+            node.TextLength ?? string.Empty
         ]);
         return $"{node.NodeKind}:{node.SourceLabel}:{CombinedReportHelpers.Hash(identity, 32)}";
     }

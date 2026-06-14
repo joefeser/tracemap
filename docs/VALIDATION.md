@@ -197,6 +197,16 @@ sqlite3 <out>/index.sqlite "select count(*) from argument_flows;"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='HttpRouteBinding';"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='DatabaseColumnMapping';"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='QueryPatternDetected';"
+sqlite3 <out>/index.sqlite "select rule_id, json_extract(properties_json, '$.sqlSourceKind'), json_extract(properties_json, '$.queryShapeHash') from facts where fact_type='QueryPatternDetected' and json_extract(properties_json, '$.sqlSourceKind') is not null order by rule_id, fact_id;"
+sqlite3 <combined>/combined.sqlite "select sources.label, facts.fact_type, json_extract(facts.properties_json, '$.sqlSourceKind'), json_extract(facts.properties_json, '$.queryShapeHash'), json_extract(facts.properties_json, '$.textHash') from combined_facts facts join combined_sources sources on sources.source_index_id = facts.source_index_id where facts.fact_type in ('SqlTextUsed','QueryPatternDetected','DatabaseColumnMapping','DapperCallDetected','SqlCommandDetected') order by sources.label, facts.combined_fact_id;"
 grep "orm-text" <out>/report.md
 grep "orders" <out>/report.md
+```
+
+For SQL dependency-surface changes, also inspect hash-only and weak-identity behavior:
+
+```bash
+sqlite3 <combined>/combined.sqlite "select sources.label, facts.fact_type, facts.properties_json from combined_facts facts join combined_sources sources on sources.source_index_id = facts.source_index_id where facts.fact_type in ('SqlTextUsed','QueryPatternDetected') order by sources.label, facts.combined_fact_id;"
+dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <before-combined.sqlite> --after <after-combined.sqlite> --out <tmp>/sql-diff --scope surfaces --surface sql-query --format json
+grep -E "HashOnlyEvidence|VolatileIdentity" <tmp>/sql-diff/diff-report.json
 ```

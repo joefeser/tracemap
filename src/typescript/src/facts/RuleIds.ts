@@ -26,6 +26,7 @@ export const RuleIds = {
   TypeScriptIntegrationRoute: "typescript.integration.route.v1",
   TypeScriptIntegrationSerializer: "typescript.integration.serializer.v1",
   TypeScriptIntegrationDatabase: "typescript.integration.database.v1",
+  TypeScriptIntegrationSql: "typescript.integration.sql.v1",
   TypeScriptIntegrationContractMapping: "typescript.integration.contractmapping.v1",
   TypeScriptIntegrationBoundary: "typescript.integration.boundary.v1",
   TypeScriptIntegrationQueryPattern: "typescript.integration.querypattern.v1",

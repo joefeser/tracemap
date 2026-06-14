@@ -562,10 +562,15 @@ Each fixture should document:
 | TypeScript semantic property usage match | `DefiniteImpact` through existing .NET reducer |
 | TypeScript syntax-only fallback | reduced or syntax-only coverage, never clean |
 | TypeScript integration boundary | Tier1/Tier2/Tier3 according to compiler/package/shape evidence |
+| TypeScript direct SQL literal | `SqlTextUsed` plus SQL-shape `QueryPatternDetected` under `typescript.integration.sql.v1` when complete static SQL text is visible |
+| TypeScript Prisma/Base44 query pattern | `QueryPatternDetected` remains query-builder evidence and does not gain `sqlSourceKind` unless direct SQL text is present |
 | Python Pydantic DTO member match | `ProbableImpact` through Tier2 `SerializerContractMember` |
 | Python Flask/FastAPI route | `HttpRouteBinding` with normalized route key when static decorator syntax is visible |
 | Python SQLAlchemy column | `DatabaseColumnMapping` with table/column/member evidence when declarative syntax is visible |
-| Python static SQL pattern | `QueryPatternDetected` with operation, table/column metadata, text hash, and query shape hash |
+| Python static SQL pattern | `QueryPatternDetected` with operation, table/column metadata, text hash, and query shape hash; SQL-like `WITH`/CTE may be shape-hash-only |
+| Cross-adapter SQL shape fixture | `.NET`, TypeScript, JVM, and Python SQL-shape helpers match `samples/sql-shape-fixtures/sql-shape-v1.json` for v1 text/shape hashes |
+| Combined SQL surface identity | SQL surface display prefers `queryShapeHash`, keeps same-table/different-shape surfaces separate, and preserves different `sqlSourceKind` values in diff/reverse identity |
+| Combined SQL weak evidence caveat | hash-only SQL evidence emits `HashOnlyEvidence`, fact-hash fallback emits `VolatileIdentity`, and both remain review-tier in diff/impact |
 | Python endpoint smoke | `MatchedEndpoint` from public Python client/server sample indexes |
 | Python syntax invocation | `CallEdge` with containing function/module and callee syntax name |
 | Python broken file | reduced coverage with `AnalysisGap`, while other files continue scanning |

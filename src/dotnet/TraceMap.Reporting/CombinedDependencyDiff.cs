@@ -175,7 +175,9 @@ internal sealed record ComparableDiffRecord(
     string MetadataHash,
     string EvidenceHash,
     CombinedDiffEvidence Evidence,
-    bool NeedsReview = false);
+    bool NeedsReview = false,
+    IReadOnlyList<CombinedCoverageCaveat>? Caveats = null,
+    IReadOnlyList<CombinedDiffNote>? Notes = null);
 
 internal sealed record ComparablePathRecord(
     string Signature,
@@ -660,6 +662,8 @@ public static class CombinedDependencyDiffer
                 var source = SourceFor(read, surface.SourceIndexId);
                 var metadata = SurfaceMetadata(surface);
                 var stable = $"surface:{surface.SourceLabel}:{surface.SurfaceKind}:{MetadataHash(metadata)}";
+                var caveats = SurfaceCaveats(surface);
+                var notes = caveats.Select(caveat => new CombinedDiffNote(caveat.Code, caveat.Message)).ToArray();
                 var evidence = Evidence(
                     source,
                     "surface",
@@ -678,7 +682,9 @@ public static class CombinedDependencyDiffer
                     MetadataHash(metadata),
                     EvidenceHash(evidence),
                     evidence,
-                    surface.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+                    surface.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual || caveats.Count > 0,
+                    caveats,
+                    notes);
             })
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
             .ToArray();
@@ -699,8 +705,61 @@ public static class CombinedDependencyDiffer
             Pair("textLength", surface.TextLength),
             Pair("packageName", surface.PackageName),
             Pair("version", surface.Version),
-            Pair("configKey", surface.ConfigKey)
+            Pair("configKey", surface.ConfigKey),
+            Pair("identityFallbackHash", IsVolatileSqlIdentity(surface) ? CombinedReportHelpers.Hash(surface.OriginalFactId, 24) : null)
         ]);
+    }
+
+    private static IReadOnlyList<CombinedCoverageCaveat> SurfaceCaveats(CombinedDependencySurfaceRow surface)
+    {
+        if (surface.SurfaceKind != "sql-query")
+        {
+            return [];
+        }
+
+        var caveats = new List<CombinedCoverageCaveat>();
+        if (IsHashOnlySqlEvidence(surface))
+        {
+            caveats.Add(new CombinedCoverageCaveat(
+                surface.SourceLabel,
+                "HashOnlyEvidence",
+                "SQL surface has text hash evidence without credible shape metadata; diff classification remains review-tier."));
+        }
+
+        if (IsVolatileSqlIdentity(surface))
+        {
+            caveats.Add(new CombinedCoverageCaveat(
+                surface.SourceLabel,
+                "VolatileIdentity",
+                "SQL surface identity fell back to a fact hash because stable SQL metadata was unavailable; diff classification remains review-tier."));
+        }
+
+        return caveats;
+    }
+
+    private static bool IsHashOnlySqlEvidence(CombinedDependencySurfaceRow surface)
+    {
+        return surface.SurfaceKind == "sql-query"
+            && HasSqlValue(surface.TextHash)
+            && !HasSqlValue(surface.ShapeHash)
+            && !HasSqlValue(surface.OperationName)
+            && !HasSqlValue(surface.TableName)
+            && !HasSqlValue(surface.ColumnNames);
+    }
+
+    private static bool IsVolatileSqlIdentity(CombinedDependencySurfaceRow surface)
+    {
+        return surface.SurfaceKind == "sql-query"
+            && !HasSqlValue(surface.ShapeHash)
+            && !HasSqlValue(surface.TextHash)
+            && !HasSqlValue(surface.OperationName)
+            && !HasSqlValue(surface.TableName)
+            && !HasSqlValue(surface.ColumnNames);
+    }
+
+    private static bool HasSqlValue(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && !value.Equals("n/a", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool SurfaceNameMatches(CombinedDependencySurfaceRow surface, string selector)
@@ -709,6 +768,8 @@ public static class CombinedDependencyDiffer
             || string.Equals(surface.PackageName, selector, StringComparison.OrdinalIgnoreCase)
             || string.Equals(surface.ConfigKey, selector, StringComparison.OrdinalIgnoreCase)
             || string.Equals(surface.TableName, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(surface.ShapeHash, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(surface.TextHash, selector, StringComparison.OrdinalIgnoreCase)
             || string.Equals(surface.NormalizedPathKey, selector, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -839,8 +900,13 @@ public static class CombinedDependencyDiffer
             Pair("surfaceName", terminal.SurfaceName),
             Pair("httpMethod", terminal.HttpMethod),
             Pair("normalizedPathKey", terminal.NormalizedPathKey),
+            Pair("operationName", terminal.OperationName),
+            Pair("tableName", terminal.TableName),
+            Pair("columnNames", terminal.ColumnNames),
+            Pair("sqlSourceKind", terminal.SourceKind),
             Pair("shapeHash", terminal.ShapeHash),
             Pair("textHash", terminal.TextHash),
+            Pair("textLength", terminal.TextLength),
             Pair("packageName", terminal.PackageName),
             Pair("configKey", terminal.ConfigKey)
         ]);
@@ -1036,6 +1102,21 @@ public static class CombinedDependencyDiffer
     private static CombinedDiffRow CreateRow(string ruleId, string stableKey, string classification, ComparableDiffRecord? before, ComparableDiffRecord? after)
     {
         var changeType = ChangeType(classification);
+        var caveats = (before?.Caveats ?? [])
+            .Concat(after?.Caveats ?? [])
+            .GroupBy(caveat => $"{caveat.SourceLabel}\u001f{caveat.Code}\u001f{caveat.Message}", StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(caveat => caveat.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(caveat => caveat.Code, StringComparer.Ordinal)
+            .ThenBy(caveat => caveat.Message, StringComparer.Ordinal)
+            .ToArray();
+        var notes = (before?.Notes ?? [])
+            .Concat(after?.Notes ?? [])
+            .GroupBy(note => $"{note.Code}\u001f{note.Message}", StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(note => note.Code, StringComparer.Ordinal)
+            .ThenBy(note => note.Message, StringComparer.Ordinal)
+            .ToArray();
         return new CombinedDiffRow(
             DiffId(changeType, classification, stableKey, ruleId),
             changeType,
@@ -1045,8 +1126,8 @@ public static class CombinedDependencyDiffer
             ruleId,
             before?.Evidence,
             after?.Evidence,
-            [],
-            []);
+            caveats,
+            notes);
     }
 
     private static IReadOnlyList<CombinedDiffRow> SortAndCapRows(IReadOnlyList<CombinedDiffRow> rows, int maxRows, string ruleId, List<CombinedDiffGap> gaps)
