@@ -489,6 +489,79 @@ h3 {
   color: var(--muted);
 }
 
+.article-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr);
+  gap: 14px;
+}
+
+.article-grid a {
+  display: grid;
+  min-height: 220px;
+  align-content: start;
+  gap: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 24px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.article-grid a:hover {
+  border-color: var(--accent);
+}
+
+.article-grid span {
+  color: var(--gold);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.article-grid strong {
+  font-size: 1.24rem;
+  line-height: 1.24;
+}
+
+.article-grid p {
+  max-width: 720px;
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.article {
+  width: min(900px, calc(100% - 40px));
+  margin-inline: auto;
+}
+
+.article-header {
+  padding: 96px 0 46px;
+}
+
+.article-meta {
+  color: var(--muted);
+  font-size: 0.94rem;
+  font-weight: 750;
+}
+
+.article-body {
+  padding-bottom: 78px;
+}
+
+.article-body h2 {
+  max-width: 780px;
+  margin: 52px 0 18px;
+  font-size: clamp(1.85rem, 3.2vw, 2.75rem);
+}
+
+.article-body p {
+  max-width: 760px;
+  color: var(--ink);
+  font-size: 1.1rem;
+  line-height: 1.72;
+}
+
 .command-block {
   overflow-x: auto;
   border: 1px solid rgba(16, 58, 50, 0.2);
@@ -626,8 +699,18 @@ h3 {
   .workflow-grid,
   .path-grid,
   .example-grid,
+  .article-grid,
   .link-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .article,
+  .article-grid {
+    width: min(100% - 28px, 720px);
+  }
+
+  .article-header {
+    padding: 72px 0 38px;
   }
 }
 
@@ -648,6 +731,7 @@ h3 {
   .workflow-grid,
   .path-grid,
   .example-grid,
+  .article-grid,
   .link-grid,
   .preview-stats,
   .output-list div {

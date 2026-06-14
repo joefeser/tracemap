@@ -41,6 +41,16 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://tracemap.tools/blog/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://tracemap.tools/blog/what-tracemap-solves-for-engineering-teams/</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://tracemap.tools/validation/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
