@@ -1,0 +1,88 @@
+{
+  "version": "contract-delta-v2",
+  "contract": "CustomerProfile",
+  "source": {
+    "label": "api"
+  },
+  "changes": [
+    {
+      "id": "customer-profile-primary-email",
+      "kind": "property",
+      "changeType": "removed",
+      "reference": {
+        "typeName": "CustomerProfileResponse",
+        "propertyName": "primaryEmail"
+      }
+    },
+    {
+      "id": "orders-endpoint",
+      "kind": "endpoint",
+      "changeType": "changed",
+      "reference": {
+        "method": "GET",
+        "path": "/api/orders"
+      }
+    },
+    {
+      "id": "order-service-send",
+      "kind": "method",
+      "changeType": "signature_changed",
+      "reference": {
+        "typeName": "OrderService",
+        "methodName": "Send"
+      }
+    },
+    {
+      "id": "orders-schema",
+      "kind": "schema",
+      "changeType": "changed",
+      "reference": {
+        "schemaName": "dbo",
+        "tableName": "Orders"
+      }
+    },
+    {
+      "id": "orders-table",
+      "kind": "sql-table",
+      "changeType": "changed",
+      "reference": {
+        "tableName": "Orders"
+      }
+    },
+    {
+      "id": "orders-status-column",
+      "kind": "sql-column",
+      "changeType": "type_changed",
+      "reference": {
+        "tableName": "Orders",
+        "columnName": "Status"
+      }
+    },
+    {
+      "id": "orders-query-shape",
+      "kind": "sql-query",
+      "changeType": "behavior_changed",
+      "reference": {
+        "queryShapeHash": "example-shape-hash"
+      }
+    },
+    {
+      "id": "orders-sql-surface",
+      "kind": "dependency-surface",
+      "changeType": "changed",
+      "reference": {
+        "surfaceKind": "sql",
+        "surfaceName": "Orders"
+      }
+    },
+    {
+      "id": "newtonsoft-json",
+      "kind": "package",
+      "changeType": "removed",
+      "reference": {
+        "ecosystem": "nuget",
+        "packageName": "Newtonsoft.Json"
+      }
+    }
+  ]
+}

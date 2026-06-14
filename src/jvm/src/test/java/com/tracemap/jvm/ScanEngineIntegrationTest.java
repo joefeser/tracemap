@@ -52,6 +52,13 @@ final class ScanEngineIntegrationTest {
             FactTypes.PROPERTY_ACCESSED.equals(fact.factType())
                 && EvidenceTiers.TIER1_SEMANTIC.equals(fact.evidenceTier())
                 && "status".equals(fact.properties().get("propertyName"))));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
+                && "maven".equals(fact.properties().get("ecosystem"))
+                && "pom.xml".equals(fact.properties().get("manifestKind"))
+                && "runtime".equals(fact.properties().get("dependencyScope"))
+                && "package-config".equals(fact.properties().get("surfaceKind"))
+                && "org.springframework:spring-web".equals(fact.properties().get("packageName"))));
 
         Path report = temp.resolve("impact.md");
         Process process = new ProcessBuilder(
@@ -73,7 +80,9 @@ final class ScanEngineIntegrationTest {
         assertTrue(process.waitFor(60, TimeUnit.SECONDS), "dotnet reduce timed out");
         String output = new String(process.getInputStream().readAllBytes());
         assertEquals(0, process.exitValue(), output);
-        assertTrue(Files.readString(report).contains("DefiniteImpact"));
+        String markdown = Files.readString(report);
+        assertTrue(markdown.contains("NeedsReview"));
+        assertTrue(markdown.contains("PropertyAccessed"));
     }
 
     @Test
@@ -230,6 +239,36 @@ final class ScanEngineIntegrationTest {
         assertFalse(result.facts().stream().anyMatch(fact ->
             FactTypes.PROJECT_DECLARED.equals(fact.factType())
                 && "example.parent:parent-artifact".equals(fact.targetSymbol())));
+    }
+
+    @Test
+    void gradlePackageExtractionIgnoresLineAndBlockCommentMatches() throws Exception {
+        Path repo = temp.resolve("gradle-comments");
+        Files.createDirectories(repo);
+        Files.writeString(repo.resolve("build.gradle"), """
+            plugins {
+                id 'java'
+            }
+
+            dependencies {
+                // implementation 'com.example:commented-line:1.0.0'
+                * implementation 'com.example:commented-block:1.0.0'
+                implementation 'com.example:active:1.0.0'
+            }
+            """);
+        initGit(repo);
+
+        ScanResult result = new ScanEngine().scan(new ScanOptions(repo, temp.resolve("gradle-comments-out"), List.of(), List.of(), List.of(), 1024 * 1024, false, "all"));
+
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
+                && "com.example:active".equals(fact.properties().get("packageName"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
+                && "com.example:commented-line".equals(fact.properties().get("packageName"))));
+        assertFalse(result.facts().stream().anyMatch(fact ->
+            FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
+                && "com.example:commented-block".equals(fact.properties().get("packageName"))));
     }
 
     @Test

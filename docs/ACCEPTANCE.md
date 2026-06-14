@@ -44,6 +44,8 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `index.sqlite` includes a `local_aliases` table when local-alias facts are emitted.
 - `index.sqlite` includes a `field_aliases` table when field-alias facts are emitted.
 - `index.sqlite` includes a `parameter_forward_edges` table derived from parameter-to-parameter argument-flow facts.
+- `parameter_forward_edges` includes direct parameter forwarding, same-method local alias forwarding up to 3 alias hops, and unique constructor field-origin forwarding when evidence exists.
+- `parameter_forward_edges` omits ambiguous constructor field origins and alias chains beyond the documented bound instead of inventing a flow path.
 
 For every successful `tracemap-ts scan --repo <repo> --out <out>` run, verify:
 
@@ -80,10 +82,14 @@ For every successful `tracemap-py scan --repo <repo> --out <out>` run, verify:
 For every successful `tracemap reduce --index <index> --contract-delta <delta> --out <report>` run, verify:
 
 - impact report exists.
-- every finding includes the reducer rule ID `contract.delta.reduce.v1`.
+- every legacy finding includes the reducer rule ID `contract.delta.reduce.v1`, and every v2 finding or gap includes `contract.delta.input.v2`, `contract.delta.impact.v2`, or `contract.delta.context.v2`.
 - matched findings include evidence rows.
 - no-match findings include manifest coverage evidence.
 - reduced coverage never produces `NoEvidenceFullCoverage`.
+- v2 directory output writes deterministic `impact-report.md` and `impact-report.json`.
+- v2 reports do not render raw SQL, literal values, connection strings, URLs, local absolute paths, or source snippets.
+- v2 single-index reduce rejects `--include-paths` and `--include-reverse`; those context flags require a combined index and must emit explicit unavailable gaps when selectors cannot be derived safely.
+- v2 combined-index reduce preserves source labels, commit SHA, language, analysis level, build status, and repository identity hashes rather than raw repository URLs.
 
 ## Export Acceptance
 
@@ -184,6 +190,22 @@ For every successful `tracemap diff --before <before.sqlite> --after <after.sqli
 - `--exit-code` returns a non-zero exit only when requested and diff rows are present.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
 
+For every successful `tracemap snapshot-diff --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are the same TraceMap index kind: single-language indexes or combined indexes. Mixed single/combined inputs fail clearly without writing output.
+- inputs are opened read-only.
+- directory or extensionless output writes `snapshot-diff-report.md` and `snapshot-diff-report.json`.
+- JSON includes `reportType: snapshot-diff`, required empty arrays, stable query metadata, before/after snapshots, source diffs, coverage diffs, extractor-version diffs, gaps, and limitations.
+- single-language indexes use the synthetic source label `single`; reports do not render raw repository URLs, raw repository names, raw local roots, or local absolute paths.
+- conflicting source identity fails by default and can only continue with `--allow-identity-mismatch`, which emits rule-backed review/unknown gaps.
+- reduced coverage and unknown commit SHAs produce gaps instead of clean history-dependent conclusions.
+- combined-index endpoint, surface, graph, and opt-in path sections delegate to the combined diff engine and preserve combined rule IDs as supporting evidence.
+- single-index endpoint/surface/graph projectors, contract-shape comparison, and snapshot-specific gap-diff rows emit explicit availability gaps until their projector slices are implemented.
+- `--include-paths` requires combined indexes; `--scope paths` requires `--include-paths`.
+- `--max-diff-rows` and `--max-gaps` cap output deterministically.
+- `--exit-code` returns a non-zero exit only when requested and diff rows are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
+
 For every successful `tracemap impact --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
 
 - both inputs are combined indexes and are opened read-only through the shared diff pipeline.
@@ -200,6 +222,21 @@ For every successful `tracemap impact --before <before.sqlite> --after <after.sq
 - `--source`, `--endpoint`, `--surface`, `--surface-name`, `--max-impact-items`, `--max-paths-per-item`, `--max-path-queries`, `--max-depth`, `--max-frontier`, `--max-gaps`, and `--exit-code` behave deterministically.
 - `--exit-code` returns a non-zero exit only when requested and impact items are present.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
+
+For every successful `tracemap release-review --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are valid TraceMap indexes and are opened read-only.
+- both inputs are the same mode: single-language indexes use `ReleaseReviewSingleV1`, combined indexes use `ReleaseReviewCombinedV1`, and mixed mode is rejected without raw file paths.
+- directory or extensionless output writes `release-review.md` and `release-review.json`, even when `--format json` is supplied.
+- JSON includes `reportType: release-review`, required empty arrays, stable query metadata, before/after snapshots, summary, source coverage, all section objects, gaps, checklist items, and limitations.
+- release rollups use `ActionableStaticEvidence`, `ReviewRecommended`, `NoActionableEvidence`, `PartialAnalysis`, `SelectorNoMatch`, `UnknownAnalysisGap`, or `TruncatedByLimit`.
+- every release-level rollup, checklist item, section gap, selector gap, truncation gap, and source/coverage gap cites a `release.review.*` rule ID and evidence tier.
+- contract delta context is included when `--contract-delta` is provided and the reducer workflow is available.
+- API/DTO, SQL/schema, and package-upgrade workflows render explicit `unavailable` or `deferred` sections when they are not implemented or not requested; missing sections are never silently treated as clean evidence.
+- `--include-paths` and `--include-reverse` are off by default; single-index mode renders requested path/reverse context as unavailable with a rule-backed gap.
+- checklist items are derived only from findings and gaps and do not include release approval, readiness, or runtime-risk language.
+- caps such as `--max-findings`, `--max-surface-rows`, `--max-paths`, `--max-gaps`, and `--max-checklist-items` apply deterministically and emit truncation gaps when rows are omitted.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
 
 ## Language Adapter Acceptance
 

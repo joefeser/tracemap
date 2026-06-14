@@ -10,6 +10,7 @@ import com.tracemap.jvm.model.RuleIds;
 import com.tracemap.jvm.model.ScanManifest;
 import com.tracemap.jvm.model.ScannerVersions;
 import com.tracemap.jvm.scan.AnalysisGapCollector;
+import com.tracemap.jvm.util.Hashes;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -25,7 +26,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public final class BuildFileExtractor {
-    private static final Pattern GRADLE_COORDINATE = Pattern.compile("['\"]([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+):([^'\"]+)['\"]");
+    private static final Pattern GRADLE_COORDINATE = Pattern.compile("\\b([A-Za-z][A-Za-z0-9_]*)\\s*\\(?\\s*['\"]([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+):([^'\"]+)['\"]");
     private static final Pattern GRADLE_GROUP = Pattern.compile("\\bgroup\\s*=\\s*['\"]([^'\"]+)['\"]");
     private static final Pattern GRADLE_VERSION = Pattern.compile("\\bversion\\s*=\\s*['\"]([^'\"]+)['\"]");
     private static final Pattern GRADLE_INCLUDE = Pattern.compile("\\binclude\\s*\\(?\\s*['\"]([^'\"]+)['\"]");
@@ -81,7 +82,7 @@ public final class BuildFileExtractor {
                 null,
                 packageName,
                 null,
-                props("buildTool", "maven", "groupId", safe(groupId), "artifactId", safe(artifactId), "version", safe(version), "name", packageName)));
+                props("buildTool", "maven", "ecosystem", "maven", "groupId", safe(groupId), "artifactId", safe(artifactId), "version", safe(version), "name", packageName, "manifestKind", "pom.xml", "packageManager", "maven", "sourceKind", "build-file")));
 
             NodeList dependencies = project.getElementsByTagName("dependency");
             for (int i = 0; i < dependencies.getLength(); i++) {
@@ -91,6 +92,7 @@ public final class BuildFileExtractor {
                 String depGroup = firstDirectText(dep, "groupId");
                 String depArtifact = firstDirectText(dep, "artifactId");
                 String depVersion = firstDirectText(dep, "version");
+                String depScope = firstDirectText(dep, "scope");
                 if (depGroup == null || depArtifact == null) {
                     continue;
                 }
@@ -98,6 +100,8 @@ public final class BuildFileExtractor {
                     gaps.add("DynamicBuildValue: " + file.relativePath() + " dependency " + depGroup + ":" + depArtifact);
                 }
                 String dependencyName = depGroup + ":" + depArtifact;
+                Map<String, String> depProps = props("artifactId", depArtifact, "buildTool", "maven", "dependencyGroup", safe(depScope), "dependencyScope", mavenScope(depScope), "ecosystem", "maven", "groupId", depGroup, "manifestKind", "pom.xml", "name", dependencyName, "packageManager", "maven", "packageName", dependencyName, "sourceKind", "build-file", "surfaceKind", "package-config");
+                putVersion(depProps, depVersion);
                 facts.add(FactFactory.create(
                     manifest,
                     FactTypes.PACKAGE_REFERENCED,
@@ -108,7 +112,7 @@ public final class BuildFileExtractor {
                     packageName,
                     dependencyName,
                     null,
-                    props("buildTool", "maven", "groupId", depGroup, "artifactId", depArtifact, "version", safe(depVersion), "name", dependencyName)));
+                    depProps));
             }
         } catch (Exception exception) {
             gaps.add("MavenParseFailed: " + file.relativePath() + " (" + exception.getClass().getSimpleName() + ")");
@@ -134,11 +138,18 @@ public final class BuildFileExtractor {
                 null,
                 projectName,
                 null,
-                props("buildTool", "gradle", "groupId", safe(group), "artifactId", projectName, "version", safe(version), "name", projectName)));
+                props("buildTool", "gradle", "ecosystem", "gradle", "groupId", safe(group), "artifactId", projectName, "version", safe(version), "name", projectName, "manifestKind", "gradle", "packageManager", "gradle", "sourceKind", "build-file")));
             Matcher dependencyMatcher = GRADLE_COORDINATE.matcher(text);
             while (dependencyMatcher.find()) {
-                String dependencyName = dependencyMatcher.group(1) + ":" + dependencyMatcher.group(2);
+                if (isCommentedGradleMatch(text, dependencyMatcher.start())) {
+                    continue;
+                }
+
+                String configuration = dependencyMatcher.group(1);
+                String dependencyName = dependencyMatcher.group(2) + ":" + dependencyMatcher.group(3);
                 int line = lineOf(text, dependencyMatcher.start());
+                Map<String, String> depProps = props("artifactId", dependencyMatcher.group(3), "buildTool", "gradle", "dependencyGroup", configuration, "dependencyScope", gradleScope(configuration), "ecosystem", "gradle", "groupId", dependencyMatcher.group(2), "manifestKind", "gradle", "name", dependencyName, "packageManager", "gradle", "packageName", dependencyName, "sourceKind", "build-file", "surfaceKind", "package-config");
+                putVersion(depProps, dependencyMatcher.group(4));
                 facts.add(FactFactory.create(
                     manifest,
                     FactTypes.PACKAGE_REFERENCED,
@@ -149,7 +160,7 @@ public final class BuildFileExtractor {
                     projectName,
                     dependencyName,
                     null,
-                    props("buildTool", "gradle", "groupId", dependencyMatcher.group(1), "artifactId", dependencyMatcher.group(2), "version", dependencyMatcher.group(3), "name", dependencyName)));
+                    depProps));
             }
             Matcher includeMatcher = GRADLE_INCLUDE.matcher(text);
             while (includeMatcher.find()) {
@@ -206,6 +217,76 @@ public final class BuildFileExtractor {
 
     private static String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private static String mavenScope(String scope) {
+        if (scope == null || scope.isBlank() || "compile".equals(scope) || "runtime".equals(scope)) {
+            return "runtime";
+        }
+        if ("test".equals(scope)) {
+            return "test";
+        }
+        if ("provided".equals(scope)) {
+            return "build";
+        }
+        if ("system".equals(scope)) {
+            return "runtime";
+        }
+        if ("import".equals(scope)) {
+            return "dependencyManagement";
+        }
+        return "unknown";
+    }
+
+    private static String gradleScope(String configuration) {
+        if (configuration == null || configuration.isBlank()) {
+            return "unknown";
+        }
+        String lower = configuration.toLowerCase();
+        if (lower.contains("test")) {
+            return "test";
+        }
+        if (lower.contains("compileonly") || lower.contains("annotationprocessor")) {
+            return "build";
+        }
+        if (lower.contains("runtime") || lower.contains("implementation") || lower.equals("api") || lower.equals("compile")) {
+            return "runtime";
+        }
+        return "unknown";
+    }
+
+    private static boolean isCommentedGradleMatch(String text, int offset) {
+        int startOfLine = text.lastIndexOf('\n', offset) + 1;
+        String prefix = text.substring(startOfLine, offset);
+        return prefix.contains("//") || prefix.trim().startsWith("*");
+    }
+
+    private static void putVersion(Map<String, String> props, String version) {
+        if (version == null || version.isBlank()) {
+            props.put("version", "");
+            return;
+        }
+        String trimmed = version.trim();
+        if (unsafePackageVersion(trimmed)) {
+            props.put("versionHash", Hashes.sha256(trimmed, 32));
+            props.put("redactionReason", "unsafe-package-version");
+        } else {
+            props.put("version", trimmed);
+        }
+    }
+
+    private static boolean unsafePackageVersion(String value) {
+        String lower = value.toLowerCase();
+        return value.contains("://")
+            || value.contains("\\")
+            || value.startsWith("/")
+            || value.startsWith("./")
+            || value.startsWith("../")
+            || lower.startsWith("file:")
+            || lower.startsWith("git+")
+            || value.contains("${")
+            || value.contains("$(")
+            || value.contains("%");
     }
 
     private static Map<String, String> props(String... values) {

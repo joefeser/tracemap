@@ -14,6 +14,7 @@ Every language adapter should have:
 | local broken sample | proves syntax fallback and reduced coverage labels |
 | reducer fixture | proves contract delta matching through shared facts/index schema |
 | SQLite relationship queries | proves `call_edges`, `object_creations`, `argument_flows`, symbols, and relationship tables are populated when facts exist |
+| value-origin flow queries | proves direct parameter forwarding, bounded local aliases, and unique constructor field origins are represented without crossing ambiguous boundaries |
 | integration facts | proves HTTP/API, config, SQL/DB, serializer, and package/dependency facts where supported |
 | combine/report/paths/reverse/export smoke | proves shared schema compatibility, combined dependency reporting, static dependency path queries, and reverse dependency-surface queries across adapters |
 | public OSS smoke | proves larger real-world repos complete without unchecked assumptions |
@@ -35,6 +36,42 @@ PYTHON_BIN=/tmp/tracemap-python-venv/bin/python ./scripts/smoke-python-endpoints
 ./scripts/check-private-paths.sh
 ```
 
+## Public Demo Workflow
+
+Run the public demo when validating the open-source walkthrough or generated public artifacts:
+
+```bash
+./scripts/demo-public.sh
+./scripts/demo-public.sh .tracemap-demo
+```
+
+The default demo uses only checked-in samples. It does not clone public repositories, read private repositories, call external analysis services, query package registries, or run vulnerability/license/compatibility analysis. First-run build restore may still need network access for local toolchains such as NuGet or npm.
+
+Current first-slice behavior:
+
+- checks `git`, `.NET`, `node`, and `npm`
+- builds the .NET solution and TypeScript adapter
+- scans `samples/modern-sample`
+- scans `samples/endpoint-server-aspnet`
+- scans `samples/typescript-modern-sample`
+- scans `samples/endpoint-client-angular`
+- writes `demo-summary.md` and `demo-summary.json`
+- runs a generated-output sentinel scan over public-shareable summaries and reports
+- marks Python as `not_requested` unless `--include-python` is passed; requested Python scanning is currently `deferred` to a follow-up slice
+- marks JVM as `unavailable` when Java 21 is absent
+- marks combine/report, paths/reverse, portfolio, diff, impact, and release-review as `deferred` until follow-up demo slices add their assertions
+
+Troubleshooting:
+
+- If the demo refuses an in-repo output directory, use `.tracemap-demo/` or add a generic ignored output path before running the script.
+- If .NET or TypeScript build restore fails, run the build/test commands above directly to restore local toolchain dependencies and inspect their native diagnostics.
+- Reduced sample scan coverage is expected in the first public-demo slice for samples that intentionally rely on syntax fallback or missing framework packages. The summary reports full and reduced scan counts so follow-up report assertions can stay coverage-aware.
+- If the generated public-report sentinel fails, inspect the relative file paths and category it prints. Keep scan manifests, SQLite files, facts, and logs local-only; public summaries and reports must use hashes, labels, or relative paths.
+
+Generated outputs under `scans/**`, SQLite files, facts, manifests, and logs are local-only artifacts and may contain temporary execution details. Public-shareable `demo-summary.*` and future `reports/**/*.md|json` artifacts must not contain raw scripts, SQL, snippets, config values, connection strings, raw URLs with credentials, private paths, or local absolute paths.
+
+Use `.tracemap-demo/` for an in-repo output root; it is ignored by git. Other in-repo output directories are rejected unless `git check-ignore` proves they are ignored.
+
 For JVM CLI smoke, also run:
 
 ```bash
@@ -50,8 +87,9 @@ rg -n "fields none" <scan-output>/report.md
 
 `fields none` is acceptable for query-builder facts with no extracted field metadata. SQL-shape facts should render derived operation/table/column/source/hash metadata instead, and reports must not render raw SQL text, literal values, unsafe identifiers, or developer-local absolute paths.
 
-For combined dependency report, path-query, reverse-query, or diff changes, run a combine/report/paths/reverse/diff smoke over any two existing local scan outputs:
+For combined dependency report, path-query, reverse-query, diff, or snapshot-diff changes, run a combine/report/paths/reverse/diff/snapshot-diff smoke over any two existing local scan outputs:
 For combined change-impact changes, include the `impact` command in the same smoke.
+For release-review changes, include `release-review` in the same smoke and verify `release-review.md` plus `release-review.json` are produced.
 
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- combine \
@@ -62,7 +100,9 @@ dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sq
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
 dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index <tmp>/combined.sqlite --surface sql-query --to endpoints --out <tmp>/combined-reverse
 dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-diff
+dotnet run --project src/dotnet/TraceMap.Cli -- snapshot-diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/snapshot-diff
 dotnet run --project src/dotnet/TraceMap.Cli -- impact --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-impact
+dotnet run --project src/dotnet/TraceMap.Cli -- release-review --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/release-review
 test -f <tmp>/combined-report/dependency-report.md
 test -f <tmp>/combined-report/dependency-report.json
 test -f <tmp>/combined-paths/paths-report.md
@@ -71,9 +111,21 @@ test -f <tmp>/combined-reverse/reverse-report.md
 test -f <tmp>/combined-reverse/reverse-report.json
 test -f <tmp>/combined-diff/diff-report.md
 test -f <tmp>/combined-diff/diff-report.json
+test -f <tmp>/snapshot-diff/snapshot-diff-report.md
+test -f <tmp>/snapshot-diff/snapshot-diff-report.json
 test -f <tmp>/combined-impact/impact-report.md
 test -f <tmp>/combined-impact/impact-report.json
+test -f <tmp>/release-review/release-review.md
+test -f <tmp>/release-review/release-review.json
 ```
+
+For value-origin flow changes, also inspect the source `parameter_forward_edges` table from a semantic .NET sample or focused fixture:
+
+```bash
+sqlite3 <out>/index.sqlite "select source_method_symbol, source_parameter_symbol, target_method_symbol, target_parameter_name, rule_id from parameter_forward_edges order by source_method_symbol, target_method_symbol;"
+```
+
+Expected behavior: direct parameter forwarding is present, same-method aliases are bounded to 3 hops, and ambiguous constructor/member origins are omitted or represented as gaps by future reporting slices rather than being promoted to forwarding edges.
 
 For changes to `combine`, `report`, `paths`, `reverse`, endpoint extraction, call edges, SQL/query extraction, or dependency-surface projection, run the public combined-path smoke:
 

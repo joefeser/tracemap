@@ -42,6 +42,7 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
       const json = JSON.parse(text) as Record<string, unknown>;
       const packageName = typeof json.name === "string" ? json.name : path.basename(repoPath);
       const packageVersion = typeof json.version === "string" ? json.version : "HEAD";
+      const packageManager = typeof json.packageManager === "string" ? json.packageManager.split("@", 1)[0] : "npm";
       facts.push(
         createFact(
           manifest,
@@ -55,6 +56,10 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
               name: packageName,
               packageName,
               packageVersion,
+              ecosystem: "npm",
+              manifestKind: "package.json",
+              packageManager,
+              sourceKind: "manifest",
               type: "package-json"
             }
           }
@@ -67,6 +72,7 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
         }
         for (const dependencyName of Object.keys(dependencies as Record<string, unknown>).sort()) {
           const version = (dependencies as Record<string, unknown>)[dependencyName];
+          const versionProperties = packageVersionProperties(typeof version === "string" ? version : "unknown");
           facts.push(
             createFact(
               manifest,
@@ -78,9 +84,16 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
                 targetSymbol: dependencyName,
                 properties: {
                   name: dependencyName,
+                  dependencyGroup: section,
+                  dependencyScope: dependencyScope(section),
+                  dependencySection: section,
+                  ecosystem: "npm",
+                  manifestKind: "package.json",
+                  packageManager,
                   packageName: dependencyName,
-                  packageVersion: typeof version === "string" ? version : "unknown",
-                  dependencySection: section
+                  sourceKind: "manifest",
+                  surfaceKind: "package-config",
+                  ...versionProperties
                 }
               }
             )
@@ -91,6 +104,7 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
       if (scripts && typeof scripts === "object" && !Array.isArray(scripts)) {
         for (const scriptName of Object.keys(scripts as Record<string, unknown>).sort()) {
           const value = (scripts as Record<string, unknown>)[scriptName];
+          const scriptText = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
           facts.push(
             createFact(
               manifest,
@@ -104,8 +118,10 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
                 properties: {
                   keyPath: `scripts:${scriptName}`,
                   name: scriptName,
-                  valueHash: hash(typeof value === "string" ? value : JSON.stringify(value)),
-                  valueKind: typeof value
+                  redactionReason: "script-command-redacted",
+                  valueHash: hash(scriptText),
+                  valueKind: typeof value,
+                  valueLength: String(scriptText.length)
                 }
               }
             )
@@ -126,6 +142,48 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
     }
   }
   return facts;
+}
+
+function dependencyScope(section: string): string {
+  switch (section) {
+    case "dependencies":
+      return "runtime";
+    case "devDependencies":
+      return "development";
+    case "peerDependencies":
+      return "peer";
+    case "optionalDependencies":
+      return "optional";
+    default:
+      return "unknown";
+  }
+}
+
+function packageVersionProperties(value: string): Record<string, string> {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { packageVersion: "", version: "" };
+  }
+  if (isUnsafePackageVersion(trimmed)) {
+    return {
+      versionHash: hash(trimmed, 32),
+      redactionReason: "unsafe-package-version"
+    };
+  }
+  return { packageVersion: trimmed, version: trimmed };
+}
+
+function isUnsafePackageVersion(value: string): boolean {
+  return value.includes("://")
+    || value.includes("\\")
+    || value.startsWith("/")
+    || value.startsWith("./")
+    || value.startsWith("../")
+    || value.toLowerCase().startsWith("file:")
+    || value.toLowerCase().startsWith("git+")
+    || value.includes("${")
+    || value.includes("$(")
+    || value.includes("%");
 }
 
 function lineOf(text: string, needle: string): number {

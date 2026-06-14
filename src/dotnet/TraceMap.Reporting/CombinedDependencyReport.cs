@@ -114,7 +114,14 @@ public sealed record CombinedDependencySurfaceRow(
     string? TextLength,
     string? PackageName,
     string? Version,
-    string? ConfigKey);
+    string? ConfigKey,
+    string? Ecosystem = null,
+    string? ManifestKind = null,
+    string? DependencyScope = null,
+    string? DependencyGroup = null,
+    string? PackageManager = null,
+    string? VersionHash = null,
+    string? RedactionReason = null);
 
 public sealed record CombinedDependencyEdgeRow(
     string EdgeKind,
@@ -730,8 +737,19 @@ public static class CombinedDependencyReporter
         var textHash = FirstValue(fact.Properties, "textHash");
         var textLength = FirstValue(fact.Properties, "textLength");
         var packageName = FirstValue(fact.Properties, "packageName", "package", "dependencyName", "moduleName", "name");
-        var version = FirstValue(fact.Properties, "version", "packageVersion");
+        var rawVersion = FirstValue(fact.Properties, "version", "packageVersion");
+        var version = SafePackageVersion(rawVersion);
+        var unsafeVersion = !string.IsNullOrWhiteSpace(rawVersion) && version is null;
+        var versionHash = FirstValue(fact.Properties, "versionHash")
+            ?? (unsafeVersion ? CombinedReportHelpers.Hash(rawVersion!, 32) : null);
+        var redactionReason = FirstValue(fact.Properties, "redactionReason")
+            ?? (unsafeVersion ? "unsafe-package-version" : null);
         var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "environmentVariableName");
+        var ecosystem = FirstValue(fact.Properties, "ecosystem", "packageEcosystem", "packageManager");
+        var manifestKind = FirstValue(fact.Properties, "manifestKind", "metadataSource", "sourceFormat", "type");
+        var dependencyScope = FirstValue(fact.Properties, "dependencyScope", "scope");
+        var dependencyGroup = FirstValue(fact.Properties, "dependencyGroup", "dependencySection", "buildTool");
+        var packageManager = FirstValue(fact.Properties, "packageManager", "buildTool");
         var displayName = surfaceKind switch
         {
             "http-client" or "http-route" => normalizedPathKey ?? FirstValue(fact.Properties, "normalizedPathTemplate") ?? $"{httpMethod ?? "ANY"} unknown",
@@ -767,7 +785,14 @@ public static class CombinedDependencyReporter
             textLength,
             packageName,
             version,
-            configKey);
+            configKey,
+            ecosystem,
+            manifestKind,
+            dependencyScope,
+            dependencyGroup,
+            packageManager,
+            versionHash,
+            redactionReason);
     }
 
     private static string? SurfaceKind(CombinedFactRow fact)
@@ -792,12 +817,23 @@ public static class CombinedDependencyReporter
             return "sql-query";
         }
 
-        if (fact.FactType.Contains("Package", StringComparison.Ordinal)
-            || fact.FactType.Contains("Dependency", StringComparison.Ordinal)
-            || fact.FactType.Contains("ProjectReference", StringComparison.Ordinal)
-            || fact.FactType.Contains("Config", StringComparison.Ordinal)
-            || fact.FactType.Contains("ConnectionString", StringComparison.Ordinal)
-            || fact.FactType.Contains("EnvironmentVariable", StringComparison.Ordinal))
+        if (fact.Properties.TryGetValue("surfaceKind", out var declaredSurfaceKind)
+            && !string.IsNullOrWhiteSpace(declaredSurfaceKind))
+        {
+            var trimmed = declaredSurfaceKind.Trim();
+            return string.Equals(trimmed, "package", StringComparison.OrdinalIgnoreCase)
+                ? "package-config"
+                : trimmed;
+        }
+
+        if (fact.FactType == FactTypes.PackageReferenced)
+        {
+            return "package-config";
+        }
+
+        if (fact.FactType is FactTypes.ConfigBinding
+            or FactTypes.ConfigKeyDeclared
+            or FactTypes.ConnectionStringDeclared)
         {
             return "package-config";
         }
@@ -987,7 +1023,7 @@ public static class CombinedDependencyReporter
             "http-client" or "http-route" => $"{surface.HttpMethod ?? "ANY"} {surface.NormalizedPathKey ?? "unknown"}",
             "sql-query" => $"op {surface.OperationName ?? "unknown"} table {surface.TableName ?? "n/a"} columns {surface.ColumnNames ?? "n/a"} source {surface.SourceKind ?? "unknown"} shape {surface.ShapeHash ?? surface.TextHash ?? "n/a"}",
             "sql-persistence" => $"table {surface.TableName ?? "n/a"} columns {surface.ColumnNames ?? "n/a"}",
-            "package-config" => $"package {surface.PackageName ?? "n/a"} version {surface.Version ?? "n/a"} key {surface.ConfigKey ?? "n/a"}",
+            "package-config" => $"package {surface.PackageName ?? "n/a"} ecosystem {surface.Ecosystem ?? "unknown"} version {surface.Version ?? surface.VersionHash ?? "n/a"} scope {surface.DependencyScope ?? "unknown"} manifest {surface.ManifestKind ?? "unknown"} key {surface.ConfigKey ?? "n/a"}",
             _ => string.Empty
         };
     }
@@ -1048,6 +1084,31 @@ public static class CombinedDependencyReporter
         }
 
         return $"unknown-persistence:{Hash(fact.OriginalFactId ?? fact.CombinedFactId, 16)}";
+    }
+
+    private static string? SafePackageVersion(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return IsUnsafePackageVersion(trimmed) ? null : trimmed;
+    }
+
+    private static bool IsUnsafePackageVersion(string value)
+    {
+        return value.Contains("://", StringComparison.Ordinal)
+            || value.Contains("\\", StringComparison.Ordinal)
+            || value.StartsWith("/", StringComparison.Ordinal)
+            || value.StartsWith("./", StringComparison.Ordinal)
+            || value.StartsWith("../", StringComparison.Ordinal)
+            || value.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("git+", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("${", StringComparison.Ordinal)
+            || value.Contains("$(", StringComparison.Ordinal)
+            || value.Contains("%", StringComparison.Ordinal);
     }
 
     private static bool IsTableMappingKind(string? mappingKind)

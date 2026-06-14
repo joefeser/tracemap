@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap is a deterministic repository indexer and contract-change impact reducer that publishes rule-backed evidence, coverage labels, and static dependency reports."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>TraceMap | Evidence-backed repository maps</title>
+    <link rel="canonical" href="https://tracemap.tools/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap | Evidence-backed repository maps">
+    <meta
+      property="og:description"
+      content="TraceMap scans code into deterministic facts and reduces contract changes against evidence without LLM calls, embeddings, or prompt-based classification in the scanner."
+    >
+    <meta property="og:url" content="https://tracemap.tools/">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="TraceMap | Evidence-backed repository maps">
+    <meta
+      name="twitter:description"
+      content="Deterministic static analysis artifacts for repository maps, contract deltas, dependency surfaces, and release review evidence."
+    >
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "TraceMap",
+        "url": "https://tracemap.tools/",
+        "codeRepository": "https://github.com/joefeser/tracemap",
+        "programmingLanguage": ["C#", "TypeScript", "Java", "Kotlin", "Python"],
+        "description": "TraceMap is a deterministic repository indexer and contract-change impact reducer that emits rule-backed static analysis evidence."
+      }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="#evidence">Evidence</a>
+        <a href="#outputs">Outputs</a>
+        <a href="#workflows">Workflows</a>
+        <a href="#start">Start</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">Deterministic repository analysis</p>
+          <h1>TraceMap turns code into evidence-backed maps.</h1>
+          <p class="hero-subhead">
+            Scan repositories, compare snapshots, reduce contract deltas, and assemble
+            release review packets from rule-backed facts. Every finding keeps its
+            rule ID, evidence tier, file span, commit SHA, and extractor version.
+          </p>
+          <p class="hero-note">
+            TraceMap is static analysis. It does not use LLM calls, embeddings, vector
+            databases, or prompt-based classification in the scanner or reducer.
+          </p>
+          <div class="hero-actions" aria-label="Primary links">
+            <a class="button primary" href="#start">Run the demo</a>
+            <a class="button secondary" href="https://github.com/joefeser/tracemap">Read the source</a>
+          </div>
+        </div>
+        <div class="artifact-preview" aria-label="TraceMap evidence artifact preview">
+          <div class="preview-window">
+            <div class="preview-bar" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <pre><code>scan-manifest.json
+facts.ndjson
+index.sqlite
+report.md
+logs/analyzer.log
+
+ruleId: contract.delta.impact.v2
+tier: Tier2Structural
+commitSha: 5e7fe17
+classification: NeedsReview</code></pre>
+          </div>
+          <div class="preview-stats" aria-label="Evidence model summary">
+            <div>
+              <strong>4</strong>
+              <span>evidence tiers</span>
+            </div>
+            <div>
+              <strong>5</strong>
+              <span>scan artifacts</span>
+            </div>
+            <div>
+              <strong>0</strong>
+              <span>AI calls in scanner</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section proof-strip" id="evidence">
+        <div class="section-header">
+          <p class="section-kicker">Evidence model</p>
+          <h2>No conclusion without evidence.</h2>
+        </div>
+        <div class="tier-grid">
+          <article>
+            <span>Tier 1</span>
+            <h3>Semantic</h3>
+            <p>Compiler-resolved symbol evidence where the language adapter can prove identity.</p>
+          </article>
+          <article>
+            <span>Tier 2</span>
+            <h3>Structural</h3>
+            <p>Known framework, project, endpoint, package, SQL, config, or DTO patterns.</p>
+          </article>
+          <article>
+            <span>Tier 3</span>
+            <h3>Syntax or text</h3>
+            <p>Useful static clues when semantic proof is not available.</p>
+          </article>
+          <article>
+            <span>Tier 4</span>
+            <h3>Unknown</h3>
+            <p>Analysis gaps, unavailable sections, reduced coverage, or unable-to-prove cases.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section" id="outputs">
+        <div>
+          <p class="section-kicker">Artifacts</p>
+          <h2>The scanner emits files people and machines can inspect.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>scan-manifest.json</code><span>Repo, commit, scanner, build, and coverage metadata.</span></div>
+          <div><code>facts.ndjson</code><span>Rule-backed facts with evidence tiers and source spans.</span></div>
+          <div><code>index.sqlite</code><span>Queryable facts, symbols, relationships, surfaces, and flows.</span></div>
+          <div><code>report.md</code><span>Human-readable summary with coverage and known gaps.</span></div>
+          <div><code>logs/analyzer.log</code><span>Analyzer diagnostics for partial or failed project loading.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="workflows">
+        <div class="section-header">
+          <p class="section-kicker">Workflows</p>
+          <h2>Static evidence for contract and dependency review.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Scan</h3>
+            <p>Index .NET, TypeScript, JVM, and Python repositories into deterministic facts.</p>
+          </article>
+          <article>
+            <h3>Reduce</h3>
+            <p>Compare contract deltas against indexed evidence and label reduced coverage honestly.</p>
+          </article>
+          <article>
+            <h3>Combine</h3>
+            <p>Merge many indexes with source provenance for cross-repo dependency reports.</p>
+          </article>
+          <article>
+            <h3>Paths and reverse</h3>
+            <p>Trace bounded static evidence from endpoints to surfaces, or from surfaces back to roots.</p>
+          </article>
+          <article>
+            <h3>Diff and impact</h3>
+            <p>Compare snapshots and summarize changed static evidence without claiming runtime behavior.</p>
+          </article>
+          <article>
+            <h3>Release review</h3>
+            <p>Assemble a release-oriented packet from coverage, impact, contract, and gap evidence.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section command-section" id="start">
+        <div>
+          <p class="section-kicker">Get started</p>
+          <h2>Run the checked-in public demo.</h2>
+          <p>
+            The demo scans sample repositories, writes a generated artifact bundle,
+            and produces public-shareable summaries without local absolute paths.
+          </p>
+        </div>
+        <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
+cd tracemap
+./scripts/demo-public.sh
+
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/modern-sample \
+  --out .tracemap</code></pre>
+      </section>
+
+      <section class="section boundary-section" id="boundaries">
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>TraceMap keeps the claim narrow.</h2>
+        </div>
+        <ul>
+          <li>No raw source snippets are stored by default.</li>
+          <li>No failed or partial scan is reported as clean.</li>
+          <li>No runtime traffic, production usage, deployment state, or release approval is inferred.</li>
+          <li>No impact conclusion is emitted without a rule ID and supporting evidence.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" aria-label="Project links">
+        <div>
+          <p class="section-kicker">Source of truth</p>
+          <h2>Open source, testable, and intentionally inspectable.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="https://github.com/joefeser/tracemap">GitHub repository</a>
+          <a href="https://github.com/joefeser/tracemap/blob/dev/docs/PRD.md">Product requirements</a>
+          <a href="https://github.com/joefeser/tracemap/blob/dev/docs/VALIDATION.md">Validation guide</a>
+          <a href="https://github.com/joefeser/tracemap/blob/dev/rules/rule-catalog.yml">Rule catalog</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        TraceMap publishes deterministic static-analysis evidence for reviewers.
+        Source docs live at
+        <a href="https://github.com/joefeser/tracemap">github.com/joefeser/tracemap</a>.
+      </p>
+    </footer>
+  </body>
+</html>

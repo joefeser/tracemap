@@ -38,6 +38,17 @@ ScaffoldingReadMe.txt
 
 # dotenv environment variables file
 .env
+.env.kiro.local
+
+# Local review artifacts
+.tmp/kiro-reviews/
+
+# Local TraceMap demo output
+.tracemap-demo/
+
+# Static site build output
+site/dist/
+site/output/
 
 # Others
 ~$*

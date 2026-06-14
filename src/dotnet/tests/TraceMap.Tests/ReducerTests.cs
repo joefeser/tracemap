@@ -92,7 +92,7 @@ public sealed class ReducerTests
         var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
 
         Assert.Contains("Classification: `NeedsReview`", report);
-        Assert.Contains("Generic member name `status` matched 12 facts", report);
+        Assert.Contains("Generic member name \\`status\\` matched 12 facts", report);
         Assert.Contains("High fan-out match set: 12 facts across 12 files", report);
     }
 
@@ -204,6 +204,10 @@ public sealed class ReducerTests
 
         Assert.Contains("Classification: `NoEvidenceFullCoverage`", report);
         Assert.Contains("Manifest coverage evidence", report);
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.json"));
+        Assert.Contains("\"factType\": \"RepoScanned\"", json);
+        Assert.Contains("\"evidenceKind\": \"coverage-no-match\"", json);
+        Assert.Contains("\"matchedFactCount\": \"0\"", json);
     }
 
     [Fact]
@@ -220,6 +224,10 @@ public sealed class ReducerTests
 
         Assert.Contains("Classification: `NoEvidenceReducedCoverage`", report);
         Assert.Contains("reduced or syntax-only coverage", report);
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.json"));
+        Assert.Contains("\"factType\": \"RepoScanned\"", json);
+        Assert.Contains("\"evidenceKind\": \"coverage-no-match\"", json);
+        Assert.Contains("\"matchedFactCount\": \"0\"", json);
     }
 
     private static async Task<string> RunReduceAsync(string indexPath, string deltaPath, string outputPath)
