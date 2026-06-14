@@ -140,21 +140,7 @@ Risk:
 
 - Medium. Mostly composition and reporting, but it must avoid implying that unavailable workflows ran.
 
-### 2. Implement `snapshot-diff-by-sha`
-
-Why: this makes the "compare two repo states by commit" story concrete. It also supports the long-term goal of tracking dependency and impact changes across versions.
-
-Expected value:
-
-- Scan/compare workflow anchored to commit SHAs.
-- Better repeatability for demos and regression examples.
-- Stronger foundation for release review.
-
-Risk:
-
-- Medium. Needs careful command behavior around checkout/build cleanliness and no raw path leakage.
-
-### 3. Implement `api-dto-contract-diff`
+### 2. Implement `api-dto-contract-diff`
 
 Why: API/DTO changes are one of the clearest ways to demonstrate TraceMap's evidence model. This builds on endpoint and type facts.
 
@@ -168,7 +154,7 @@ Risk:
 
 - Medium-high. Needs precise classification boundaries so it does not claim runtime serialization behavior it cannot prove.
 
-### 4. Implement `sql-schema-change-impact`
+### 3. Implement `sql-schema-change-impact`
 
 Why: SQL is a major dependency surface, and we now collect enough SQL evidence to make schema/table/column changes useful.
 
@@ -182,7 +168,7 @@ Risk:
 
 - Medium. Static SQL parsing and dynamic SQL boundaries must stay honest.
 
-### 5. Implement `parameter-value-origin-flow`
+### 4. Implement `parameter-value-origin-flow`
 
 Why: this is the deeper analysis layer: request object to service call to external dependency. It is high-value, but also more complex than the report-oriented work above.
 
