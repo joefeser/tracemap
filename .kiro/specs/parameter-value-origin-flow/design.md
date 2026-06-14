@@ -66,7 +66,7 @@ Origins are only credible when backed by a fact with rule ID, evidence tier, spa
 
 ### Value Hop
 
-A value hop is one direct static step:
+A value hop is one direct static step that can move value-origin evidence:
 
 | Hop | Evidence |
 | --- | --- |
@@ -75,10 +75,10 @@ A value hop is one direct static step:
 | local alias | `LocalAlias` |
 | field/member alias | `FieldAlias` |
 | constructor argument to member | constructor `ArgumentPassed` plus `FieldAlias` or dedicated derived edge |
-| call relationship | `CallEdge` |
-| object construction | `ObjectCreated` |
 | endpoint/source root | endpoint facts with containing symbol and parameter evidence |
 | dependency terminal | SQL, HTTP, config/package, package, event/message, or persistence surface facts |
+
+`CallEdge` and `ObjectCreated` are structural reachability context, not value-moving hops by themselves. They may appear in a value-origin path only when paired with direct argument, alias, field/member, constructor-member, or terminal evidence that explains which value is moving.
 
 Hops are not runtime proof. They are static evidence rows.
 
