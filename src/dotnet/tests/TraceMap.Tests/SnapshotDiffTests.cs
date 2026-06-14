@@ -508,6 +508,35 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_combined_source_selector_filters_unselected_metadata_gaps()
+    {
+        using var temp = new TempDirectory();
+        var beforeApi = Path.Combine(temp.Path, "before-api.sqlite");
+        var beforeWeb = Path.Combine(temp.Path, "before-web.sqlite");
+        var afterApi = Path.Combine(temp.Path, "after-api.sqlite");
+        var afterWeb = Path.Combine(temp.Path, "after-web.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        SqliteIndexWriter.Write(beforeApi, Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111"), []);
+        SqliteIndexWriter.Write(beforeWeb, Manifest("web", ScannerVersions.TraceMap, commitSha: "1111111"), []);
+        SqliteIndexWriter.Write(afterApi, Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222"), []);
+        SqliteIndexWriter.Write(afterWeb, Manifest("web", ScannerVersions.TraceMap, commitSha: "2222222"), []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeApi, beforeWeb], beforeCombined, ["api", "web"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterApi, afterWeb], afterCombined, ["api", "web"]));
+        CorruptCombinedSourceManifest(beforeCombined, "web");
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "report"),
+            Scope: "sources",
+            Source: "api"));
+
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MalformedMetadataGap" && gap.SourceLabel == "web");
+        Assert.All(result.Report.Gaps.Where(gap => !string.IsNullOrWhiteSpace(gap.SourceLabel)), gap => Assert.Equal("api", gap.SourceLabel));
+    }
+
+    [Fact]
     public async Task Snapshot_diff_combined_gap_mapping_preserves_supporting_fact_ids()
     {
         using var temp = new TempDirectory();
@@ -766,6 +795,20 @@ public sealed class SnapshotDiffTests
             where fact_id = $fact_id;
             """;
         command.Parameters.AddWithValue("$fact_id", factId);
+        command.ExecuteNonQuery();
+    }
+
+    private static void CorruptCombinedSourceManifest(string indexPath, string label)
+    {
+        using var connection = new SqliteConnection($"Data Source={indexPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            update index_sources
+            set manifest_json = '{'
+            where label = $label;
+            """;
+        command.Parameters.AddWithValue("$label", label);
         command.ExecuteNonQuery();
     }
 }
