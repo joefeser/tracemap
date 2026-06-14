@@ -80,10 +80,14 @@ For every successful `tracemap-py scan --repo <repo> --out <out>` run, verify:
 For every successful `tracemap reduce --index <index> --contract-delta <delta> --out <report>` run, verify:
 
 - impact report exists.
-- every finding includes the reducer rule ID `contract.delta.reduce.v1`.
+- every legacy finding includes the reducer rule ID `contract.delta.reduce.v1`, and every v2 finding or gap includes `contract.delta.input.v2`, `contract.delta.impact.v2`, or `contract.delta.context.v2`.
 - matched findings include evidence rows.
 - no-match findings include manifest coverage evidence.
 - reduced coverage never produces `NoEvidenceFullCoverage`.
+- v2 directory output writes deterministic `impact-report.md` and `impact-report.json`.
+- v2 reports do not render raw SQL, literal values, connection strings, URLs, local absolute paths, or source snippets.
+- v2 single-index reduce rejects `--include-paths` and `--include-reverse`; those context flags require a combined index and must emit explicit unavailable gaps when selectors cannot be derived safely.
+- v2 combined-index reduce preserves source labels, commit SHA, language, analysis level, build status, and repository identity hashes rather than raw repository URLs.
 
 ## Export Acceptance
 

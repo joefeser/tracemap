@@ -61,6 +61,12 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sampl
 dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap/index.sqlite --contract-delta samples/contract-deltas/modern-sample.customer-profile.json --out .tracemap/impact-report.md
 ```
 
+`tracemap reduce` also accepts structured contract delta v2 input for type, property, method, endpoint, package, schema, SQL, and dependency-surface references, and directory outputs write both Markdown and deterministic JSON:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- reduce --index .tracemap/index.sqlite --contract-delta samples/contract-deltas/contract-delta-v2.example.json --out .tracemap/impact --format json
+```
+
 Useful .NET index commands:
 
 ```bash
