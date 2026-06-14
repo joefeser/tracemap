@@ -347,12 +347,83 @@ public sealed class PortfolioReportTests
         Assert.Contains(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "ChangedSurfaceEvidence" && HasMetadata(row, "displayName", "Telemetry.Core"));
         Assert.Contains(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "AddedSurfaceEvidence" && HasMetadata(row, "displayName", "Added.Package"));
         Assert.Contains(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "RemovedSurfaceEvidence" && HasMetadata(row, "displayName", "Removed.Package"));
-        Assert.Contains(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "ChangedEdgeEvidence" && row.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        var changedSurface = Assert.Single(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "ChangedSurfaceEvidence" && HasMetadata(row, "displayName", "Telemetry.Core"));
+        Assert.True(HasMetadata(changedSurface, "beforeFilePath", "Api.csproj"));
+        Assert.True(HasMetadata(changedSurface, "afterFilePath", "Api.csproj"));
+        Assert.True(HasMetadata(changedSurface, "beforeStartLine", "5"));
+        Assert.True(HasMetadata(changedSurface, "afterStartLine", "5"));
+        var changedEdge = Assert.Single(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "ChangedEdgeEvidence" && row.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.True(HasMetadata(changedEdge, "beforeFilePath", "Services/OrderService.cs"));
+        Assert.True(HasMetadata(changedEdge, "afterFilePath", "Services/OrderService.cs"));
+        Assert.True(HasMetadata(changedEdge, "beforeStartLine", "20"));
+        Assert.True(HasMetadata(changedEdge, "afterStartLine", "21"));
         Assert.Equal(PortfolioReportClassifications.ActionableStaticEvidence, result.Report.Summary.RollupClassification);
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.md"));
         Assert.Contains("ChangedSurfaceEvidence", markdown);
         Assert.Contains("ChangedEdgeEvidence", markdown);
+    }
+
+    [Fact]
+    public async Task Portfolio_comparison_projected_rows_downgrade_ambiguous_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        var beforeScan = Manifest("api", ScannerVersions.TraceMap, "git-api-before");
+        var afterScan = Manifest("api", ScannerVersions.TraceMap, "git-api-after");
+        SqliteIndexWriter.Write(beforeIndex, beforeScan, [
+            PackageFact(beforeScan, "Telemetry.Core", "nuget", "Api.csproj", "PackageReference", "1.0.0")
+        ]);
+        SqliteIndexWriter.Write(afterIndex, afterScan, [
+            PackageFact(afterScan, "Telemetry.Core", "nuget", "Api.csproj", "PackageReference", "2.0.0")
+        ]);
+        await WriteManifestAsync(beforeManifest, [("api", beforeIndex)]);
+        await WriteManifestAsync(afterManifest, [("api", afterIndex)]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "IdentityAmbiguous" && gap.Section == "portfolioDiff");
+        Assert.Contains(result.Report.PortfolioDiff.Rows, row =>
+            row.ChangeKind == "ChangedSurfaceEvidence"
+            && HasMetadata(row, "displayName", "Telemetry.Core")
+            && row.Classification == PortfolioReportClassifications.ReviewRecommended);
+    }
+
+    [Fact]
+    public async Task Portfolio_comparison_ignores_absolute_path_hashes_for_package_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        var beforeScan = Manifest("api", ScannerVersions.TraceMap, "git-api");
+        var afterScan = Manifest("api", ScannerVersions.TraceMap, "git-api");
+        SqliteIndexWriter.Write(beforeIndex, beforeScan, [
+            PackageFact(beforeScan, "Telemetry.Core", "nuget", Path.Combine(temp.Path, "before-root", "Api.csproj"), "PackageReference")
+        ]);
+        SqliteIndexWriter.Write(afterIndex, afterScan, [
+            PackageFact(afterScan, "Telemetry.Core", "nuget", Path.Combine(temp.Path, "after-root", "Api.csproj"), "PackageReference")
+        ]);
+        await WriteManifestAsync(beforeManifest, [("api", beforeIndex)]);
+        await WriteManifestAsync(afterManifest, [("api", afterIndex)]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest));
+
+        Assert.DoesNotContain(result.Report.PortfolioDiff.Rows, row => row.ChangeKind.EndsWith("SurfaceEvidence", StringComparison.Ordinal));
     }
 
     [Fact]

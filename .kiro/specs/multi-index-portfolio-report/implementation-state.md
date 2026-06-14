@@ -63,7 +63,7 @@ Implemented a useful v1 portfolio command:
 ## Validation
 
 - `dotnet build src/dotnet/TraceMap.sln` passed.
-- `dotnet test src/dotnet/TraceMap.sln` passed: 201 tests.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 203 tests.
 - `./scripts/check-private-paths.sh` passed.
 - `git diff --check` passed.
 - Relevant pinned smoke checks are deferred for this branch because the change is limited to portfolio report comparison projection and does not change language adapters, combined indexes, path/reverse traversal, combined report, combined diff, impact, or release-review behavior.
