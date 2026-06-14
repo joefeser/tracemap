@@ -65,11 +65,13 @@ Options:
 --format <markdown|json>
 --source <label>
 --group <tag>
---surface <http-client|http-route|sql-query|package|config|symbol|edge>
+--surface <http-client|http-route|sql-query|sql-persistence|package-config|symbol|edge>
 --surface-name <text>
 --include-impact
 --include-paths
 --include-reverse
+--max-diff-rows <n>
+--max-impact-items <n>
 --max-sources <n>
 --max-surface-rows <n>
 --max-endpoint-findings <n>
@@ -77,6 +79,8 @@ Options:
 --max-edge-rows <n>
 --max-paths <n>
 --max-roots <n>
+--max-depth <n>
+--max-frontier <n>
 --max-gaps <n>
 ```
 
@@ -85,7 +89,8 @@ Output behavior:
 - File output defaults to Markdown.
 - `--format json` with file output writes JSON.
 - Directory output writes both `portfolio-report.md` and `portfolio-report.json`.
-- A non-existing output path with no extension is treated as a directory.
+- Any output path with no extension is treated as a directory, matching existing TraceMap report helpers.
+- If an extensionless path already exists as a file, the command fails with a sanitized output-path error rather than overwriting it.
 - Input indexes are opened read-only.
 - `--exit-code` is not part of v1. Deterministic CI exit policy is deferred to a follow-up spec.
 
@@ -122,11 +127,13 @@ Suggested schema:
 Rules:
 
 - `indexPath` can be absolute or relative to the manifest file for local resolution.
+- Relative `indexPath` values are resolved against the manifest file's directory, not the current working directory.
 - `indexPath` must not be emitted in public Markdown/JSON except as a safe hash or sanitized basename if needed.
 - `label` is the stable portfolio source label.
 - `expectedRepoIdentity` and `expectedCommitSha` are optional validation hints, not replacements for index provenance.
 - `group` and `roleTags` are reviewer-provided grouping metadata. They do not prove runtime topology or ownership.
 - Metadata output should use canonical `metadata: [{ "key": "...", "value": "..." }]` arrays, not arbitrary dictionaries.
+- Reused path/reverse/impact models with dictionary metadata must be adapted into portfolio rows and converted to sorted key/value arrays before rendering; portfolio JSON should not embed conflicting reused-model metadata shapes directly.
 
 ## Proposed Package Layout
 
@@ -230,6 +237,23 @@ public sealed record PortfolioReport(
 ```
 
 `Inputs` are the raw direct-index or manifest entries. `Sources` are expanded portfolio sources: a combined index is one input but may produce many sources from `index_sources`.
+
+Suggested snapshot model:
+
+```csharp
+public sealed record PortfolioSnapshot(
+    string? PortfolioId,
+    string? SnapshotId,
+    string SnapshotMode,
+    IReadOnlyList<string> InputIds,
+    IReadOnlyList<string> SourceIds,
+    IReadOnlyList<string> CommitShas,
+    string Coverage,
+    IReadOnlyList<PortfolioGap> Gaps,
+    IReadOnlyList<KeyValuePair<string, string>> Metadata);
+```
+
+`PortfolioSnapshot` is stable input provenance, not a run log. It must not contain generated timestamps, process IDs, local paths, raw URLs, or stored scan/import timestamps.
 
 Section status vocabulary:
 
@@ -340,12 +364,18 @@ Surface kind mapping:
 | `http-client` | `HttpCallDetected` |
 | `http-route` | `HttpRouteBinding` |
 | `sql-query` | `QueryPatternDetected`, `SqlTextUsed`, `DapperCallDetected`, `SqlCommandDetected` |
-| `package` | package declarations, project references, imports, lockfile rows |
-| `config` | config keys, environment variable names, connection string names |
+| `sql-persistence` | `DatabaseColumnMapping` and database table/column persistence mapping facts |
+| `package-config` | package declarations, project references, imports, lockfile rows, config keys, environment variable names, connection string names |
 | `symbol` | public symbols and framework-specific symbols |
 | `edge` | calls, creates, relationships, argument flows, parameter forwarding |
 
 Unsafe property values must be omitted, hashed, or represented as closed-set reason codes.
+
+Selector compatibility:
+
+- `--surface` uses the existing TraceMap combined surface-kind vocabulary so portfolio can delegate to diff, impact, path, and reverse workflows without translation drift.
+- `package` and `config` are not separate v1 `--surface` kinds; both normalize to `package-config` and may be distinguished by safe metadata, `--surface-name`, or future typed selectors.
+- `sql-persistence` is distinct from `sql-query` so database column/persistence mappings are not lost or misreported as query execution evidence.
 
 ## Endpoint Alignment
 
@@ -503,6 +533,7 @@ Rules:
 - empty lists are `[]`;
 - absent optional objects are `null`;
 - arbitrary metadata is represented as sorted `[{ "key": "...", "value": "..." }]`;
+- reused report rows with dictionary metadata are normalized to sorted key/value arrays before entering portfolio JSON;
 - generated timestamps are omitted unless a future version explicitly accepts non-byte-stable output;
 - `PortfolioSnapshot` and nested objects must not include generated timestamps, wall-clock dates, process IDs, stored scan timestamps, or stored import timestamps;
 - identical inputs and options must produce byte-identical JSON and Markdown.

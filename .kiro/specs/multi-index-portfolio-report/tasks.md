@@ -26,9 +26,11 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [ ] Parse `--format`, selectors, optional path/reverse context flags, and caps.
   - [ ] Reject deferred v1 flags such as `--exit-code`, `--release-review`, and `--allow-mixed-inputs` with sanitized errors if they are encountered.
   - [ ] Validate numeric caps.
+  - [ ] Include bounded optional-section caps: `--max-diff-rows`, `--max-impact-items`, `--max-depth`, and `--max-frontier`.
   - [ ] Emit sanitized errors without raw local paths or secret-looking values.
   - [ ] Open input indexes read-only.
-  - [ ] Implement output path behavior for directory, extensionless, Markdown file, and JSON file.
+  - [ ] Implement output path behavior for directory, extensionless directory, Markdown file, and JSON file.
+  - [ ] Fail with a sanitized error when an extensionless output path already exists as a file.
 
 - [ ] 3. Add portfolio manifest model and reader. Requirements: 2, 10, 11.
   - [ ] Define manifest schema version `1.0`.
@@ -41,7 +43,7 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
 
 - [ ] 4. Add report models and section status support. Requirements: 3, 8, 10.
   - [ ] Define root model with `reportType = multi-index-portfolio-report` and `version = 1.0`.
-  - [ ] Define query, input, source, coverage, summary, section, gap, limitation, and metadata models.
+  - [ ] Define query, input, `PortfolioSnapshot`, source, coverage, summary, section, gap, limitation, and metadata models.
   - [ ] Implement section status vocabulary: `available`, `not_requested`, `unavailable`, `deferred`, `truncated`.
   - [ ] Implement rollup vocabulary and fixed precedence.
   - [ ] Use empty arrays and nulls consistently.
@@ -64,6 +66,7 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [ ] Render all optional sections as `not_requested`, `unavailable`, or `deferred` instead of omitting them.
   - [ ] Sort arrays deterministically.
   - [ ] Encode arbitrary metadata as sorted key/value arrays.
+  - [ ] Normalize dictionary metadata from reused path/reverse/impact/diff models into sorted key/value arrays before rendering.
   - [ ] Escape Markdown table and link syntax.
   - [ ] Use shared safe path and safe value rendering helpers.
   - [ ] Add byte-stability tests for skeleton output.
@@ -93,8 +96,9 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [ ] Read HTTP client call facts.
   - [ ] Read HTTP route binding facts.
   - [ ] Read SQL/query-pattern facts and hash-only SQL evidence.
-  - [ ] Read package, project reference, import, module, and dependency facts.
-  - [ ] Read config, environment variable, connection string name, and resource identifier facts.
+  - [ ] Read database column/persistence mapping facts such as `DatabaseColumnMapping` as `sql-persistence`.
+  - [ ] Read package, project reference, import, module, config, environment variable, connection string name, resource identifier, and dependency facts as `package-config`.
+  - [ ] Ensure config/resource values are omitted, hashed, or replaced with closed-set reason codes.
   - [ ] Normalize all rows into portfolio source-scoped surface rows.
   - [ ] Preserve rule ID, evidence tier, fact ID, commit SHA, file path, and line span.
   - [ ] Render missing optional values as `unknown`, `n/a`, `null`, or `[]` consistently.
@@ -202,8 +206,11 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [ ] Optional path/reverse unavailable for incompatible inputs.
   - [ ] `releaseReviewContext` v1 deferred/not-requested behavior.
   - [ ] Relative manifest paths resolve from the manifest location.
+  - [ ] Extensionless output path behavior, including existing extensionless-file failure.
   - [ ] Rollup precedence.
   - [ ] Truncation omitted counts.
+  - [ ] Optional section caps for diff, impact, path depth, and path frontier are honored.
+  - [ ] Reused reverse/path dictionary metadata is normalized to sorted key/value arrays.
   - [ ] No generated timestamps or stored scan/import timestamps render.
   - [ ] Input databases are not mutated.
   - [ ] Repeated output is byte-stable.
