@@ -91,7 +91,7 @@
 - [x] PR 1b: combine and dependency report assertions, docs, optional JVM availability behavior.
 - [x] PR 2: path/reverse semantic assertions and shared assertion helpers.
 - [x] PR 3: portfolio section plus deferred diff/impact/release-review summary entries.
-- PR 4: concrete before/after fixture pair that promotes diff/impact/release-review to available.
+- [x] PR 4: concrete before/after fixture pair that promotes diff/impact/release-review to available.
 - PR 5: optional OSS mode or CI wiring if desired.
 
 ## Shipped Follow-Up Slice
@@ -106,7 +106,11 @@
 - [x] A demo-run `portfolio-manifest.json` is generated from generated combined index paths.
 - [x] `tracemap portfolio` runs over the generated manifest and verifies source coverage plus dependency surface metadata.
 - [x] Public generated reports and summaries remain covered by the sentinel scan.
-- [x] Diff, impact, and release-review remain deferred until compatible before/after fixtures and contract deltas exist.
+- [x] Checked-in `samples/public-demo/before` and `samples/public-demo/after` fixtures provide deterministic public before/after evidence.
+- [x] The demo scans and combines the public before/after fixtures with deterministic label `public-demo-api`.
+- [x] `tracemap diff` runs over the generated before/after combined snapshots and verifies route surface, SQL surface, rule, evidence-tier, commit, and supporting-ID metadata.
+- [x] `tracemap impact` runs over the generated before/after combined snapshots and verifies surface impact evidence without runtime-impact claims.
+- [x] `tracemap release-review` runs over the generated before/after combined snapshots and verifies static release evidence, checklist rules, and explicit not-requested/unavailable/deferred subsections.
 
 ## Definition Of Done
 
@@ -122,11 +126,5 @@
 
 - Prepare a fresh Python temporary environment under the output root only when Python scans are requested.
 - Leave separate `tracemap endpoints` output as optional/follow-up unless implementation explicitly adds it.
-- Mark `diff` deferred in first implementation because no concrete before/after fixture pair exists yet.
-- Mark `impact` deferred in first implementation because no concrete before/after fixture pair exists yet.
-- Assert deferred status and explanation metadata in `demo-summary.json`.
-- Document the future before/after fixture strategy needed to promote diff/impact sections to available.
-- Mark release-review deferred in first implementation because compatible before/after inputs and contract deltas are absent.
-- Assert release-review deferred status and explanation metadata.
 - Document troubleshooting.
 - Document optional OSS workflow or state that it remains separate.

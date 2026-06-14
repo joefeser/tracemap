@@ -15,6 +15,8 @@ SAMPLE_ROOTS=(
   "$ROOT_DIR/samples/endpoint-server-aspnet"
   "$ROOT_DIR/samples/typescript-modern-sample"
   "$ROOT_DIR/samples/endpoint-client-angular"
+  "$ROOT_DIR/samples/public-demo/before"
+  "$ROOT_DIR/samples/public-demo/after"
 )
 
 usage() {
@@ -170,7 +172,7 @@ SECTIONS_JSONL="$OUT_ROOT/.demo-sections.jsonl"
 echo "TraceMap public demo"
 echo "Mode: default checked-in samples"
 echo "Output root: $OUT_ROOT"
-echo "Samples: dotnet-modern, dotnet-endpoint-server, typescript-modern, typescript-endpoint-client"
+echo "Samples: dotnet-modern, dotnet-endpoint-server, typescript-modern, typescript-endpoint-client, public-demo-before, public-demo-after"
 echo
 
 echo "== Toolchain checks =="
@@ -220,18 +222,24 @@ DOTNET_MODERN="$SCANS_DIR/dotnet-modern"
 DOTNET_ENDPOINT="$SCANS_DIR/dotnet-endpoint-server"
 TS_MODERN="$SCANS_DIR/typescript-modern"
 TS_ENDPOINT="$SCANS_DIR/typescript-endpoint-client"
+PUBLIC_DEMO_BEFORE="$SCANS_DIR/public-demo-before"
+PUBLIC_DEMO_AFTER="$SCANS_DIR/public-demo-after"
 
 run_dotnet_scan "$ROOT_DIR/samples/modern-sample" "$DOTNET_MODERN" "dotnet-modern"
 run_dotnet_scan "$ROOT_DIR/samples/endpoint-server-aspnet" "$DOTNET_ENDPOINT" "dotnet-endpoint-server"
 run_ts_scan "$ROOT_DIR/samples/typescript-modern-sample" "$TS_MODERN" "typescript-modern"
 run_ts_scan "$ROOT_DIR/samples/endpoint-client-angular" "$TS_ENDPOINT" "typescript-endpoint-client"
+run_dotnet_scan "$ROOT_DIR/samples/public-demo/before" "$PUBLIC_DEMO_BEFORE" "public-demo-before"
+run_dotnet_scan "$ROOT_DIR/samples/public-demo/after" "$PUBLIC_DEMO_AFTER" "public-demo-after"
 
 SCAN_COUNTS="$(
   node "$ASSERT_HELPER" scan-summary \
     "dotnet-modern=$DOTNET_MODERN" \
     "dotnet-endpoint-server=$DOTNET_ENDPOINT" \
     "typescript-modern=$TS_MODERN" \
-    "typescript-endpoint-client=$TS_ENDPOINT"
+    "typescript-endpoint-client=$TS_ENDPOINT" \
+    "public-demo-before=$PUBLIC_DEMO_BEFORE" \
+    "public-demo-after=$PUBLIC_DEMO_AFTER"
 )"
 SCAN_REDUCED_COUNT="$(node -e 'const counts = JSON.parse(process.argv[1]); console.log(counts.reducedCoverageScans ?? 0);' "$SCAN_COUNTS")"
 SCAN_COVERAGE="FullEvidenceAvailable"
@@ -242,7 +250,7 @@ if [[ "$SCAN_REDUCED_COUNT" != "0" ]]; then
 fi
 
 add_section "sample-scans" "available" "$SCAN_CLASSIFICATION" "$SCAN_COVERAGE" "" \
-  "scans/dotnet-modern/report.md,scans/dotnet-endpoint-server/report.md,scans/typescript-modern/report.md,scans/typescript-endpoint-client/report.md" \
+  "scans/dotnet-modern/report.md,scans/dotnet-endpoint-server/report.md,scans/typescript-modern/report.md,scans/typescript-endpoint-client/report.md,scans/public-demo-before/report.md,scans/public-demo-after/report.md" \
   "$SCAN_COUNTS"
 
 echo "== Combine indexes and report dependency evidence =="
@@ -379,9 +387,89 @@ PORTFOLIO_COUNTS="$(
 add_section "portfolio" "available" "PartialAnalysis" "PartialAnalysis" "" \
   "portfolio-manifest.json,reports/portfolio/portfolio-report.md,reports/portfolio/portfolio-report.json" \
   "$PORTFOLIO_COUNTS"
-add_section "diff" "deferred" "PartialAnalysis" "deferred" "No concrete checked-in before/after fixture pair exists yet." "" '{}'
-add_section "impact" "deferred" "PartialAnalysis" "deferred" "No concrete checked-in before/after fixture pair exists yet." "" '{}'
-add_section "release-review" "deferred" "PartialAnalysis" "deferred" "Compatible before/after inputs and delta fixtures are not part of the first public demo slice." "" '{}'
+
+echo "== Run before/after diff, impact, and release review =="
+PUBLIC_DEMO_BEFORE_COMBINED="$COMBINED_DIR/public-demo-before.sqlite"
+PUBLIC_DEMO_AFTER_COMBINED="$COMBINED_DIR/public-demo-after.sqlite"
+DIFF_REPORT="$REPORTS_DIR/diff/public-demo"
+IMPACT_REPORT="$REPORTS_DIR/impact/public-demo"
+RELEASE_REVIEW_REPORT="$REPORTS_DIR/release-review/public-demo"
+
+dotnet run --no-build --project "$DOTNET_CLI" -- combine \
+  --index "$PUBLIC_DEMO_BEFORE/index.sqlite" --label public-demo-api \
+  --out "$PUBLIC_DEMO_BEFORE_COMBINED"
+
+dotnet run --no-build --project "$DOTNET_CLI" -- combine \
+  --index "$PUBLIC_DEMO_AFTER/index.sqlite" --label public-demo-api \
+  --out "$PUBLIC_DEMO_AFTER_COMBINED"
+
+test -f "$PUBLIC_DEMO_BEFORE_COMBINED"
+test -f "$PUBLIC_DEMO_AFTER_COMBINED"
+
+dotnet run --no-build --project "$DOTNET_CLI" -- diff \
+  --before "$PUBLIC_DEMO_BEFORE_COMBINED" \
+  --after "$PUBLIC_DEMO_AFTER_COMBINED" \
+  --out "$DIFF_REPORT" \
+  --scope surfaces
+dotnet run --no-build --project "$DOTNET_CLI" -- diff \
+  --before "$PUBLIC_DEMO_BEFORE_COMBINED" \
+  --after "$PUBLIC_DEMO_AFTER_COMBINED" \
+  --out "$DIFF_REPORT-second" \
+  --scope surfaces
+cmp -s "$DIFF_REPORT/diff-report.json" "$DIFF_REPORT-second/diff-report.json"
+
+DIFF_COUNTS="$(
+  node "$ASSERT_HELPER" diff-report "$DIFF_REPORT" "public-demo-api"
+)"
+add_section "diff" "available" "PartialAnalysis" "PartialAnalysis" "" \
+  "reports/diff/public-demo/diff-report.md,reports/diff/public-demo/diff-report.json" \
+  "$DIFF_COUNTS"
+
+dotnet run --no-build --project "$DOTNET_CLI" -- impact \
+  --before "$PUBLIC_DEMO_BEFORE_COMBINED" \
+  --after "$PUBLIC_DEMO_AFTER_COMBINED" \
+  --out "$IMPACT_REPORT" \
+  --scope surfaces
+dotnet run --no-build --project "$DOTNET_CLI" -- impact \
+  --before "$PUBLIC_DEMO_BEFORE_COMBINED" \
+  --after "$PUBLIC_DEMO_AFTER_COMBINED" \
+  --out "$IMPACT_REPORT-second" \
+  --scope surfaces
+cmp -s "$IMPACT_REPORT/impact-report.json" "$IMPACT_REPORT-second/impact-report.json"
+
+IMPACT_COUNTS="$(
+  node "$ASSERT_HELPER" impact-report "$IMPACT_REPORT" "public-demo-api"
+)"
+add_section "impact" "available" "PartialAnalysis" "PartialAnalysis" "" \
+  "reports/impact/public-demo/impact-report.md,reports/impact/public-demo/impact-report.json" \
+  "$IMPACT_COUNTS"
+
+dotnet run --no-build --project "$DOTNET_CLI" -- release-review \
+  --before "$PUBLIC_DEMO_BEFORE_COMBINED" \
+  --after "$PUBLIC_DEMO_AFTER_COMBINED" \
+  --out "$RELEASE_REVIEW_REPORT" \
+  --scope surfaces \
+  --max-findings 200 \
+  --max-surface-rows 200 \
+  --max-checklist-items 200 \
+  --max-paths 5
+dotnet run --no-build --project "$DOTNET_CLI" -- release-review \
+  --before "$PUBLIC_DEMO_BEFORE_COMBINED" \
+  --after "$PUBLIC_DEMO_AFTER_COMBINED" \
+  --out "$RELEASE_REVIEW_REPORT-second" \
+  --scope surfaces \
+  --max-findings 200 \
+  --max-surface-rows 200 \
+  --max-checklist-items 200 \
+  --max-paths 5
+cmp -s "$RELEASE_REVIEW_REPORT/release-review.json" "$RELEASE_REVIEW_REPORT-second/release-review.json"
+
+RELEASE_REVIEW_COUNTS="$(
+  node "$ASSERT_HELPER" release-review "$RELEASE_REVIEW_REPORT" "public-demo-api"
+)"
+add_section "release-review" "available" "PartialAnalysis" "PartialAnalysis" "" \
+  "reports/release-review/public-demo/release-review.md,reports/release-review/public-demo/release-review.json" \
+  "$RELEASE_REVIEW_COUNTS"
 
 node "$ASSERT_HELPER" write-summary "$OUT_ROOT" "$SECTIONS_JSONL" "$OUT_ROOT/demo-summary.json" "$OUT_ROOT/demo-summary.md"
 node "$ASSERT_HELPER" validate-summary "$OUT_ROOT/demo-summary.json"
@@ -390,8 +478,8 @@ node "$ASSERT_HELPER" sentinel-scan "$OUT_ROOT"
 echo
 echo "TraceMap public demo complete"
 echo "Output root: $OUT_ROOT"
-echo "Scanned sources: 4"
-echo "Combined sources: 6"
+echo "Scanned sources: 6"
+echo "Combined sources: 8"
 node -e '
   const fs = require("node:fs");
   const summary = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -399,13 +487,16 @@ node -e '
   const dependency = section("combine-and-dependency-report");
   const paths = section("paths-and-reverse");
   const portfolio = section("portfolio");
+  const diff = section("diff");
+  const impact = section("impact");
+  const releaseReview = section("release-review");
   console.log(`Endpoint findings: ${dependency.endpointFindings ?? 0}`);
   console.log(`Paths: ${paths.paths ?? 0}`);
   console.log(`Reverse results: ${paths.reversePaths ?? 0}`);
   console.log(`Portfolio sources: ${portfolio.portfolioSources ?? 0}`);
+  console.log(`Diff rows: ${diff.diffRows ?? 0}`);
+  console.log(`Impact items: ${impact.impactItems ?? 0}`);
+  console.log(`Release review findings: ${releaseReview.findings ?? 0}`);
 ' "$OUT_ROOT/demo-summary.json"
-echo "Diff rows: deferred"
-echo "Impact items: deferred"
-echo "Release review: deferred"
 echo "Report coverage: see demo-summary.json"
 echo "Gaps: see demo-summary.json"
