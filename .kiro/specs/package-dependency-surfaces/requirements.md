@@ -77,7 +77,9 @@ As a platform maintainer, I want contract delta v2 to accept dependency-surface 
 Acceptance criteria:
 
 - Contract delta changes with `kind = "dependency-surface"` and `surfaceKind = "package-config"` can match package surface facts.
-- The reducer supports stable package selectors such as package name, ecosystem, source label, dependency scope, manifest kind, and optional version/range.
+- The reducer supports stable package selectors such as `surfaceName` or `packageName`, ecosystem, source label, dependency scope, manifest kind, and optional version/range metadata.
+- `package-config` is the canonical surface kind; any existing shorter `package` surface-kind helper must be updated or treated as an alias so the same package evidence is not missed.
+- Version-only selectors are invalid because old and new versions are comparison metadata, not package identity.
 - No-evidence results respect full versus reduced coverage.
 - Findings include path and reverse context only when stable combined selectors can be derived.
 
@@ -134,27 +136,28 @@ Recommended properties:
 ### .NET
 
 - Existing `ProjectFileReader` and `ConfigExtractor` package facts from `.csproj` and `packages.config`.
-- Add or confirm safe properties: `surfaceKind`, `ecosystem=nuget`, `manifestKind`, `dependencyScope`, and version redaction behavior.
+- Add safe properties: `surfaceKind`, `ecosystem=nuget`, `manifestKind`, `dependencyScope`, and version redaction behavior.
+- Address the current `packages.config` path explicitly: either emit `PackageReferenced` facts for package rows or project rule-backed `ConfigKeyDeclared` package rows as `package-config` surfaces.
 - Do not evaluate conditional MSBuild properties beyond current scanner capability unless explicitly implemented with gaps.
 
 ### TypeScript
 
 - Existing `package.json` facts for package identity, dependency groups, and scripts.
 - Package scripts remain hashed key evidence only.
-- Add or confirm safe properties: `surfaceKind`, `ecosystem=npm`, `manifestKind=package.json`, dependency group/scope, and version redaction behavior.
+- Add safe properties: `surfaceKind`, `ecosystem=npm`, `manifestKind=package.json`, dependency group/scope, and version redaction behavior.
 - Do not execute scripts, resolve workspaces, query registries, or install dependencies.
 
 ### Python
 
 - Existing metadata from `pyproject.toml`, `setup.cfg`, literal-only `setup.py`, and requirements files.
-- Add or confirm safe properties: `surfaceKind`, `ecosystem=python`, manifest kind, dependency scope, package manager/source kind, and version redaction behavior.
+- Add safe properties: `surfaceKind`, `ecosystem=python`, manifest kind, dependency scope, package manager/source kind, and version redaction behavior.
 - Never execute setup scripts or import target modules.
 - Treat editable installs, URL dependencies, environment markers, extras, and interpolation as structural evidence or gaps according to parser confidence.
 
 ### JVM
 
 - Existing Maven and literal Gradle metadata from `pom.xml` and Gradle files.
-- Add or confirm safe properties: `surfaceKind`, `ecosystem=maven` or `gradle`, manifest kind, group/artifact/version, scope/configuration, and version redaction behavior.
+- Add safe properties: `surfaceKind`, `ecosystem=maven` or `gradle`, manifest kind, group/artifact/version, scope/configuration, and version redaction behavior.
 - Do not execute Gradle, resolve version catalogs, fetch parent POMs remotely, evaluate plugins, or inspect dependency caches.
 
 ## Output Expectations
@@ -238,10 +241,12 @@ Limitations must include:
 - SQLite writer tests proving package properties are persisted with deterministic JSON ordering.
 - Combined report tests proving package surfaces render in JSON and Markdown.
 - Diff tests for added, removed, changed version/scope, weak identity, selector no-match, and reduced-coverage gaps.
+- Diff tests must prove version and scope/group changes produce changed rows, not added/removed pairs, when package identity is otherwise stable.
 - Impact tests proving package surface diff rows project into static impact items with caveats.
 - Path tests proving package terminal surfaces can be selected and unattached facts become gaps instead of invented paths.
 - Reverse tests for `--surface package-config` and exact package selector behavior.
 - Contract delta tests for `kind=dependency-surface`, `surfaceKind=package-config`.
+- Contract delta tests must cover `surfaceName=<packageName>`, the additive `packageName` alias, ecosystem-scoped matching, and invalid version-only selectors.
 - Private path and secret redaction tests.
 - Determinism tests comparing repeated JSON output byte-for-byte for stable fixtures.
 
@@ -263,7 +268,7 @@ python3 -m venv /tmp/tracemap-python-venv
 ./scripts/smoke-combined-paths.sh
 ```
 
-Also run a package-focused combined smoke over sample indexes:
+Also run a package-focused combined smoke over sample indexes. The same-index `--before`/`--after` run is only a redaction, determinism, and command-shape smoke; implementation PRs that change diff/impact behavior should also include a fixture or sample pair with at least one package version or scope change.
 
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- combine \

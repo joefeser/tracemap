@@ -32,24 +32,29 @@ Exit criteria:
 Tests:
 
 - [ ] Unit tests for aliases, safe metadata, redaction, weak identity, duplicate rows, and deterministic sort order.
+- [ ] Unit test proving the same package display name in different ecosystems remains distinct unless an explicit cross-ecosystem review-tier query is requested.
 
 ## 4. Adapter Fact Shape
 
 ### .NET
 
-- [ ] Add or confirm `surfaceKind=package-config` and `ecosystem=nuget` on `.csproj` and `packages.config` package facts.
-- [ ] Add or confirm manifest kind, dependency scope/group, target framework when safe, version or version hash, and redaction reason.
+- [ ] Add `surfaceKind=package-config` and `ecosystem=nuget` on `.csproj` package facts.
+- [ ] Address `packages.config` explicitly: either emit `PackageReferenced` facts or project existing `ConfigKeyDeclared` package rows into `package-config` surfaces with rule-backed metadata.
+- [ ] Add manifest kind, dependency scope/group, target framework when safe, version or version hash, and redaction reason.
+- [ ] Emit version-absent caveats or `AnalysisGap` evidence for central package management or unresolved externally declared versions when local static parsing is not implemented.
 - [ ] Emit `AnalysisGap` for unsupported package metadata rather than silently dropping it when the scanner can detect the gap.
 - [ ] Keep failed MSBuild/project load behavior partial, not clean.
 
 Tests:
 
 - [ ] .NET unit or scan tests for `PackageReference` and `packages.config` fact properties.
+- [ ] .NET malformed package manifest or unsupported metadata test emits `AnalysisGap` rather than silent success.
 - [ ] Redaction test for unsafe path or credential-like version/source metadata if supported input exists.
 
 ### TypeScript
 
-- [ ] Add or confirm `surfaceKind=package-config`, `ecosystem=npm`, `manifestKind=package.json`, dependency group/scope, package manager, and safe version metadata.
+- [ ] Add `surfaceKind=package-config`, `ecosystem=npm`, `manifestKind=package.json`, dependency group/scope, package manager, and safe version metadata.
+- [ ] Map dependency groups to normalized `dependencyScope` values instead of relying only on raw group names such as `dependencySection`.
 - [ ] Confirm raw package scripts are never emitted; only script keys, hashes, lengths, and redaction reasons are allowed.
 - [ ] Emit parser gaps for malformed package JSON.
 
@@ -60,7 +65,8 @@ Tests:
 
 ### Python
 
-- [ ] Add or confirm `surfaceKind=package-config`, `ecosystem=python`, manifest kind, package manager/source kind, dependency scope, version or version hash, and redaction reason.
+- [ ] Add `surfaceKind=package-config`, `ecosystem=python`, manifest kind, package manager/source kind, dependency scope, version or version hash, and redaction reason.
+- [ ] Preserve per-source-file evidence spans for dependencies from pyproject, setup.cfg, setup.py, and requirements files; avoid last-write-wins batch rows that lose file/line evidence.
 - [ ] Keep `setup.py` literal-only and never execute it.
 - [ ] Represent direct URLs, editable installs, extras, markers, and local paths as safe metadata, hash-only metadata, or gaps.
 
@@ -68,10 +74,12 @@ Tests:
 
 - [ ] Python metadata tests for pyproject/setup.cfg/requirements.
 - [ ] Python redaction tests for direct URL or local path dependency forms.
+- [ ] Python malformed or unsupported manifest test emits `AnalysisGap` with reduced coverage when appropriate.
 
 ### JVM
 
-- [ ] Add or confirm `surfaceKind=package-config`, ecosystem, manifest kind, package manager/build tool, group ID, artifact ID, scope/configuration, version or version hash, and redaction reason.
+- [ ] Add `surfaceKind=package-config`, ecosystem, manifest kind, package manager/build tool, group ID, artifact ID, scope/configuration, version or version hash, and redaction reason.
+- [ ] Extract Maven `<scope>` and Gradle configuration names into normalized `dependencyScope`/`dependencyGroup` fields when statically visible.
 - [ ] Emit gaps for non-literal Gradle declarations, missing local parent POMs, version catalogs, and unresolved interpolation when detected.
 
 Tests:
@@ -82,21 +90,24 @@ Tests:
 ## 5. Combined Dependency Report
 
 - [ ] Project `PackageReferenced` into `package-config` terminal surfaces.
+- [ ] Tighten package surface projection to exact package fact types or `surfaceKind=package-config`; do not rely on broad fact-type substring matching for new conclusions.
 - [ ] Add package fields and caveats to `dependency-report.json`.
+- [ ] Extend combined surface JSON additively for ecosystem, manifest kind, dependency scope, dependency group, version hash, metadata hash, and caveats if those fields are not already present.
 - [ ] Add or polish package rows in `dependency-report.md`.
 - [ ] Ensure Markdown does not expose raw scripts, snippets, credentials, or absolute paths.
 
 Tests:
 
 - [ ] Combined dependency report tests for package surfaces.
+- [ ] Combine import fidelity test proving source package fact IDs survive combine without being rewritten.
 - [ ] Private-path and secret guard coverage for report output.
 
 ## 6. Combined Diff
 
 - [ ] Support `diff --scope surfaces --surface package-config`.
-- [ ] Compare package identity separately from version/scope metadata.
+- [ ] Compare package identity separately from version/scope metadata; stable package keys must exclude version, dependency scope, and dependency group.
 - [ ] Classify added, removed, changed, needs-review, no-evidence, selector no-match, and truncation cases.
-- [ ] Add caveats for hash-only evidence and volatile identity.
+- [ ] Add package-config caveats for hash-only evidence and volatile identity.
 
 Tests:
 
@@ -106,6 +117,7 @@ Tests:
 - [ ] Scope/group changed.
 - [ ] Hash-only version changed.
 - [ ] Duplicate package identity downgrades to needs review.
+- [ ] Hash-only and volatile-identity package caveats are present when package version evidence or identity is weak.
 - [ ] Reduced coverage downgrades no-diff confidence.
 
 ## 7. Combined Impact
@@ -118,7 +130,7 @@ Tests:
 Tests:
 
 - [ ] Impact tests for added, removed, changed, and needs-review package surface rows.
-- [ ] Assertion that impact text does not claim runtime loading or business impact.
+- [ ] Assertion that impact text does not claim runtime loading, loaded packages, vulnerabilities, exploitability, security affected, or business impact.
 
 ## 8. Paths and Reverse Queries
 
@@ -138,13 +150,17 @@ Tests:
 ## 9. Contract Delta v2
 
 - [ ] Accept dependency-surface changes with `surfaceKind=package-config`.
-- [ ] Match by package name and ecosystem, with optional source label, manifest kind, scope, and version fields.
-- [ ] Reject version-only selectors without package identity as invalid or selector gaps.
+- [ ] Make `package-config` the canonical reducer surface kind for package facts, with any existing `package` helper updated or treated as an alias.
+- [ ] Match by `surfaceName`/`packageName` and ecosystem, with optional source label, manifest kind, scope, and version fields.
+- [ ] Update dependency-surface validation, specificity scoring, and matching to recognize the additive `packageName` alias for `surfaceKind=package-config`.
+- [ ] Reject version-only selectors without package identity as invalid or selector gaps; treat `oldVersion`/`newVersion` as comparison metadata, not sufficient selectors.
+- [ ] Reconcile `kind=package` and `kind=dependency-surface` package matching so one reduction does not double-report the same fact.
 - [ ] Add optional path and reverse context only when stable selectors are derivable.
 
 Tests:
 
 - [ ] Contract delta package version change produces evidence-backed findings.
+- [ ] Contract delta package-config selector works with `surfaceName=<packageName>` and with the additive `packageName` alias.
 - [ ] Missing package under full coverage and reduced coverage produces distinct no-evidence classifications.
 - [ ] Invalid selector produces rule-backed input gap.
 
@@ -158,6 +174,7 @@ Tests:
 - [ ] Run `./scripts/check-private-paths.sh`.
 - [ ] Run `./scripts/smoke-combined-paths.sh`.
 - [ ] Run package-focused combine/report/paths/reverse/diff/impact smoke from `requirements.md`.
+- [ ] Include a package diff/impact fixture or sample pair with a real version or scope change; the same-index smoke is not enough to prove changed rows.
 - [ ] Compare repeated package report JSON output byte-for-byte for a stable fixture.
 
 Exit criteria:
