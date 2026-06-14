@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap workflows include scan, reduce, combine, paths, reverse, diff, impact, portfolio, and release review."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Workflows | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/workflows/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Workflows">
+    <meta property="og:description" content="Static analysis workflows for contract and dependency review.">
+    <meta property="og:url" content="https://tracemap.tools/workflows/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/" aria-current="page">Workflows</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Workflows</p>
+        <h1>Static evidence for contract and dependency review.</h1>
+        <p class="hero-subhead">
+          TraceMap workflows turn repository snapshots into evidence packets. They
+          help reviewers find what needs review without pretending to observe runtime
+          execution.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="workflow-grid">
+          <article><h3>Scan</h3><p>Index a repository into deterministic facts and a SQLite database.</p></article>
+          <article><h3>Reduce</h3><p>Compare contract deltas against indexed facts with coverage-aware classifications.</p></article>
+          <article><h3>Combine</h3><p>Merge indexes while preserving source labels, commit SHAs, and original fact IDs.</p></article>
+          <article><h3>Paths</h3><p>Find bounded static evidence paths from endpoints or symbols to dependency surfaces.</p></article>
+          <article><h3>Reverse</h3><p>Start from dependency surfaces and walk back to static roots such as endpoints or symbols.</p></article>
+          <article><h3>Diff</h3><p>Compare combined snapshots by stable static evidence keys.</p></article>
+          <article><h3>Impact</h3><p>Project static diff evidence into change-impact review items.</p></article>
+          <article><h3>Portfolio</h3><p>Summarize dependency surfaces and coverage across many indexes.</p></article>
+          <article><h3>Release review</h3><p>Assemble a release-oriented evidence packet with explicit unavailable sections.</p></article>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Coverage controls the conclusion.</h2>
+        <p>
+          A no-evidence result under full known coverage means something different
+          than no evidence under reduced coverage. TraceMap keeps those outcomes
+          separate.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Workflow examples live in the
+        <a href="https://github.com/joefeser/tracemap/blob/main/README.md">TraceMap README</a>.
+      </p>
+    </footer>
+  </body>
+</html>

@@ -125,6 +125,12 @@ pre {
   padding: 34px 0 58px;
 }
 
+.page-hero {
+  width: min(920px, calc(100% - 40px));
+  margin-inline: auto;
+  padding: 96px 0 78px;
+}
+
 .eyebrow,
 .section-kicker {
   margin: 0 0 14px;
@@ -349,6 +355,27 @@ h3 {
   gap: 10px;
 }
 
+.detail-list {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-list div {
+  display: grid;
+  gap: 4px;
+  border-left: 4px solid var(--accent);
+  background: rgba(255, 255, 255, 0.64);
+  padding: 15px 18px;
+}
+
+.detail-list strong {
+  color: var(--ink);
+}
+
+.detail-list span {
+  color: var(--muted);
+}
+
 .output-list div {
   display: grid;
   grid-template-columns: minmax(170px, 0.45fr) minmax(0, 1fr);
@@ -398,6 +425,31 @@ h3 {
   padding: 14px 16px;
 }
 
+.callout-section {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 42px;
+  box-shadow: var(--shadow);
+}
+
+.callout-section h2 {
+  max-width: 780px;
+  margin-bottom: 16px;
+  font-size: clamp(1.9rem, 3.6vw, 3rem);
+}
+
+.callout-section p {
+  max-width: 780px;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 1.08rem;
+}
+
+.not-found {
+  min-height: 560px;
+  align-content: center;
+}
+
 .link-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -431,6 +483,7 @@ h3 {
 @media (max-width: 900px) {
   .site-header,
   .hero,
+  .page-hero,
   .section,
   .site-footer {
     width: min(100% - 28px, 720px);
@@ -460,6 +513,10 @@ h3 {
     padding-top: 26px;
   }
 
+  .page-hero {
+    padding: 72px 0 54px;
+  }
+
   .tier-grid,
   .workflow-grid,
   .link-grid {
@@ -474,6 +531,10 @@ h3 {
 
   .section {
     padding: 62px 0;
+  }
+
+  .callout-section {
+    padding: 28px;
   }
 
   .tier-grid,

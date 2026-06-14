@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap evidence tiers explain how findings are backed by semantic, structural, syntax/textual, or unknown analysis evidence."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Evidence Model | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/evidence/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Model">
+    <meta
+      property="og:description"
+      content="Every TraceMap finding carries a rule ID, evidence tier, source span, commit SHA, and extractor version."
+    >
+    <meta property="og:url" content="https://tracemap.tools/evidence/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/" aria-current="page">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Evidence model</p>
+        <h1>No conclusion without evidence.</h1>
+        <p class="hero-subhead">
+          TraceMap findings are records of static evidence. A finding is useful
+          only when it carries the rule that emitted it, the confidence tier, the
+          source location, the commit SHA, and the extractor version.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="tier-grid">
+          <article>
+            <span>Tier 1</span>
+            <h3>Semantic</h3>
+            <p>Compiler-resolved symbol evidence from Roslyn, TypeScript, JVM, or adapter-specific semantic analysis.</p>
+          </article>
+          <article>
+            <span>Tier 2</span>
+            <h3>Structural</h3>
+            <p>Known framework, project, endpoint, SQL, package, config, or serializer structure evidence.</p>
+          </article>
+          <article>
+            <span>Tier 3</span>
+            <h3>Syntax or textual</h3>
+            <p>Syntax-only or text evidence that can route review but cannot prove exact symbol identity.</p>
+          </article>
+          <article>
+            <span>Tier 4</span>
+            <h3>Unknown</h3>
+            <p>Analysis gaps, reduced coverage, unavailable sections, or cases TraceMap cannot prove or disprove.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Fact envelope</p>
+          <h2>Evidence rows are designed to survive review.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Rule ID</strong><span>The documented rule or reducer stage that emitted the row.</span></div>
+          <div><strong>Evidence tier</strong><span>The confidence boundary for the static evidence.</span></div>
+          <div><strong>File span</strong><span>Path plus line span; raw source snippets are not stored by default.</span></div>
+          <div><strong>Commit SHA</strong><span>The repository state that was scanned or compared.</span></div>
+          <div><strong>Extractor version</strong><span>The scanner/reducer version that produced the evidence.</span></div>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Static evidence is not runtime proof.</h2>
+        <p>
+          TraceMap can show that static evidence exists, that coverage was reduced,
+          or that no evidence was found under full known coverage. It does not prove
+          production traffic, branch feasibility, deployment state, release approval,
+          or absence of impact when analysis is partial.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Source docs:
+        <a href="https://github.com/joefeser/tracemap/blob/main/docs/PRD.md">PRD</a>,
+        <a href="https://github.com/joefeser/tracemap/blob/main/rules/rule-catalog.yml">rule catalog</a>.
+      </p>
+    </footer>
+  </body>
+</html>
