@@ -341,6 +341,305 @@ public sealed class SqliteIndexWriterTests
         Assert.False((bool)method.Invoke(null, ["global::Demo.Service.Run()"])!);
     }
 
+    [Fact]
+    public async Task Parameter_forwarding_derives_direct_and_bounded_local_alias_edges()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "AliasFlowSample", """
+            namespace AliasFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                public void Direct(Request request)
+                {
+                    new Sink().Send(request);
+                }
+
+                public void ThreeHop(Request request)
+                {
+                    var first = request;
+                    var second = first;
+                    var third = second;
+                    new Sink().Send(third);
+                }
+
+                public void FourHop(Request request)
+                {
+                    var first = request;
+                    var second = first;
+                    var third = second;
+                    var fourth = third;
+                    new Sink().Send(fourth);
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        Assert.Equal(1L, await CountParameterForwardEdgesAsync(connection, "Direct", "Send"));
+        Assert.Equal(1L, await CountParameterForwardEdgesAsync(connection, "ThreeHop", "Send"));
+        Assert.Equal(0L, await CountParameterForwardEdgesAsync(connection, "FourHop", "Send"));
+    }
+
+    [Fact]
+    public async Task Parameter_forwarding_uses_unique_constructor_field_origin()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "ConstructorFlowSample", """
+            namespace ConstructorFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                private readonly Request cached;
+
+                public Handler(Request request)
+                {
+                    cached = request;
+                }
+
+                public void UseCached()
+                {
+                    new Sink().Send(cached);
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        var constructorForwardCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from parameter_forward_edges
+            where source_method_symbol like '%Handler.%'
+              and source_parameter_symbol like '%Request request%'
+              and target_method_symbol like '%Sink.Send%'
+              and target_parameter_name = 'input';
+            """);
+        Assert.Equal(1L, constructorForwardCount);
+    }
+
+    [Fact]
+    public async Task Parameter_forwarding_omits_ambiguous_constructor_field_origin()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "AmbiguousConstructorFlowSample", """
+            namespace AmbiguousConstructorFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                private readonly Request cached;
+
+                public Handler(Request request)
+                {
+                    cached = request;
+                }
+
+                public Handler(Request first, Request second)
+                {
+                    cached = second;
+                }
+
+                public void UseCached()
+                {
+                    new Sink().Send(cached);
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        var constructorForwardCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from parameter_forward_edges
+            where source_parameter_symbol like '%Request%'
+              and target_method_symbol like '%Sink.Send%'
+              and target_parameter_name = 'input';
+            """);
+        Assert.Equal(0L, constructorForwardCount);
+    }
+
+    [Fact]
+    public async Task Parameter_forwarding_omits_reassigned_constructor_field_origin_beyond_bound()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "ReassignedConstructorFlowSample", """
+            namespace ReassignedConstructorFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                private Request cached;
+
+                public Handler(Request request)
+                {
+                    cached = request;
+                }
+
+                public void UseCached(Request other)
+                {
+                    var first = other;
+                    var second = first;
+                    var third = second;
+                    var fourth = third;
+                    cached = fourth;
+                    new Sink().Send(cached);
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        var constructorForwardCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from parameter_forward_edges
+            where source_parameter_symbol like '%Request%'
+              and target_method_symbol like '%Sink.Send%'
+              and target_parameter_name = 'input';
+            """);
+        Assert.Equal(0L, constructorForwardCount);
+    }
+
+    [Fact]
+    public async Task Parameter_forwarding_omits_repeated_constructor_field_assignment()
+    {
+        using var temp = new TempDirectory();
+        var sqlitePath = await ScanSemanticProjectAsync(temp, "RepeatedConstructorAssignmentFlowSample", """
+            namespace RepeatedConstructorAssignmentFlowSample;
+
+            public sealed class Request
+            {
+            }
+
+            public sealed class Sink
+            {
+                public void Send(Request input)
+                {
+                }
+            }
+
+            public sealed class Handler
+            {
+                private readonly Request cached;
+
+                public Handler(Request request)
+                {
+                    cached = request;
+                    cached = request;
+                }
+
+                public void UseCached()
+                {
+                    new Sink().Send(cached);
+                }
+            }
+            """);
+
+        await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        await connection.OpenAsync();
+
+        var constructorForwardCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from parameter_forward_edges
+            where source_parameter_symbol like '%Request request%'
+              and target_method_symbol like '%Sink.Send%'
+              and target_parameter_name = 'input';
+            """);
+        Assert.Equal(0L, constructorForwardCount);
+    }
+
+    private static async Task<string> ScanSemanticProjectAsync(TempDirectory temp, string projectName, string source)
+    {
+        var repo = Path.Combine(temp.Path, "repo");
+        var projectPath = Path.Combine(repo, "src", projectName);
+        var outputPath = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(projectPath);
+        File.WriteAllText(Path.Combine(projectPath, $"{projectName}.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(projectPath, "Flow.cs"), source);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], output, error);
+        Assert.True(exitCode == 0, error.ToString());
+
+        return Path.Combine(outputPath, "index.sqlite");
+    }
+
+    private static Task<long> CountParameterForwardEdgesAsync(SqliteConnection connection, string sourceMethodName, string targetMethodName)
+    {
+        return ExecuteScalarAsync<long>(
+            connection,
+            $"""
+            select count(*)
+            from parameter_forward_edges
+            where source_method_symbol like '%Handler.{sourceMethodName}%'
+              and source_parameter_symbol like '%Request request%'
+              and target_method_symbol like '%Sink.{targetMethodName}%'
+              and target_parameter_name = 'input';
+            """);
+    }
+
     private static async Task<T> ExecuteScalarAsync<T>(SqliteConnection connection, string sql)
     {
         await using var command = connection.CreateCommand();

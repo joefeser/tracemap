@@ -14,6 +14,7 @@ Every language adapter should have:
 | local broken sample | proves syntax fallback and reduced coverage labels |
 | reducer fixture | proves contract delta matching through shared facts/index schema |
 | SQLite relationship queries | proves `call_edges`, `object_creations`, `argument_flows`, symbols, and relationship tables are populated when facts exist |
+| value-origin flow queries | proves direct parameter forwarding, bounded local aliases, and unique constructor field origins are represented without crossing ambiguous boundaries |
 | integration facts | proves HTTP/API, config, SQL/DB, serializer, and package/dependency facts where supported |
 | combine/report/paths/reverse/export smoke | proves shared schema compatibility, combined dependency reporting, static dependency path queries, and reverse dependency-surface queries across adapters |
 | public OSS smoke | proves larger real-world repos complete without unchecked assumptions |
@@ -114,6 +115,14 @@ test -f <tmp>/combined-impact/impact-report.json
 test -f <tmp>/release-review/release-review.md
 test -f <tmp>/release-review/release-review.json
 ```
+
+For value-origin flow changes, also inspect the source `parameter_forward_edges` table from a semantic .NET sample or focused fixture:
+
+```bash
+sqlite3 <out>/index.sqlite "select source_method_symbol, source_parameter_symbol, target_method_symbol, target_parameter_name, rule_id from parameter_forward_edges order by source_method_symbol, target_method_symbol;"
+```
+
+Expected behavior: direct parameter forwarding is present, same-method aliases are bounded to 3 hops, and ambiguous constructor/member origins are omitted or represented as gaps by future reporting slices rather than being promoted to forwarding edges.
 
 For changes to `combine`, `report`, `paths`, `reverse`, endpoint extraction, call edges, SQL/query extraction, or dependency-surface projection, run the public combined-path smoke:
 
