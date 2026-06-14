@@ -205,6 +205,21 @@ For every successful `tracemap impact --before <before.sqlite> --after <after.sq
 - `--exit-code` returns a non-zero exit only when requested and impact items are present.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
 
+For every successful `tracemap release-review --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are valid TraceMap indexes and are opened read-only.
+- both inputs are the same mode: single-language indexes use `ReleaseReviewSingleV1`, combined indexes use `ReleaseReviewCombinedV1`, and mixed mode is rejected without raw file paths.
+- directory or extensionless output writes `release-review.md` and `release-review.json`, even when `--format json` is supplied.
+- JSON includes `reportType: release-review`, required empty arrays, stable query metadata, before/after snapshots, summary, source coverage, all section objects, gaps, checklist items, and limitations.
+- release rollups use `ActionableStaticEvidence`, `ReviewRecommended`, `NoActionableEvidence`, `PartialAnalysis`, `SelectorNoMatch`, `UnknownAnalysisGap`, or `TruncatedByLimit`.
+- every release-level rollup, checklist item, section gap, selector gap, truncation gap, and source/coverage gap cites a `release.review.*` rule ID and evidence tier.
+- contract delta context is included when `--contract-delta` is provided and the reducer workflow is available.
+- API/DTO, SQL/schema, and package-upgrade workflows render explicit `unavailable` or `deferred` sections when they are not implemented or not requested; missing sections are never silently treated as clean evidence.
+- `--include-paths` and `--include-reverse` are off by default; single-index mode renders requested path/reverse context as unavailable with a rule-backed gap.
+- checklist items are derived only from findings and gaps and do not include release approval, readiness, or runtime-risk language.
+- caps such as `--max-findings`, `--max-surface-rows`, `--max-paths`, `--max-gaps`, and `--max-checklist-items` apply deterministically and emit truncation gaps when rows are omitted.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
+
 ## Language Adapter Acceptance
 
 New language adapters should satisfy [Language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md) before language-specific depth is considered complete.
