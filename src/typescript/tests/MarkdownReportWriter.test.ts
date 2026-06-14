@@ -84,6 +84,24 @@ describe("MarkdownReportWriter", () => {
     expect(report).not.toContain("unsafe-identifier-hash:");
   });
 
+  it("hashes Windows-style evidence paths on non-Windows hosts", async () => {
+    const fact = factWithProperties(
+      {
+        operationName: "SELECT",
+        tableName: "orders",
+        columnNames: "order_id",
+        sqlSourceKind: "orm-text",
+        queryShapeHash: "abcdef0123456789abcdef0123456789"
+      },
+      "C:\\private\\orders.ts"
+    );
+
+    const report = await renderReport([fact]);
+
+    expect(report).toContain("absolute-path-hash:");
+    expect(report).not.toContain("C:\\private");
+  });
+
   it("uses SQL-shape placeholders for missing optional metadata", async () => {
     const fact = factWithProperties({ sqlSourceKind: "orm-text" });
 
