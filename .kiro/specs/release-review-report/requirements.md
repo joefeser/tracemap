@@ -41,8 +41,8 @@ Out of scope:
 3. WHEN both inputs are combined indexes THEN the report SHALL run in `ReleaseReviewCombinedV1` mode.
 4. WHEN one input is combined and the other is single-language THEN the command SHALL emit a sanitized error to stderr naming only which side is combined and which side is single-language, SHALL NOT echo raw file paths, and SHALL exit non-zero; mixed-mode release review is deferred.
 5. WHEN either input is not a valid TraceMap index THEN the command SHALL fail with a sanitized schema error naming the side and missing object.
-6. WHEN `--contract-delta <path>` is provided THEN the command SHALL include contract delta impact context using the v2 contract-delta workflow where available.
-7. WHEN `--sql-schema-delta <path>` is provided THEN the command SHALL include SQL/schema impact context using the SQL/schema change impact workflow where available.
+6. WHEN `--contract-delta <path>` is provided THEN the command SHALL verify the file is readable and include contract delta impact context using the v2 contract-delta workflow where available; if the workflow is unavailable THEN the Contract Delta Impact section SHALL be `deferred` or `unavailable` and SHALL emit a gap rather than silently ignore the input.
+7. WHEN `--sql-schema-delta <path>` is provided THEN the command SHALL verify the file is readable and include SQL/schema impact context using the SQL/schema change impact workflow where available; if the workflow is unavailable THEN the SQL and Schema Impact section SHALL be `deferred` or `unavailable` and SHALL emit a gap rather than silently ignore the input.
 8. WHEN `--package-delta <path>` is provided THEN the command SHALL verify the file is readable and include package impact context where indexed package-surface evidence is available; if the package-upgrade workflow is not implemented THEN the Package Impact section SHALL be `deferred` or `unavailable`, SHALL emit a gap stating the file was received but not analyzed by a package-upgrade workflow, and SHALL NOT silently ignore the input or imply package compatibility analysis.
 9. WHEN no delta file is provided THEN the report SHALL still include before/after evidence diffs, coverage, gaps, and reviewer checklist sections.
 10. WHEN the command runs THEN it SHALL open input indexes read-only and SHALL NOT mutate either input.
@@ -110,10 +110,10 @@ Out of scope:
 1. WHEN release review summarizes findings THEN it SHALL preserve underlying classification names from diff, impact, path, reverse, API/DTO, SQL/schema, and package workflows.
 2. WHEN a release-level rollup classification is emitted THEN it SHALL use a closed vocabulary: `ActionableStaticEvidence`, `ReviewRecommended`, `NoActionableEvidence`, `PartialAnalysis`, `SelectorNoMatch`, `UnknownAnalysisGap`, and `TruncatedByLimit`.
 3. WHEN the primary release-level rollup is selected THEN it SHALL use this fixed precedence order: `UnknownAnalysisGap`, `TruncatedByLimit`, `ActionableStaticEvidence`, `ReviewRecommended`, `PartialAnalysis`, `SelectorNoMatch`, `NoActionableEvidence`.
-4. WHEN any underlying finding is strong static evidence such as `DefiniteImpact`, `ProbableImpact`, `StaticImpactEvidence`, `ProbableStaticImpact`, `Added`, `Removed`, or `ChangedEvidence` under verified source identity and full or comparable coverage THEN release rollup MAY be `ActionableStaticEvidence`.
+4. WHEN any underlying finding is strong static evidence such as `DefiniteImpact`, `ProbableImpact`, `StaticImpactEvidence`, `ProbableStaticImpact`, `Added`, `Removed`, or `ChangedEvidence` under verified source identity and full or comparable coverage THEN release rollup SHALL be `ActionableStaticEvidence` unless a higher-precedence rollup applies.
 5. WHEN findings are review-tier, syntax-only, hash-only, identity-unverified, emitted with high-fan-out caveats by an underlying workflow, coverage-relative, or ambiguous THEN release rollup SHALL be no stronger than `ReviewRecommended`.
-6. WHEN the report contains only no-evidence results under verified identity and full requested coverage THEN release rollup MAY be `NoActionableEvidence`.
-7. WHEN reduced coverage, unknown commit SHA, identity gaps, missing precision tables, or unavailable workflows affect requested sections but do not block all comparison THEN release rollup SHALL be at most `PartialAnalysis`.
+6. WHEN the report contains only no-evidence results under verified identity and full requested coverage THEN release rollup SHALL be `NoActionableEvidence` unless a higher-precedence rollup applies.
+7. WHEN reduced coverage, unknown commit SHA, identity gaps, missing precision tables, or unavailable workflows affect requested sections but do not block all comparison THEN release rollup SHALL be `PartialAnalysis` only when no higher-precedence rollup applies.
 8. WHEN identity, schema, coverage, or missing-table gaps prevent a credible conclusion for a requested section THEN the primary release rollup SHALL be `UnknownAnalysisGap`.
 9. WHEN selectors match nothing THEN release rollup SHALL be `SelectorNoMatch` unless a higher-precedence rollup applies, and SHALL include selector metadata.
 10. WHEN caps truncate findings or gaps THEN the primary release rollup SHALL be `TruncatedByLimit` unless `UnknownAnalysisGap` also applies.
@@ -163,12 +163,12 @@ Out of scope:
 1. WHEN JSON is emitted THEN it SHALL include `reportType`, `version`, `mode`, `query`, `beforeSnapshot`, `afterSnapshot`, `summary`, `sourceCoverage`, `topChangedSurfaces`, `contractImpact`, `apiDtoChanges`, `sqlSchemaImpact`, `packageImpact`, `pathContext`, `reverseContext`, `gaps`, `reviewerChecklist`, and `limitations`.
 2. WHEN an underlying workflow is unavailable THEN the corresponding section SHALL be present with `status: "unavailable"` and explanatory gaps.
 3. WHEN a section was not requested THEN it SHALL be present with `status: "not_requested"`.
-4. WHEN findings are included THEN each finding SHALL preserve stable ID, source label, classification, rule ID, evidence tier, file span, commit SHA, extractor version, supporting IDs, safe display metadata, and limitations.
+4. WHEN findings are included THEN each finding SHALL preserve stable ID, source label, classification, rule ID, evidence tier, file span, commit SHA, supporting IDs, safe display metadata, and limitations.
 5. WHEN an underlying workflow already emits confidence or classification confidence THEN release review SHALL preserve it; release review SHALL NOT invent confidence values.
 6. WHEN a section has evidence but caps were applied and rows were omitted THEN the section SHALL use `status: "truncated"` and include deterministic omitted counts.
 7. WHEN checklist items are included THEN each item SHALL include stable ID, source section, triggering finding IDs or gap IDs, severity, and deterministic text.
 8. WHEN arrays are emitted THEN they SHALL be sorted deterministically.
-9. WHEN metadata objects are emitted THEN keys SHALL be sorted deterministically.
+9. WHEN arbitrary metadata is emitted THEN release review SHALL use the canonical JSON encoding `metadata: [{ "key": "...", "value": "..." }]`, sorted by key and then value using ordinal comparison; emitted release-review JSON SHALL NOT use unordered metadata dictionaries for arbitrary fact metadata.
 10. WHEN a field has no values THEN JSON SHALL use empty arrays or `null` consistently.
 11. WHEN identical inputs and options are run twice THEN Markdown and JSON SHALL be byte-stable.
 

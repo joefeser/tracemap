@@ -86,10 +86,15 @@
 - [ ] PR 4: Add optional path/reverse context and reviewer checklist, including single-index unavailable behavior.
 - [ ] PR 5: Public sample workflow and byte-stability/safety hardening.
 
-## Deferred Follow-Ups
+## Adjacent Follow-Ups
 
-- CI gate policy.
-- Deterministic risk scoring integration.
 - HTML release review explorer.
 - Hosted/dashboard workflow.
+- Deterministic risk-scoring consumer in a separate spec, if it remains evidence-bound and documented.
+
+## Out of Scope for TraceMap Core
+
+- CI gate policy.
+- Auto-approval, merge, or release decisions.
+- Runtime risk prediction.
 - LLM-generated narrative summaries.

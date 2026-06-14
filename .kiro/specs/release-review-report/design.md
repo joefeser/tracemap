@@ -108,7 +108,15 @@ reviewerChecklist
 limitations
 ```
 
-Every list should be deterministic. Metadata maps should be serialized as sorted key/value arrays when the existing serializer cannot guarantee key order.
+Every list should be deterministic. Arbitrary finding, gap, and evidence metadata should use one canonical JSON representation:
+
+```json
+"metadata": [
+  { "key": "example", "value": "safe-value" }
+]
+```
+
+Metadata entries should be sorted by `key` and then `value` using ordinal comparison. Release-review JSON should not emit arbitrary metadata as unordered dictionaries; fixed report objects such as `summary` and `query` may remain normal JSON objects when their property order is controlled by the writer.
 
 ### Section Status
 
@@ -216,7 +224,7 @@ Severity must be derived from classification and gaps using this fixed mapping:
 | `should_review` | `ReviewRecommended`, `PartialAnalysis`, coverage-relative findings, hash-only/syntax-only findings, or deferred requested sections |
 | `informational` | `SelectorNoMatch`, `NoActionableEvidence`, `not_requested` optional sections, or purely descriptive snapshot metadata |
 
-Gap-only reports with no actionable findings should use `should_review` for analysis-gap checklist items unless the gap is purely descriptive, such as a `not_requested` optional section. `informational` applies only when there are no analysis gaps or when the item describes intentionally omitted optional context.
+Gap-only reports with no actionable findings should preserve the table above: blocking gaps such as `UnknownAnalysisGap`, `TruncatedByLimit`, source identity conflicts, requested workflow unavailable, and reduced coverage affecting removals remain `must_review`. Non-blocking or partial-analysis gaps use `should_review`. `informational` applies only when there are no analysis gaps or when the item describes intentionally omitted optional context such as a `not_requested` section.
 
 ## Safety and Redaction
 
