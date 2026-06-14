@@ -763,6 +763,44 @@ rules:
       - UnknownAnalysisGap is emitted only when analysis-gap evidence names the changed contract element; unrelated reduced coverage is reported as NoEvidenceReducedCoverage.
       - Generic or high fan-out name matches are still reported when evidence exists, but warnings mark them as review-sensitive.
 
+  - id: contract.delta.input.v2
+    name: Contract delta v2 input validation
+    description: Validates structured contract delta v2 changes and records selector/input gaps without echoing raw unsafe values.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ContractDeltaInputGap
+      - SelectorNoMatch gap
+    limitations:
+      - Legacy v1 input is compatibility-mapped to type/property references only.
+      - Unsupported kinds or change types fail closed before reduction.
+      - Selector gaps describe query shape, not source-code impact evidence.
+
+  - id: contract.delta.impact.v2
+    name: Contract delta impact v2
+    description: Matches structured contract delta references against single-index and combined-index TraceMap facts and emits evidence-backed static impact findings.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - ImpactFinding
+      - ContractDeltaImpactGap
+    limitations:
+      - Findings describe deterministic static evidence, not runtime reachability, traffic, or business impact.
+      - Endpoint, package, SQL, schema, and dependency-surface matches are limited to indexed static facts.
+      - Generic, high fan-out, name-only, and syntax/text matches are review-sensitive.
+      - NoEvidence and NoImpactEvidence classifications are coverage-relative and depend on scan identity, commit SHA, build status, and known gaps.
+      - Raw SQL, literal values, connection strings, URLs, local absolute paths, and source snippets are not rendered in public reports.
+
+  - id: contract.delta.context.v2
+    name: Contract delta impact context v2
+    description: Records bounded path or reverse-context availability for contract delta v2 findings when stable combined-index selectors can be derived.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PathContextUnavailable gap
+      - ReverseContextUnavailable gap
+    limitations:
+      - Path and reverse context are optional bounded static context, not complete dependency coverage.
+      - Context is emitted only when stable selectors are available without overclaiming.
+      - Missing context is reported as an explicit gap rather than inferred impact or inferred safety.
+
   - id: typescript.project.v1
     name: TypeScript project loading
     description: Records explicit tsconfig project evidence and project-load gaps for the TypeScript scanner.

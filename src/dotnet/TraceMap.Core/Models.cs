@@ -201,6 +201,9 @@ public static class RuleIds
     public const string DatabaseSqlShape = "database.sql.shape.v1";
     public const string ConfigKey = "config.key.v1";
     public const string ContractDeltaReduction = "contract.delta.reduce.v1";
+    public const string ContractDeltaInput = "contract.delta.input.v2";
+    public const string ContractDeltaImpact = "contract.delta.impact.v2";
+    public const string ContractDeltaContext = "contract.delta.context.v2";
     public const string EndpointAlignment = "endpoint.alignment.v1";
 }
 
