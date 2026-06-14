@@ -274,6 +274,8 @@ public static class ReleaseReviewReporter
     public static async Task<ReleaseReviewDocument> BuildReportAsync(ReleaseReviewOptions options, CancellationToken cancellationToken = default)
     {
         ValidateOptions(options);
+        ValidateReadableFile(options.BeforePath, "--before");
+        ValidateReadableFile(options.AfterPath, "--after");
         ValidateReadableFile(options.ContractDeltaPath, "--contract-delta");
         ValidateReadableFile(options.SqlSchemaDeltaPath, "--sql-schema-delta");
         ValidateReadableFile(options.PackageDeltaPath, "--package-delta");
@@ -306,10 +308,19 @@ public static class ReleaseReviewReporter
         ReleaseReviewSection reverseContext;
         if (beforeInfo.Kind == "combined")
         {
-            var impact = await BuildCombinedImpactAsync(options, scopes, cancellationToken);
-            topChangedSurfaces = BuildTopChangedSurfacesSection(impact, options.MaxSurfaceRows);
-            pathContext = BuildPathContextSection(impact, options.IncludePaths, options.MaxPaths);
-            reverseContext = await BuildReverseContextSectionAsync(options, cancellationToken);
+            if (ImpactContextRequested(scopes, options.IncludePaths))
+            {
+                var impact = await BuildCombinedImpactAsync(options, scopes, cancellationToken);
+                topChangedSurfaces = BuildTopChangedSurfacesSection(impact, options.MaxSurfaceRows);
+                pathContext = BuildPathContextSection(impact, options.IncludePaths, options.MaxPaths);
+            }
+            else
+            {
+                topChangedSurfaces = new ReleaseReviewSection(ReleaseReviewStatuses.NotRequested, [], [], ["Top changed surface impact scope was not requested."]);
+                pathContext = new ReleaseReviewSection(ReleaseReviewStatuses.NotRequested, [], [], ["Path context is off by default or outside the requested scope."]);
+            }
+
+            reverseContext = await BuildReverseContextSectionAsync(options, afterInfo.Snapshot, cancellationToken);
             gaps.AddRange(topChangedSurfaces.Gaps);
             gaps.AddRange(pathContext.Gaps);
             gaps.AddRange(reverseContext.Gaps);
@@ -362,19 +373,13 @@ public static class ReleaseReviewReporter
         pathContext = FilterSectionFindings(pathContext, cappedFindings);
         reverseContext = FilterSectionFindings(reverseContext, cappedFindings);
 
-        var cappedGaps = gaps
-            .DistinctBy(gap => gap.GapId)
-            .OrderBy(GapSeverityRank)
-            .ThenBy(gap => gap.Section, StringComparer.Ordinal)
-            .ThenBy(gap => gap.SourceLabel ?? string.Empty, StringComparer.Ordinal)
-            .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
-            .Take(options.MaxGaps)
-            .ToArray();
-        var truncated = gaps.Count > cappedGaps.Length
+        AddChecklistTruncationGapIfNeeded(gaps, cappedFindings, options.MaxChecklistItems);
+        var cappedGaps = CapGaps(gaps, options.MaxGaps);
+        var truncated = gaps.DistinctBy(gap => gap.GapId).Count() > cappedGaps.Length
             || topChangedSurfaces.Status == ReleaseReviewStatuses.Truncated
             || cappedFindings.Length < allFindings.Length;
         var summary = BuildSummary(
-            beforeInfo.Snapshot,
+            sourceCoverage.Count,
             topChangedSurfaces,
             contractImpact,
             apiDtoChanges,
@@ -518,7 +523,7 @@ public static class ReleaseReviewReporter
         return new ReleaseReviewSection(status, capped, gaps, ["Path context is bounded static evidence and is not complete runtime reachability."], omitted);
     }
 
-    private static async Task<ReleaseReviewSection> BuildReverseContextSectionAsync(ReleaseReviewOptions options, CancellationToken cancellationToken)
+    private static async Task<ReleaseReviewSection> BuildReverseContextSectionAsync(ReleaseReviewOptions options, ReleaseReviewSnapshot afterSnapshot, CancellationToken cancellationToken)
     {
         if (!options.IncludeReverse)
         {
@@ -539,8 +544,9 @@ public static class ReleaseReviewReporter
             options.MaxFindings,
             Math.Max(1, options.MaxPaths),
             options.MaxGaps), cancellationToken);
-        var findings = reverse.ReverseRoots.Select(FromReverseRoot)
-            .Concat(reverse.Paths.Select(FromReversePath))
+        var commitBySource = afterSnapshot.Sources.ToDictionary(source => source.SourceLabel, source => source.CommitSha, StringComparer.Ordinal);
+        var findings = reverse.ReverseRoots.Select(root => FromReverseRoot(root, commitBySource))
+            .Concat(reverse.Paths.Select(path => FromReversePath(path, commitBySource)))
             .OrderBy(FindingSeverityRank)
             .ThenBy(finding => finding.FindingId, StringComparer.Ordinal)
             .Take(options.MaxPaths)
@@ -672,6 +678,7 @@ public static class ReleaseReviewReporter
         var packageFindings = topChangedSurfaces.Findings
             .Where(finding => finding.Metadata.Any(pair => pair.Key == "surfaceKind" && pair.Value == "package-config")
                 || string.Equals(finding.Metadata.FirstOrDefault(pair => pair.Key == "factType").Value, FactTypes.PackageReferenced, StringComparison.Ordinal))
+            .Select(ToPackageFinding)
             .OrderBy(FindingSeverityRank)
             .ThenBy(finding => finding.FindingId, StringComparer.Ordinal)
             .ToArray();
@@ -719,7 +726,7 @@ public static class ReleaseReviewReporter
     }
 
     private static ReleaseReviewSummary BuildSummary(
-        ReleaseReviewSnapshot before,
+        int sourceCount,
         ReleaseReviewSection topChangedSurfaces,
         ReleaseReviewSection contractImpact,
         ReleaseReviewSection apiDtoChanges,
@@ -759,7 +766,7 @@ public static class ReleaseReviewReporter
         return new ReleaseReviewSummary(
             rollup,
             RollupRuleId,
-            before.Sources.Count,
+            sourceCount,
             topChangedSurfaces.Findings.Count,
             contractImpact.Findings.Count,
             apiDtoChanges.Findings.Count,
@@ -779,6 +786,16 @@ public static class ReleaseReviewReporter
         IReadOnlyList<ReleaseReviewFinding> findings,
         IReadOnlyList<ReleaseReviewGap> gaps,
         int maxChecklistItems)
+    {
+        return BuildChecklistItems(summary, findings, gaps)
+            .Take(maxChecklistItems)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<ReleaseReviewChecklistItem> BuildChecklistItems(
+        ReleaseReviewSummary summary,
+        IReadOnlyList<ReleaseReviewFinding> findings,
+        IReadOnlyList<ReleaseReviewGap> gaps)
     {
         var items = new List<ReleaseReviewChecklistItem>();
         foreach (var gap in gaps)
@@ -828,7 +845,6 @@ public static class ReleaseReviewReporter
             .OrderBy(SeverityRank)
             .ThenBy(item => item.Section, StringComparer.Ordinal)
             .ThenBy(item => item.ChecklistId, StringComparer.Ordinal)
-            .Take(maxChecklistItems)
             .ToArray();
     }
 
@@ -883,7 +899,7 @@ public static class ReleaseReviewReporter
             ["Path context is bounded static evidence."]);
     }
 
-    private static ReleaseReviewFinding FromReverseRoot(CombinedReverseRoot root)
+    private static ReleaseReviewFinding FromReverseRoot(CombinedReverseRoot root, IReadOnlyDictionary<string, string?> commitBySource)
     {
         return new ReleaseReviewFinding(
             StableId("finding", "reverseContext", root.RootId),
@@ -892,7 +908,7 @@ public static class ReleaseReviewReporter
             root.Classification,
             root.RuleIds.OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault() ?? "combined.reverse.root.v1",
             root.EvidenceTiers.OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault() ?? EvidenceTiers.Tier4Unknown,
-            null,
+            CommitForSource(root.SourceLabel, commitBySource),
             root.DisplayName,
             null,
             null,
@@ -906,16 +922,17 @@ public static class ReleaseReviewReporter
             root.CoverageCaveats.OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
-    private static ReleaseReviewFinding FromReversePath(CombinedReversePath path)
+    private static ReleaseReviewFinding FromReversePath(CombinedReversePath path, IReadOnlyDictionary<string, string?> commitBySource)
     {
+        var sourceLabel = path.Nodes.FirstOrDefault()?.SourceLabel;
         return new ReleaseReviewFinding(
             StableId("finding", "reverseContext", path.PathId),
             "reverseContext",
-            null,
+            sourceLabel,
             path.Classification,
             path.RuleIds.OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault() ?? "combined.reverse.path.v1",
             path.EvidenceTiers.OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault() ?? EvidenceTiers.Tier4Unknown,
-            null,
+            CommitForSource(sourceLabel, commitBySource),
             path.PathId,
             null,
             null,
@@ -928,6 +945,35 @@ public static class ReleaseReviewReporter
             path.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             path.SupportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ["Reverse paths are bounded static evidence."]);
+    }
+
+    private static string? CommitForSource(string? sourceLabel, IReadOnlyDictionary<string, string?> commitBySource)
+    {
+        if (!string.IsNullOrWhiteSpace(sourceLabel) && commitBySource.TryGetValue(sourceLabel, out var commitSha))
+        {
+            return commitSha;
+        }
+
+        var commits = commitBySource.Values.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).ToArray();
+        return commits.Length == 1 ? commits[0] : null;
+    }
+
+    private static ReleaseReviewFinding ToPackageFinding(ReleaseReviewFinding finding)
+    {
+        return finding with
+        {
+            FindingId = StableId("finding", "packageImpact", finding.FindingId),
+            Section = "packageImpact",
+            Metadata = CombinedReportHelpers.SortedMetadata([
+                Pair("derivedFromFindingHash", CombinedReportHelpers.Hash(finding.FindingId, 16)),
+                .. finding.Metadata.Select(pair => Pair(pair.Key, pair.Value))
+            ]),
+            Limitations = finding.Limitations
+                .Concat(["Package impact reuses static package surface evidence and does not claim compatibility, vulnerability, or lockfile-resolution impact."])
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray()
+        };
     }
 
     private static ReleaseReviewFinding FromContractFinding(ImpactFinding finding)
@@ -1061,20 +1107,20 @@ public static class ReleaseReviewReporter
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var manifest = DeserializeManifest(reader.GetString(11));
-            var label = reader.GetString(0);
-            var scannerVersion = reader.GetString(10);
+            var manifest = DeserializeManifest(StringOrNull(reader, 11));
+            var label = StringOrDefault(reader, 0, "unknown");
+            var scannerVersion = StringOrDefault(reader, 10, "unknown");
             extractorVersions[$"{label}:{scannerVersion}"] = scannerVersion;
             var gaps = manifest?.KnownGaps ?? [];
-            var analysisLevel = reader.GetString(8);
-            var buildStatus = reader.GetString(9);
+            var analysisLevel = StringOrDefault(reader, 8, "unknown");
+            var buildStatus = StringOrDefault(reader, 9, "unknown");
             sources.Add(new ReleaseReviewSourceInfo(
                 label,
-                reader.IsDBNull(1) ? InferLanguage(scannerVersion) : reader.GetString(1),
-                reader.GetString(2),
-                NullIfUnknown(reader.GetString(3)),
-                RepositoryIdentityHash(reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(4)),
-                reader.IsDBNull(6) ? null : reader.GetString(6),
+                StringOrNull(reader, 1) ?? InferLanguage(scannerVersion),
+                StringOrNull(reader, 2),
+                NullIfUnknown(StringOrNull(reader, 3)),
+                RepositoryIdentityHash(StringOrNull(reader, 5), StringOrNull(reader, 4)),
+                StringOrNull(reader, 6),
                 CoverageFrom(analysisLevel, buildStatus, gaps),
                 buildStatus,
                 analysisLevel,
@@ -1106,19 +1152,21 @@ public static class ReleaseReviewReporter
             throw new InvalidDataException($"{side} input is not a valid TraceMap index; missing scan_manifest row.");
         }
 
-        var manifest = DeserializeManifest(reader.GetString(6));
+        var manifest = DeserializeManifest(StringOrNull(reader, 6));
         var gaps = manifest?.KnownGaps ?? [];
-        var scannerVersion = reader.GetString(3);
+        var scannerVersion = StringOrDefault(reader, 3, "unknown");
+        var analysisLevel = StringOrDefault(reader, 4, "unknown");
+        var buildStatus = StringOrDefault(reader, 5, "unknown");
         var source = new ReleaseReviewSourceInfo(
             "single",
             InferLanguage(scannerVersion),
-            reader.GetString(0),
-            NullIfUnknown(reader.GetString(2)),
-            RepositoryIdentityHash(manifest?.RemoteUrl, reader.GetString(1)),
+            StringOrNull(reader, 0),
+            NullIfUnknown(StringOrNull(reader, 2)),
+            RepositoryIdentityHash(manifest?.RemoteUrl, StringOrNull(reader, 1)),
             manifest?.ScanRootPathHash,
-            CoverageFrom(reader.GetString(4), reader.GetString(5), gaps),
-            reader.GetString(5),
-            reader.GetString(4),
+            CoverageFrom(analysisLevel, buildStatus, gaps),
+            buildStatus,
+            analysisLevel,
             gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray());
         var warnings = CoverageWarnings([source]);
         return new ReleaseReviewSnapshot(side, "single", [source], warnings.Count == 0 ? "Full" : "Reduced", warnings, [new KeyValuePair<string, string>($"single:{scannerVersion}", scannerVersion)]);
@@ -1203,7 +1251,7 @@ public static class ReleaseReviewReporter
         await connection.OpenAsync(cancellationToken);
         await using var manifestCommand = connection.CreateCommand();
         manifestCommand.CommandText = "select commit_sha from scan_manifest order by scanned_at desc limit 1;";
-        var commitSha = NullIfUnknown((string?)await manifestCommand.ExecuteScalarAsync(cancellationToken));
+        var commitSha = NullIfUnknown(await manifestCommand.ExecuteScalarAsync(cancellationToken) as string);
         await using var command = connection.CreateCommand();
         command.CommandText = """
             select fact_id,
@@ -1234,19 +1282,18 @@ public static class ReleaseReviewReporter
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var factId = reader.GetString(0);
-            var factType = reader.GetString(1);
-            var ruleId = reader.GetString(2);
-            var evidenceTier = reader.GetString(3);
-            var filePath = reader.GetString(4);
-            var startLine = reader.GetInt32(5);
-            var endLine = reader.GetInt32(6);
-            var targetSymbol = reader.IsDBNull(7) ? null : reader.GetString(7);
-            var contractElement = reader.IsDBNull(8) ? null : reader.GetString(8);
-            var properties = ParseProperties(reader.GetString(9));
+            var factId = StringOrDefault(reader, 0, "unknown");
+            var factType = StringOrDefault(reader, 1, "unknown");
+            var ruleId = StringOrDefault(reader, 2, "release.review.section.v1");
+            var filePath = StringOrNull(reader, 4);
+            var startLine = IntOrNull(reader, 5);
+            var endLine = IntOrNull(reader, 6);
+            var targetSymbol = StringOrNull(reader, 7);
+            var contractElement = StringOrNull(reader, 8);
+            var properties = ParseProperties(StringOrNull(reader, 9));
             var metadata = SafeFactMetadata(factType, properties);
             var stableInput = string.Join("|", factType, ruleId, targetSymbol, contractElement, string.Join(";", metadata.Select(pair => $"{pair.Key}={pair.Value}")));
-            var evidenceInput = string.Join("|", stableInput, CombinedReportHelpers.SafePath(filePath), startLine, endLine, side);
+            var evidenceInput = string.Join("|", stableInput, CombinedReportHelpers.SafePath(filePath), startLine, endLine);
             var finding = new ReleaseReviewFinding(
                 StableId("finding", "topChangedSurfaces", side, factId),
                 "topChangedSurfaces",
@@ -1316,6 +1363,77 @@ public static class ReleaseReviewReporter
             ReleaseReviewClassifications.TruncatedByLimit,
             $"Release review omitted {findings.Length - cap} findings because --max-findings was reached."));
         return findings.Take(cap).ToArray();
+    }
+
+    private static void AddChecklistTruncationGapIfNeeded(List<ReleaseReviewGap> gaps, IReadOnlyList<ReleaseReviewFinding> findings, int maxChecklistItems)
+    {
+        var provisionalSummary = new ReleaseReviewSummary(
+            ReleaseReviewClassifications.NoActionableEvidence,
+            RollupRuleId,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            gaps.Count,
+            false,
+            "Checklist truncation preflight.");
+        var checklistCount = BuildChecklistItems(provisionalSummary, findings, SortGaps(gaps)).Count;
+        if (checklistCount <= maxChecklistItems)
+        {
+            return;
+        }
+
+        gaps.Add(Gap(
+            "truncation",
+            "TruncatedByLimit",
+            "checklist",
+            null,
+            TruncationRuleId,
+            ReleaseReviewClassifications.TruncatedByLimit,
+            $"Reviewer checklist omitted {checklistCount - maxChecklistItems} rows because --max-checklist-items was reached."));
+    }
+
+    private static ReleaseReviewGap[] CapGaps(List<ReleaseReviewGap> gaps, int maxGaps)
+    {
+        var sorted = SortGaps(gaps);
+        if (sorted.Length <= maxGaps)
+        {
+            return sorted;
+        }
+
+        var omitted = sorted.Length - maxGaps + 1;
+        var truncationGap = Gap(
+            "truncation",
+            "TruncatedByLimit",
+            "gaps",
+            null,
+            TruncationRuleId,
+            ReleaseReviewClassifications.TruncatedByLimit,
+            $"Analysis gaps omitted {omitted} rows because --max-gaps was reached.");
+        return new[] { truncationGap }
+            .Concat(sorted.Where(gap => gap.GapId != truncationGap.GapId).Take(maxGaps - 1))
+            .OrderBy(GapSeverityRank)
+            .ThenBy(gap => gap.Section, StringComparer.Ordinal)
+            .ThenBy(gap => gap.SourceLabel ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static ReleaseReviewGap[] SortGaps(IEnumerable<ReleaseReviewGap> gaps)
+    {
+        return gaps
+            .DistinctBy(gap => gap.GapId)
+            .OrderBy(GapSeverityRank)
+            .ThenBy(gap => gap.Section, StringComparer.Ordinal)
+            .ThenBy(gap => gap.SourceLabel ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static ReleaseReviewSection FilterSectionFindings(ReleaseReviewSection section, IReadOnlyList<ReleaseReviewFinding> allowed)
@@ -1502,7 +1620,15 @@ public static class ReleaseReviewReporter
             mapped.Add("paths");
         }
 
-        return mapped.Count == 0 ? "sources,coverage,endpoints,surfaces,edges" : string.Join(",", mapped.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+        return string.Join(",", mapped.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+    }
+
+    private static bool ImpactContextRequested(IReadOnlyList<string> scopes, bool includePaths)
+    {
+        return ScopeEnabled(scopes, "sources")
+            || ScopeEnabled(scopes, "coverage")
+            || ScopeEnabled(scopes, "surfaces")
+            || (includePaths && ScopeEnabled(scopes, "paths"));
     }
 
     private static bool ScopeEnabled(IReadOnlyList<string> scopes, string scope)
@@ -1717,16 +1843,16 @@ public static class ReleaseReviewReporter
             .ToArray();
     }
 
-    private static string CoverageFrom(string analysisLevel, string buildStatus, IReadOnlyList<string> knownGaps)
+    private static string CoverageFrom(string? analysisLevel, string? buildStatus, IReadOnlyList<string> knownGaps)
     {
-        return analysisLevel.Contains("Reduced", StringComparison.OrdinalIgnoreCase)
+        return (analysisLevel?.Contains("Reduced", StringComparison.OrdinalIgnoreCase) ?? false)
             || buildStatus is "FailedOrPartial" or "Failed"
             || knownGaps.Count > 0
             ? "Reduced"
             : "Full";
     }
 
-    private static string? RepositoryIdentityHash(string? remoteUrl, string repoName)
+    private static string? RepositoryIdentityHash(string? remoteUrl, string? repoName)
     {
         var identity = string.IsNullOrWhiteSpace(remoteUrl) ? repoName : remoteUrl;
         return string.IsNullOrWhiteSpace(identity) ? null : $"repo:{CombinedReportHelpers.Hash(identity, 24)}";
@@ -1742,8 +1868,13 @@ public static class ReleaseReviewReporter
         return value;
     }
 
-    private static string InferLanguage(string scannerVersion)
+    private static string InferLanguage(string? scannerVersion)
     {
+        if (string.IsNullOrWhiteSpace(scannerVersion))
+        {
+            return "csharp";
+        }
+
         if (scannerVersion.Contains("typescript", StringComparison.OrdinalIgnoreCase))
         {
             return "typescript";
@@ -1762,8 +1893,13 @@ public static class ReleaseReviewReporter
         return "csharp";
     }
 
-    private static ScanManifest? DeserializeManifest(string manifestJson)
+    private static ScanManifest? DeserializeManifest(string? manifestJson)
     {
+        if (string.IsNullOrWhiteSpace(manifestJson))
+        {
+            return null;
+        }
+
         try
         {
             return JsonSerializer.Deserialize<ScanManifest>(manifestJson, CombinedDependencyReporter.JsonOptions);
@@ -1774,8 +1910,13 @@ public static class ReleaseReviewReporter
         }
     }
 
-    private static IReadOnlyDictionary<string, string> ParseProperties(string json)
+    private static IReadOnlyDictionary<string, string> ParseProperties(string? json)
     {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+
         try
         {
             return JsonSerializer.Deserialize<SortedDictionary<string, string>>(json, CombinedDependencyReporter.JsonOptions)
@@ -1785,6 +1926,21 @@ public static class ReleaseReviewReporter
         {
             return new SortedDictionary<string, string>(StringComparer.Ordinal);
         }
+    }
+
+    private static string? StringOrNull(SqliteDataReader reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+    }
+
+    private static string StringOrDefault(SqliteDataReader reader, int ordinal, string fallback)
+    {
+        return StringOrNull(reader, ordinal) ?? fallback;
+    }
+
+    private static int? IntOrNull(SqliteDataReader reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
     }
 
     private static IReadOnlyList<KeyValuePair<string, string>> SafeFactMetadata(string factType, IReadOnlyDictionary<string, string> properties)

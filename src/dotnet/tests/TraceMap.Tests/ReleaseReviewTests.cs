@@ -68,6 +68,11 @@ public sealed class ReleaseReviewTests
         Assert.Equal(ReleaseReviewClassifications.ActionableStaticEvidence, result.Report.Summary.RollupClassification);
         Assert.NotEmpty(result.Report.TopChangedSurfaces.Findings);
         Assert.NotEmpty(result.Report.ContractImpact.Findings);
+        Assert.NotEmpty(result.Report.PackageImpact.Findings);
+        Assert.DoesNotContain(
+            result.Report.PackageImpact.Findings.Select(finding => finding.FindingId),
+            id => result.Report.TopChangedSurfaces.Findings.Any(finding => finding.FindingId == id));
+        Assert.All(result.Report.PackageImpact.Findings, finding => Assert.Equal("packageImpact", finding.Section));
         Assert.Equal(ReleaseReviewStatuses.NotRequested, result.Report.PathContext.Status);
         Assert.Equal(ReleaseReviewStatuses.NotRequested, result.Report.ReverseContext.Status);
         Assert.All(result.Report.Gaps, gap => Assert.False(string.IsNullOrWhiteSpace(gap.RuleId)));
@@ -134,6 +139,153 @@ public sealed class ReleaseReviewTests
         Assert.Equal(ReleaseReviewStatuses.Unavailable, document.ReverseContext.Status);
         Assert.Contains(document.Gaps, gap => gap.GapKind == "UnsupportedMode" && gap.Section == "pathContext");
         Assert.Contains(document.Gaps, gap => gap.GapKind == "UnsupportedMode" && gap.Section == "reverseContext");
+    }
+
+    [Fact]
+    public async Task Release_review_single_index_identical_facts_emit_no_changed_surface_evidence()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, [
+            RouteFact(before, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)
+        ]);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            RouteFact(after, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)
+        ]);
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "release")));
+
+        Assert.Empty(result.Report.TopChangedSurfaces.Findings);
+        Assert.NotEqual(ReleaseReviewClassifications.ActionableStaticEvidence, result.Report.Summary.RollupClassification);
+    }
+
+    [Fact]
+    public async Task Release_review_contract_scope_does_not_fall_back_to_surface_impact()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeApi = Path.Combine(temp.Path, "before-api.sqlite");
+        var afterApi = Path.Combine(temp.Path, "after-api.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeApi, before, []);
+        SqliteIndexWriter.Write(afterApi, after, [
+            RouteFact(after, "POST", "/api/orders/archive", "/api/orders/archive", "Controllers/OrdersController.cs", 20)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeApi], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterApi], afterCombined, ["api"]));
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "release"),
+            Scope: "contracts"));
+
+        Assert.Equal(ReleaseReviewStatuses.NotRequested, result.Report.TopChangedSurfaces.Status);
+        Assert.Empty(result.Report.TopChangedSurfaces.Findings);
+    }
+
+    [Fact]
+    public async Task Release_review_source_count_uses_union_of_before_after_sources()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeApi = Path.Combine(temp.Path, "before-api.sqlite");
+        var afterApi = Path.Combine(temp.Path, "after-api.sqlite");
+        var afterClient = Path.Combine(temp.Path, "after-client.sqlite");
+        var apiBefore = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var apiAfter = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        var clientAfter = Manifest("client", "tracemap-typescript/0.1.0", commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeApi, apiBefore, []);
+        SqliteIndexWriter.Write(afterApi, apiAfter, []);
+        SqliteIndexWriter.Write(afterClient, clientAfter, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeApi], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterApi, afterClient], afterCombined, ["api", "client"]));
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "release")));
+
+        Assert.Equal(2, result.Report.Summary.SourceCount);
+        Assert.Equal(result.Report.SourceCoverage.Count, result.Report.Summary.SourceCount);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SourceOnlyOnOneSide" && gap.SourceLabel == "client");
+    }
+
+    [Fact]
+    public async Task Release_review_gap_and_checklist_caps_emit_truncation_gaps()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeApi = Path.Combine(temp.Path, "before-api.sqlite");
+        var afterApi = Path.Combine(temp.Path, "after-api.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeApi, before, []);
+        SqliteIndexWriter.Write(afterApi, after, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeApi], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterApi], afterCombined, ["api"]));
+
+        var gapCapped = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "gap-capped"),
+            Scope: "surfaces,api-dto,sql-schema,packages",
+            MaxGaps: 1,
+            MaxChecklistItems: 50));
+        Assert.Single(gapCapped.Report.Gaps);
+        Assert.Contains(gapCapped.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Section == "gaps");
+
+        var checklistCapped = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "checklist-capped"),
+            Scope: "surfaces,api-dto,sql-schema,packages",
+            MaxGaps: 50,
+            MaxChecklistItems: 1));
+        Assert.Contains(checklistCapped.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Section == "checklist");
+    }
+
+    [Fact]
+    public async Task Release_review_reverse_findings_include_after_commit_sha()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeServer = Path.Combine(temp.Path, "before-server.sqlite");
+        var afterServer = Path.Combine(temp.Path, "after-server.sqlite");
+        var before = Manifest("server", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("server", ScannerVersions.TraceMap, commitSha: "2222222");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+        SqliteIndexWriter.Write(beforeServer, before, []);
+        SqliteIndexWriter.Write(afterServer, after, [
+            RouteFact(after, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(after, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(after, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeServer], beforeCombined, ["server"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterServer], afterCombined, ["server"]));
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "release"),
+            IncludeReverse: true,
+            Surface: "sql-query",
+            SurfaceName: "orders"));
+
+        Assert.NotEmpty(result.Report.ReverseContext.Findings);
+        Assert.All(result.Report.ReverseContext.Findings, finding => Assert.Equal("2222222", finding.CommitSha));
     }
 
     [Fact]
@@ -330,7 +482,49 @@ public sealed class ReleaseReviewTests
             });
     }
 
+    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string methodSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol,
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["routeTemplates"] = template
+            });
+    }
+
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callKind"] = "method"
+            });
+    }
+
     private static CodeFact QueryPatternFact(ScanManifest manifest, string file, int line)
+    {
+        return QueryPatternFact(manifest, null, file, line);
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
     {
         return FactFactory.Create(
             manifest,
@@ -338,6 +532,7 @@ public sealed class ReleaseReviewTests
             RuleIds.CSharpSyntaxQueryPattern,
             EvidenceTiers.Tier2Structural,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
             targetSymbol: "orders",
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
