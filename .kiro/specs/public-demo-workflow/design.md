@@ -166,7 +166,7 @@ Required versus optional sections:
 | tool checks for git, .NET, Node, npm | yes | fail non-zero |
 | .NET sample scans | yes | fail non-zero |
 | TypeScript sample scans | yes | fail non-zero |
-| Python sample scan | no, opt-in | unavailable unless `--include-python`; fail if requested and setup fails |
+| Python sample scan | no, opt-in | not_requested unless `--include-python`; fail if requested and setup fails |
 | JVM sample scan | no, auto-available | unavailable if Java 21 is absent; fail if `--require-jvm` is supplied |
 | combine and combined dependency report | yes | fail non-zero |
 | paths and reverse | yes after compatible combined index exists | fail non-zero unless report contains an explicitly allowed rule-backed gap |
