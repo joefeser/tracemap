@@ -175,6 +175,7 @@ public static class CombinedDependencyPathReporter
     private static readonly HashSet<string> TerminalSurfaceKinds = new(StringComparer.Ordinal)
     {
         "sql-query",
+        "sql-persistence",
         "http-route",
         "http-client",
         "package-config"
@@ -302,7 +303,7 @@ public static class CombinedDependencyPathReporter
 
             if (!TerminalSurfaceKinds.Contains(surfaceKind))
             {
-                throw new ArgumentException("paths --to-surface must be one of sql-query, http-route, http-client, or package-config.");
+                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, or package-config.");
             }
         }
     }
@@ -1275,6 +1276,7 @@ public static class CombinedDependencyPathReporter
             surface.SurfaceKind switch
             {
                 "sql-query" => "SqlSurface",
+                "sql-persistence" => "SqlPersistenceSurface",
                 "http-client" => "HttpClientSurface",
                 "http-route" => "HttpRouteSurface",
                 "package-config" => surface.ConfigKey is not null ? "ConfigSurface" : "PackageSurface",

@@ -335,6 +335,42 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_treats_database_column_mapping_as_persistence_not_query_execution()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var model = "Server.Models.Order";
+        SqliteIndexWriter.Write(index, manifest, [
+            MethodFact(manifest, model, "Models/Order.cs", 3),
+            DatabaseColumnMappingFact(manifest, model, "Models/Order.cs", 7)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var queryResult = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "query-paths"),
+                FromSymbol: model,
+                ToSurface: "sql-query"));
+
+        Assert.Empty(queryResult.Report.Paths);
+
+        var persistenceResult = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "persistence-paths"),
+                FromSymbol: model,
+                ToSurface: "sql-persistence"));
+
+        var path = Assert.Single(persistenceResult.Report.Paths);
+        Assert.Equal("sql-persistence", path.Nodes.Last().SurfaceKind);
+        Assert.Equal("SqlPersistenceSurface", path.Nodes.Last().NodeKind);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "surface-evidence");
+    }
+
+    [Fact]
     public async Task Paths_reports_selector_no_match_and_rejects_edge_kind_surface()
     {
         using var temp = new TempDirectory();
@@ -647,6 +683,26 @@ public sealed class CombinedDependencyPathTests
             {
                 ["keyPath"] = "ConnectionStrings:Default",
                 ["valueHash"] = "hash-only"
+            });
+    }
+
+    private static CodeFact DatabaseColumnMappingFact(ScanManifest manifest, string sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.DatabaseColumnMapping,
+            RuleIds.CSharpSemanticContractMapping,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: $"{sourceSymbol}.Status",
+            contractElement: "status",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["mappingKind"] = "DatabaseColumnMapping",
+                ["mappedName"] = "status",
+                ["columnName"] = "status",
+                ["containingType"] = sourceSymbol
             });
     }
 

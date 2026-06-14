@@ -186,7 +186,7 @@ public static class CombinedChangeImpactReporter
         "Impact rows describe static change evidence, not runtime or business impact.",
         "Path context is opt-in, bounded static graph evidence and must not be treated as complete dependency coverage when truncated.",
         "Endpoint evidence does not prove runtime traffic, auth behavior, proxies, deployment base paths, CORS behavior, or reachability.",
-        "SQL/query evidence does not prove runtime execution, schema existence, generated SQL equivalence, dialect validity, or branch feasibility.",
+        "SQL query/persistence evidence does not prove runtime execution, schema existence, generated SQL equivalence, dialect validity, or branch feasibility.",
         "Reduced scan coverage makes absence of evidence coverage-relative."
     ];
 

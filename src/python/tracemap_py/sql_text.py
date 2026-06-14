@@ -123,8 +123,8 @@ def _shape_operation(value: str) -> str:
 def _table_names(sql: str, operation: str) -> list[str]:
     candidates: list[str] = []
     if operation == "SELECT":
-        candidates.extend(_matches(sql, r"\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
-        candidates.extend(_matches(sql, r"\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
+        candidates.extend(_top_level_matches(sql, r"\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
+        candidates.extend(_top_level_matches(sql, r"\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
     elif operation == "INSERT":
         candidates.extend(_matches(sql, r"\bINSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
     elif operation == "UPDATE":
@@ -135,6 +135,7 @@ def _table_names(sql: str, operation: str) -> list[str]:
         candidates.extend(_matches(sql, r"\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
     elif operation in {"DROP", "TRUNCATE", "ALTER"}:
         candidates.extend(_matches(sql, rf"\b{operation}\s+(?:TABLE\s+)?([A-Za-z_][A-Za-z0-9_.$\[\]\"`]*)"))
+    # CALL/EXEC routine names are intentionally not table candidates in v1.
     return _unique(_clean_identifier(value) for value in candidates)
 
 
@@ -156,6 +157,24 @@ def _column_names(sql: str, operation: str) -> list[str]:
 
 def _matches(sql: str, pattern: str) -> list[str]:
     return [match.group(1) for match in re.finditer(pattern, sql, flags=re.I)]
+
+
+def _top_level_matches(sql: str, pattern: str) -> list[str]:
+    return [
+        match.group(1)
+        for match in re.finditer(pattern, sql, flags=re.I)
+        if _parenthesis_depth_before(sql, match.start()) == 0
+    ]
+
+
+def _parenthesis_depth_before(sql: str, index: int) -> int:
+    depth = 0
+    for char in sql[:index]:
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth > 0:
+            depth -= 1
+    return depth
 
 
 def _between(sql: str, start: str, end: str) -> str:

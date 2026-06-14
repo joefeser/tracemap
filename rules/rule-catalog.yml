@@ -34,7 +34,7 @@ rules:
 
   - id: combined.diff.surface.v1
     name: Combined dependency diff surface comparison
-    description: Compares dependency surfaces such as SQL/query, HTTP, package, and config evidence using safe structured metadata.
+    description: Compares dependency surfaces such as SQL query/persistence, HTTP, package, and config evidence using safe structured metadata.
     evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
     emits:
       - surface diff row
@@ -136,7 +136,7 @@ rules:
 
   - id: combined.impact.surface.v1
     name: Combined change impact dependency surface item
-    description: Projects dependency-surface diff rows into static change-impact items for SQL/query, HTTP, package, and config surfaces using safe structured metadata.
+    description: Projects dependency-surface diff rows into static change-impact items for SQL query/persistence, HTTP, package, and config surfaces using safe structured metadata.
     evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
     emits:
       - surface impact item
@@ -717,6 +717,7 @@ rules:
       - AnalysisGap
     limitations:
       - SQL text evidence stores hashes and lengths only; table and column guesses belong on database.sql.shape.v1 QueryPatternDetected facts.
+      - C# syntax fallback may classify any complete SQL-like string literal whose first token is a supported SQL verb, even outside a recognized framework call shape.
       - Dynamic SQL construction emits reduced-coverage boundary evidence instead of complete SQL text.
       - Raw SQL text is not stored by default; hashes and spans are emitted instead.
 
@@ -731,6 +732,7 @@ rules:
       - Normalization strips comments before masking strings; `--` inside string literals follows the v1 reference behavior.
       - Double-quoted contents are masked like strings, so quoted SQL identifiers may be omitted or collapse until a parser-backed version exists.
       - Shape-hash-only facts are allowed for SQL-like WITH/CTE text and omit unsupported operation/table/column fields.
+      - SELECT table extraction only claims visible top-level FROM/JOIN identifiers; subquery table positions may be left without table metadata to avoid overclaiming.
       - Static SQL shape evidence does not prove runtime execution, schema existence, dialect validity, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
       - Raw SQL text, predicate literal values, source snippets, connection strings, raw URLs, and unsafe identifiers are not rendered.
 
@@ -1002,7 +1004,7 @@ rules:
       - QueryPatternDetected
       - AnalysisGap
     limitations:
-      - Detection is syntax-only for supported direct SQL call and tag shapes; unrelated APIs named query or execute may be missed or require SQL-like first arguments to avoid overclaiming.
+      - Detection is syntax-only for supported direct SQL call and tag shapes; supported method names are query, execute, raw, executeRaw, $queryRaw, and $executeRaw, and unrelated APIs with those names may be missed or require SQL-like first arguments to avoid overclaiming.
       - Template literals with non-static expressions emit dynamic-boundary gaps rather than complete SQL text evidence.
       - Prisma/Base44 query-builder facts remain under typescript.integration.querypattern.v1 and are not SQL-shape evidence unless direct SQL text is present.
       - The v1 queryShapeHash follows Python normalized masked SQL text semantics, including comment-before-string masking and double-quoted-content caveats.
@@ -1299,6 +1301,7 @@ rules:
       - The v1 queryShapeHash follows Python normalized masked SQL text semantics, including comment-before-string masking and double-quoted-content caveats.
       - SQL-like WITH/CTE text may emit shape-hash-only QueryPatternDetected without operation/table/column metadata.
       - Dynamic or concatenated SQL literals are not complete SQL text evidence.
+      - JDBC/JPA literal detection is conservative and may miss overloaded calls with trailing non-SQL arguments when the visible SQL shape cannot be isolated safely.
       - When JVM query-pattern facts are emitted, reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 
   - id: jvm.integration.jpa.v1

@@ -109,8 +109,8 @@ function shapeOperation(value: string): string {
 function tableNames(sql: string, operation: string): string[] {
   const candidates: string[] = [];
   if (operation === "SELECT") {
-    candidates.push(...matches(sql, /\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]"\x60]*)/gi));
-    candidates.push(...matches(sql, /\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]"\x60]*)/gi));
+    candidates.push(...topLevelMatches(sql, /\bFROM\s+([A-Za-z_][A-Za-z0-9_.$\[\]"\x60]*)/gi));
+    candidates.push(...topLevelMatches(sql, /\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$\[\]"\x60]*)/gi));
   } else if (operation === "INSERT") {
     candidates.push(...matches(sql, /\bINSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_.$\[\]"\x60]*)/gi));
   } else if (operation === "UPDATE") {
@@ -122,6 +122,7 @@ function tableNames(sql: string, operation: string): string[] {
   } else if (["DROP", "TRUNCATE", "ALTER"].includes(operation)) {
     candidates.push(...matches(sql, new RegExp(`\\b${operation}\\s+(?:TABLE\\s+)?([A-Za-z_][A-Za-z0-9_.$\\[\\]"\\x60]*)`, "gi")));
   }
+  // CALL/EXEC routine names are intentionally not table candidates in v1.
   return unique(candidates.map(cleanIdentifier));
 }
 
@@ -145,6 +146,29 @@ function columnNames(sql: string, operation: string): string[] {
 
 function matches(sql: string, pattern: RegExp): string[] {
   return Array.from(sql.matchAll(pattern)).map((match) => match[1]);
+}
+
+function topLevelMatches(sql: string, pattern: RegExp): string[] {
+  const result: string[] = [];
+  for (const match of sql.matchAll(pattern)) {
+    if (parenthesisDepthBefore(sql, match.index ?? 0) === 0) {
+      result.push(match[1]);
+    }
+  }
+  return result;
+}
+
+function parenthesisDepthBefore(sql: string, index: number): number {
+  let depth = 0;
+  for (let offset = 0; offset < index && offset < sql.length; offset += 1) {
+    const char = sql[offset];
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")" && depth > 0) {
+      depth -= 1;
+    }
+  }
+  return depth;
 }
 
 function between(sql: string, start: string, end: string): string {

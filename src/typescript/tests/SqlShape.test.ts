@@ -17,6 +17,11 @@ interface Fixture {
   columnNames?: string;
 }
 
+interface UnsupportedFixture {
+  name: string;
+  sql?: string;
+}
+
 describe("SqlShape", () => {
   it("matches the Python v1 golden fixture", () => {
     for (const fixture of readFixtures()) {
@@ -40,8 +45,25 @@ describe("SqlShape", () => {
     expect(props.tableName).toBeUndefined();
     expect(props.columnNames).toBeUndefined();
   });
+
+  it("does not overclaim table metadata for unsupported subquery table positions", () => {
+    const shape = queryShape(readUnsupportedSql("subquery-table-position"));
+
+    expect(shape.operationName).toBe("SELECT");
+    expect(shape.tableNames).toEqual([]);
+    expect(shape.columnNames).toEqual(["id"]);
+  });
 });
 
 function readFixtures(): Fixture[] {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, "samples/sql-shape-fixtures/sql-shape-v1.json"), "utf8")).cases;
+}
+
+function readUnsupportedSql(name: string): string {
+  const fixture = JSON.parse(fs.readFileSync(path.join(repoRoot, "samples/sql-shape-fixtures/sql-shape-v1.json"), "utf8")) as { unsupportedCases: UnsupportedFixture[] };
+  const match = fixture.unsupportedCases.find((item) => item.name === name);
+  if (!match?.sql) {
+    throw new Error(`Missing unsupported SQL fixture ${name}`);
+  }
+  return match.sql;
 }

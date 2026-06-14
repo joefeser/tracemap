@@ -129,13 +129,15 @@ Out of scope:
 1. `tracemap report` over a combined index SHALL project SQL surfaces from `QueryPatternDetected`, `SqlTextUsed`, `SqlFileDeclared`, `DatabaseColumnMapping`, `DapperCallDetected`, and `SqlCommandDetected` using one shared surface model.
 2. SQL surfaces SHALL have deterministic identity keys independent of combined row order and local paths.
 3. SQL surface display/grouping labels SHALL prefer `queryShapeHash` before table-only metadata to avoid hiding distinct queries against the same table.
-4. `tracemap paths --to-surface sql-query` SHALL continue to find terminal SQL surfaces and SHALL label unlinked SQL evidence as gaps rather than successful paths.
-5. `tracemap reverse --surface sql-query` SHALL work for SQL-shape and hash-only surfaces.
-6. `tracemap diff` and `tracemap impact` SHALL compare SQL surfaces without treating reduced coverage or hash-only evidence as full semantic certainty.
-7. Combined Markdown/JSON SHALL not display raw SQL, literal values, snippets, connection strings, raw URLs, or local absolute paths.
-8. WHEN combined reports render table or column identifiers THEN they SHALL validate identifiers against the safe identifier policy and hash or omit unsafe values even if scanner facts stored them.
-9. WHEN a SQL surface has only `textHash` and no shape metadata THEN diff and impact SHALL include a `HashOnlyEvidence` caveat under `combined.diff.surface.v1` or `combined.impact.surface.v1` and classify changes no stronger than review-tier evidence unless both sides have credible shape metadata.
-10. WHEN a SQL surface identity depends on fact ID hash fallback THEN combined analysis SHALL emit a `VolatileIdentity` or equivalent gap under the relevant combined identity/surface rule and classify the surface no stronger than review-tier evidence.
+4. `DatabaseColumnMapping` SHALL project as `sql-persistence` terminal evidence, not `sql-query`, and SHALL not claim query execution.
+5. `tracemap paths --to-surface sql-query` SHALL continue to find terminal SQL text/shape/query-call surfaces and SHALL label unlinked SQL evidence as gaps rather than successful paths.
+6. `tracemap paths --to-surface sql-persistence` SHALL find reachable mapping-only persistence surfaces.
+7. `tracemap reverse --surface sql-query` SHALL work for SQL-shape and hash-only surfaces, and `tracemap reverse --surface sql-persistence` SHALL work for mapping-only persistence surfaces.
+8. `tracemap diff` and `tracemap impact` SHALL compare SQL surfaces without treating reduced coverage or hash-only evidence as full semantic certainty.
+9. Combined Markdown/JSON SHALL not display raw SQL, literal values, snippets, connection strings, raw URLs, or local absolute paths.
+10. WHEN combined reports render table or column identifiers THEN they SHALL validate identifiers against the safe identifier policy and hash or omit unsafe values even if scanner facts stored them.
+11. WHEN a SQL surface has only `textHash` and no shape metadata THEN diff and impact SHALL include a `HashOnlyEvidence` caveat under `combined.diff.surface.v1` or `combined.impact.surface.v1` and classify changes no stronger than review-tier evidence unless both sides have credible shape metadata.
+12. WHEN a SQL surface identity depends on fact ID hash fallback THEN combined analysis SHALL emit a `VolatileIdentity` or equivalent gap under the relevant combined identity/surface rule and classify the surface no stronger than review-tier evidence.
 
 ### Requirement 8: Evidence tiers and limitations
 
@@ -171,13 +173,14 @@ Out of scope:
 
 1. Each affected adapter SHALL have a local fixture or unit test that emits `SqlTextUsed` and SQL-shape `QueryPatternDetected`.
 2. At least one combined sample smoke SHALL prove an endpoint-to-`sql-query` path from application code to a terminal SQL surface.
-3. Validation docs SHALL include SQLite inspection queries for SQL facts and combined SQL surfaces.
-4. Public OSS smoke expectations SHALL remain honest about reduced coverage and shall not require every public repo to emit SQL shapes.
-5. All language adapter tests affected by this slice SHALL pass before PR merge.
-6. Shared golden fixtures SHALL prove `queryShapeHash` consistency across Python, .NET, TypeScript, and JVM implementations for the same simple SQL inputs.
-7. Combined tests SHALL prove two SQL surfaces against the same table but different shape hashes do not collapse to one report grouping or identity.
-8. Path tests SHALL prove SQL facts without call/symbol path evidence emit `UnlinkedSurface` or equivalent gaps and do not produce successful endpoint-to-SQL paths.
-9. Combined report tests SHALL prove deterministic byte-stable Markdown/JSON output for SQL surfaces.
-10. Golden fixtures SHALL pin SQL-like `WITH`/CTE behavior as shape-hash-only SQL-shape evidence with no `operationName`, table, or column metadata.
-11. Golden fixtures SHALL include normalization edge cases for escaped quotes, multiline comments, CRLF/tab whitespace, trailing semicolons, `--` inside a string literal, and double-quoted identifiers.
-12. Tests SHALL prove same normalized SQL with different `sqlSourceKind` values does not collapse in diff or reverse identity.
+3. At least one combined test SHALL prove `DatabaseColumnMapping` is selectable as `sql-persistence` and not as `sql-query`.
+4. Validation docs SHALL include SQLite inspection queries for SQL facts and combined SQL surfaces.
+5. Public OSS smoke expectations SHALL remain honest about reduced coverage and shall not require every public repo to emit SQL shapes.
+6. All language adapter tests affected by this slice SHALL pass before PR merge.
+7. Shared golden fixtures SHALL prove `queryShapeHash` consistency across Python, .NET, TypeScript, and JVM implementations for the same simple SQL inputs.
+8. Combined tests SHALL prove two SQL surfaces against the same table but different shape hashes do not collapse to one report grouping or identity.
+9. Path tests SHALL prove SQL facts without call/symbol path evidence emit `UnlinkedSurface` or equivalent gaps and do not produce successful endpoint-to-SQL paths.
+10. Combined report tests SHALL prove deterministic byte-stable Markdown/JSON output for SQL surfaces.
+11. Golden fixtures SHALL pin SQL-like `WITH`/CTE behavior as shape-hash-only SQL-shape evidence with no `operationName`, table, or column metadata.
+12. Golden fixtures SHALL include normalization edge cases for escaped quotes, multiline comments, CRLF/tab whitespace, trailing semicolons, `--` inside a string literal, and double-quoted identifiers.
+13. Tests SHALL prove same normalized SQL with different `sqlSourceKind` values does not collapse in diff or reverse identity.

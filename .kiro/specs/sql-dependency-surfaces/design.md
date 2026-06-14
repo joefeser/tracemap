@@ -92,7 +92,7 @@ SQL-shape facts should be omitted when the adapter cannot safely derive at least
 
 ### `DatabaseColumnMapping`
 
-`DatabaseColumnMapping` remains schema/mapping evidence from ORM/declarative mapping constructs. It may contribute to `sql-query` surfaces but is not the same as a query execution or query text.
+`DatabaseColumnMapping` remains schema/mapping evidence from ORM/declarative mapping constructs. It should project as a `sql-persistence` terminal surface, not a `sql-query` terminal surface, because it does not prove query execution or query text.
 
 ## Shared Source Kinds
 
@@ -288,11 +288,12 @@ Python already has the strongest current SQL-shape path. Keep changes minimal:
 
 ## Combined Surface Normalization
 
-Current combined reporting already has `CombinedDependencySurfaceRow` and recognizes `sql-query`.
+Current combined reporting already has `CombinedDependencySurfaceRow` and recognizes `sql-query`. This slice also distinguishes mapping-only persistence evidence as `sql-persistence`.
 
 This slice should harden the model around:
 
-- `SurfaceKind = sql-query`;
+- `SurfaceKind = sql-query` for SQL text/shape/query-call evidence;
+- `SurfaceKind = sql-persistence` for `DatabaseColumnMapping` evidence;
 - source label;
 - operation;
 - table name(s);
@@ -311,6 +312,7 @@ Display/grouping label precedence:
 2. `sourceLabel + sql-query + operationName + tableName/tableNames + columnNames/fieldNames + sqlSourceKind`.
 3. `sourceLabel + sql-query + textHash` for hash-only evidence.
 4. `sourceLabel + sql-query + factId hash` only as a review-tier fallback with a documented gap/note.
+5. `sourceLabel + sql-persistence + safe table/column/mapping metadata` for mapping-only persistence surfaces.
 
 This intentionally replaces table-name-first report display/grouping behavior where it exists. Shape hash must win over table name in display/grouping because two distinct queries against the same table can have different columns, operations, and review implications.
 
@@ -328,14 +330,14 @@ It must not render raw SQL, literal values, snippets, URLs, or absolute paths.
 
 ## Path and Reverse Semantics
 
-`tracemap paths --to-surface sql-query` succeeds only when a static graph path reaches a SQL surface node.
+`tracemap paths --to-surface sql-query` succeeds only when a static graph path reaches a SQL text/shape/query-call surface node. `tracemap paths --to-surface sql-persistence` selects mapping-only persistence surfaces such as `DatabaseColumnMapping`.
 
 Important distinctions:
 
 - `SqlTextUsed` attached to a method/file can be a terminal SQL surface if reachable through facts/symbols.
-- `DatabaseColumnMapping` can be a terminal persistence surface, but it does not prove a query executes.
+- `DatabaseColumnMapping` can be a terminal `sql-persistence` surface, but it does not prove a query executes.
 - Unreachable SQL facts are reported as `UnlinkedSurface` or equivalent gaps, not successful endpoint paths.
-- Reverse query from `sql-query` to endpoints should preserve path classification and reduced-coverage caveats.
+- Reverse query from `sql-query` or `sql-persistence` to endpoints should preserve path classification and reduced-coverage caveats.
 
 ## Rule Catalog Updates
 

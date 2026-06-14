@@ -229,6 +229,7 @@ public static class CombinedDependencyDiffer
     private static readonly HashSet<string> ValidSurfaceKinds = new(StringComparer.Ordinal)
     {
         "sql-query",
+        "sql-persistence",
         "http-route",
         "http-client",
         "package-config"
@@ -239,7 +240,7 @@ public static class CombinedDependencyDiffer
         "Diff rows compare static TraceMap evidence, not runtime behavior.",
         "Endpoint diffs do not prove runtime traffic, auth behavior, proxies, deployment base paths, or reachability.",
         "Path diffs are static evidence trails and are not full taint analysis, runtime DI resolution, dynamic dispatch resolution, reflection resolution, serializer mapping, or branch feasibility analysis.",
-        "SQL/query diffs do not prove runtime execution, schema existence, generated SQL equivalence, dialect validity, or branch feasibility.",
+        "SQL query/persistence diffs do not prove runtime execution, schema existence, generated SQL equivalence, dialect validity, or branch feasibility.",
         "Reduced scan coverage makes absence of evidence coverage-relative."
     ];
 
@@ -367,7 +368,7 @@ public static class CombinedDependencyDiffer
 
         if (!string.IsNullOrWhiteSpace(options.Surface) && !ValidSurfaceKinds.Contains(options.Surface.Trim()))
         {
-            throw new ArgumentException("diff --surface must be one of sql-query, http-route, http-client, or package-config.");
+            throw new ArgumentException("diff --surface must be one of sql-query, sql-persistence, http-route, http-client, or package-config.");
         }
 
         var scopes = NormalizeScopes(options.Scope, options.IncludePaths);

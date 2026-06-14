@@ -7,7 +7,7 @@
   - [ ] Inspect TypeScript Prisma/Base44 query-builder facts and direct SQL coverage gaps.
   - [ ] Inspect JVM SQL resource, JDBC, and JPA facts.
   - [ ] Inspect Python SQL-shape behavior and tests.
-  - [ ] Inspect combined `sql-query` surface projection, path, reverse, diff, and impact behavior.
+  - [ ] Inspect combined `sql-query` and `sql-persistence` surface projection, path, reverse, diff, and impact behavior.
 
 - [ ] 2. Add shared SQL-shape extraction contract. Requirements: 1, 2, 8, 9.
   - [ ] Define supported operations and unsupported constructs.

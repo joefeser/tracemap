@@ -179,6 +179,7 @@ public static class CombinedReverseReporter
     private static readonly HashSet<string> SurfaceKinds = new(StringComparer.Ordinal)
     {
         "sql-query",
+        "sql-persistence",
         "http-route",
         "http-client",
         "package-config"
@@ -612,7 +613,7 @@ public static class CombinedReverseReporter
 
         if (!string.IsNullOrWhiteSpace(options.Surface) && !SurfaceKinds.Contains(options.Surface.Trim()))
         {
-            throw new ArgumentException("reverse --surface must be one of sql-query, http-route, http-client, or package-config.");
+            throw new ArgumentException("reverse --surface must be one of sql-query, sql-persistence, http-route, http-client, or package-config.");
         }
 
         if (!TargetKinds.Contains(NormalizeTarget(options.To)))

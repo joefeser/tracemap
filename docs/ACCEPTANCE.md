@@ -137,7 +137,7 @@ For every successful `tracemap report --index <combined.sqlite> --out <out>` run
 - reduced coverage and known gaps are labeled as coverage-relative.
 - endpoint findings distinguish two-sided pairwise comparisons from one-sided global inventory rows.
 - endpoint JSON rows include side-specific scan IDs, commit SHAs, rule IDs, evidence tiers, file spans, and fact IDs.
-- HTTP, SQL/query, package/config, and dependency-edge surfaces preserve source labels and evidence spans.
+- HTTP, SQL query/persistence, package/config, and dependency-edge surfaces preserve source labels and evidence spans.
 - SQL and dynamic URL rows do not display raw SQL text, raw URLs, source snippets, or local absolute paths.
 - `endpoint_matches` is not mutated by report generation.
 
@@ -148,7 +148,8 @@ For every successful `tracemap paths --index <combined.sqlite> --out <out>` run,
 - the command opens the combined database read-only and does not mutate `endpoint_matches` or source evidence tables.
 - no-selector mode starts from in-memory endpoint matches and searches to terminal dependency surfaces.
 - `--from-endpoint`, `--from-symbol`, `--from-source`, `--to-surface`, `--surface-name`, `--source-pair`, `--max-depth`, `--max-paths`, and `--max-frontier` behave deterministically.
-- terminal surfaces are limited to `sql-query`, `http-route`, `http-client`, and `package-config`.
+- terminal surfaces are limited to `sql-query`, `sql-persistence`, `http-route`, `http-client`, and `package-config`.
+- `DatabaseColumnMapping` terminal surfaces are `sql-persistence` evidence and do not claim query execution.
 - path rows include source labels, scan IDs, commit SHAs, rule IDs, evidence tiers, file spans, node IDs, edge IDs, and supporting fact or edge IDs where available.
 - classifications use `StrongStaticPath`, `ProbableStaticPath`, `NeedsReviewPath`, `UnknownAnalysisGap`, `NoPathFound`, and `SelectorNoMatch`.
 - no-path conclusions are coverage-relative when contributing sources have reduced coverage.
@@ -160,7 +161,7 @@ For every successful `tracemap reverse --index <combined.sqlite> --out <out>` ru
 - directory output writes `reverse-report.md` and `reverse-report.json`.
 - the command opens the combined database read-only and does not mutate `endpoint_matches` or source evidence tables.
 - JSON includes `reportType: combined-reverse-query`, required empty arrays, stable query metadata, source snapshots, selected surfaces, reverse roots, paths, gaps, and limitations.
-- selected surfaces are limited to dependency surfaces such as `sql-query`, `http-route`, `http-client`, and `package-config`.
+- selected surfaces are limited to dependency surfaces such as `sql-query`, `sql-persistence`, `http-route`, `http-client`, and `package-config`.
 - `--source` matches source labels case-insensitively, `--surface-name` uses exact case-insensitive matching, and `--surface`, `--to`, `--max-depth`, `--max-frontier`, `--max-surfaces`, `--max-roots`, `--max-paths-per-root`, and `--max-gaps` behave deterministically.
 - `--to endpoints`, `--to symbols`, `--to sources`, and `--to all` select the requested reverse root families without implying runtime reachability.
 - selected surfaces, reverse roots, paths, and gaps carry rule IDs, evidence tiers, source labels, stable keys, file spans, and supporting fact or edge IDs where available.
