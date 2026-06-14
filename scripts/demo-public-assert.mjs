@@ -34,6 +34,19 @@ function hashPath(value) {
   return `path-hash:${crypto.createHash("sha256").update(path.resolve(value)).digest("hex").slice(0, 24)}`;
 }
 
+function ruleIdsForSection(name) {
+  assert(/^[a-z0-9][a-z0-9-]*$/i.test(name), `Invalid section name: ${name}`);
+  return ["public.demo.summary.v1"];
+}
+
+function evidenceTierForSection(status) {
+  if (["deferred", "unavailable", "failed"].includes(status)) {
+    return "Tier4Unknown";
+  }
+
+  return "Tier2Structural";
+}
+
 function appendSection() {
   const [jsonlPath, name, status, classification, reportCoverage, reason, artifactCsv = "", countsJson = "{}"] = args;
   assert(jsonlPath && name && status, "append-section requires jsonl path, name, and status.");
@@ -61,6 +74,8 @@ function appendSection() {
     name,
     status,
     classification: classification || "NoActionableEvidence",
+    evidenceTier: evidenceTierForSection(status),
+    ruleIds: ruleIdsForSection(name),
     reportCoverage: reportCoverage || "not_requested",
     artifactPaths,
     counts,
@@ -169,14 +184,15 @@ function writeSummary() {
     "",
     `Output root: \`${summary.outputRootHash}\``,
     "",
-    "| Section | Status | Coverage | Counts | Reason |",
-    "| --- | --- | --- | --- | --- |",
+    "| Section | Status | Evidence Tier | Rule IDs | Coverage | Counts | Reason |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
     ...sections.map(section => {
       const counts = Object.entries(section.counts ?? {})
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([key, value]) => `${key}=${value}`)
         .join(", ");
-      return `| ${escapeCell(section.name)} | \`${escapeCell(section.status)}\` | \`${escapeCell(section.reportCoverage)}\` | ${escapeCell(counts || "n/a")} | ${escapeCell(section.reason || "")} |`;
+      const ruleIds = Array.isArray(section.ruleIds) ? section.ruleIds.join(", ") : "";
+      return `| ${escapeCell(section.name)} | \`${escapeCell(section.status)}\` | \`${escapeCell(section.evidenceTier || "")}\` | ${escapeCell(ruleIds || "n/a")} | \`${escapeCell(section.reportCoverage)}\` | ${escapeCell(counts || "n/a")} | ${escapeCell(section.reason || "")} |`;
     }),
     "",
     "Static analysis demo output is evidence context only. It does not prove runtime execution, deployment, production traffic, package restore, vulnerability, compatibility, or release approval.",
@@ -215,8 +231,8 @@ function findSentinelFailures(root) {
   assert(files.length > 0, "public-report-sentinel-scan found no public demo files to inspect.");
 
   const checks = [
-    ["local-absolute-path", /(?:^|[^A-Za-z0-9_])(?:\/Users\/[^/\s`"']+|\/home\/[^/\s`"']+|\/private\/tmp\/[^/\s`"']+|\/tmp\/tracemap-[^/\s`"']+)/],
-    ["windows-absolute-path", /[A-Za-z]:\\Users\\/],
+    ...localAbsolutePathChecks(root),
+    ["windows-absolute-path", /[A-Za-z]:\\(?:Users|home|workspace|workspaces|tmp|temp|repo|agent|a)\\/i],
     ["url-credential", /https?:\/\/[^/\s:@]+:[^/\s@]+@/i],
     ["connection-string", /\b(?:Password|Pwd|User Id|AccountKey|SharedAccessKey|ConnectionString)\s*=/i],
     ["secret-looking-value", /\b(?:token|secret|password|apikey|api_key|credential)\b\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{8,}/i],
@@ -234,6 +250,28 @@ function findSentinelFailures(root) {
   }
 
   return failures.sort();
+}
+
+function localAbsolutePathChecks(root) {
+  const exactRoots = new Set([
+    path.resolve(root),
+    process.cwd(),
+    os.tmpdir()
+  ].filter(Boolean));
+  const checks = [];
+  for (const exactRoot of [...exactRoots].sort()) {
+    checks.push(["local-absolute-path", new RegExp(`${escapeRegExp(exactRoot)}(?:[/\\\\]|$)`)]);
+  }
+
+  checks.push([
+    "local-absolute-path",
+    /(?<![:/])\/(?:Users|home|private\/tmp|tmp|var\/folders|workspace|workspaces|github\/workspace|runner\/work|__w|mnt|opt\/hostedtoolcache|builds)\/[^\s`"'<>|)]+/i
+  ]);
+  return checks;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function collectPublicFiles(dir, files) {
@@ -270,6 +308,8 @@ function validateSummary() {
   for (const section of summary.sections) {
     assert(section.name, "summary section is missing name.");
     assert(section.status, `summary section ${section.name} is missing status.`);
+    assert(section.evidenceTier, `summary section ${section.name} is missing evidenceTier.`);
+    assert(Array.isArray(section.ruleIds) && section.ruleIds.length > 0, `summary section ${section.name} is missing ruleIds.`);
     if (["deferred", "unavailable", "failed"].includes(section.status)) {
       assert(section.reason, `summary section ${section.name} must include a reason.`);
     }
@@ -280,14 +320,40 @@ function selfTest() {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tracemap-demo-assert-"));
   try {
     fs.mkdirSync(path.join(tempRoot, "reports", "sample"), { recursive: true });
-    fs.writeFileSync(path.join(tempRoot, "demo-summary.md"), "safe summary\n", "utf8");
+    fs.writeFileSync(path.join(tempRoot, "demo-summary.md"), "safe summary /api/public\n", "utf8");
     fs.writeFileSync(path.join(tempRoot, "demo-summary.json"), "{\"version\":\"1.0\"}\n", "utf8");
     assert(findSentinelFailures(tempRoot).length === 0, "clean sentinel fixture should pass.");
 
     const plantedHomePath = `${String.fromCharCode(47)}Users/example/private`;
     fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), `leak ${plantedHomePath}\n`, "utf8");
-    const failures = findSentinelFailures(tempRoot);
+    let failures = findSentinelFailures(tempRoot);
     assert(failures.some(failure => failure.includes("local-absolute-path")), "sentinel fixture should catch home-path leak.");
+
+    fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), "leak /workspace/tracemap/out/demo-summary.md\n", "utf8");
+    failures = findSentinelFailures(tempRoot);
+    assert(failures.some(failure => failure.includes("local-absolute-path")), "sentinel fixture should catch workspace-path leak.");
+
+    fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), "leak /tmp/tmp.public-demo/report.json\n", "utf8");
+    failures = findSentinelFailures(tempRoot);
+    assert(failures.some(failure => failure.includes("local-absolute-path")), "sentinel fixture should catch temp-path leak.");
+
+    const sectionsJsonl = path.join(tempRoot, "sections.jsonl");
+    const appendSectionResult = spawnSync(process.execPath, [
+      process.argv[1],
+      "append-section",
+      sectionsJsonl,
+      "sample-scans",
+      "available",
+      "ActionableStaticEvidence",
+      "FullEvidenceAvailable",
+      "",
+      "reports/sample/report.md",
+      "{\"scannedSources\":1}"
+    ], { encoding: "utf8" });
+    assert(appendSectionResult.status === 0, `append-section should pass: ${appendSectionResult.stderr}`);
+    const sectionRow = JSON.parse(fs.readFileSync(sectionsJsonl, "utf8").trim());
+    assert(sectionRow.evidenceTier === "Tier2Structural", "append-section should include evidenceTier.");
+    assert((sectionRow.ruleIds ?? []).includes("public.demo.summary.v1"), "append-section should include ruleIds.");
 
     const missingScan = path.join(tempRoot, "missing-scan");
     fs.mkdirSync(missingScan);

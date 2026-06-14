@@ -8,6 +8,12 @@ TS_DIR="$ROOT_DIR/src/typescript"
 INCLUDE_PYTHON=0
 REQUIRE_JVM=0
 OUT_ARG=""
+SAMPLE_ROOTS=(
+  "$ROOT_DIR/samples/modern-sample"
+  "$ROOT_DIR/samples/endpoint-server-aspnet"
+  "$ROOT_DIR/samples/typescript-modern-sample"
+  "$ROOT_DIR/samples/endpoint-client-angular"
+)
 
 usage() {
   cat <<'EOF'
@@ -72,6 +78,27 @@ is_inside_repo() {
   [[ "$candidate" == "$ROOT_DIR" || "$candidate" == "$ROOT_DIR/"* ]]
 }
 
+is_inside_path() {
+  local candidate="$1"
+  local parent="$2"
+  [[ "$candidate" == "$parent" || "$candidate" == "$parent/"* ]]
+}
+
+reject_sample_output_root() {
+  local sample_root
+  for sample_root in "${SAMPLE_ROOTS[@]}"; do
+    if is_inside_path "$OUT_ROOT" "$sample_root"; then
+      cat >&2 <<EOF
+error: output directory cannot be inside a scanned sample root.
+
+Use an ignored directory outside samples, such as:
+  $ROOT_DIR/.tracemap-demo/
+EOF
+      exit 1
+    fi
+  done
+}
+
 add_section() {
   local name="$1"
   local status="$2"
@@ -129,6 +156,7 @@ EOF
   fi
 fi
 
+reject_sample_output_root
 mkdir -p "$OUT_ROOT"
 SCANS_DIR="$OUT_ROOT/scans"
 REPORTS_DIR="$OUT_ROOT/reports"

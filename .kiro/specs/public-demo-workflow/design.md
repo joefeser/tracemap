@@ -237,6 +237,8 @@ Minimum `demo-summary.json` shape:
       "name": "dependency-report",
       "status": "available",
       "classification": "ActionableStaticEvidence",
+      "evidenceTier": "Tier2Structural",
+      "ruleIds": ["public.demo.summary.v1"],
       "reportCoverage": "FullEvidenceAvailable",
       "artifactPaths": ["reports/dependency/dependency-report.json"],
       "counts": {
@@ -256,6 +258,8 @@ Rules:
 - `outputRootHash` is allowed; the absolute output root is not allowed in public summary artifacts.
 - `artifactPaths` are relative to the output root.
 - `sections[].status` must be one of the Section Status Model values.
+- `sections[].evidenceTier` must be present. Deferred, unavailable, and failed sections use `Tier4Unknown`.
+- `sections[].ruleIds` must be present and non-empty; summary workflow rows use `public.demo.summary.v1`.
 - Deferred, unavailable, and failed sections must include a non-empty `reason`.
 - Counts may omit irrelevant keys, but present keys must be deterministic for the same generated inputs.
 
