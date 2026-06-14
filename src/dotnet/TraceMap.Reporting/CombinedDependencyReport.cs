@@ -739,10 +739,11 @@ public static class CombinedDependencyReporter
         var packageName = FirstValue(fact.Properties, "packageName", "package", "dependencyName", "moduleName", "name");
         var rawVersion = FirstValue(fact.Properties, "version", "packageVersion");
         var version = SafePackageVersion(rawVersion);
+        var unsafeVersion = !string.IsNullOrWhiteSpace(rawVersion) && version is null;
         var versionHash = FirstValue(fact.Properties, "versionHash")
-            ?? (rawVersion is not null && version is null ? CombinedReportHelpers.Hash(rawVersion, 32) : null);
+            ?? (unsafeVersion ? CombinedReportHelpers.Hash(rawVersion!, 32) : null);
         var redactionReason = FirstValue(fact.Properties, "redactionReason")
-            ?? (rawVersion is not null && version is null ? "unsafe-package-version" : null);
+            ?? (unsafeVersion ? "unsafe-package-version" : null);
         var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "environmentVariableName");
         var ecosystem = FirstValue(fact.Properties, "ecosystem", "packageEcosystem", "packageManager");
         var manifestKind = FirstValue(fact.Properties, "manifestKind", "metadataSource", "sourceFormat", "type");
