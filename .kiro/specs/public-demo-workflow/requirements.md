@@ -59,7 +59,7 @@ The default workflow must not clone repositories, fetch external sample data, or
 1. WHEN `dotnet` is missing THEN the workflow SHALL fail early with a clear message.
 2. WHEN `node`, `npm`, or TypeScript build prerequisites are missing THEN the workflow SHALL fail early with a clear message.
 3. WHEN `git` is missing THEN the workflow SHALL fail early with a clear message because repository-root and ignored-path checks require git.
-4. WHEN Python sample scanning is requested or auto-enabled THEN the workflow SHALL create a fresh isolated temporary virtual environment under the output root and SHALL NOT install packages into the repository or any pre-existing system or user Python environment.
+4. WHEN Python sample scanning is requested THEN the workflow SHALL create a fresh isolated temporary virtual environment under the output root and SHALL NOT install packages into the repository or any pre-existing system or user Python environment.
 5. WHEN Java/JVM sample scanning is requested or auto-enabled THEN the workflow SHALL check Java 21 availability and include Homebrew discovery guidance on macOS, consistent with `AGENTS.md`.
 6. WHEN optional tools are unavailable THEN the workflow SHALL either skip the optional section with an explicit gap/status or fail only if the caller requested that section as required.
 7. WHEN a tool check fails THEN diagnostics SHALL avoid private paths, raw environment values, secrets, and source snippets.
