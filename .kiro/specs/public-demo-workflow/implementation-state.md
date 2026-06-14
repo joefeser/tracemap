@@ -2,11 +2,13 @@
 
 ## Current State
 
-Implemented first public-demo slice in `dev`.
+Implemented the first public-demo slice in `dev`.
+
+Current follow-up branch: `codex/public-demo-workflow-followups`.
 
 ## Spec Status
 
-The first public-demo slice adds the public demo script, assertion helper, ignore rule, and documentation. Follow-up slices are still open for combine/report/path/reverse/portfolio and before/after workflows.
+The first public-demo slice added the public demo script, assertion helper, ignore rule, and documentation. The current follow-up slice promotes combine/report/path/reverse/portfolio demo sections to available while leaving before/after workflows deferred.
 
 ## Scope Decisions
 
@@ -17,6 +19,10 @@ The first public-demo slice adds the public demo script, assertion helper, ignor
 - JVM scanning runs only when Java 21 is available or explicitly required.
 - If Java 21 is unavailable and not required, the JVM section is `unavailable`.
 - Combined dependency report is the default endpoint assertion target.
+- Default combined labels are deterministic and public: endpoint stack uses `public-ts-client` and `public-dotnet-server`; mixed stack uses `public-dotnet-modern`, `public-dotnet-server`, `public-ts-modern`, and `public-ts-client`.
+- The path demo uses the checked-in endpoint selector `GET /api/admin/runner/get-by-id/{}` and targets `sql-query` evidence.
+- The reverse demo selects `sql-query` surfaces and traces back to endpoints.
+- Portfolio uses a generated `portfolio-manifest.json` under the demo output root that points at generated combined index paths.
 - Diff, impact, and release-review are `deferred` in the first implementation until a concrete checked-in before/after fixture pair exists. This avoids a misleading zero-diff demo and is a deliberate scope decision from review, not an accidental omission.
 - Portfolio must use a demo-run generated manifest that points at generated index paths; do not reuse `samples/portfolio.example.json` directly.
 - Generated output roots are kept for inspection and printed at the end; the script does not auto-delete them.
@@ -70,14 +76,42 @@ Validation run on this branch:
 - `./scripts/smoke-combined-paths.sh /tmp/tracemap-demo-combined-smoke`
 - `git diff --check`
 
+## Shipped Follow-Up Scope
+
+This branch adds:
+
+- generated endpoint-stack and mixed-stack combined SQLite indexes,
+- combined dependency reports for both combined indexes,
+- semantic dependency-report assertions over labels, SHA-shaped commits, endpoint evidence, rule IDs, evidence tiers, surfaces, and edges,
+- targeted `tracemap paths` and `tracemap reverse` runs with deterministic repeated JSON comparisons,
+- semantic path/reverse assertions over rule IDs, evidence tiers, labels, supporting IDs, and gaps,
+- generated portfolio manifest creation,
+- `tracemap portfolio` over the generated manifest,
+- portfolio assertions over source coverage, dependency surfaces, commit SHAs, rule IDs, evidence tiers, and supporting IDs,
+- docs and task-state updates for the shipped slice.
+
+The endpoint, path, reverse, and portfolio reports are currently `PartialAnalysis` in `demo-summary.*` because the checked-in endpoint samples intentionally include reduced coverage/gaps. This is expected and should not be upgraded to full coverage without stronger scanner evidence.
+
 ## Follow-Up Boundary
 
 Later PRs can add:
 
-- combine/report assertions,
-- path/reverse assertions,
-- portfolio generated manifest,
 - concrete before/after fixture pair,
 - diff/impact/release-review availability,
+- optional separate `tracemap endpoints` output,
+- Python sample scan support behind `--include-python`,
 - optional OSS mode,
 - CI wiring.
+
+## Validation Notes
+
+Latest local validation on this branch:
+
+- `node scripts/demo-public-assert.mjs self-test`
+- `bash -n scripts/demo-public.sh`
+- `node --check scripts/demo-public-assert.mjs`
+- `./scripts/demo-public.sh /tmp/tracemap-public-demo-followups`
+- `dotnet build src/dotnet/TraceMap.sln`
+- `dotnet test src/dotnet/TraceMap.sln`
+- `./scripts/check-private-paths.sh`
+- `git diff --check`
