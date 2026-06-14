@@ -1396,7 +1396,7 @@ public static class TraceMapCommand
               --surface <kind>           Filter dependency-surface contract changes by kind.
               --include-paths            Request bounded combined-index path context.
               --include-reverse          Request bounded combined-index reverse context.
-              --exit-code                Return exit code 1 when actionable findings are present.
+              --exit-code                Return 1 for actionable findings; SQL/schema review-tier findings return 0.
               --max-findings <n>         Finding rows. Default: 100.
               --max-evidence-rows <n>    Evidence rows across all findings. Default: 500.
               --max-paths-per-change <n> Reserved path context cap. Default: 5.
