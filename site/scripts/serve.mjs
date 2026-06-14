@@ -20,9 +20,19 @@ const contentTypes = {
 };
 
 const server = createServer(async (request, response) => {
-  const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
-  const safePath = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
-  const requestedPath = resolve(root, `.${safePath}`);
+  let requestedPath;
+
+  try {
+    const url = new URL(request.url ?? "/", "http://localhost");
+    const safePath = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
+    requestedPath = resolve(root, `.${safePath}`);
+  } catch (error) {
+    response.writeHead(error instanceof URIError ? 400 : 500, {
+      "content-type": "text/plain; charset=utf-8"
+    });
+    response.end(error instanceof URIError ? "Bad request" : "Internal server error");
+    return;
+  }
 
   if (!requestedPath.startsWith(root)) {
     response.writeHead(403);
@@ -38,10 +48,24 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  response.writeHead(200, {
-    "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream"
+  const stream = createReadStream(filePath);
+
+  stream.once("open", () => {
+    response.writeHead(200, {
+      "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream"
+    });
+    stream.pipe(response);
   });
-  createReadStream(filePath).pipe(response);
+
+  stream.once("error", () => {
+    if (!response.headersSent) {
+      response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+      response.end("Internal server error");
+      return;
+    }
+
+    response.destroy();
+  });
 });
 
 server.listen(port, () => {
