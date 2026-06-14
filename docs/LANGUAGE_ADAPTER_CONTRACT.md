@@ -131,6 +131,26 @@ Combined path queries work best when adapters attach integration facts to the co
 
 Adapters should leave surfaces unlinked when containing symbols are not credible. The combined paths report will surface those as review gaps instead of inventing a path.
 
+## Value-Origin Flow Contract
+
+Value-origin evidence is a bounded static explanation layer over direct argument, alias, field/member, constructor, and dependency-surface facts. It is not taint analysis and must not claim runtime execution, branch feasibility, mutation semantics, collection contents, concrete DI state, reflection targets, serializer-created object identity, or dynamic dispatch targets.
+
+Adapters that emit value-origin evidence should use these shared fact/table roles:
+
+| Evidence | Preferred fact/table shape |
+| --- | --- |
+| call-site argument to callee parameter | `ArgumentPassed` facts and `argument_flows` rows |
+| direct same-method local alias | `LocalAlias` facts and `local_aliases` rows |
+| direct field/member alias | `FieldAlias` facts and `field_aliases` rows |
+| derived parameter-to-parameter forwarding | `parameter_forward_edges` rows derived from rule-backed facts |
+| runtime-sensitive stop point | `FlowBoundary`-style facts or `AnalysisGap` facts with safe `boundaryKind` metadata |
+
+Every value-origin fact should preserve rule ID, evidence tier, file span, source/target/argument/parameter/origin role properties, scan ID, commit SHA, extractor ID, and extractor version through the normal fact contract.
+
+Derived parameter-forwarding rows may use direct parameter arguments, same-method local/field aliases, and unique constructor field origins only when every hop has deterministic evidence. The current .NET storage derivation follows same-method alias chains up to 3 alias hops. A field argument may resolve through constructor initialization only when exactly one visible constructor assignment in the analyzed containing type assigns that field from a constructor parameter. Multiple constructors, multiple visible assignments, mutation boundaries, property setter side effects, collection mutation, factory construction, DI activation, serializer construction, reflection, and dynamic dispatch must stop or downgrade value-origin evidence rather than inventing a path.
+
+Value-origin path classifications, when added to reports, must be additive notes or metadata such as `StrongStaticValuePath`, `ProbableStaticValuePath`, `NeedsReviewValuePath`, `UnknownAnalysisGap`, or `NoValuePathEvidence`. They must not replace existing canonical path classifications unless a future compatibility spec changes the public path contract.
+
 Endpoint boundary facts should use a shared path key when possible:
 
 - `normalizedPathKey` is path-only; HTTP method belongs in `httpMethod` and should not be prefixed into the key.

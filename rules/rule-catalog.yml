@@ -571,7 +571,8 @@ rules:
       - ParameterForwardEdge
     limitations:
       - Requires an `ArgumentPassed` fact where the argument is resolved as a method parameter, as a local/field with alias evidence back to a parameter in the same containing method, or as a field with exactly one constructor assignment from a parameter in the same containing type.
-      - Follows parameter forwarding, bounded same-method alias chains, and unique constructor field initialization only; it does not infer arbitrary cross-method field lifetime, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
+      - Follows parameter forwarding, same-method alias chains up to 3 alias hops, and unique constructor field initialization only; it does not infer arbitrary cross-method field lifetime, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
+      - Constructor field forwarding requires exactly one visible constructor assignment from a parameter in the analyzed containing type; multiple visible assignments or constructors suppress the derived edge.
       - Path reports are bounded by max depth and max path count, so large or cyclic graphs can be intentionally truncated.
       - Paths are evidence chains, not proof that a runtime request always reaches the terminal method.
 
