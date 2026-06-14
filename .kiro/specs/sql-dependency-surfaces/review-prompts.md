@@ -48,7 +48,7 @@ Review questions:
 4. Is the lightweight SQL-shape extraction conservative enough?
 5. Is Python's existing normalized masked SQL text `queryShapeHash` behavior acceptable as the v1 cross-adapter contract?
 6. Are the adapter-specific requirements realistic for current .NET, TypeScript, JVM, and Python code?
-7. Are combined `sql-query` surface stable keys safe and deterministic, especially shape-hash-first behavior?
+7. Are combined `sql-query` display/grouping labels and diff/reverse identity keys safe and deterministic, especially preserving full-metadata identity while preferring shape hash for display?
 8. Are path/reverse semantics correct for reachable vs unlinked SQL surfaces?
 9. Are evidence tiers and rule catalog expectations complete, including `typescript.integration.sql.v1`?
 10. Are safety rules strong enough to prevent raw SQL/private-data leakage?
@@ -73,9 +73,10 @@ Focus on:
 - Existing code seams for SQL extraction in each adapter.
 - Whether a shared SQL-shape helper should be duplicated per language or specified via common golden fixtures.
 - Whether Python-compatible golden fixtures are enough to keep `queryShapeHash` behavior aligned.
+- Whether shape-hash-only `WITH`/CTE behavior now cleanly follows Python without overclaiming operation/table metadata.
 - Minimal first PR with high value and low blast radius.
 - How to avoid breaking existing query-builder facts.
-- Combined surface stable-key risks.
+- Combined surface display/grouping and full-identity risks.
 - Path/reverse query linkage risks.
 - Test fixture design for simple SQL shapes and dynamic boundaries.
 - Validation commands likely to fail.
@@ -95,6 +96,7 @@ Look for:
 - New evidence without rule IDs or documented limitations.
 - Conflation between SQL text evidence, SQL-shape evidence, ORM mapping evidence, and query-builder evidence.
 - Stable key dependence on volatile fact IDs, display names, row order, or local paths.
+- Accidental identity weakening where same shape hash but different source kind collapses.
 - Missing reduced-coverage caveats.
 - Path/reverse false positives where unlinked SQL evidence is treated as reachable.
 - Test gaps that could hide overclaiming.

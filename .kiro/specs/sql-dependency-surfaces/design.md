@@ -120,7 +120,7 @@ Trim leading whitespace. Recognize these visible leading operations:
 SELECT INSERT UPDATE DELETE MERGE CREATE ALTER DROP TRUNCATE CALL EXEC EXECUTE
 ```
 
-`WITH` and CTEs are not supported in v1 unless the implementation can safely find the first real operation without comment/dialect parsing. The default behavior is `SqlTextUsed` only.
+`WITH` and CTEs are not parsed for table/column metadata in v1. To preserve the Python reference behavior, a deterministic SQL-like `WITH` input should emit a shape-hash-only `QueryPatternDetected` with `queryShapeHash` and `sqlSourceKind`, but no `operationName`, `tableName`, `tableNames`, `columnNames`, or `fieldNames`. Non-SQL text must not emit SQL-shape evidence.
 
 ### Supported Shapes
 
@@ -153,7 +153,7 @@ Do not emit table/column properties for:
 - `SELECT` expressions that are not simple identifiers;
 - dialect-specific hints;
 - multiple statements unless split deterministically and safely;
-- strings containing obvious secret/config content.
+- static text that exceeds deterministic adapter size limits documented by that adapter.
 
 Emit `SqlTextUsed` only, plus an `AnalysisGap` where current adapter conventions require one.
 
@@ -174,7 +174,13 @@ Reference normalization from `src/python/tracemap_py/sql_text.py`:
 
 This intentionally preserves current Python `queryShapeHash` semantics. A future structural-hash v2 can be introduced with a new property or explicit shape version after migration planning.
 
-If no table/column metadata is safe but the operation/source are visible, the adapter may still emit a shape hash only when the resulting fact is useful and not misleading. Otherwise keep `SqlTextUsed` only.
+If no table/column metadata is safe but the text is deterministically SQL-like, the adapter may emit shape-hash-only `QueryPatternDetected` to match Python. This is allowed for `WITH`/CTE text and other SQL-like text that passes the adapter's deterministic SQL gate, but it must omit unsupported operation/table/column properties. Otherwise keep `SqlTextUsed` only.
+
+Normalization caveats are part of the v1 contract and must be documented on every SQL-shape rule:
+
+- double-quoted contents are masked like string literals, so dialects that use double quotes for identifiers can collapse quoted identifier differences;
+- `--` comments are stripped before string masking, so a string literal containing `--` can normalize differently than a SQL parser would;
+- this is deterministic static shape evidence, not dialect validation or runtime equivalence.
 
 ## Golden Fixtures
 
@@ -186,6 +192,13 @@ Add shared fixture cases under `samples/sql-shape-fixtures/` or an equivalent te
 - safe `tableName`/`tableNames`;
 - safe `columnNames`/`fieldNames`;
 - unsupported/dynamic no-shape behavior.
+- shape-hash-only `WITH`/CTE behavior;
+- escaped quote and backslash quote cases;
+- multiline block comments;
+- CRLF and tab whitespace;
+- trailing semicolons;
+- `--` inside string literals;
+- double-quoted identifiers.
 
 The fixture contract is the shared behavior; implementation code can be duplicated per runtime rather than forced through generated cross-language code.
 
@@ -217,6 +230,8 @@ Candidate extraction points:
 Implementation should add a shared .NET helper, for example `SqlShapeExtractor`, used by SQL file and integration extractors.
 
 `SqlTextUsed` emitted from C# code should use the containing method/class/file symbol as `targetSymbol` where available. The old generic sentinel style, such as `sql-string-literal`, is not enough for path and reverse linkage.
+
+SQL-shape `QueryPatternDetected` emitted from .NET direct SQL text should use `database.sql.shape.v1`. Do not reuse `csharp.syntax.querypattern.v1`; that rule remains scoped to LINQ/query-builder syntax evidence.
 
 Tests should cover:
 
@@ -260,6 +275,8 @@ Tests should cover:
 - JPA query literal if supported;
 - unsupported/dynamic SQL that does not emit false table/column metadata.
 
+Existing `operationName` values such as `SqlResource` are not valid shared SQL operations. When SQL resources are backfilled, emit a visible SQL verb or omit `operationName`.
+
 ### Python
 
 Python already has the strongest current SQL-shape path. Keep changes minimal:
@@ -288,16 +305,18 @@ This slice should harden the model around:
 - safe path and span;
 - supporting fact IDs.
 
-Stable key precedence:
+Display/grouping label precedence:
 
 1. `sourceLabel + sql-query + queryShapeHash` when present.
 2. `sourceLabel + sql-query + operationName + tableName/tableNames + columnNames/fieldNames + sqlSourceKind`.
 3. `sourceLabel + sql-query + textHash` for hash-only evidence.
 4. `sourceLabel + sql-query + factId hash` only as a review-tier fallback with a documented gap/note.
 
-This intentionally replaces the current table-name-first SQL stable key behavior. Shape hash must win over table name because two distinct queries against the same table can have different columns, operations, and review implications.
+This intentionally replaces table-name-first report display/grouping behavior where it exists. Shape hash must win over table name in display/grouping because two distinct queries against the same table can have different columns, operations, and review implications.
 
-Hash-only surfaces must render an explicit `HashOnlyEvidence` caveat and remain review-tier for diff/impact classification. Fact-ID fallback surfaces must render a `VolatileIdentity` or equivalent gap and remain review-tier because the identity is not robust across changed extraction coverage.
+Diff and reverse identity must preserve full-metadata identity. Do not downgrade existing identity behavior that includes source label, surface kind, operation, safe table/column metadata, `sqlSourceKind`, `queryShapeHash`, `textHash`, and related deterministic metadata. In particular, identical normalized SQL text with different `sqlSourceKind` values, such as `literal-string` versus `sql-file`, must not collapse into one diff/reverse identity.
+
+Hash-only surfaces must render an explicit `HashOnlyEvidence` caveat under `combined.diff.surface.v1` or `combined.impact.surface.v1` and remain review-tier for diff/impact classification. Fact-ID fallback surfaces must render a `VolatileIdentity` or equivalent gap under the relevant combined identity/surface rule and remain review-tier because the identity is not robust across changed extraction coverage.
 
 Combined Markdown should render SQL details as:
 
@@ -323,6 +342,7 @@ Important distinctions:
 Expected rule updates:
 
 - `database.sql.text.v1`
+- `database.sql.shape.v1`
 - `database.dapper.invocation.v1`
 - `csharp.syntax.querypattern.v1`
 - `typescript.integration.querypattern.v1`
@@ -332,6 +352,8 @@ Expected rule updates:
 - any new adapter-local rule introduced for direct SQL client detection
 
 No new rule ID should be introduced unless there is genuinely new evidence behavior. Report-only normalization should reuse existing rule IDs.
+
+`database.sql.shape.v1`, `typescript.integration.sql.v1`, `jvm.integration.sql.v1`, and `python.integration.sql.v1` must all document the Python v1 normalization caveats. `combined.diff.surface.v1` and `combined.impact.surface.v1` must document `HashOnlyEvidence`; the relevant combined identity/surface rules must document `VolatileIdentity` when fact-ID fallback identity is used.
 
 ## Tests
 
@@ -343,9 +365,14 @@ Test layers:
 - .NET EF raw SQL shape tests;
 - report-writer safety tests where rendered SQL surfaces change;
 - combined report tests for stable `sql-query` surface projection;
-- combined report stable-key collision tests for same table / different shape hash;
+- combined report grouping/identity collision tests for same table / different shape hash;
+- diff/reverse identity tests for same shape hash with different `sqlSourceKind`;
+- shape-hash-only `WITH`/CTE behavior tests;
+- normalization edge-case tests for escaped quotes, multiline comments, whitespace, semicolons, `--` in literals, and double-quoted identifiers;
 - path/reverse tests proving reachable SQL surfaces;
 - path/reverse tests proving unlinked SQL facts are gaps, not successful paths;
+- tests proving `DatabaseColumnMapping` terminal surfaces do not claim query execution;
+- log safety tests proving raw SQL is absent from analyzer logs;
 - reducer/diff/impact tests only where classification behavior changes.
 
 ## Validation Commands
@@ -371,10 +398,11 @@ If implementation touches only one adapter in an incremental PR, run that adapte
 
 This spec is valuable but broad. Recommended implementation slices:
 
-1. Shared SQL-shape helper + .NET backfill + combined projection tests.
-2. TypeScript direct SQL surfaces + query-builder regression tests.
-3. JVM SQL-shape backfill.
-4. Python alignment only if shared normalization requires it.
-5. Combined path/reverse/diff/impact hardening and smoke updates.
+1. Shared SQL-shape contract + golden fixtures + Python reference expected values, with no non-Python extractor behavior change.
+2. .NET SQL-shape backfill + combined projection/display tests.
+3. TypeScript direct SQL surfaces + query-builder regression tests.
+4. JVM SQL-shape backfill.
+5. Python alignment only if contract documentation requires it.
+6. Combined path/reverse/diff/impact hardening and smoke updates.
 
 Each slice should preserve public report safety and avoid raw SQL output.
