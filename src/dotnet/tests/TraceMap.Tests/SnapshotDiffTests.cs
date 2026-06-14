@@ -345,6 +345,35 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_combined_gap_mapping_preserves_supporting_fact_ids()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, [
+            QueryPatternFact(before, "M:Sample.Repository.First", "Repository/First.cs", 10),
+            QueryPatternFact(before, "M:Sample.Repository.Second", "Repository/Second.cs", 20)
+        ]);
+        SqliteIndexWriter.Write(afterIndex, after, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeIndex], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterIndex], afterCombined, ["api"]));
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "report"),
+            Scope: "surfaces"));
+
+        var duplicateGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DuplicateIdentity");
+        Assert.Equal("combined.diff.identity.v1", duplicateGap.RuleId);
+        Assert.NotEmpty(duplicateGap.SupportingFactIds);
+    }
+
+    [Fact]
     public async Task Snapshot_diff_cli_exit_code_is_opt_in()
     {
         using var temp = new TempDirectory();
