@@ -783,9 +783,12 @@ public static class ReleaseReviewReporter
         var items = new List<ReleaseReviewChecklistItem>();
         foreach (var gap in gaps)
         {
-            var severity = gap.Classification is ReleaseReviewClassifications.UnknownAnalysisGap or ReleaseReviewClassifications.TruncatedByLimit
-                ? "must_review"
-                : "should_review";
+            var severity = gap.Classification switch
+            {
+                ReleaseReviewClassifications.UnknownAnalysisGap or ReleaseReviewClassifications.TruncatedByLimit => "must_review",
+                ReleaseReviewClassifications.SelectorNoMatch or ReleaseReviewClassifications.NoActionableEvidence => "informational",
+                _ => "should_review"
+            };
             items.Add(new ReleaseReviewChecklistItem(
                 StableId("checklist", gap.Section, gap.GapId),
                 gap.Section,
@@ -841,7 +844,7 @@ public static class ReleaseReviewReporter
             item.EvidenceTier ?? EvidenceTiers.Tier4Unknown,
             evidence?.CommitSha,
             evidence?.DisplayName,
-            CombinedReportHelpers.SafePath(evidence?.FilePath),
+            SafeReportPath(evidence?.FilePath),
             evidence?.StartLine,
             evidence?.EndLine,
             CombinedReportHelpers.SortedMetadata([
@@ -943,7 +946,7 @@ public static class ReleaseReviewReporter
             finding.EvidenceTier,
             evidence?.CommitSha,
             finding.Element,
-            CombinedReportHelpers.SafePath(evidence?.FilePath),
+            SafeReportPath(evidence?.FilePath),
             evidence?.StartLine,
             evidence?.EndLine,
             CombinedReportHelpers.SortedMetadata([
@@ -1250,16 +1253,16 @@ public static class ReleaseReviewReporter
                 "single",
                 side == "after" ? CombinedDependencyDiffClassifications.Added : CombinedDependencyDiffClassifications.Removed,
                 ruleId,
-                evidenceTier,
+                EvidenceTiers.Tier3SyntaxOrTextual,
                 commitSha,
                 DisplayName(factType, targetSymbol, contractElement, metadata),
-                CombinedReportHelpers.SafePath(filePath),
+                SafeReportPath(filePath),
                 startLine,
                 endLine,
                 CombinedReportHelpers.SortedMetadata([Pair("factType", factType), .. metadata.Select(pair => Pair(pair.Key, pair.Value))]),
                 [factId],
                 [],
-                ["Single-index release review compares indexed fact evidence only."]);
+                ["Single-index release review compares indexed fact evidence only; added/removed evidence is coverage-relative and review-tier."]);
             rows.Add(new SingleComparableFact(StableId("single-fact", stableInput), CombinedReportHelpers.Hash(evidenceInput, 32), finding));
         }
 
@@ -1344,14 +1347,14 @@ public static class ReleaseReviewReporter
             return ReleaseReviewClassifications.ReviewRecommended;
         }
 
-        if (gaps.Any(gap => gap.Classification == ReleaseReviewClassifications.SelectorNoMatch))
-        {
-            return ReleaseReviewClassifications.SelectorNoMatch;
-        }
-
         if (gaps.Any(gap => gap.Classification == ReleaseReviewClassifications.PartialAnalysis))
         {
             return ReleaseReviewClassifications.PartialAnalysis;
+        }
+
+        if (gaps.Any(gap => gap.Classification == ReleaseReviewClassifications.SelectorNoMatch))
+        {
+            return ReleaseReviewClassifications.SelectorNoMatch;
         }
 
         return ReleaseReviewClassifications.NoActionableEvidence;
@@ -1361,6 +1364,11 @@ public static class ReleaseReviewReporter
     {
         return StrongClassifications.Contains(finding.Classification)
             && finding.EvidenceTier is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier2Structural;
+    }
+
+    private static string? SafeReportPath(string? filePath)
+    {
+        return string.IsNullOrWhiteSpace(filePath) ? null : CombinedReportHelpers.SafePath(filePath);
     }
 
     private static int FindingSeverityRank(ReleaseReviewFinding finding)
