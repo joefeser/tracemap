@@ -5,7 +5,15 @@ namespace TraceMap.Core;
 
 public sealed record TargetFrameworkInfo(string ProjectPath, string TargetFramework, int Line);
 
-public sealed record PackageReferenceInfo(string ProjectPath, string PackageName, string? Version, int Line);
+public sealed record PackageReferenceInfo(
+    string ProjectPath,
+    string PackageName,
+    string? Version,
+    int Line,
+    string ManifestKind,
+    string DependencyGroup,
+    string DependencyScope,
+    string? TargetFramework);
 
 public static class ProjectFileReader
 {
@@ -88,7 +96,15 @@ public static class ProjectFileReader
 
             var version = AttributeValue(element, "Version")
                 ?? element.Elements().FirstOrDefault(child => child.Name.LocalName == "Version")?.Value.Trim();
-            yield return new PackageReferenceInfo(relativePath, packageName, version, GetLine(element));
+            yield return new PackageReferenceInfo(
+                relativePath,
+                packageName,
+                version,
+                GetLine(element),
+                "csproj",
+                "PackageReference",
+                "runtime",
+                null);
         }
     }
 
@@ -107,7 +123,15 @@ public static class ProjectFileReader
                 continue;
             }
 
-            yield return new PackageReferenceInfo(relativePath, packageName, AttributeValue(element, "version"), GetLine(element));
+            yield return new PackageReferenceInfo(
+                relativePath,
+                packageName,
+                AttributeValue(element, "version"),
+                GetLine(element),
+                "packages.config",
+                "packages.config",
+                "runtime",
+                AttributeValue(element, "targetFramework"));
         }
     }
 

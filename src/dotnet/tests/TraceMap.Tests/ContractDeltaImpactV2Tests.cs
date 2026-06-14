@@ -91,6 +91,26 @@ public sealed class ContractDeltaImpactV2Tests
               }
             },
             {
+              "id": "chg-package-surface-json",
+              "kind": "dependency-surface",
+              "changeType": "changed",
+              "reference": {
+                "surfaceKind": "package-config",
+                "packageName": "Newtonsoft.Json",
+                "ecosystem": "nuget"
+              }
+            },
+            {
+              "id": "chg-package-surface-name-json",
+              "kind": "dependency-surface",
+              "changeType": "changed",
+              "reference": {
+                "surfaceKind": "package-config",
+                "surfaceName": "Newtonsoft.Json",
+                "ecosystem": "nuget"
+              }
+            },
+            {
               "id": "chg-sql-orders",
               "kind": "sql-table",
               "changeType": "changed",
@@ -130,7 +150,9 @@ public sealed class ContractDeltaImpactV2Tests
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["ecosystem"] = "nuget",
-                    ["packageName"] = "Newtonsoft.Json"
+                    ["manifestKind"] = "csproj",
+                    ["packageName"] = "Newtonsoft.Json",
+                    ["surfaceKind"] = "package-config"
                 }),
             FactFactory.Create(
                 manifest,
@@ -155,8 +177,12 @@ public sealed class ContractDeltaImpactV2Tests
 
         Assert.Equal(0, exitCode);
         var markdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.json"));
         Assert.Contains("### `GET /api/orders`", markdown);
         Assert.Contains("### `nuget:Newtonsoft.Json`", markdown);
+        Assert.Contains("### `package-config:Newtonsoft.Json`", markdown);
+        Assert.Contains("\"changeId\": \"chg-package-surface-json\"", json);
+        Assert.Contains("\"changeId\": \"chg-package-surface-name-json\"", json);
         Assert.Contains("### `Orders`", markdown);
         Assert.Contains("### `sql:Orders`", markdown);
         Assert.Contains("Classification: `ProbableImpact`", markdown);
@@ -286,6 +312,40 @@ public sealed class ContractDeltaImpactV2Tests
 
         Assert.Equal(1, exitCode);
         Assert.Contains("reduce --source requires a combined TraceMap index", sourceError.ToString());
+    }
+
+    [Fact]
+    public async Task Reduce_v2_rejects_package_surface_version_only_selector()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, []);
+        var badDeltaPath = WriteV2Delta(temp.Path, """
+            {
+              "id": "chg-package-version-only",
+              "kind": "dependency-surface",
+              "changeType": "changed",
+              "reference": {
+                "surfaceKind": "package-config",
+                "oldVersion": "1.0.0",
+                "newVersion": "2.0.0"
+              }
+            }
+            """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync([
+            "reduce",
+            "--index", indexPath,
+            "--contract-delta", badDeltaPath,
+            "--out", outputPath
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("reference is missing required identity fields", error.ToString());
     }
 
     [Fact]

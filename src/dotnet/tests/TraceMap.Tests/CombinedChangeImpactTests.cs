@@ -255,6 +255,38 @@ public sealed class CombinedChangeImpactTests
     }
 
     [Fact]
+    public async Task Impact_projects_package_surface_version_change_as_static_metadata_change()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, [
+            PackageFact(manifest, "Newtonsoft.Json", "13.0.1", "src/App.csproj", 12)
+        ]);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            PackageFact(manifest, "Newtonsoft.Json", "13.0.3", "src/App.csproj", 12)
+        ]);
+
+        var result = await CombinedChangeImpactReporter.WriteAsync(new CombinedChangeImpactOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "impact"),
+            Scope: "surfaces",
+            Surface: "package-config"));
+
+        var item = Assert.Single(result.Report.ImpactItems);
+        Assert.Equal("surface", item.EvidenceKind);
+        Assert.Equal(CombinedImpactClassifications.ProbableStaticImpact, item.Classification);
+        Assert.Contains(item.After!.SafeMetadata, pair => pair.Key == "surfaceKind" && pair.Value == "package-config");
+        Assert.Contains(item.After.SafeMetadata, pair => pair.Key == "version" && pair.Value == "13.0.3");
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "impact", "impact-report.md"));
+        Assert.Contains("package-config", markdown);
+        Assert.DoesNotContain("vulnerable", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("exploitable", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Impact_include_paths_adds_endpoint_reachability_context()
     {
         using var temp = new TempDirectory();
@@ -487,6 +519,28 @@ public sealed class CombinedChangeImpactTests
                 ["sqlSourceKind"] = "literal-string",
                 ["queryShapeHash"] = "shape123",
                 ["rawSql"] = "select * from orders"
+            });
+    }
+
+    private static CodeFact PackageFact(ScanManifest manifest, string packageName, string version, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.PackageReferenced,
+            RuleIds.ProjectFile,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: packageName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dependencyGroup"] = "PackageReference",
+                ["dependencyScope"] = "runtime",
+                ["ecosystem"] = "nuget",
+                ["manifestKind"] = "csproj",
+                ["packageManager"] = "nuget",
+                ["packageName"] = packageName,
+                ["surfaceKind"] = "package-config",
+                ["version"] = version
             });
     }
 }

@@ -662,7 +662,7 @@ public static class CombinedDependencyDiffer
             {
                 var source = SourceFor(read, surface.SourceIndexId);
                 var metadata = SurfaceMetadata(surface);
-                var stable = $"surface:{surface.SourceLabel}:{surface.SurfaceKind}:{MetadataHash(metadata)}";
+                var stable = $"surface:{surface.SourceLabel}:{surface.SurfaceKind}:{MetadataHash(SurfaceIdentityMetadata(surface))}";
                 var caveats = SurfaceCaveats(surface);
                 var notes = caveats.Select(caveat => new CombinedDiffNote(caveat.Code, caveat.Message)).ToArray();
                 var evidence = Evidence(
@@ -704,15 +704,61 @@ public static class CombinedDependencyDiffer
             Pair("queryShapeHash", surface.ShapeHash),
             Pair("textHash", surface.TextHash),
             Pair("textLength", surface.TextLength),
+            Pair("ecosystem", surface.Ecosystem),
+            Pair("manifestKind", surface.ManifestKind),
             Pair("packageName", surface.PackageName),
+            Pair("packageManager", surface.PackageManager),
+            Pair("dependencyScope", surface.DependencyScope),
+            Pair("dependencyGroup", surface.DependencyGroup),
             Pair("version", surface.Version),
+            Pair("versionHash", surface.VersionHash),
+            Pair("redactionReason", surface.RedactionReason),
             Pair("configKey", surface.ConfigKey),
             Pair("identityFallbackHash", IsVolatileSqlIdentity(surface) ? CombinedReportHelpers.Hash(surface.OriginalFactId, 24) : null)
         ]);
     }
 
+    private static IReadOnlyList<KeyValuePair<string, string>> SurfaceIdentityMetadata(CombinedDependencySurfaceRow surface)
+    {
+        if (surface.SurfaceKind == "package-config" && !string.IsNullOrWhiteSpace(surface.PackageName))
+        {
+            return CombinedReportHelpers.SortedMetadata([
+                Pair("surfaceKind", surface.SurfaceKind),
+                Pair("ecosystem", surface.Ecosystem),
+                Pair("manifestKind", surface.ManifestKind),
+                Pair("packageName", surface.PackageName),
+                Pair("manifestPath", surface.FilePath),
+                Pair("configKey", surface.ConfigKey)
+            ]);
+        }
+
+        return SurfaceMetadata(surface);
+    }
+
     private static IReadOnlyList<CombinedCoverageCaveat> SurfaceCaveats(CombinedDependencySurfaceRow surface)
     {
+        if (surface.SurfaceKind == "package-config")
+        {
+            var packageCaveats = new List<CombinedCoverageCaveat>();
+            if (!string.IsNullOrWhiteSpace(surface.VersionHash) && string.IsNullOrWhiteSpace(surface.Version))
+            {
+                packageCaveats.Add(new CombinedCoverageCaveat(
+                    surface.SourceLabel,
+                    "HashOnlyEvidence",
+                    "Package version evidence is hash-only or redacted; diff classification remains review-tier."));
+            }
+
+            if (string.IsNullOrWhiteSpace(surface.PackageName) || string.IsNullOrWhiteSpace(surface.Ecosystem))
+            {
+                packageCaveats.Add(new CombinedCoverageCaveat(
+                    surface.SourceLabel,
+                    "VolatileIdentity",
+                    "Package surface identity is missing package name or ecosystem metadata; diff classification remains review-tier."));
+            }
+
+            return packageCaveats;
+        }
+
         if (surface.SurfaceKind != "sql-query")
         {
             return [];

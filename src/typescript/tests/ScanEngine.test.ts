@@ -38,6 +38,26 @@ describe("ScanEngine", () => {
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.HttpRouteBinding }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ConfigKeyDeclared, targetSymbol: "CUSTOMER_ENDPOINT" }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.QueryPatternDetected }));
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({
+        dependencyGroup: "dependencies",
+        dependencyScope: "runtime",
+        ecosystem: "npm",
+        manifestKind: "package.json",
+        packageName: "express",
+        surfaceKind: "package-config"
+      })
+    }));
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.ConfigKeyDeclared,
+      targetSymbol: "scripts:build",
+      properties: expect.objectContaining({
+        redactionReason: "script-command-redacted",
+        valueHash: expect.stringMatching(/^[0-9a-f]+$/),
+        valueLength: "20"
+      })
+    }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ObjectShapeInferred }));
     const prismaPattern = result.facts.find((fact) => fact.factType === FactTypes.QueryPatternDetected && fact.properties.orm === "prisma");
     expect(prismaPattern?.properties.filterFields).toContain("status");
@@ -46,6 +66,7 @@ describe("ScanEngine", () => {
     expect(entityPattern?.properties.filterFields).toContain("organization_id");
     expect(entityPattern?.properties.sortFields).toContain("updated_at");
     expect(JSON.stringify(result.facts)).not.toContain("organization_id: \"org_1\"");
+    expect(JSON.stringify(result.facts)).not.toContain("tsc -p tsconfig.json");
   });
 
   it("runs syntax fallback for a repo with no tsconfig and broken syntax", async () => {
@@ -66,7 +87,7 @@ describe("ScanEngine", () => {
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.TypeDeclared, targetSymbol: "BrokenContract" }));
   });
 
-  it("can be reduced by the existing .NET reducer as DefiniteImpact", async () => {
+  it("can be reduced by the existing .NET reducer with review-tier fan-out handling", async () => {
     const out = await tempDir();
     await scan({
       repoPath: path.join(repoRoot, "samples/typescript-modern-sample"),
@@ -98,7 +119,8 @@ describe("ScanEngine", () => {
     );
     expect(reduce.status, reduce.stderr + reduce.stdout).toBe(0);
     const markdown = await fsp.readFile(report, "utf8");
-    expect(markdown).toContain("DefiniteImpact");
+    expect(markdown).toContain("NeedsReview");
+    expect(markdown).toContain("High fan-out match set");
     expect(markdown).toContain("PropertyAccessed");
   });
 

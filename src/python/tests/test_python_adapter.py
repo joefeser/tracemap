@@ -336,6 +336,11 @@ def test_requirements_options_are_not_packages(tmp_path: Path) -> None:
 
     assert deps == {"requests": "==2.32.0"}
     assert all(fact.target_symbol not in {"-r", "-c"} for fact in facts)
+    package_fact = next(fact for fact in facts if fact.fact_type == "PackageReferenced" and fact.target_symbol == "requests")
+    assert package_fact.properties["ecosystem"] == "python"
+    assert package_fact.properties["manifestKind"] == "requirements.txt"
+    assert package_fact.properties["dependencyScope"] == "runtime"
+    assert package_fact.properties["surfaceKind"] == "package-config"
     assert gaps == []
 
 

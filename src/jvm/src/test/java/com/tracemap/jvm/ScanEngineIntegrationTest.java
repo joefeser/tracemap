@@ -52,6 +52,13 @@ final class ScanEngineIntegrationTest {
             FactTypes.PROPERTY_ACCESSED.equals(fact.factType())
                 && EvidenceTiers.TIER1_SEMANTIC.equals(fact.evidenceTier())
                 && "status".equals(fact.properties().get("propertyName"))));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
+                && "maven".equals(fact.properties().get("ecosystem"))
+                && "pom.xml".equals(fact.properties().get("manifestKind"))
+                && "runtime".equals(fact.properties().get("dependencyScope"))
+                && "package-config".equals(fact.properties().get("surfaceKind"))
+                && "org.springframework:spring-web".equals(fact.properties().get("packageName"))));
 
         Path report = temp.resolve("impact.md");
         Process process = new ProcessBuilder(
@@ -73,7 +80,9 @@ final class ScanEngineIntegrationTest {
         assertTrue(process.waitFor(60, TimeUnit.SECONDS), "dotnet reduce timed out");
         String output = new String(process.getInputStream().readAllBytes());
         assertEquals(0, process.exitValue(), output);
-        assertTrue(Files.readString(report).contains("DefiniteImpact"));
+        String markdown = Files.readString(report);
+        assertTrue(markdown.contains("NeedsReview"));
+        assertTrue(markdown.contains("PropertyAccessed"));
     }
 
     @Test
