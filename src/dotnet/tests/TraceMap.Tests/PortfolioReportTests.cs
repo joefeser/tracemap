@@ -127,6 +127,103 @@ public sealed class PortfolioReportTests
     }
 
     [Fact]
+    public async Task Portfolio_source_selector_filters_duplicate_inner_source_labels_by_container()
+    {
+        using var temp = new TempDirectory();
+        var firstIndex = Path.Combine(temp.Path, "first-api.sqlite");
+        var secondIndex = Path.Combine(temp.Path, "second-api.sqlite");
+        var firstCombined = Path.Combine(temp.Path, "first-combined.sqlite");
+        var secondCombined = Path.Combine(temp.Path, "second-combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "portfolio");
+        var first = Manifest("first", ScannerVersions.TraceMap, "git-first");
+        var second = Manifest("second", ScannerVersions.TraceMap, "git-second");
+        SqliteIndexWriter.Write(firstIndex, first, [
+            PackageFact(first, "StackA.Only", "nuget", "First.csproj", "PackageReference")
+        ]);
+        SqliteIndexWriter.Write(secondIndex, second, [
+            PackageFact(second, "StackB.Only", "nuget", "Second.csproj", "PackageReference")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([firstIndex], firstCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([secondIndex], secondCombined, ["api"]));
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("stack-a", firstCombined),
+            new PortfolioInputSpec("stack-b", secondCombined)
+        ], outDir, Source: "stack-a"));
+
+        var source = Assert.Single(result.Report.Sources);
+        Assert.Equal("stack-a", source.ContainerLabel);
+        Assert.Equal("api", source.Label);
+        var surface = Assert.Single(result.Report.DependencySurfaces.Rows);
+        Assert.Equal(source.SourceId, surface.SourceId);
+        Assert.Equal("StackA.Only", surface.DisplayName);
+        Assert.DoesNotContain(result.Report.DependencySurfaces.Rows, row => row.DisplayName == "StackB.Only");
+    }
+
+    [Fact]
+    public async Task Portfolio_source_cap_emits_truncation_gap()
+    {
+        using var temp = new TempDirectory();
+        var firstIndex = Path.Combine(temp.Path, "first.sqlite");
+        var secondIndex = Path.Combine(temp.Path, "second.sqlite");
+        var outDir = Path.Combine(temp.Path, "portfolio");
+        SqliteIndexWriter.Write(firstIndex, Manifest("first", ScannerVersions.TraceMap, "git-first"), []);
+        SqliteIndexWriter.Write(secondIndex, Manifest("second", ScannerVersions.TraceMap, "git-second"), []);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("first", firstIndex),
+            new PortfolioInputSpec("second", secondIndex)
+        ], outDir, MaxSources: 1));
+
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.Equal(PortfolioReportStatuses.Truncated, result.Report.SourceCoverage.Status);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Section == "sourceCoverage");
+    }
+
+    [Fact]
+    public async Task Portfolio_before_after_manifests_compare_duplicate_inner_source_labels_by_container()
+    {
+        using var temp = new TempDirectory();
+        var beforeFirstIndex = Path.Combine(temp.Path, "before-first.sqlite");
+        var beforeSecondIndex = Path.Combine(temp.Path, "before-second.sqlite");
+        var afterFirstIndex = Path.Combine(temp.Path, "after-first.sqlite");
+        var afterSecondIndex = Path.Combine(temp.Path, "after-second.sqlite");
+        var beforeFirstCombined = Path.Combine(temp.Path, "before-first-combined.sqlite");
+        var beforeSecondCombined = Path.Combine(temp.Path, "before-second-combined.sqlite");
+        var afterFirstCombined = Path.Combine(temp.Path, "after-first-combined.sqlite");
+        var afterSecondCombined = Path.Combine(temp.Path, "after-second-combined.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        SqliteIndexWriter.Write(beforeFirstIndex, Manifest("first-before", ScannerVersions.TraceMap, "git-first-before"), []);
+        SqliteIndexWriter.Write(beforeSecondIndex, Manifest("second", ScannerVersions.TraceMap, "git-second"), []);
+        SqliteIndexWriter.Write(afterFirstIndex, Manifest("first-after", ScannerVersions.TraceMap, "git-first-after"), []);
+        SqliteIndexWriter.Write(afterSecondIndex, Manifest("second", ScannerVersions.TraceMap, "git-second"), []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeFirstIndex], beforeFirstCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeSecondIndex], beforeSecondCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterFirstIndex], afterFirstCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterSecondIndex], afterSecondCombined, ["api"]));
+        await WriteManifestAsync(beforeManifest, [
+            ("stack-a", beforeFirstCombined),
+            ("stack-b", beforeSecondCombined)
+        ]);
+        await WriteManifestAsync(afterManifest, [
+            ("stack-a", afterFirstCombined),
+            ("stack-b", afterSecondCombined)
+        ]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest));
+
+        var row = Assert.Single(result.Report.PortfolioDiff.Rows);
+        Assert.Equal("ChangedSourceEvidence", row.ChangeKind);
+        Assert.Equal("stack-a/api", row.SourceLabel);
+    }
+
+    [Fact]
     public async Task Portfolio_before_after_manifests_emit_source_diff_rows()
     {
         using var temp = new TempDirectory();
@@ -302,5 +399,19 @@ public sealed class PortfolioReportTests
             {
                 ["callKind"] = "Invocation"
             });
+    }
+
+    private static Task WriteManifestAsync(string path, IReadOnlyList<(string Label, string IndexPath)> inputs)
+    {
+        var json = JsonSerializer.Serialize(
+            new
+            {
+                version = "1.0",
+                portfolioId = "demo",
+                snapshotId = Path.GetFileNameWithoutExtension(path),
+                inputs = inputs.Select(input => new { label = input.Label, indexPath = Path.GetFileName(input.IndexPath) }).ToArray()
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+        return File.WriteAllTextAsync(path, json);
     }
 }
