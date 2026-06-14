@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -21,7 +22,8 @@ Options:
   --trust-tools <tools>                   Comma-separated tool allowlist. Default: fs_read,grep
   --timeout-ms <milliseconds>             Wrapper timeout. Default: 1800000
   --prompt-file <path>                    Use an explicit prompt file
-  --dry-run                               Write prompt/meta only; do not invoke Kiro
+  --save-review-text                      Persist prompt/raw/clean text artifacts
+  --dry-run                               Build prompt/meta only; do not invoke Kiro
   --help                                  Show this help
 
 Examples:
@@ -41,6 +43,7 @@ function parseArgs(argv) {
     trustTools: "fs_read,grep",
     timeoutMs: defaultTimeoutMs,
     promptFile: null,
+    saveReviewText: false,
     dryRun: false,
   };
 
@@ -87,6 +90,9 @@ function parseArgs(argv) {
       case "--prompt-file":
         options.promptFile = nextValue();
         break;
+      case "--save-review-text":
+        options.saveReviewText = true;
+        break;
       case "--dry-run":
         options.dryRun = true;
         break;
@@ -97,6 +103,11 @@ function parseArgs(argv) {
 
   if (!options.phase) {
     throw new Error("Missing required --phase <spec-slug>");
+  }
+
+  options.phase = options.phase.trim();
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(options.phase)) {
+    throw new Error(`Invalid --phase '${options.phase}'. Expected a lowercase spec slug such as contract-delta-impact-v2.`);
   }
 
   if (!validKinds.has(options.kind)) {
@@ -146,11 +157,25 @@ function loadEnvFile(envPath) {
 }
 
 function nowStamp() {
-  return new Date().toISOString().replace(/[:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return new Date().toISOString().replace(/[:]/g, "").replace(".", "-");
 }
 
 function safeSegment(value) {
   return value.replace(/[^A-Za-z0-9_.-]+/g, "-");
+}
+
+function sha256(text) {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+function resolveInside(baseDir, childSegment, description) {
+  const base = path.resolve(baseDir);
+  const target = path.resolve(base, childSegment);
+  if (target !== base && !target.startsWith(`${base}${path.sep}`)) {
+    throw new Error(`${description} escaped expected base directory`);
+  }
+
+  return target;
 }
 
 function stripAnsi(text) {
@@ -168,6 +193,15 @@ function gitValue(args) {
   return result.status === 0 ? result.stdout.trim() : "";
 }
 
+function requireGitValue(args, description) {
+  const value = gitValue(args);
+  if (!value) {
+    throw new Error(`Unable to determine ${description}`);
+  }
+
+  return value;
+}
+
 function buildPrompt(options) {
   if (options.promptFile) {
     const fullPath = path.resolve(cwd, options.promptFile);
@@ -178,7 +212,7 @@ function buildPrompt(options) {
     return readFileSync(fullPath, "utf8");
   }
 
-  const specDir = path.join(cwd, ".kiro", "specs", options.phase);
+  const specDir = resolveInside(path.join(cwd, ".kiro", "specs"), options.phase, "Spec path");
   const reviewPacketPath = path.join(specDir, "review-packet.md");
   if (existsSync(reviewPacketPath)) {
     return readFileSync(reviewPacketPath, "utf8");
@@ -193,8 +227,8 @@ function buildPrompt(options) {
     throw new Error(`Missing expected spec files:\n${missing.map((filePath) => `- ${path.relative(cwd, filePath)}`).join("\n")}`);
   }
 
-  const branch = gitValue(["branch", "--show-current"]) || "unknown";
-  const commit = gitValue(["rev-parse", "HEAD"]) || "unknown";
+  const branch = requireGitValue(["branch", "--show-current"], "git branch");
+  const commit = requireGitValue(["rev-parse", "HEAD"], "git commit SHA");
   const kindGuidance = {
     spec: "Review this Kiro spec for merge readiness. Focus on correctness, implementability, evidence boundaries, safety, missing tests, and whether the tasks are reviewable.",
     "re-review": "Re-review this Kiro spec after changes. Focus on whether previously identified blockers are resolved and whether any new blockers were introduced.",
@@ -290,6 +324,63 @@ function latestSessionId(env) {
   }
 }
 
+function serializeSpawnError(error) {
+  if (!error) {
+    return null;
+  }
+
+  return {
+    code: error.code ?? null,
+    errno: error.errno ?? null,
+    syscall: error.syscall ?? null,
+    path: error.path ?? null,
+    message: error.message ?? String(error),
+  };
+}
+
+function statusFromSpawnResult(result) {
+  if (result.error?.code === "ETIMEDOUT") {
+    return 124;
+  }
+
+  if (result.status !== null && result.status !== undefined) {
+    return result.status;
+  }
+
+  if (result.error?.code === "ENOENT") {
+    return 127;
+  }
+
+  if (result.error?.code === "EACCES") {
+    return 126;
+  }
+
+  return result.error ? 1 : 0;
+}
+
+function buildAnalysisGaps({ toolDenied, spawnError }) {
+  const gaps = [];
+  if (toolDenied) {
+    gaps.push({
+      kind: "ToolDenied",
+      evidenceTier: "Tier4Unknown",
+      ruleId: "kiro.review.wrapper.v1",
+      message: "Kiro reported denied tool access; review coverage is reduced.",
+    });
+  }
+
+  if (spawnError) {
+    gaps.push({
+      kind: "SpawnError",
+      evidenceTier: "Tier4Unknown",
+      ruleId: "kiro.review.wrapper.v1",
+      message: "kiro-cli could not be executed completely; review coverage is reduced.",
+    });
+  }
+
+  return gaps;
+}
+
 function main() {
   let options;
   try {
@@ -302,7 +393,7 @@ function main() {
   const startedAt = new Date();
   const timestamp = nowStamp();
   const modelSegment = safeSegment(options.model);
-  const outputDir = path.join(cwd, ".tmp", "kiro-reviews", options.phase);
+  const outputDir = resolveInside(path.join(cwd, ".tmp", "kiro-reviews"), options.phase, "Artifact path");
   mkdirSync(outputDir, { recursive: true });
 
   const baseName = `${timestamp}-${options.kind}-${modelSegment}`;
@@ -314,7 +405,12 @@ function main() {
   const envFileValues = loadEnvFile(path.join(cwd, ".env.kiro.local"));
   const env = { ...process.env, ...envFileValues };
   const prompt = buildPrompt(options);
-  writeFileSync(promptPath, prompt, "utf8");
+  if (options.saveReviewText) {
+    writeFileSync(promptPath, prompt, "utf8");
+  }
+
+  const gitCommit = requireGitValue(["rev-parse", "HEAD"], "git commit SHA");
+  const gitBranch = requireGitValue(["branch", "--show-current"], "git branch");
 
   const meta = {
     phase: options.phase,
@@ -327,17 +423,25 @@ function main() {
     timedOut: false,
     terminatedBySignal: null,
     reviewComplete: false,
+    reviewCoverage: "NotRun",
     status: null,
     startedAt: startedAt.toISOString(),
     finishedAt: null,
-    promptPath: path.relative(cwd, promptPath),
-    rawPath: path.relative(cwd, rawPath),
-    cleanPath: path.relative(cwd, cleanPath),
+    saveReviewText: options.saveReviewText,
+    promptPath: options.saveReviewText ? path.relative(cwd, promptPath) : null,
+    rawPath: options.saveReviewText ? path.relative(cwd, rawPath) : null,
+    cleanPath: options.saveReviewText ? path.relative(cwd, cleanPath) : null,
     metaPath: path.relative(cwd, metaPath),
+    promptSha256: sha256(prompt),
+    rawSha256: null,
+    cleanSha256: null,
     sessionId: null,
     toolDenied: false,
-    gitCommit: gitValue(["rev-parse", "HEAD"]) || null,
-    gitBranch: gitValue(["branch", "--show-current"]) || null,
+    analysisGaps: [],
+    spawned: null,
+    spawnError: null,
+    gitCommit,
+    gitBranch,
     dryRun: options.dryRun,
     auth: {
       kiroApiKeyPresent: Boolean(env.KIRO_API_KEY),
@@ -347,66 +451,113 @@ function main() {
   if (options.dryRun) {
     meta.status = 0;
     meta.reviewComplete = false;
+    meta.reviewCoverage = "NotRun";
     meta.finishedAt = new Date().toISOString();
-    writeFileSync(rawPath, "", "utf8");
-    writeFileSync(cleanPath, "", "utf8");
+    meta.rawSha256 = sha256("");
+    meta.cleanSha256 = sha256("");
+    if (options.saveReviewText) {
+      writeFileSync(rawPath, "", "utf8");
+      writeFileSync(cleanPath, "", "utf8");
+    }
     writeJson(metaPath, meta);
-    printArtifacts({ promptPath, rawPath, cleanPath, metaPath, sessionId: null });
+    printArtifacts({ meta, promptPath, rawPath, cleanPath, metaPath, sessionId: null });
     return;
   }
 
   if (!env.KIRO_API_KEY) {
     console.error("KIRO_API_KEY is missing. Set it in .env.kiro.local or the process environment.");
     meta.status = 1;
+    meta.reviewCoverage = "NotRun";
     meta.finishedAt = new Date().toISOString();
-    writeFileSync(rawPath, "", "utf8");
-    writeFileSync(cleanPath, "", "utf8");
+    meta.rawSha256 = sha256("");
+    meta.cleanSha256 = sha256("");
+    if (options.saveReviewText) {
+      writeFileSync(rawPath, "", "utf8");
+      writeFileSync(cleanPath, "", "utf8");
+    }
     writeJson(metaPath, meta);
     process.exit(1);
   }
 
-  const args = ["chat", "--no-interactive", "--model", options.model, `--trust-tools=${options.trustTools}`];
+  const args = [
+    "chat",
+    "--no-interactive",
+    "--model",
+    options.model,
+    `--trust-tools=${options.trustTools}`,
+    prompt,
+  ];
   if (options.resumeId) {
-    args.push("--resume-id", options.resumeId);
+    args.splice(args.length - 1, 0, "--resume-id", options.resumeId);
   } else if (options.resume) {
-    args.push("--resume");
+    args.splice(args.length - 1, 0, "--resume");
   }
 
   const result = spawnSync("kiro-cli", args, {
     cwd,
     env,
-    input: prompt,
     encoding: "utf8",
     timeout: options.timeoutMs,
     maxBuffer: 50 * 1024 * 1024,
   });
 
-  const raw = [result.stdout ?? "", result.stderr ?? ""].filter(Boolean).join("\n");
-  const clean = stripAnsi(raw);
-  writeFileSync(rawPath, raw, "utf8");
-  writeFileSync(cleanPath, clean, "utf8");
+  const spawnError = serializeSpawnError(result.error);
+  if (spawnError) {
+    console.error(`kiro-cli execution issue: ${spawnError.message}`);
+  }
 
+  const errorBlock = spawnError
+    ? `\n\n## Wrapper Spawn Error\n\n${spawnError.message}\n`
+    : "";
+  const raw = [result.stdout ?? "", result.stderr ?? "", errorBlock].filter(Boolean).join("\n");
+  const clean = stripAnsi(raw);
+  meta.rawSha256 = sha256(raw);
+  meta.cleanSha256 = sha256(clean);
+  if (options.saveReviewText) {
+    writeFileSync(rawPath, raw, "utf8");
+    writeFileSync(cleanPath, clean, "utf8");
+  } else if (clean.trim()) {
+    process.stdout.write(clean.endsWith("\n") ? clean : `${clean}\n`);
+  }
+
+  meta.spawned = !spawnError;
+  meta.spawnError = spawnError;
   meta.timedOut = Boolean(result.error && result.error.code === "ETIMEDOUT");
   meta.terminatedBySignal = result.signal ?? null;
-  meta.status = meta.timedOut ? 124 : result.status;
-  meta.sessionId = extractSessionId(clean) ?? latestSessionId(env);
+  meta.status = statusFromSpawnResult(result);
+  meta.sessionId = result.error ? null : (extractSessionId(clean) ?? latestSessionId(env));
   meta.toolDenied = clean.includes("is rejected because it matches one or more rules on the denied list");
+  meta.analysisGaps = buildAnalysisGaps({ toolDenied: meta.toolDenied, spawnError: meta.spawnError });
+  meta.reviewCoverage = meta.analysisGaps.length > 0 ? "Reduced" : "Full";
   meta.reviewComplete = meta.status === 0 && clean.trim().length > 0 && looksLikeCompleteReview(clean);
   meta.finishedAt = new Date().toISOString();
   writeJson(metaPath, meta);
 
-  printArtifacts({ promptPath, rawPath, cleanPath, metaPath, sessionId: meta.sessionId });
+  if (meta.toolDenied) {
+    console.warn("Review coverage reduced: Kiro reported denied tool access. See meta analysisGaps.");
+  }
+
+  printArtifacts({ meta, promptPath, rawPath, cleanPath, metaPath, sessionId: meta.sessionId });
 
   if (!meta.reviewComplete || meta.status !== 0) {
     process.exit(meta.status || 1);
   }
 }
 
-function printArtifacts({ promptPath, rawPath, cleanPath, metaPath, sessionId }) {
-  console.log(`Prompt: ${path.relative(cwd, promptPath)}`);
-  console.log(`Raw:    ${path.relative(cwd, rawPath)}`);
-  console.log(`Clean:  ${path.relative(cwd, cleanPath)}`);
+function printArtifacts({ meta, promptPath, rawPath, cleanPath, metaPath, sessionId }) {
+  if (meta.saveReviewText) {
+    console.log(`Prompt: ${path.relative(cwd, promptPath)}`);
+    console.log(`Raw:    ${path.relative(cwd, rawPath)}`);
+    console.log(`Clean:  ${path.relative(cwd, cleanPath)}`);
+  } else {
+    console.log("Prompt: not saved (use --save-review-text to persist)");
+    console.log("Raw:    not saved (use --save-review-text to persist)");
+    console.log("Clean:  not saved (use --save-review-text to persist)");
+  }
+
   console.log(`Meta:   ${path.relative(cwd, metaPath)}`);
+  console.log(`Hashes: prompt=${meta.promptSha256} raw=${meta.rawSha256 ?? ""} clean=${meta.cleanSha256 ?? ""}`);
+  console.log(`Coverage: ${meta.reviewCoverage}`);
   console.log(`Session: ${sessionId ?? ""}`);
 }
 
