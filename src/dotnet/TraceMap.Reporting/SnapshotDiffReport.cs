@@ -151,6 +151,7 @@ public sealed record SnapshotDiffEvidence(
     string? AnalysisLevel,
     string? BuildStatus,
     string? ScannerVersion,
+    IReadOnlyList<SnapshotDiffFileSpan> FileSpans,
     IReadOnlyList<KeyValuePair<string, string>> Metadata);
 
 public sealed record SnapshotDiffGap(
@@ -702,6 +703,7 @@ public static class SnapshotDiffReporter
             source.AnalysisLevel,
             source.BuildStatus,
             source.ScannerVersion,
+            [],
             CombinedReportHelpers.SortedMetadata(source.GapCodes.Select(gap => Pair("gapCode", gap))));
     }
 
