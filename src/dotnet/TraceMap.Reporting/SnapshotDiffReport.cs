@@ -558,7 +558,8 @@ public static class SnapshotDiffReporter
             throw new ArgumentException("snapshot-diff --scope paths requires --include-paths.");
         }
 
-        if (!string.IsNullOrWhiteSpace(options.Endpoint) && !options.Endpoint.Contains(' ', StringComparison.Ordinal))
+        if (ParseEndpointSelector(options.Endpoint) is { } selector
+            && (string.IsNullOrWhiteSpace(selector.Method) || string.IsNullOrWhiteSpace(selector.PathKey)))
         {
             throw new ArgumentException("snapshot-diff --endpoint must be formatted as `<METHOD> <normalized-path-key>`.");
         }
@@ -820,21 +821,28 @@ public static class SnapshotDiffReporter
             return new SnapshotSingleDiffs([], []);
         }
 
+        var includeEndpoints = scopes.Contains("endpoints", StringComparer.Ordinal);
+        var includeSurfaces = scopes.Contains("surfaces", StringComparer.Ordinal);
+        if (!includeEndpoints && !includeSurfaces)
+        {
+            return new SnapshotSingleDiffs([], []);
+        }
+
+        var sourcePair = sourcePairs.First(pair => pair.Label == "single");
+        var endpointSelector = includeEndpoints ? ParseEndpointSelector(options.Endpoint) : null;
         var beforeFacts = await ReadSingleFactsAsync(options.BeforePath, "before", gaps, cancellationToken);
         var afterFacts = await ReadSingleFactsAsync(options.AfterPath, "after", gaps, cancellationToken);
-        var sourcePair = sourcePairs.First(pair => pair.Label == "single");
-        var endpointSelector = ParseEndpointSelector(options.Endpoint);
 
-        var beforeEndpoints = ProjectSingleEndpoints(beforeFacts, sourcePair.Before, endpointSelector);
-        var afterEndpoints = ProjectSingleEndpoints(afterFacts, sourcePair.After, endpointSelector);
-        if (scopes.Contains("endpoints", StringComparer.Ordinal) && endpointSelector is not null && beforeEndpoints.Count == 0 && afterEndpoints.Count == 0)
+        var beforeEndpoints = includeEndpoints ? ProjectSingleEndpoints(beforeFacts, sourcePair.Before, endpointSelector) : [];
+        var afterEndpoints = includeEndpoints ? ProjectSingleEndpoints(afterFacts, sourcePair.After, endpointSelector) : [];
+        if (includeEndpoints && endpointSelector is not null && beforeEndpoints.Count == 0 && afterEndpoints.Count == 0)
         {
             gaps.Add(Gap("selector", "SelectorNoMatch", "endpointDiffs", sourcePair.Label, EvidenceRuleId, SnapshotDiffClassifications.SelectorNoMatch, $"Endpoint selector `{options.Endpoint}` matched no single-index endpoint evidence."));
         }
 
-        var beforeSurfaces = ProjectSingleSurfaces(beforeFacts, sourcePair.Before, options.Surface, options.SurfaceName);
-        var afterSurfaces = ProjectSingleSurfaces(afterFacts, sourcePair.After, options.Surface, options.SurfaceName);
-        if (scopes.Contains("surfaces", StringComparer.Ordinal)
+        var beforeSurfaces = includeSurfaces ? ProjectSingleSurfaces(beforeFacts, sourcePair.Before, options.Surface, options.SurfaceName) : [];
+        var afterSurfaces = includeSurfaces ? ProjectSingleSurfaces(afterFacts, sourcePair.After, options.Surface, options.SurfaceName) : [];
+        if (includeSurfaces
             && (!string.IsNullOrWhiteSpace(options.Surface) || !string.IsNullOrWhiteSpace(options.SurfaceName))
             && beforeSurfaces.Count == 0
             && afterSurfaces.Count == 0)
@@ -842,10 +850,10 @@ public static class SnapshotDiffReporter
             gaps.Add(Gap("selector", "SelectorNoMatch", "surfaceDiffs", sourcePair.Label, EvidenceRuleId, SnapshotDiffClassifications.SelectorNoMatch, "Surface selector matched no single-index surface evidence."));
         }
 
-        var endpointDiffs = scopes.Contains("endpoints", StringComparer.Ordinal)
+        var endpointDiffs = includeEndpoints
             ? CompareSingleRecords(beforeEndpoints, afterEndpoints, "endpointDiffs", sourcePair, gaps, options.MaxDiffRows)
             : [];
-        var surfaceDiffs = scopes.Contains("surfaces", StringComparer.Ordinal)
+        var surfaceDiffs = includeSurfaces
             ? CompareSingleRecords(beforeSurfaces, afterSurfaces, "surfaceDiffs", sourcePair, gaps, options.MaxDiffRows)
             : [];
 
@@ -1053,9 +1061,14 @@ public static class SnapshotDiffReporter
         var rows = new List<SnapshotDiffRow>();
         var beforeGroups = before.GroupBy(record => record.StableKey, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var afterGroups = after.GroupBy(record => record.StableKey, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        foreach (var duplicate in beforeGroups.Where(group => group.Value.Length > 1).Concat(afterGroups.Where(group => group.Value.Length > 1)))
+        foreach (var duplicate in beforeGroups.Where(group => group.Value.Length > 1))
         {
-            gaps.Add(DuplicateIdentityGap(section, sourcePair.Label, duplicate.Key, duplicate.Value.SelectMany(record => record.SupportingFactIds)));
+            gaps.Add(DuplicateIdentityGap(section, "before", sourcePair.Label, duplicate.Key, duplicate.Value.SelectMany(record => record.SupportingFactIds)));
+        }
+
+        foreach (var duplicate in afterGroups.Where(group => group.Value.Length > 1))
+        {
+            gaps.Add(DuplicateIdentityGap(section, "after", sourcePair.Label, duplicate.Key, duplicate.Value.SelectMany(record => record.SupportingFactIds)));
         }
 
         foreach (var key in beforeGroups.Keys.Concat(afterGroups.Keys).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
@@ -1232,6 +1245,11 @@ public static class SnapshotDiffReporter
         }
 
         var parts = endpoint.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+        {
+            throw new ArgumentException("snapshot-diff --endpoint must be formatted as `<METHOD> <normalized-path-key>`.");
+        }
+
         return (NormalizeEndpointMethod(parts[0]), parts[1]);
     }
 
@@ -1390,10 +1408,10 @@ public static class SnapshotDiffReporter
         return CombinedReportHelpers.Hash(string.Join("\n", values.Where(value => !string.IsNullOrWhiteSpace(value))));
     }
 
-    private static SnapshotDiffGap DuplicateIdentityGap(string section, string sourceLabel, string stableKey, IEnumerable<string> supportingFactIds)
+    private static SnapshotDiffGap DuplicateIdentityGap(string section, string side, string sourceLabel, string stableKey, IEnumerable<string> supportingFactIds)
     {
         return new SnapshotDiffGap(
-            StableId("gap", "duplicate", section, sourceLabel, stableKey),
+            StableId("gap", "duplicate", section, side, sourceLabel, stableKey),
             "DuplicateIdentity",
             section,
             sourceLabel,
@@ -1407,6 +1425,7 @@ public static class SnapshotDiffReporter
             [],
             CombinedReportHelpers.SortedMetadata([
                 Pair("section", section),
+                Pair("side", side),
                 Pair("sourceLabel", sourceLabel),
                 Pair("stableKeyHash", CombinedReportHelpers.Hash(stableKey, 24))
             ]));

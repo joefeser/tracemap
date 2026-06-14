@@ -141,6 +141,77 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_rejects_trailing_space_endpoint_selector_without_crashing()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        SqliteIndexWriter.Write(beforeIndex, Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111"), []);
+        SqliteIndexWriter.Write(afterIndex, Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222"), []);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "endpoints",
+            Endpoint: "GET ")));
+
+        Assert.Contains("--endpoint must be formatted", exception.Message);
+    }
+
+    [Fact]
+    public async Task Snapshot_diff_source_only_scope_does_not_scan_fact_properties()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        var malformedFact = RouteFact(before, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10);
+        SqliteIndexWriter.Write(beforeIndex, before, [malformedFact]);
+        SqliteIndexWriter.Write(afterIndex, after, []);
+        CorruptFactProperties(beforeIndex, malformedFact.FactId);
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "sources"));
+
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MalformedMetadataGap" && gap.SupportingFactIds.Contains(malformedFact.FactId));
+    }
+
+    [Fact]
+    public async Task Snapshot_diff_duplicate_identity_gaps_include_snapshot_side()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, [
+            RouteFact(before, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10),
+            RouteFact(before, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 11)
+        ]);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            RouteFact(after, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10),
+            RouteFact(after, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 11)
+        ]);
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "endpoints"));
+
+        var duplicateGaps = result.Report.Gaps.Where(gap => gap.GapKind == "DuplicateIdentity").ToArray();
+        Assert.Equal(2, duplicateGaps.Length);
+        Assert.Equal(2, duplicateGaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(duplicateGaps, gap => gap.Metadata.Any(pair => pair.Key == "side" && pair.Value == "before"));
+        Assert.Contains(duplicateGaps, gap => gap.Metadata.Any(pair => pair.Key == "side" && pair.Value == "after"));
+    }
+
+    [Fact]
     public async Task Snapshot_diff_rejects_mixed_single_and_combined_without_writing_output()
     {
         using var temp = new TempDirectory();
@@ -676,6 +747,20 @@ public sealed class SnapshotDiffTests
             set manifest_json = '{'
             where scan_id = (select scan_id from scan_manifest limit 1);
 
+            update facts
+            set properties_json = '{'
+            where fact_id = $fact_id;
+            """;
+        command.Parameters.AddWithValue("$fact_id", factId);
+        command.ExecuteNonQuery();
+    }
+
+    private static void CorruptFactProperties(string indexPath, string factId)
+    {
+        using var connection = new SqliteConnection($"Data Source={indexPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
             update facts
             set properties_json = '{'
             where fact_id = $fact_id;
