@@ -46,6 +46,10 @@ ScaffoldingReadMe.txt
 # Local TraceMap demo output
 .tracemap-demo/
 
+# Static site build output
+site/dist/
+site/output/
+
 # Others
 ~$*
 *~
