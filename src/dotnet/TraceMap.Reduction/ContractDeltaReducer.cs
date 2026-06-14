@@ -10,7 +10,7 @@ namespace TraceMap.Reduction;
 
 public sealed record ReduceOptions(
     string IndexPath,
-    string ContractDeltaPath,
+    string? ContractDeltaPath,
     string OutputPath,
     string Format = "markdown",
     string? Scope = null,
@@ -26,7 +26,11 @@ public sealed record ReduceOptions(
     int MaxEvidenceRows = 500,
     int MaxPathsPerChange = 5,
     int MaxContextQueries = 50,
-    int MaxGaps = 1000);
+    int MaxGaps = 1000,
+    string? SqlSchemaDeltaPath = null,
+    string? Table = null,
+    string? Column = null,
+    string? QueryShape = null);
 
 public sealed record ReduceResult(
     ImpactReport Report,
@@ -127,6 +131,9 @@ public sealed record ContractDeltaImpactQuery(
     string? Kind,
     string? Surface,
     string? Endpoint,
+    string? Table,
+    string? Column,
+    string? QueryShape,
     int MaxFindings,
     int MaxEvidenceRows,
     int MaxPathsPerChange,
@@ -141,6 +148,9 @@ public sealed record ContractDeltaImpactQuery(
         ["all"],
         false,
         false,
+        null,
+        null,
+        null,
         null,
         null,
         null,
@@ -231,6 +241,8 @@ public static class ContractDeltaReducer
     private const int HighFanOutMatchThreshold = 10;
     private const string SingleReportType = "contract-delta-impact-single";
     private const string CombinedReportType = "contract-delta-impact-combined";
+    private const string SqlSingleReportType = "SqlSchemaChangeImpactSingleV1";
+    private const string SqlCombinedReportType = "SqlSchemaChangeImpactCombinedV1";
     private const string Algorithm = "contract-delta-fact-match";
     private const string AlgorithmVersion = "2.0";
 
@@ -300,6 +312,31 @@ public static class ContractDeltaReducer
         "unknown"
     };
 
+    private static readonly HashSet<string> ValidSqlSchemaKinds = new(StringComparer.Ordinal)
+    {
+        "schema",
+        "table",
+        "column",
+        "query-shape",
+        "sql-file",
+        "mapping",
+        "persistence-surface"
+    };
+
+    private static readonly HashSet<string> ValidSqlSchemaChangeTypes = new(StringComparer.Ordinal)
+    {
+        "added",
+        "removed",
+        "renamed",
+        "type_changed",
+        "nullable_changed",
+        "constraint_changed",
+        "index_changed",
+        "behavior_changed",
+        "shape_changed",
+        "unknown_changed"
+    };
+
     private static readonly JsonSerializerOptions InputJsonOptions = new()
     {
         PropertyNameCaseInsensitive = false,
@@ -363,12 +400,22 @@ public static class ContractDeltaReducer
             throw new FileNotFoundException("TraceMap index does not exist.", options.IndexPath);
         }
 
-        if (!File.Exists(options.ContractDeltaPath))
+        var inputPath = options.SqlSchemaDeltaPath ?? options.ContractDeltaPath;
+        if (string.IsNullOrWhiteSpace(inputPath))
         {
-            throw new FileNotFoundException("Contract delta does not exist.", options.ContractDeltaPath);
+            throw new ArgumentException("reduce requires --contract-delta <path> or --sql-schema-delta <path>.");
         }
 
-        var input = await ReadDeltaInputAsync(options.ContractDeltaPath, cancellationToken);
+        if (!File.Exists(inputPath))
+        {
+            throw new FileNotFoundException(
+                options.SqlSchemaDeltaPath is null ? "Contract delta does not exist." : "SQL schema delta does not exist.",
+                inputPath);
+        }
+
+        var input = options.SqlSchemaDeltaPath is null
+            ? await ReadDeltaInputAsync(inputPath, cancellationToken)
+            : await ReadSqlSchemaDeltaInputAsync(inputPath, cancellationToken);
         await using var connection = new SqliteConnection($"Data Source={options.IndexPath};Mode=ReadOnly");
         await connection.OpenAsync(cancellationToken);
 
@@ -450,8 +497,10 @@ public static class ContractDeltaReducer
             input.Changes.Select(change => new ContractDeltaChange(change.DisplayName, change.ChangeType, null, null, null)).ToArray());
         var report = new ImpactReport(manifest, legacyDelta, findingsArray)
         {
-            ReportType = isCombined ? CombinedReportType : SingleReportType,
-            Version = "2.0",
+            ReportType = input.IsSqlSchemaDelta
+                ? isCombined ? SqlCombinedReportType : SqlSingleReportType
+                : isCombined ? CombinedReportType : SingleReportType,
+            Version = input.IsSqlSchemaDelta ? "1" : "2.0",
             InputCompatibility = input.Compatibility,
             ReportCoverage = reportCoverage,
             CoverageWarnings = BuildCoverageWarnings(index),
@@ -471,6 +520,9 @@ public static class ContractDeltaReducer
                 options.Kind,
                 options.Surface,
                 options.Endpoint,
+                options.Table,
+                options.Column,
+                options.QueryShape,
                 options.MaxFindings,
                 options.MaxEvidenceRows,
                 options.MaxPathsPerChange,
@@ -503,9 +555,14 @@ public static class ContractDeltaReducer
             throw new ArgumentException("reduce requires --index <path>.");
         }
 
-        if (string.IsNullOrWhiteSpace(options.ContractDeltaPath))
+        if (!string.IsNullOrWhiteSpace(options.ContractDeltaPath) && !string.IsNullOrWhiteSpace(options.SqlSchemaDeltaPath))
         {
-            throw new ArgumentException("reduce requires --contract-delta <path>.");
+            throw new ArgumentException("reduce accepts either --contract-delta <path> or --sql-schema-delta <path>, not both.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.ContractDeltaPath) && string.IsNullOrWhiteSpace(options.SqlSchemaDeltaPath))
+        {
+            throw new ArgumentException("reduce requires --contract-delta <path> or --sql-schema-delta <path>.");
         }
 
         if (string.IsNullOrWhiteSpace(options.OutputPath))
@@ -558,7 +615,8 @@ public static class ContractDeltaReducer
                 ["label"] = SanitizeScalar(delta.Source ?? "unknown")
             },
             changes,
-            delta with { Changes = delta.Changes ?? [] });
+            delta with { Changes = delta.Changes ?? [] },
+            false);
     }
 
     private static NormalizedChange NormalizeLegacyChange(ContractDeltaChange change, int index)
@@ -583,6 +641,7 @@ public static class ContractDeltaReducer
 
         return new NormalizedChange(
             $"legacy-{index + 1:000}",
+            kind,
             kind,
             string.IsNullOrWhiteSpace(change.ChangeType) ? "unknown" : change.ChangeType.Trim(),
             reference,
@@ -624,10 +683,169 @@ public static class ContractDeltaReducer
             var reference = ParseReferenceMap(referenceElement);
             ValidateReference(kind, reference);
             var displayName = BuildDisplayName(kind, reference);
-            changes.Add(new NormalizedChange(id, kind, changeType, reference, displayName, false, Specificity(kind, reference)));
+            changes.Add(new NormalizedChange(id, kind, kind, changeType, reference, displayName, false, Specificity(kind, reference)));
         }
 
-        return new ContractDeltaInput("contract-delta-v2", "ContractDeltaV2", contract, source, changes, null);
+        return new ContractDeltaInput("contract-delta-v2", "ContractDeltaV2", contract, source, changes, null, false);
+    }
+
+    private static async Task<ContractDeltaInput> ReadSqlSchemaDeltaInputAsync(string path, CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(path);
+        using var document = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        }, cancellationToken);
+
+        return ParseSqlSchemaDelta(document.RootElement.Clone());
+    }
+
+    private static ContractDeltaInput ParseSqlSchemaDelta(JsonElement root)
+    {
+        var version = GetRequiredString(root, "version", "SQL schema delta requires version.");
+        if (!string.Equals(version, "sql-schema-delta.v1", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("SQL schema delta contains an unsupported version.");
+        }
+
+        var source = ParseSource(root);
+        if (!root.TryGetProperty("changes", out var changesElement) || changesElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException("SQL schema delta requires a changes array.");
+        }
+
+        var changes = new List<NormalizedChange>();
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var changeElement in changesElement.EnumerateArray())
+        {
+            var id = GetRequiredString(changeElement, "id", "SQL schema delta changes require id.");
+            if (!ids.Add(id))
+            {
+                throw new InvalidDataException("SQL schema delta contains duplicate change ids.");
+            }
+
+            var inputKind = GetRequiredString(changeElement, "kind", "SQL schema delta changes require kind.");
+            if (!ValidSqlSchemaKinds.Contains(inputKind))
+            {
+                throw new InvalidDataException("SQL schema delta contains an unsupported change kind.");
+            }
+
+            var changeType = GetRequiredString(changeElement, "changeType", "SQL schema delta changes require changeType.");
+            if (!ValidSqlSchemaChangeTypes.Contains(changeType))
+            {
+                throw new InvalidDataException("SQL schema delta contains an unsupported change type.");
+            }
+
+            if (!changeElement.TryGetProperty("reference", out var referenceElement) || referenceElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidDataException("SQL schema delta changes require a reference object.");
+            }
+
+            var reference = NormalizeSqlSchemaReference(inputKind, referenceElement);
+            var contractKind = ToContractKind(inputKind, reference);
+            ValidateReference(contractKind, reference);
+            var displayName = BuildDisplayName(contractKind, reference);
+            changes.Add(new NormalizedChange(
+                id,
+                contractKind,
+                inputKind,
+                changeType,
+                reference,
+                displayName,
+                false,
+                SqlSchemaSpecificity(inputKind, reference)));
+        }
+
+        return new ContractDeltaInput(
+            "sql-schema-delta.v1",
+            "SqlSchemaDeltaV1",
+            "sql-schema",
+            source,
+            changes.OrderBy(change => change.Id, StringComparer.Ordinal).ToArray(),
+            null,
+            true);
+    }
+
+    private static IReadOnlyDictionary<string, string> NormalizeSqlSchemaReference(string inputKind, JsonElement referenceElement)
+    {
+        var raw = ParseStringMap(referenceElement, sanitizeValues: false);
+        var allowed = inputKind switch
+        {
+            "schema" => new HashSet<string>(["schemaName", "databaseNameHash", "sourceKind", "surfaceKind"], StringComparer.Ordinal),
+            "table" => new HashSet<string>(["schemaName", "tableName", "tableNames", "sourceKind", "surfaceKind"], StringComparer.Ordinal),
+            "column" => new HashSet<string>(["schemaName", "tableName", "columnName", "columnNames", "mappedName", "containingType", "propertyName"], StringComparer.Ordinal),
+            "query-shape" => new HashSet<string>(["queryShapeHash", "textHash", "operationName", "tableName", "tableNames", "columnNames", "sqlSourceKind", "sourceSymbol"], StringComparer.Ordinal),
+            "sql-file" => new HashSet<string>(["sqlResourceName", "sqlSourceKind", "textHash", "queryShapeHash", "tableName", "tableNames"], StringComparer.Ordinal),
+            "mapping" => new HashSet<string>(["surfaceKind", "tableName", "columnName", "mappedName", "containingType", "propertyName", "sourceSymbol", "targetSymbol"], StringComparer.Ordinal),
+            "persistence-surface" => new HashSet<string>(["surfaceKind", "surfaceName", "stableKey", "tableName", "columnName", "mappedName", "containingType", "sourceLabel"], StringComparer.Ordinal),
+            _ => new HashSet<string>(StringComparer.Ordinal)
+        };
+        var safe = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in raw.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            if (!allowed.Contains(key))
+            {
+                continue;
+            }
+
+            var sanitized = SanitizeReferenceValue(key, value);
+            if (!sanitized.StartsWith("value-hash:", StringComparison.Ordinal) || IsHashReferenceKey(key))
+            {
+                safe[key] = sanitized;
+            }
+        }
+
+        if ((inputKind is "mapping" or "persistence-surface") && !safe.ContainsKey("surfaceKind"))
+        {
+            safe["surfaceKind"] = "sql-persistence";
+        }
+
+        if (inputKind == "sql-file" && safe.TryGetValue("sqlResourceName", out var resourceName) && !safe.ContainsKey("name"))
+        {
+            safe["name"] = resourceName;
+        }
+
+        if (safe.Count == 0)
+        {
+            throw new InvalidDataException("SQL schema delta reference did not contain a safe selector.");
+        }
+
+        return safe;
+    }
+
+    private static bool IsHashReferenceKey(string key)
+    {
+        return key is "queryShapeHash" or "textHash" or "databaseNameHash";
+    }
+
+    private static string ToContractKind(string inputKind, IReadOnlyDictionary<string, string> reference)
+    {
+        return inputKind switch
+        {
+            "schema" => "schema",
+            "table" => "sql-table",
+            "column" => "sql-column",
+            "query-shape" or "sql-file" => "sql-query",
+            "mapping" or "persistence-surface" => "dependency-surface",
+            _ => inputKind
+        };
+    }
+
+    private static string SqlSchemaSpecificity(string inputKind, IReadOnlyDictionary<string, string> reference)
+    {
+        return inputKind switch
+        {
+            "column" when Has(reference, "tableName") && Has(reference, "columnName", "columnNames") => "sql-table-column",
+            "query-shape" when Has(reference, "queryShapeHash") => "sql-query-shape",
+            "query-shape" when Has(reference, "textHash") => "sql-text-hash-only",
+            "mapping" when Has(reference, "mappedName") && !Has(reference, "tableName") && !Has(reference, "columnName") => "sql-mapped-name-only",
+            "mapping" or "persistence-surface" when Has(reference, "tableName", "columnName", "mappedName", "surfaceName", "stableKey") => "surface-kind-name",
+            "schema" => "sql-schema-only",
+            "table" => "sql-table-only",
+            "column" => "sql-column-only",
+            _ => Specificity(ToContractKind(inputKind, reference), reference)
+        };
     }
 
     private static void ValidateReference(string kind, IReadOnlyDictionary<string, string> reference)
@@ -640,11 +858,11 @@ public static class ContractDeltaReducer
             "method" => Has(reference, "methodName", "signature", "symbolId", "name"),
             "endpoint" => Has(reference, "path", "pathKey", "normalizedPathKey", "routeTemplate"),
             "package" => Has(reference, "packageName", "name"),
-            "schema" => Has(reference, "schemaName", "tableName", "columnName", "name"),
-            "sql-table" => Has(reference, "tableName", "name"),
-            "sql-column" => Has(reference, "columnName", "name"),
-            "sql-query" => Has(reference, "queryShapeHash", "textHash", "tableName", "operationName", "name"),
-            "dependency-surface" => Has(reference, "surfaceKind", "kind") && Has(reference, "surfaceName", "stableKey", "packageName", "name"),
+            "schema" => Has(reference, "schemaName", "databaseNameHash", "sourceKind", "surfaceKind", "tableName", "columnName", "name"),
+            "sql-table" => Has(reference, "tableName", "tableNames", "schemaName", "name"),
+            "sql-column" => Has(reference, "columnName", "columnNames", "mappedName", "propertyName", "name"),
+            "sql-query" => Has(reference, "queryShapeHash", "textHash", "tableName", "tableNames", "operationName", "sqlSourceKind", "sqlResourceName", "name"),
+            "dependency-surface" => Has(reference, "surfaceKind", "kind") && Has(reference, "surfaceName", "stableKey", "packageName", "name", "tableName", "columnName", "mappedName"),
             _ => hasAny
         };
         if (kind == "dependency-surface"
@@ -752,14 +970,16 @@ public static class ContractDeltaReducer
             selected = selected.Where(change => string.Equals(change.Id, options.ChangeId, StringComparison.Ordinal));
         }
 
-        if (!string.IsNullOrWhiteSpace(options.Kind))
+        var kindFilter = NormalizeKindFilter(options.Kind);
+        if (!string.IsNullOrWhiteSpace(kindFilter))
         {
-            if (!ValidKinds.Contains(options.Kind))
+            if (!ValidKinds.Contains(kindFilter))
             {
                 throw new ArgumentException("reduce --kind must be a supported contract delta kind.");
             }
 
-            selected = selected.Where(change => string.Equals(change.Kind, options.Kind, StringComparison.Ordinal));
+            selected = selected.Where(change => string.Equals(change.Kind, kindFilter, StringComparison.Ordinal)
+                || string.Equals(change.InputKind, options.Kind, StringComparison.Ordinal));
         }
 
         if (!string.IsNullOrWhiteSpace(options.Endpoint))
@@ -778,8 +998,43 @@ public static class ContractDeltaReducer
             ignored.Add("--surface had no dependency-surface contract changes to filter.");
         }
 
+        if (!string.IsNullOrWhiteSpace(options.Table))
+        {
+            selected = selected.Where(change => Value(change.Reference, "tableName", "tableNames", "name")
+                is { } tableName && NamesMatch(options.Table, tableName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.Column))
+        {
+            selected = selected.Where(change => Value(change.Reference, "columnName", "columnNames", "mappedName", "propertyName", "name")
+                is { } columnName && NamesMatch(options.Column, columnName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.QueryShape))
+        {
+            selected = selected.Where(change => Value(change.Reference, "queryShapeHash")
+                is { } queryShapeHash && string.Equals(options.QueryShape, queryShapeHash, StringComparison.Ordinal));
+        }
+
         ignoredSelectors = ignored;
         return selected.ToArray();
+    }
+
+    private static string? NormalizeKindFilter(string? kind)
+    {
+        if (string.IsNullOrWhiteSpace(kind))
+        {
+            return null;
+        }
+
+        return kind.Trim() switch
+        {
+            "table" => "sql-table",
+            "column" => "sql-column",
+            "query-shape" or "sql-file" => "sql-query",
+            "mapping" or "persistence-surface" => "dependency-surface",
+            var value => value
+        };
     }
 
     private static bool EndpointMatchesSelector(NormalizedChange change, string selector)
@@ -843,7 +1098,7 @@ public static class ContractDeltaReducer
         }
 
         var warnings = BuildWarnings(change, matchedItems);
-        var classification = Classify(matches, change, isCombined, warnings);
+        var classification = Classify(matches, change, input.IsSqlSchemaDelta, isCombined, warnings);
         if (options.IncludePaths)
         {
             gaps.Add(new ContractDeltaImpactGap(
@@ -897,6 +1152,7 @@ public static class ContractDeltaReducer
         var findingRuleId = input.Compatibility == "LegacyContractDeltaV1"
             ? RuleIds.ContractDeltaReduction
             : RuleIds.ContractDeltaImpact;
+        var findingPrefix = input.IsSqlSchemaDelta ? "sql-schema-impact" : "contract-delta";
         return new ImpactFinding(
             change.DisplayName,
             change.ChangeType,
@@ -906,9 +1162,9 @@ public static class ContractDeltaReducer
             warnings,
             evidence)
         {
-            FindingId = $"finding:contract-delta:{Hash($"{change.Id}:{classification}:{change.DisplayName}", 24)}",
+            FindingId = $"finding:{findingPrefix}:{Hash($"{change.Id}:{classification}:{change.DisplayName}", 24)}",
             ChangeId = change.Id,
-            ChangeKind = change.Kind,
+            ChangeKind = change.InputKind,
             Confidence = ConfidenceFor(classification),
             EvidenceTier = evidenceTier,
             SourceLabel = sourceLabel,
@@ -917,7 +1173,7 @@ public static class ContractDeltaReducer
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
             PathContext = contexts,
             ReverseContext = reverseContexts,
-            Limitations = FindingLimitations(change, classification, input.Compatibility)
+            Limitations = FindingLimitations(change, classification, input.Compatibility, input.IsSqlSchemaDelta)
         };
     }
 
@@ -931,14 +1187,16 @@ public static class ContractDeltaReducer
         return HasFullCoverage(index) ? ImpactClassifications.NoEvidenceFullCoverage : ImpactClassifications.NoEvidenceReducedCoverage;
     }
 
-    private static string Classify(IReadOnlyList<(IndexedFact Fact, EvidenceMatch Match)> matches, NormalizedChange change, bool isCombined, IReadOnlyList<string> warnings)
+    private static string Classify(IReadOnlyList<(IndexedFact Fact, EvidenceMatch Match)> matches, NormalizedChange change, bool isSqlSchemaDelta, bool isCombined, IReadOnlyList<string> warnings)
     {
         if (matches.Any(item => item.Fact.FactType == FactTypes.AnalysisGap || item.Fact.EvidenceTier == EvidenceTiers.Tier4Unknown))
         {
             return ImpactClassifications.UnknownAnalysisGap;
         }
 
-        if (matches.Any(item => item.Match.ReviewOnly) || warnings.Any(IsReviewSensitiveWarning))
+        if (matches.Any(item => item.Match.ReviewOnly)
+            || warnings.Any(IsReviewSensitiveWarning)
+            || isSqlSchemaDelta && IsSqlSchemaReviewTier(change, matches))
         {
             return isCombined ? ImpactClassifications.NeedsReviewImpact : ImpactClassifications.NeedsReview;
         }
@@ -964,6 +1222,12 @@ public static class ContractDeltaReducer
         }
 
         return ImpactClassifications.UnknownAnalysisGap;
+    }
+
+    private static bool IsSqlSchemaReviewTier(NormalizedChange change, IReadOnlyList<(IndexedFact Fact, EvidenceMatch Match)> matches)
+    {
+        return change.Specificity is "sql-schema-only" or "sql-table-only" or "sql-column-only" or "sql-text-hash-only" or "sql-mapped-name-only"
+            || matches.Any(item => item.Match.EvidenceKind is "sql-text-hash" or "sql-schema-metadata" or "sql-resource");
     }
 
     private static string BuildReason(string classification, bool isCombined)
@@ -1028,7 +1292,7 @@ public static class ContractDeltaReducer
         return warnings;
     }
 
-    private static IReadOnlyList<string> FindingLimitations(NormalizedChange change, string classification, string compatibility)
+    private static IReadOnlyList<string> FindingLimitations(NormalizedChange change, string classification, string compatibility, bool isSqlSchemaDelta)
     {
         var limitations = new List<string>();
         if (compatibility == "LegacyContractDeltaV1")
@@ -1046,7 +1310,11 @@ public static class ContractDeltaReducer
             limitations.Add("Reduced coverage or analysis gaps prevent a full absence-of-evidence conclusion.");
         }
 
-        if (change.Kind is "sql-query" or "sql-table" or "sql-column")
+        if (isSqlSchemaDelta)
+        {
+            limitations.Add("SQL/schema impact is deterministic static evidence, not runtime execution, schema existence, migration correctness, dialect validation, query-plan behavior, permissions, data contents, or tenant behavior proof.");
+        }
+        else if (change.Kind is "sql-query" or "sql-table" or "sql-column")
         {
             limitations.Add("SQL evidence is static shape or API usage evidence and does not prove runtime execution or schema state.");
         }
@@ -1205,7 +1473,7 @@ public static class ContractDeltaReducer
 
         var tableMatches = PropertyValues(fact, "tableName", "tableNames", "schemaName", "entityName", "name")
             .Any(value => NamesMatch(expectedTable, value));
-        return tableMatches ? new EvidenceMatch(MatchStrength.Member, false, "sql-table") : EvidenceMatch.None;
+        return tableMatches ? new EvidenceMatch(MatchStrength.Member, false, SqlEvidenceKind(fact, "sql-schema-metadata")) : EvidenceMatch.None;
     }
 
     private static EvidenceMatch MatchSqlColumn(NormalizedChange change, IndexedFact fact)
@@ -1228,7 +1496,7 @@ public static class ContractDeltaReducer
             || PropertyValues(fact, "tableName", "tableNames", "schemaName", "entityName")
                 .Any(value => NamesMatch(expectedTable, value));
         return columnMatches && tableMatches
-            ? new EvidenceMatch(expectedTable is null ? MatchStrength.Member : MatchStrength.TypeAndMember, expectedTable is null, "sql-column")
+            ? new EvidenceMatch(expectedTable is null ? MatchStrength.Member : MatchStrength.TypeAndMember, expectedTable is null, SqlEvidenceKind(fact, "sql-schema-metadata"))
             : EvidenceMatch.None;
     }
 
@@ -1244,7 +1512,10 @@ public static class ContractDeltaReducer
             && PropertyValues(fact, "queryShapeHash", "textHash", "sqlTextHash")
                 .Any(value => string.Equals(value, expectedHash, StringComparison.Ordinal)))
         {
-            return new EvidenceMatch(MatchStrength.Exact, false, "sql-query");
+            var hashKind = change.Reference.ContainsKey("textHash") && !change.Reference.ContainsKey("queryShapeHash")
+                ? "sql-text-hash"
+                : SqlEvidenceKind(fact, "sql-query-shape");
+            return new EvidenceMatch(MatchStrength.Exact, hashKind == "sql-text-hash", hashKind);
         }
 
         var expectedOperation = Value(change.Reference, "operationName", "name");
@@ -1252,16 +1523,36 @@ public static class ContractDeltaReducer
             && PropertyValues(fact, "operationName", "queryKind", "name")
                 .Any(value => NamesMatch(expectedOperation, value)))
         {
-            return new EvidenceMatch(MatchStrength.Member, true, "sql-query");
+            return new EvidenceMatch(MatchStrength.Member, true, SqlEvidenceKind(fact, "sql-query-shape"));
+        }
+
+        var expectedResource = Value(change.Reference, "sqlResourceName", "name");
+        if (!string.IsNullOrWhiteSpace(expectedResource)
+            && PropertyValues(fact, "sqlResourceName", "resourceName", "name", "fileName")
+                .Any(value => NamesMatch(expectedResource, value)))
+        {
+            return new EvidenceMatch(MatchStrength.Member, true, "sql-resource");
         }
 
         return MatchSqlTable(change, fact);
     }
 
+    private static string SqlEvidenceKind(IndexedFact fact, string fallback)
+    {
+        return fact.FactType switch
+        {
+            FactTypes.QueryPatternDetected => "sql-query-shape",
+            FactTypes.SqlTextUsed => "sql-text-hash",
+            FactTypes.SqlFileDeclared => "sql-resource",
+            FactTypes.DatabaseColumnMapping => "sql-persistence-mapping",
+            _ => fallback
+        };
+    }
+
     private static EvidenceMatch MatchDependencySurface(NormalizedChange change, IndexedFact fact)
     {
         var expectedKind = NormalizeSurfaceKind(Value(change.Reference, "surfaceKind", "kind"));
-        var expectedName = Value(change.Reference, "surfaceName", "packageName", "name", "stableKey");
+        var expectedName = Value(change.Reference, "surfaceName", "packageName", "name", "stableKey", "tableName", "columnName", "mappedName");
         var expectedEcosystem = Value(change.Reference, "ecosystem");
         var actualKind = SurfaceKind(fact);
         if (expectedKind is null)
@@ -1284,7 +1575,11 @@ public static class ContractDeltaReducer
                 .Any(value => string.Equals(expectedEcosystem, value, StringComparison.OrdinalIgnoreCase));
         return nameMatches
             && ecosystemMatches
-            ? new EvidenceMatch(MatchStrength.TypeAndMember, false, "dependency-surface")
+            ? new EvidenceMatch(
+                MatchStrength.TypeAndMember,
+                string.Equals(expectedKind, "sql-persistence", StringComparison.OrdinalIgnoreCase)
+                    && Value(change.Reference, "tableName", "columnName") is null,
+                string.Equals(expectedKind, "sql-persistence", StringComparison.OrdinalIgnoreCase) ? "sql-persistence-mapping" : "dependency-surface")
             : EvidenceMatch.None;
     }
 
@@ -1295,6 +1590,7 @@ public static class ContractDeltaReducer
             or FactTypes.DapperCallDetected
             or FactTypes.SqlCommandDetected
             or FactTypes.SqlTextUsed
+            or FactTypes.SqlFileDeclared
             or FactTypes.DbContextDeclared
             or FactTypes.DbSetDeclared
             or FactTypes.DbChangeSaved;
@@ -1305,6 +1601,16 @@ public static class ContractDeltaReducer
         if (fact.Properties.TryGetValue("surfaceKind", out var surfaceKind) && !string.IsNullOrWhiteSpace(surfaceKind))
         {
             return NormalizeSurfaceKind(surfaceKind) ?? surfaceKind;
+        }
+
+        if (fact.FactType == FactTypes.DatabaseColumnMapping)
+        {
+            return "sql-persistence";
+        }
+
+        if (fact.FactType is FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.SqlFileDeclared or FactTypes.DapperCallDetected or FactTypes.SqlCommandDetected)
+        {
+            return "sql-query";
         }
 
         if (IsSqlFact(fact))
@@ -1446,7 +1752,7 @@ public static class ContractDeltaReducer
                 ["evidenceKind"] = "coverage-no-match",
                 ["analysisLevel"] = analysisLevel,
                 ["buildStatus"] = buildStatus,
-                ["changeKind"] = change.Kind,
+                ["changeKind"] = change.InputKind,
                 ["classificationBasis"] = classification,
                 ["matchedFactCount"] = "0",
                 ["sourceCount"] = index.Summary.SourceCount.ToString(CultureInfo.InvariantCulture)
@@ -1739,6 +2045,15 @@ public static class ContractDeltaReducer
 
     private static bool HasActionableFindings(ImpactReport report)
     {
+        if (report.ReportType is SqlSingleReportType or SqlCombinedReportType)
+        {
+            return report.Findings.Any(finding => finding.Classification is
+                ImpactClassifications.DefiniteImpact
+                or ImpactClassifications.ProbableImpact
+                or ImpactClassifications.StaticImpactEvidence
+                or ImpactClassifications.ProbableStaticImpact);
+        }
+
         return report.Findings.Any(finding => finding.Classification is
             ImpactClassifications.DefiniteImpact
             or ImpactClassifications.ProbableImpact
@@ -1752,11 +2067,9 @@ public static class ContractDeltaReducer
     {
         return classification switch
         {
-            ImpactClassifications.DefiniteImpact or ImpactClassifications.StaticImpactEvidence => "high",
-            ImpactClassifications.ProbableImpact or ImpactClassifications.ProbableStaticImpact => "medium",
-            ImpactClassifications.NeedsReview or ImpactClassifications.NeedsReviewImpact => "review",
-            ImpactClassifications.NoEvidenceFullCoverage or ImpactClassifications.NoImpactEvidence => "coverage-relative-none",
-            _ => "unknown"
+            ImpactClassifications.DefiniteImpact or ImpactClassifications.StaticImpactEvidence => "High",
+            ImpactClassifications.ProbableImpact or ImpactClassifications.ProbableStaticImpact => "Medium",
+            _ => "Low"
         };
     }
 
@@ -1804,11 +2117,18 @@ public static class ContractDeltaReducer
         var fullPath = Path.GetFullPath(outputPath);
         var extension = Path.GetExtension(fullPath);
         var isDirectoryTarget = string.IsNullOrWhiteSpace(extension);
+        var isSqlReport = report.ReportType is SqlSingleReportType or SqlCombinedReportType;
         if (isDirectoryTarget)
         {
             Directory.CreateDirectory(fullPath);
-            var markdownPath = Path.Combine(fullPath, "impact-report.md");
-            var jsonPath = Path.Combine(fullPath, "impact-report.json");
+            var markdownPath = Path.Combine(fullPath, isSqlReport ? "sql-impact-report.md" : "impact-report.md");
+            var jsonPath = Path.Combine(fullPath, isSqlReport ? "sql-impact-report.json" : "impact-report.json");
+            if (isSqlReport && format == "json")
+            {
+                await File.WriteAllTextAsync(jsonPath, JsonSerializer.Serialize(report, OutputJsonOptions), cancellationToken);
+                return (null, jsonPath);
+            }
+
             await File.WriteAllTextAsync(markdownPath, ImpactMarkdownWriter.Build(report), cancellationToken);
             await File.WriteAllTextAsync(jsonPath, JsonSerializer.Serialize(report, OutputJsonOptions), cancellationToken);
             return (markdownPath, jsonPath);
@@ -1894,7 +2214,7 @@ public static class ContractDeltaReducer
     private static string SanitizeReferenceValue(string key, string value)
     {
         var normalizedKey = key.ToLowerInvariant();
-        if (normalizedKey.Contains("sql", StringComparison.Ordinal) && normalizedKey is not ("queryshapehash" or "texthash" or "sqlsourcekind"))
+        if (normalizedKey.Contains("sql", StringComparison.Ordinal) && normalizedKey is not ("queryshapehash" or "texthash" or "sqlsourcekind" or "sqlresourcename"))
         {
             return $"value-hash:{Hash(value, 16)}";
         }
@@ -2169,11 +2489,13 @@ public static class ContractDeltaReducer
         string? Contract,
         IReadOnlyDictionary<string, string> Source,
         IReadOnlyList<NormalizedChange> Changes,
-        ContractDelta? LegacyDelta);
+        ContractDelta? LegacyDelta,
+        bool IsSqlSchemaDelta);
 
     private sealed record NormalizedChange(
         string Id,
         string Kind,
+        string InputKind,
         string ChangeType,
         IReadOnlyDictionary<string, string> Reference,
         string DisplayName,

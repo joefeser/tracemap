@@ -92,9 +92,17 @@ public static class TraceMapCommand
             return 1;
         }
 
-        if (!values.TryGetValue("--contract-delta", out var contractDeltaPath) || string.IsNullOrWhiteSpace(contractDeltaPath))
+        var hasContractDelta = values.TryGetValue("--contract-delta", out var contractDeltaPath) && !string.IsNullOrWhiteSpace(contractDeltaPath);
+        var hasSqlSchemaDelta = values.TryGetValue("--sql-schema-delta", out var sqlSchemaDeltaPath) && !string.IsNullOrWhiteSpace(sqlSchemaDeltaPath);
+        if (hasContractDelta && hasSqlSchemaDelta)
         {
-            await error.WriteLineAsync("error: reduce requires --contract-delta <path>.");
+            await error.WriteLineAsync("error: reduce accepts either --contract-delta <path> or --sql-schema-delta <path>, not both.");
+            return 1;
+        }
+
+        if (!hasContractDelta && !hasSqlSchemaDelta)
+        {
+            await error.WriteLineAsync("error: reduce requires --contract-delta <path> or --sql-schema-delta <path>.");
             return 1;
         }
 
@@ -132,13 +140,19 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--max-evidence-rows", 500),
                 ParsePositiveInt(values, "--max-paths-per-change", 5),
                 ParsePositiveInt(values, "--max-context-queries", 50),
-                ParsePositiveInt(values, "--max-gaps", 1000)),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                sqlSchemaDeltaPath,
+                values.GetValueOrDefault("--table"),
+                values.GetValueOrDefault("--column"),
+                values.GetValueOrDefault("--query-shape")),
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap reduce completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Changes analyzed: {result.Report.Summary.ChangeCount}");
         await output.WriteLineAsync($"Findings written: {result.Report.Findings.Count}");
         await output.WriteLineAsync($"Evidence rows: {result.Report.Summary.EvidenceRowCount}");
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Sources: {result.Report.Index.SourceCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.HasActionableFindings ? 1 : 0;
     }
@@ -1361,10 +1375,12 @@ public static class TraceMapCommand
         return """
             Usage:
               tracemap reduce --index <path> --contract-delta <path> --out <path>
+              tracemap reduce --index <path> --sql-schema-delta <path> --out <path>
 
             Required:
               --index <path>             Existing TraceMap index.sqlite.
-              --contract-delta <path>    Contract delta JSON file.
+              --contract-delta <path>    Contract delta JSON file. Mutually exclusive with --sql-schema-delta.
+              --sql-schema-delta <path>  SQL/schema delta JSON file. Mutually exclusive with --contract-delta.
               --out <path>               Output directory, impact-report.md, or impact-report.json path.
 
             Optional:
@@ -1373,6 +1389,9 @@ public static class TraceMapCommand
               --source <label>           Combined-index source label filter.
               --change-id <id>           v2 contract-delta change id filter.
               --kind <kind>              Filter to one v2 contract kind.
+              --table <name>             Filter SQL/schema changes by table selector.
+              --column <name>            Filter SQL/schema changes by column or mapped-name selector.
+              --query-shape <hash>       Filter SQL/schema changes by query shape hash.
               --endpoint "<M> <P>"       Filter endpoint contract changes by method/path.
               --surface <kind>           Filter dependency-surface contract changes by kind.
               --include-paths            Request bounded combined-index path context.
