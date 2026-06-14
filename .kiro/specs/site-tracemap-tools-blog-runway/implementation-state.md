@@ -1,18 +1,17 @@
 # Implementation State
 
-Status: partially-implemented
+Status: implemented
 Last verified: 2026-06-14
-Branch: codex/site-manager-blog-phase
+Branch: codex/site-build-process-blog
 Source of truth: pending PR
 
 ## Summary
 
 This spec captures blog/editorial ideas for `tracemap.tools`. The blog now has a
-plain static `/blog/` index, the origin-story article
-`/blog/why-tracemap-exists/`, and the manager-facing article
+plain static `/blog/` index and the three initial runway articles:
+`/blog/building-tracemap-with-codex-kiro-qodo/`,
+`/blog/why-tracemap-exists/`, and
 `/blog/what-tracemap-solves-for-engineering-teams/`.
-
-The build-process article remains planned and not implemented.
 
 ## Published Articles
 
@@ -38,28 +37,19 @@ describes how TraceMap turns manual dependency indexing and contract-impact
 questions into auditable evidence packets that can be reviewed, handed off, and
 revisited when scope or coverage changes.
 
-## Planned Articles
-
 ### Building TraceMap With Codex, Kiro, and Qodo
 
+Status: implemented
+
+URL: `/blog/building-tracemap-with-codex-kiro-qodo/`
+
 Purpose: describe the collaboration workflow behind the repo and site. The
-article should show how Codex worktrees, Kiro specs, implementation-state notes,
-task checkboxes, GitHub PR loops, and Qodo review feedback help keep the project
-reviewable and resumable.
-
-Tone: appreciative and concrete. Qodo should be described as a useful PR review
-agent that caught real issues in the site PRs. Codex and Kiro should be framed
-as coordination and implementation tools around a deterministic scanner/reducer,
-not as runtime analysis dependencies.
-
-Avoid:
-
-- claiming formal endorsement, partnership, sponsorship, or integration
-- implying TraceMap core scanner/reducer uses LLM calls or prompt-based
-  classification
+article shows how Codex worktrees, Kiro specs, implementation-state notes, task
+checkboxes, GitHub PR loops, and Qodo review feedback help keep the project
+reviewable and resumable while preserving the boundary that TraceMap core
+analysis remains deterministic.
 
 ## Follow-ups
 
-- Draft `Building TraceMap With Codex, Kiro, and Qodo`.
 - Consider a tiny template/layout build step before the blog grows beyond a few
   static pages.

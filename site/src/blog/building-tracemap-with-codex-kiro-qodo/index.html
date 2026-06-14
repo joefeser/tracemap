@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="How TraceMap is built with Codex worktrees, Kiro specs, implementation-state notes, PR review loops, and Qodo feedback while keeping the core scanner deterministic."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Building TraceMap With Codex, Kiro, and Qodo | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/blog/building-tracemap-with-codex-kiro-qodo/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Building TraceMap With Codex, Kiro, and Qodo">
+    <meta
+      property="og:description"
+      content="TraceMap uses specs, worktrees, review loops, and PR feedback to keep deterministic analysis work small, auditable, and easy to resume."
+    >
+    <meta property="og:url" content="https://tracemap.tools/blog/building-tracemap-with-codex-kiro-qodo/">
+    <meta property="article:published_time" content="2026-06-14">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/" aria-current="location">Blog</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <article class="article">
+        <header class="article-header">
+          <p class="eyebrow">Project workflow</p>
+          <h1>Building TraceMap with Codex, Kiro, and Qodo</h1>
+          <p class="hero-subhead">
+            TraceMap is a deterministic analysis tool, but the project still
+            benefits from a workflow that makes intent, implementation state,
+            and review feedback visible to humans and agents.
+          </p>
+          <p class="article-meta">Published June 14, 2026</p>
+        </header>
+
+        <div class="article-body">
+          <p>
+            TraceMap has a strict boundary: the core scanner and reducer do not
+            use LLM calls, embeddings, vector databases, or prompt-based impact
+            classification. The output has to come from deterministic
+            extractors, rule IDs, evidence tiers, file paths, line spans, commit
+            SHAs, extractor versions, and documented limitations.
+          </p>
+
+          <p>
+            That boundary makes the engineering workflow more important, not
+            less. When a tool is supposed to preserve evidence, the project
+            building it should preserve its own evidence too: what was planned,
+            what changed, what was validated, what reviewers found, and what
+            still needs attention.
+          </p>
+
+          <h2>Kiro specs keep the intent discoverable.</h2>
+
+          <p>
+            TraceMap work starts from specs instead of scattered notes. A Kiro
+            spec describes the goal, acceptance boundaries, and task list for a
+            slice of work. For longer specs, an implementation-state note records
+            the current branch, scope decisions, validation, oddities, and
+            follow-up items.
+          </p>
+
+          <p>
+            That matters because this project often moves through multiple
+            focused branches. A future agent or reviewer should be able to open
+            the spec folder and learn whether a feature is not started,
+            partially implemented, or complete without reconstructing the story
+            from commit history alone.
+          </p>
+
+          <h2>Codex turns those specs into small reviewable branches.</h2>
+
+          <p>
+            Codex is useful here because it can work in a separate worktree,
+            read the existing shape of the repository, make scoped edits, run
+            local validation, and keep the spec status up to date as tasks move.
+            The site work has followed that pattern: one branch for discovery,
+            another for examples, another for guided demos, and small article
+            branches after that.
+          </p>
+
+          <p>
+            The size of the branch matters. TraceMap should be easy to review
+            because each PR has a narrow purpose, an obvious diff, and a clear
+            validation story. When a change touches docs, site pages, examples,
+            or scanner behavior, the branch should make the evidence visible
+            enough for another person to say yes, ask for changes, or find the
+            next better slice.
+          </p>
+
+          <h2>Qodo strengthens the PR review loop.</h2>
+
+          <p>
+            Qodo has been helpful as a PR review agent because it looks at the
+            submitted change and reports concrete issues that might be easy to
+            miss during fast iteration. In the site work, that kind of feedback
+            helps catch practical review concerns such as navigation state,
+            accessibility details, and places where examples or metadata drift
+            from the surrounding page contract.
+          </p>
+
+          <p>
+            The point is not to outsource judgment. The point is to give the PR
+            another reviewer with a different angle, then let the project decide
+            what is actionable. When the feedback is right, the branch gets
+            better. When it is not applicable, the review trail still records why
+            the change was left alone.
+          </p>
+
+          <h2>The workflow mirrors the product.</h2>
+
+          <p>
+            TraceMap is built around the idea that conclusions should point back
+            to evidence. The development workflow uses the same habit. Specs
+            explain intent. Task checkboxes show progress. Implementation-state
+            files describe the current facts. Pull requests preserve the diff,
+            validation, and review feedback. Browser smoke checks and build logs
+            make site changes less hand-wavy.
+          </p>
+
+          <p>
+            That trail is especially valuable because the project is moving
+            quickly. Agents can help build and review, but they need current
+            state to do useful work. Keeping that state in the repository makes
+            the next pass less dependent on memory, chat context, or the one
+            person who happened to work on the last branch.
+          </p>
+
+          <h2>The scanner stays deterministic.</h2>
+
+          <p>
+            Codex, Kiro, and Qodo help with project coordination,
+            implementation, review, and documentation. They are not runtime
+            dependencies for TraceMap analysis. The scanner and reducer still
+            have to earn their claims through deterministic extractors and
+            evidence-backed rules.
+          </p>
+
+          <p>
+            That separation is the whole shape of the project: use strong tools
+            to build faster and review better, while keeping the product's
+            conclusions grounded in inspectable static evidence.
+          </p>
+        </div>
+      </article>
+
+      <section class="section callout-section">
+        <h2>Want the product boundary first?</h2>
+        <p>
+          Read <a href="/blog/why-tracemap-exists/">why TraceMap exists</a> or
+          inspect the <a href="/examples/">example evidence packets</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Blog index:
+        <a href="/blog/">TraceMap Blog</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

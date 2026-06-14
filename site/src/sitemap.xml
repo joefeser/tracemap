@@ -46,6 +46,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://tracemap.tools/blog/building-tracemap-with-codex-kiro-qodo/</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://tracemap.tools/blog/why-tracemap-exists/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.7</priority>
