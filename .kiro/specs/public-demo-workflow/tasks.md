@@ -88,11 +88,25 @@
 ## Suggested PR Slices
 
 - [x] PR 1a: script skeleton, tool checks, .NET/TypeScript scans, summary skeleton, generated public-report sentinel scan.
-- PR 1b: combine and dependency report assertions, docs, optional JVM availability behavior.
-- PR 2: path/reverse semantic assertions and shared assertion helpers.
-- PR 3: portfolio section plus deferred diff/impact/release-review summary entries.
+- [x] PR 1b: combine and dependency report assertions, docs, optional JVM availability behavior.
+- [x] PR 2: path/reverse semantic assertions and shared assertion helpers.
+- [x] PR 3: portfolio section plus deferred diff/impact/release-review summary entries.
 - PR 4: concrete before/after fixture pair that promotes diff/impact/release-review to available.
 - PR 5: optional OSS mode or CI wiring if desired.
+
+## Shipped Follow-Up Slice
+
+- [x] Combined endpoint-stack and mixed-stack indexes use deterministic public labels.
+- [x] Combined SQLite outputs are generated under the demo output root.
+- [x] Combined dependency reports are generated for endpoint-stack and mixed-stack indexes.
+- [x] The endpoint-stack dependency report is the default endpoint assertion target.
+- [x] Dependency report assertions verify source labels, SHA-shaped commits, rule IDs, evidence tiers, endpoint findings, dependency surfaces, and dependency edges.
+- [x] Targeted `tracemap paths` runs over the endpoint stack and verifies rule-backed paths, source labels, supporting IDs, and deterministic repeated JSON.
+- [x] Targeted `tracemap reverse` runs over the endpoint stack and verifies selected surfaces, endpoint roots, rule/evidence metadata, supporting IDs, and deterministic repeated JSON.
+- [x] A demo-run `portfolio-manifest.json` is generated from generated combined index paths.
+- [x] `tracemap portfolio` runs over the generated manifest and verifies source coverage plus dependency surface metadata.
+- [x] Public generated reports and summaries remain covered by the sentinel scan.
+- [x] Diff, impact, and release-review remain deferred until compatible before/after fixtures and contract deltas exist.
 
 ## Definition Of Done
 
@@ -107,28 +121,12 @@
 ## Deferred Follow-Ups
 
 - Prepare a fresh Python temporary environment under the output root only when Python scans are requested.
-- Combine demo indexes with deterministic labels for endpoint stack and mixed stack scenarios.
-- Assert combined SQLite indexes and combined source labels are present and deterministic.
-- Run combined dependency report and use it as the default endpoint assertion target.
 - Leave separate `tracemap endpoints` output as optional/follow-up unless implementation explicitly adds it.
-- Assert combined-report Markdown and JSON outputs exist.
-- Assert endpoint findings include rule IDs, evidence tiers, commit SHAs, and source labels.
-- Assert no unsafe sentinel values render in combined-report outputs.
-- Run default or targeted `tracemap paths`.
-- Assert path rows or allowed rule-backed gaps.
-- Run `tracemap reverse` for at least one useful selector.
-- Assert reverse rows or allowed rule-backed gaps.
-- Compare byte-stable JSON for deterministic repeated path/reverse outputs where supported.
 - Mark `diff` deferred in first implementation because no concrete before/after fixture pair exists yet.
 - Mark `impact` deferred in first implementation because no concrete before/after fixture pair exists yet.
 - Assert deferred status and explanation metadata in `demo-summary.json`.
 - Document the future before/after fixture strategy needed to promote diff/impact sections to available.
-- Generate a demo-run portfolio manifest from actual generated index paths.
-- Run `tracemap portfolio` over generated indexes.
-- Assert source coverage and dependency surfaces.
 - Mark release-review deferred in first implementation because compatible before/after inputs and contract deltas are absent.
 - Assert release-review deferred status and explanation metadata.
-- Assert rule IDs and evidence tiers on evidence and gaps.
-- Add lightweight tests if helper logic is substantial.
 - Document troubleshooting.
 - Document optional OSS workflow or state that it remains separate.
