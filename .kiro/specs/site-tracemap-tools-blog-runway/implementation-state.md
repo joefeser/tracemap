@@ -1,14 +1,30 @@
 # Implementation State
 
-Status: not-started
+Status: partially-implemented
 Last verified: 2026-06-14
-Branch: codex/site-demo-guided-path
-Source of truth: planning note only
+Branch: codex/site-manager-blog-phase
+Source of truth: pending PR
 
 ## Summary
 
-This spec captures future blog/editorial ideas for `tracemap.tools`. No blog
-pages have been implemented in this slice.
+This spec captures blog/editorial ideas for `tracemap.tools`. The first blog
+slice adds a plain static `/blog/` index and publishes the manager-facing article
+`/blog/what-tracemap-solves-for-engineering-teams/`.
+
+Origin-story and build-process articles remain planned and not implemented.
+
+## Published Articles
+
+### What TraceMap Solves for Engineering Teams
+
+Status: implemented
+
+URL: `/blog/what-tracemap-solves-for-engineering-teams/`
+
+Purpose: explain the manager-level value in plain language. The article
+describes how TraceMap turns manual dependency indexing and contract-impact
+questions into auditable evidence packets that can be reviewed, handed off, and
+revisited when scope or coverage changes.
 
 ## Planned Articles
 
@@ -46,31 +62,9 @@ Avoid:
 - implying TraceMap core scanner/reducer uses LLM calls or prompt-based
   classification
 
-### What TraceMap Solves for Engineering Teams
-
-Purpose: explain the manager-level value in plain language. The article should
-describe how TraceMap turns manual dependency indexing and contract-impact
-questions into auditable evidence packets that can be reviewed, handed off, and
-revisited when scope or coverage changes.
-
-Tone: higher-level, practical, and delivery-focused.
-
-Cover:
-
-- manual indexing work and why it does not scale well
-- auditable evidence for review and planning conversations
-- coverage-aware decisions when repositories do not build cleanly
-- handoff value for reviewers, managers, and external teams
-
-Avoid:
-
-- claiming runtime proof, production usage, or release safety
-- implying TraceMap replaces engineering judgment
-- using vague ROI claims that are not backed by project evidence
-
 ## Follow-ups
 
-- Decide whether to create a `/blog/` index page.
-- Decide whether to add a tiny template/layout build step before publishing
-  repeated blog pages.
-- Add sitemap entries only when pages exist.
+- Draft `Why TraceMap Exists`.
+- Draft `Building TraceMap With Codex, Kiro, and Qodo`.
+- Consider a tiny template/layout build step before the blog grows beyond a few
+  static pages.
