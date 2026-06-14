@@ -99,7 +99,7 @@
   - [ ] Add negative assertion coverage for output directory inside the repository root when it is not git-ignored.
   - [ ] Add positive assertion coverage for output directory inside the repository root when it is git-ignored.
   - [ ] Add negative assertion coverage for a planted public-report sentinel leak.
-  - [ ] Add negative assertion coverage proving caller-provided output roots do not false-trip the sentinel scan while genuine home-path leaks do.
+  - [ ] Add negative assertion coverage proving caller-provided output roots do not false-trip the sentinel scan, for example by checking absolute path patterns rather than naive basenames, while genuine home-path leaks do.
   - [ ] Add section-status assertion coverage for at least one deferred section.
   - [ ] Add schema assertion coverage for required `demo-summary.json` fields.
   - [ ] Add lightweight tests if helper logic is substantial.

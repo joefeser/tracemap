@@ -6,7 +6,7 @@
 
 ## Spec Status
 
-Spec-only branch. No implementation files are changed in this branch.
+Spec-only branch. No implementation files are changed in this branch. `scripts/demo-public.sh` is intentionally not added here; implementation begins in the follow-up PR 1a slice after this spec is merged.
 
 ## Scope Decisions
 
@@ -17,7 +17,7 @@ Spec-only branch. No implementation files are changed in this branch.
 - JVM scanning runs only when Java 21 is available or explicitly required.
 - If Java 21 is unavailable and not required, the JVM section is `unavailable`.
 - Combined dependency report is the default endpoint assertion target.
-- Diff, impact, and release-review are `deferred` in the first implementation until a concrete checked-in before/after fixture pair exists.
+- Diff, impact, and release-review are `deferred` in the first implementation until a concrete checked-in before/after fixture pair exists. This avoids a misleading zero-diff demo and is a deliberate scope decision from review, not an accidental omission.
 - Portfolio must use a demo-run generated manifest that points at generated index paths; do not reuse `samples/portfolio.example.json` directly.
 - Generated output roots are kept for inspection and printed at the end; the script does not auto-delete them.
 - Public `demo-summary.*` artifacts must not contain absolute output roots. Use output-root hashes/labels and relative artifact paths.

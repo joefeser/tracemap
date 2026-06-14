@@ -292,7 +292,7 @@ Sentinel scan mechanics:
 
 The default output root can be printed because it is generated or caller-provided. No source file should bake in a local absolute path.
 
-Recommended in-repo output root, if a user wants one, is `.tracemap-demo/`. The implementation should add a generic `.gitignore` pattern for that path before allowing it through the `git check-ignore` guard.
+Recommended in-repo output root, if a user wants one, is `.tracemap-demo/`. The repository's `.gitignore` should be updated to include a generic pattern for that path as part of implementation, before the script runs the `git check-ignore` guard. The script must not modify tracked repository files at runtime.
 
 ## Relationship To Existing Smokes
 
