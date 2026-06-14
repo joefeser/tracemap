@@ -49,9 +49,10 @@ Review questions:
 5. Does the JVM scope make sense given the current report writer?
 6. Are Python expectations safe and minimal?
 7. Are report limitations strong enough to avoid runtime SQL/schema overclaims?
-8. Are rule catalog updates scoped correctly, or should new rule IDs be avoided as specified?
-9. Are tests sufficient for the risk level?
-10. Is the validation command list realistic for this repo?
+8. Is the safe identifier policy strong enough to prevent raw SQL fragments or unsafe schema text from leaking through table/column fields?
+9. Are rule catalog updates scoped correctly, or should new rule IDs be avoided as specified?
+10. Are tests sufficient for the risk level?
+11. Is the validation command list realistic for this repo?
 
 Return:
 
@@ -73,6 +74,7 @@ Focus on:
 - Risks around property naming differences between adapters.
 - Risks around Markdown escaping and safe path rendering.
 - Whether limitation wording should be shared or adapter-local.
+- Whether safe identifier rendering should be shared or adapter-local.
 - Validation commands and likely failure points.
 
 Return a concrete implementation plan, risky assumptions, and suggested PR boundaries.
@@ -84,6 +86,7 @@ Review the `query-pattern-reporting-v2` spec for correctness, safety, and mainta
 Look for:
 
 - Raw SQL or private-data leakage risks.
+- Unsafe table/column identifier rendering risks.
 - Runtime SQL execution or schema-validity overclaims.
 - Any requirement that silently changes extraction behavior.
 - Any report row without evidence tier, span, or rule-backed source evidence.

@@ -51,13 +51,13 @@ Out of scope:
 #### Acceptance Criteria
 
 1. SQL-shape rows SHALL display `operationName` when present, else `unknown`.
-2. SQL-shape rows SHALL display `tableName` when present, else `tableNames`, else `unknown`.
-3. SQL-shape rows SHALL display `columnNames` when present, else `fieldNames`, else `none`.
+2. SQL-shape rows SHALL display `tableName` when present, else `tableNames`, else `unknown`; table identifiers SHALL be rendered only when they pass the safe identifier policy in the design, otherwise a deterministic identifier hash SHALL be displayed.
+3. SQL-shape rows SHALL display `columnNames` when present, else `fieldNames`, else `none`; column and field identifiers SHALL be rendered only when they pass the safe identifier policy in the design, otherwise deterministic identifier hashes SHALL be displayed.
 4. SQL-shape rows SHALL display `sqlSourceKind` when present, else `unknown`.
 5. SQL-shape rows SHALL display `queryShapeHash` when present, else `n/a`.
-6. SQL-shape rows SHALL include evidence tier and file/line span.
+6. SQL-shape rows SHALL include evidence tier, rule ID when the fact model exposes it, and file/line span; missing optional report metadata SHALL use deterministic placeholders instead of dropping the row.
 7. SQL-shape rows SHALL NOT display raw SQL text, source snippets, literal values, connection strings, raw URLs, or local absolute paths.
-8. SQL-shape rows SHALL include wording that makes the row static shape evidence, not runtime execution proof.
+8. SQL-shape rows SHALL use the exact label `SQL shape` or `Static SQL shape` and SHALL NOT use labels such as `SQL query`, `database query`, `executed query`, or `query result` that imply runtime execution.
 
 ### Requirement 3: Query-builder rendering is preserved
 
@@ -70,7 +70,8 @@ Out of scope:
 3. Query-builder rows SHALL preserve `fields none` when none of those field properties are present.
 4. Query-builder rows SHOULD display `patternHash` when present if doing so does not destabilize existing report readability.
 5. Query-builder rows SHALL include evidence tier and file/line span.
-6. Existing C# and TypeScript query-builder fixture expectations SHALL continue to pass.
+6. New or existing C# and TypeScript tests SHALL assert query-builder report rows continue to show extracted fields.
+7. If existing tests do not cover query-builder report rendering, implementation SHALL add baseline query-builder report assertions before or alongside SQL-shape rendering changes.
 
 ### Requirement 4: .NET report writer
 
@@ -82,7 +83,8 @@ Out of scope:
 2. C# syntax query-pattern facts emitted by `csharp.syntax.querypattern.v1` SHALL continue to show operation and extracted fields.
 3. A synthetic .NET report test SHALL cover a SQL-shape `QueryPatternDetected` fact with `sqlSourceKind`, `operationName`, `tableName`, `columnNames`, and `queryShapeHash`.
 4. The synthetic SQL-shape test SHALL assert the report shows derived SQL-shape metadata and does not show raw SQL text.
-5. The .NET implementation SHALL NOT add new extraction rules or change facts emitted by `CSharpSyntaxExtractor`.
+5. The synthetic SQL-shape test name or comment SHALL state that it tests report rendering only and that the .NET extractor does not currently emit SQL-shape facts.
+6. The .NET implementation SHALL NOT add new extraction rules or change facts emitted by `CSharpSyntaxExtractor`.
 
 ### Requirement 5: TypeScript report writer
 
@@ -94,7 +96,8 @@ Out of scope:
 2. Existing Prisma/Base44 query-pattern facts SHALL continue to show operation and extracted fields.
 3. A synthetic TypeScript report test SHALL cover a SQL-shape `QueryPatternDetected` fact.
 4. The synthetic SQL-shape test SHALL assert derived SQL-shape metadata appears and raw SQL text does not appear.
-5. The TypeScript implementation SHALL NOT add SQL extraction or change current query-pattern fact emission.
+5. The synthetic SQL-shape test name or comment SHALL state that it tests report rendering only and that the TypeScript extractor does not currently emit SQL-shape facts.
+6. The TypeScript implementation SHALL NOT add SQL extraction or change current query-pattern fact emission.
 
 ### Requirement 6: JVM report writer
 
@@ -102,7 +105,7 @@ Out of scope:
 
 #### Acceptance Criteria
 
-1. `src/jvm/src/main/java/com/tracemap/jvm/reporting/MarkdownReportWriter.java` SHALL add a deterministic `## Query Patterns` section.
+1. `src/jvm/src/main/java/com/tracemap/jvm/reporting/MarkdownReportWriter.java` SHALL add a deterministic `## Query Patterns` section when at least one `QueryPatternDetected` fact exists.
 2. JVM SQL-shape facts SHALL render with the same SQL-shape fields and limitations as other languages.
 3. Query-builder-style JVM facts, if any future producer emits them, SHALL render with the shared query-builder field list behavior.
 4. JVM report tests SHALL use real JVM sample output if `samples/jvm-*` currently emits `QueryPatternDetected`; otherwise they SHALL use synthetic report-writer facts and clearly label the test synthetic.
@@ -117,7 +120,7 @@ Out of scope:
 1. Reports that render query-pattern rows SHALL include a stable limitation phrase containing `static shape evidence` and `runtime execution`.
 2. The limitation SHALL state that query-pattern evidence does not prove database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.
 3. `docs/VALIDATION.md` SHALL include scan-report inspection examples for query-pattern sections across the affected adapters.
-4. `rules/rule-catalog.yml` SHALL document that C#, TypeScript, JVM, and Python query-pattern reports may display derived metadata but must not display raw SQL text or literal values.
+4. `rules/rule-catalog.yml` SHALL document that C#, TypeScript, JVM, and Python query-pattern reports may display safe derived metadata such as operation, table, columns, fields, and shape hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 5. `docs/LANGUAGE_ADAPTER_CONTRACT.md` MAY clarify report-display behavior, but SHALL NOT loosen SQL evidence semantics.
 
 ### Requirement 8: Determinism and safety
@@ -127,8 +130,8 @@ Out of scope:
 #### Acceptance Criteria
 
 1. Report row ordering SHALL preserve each report writer's existing deterministic ordering contract.
-2. New tests SHALL assert no raw SQL text is displayed for SQL-shape rows.
-3. New tests SHALL assert at least one real or synthetic 32-character lowercase hash is displayed for SQL-shape rows.
+2. New tests SHALL assert no raw SQL text is displayed for SQL-shape rows in .NET, TypeScript, and JVM; Python SHALL keep its existing raw-SQL suppression coverage unless Python report code changes.
+3. New tests SHALL assert `queryShapeHash` is displayed as a 32-character lowercase hexadecimal string matching `^[a-f0-9]{32}$` for SQL-shape rows; when `queryShapeHash` is missing, tests SHALL assert `n/a` is displayed.
 4. New tests SHALL assert query-builder rows do not regress to missing fields.
 5. Implementations SHALL not add timestamps, random IDs, or nondeterministic ordering.
 6. Implementations SHALL not store source snippets or raw SQL by default.
