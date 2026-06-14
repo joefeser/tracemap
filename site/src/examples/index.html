@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap examples show representative scan packets, facts, reports, and contract-impact evidence."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Examples | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/examples/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Examples">
+    <meta property="og:description" content="Representative static evidence artifacts and impact report examples.">
+    <meta property="og:url" content="https://tracemap.tools/examples/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/" aria-current="page">Examples</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Examples</p>
+        <h1>See the evidence packet before you run it.</h1>
+        <p class="hero-subhead">
+          These examples show representative TraceMap outputs: scan packets,
+          fact rows, Markdown summaries, contract deltas, and impact findings.
+          They are static examples for orientation, not live scan results.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="example-grid">
+          <a href="/examples/scan-packet/">
+            <span>Scan packet</span>
+            <strong>Manifest, facts, SQLite, report, and logs.</strong>
+            <p>What a repository scan emits and how coverage stays visible.</p>
+          </a>
+          <a href="/examples/contract-impact/">
+            <span>Contract impact</span>
+            <strong>Delta input, reducer rows, evidence, and gaps.</strong>
+            <p>How changed contract elements map to rule-backed findings.</p>
+          </a>
+          <a href="/use-cases/">
+            <span>Use cases</span>
+            <strong>Where static evidence helps review work.</strong>
+            <p>Contract changes, releases, cross-repo maps, and legacy systems.</p>
+          </a>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Examples keep the same boundaries as the tool.</h2>
+        <p>
+          They show file paths, line spans, rule IDs, evidence tiers, hashes, and
+          coverage labels. They do not show raw source snippets, secrets, raw SQL,
+          connection strings, or proof of runtime behavior.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Source docs:
+        <a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">acceptance plan</a>
+        and
+        <a href="https://github.com/joefeser/tracemap/blob/main/rules/rule-catalog.yml">rule catalog</a>.
+      </p>
+    </footer>
+  </body>
+</html>

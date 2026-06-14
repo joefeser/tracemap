@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A representative TraceMap contract-impact example showing contract delta input, reducer output, evidence, and gaps."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Contract Impact Example | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/examples/contract-impact/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Contract Impact Example">
+    <meta property="og:description" content="Representative contract delta and impact report excerpts.">
+    <meta property="og:url" content="https://tracemap.tools/examples/contract-impact/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/" aria-current="page">Examples</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Contract impact example</p>
+        <h1>The reducer compares a contract delta to indexed evidence.</h1>
+        <p class="hero-subhead">
+          TraceMap does not say code is impacted without evidence. It classifies
+          matches and no-match outcomes against the coverage recorded in the scan.
+        </p>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Input</p>
+          <h2>A contract delta names what changed.</h2>
+        </div>
+        <pre class="command-block"><code>{
+  "schemaVersion": "2",
+  "changes": [
+    {
+      "kind": "property",
+      "contract": "Orders.Contracts.OrderDto",
+      "element": "Orders.Contracts.OrderDto.status",
+      "changeType": "removed"
+    }
+  ]
+}</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Reducer output</p>
+          <h2>The report keeps classification, evidence, and gaps together.</h2>
+        </div>
+        <pre class="command-block"><code>## Contract Delta Impact
+
+Changed element: Orders.Contracts.OrderDto.status
+Classification: NeedsReview
+Rule: contract.delta.impact.v2
+Coverage: Reduced
+
+### Evidence
+
+- PropertyAccessed
+  - Rule: dotnet.semantic.property-access.v1
+  - Tier: Tier1Semantic
+  - File: src/Orders.Api/OrderMapper.cs:77
+  - Commit: 5e7fe17
+
+### Gaps
+
+- Reduced coverage prevents NoEvidenceFullCoverage.
+- Generic name `status` has review-tier fan-out caveats.</code></pre>
+      </section>
+
+      <section class="section">
+        <div class="detail-list">
+          <div><strong>DefiniteImpact</strong><span>Compiler-resolved type or member usage matches the changed element.</span></div>
+          <div><strong>ProbableImpact</strong><span>Strong structural evidence matches, such as DTO, endpoint, database, or config evidence.</span></div>
+          <div><strong>NeedsReview</strong><span>Syntax-only, textual, generic, or high fan-out evidence needs human review.</span></div>
+          <div><strong>NoEvidenceReducedCoverage</strong><span>No matching evidence was found, but coverage was partial.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Reducer rules live in the
+        <a href="https://github.com/joefeser/tracemap/blob/main/rules/rule-catalog.yml">rule catalog</a>.
+      </p>
+    </footer>
+  </body>
+</html>
