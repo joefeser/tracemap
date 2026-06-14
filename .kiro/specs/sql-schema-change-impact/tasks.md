@@ -55,6 +55,7 @@
   - [ ] Implement combined-index classifications.
   - [ ] Downgrade schema-only, hash-only, table-only, mappedName-only, unlinked, duplicate, volatile, and reduced-coverage evidence.
   - [ ] Add fixed confidence mapping from classification.
+  - [ ] Add tests for `sql-schema-metadata` evidence labels and mapping identity fallback when any key component is unsafe.
   - [ ] Add tests proving no overclaiming from mapping-only evidence.
   - [ ] Add tests proving languages without Tier1 SQL mapping evidence do not emit `DefiniteImpact`.
 
@@ -63,7 +64,7 @@
   - [ ] Emit deterministic JSON schema.
   - [ ] Use `sql-impact-report.md` and `sql-impact-report.json` for SQL/schema directory output while preserving existing contract-delta file names.
   - [ ] Introduce `SqlSchemaChangeImpactSingleV1` and `SqlSchemaChangeImpactCombinedV1` as new JSON models rather than changing the current Markdown-only impact record.
-  - [ ] Add path resolution tests for file output, directory output, and directory `--format json`.
+  - [ ] Add path resolution tests for file output, default directory output, and directory `--format json` precedence.
   - [ ] Include rule IDs, evidence tiers, file spans, commit SHAs, extractor versions, supporting IDs, and limitations.
   - [ ] Omit or hash unsafe metadata.
   - [ ] Add byte-stability tests, including volatile identity caveats.

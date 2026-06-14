@@ -142,7 +142,7 @@ sql-schema-impact:v1
 
 Volatile identity caveats do not waive byte-stability. Given identical inputs and options, the same volatile caveat and same supporting IDs must render in deterministic order.
 
-For `sql-persistence-mapping` evidence where no shape or text hash is available, `stableEvidenceKey` should use normalized safe table name, normalized safe column name, and normalized safe mapped name. If none of those pass the safe identifier policy, the finding must be marked `VolatileIdentity`, remain review-tier, and use a deterministic SHA-256 fallback truncated to 32 lowercase hex characters without rendering the unsafe value.
+For `sql-persistence-mapping` evidence where no shape or text hash is available, `stableEvidenceKey` should use normalized safe table name, normalized safe column name, and normalized safe mapped name. If any available key component fails the safe identifier policy, the finding must be marked `VolatileIdentity`, remain review-tier, and use a deterministic SHA-256 fallback truncated to 32 lowercase hex characters without rendering the unsafe value.
 
 ## Reference Matching
 
@@ -224,6 +224,7 @@ File/resource evidence does not prove that the SQL file is executed.
 | --- | --- | --- | --- |
 | `sql-query-shape` | SQL-shape `QueryPatternDetected`, combined `sql-query` with shape hash | Static derived SQL query shape | Not dialect/runtime proof |
 | `sql-text-hash` | `SqlTextUsed`, text hash-only combined surface | Static SQL text hash/length evidence | Hash-only review-tier |
+| `sql-schema-metadata` | Safe schema/table/column metadata without stronger shape or mapping evidence | Static schema metadata observed in code artifacts | Not database schema existence proof |
 | `sql-resource` | `SqlFileDeclared`, SQL resource facts | Static SQL resource inventory | Not execution proof |
 | `sql-persistence-mapping` | `DatabaseColumnMapping`, ORM mapping facts, `sql-persistence` | Declarative persistence/schema mapping | Not query execution proof |
 | `sql-reachability` | combined paths/reverse rows | Static graph reachability | Coverage/cap dependent |
