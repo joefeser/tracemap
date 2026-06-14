@@ -378,6 +378,14 @@ public static class ReleaseReviewReporter
         var truncated = gaps.DistinctBy(gap => gap.GapId).Count() > cappedGaps.Length
             || topChangedSurfaces.Status == ReleaseReviewStatuses.Truncated
             || cappedFindings.Length < allFindings.Length;
+        topChangedSurfaces = FilterSectionGaps(topChangedSurfaces, cappedGaps);
+        contractImpact = FilterSectionGaps(contractImpact, cappedGaps);
+        apiDtoChanges = FilterSectionGaps(apiDtoChanges, cappedGaps);
+        sqlSchemaImpact = FilterSectionGaps(sqlSchemaImpact, cappedGaps);
+        packageImpact = FilterSectionGaps(packageImpact, cappedGaps);
+        pathContext = FilterSectionGaps(pathContext, cappedGaps);
+        reverseContext = FilterSectionGaps(reverseContext, cappedGaps);
+
         var summary = BuildSummary(
             sourceCoverage.Count,
             topChangedSurfaces,
@@ -587,8 +595,8 @@ public static class ReleaseReviewReporter
             return new ReleaseReviewSection(ReleaseReviewStatuses.NotRequested, [], [], ["Surface diff scope was not requested."]);
         }
 
-        var before = await ReadSingleComparableFactsAsync(options.BeforePath, "before", options.Source, cancellationToken);
-        var after = await ReadSingleComparableFactsAsync(options.AfterPath, "after", options.Source, cancellationToken);
+        var before = await ReadSingleComparableFactsAsync(options.BeforePath, "before", options, cancellationToken);
+        var after = await ReadSingleComparableFactsAsync(options.AfterPath, "after", options, cancellationToken);
         var findings = DiffSingleFacts(before, after)
             .OrderBy(FindingSeverityRank)
             .ThenBy(finding => finding.SourceLabel ?? string.Empty, StringComparer.Ordinal)
@@ -1240,9 +1248,9 @@ public static class ReleaseReviewReporter
             .ToArray();
     }
 
-    private static async Task<IReadOnlyList<SingleComparableFact>> ReadSingleComparableFactsAsync(string path, string side, string? sourceFilter, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<SingleComparableFact>> ReadSingleComparableFactsAsync(string path, string side, ReleaseReviewOptions options, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(sourceFilter) && !sourceFilter.Equals("single", StringComparison.Ordinal))
+        if (!string.IsNullOrWhiteSpace(options.Source) && !options.Source.Equals("single", StringComparison.OrdinalIgnoreCase))
         {
             return [];
         }
@@ -1285,6 +1293,7 @@ public static class ReleaseReviewReporter
             var factId = StringOrDefault(reader, 0, "unknown");
             var factType = StringOrDefault(reader, 1, "unknown");
             var ruleId = StringOrDefault(reader, 2, "release.review.section.v1");
+            var evidenceTier = StringOrDefault(reader, 3, EvidenceTiers.Tier4Unknown);
             var filePath = StringOrNull(reader, 4);
             var startLine = IntOrNull(reader, 5);
             var endLine = IntOrNull(reader, 6);
@@ -1292,6 +1301,11 @@ public static class ReleaseReviewReporter
             var contractElement = StringOrNull(reader, 8);
             var properties = ParseProperties(StringOrNull(reader, 9));
             var metadata = SafeFactMetadata(factType, properties);
+            if (!SingleFactMatchesSelectors(factType, targetSymbol, contractElement, metadata, options.Endpoint, options.Surface, options.SurfaceName))
+            {
+                continue;
+            }
+
             var stableInput = string.Join("|", factType, ruleId, targetSymbol, contractElement, string.Join(";", metadata.Select(pair => $"{pair.Key}={pair.Value}")));
             var evidenceInput = string.Join("|", stableInput, CombinedReportHelpers.SafePath(filePath), startLine, endLine);
             var finding = new ReleaseReviewFinding(
@@ -1300,16 +1314,16 @@ public static class ReleaseReviewReporter
                 "single",
                 side == "after" ? CombinedDependencyDiffClassifications.Added : CombinedDependencyDiffClassifications.Removed,
                 ruleId,
-                EvidenceTiers.Tier3SyntaxOrTextual,
+                evidenceTier,
                 commitSha,
                 DisplayName(factType, targetSymbol, contractElement, metadata),
                 SafeReportPath(filePath),
                 startLine,
                 endLine,
-                CombinedReportHelpers.SortedMetadata([Pair("factType", factType), .. metadata.Select(pair => Pair(pair.Key, pair.Value))]),
+                CombinedReportHelpers.SortedMetadata([Pair("coverageRelative", "true"), Pair("factType", factType), .. metadata.Select(pair => Pair(pair.Key, pair.Value))]),
                 [factId],
                 [],
-                ["Single-index release review compares indexed fact evidence only; added/removed evidence is coverage-relative and review-tier."]);
+                ["Single-index release review compares indexed fact evidence only; added/removed evidence is coverage-relative."]);
             rows.Add(new SingleComparableFact(StableId("single-fact", stableInput), CombinedReportHelpers.Hash(evidenceInput, 32), finding));
         }
 
@@ -1443,6 +1457,13 @@ public static class ReleaseReviewReporter
         return section with { Findings = findings };
     }
 
+    private static ReleaseReviewSection FilterSectionGaps(ReleaseReviewSection section, IReadOnlyList<ReleaseReviewGap> allowed)
+    {
+        var allowedIds = allowed.Select(gap => gap.GapId).ToHashSet(StringComparer.Ordinal);
+        var gaps = section.Gaps.Where(gap => allowedIds.Contains(gap.GapId)).ToArray();
+        return section with { Gaps = gaps };
+    }
+
     private static string SelectRollup(IReadOnlyList<ReleaseReviewGap> gaps, IReadOnlyList<ReleaseReviewFinding> findings, bool truncated)
     {
         if (gaps.Any(gap => gap.Classification == ReleaseReviewClassifications.UnknownAnalysisGap))
@@ -1480,6 +1501,11 @@ public static class ReleaseReviewReporter
 
     private static bool IsActionableFinding(ReleaseReviewFinding finding)
     {
+        if (finding.Metadata.Any(pair => pair.Key == "coverageRelative" && pair.Value == "true"))
+        {
+            return false;
+        }
+
         return StrongClassifications.Contains(finding.Classification)
             && finding.EvidenceTier is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier2Structural;
     }
@@ -1948,6 +1974,7 @@ public static class ReleaseReviewReporter
         var allowed = new[]
         {
             "httpMethod",
+            "httpMethods",
             "normalizedPathKey",
             "normalizedPathTemplate",
             "routePatternHash",
@@ -1981,7 +2008,8 @@ public static class ReleaseReviewReporter
             return null;
         }
 
-        if (key.EndsWith("Hash", StringComparison.Ordinal) || key is "operation" or "sourceKind" or "ecosystem" or "httpMethod" or "surfaceKind")
+        if (key.EndsWith("Hash", StringComparison.Ordinal)
+            || key is "operation" or "sourceKind" or "ecosystem" or "httpMethod" or "httpMethods" or "surfaceKind" or "normalizedPathKey" or "normalizedPathTemplate")
         {
             return value;
         }
@@ -2011,12 +2039,84 @@ public static class ReleaseReviewReporter
         };
     }
 
+    private static bool SingleFactMatchesSelectors(
+        string factType,
+        string? targetSymbol,
+        string? contractElement,
+        IReadOnlyList<KeyValuePair<string, string>> metadata,
+        string? endpoint,
+        string? surface,
+        string? surfaceName)
+    {
+        if (!string.IsNullOrWhiteSpace(endpoint) && !SingleEndpointMatches(metadata, targetSymbol, contractElement, endpoint))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(surface) && !string.Equals(SurfaceKindForFact(factType), surface.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(surfaceName) && !SingleSurfaceNameMatches(metadata, targetSymbol, contractElement, surfaceName))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool SingleEndpointMatches(IReadOnlyList<KeyValuePair<string, string>> metadata, string? targetSymbol, string? contractElement, string endpoint)
+    {
+        var selector = ParseEndpointSelector(endpoint);
+        var method = MetadataValue(metadata, "httpMethod") ?? MetadataValue(metadata, "httpMethods") ?? contractElement;
+        var pathKey = MetadataValue(metadata, "normalizedPathKey")
+            ?? MetadataValue(metadata, "normalizedPathTemplate")
+            ?? targetSymbol;
+        if (string.IsNullOrWhiteSpace(method) || string.IsNullOrWhiteSpace(pathKey))
+        {
+            return false;
+        }
+
+        var normalized = EndpointRouteNormalizer.Normalize(pathKey).PathKey;
+        return string.Equals(method, selector.Method, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(normalized, selector.PathKey, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool SingleSurfaceNameMatches(IReadOnlyList<KeyValuePair<string, string>> metadata, string? targetSymbol, string? contractElement, string selector)
+    {
+        var trimmed = selector.Trim();
+        return string.Equals(DisplayName("fact", targetSymbol, contractElement, metadata), trimmed, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(targetSymbol, trimmed, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(contractElement, trimmed, StringComparison.OrdinalIgnoreCase)
+            || metadata.Any(pair => string.Equals(pair.Value, trimmed, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static (string Method, string PathKey) ParseEndpointSelector(string value)
+    {
+        var trimmed = value.Trim();
+        var parts = trimmed.Split([' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]) || parts[0].StartsWith('/'))
+        {
+            throw new ArgumentException("release-review --endpoint must be '<METHOD> <PATH_KEY>'.");
+        }
+
+        return (parts[0].ToUpperInvariant(), EndpointRouteNormalizer.Normalize(parts[1]).PathKey);
+    }
+
+    private static string? MetadataValue(IReadOnlyList<KeyValuePair<string, string>> metadata, string key)
+    {
+        return metadata.FirstOrDefault(pair => pair.Key == key).Value;
+    }
+
     private static string DisplayName(string factType, string? targetSymbol, string? contractElement, IReadOnlyList<KeyValuePair<string, string>> metadata)
     {
         var path = metadata.FirstOrDefault(pair => pair.Key == "normalizedPathKey").Value;
         if (!string.IsNullOrWhiteSpace(path))
         {
-            return $"{metadata.FirstOrDefault(pair => pair.Key == "httpMethod").Value} {path}".Trim();
+            var method = metadata.FirstOrDefault(pair => pair.Key == "httpMethod").Value
+                ?? metadata.FirstOrDefault(pair => pair.Key == "httpMethods").Value;
+            return $"{method} {path}".Trim();
         }
 
         var package = metadata.FirstOrDefault(pair => pair.Key == "packageName").Value;

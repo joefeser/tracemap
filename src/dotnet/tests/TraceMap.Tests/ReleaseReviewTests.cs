@@ -134,11 +134,45 @@ public sealed class ReleaseReviewTests
         Assert.Equal(0, document.Summary.ActionableFindingCount);
         Assert.Contains(document.TopChangedSurfaces.Findings, finding =>
             finding.Classification == CombinedDependencyDiffClassifications.Added
-            && finding.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+            && finding.EvidenceTier == EvidenceTiers.Tier2Structural
+            && finding.Metadata.Any(pair => pair.Key == "coverageRelative" && pair.Value == "true"));
         Assert.Equal(ReleaseReviewStatuses.Unavailable, document.PathContext.Status);
         Assert.Equal(ReleaseReviewStatuses.Unavailable, document.ReverseContext.Status);
         Assert.Contains(document.Gaps, gap => gap.GapKind == "UnsupportedMode" && gap.Section == "pathContext");
         Assert.Contains(document.Gaps, gap => gap.GapKind == "UnsupportedMode" && gap.Section == "reverseContext");
+    }
+
+    [Fact]
+    public async Task Release_review_single_index_applies_endpoint_and_surface_selectors()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            RouteFact(after, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10),
+            RouteFact(after, "POST", "/api/orders/archive", "/api/orders/archive", "Controllers/OrdersController.cs", 20),
+            QueryPatternFact(after, "Infrastructure/OrderRepository.cs", 30)
+        ]);
+
+        var endpoint = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "endpoint"),
+            Endpoint: "GET /api/orders"));
+        var endpointFinding = Assert.Single(endpoint.Report.TopChangedSurfaces.Findings);
+        Assert.Equal("GET /api/orders", endpointFinding.DisplayName);
+
+        var surface = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "surface"),
+            Surface: "sql-query",
+            SurfaceName: "orders"));
+        var surfaceFinding = Assert.Single(surface.Report.TopChangedSurfaces.Findings);
+        Assert.Equal("sql-query", surfaceFinding.Metadata.First(pair => pair.Key == "surfaceKind").Value);
     }
 
     [Fact]
@@ -244,6 +278,10 @@ public sealed class ReleaseReviewTests
             MaxChecklistItems: 50));
         Assert.Single(gapCapped.Report.Gaps);
         Assert.Contains(gapCapped.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Section == "gaps");
+        Assert.Empty(gapCapped.Report.TopChangedSurfaces.Gaps);
+        Assert.Empty(gapCapped.Report.ApiDtoChanges.Gaps);
+        Assert.Empty(gapCapped.Report.SqlSchemaImpact.Gaps);
+        Assert.Empty(gapCapped.Report.PackageImpact.Gaps);
 
         var checklistCapped = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
             beforeCombined,
