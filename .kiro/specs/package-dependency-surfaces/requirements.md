@@ -260,7 +260,8 @@ Required for implementation PRs touching this feature:
 dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
 npm run check --prefix src/typescript
-JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+# Set JAVA_HOME to a Java 21 JDK for your platform.
+JAVA_HOME="$JAVA_HOME" gradle -p src/jvm test
 python3 -m venv /tmp/tracemap-python-venv
 /tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]"
 /tmp/tracemap-python-venv/bin/python -m pytest src/python/tests

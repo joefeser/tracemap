@@ -323,7 +323,7 @@ Line spans may point to the declaration line but snippets are not stored.
 
 Unsafe version or source metadata should be detected deterministically. Treat values as unsafe when they contain URL schemes, URL credentials, local absolute path markers, home-directory expansion, environment-variable expansion, registry-auth syntax, or secret-like key names such as `token`, `secret`, `password`, `apikey`, `auth`, or `credential`. When uncertain, prefer hash-only metadata plus `redactionReason`.
 
-Hashes used for `versionHash` and `metadataHash` should use the repository's existing stable hash helper. The canonical hash input must be the normalized UTF-8 string after trimming insignificant whitespace and sorting key/value pairs ordinally; do not include timestamps, absolute paths, output directories, random IDs, or process-specific values.
+Hashes used for `versionHash` and `metadataHash` should use the repository's existing stable hash helper. For `versionHash`, the canonical hash input is the normalized UTF-8 version string after trimming insignificant whitespace. For `metadataHash`, the canonical hash input must be the normalized UTF-8 string after trimming insignificant whitespace and sorting key/value pairs ordinally. Do not include timestamps, absolute paths, output directories, random IDs, or process-specific values.
 
 ## Determinism
 
