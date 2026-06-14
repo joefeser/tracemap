@@ -1231,7 +1231,7 @@ public static class PortfolioReporter
 
     private static IReadOnlyList<PortfolioComparableDiffRecord> ProjectSurfaces(IReadOnlyList<CombinedFactRow> facts, IReadOnlyList<PortfolioSourceRow> sources)
     {
-        var sourceById = sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
+        var sourceById = SourceByIdMap(sources);
         return CombinedDependencyReporter.BuildSurfaces(facts)
             .Where(surface => sourceById.ContainsKey(surface.SourceIndexId))
             .Select(surface =>
@@ -1252,6 +1252,9 @@ public static class PortfolioReporter
                     source.CoverageStatus,
                     [surface.OriginalFactId],
                     [],
+                    surface.FilePath,
+                    surface.StartLine,
+                    surface.EndLine,
                     metadata,
                     surface.EvidenceTier is EvidenceTiers.Tier3SyntaxOrTextual or EvidenceTiers.Tier4Unknown
                         || HasReviewTierSurfaceIdentity(surface));
@@ -1263,7 +1266,7 @@ public static class PortfolioReporter
 
     private static IReadOnlyList<PortfolioComparableDiffRecord> ProjectEdges(IReadOnlyList<CombinedDependencyEdgeRow> edges, IReadOnlyList<PortfolioSourceRow> sources)
     {
-        var sourceById = sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
+        var sourceById = SourceByIdMap(sources);
         return edges
             .Where(edge => sourceById.ContainsKey(edge.SourceIndexId))
             .Select(edge =>
@@ -1283,6 +1286,9 @@ public static class PortfolioReporter
                     source.CoverageStatus,
                     [],
                     [edge.EdgeId],
+                    edge.FilePath,
+                    edge.StartLine,
+                    edge.EndLine,
                     metadata,
                     edge.EvidenceTier is EvidenceTiers.Tier3SyntaxOrTextual or EvidenceTiers.Tier4Unknown
                         || string.IsNullOrWhiteSpace(edge.SourceSymbol)
@@ -1342,6 +1348,20 @@ public static class PortfolioReporter
             .ThenBy(row => row.ChangeKind, StringComparer.Ordinal)
             .ThenBy(row => row.DiffId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static IReadOnlyDictionary<string, PortfolioSourceRow> SourceByIdMap(IReadOnlyList<PortfolioSourceRow> sources)
+    {
+        return sources
+            .GroupBy(source => source.SourceId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(source => DiffSourceLabel(source), StringComparer.Ordinal)
+                    .ThenBy(source => source.ScanId, StringComparer.Ordinal)
+                    .ThenBy(source => source.CommitSha, StringComparer.Ordinal)
+                    .First(),
+                StringComparer.Ordinal);
     }
 
     private static IReadOnlyDictionary<string, PortfolioSourceRow> SourceComparisonMap(IReadOnlyList<PortfolioSourceRow> sources, string side, List<PortfolioGap> gaps)
@@ -1417,6 +1437,12 @@ public static class PortfolioReporter
                 new("afterRuleId", after?.RuleId),
                 new("beforeEvidenceTier", before?.EvidenceTier),
                 new("afterEvidenceTier", after?.EvidenceTier),
+                new("beforeFilePath", before?.FilePath),
+                new("beforeStartLine", before?.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("beforeEndLine", before?.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("afterFilePath", after?.FilePath),
+                new("afterStartLine", after?.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("afterEndLine", after?.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new("beforeSupportingFactIds", beforeFactIds),
                 new("afterSupportingFactIds", afterFactIds),
                 new("beforeSupportingEdgeIds", beforeEdgeIds),
@@ -1438,6 +1464,13 @@ public static class PortfolioReporter
             .Concat(afterSources.TryGetValue(sourceKey, out var afterSource) ? [afterSource.CoverageStatus] : [])
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToArray();
+        if (beforeSources.TryGetValue(sourceKey, out var beforeIdentity)
+            && afterSources.TryGetValue(sourceKey, out var afterIdentity)
+            && !string.Equals(beforeIdentity.RepoIdentityHash, afterIdentity.RepoIdentityHash, StringComparison.Ordinal))
+        {
+            return PortfolioReportClassifications.ReviewRecommended;
+        }
+
         if (sourceCoverage.Any(value => value != "FullEvidenceAvailable"))
         {
             return PortfolioReportClassifications.PartialAnalysis;
@@ -1517,7 +1550,7 @@ public static class PortfolioReporter
                 new("ecosystem", surface.Ecosystem),
                 new("manifestKind", surface.ManifestKind),
                 new("packageName", surface.PackageName),
-                new("manifestPath", surface.FilePath),
+                new("manifestPath", StablePackageManifestPath(surface.FilePath)),
                 new("configKey", surface.ConfigKey)
             ]);
         }
@@ -1582,6 +1615,18 @@ public static class PortfolioReporter
         return edgeKind.Trim().ToLowerInvariant();
     }
 
+    private static string? StablePackageManifestPath(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath)
+            || filePath == "n/a"
+            || filePath.StartsWith("absolute-path-hash:", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return filePath;
+    }
+
     private static string RuleFamily(string ruleId)
     {
         var index = ruleId.LastIndexOf(".", StringComparison.Ordinal);
@@ -1607,13 +1652,16 @@ public static class PortfolioReporter
             MetadataHash(metadata),
             ruleId,
             evidenceTier,
-            filePath,
+            StableEvidencePath(filePath),
             startLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            endLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            string.Join(",", supportingFactIds.OrderBy(value => value, StringComparer.Ordinal)),
-            string.Join(",", supportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal))
+            endLine.ToString(System.Globalization.CultureInfo.InvariantCulture)
         ]);
         return CombinedReportHelpers.Hash(key, 24);
+    }
+
+    private static string StableEvidencePath(string? filePath)
+    {
+        return StablePackageManifestPath(filePath) ?? string.Empty;
     }
 
     private static void AddExpectedIdentityGaps(PortfolioInputSpec input, PortfolioSourceRow source, List<PortfolioGap> gaps)
@@ -2325,6 +2373,9 @@ public static class PortfolioReporter
         string CoverageStatus,
         IReadOnlyList<string> SupportingFactIds,
         IReadOnlyList<string> SupportingEdgeIds,
+        string FilePath,
+        int StartLine,
+        int EndLine,
         IReadOnlyList<KeyValuePair<string, string>> Metadata,
         bool NeedsReview);
 }
