@@ -35,7 +35,7 @@
   - [ ] Prepare a fresh Python temporary environment under the output root only when Python scans are requested.
   - [x] Keep build outputs and generated environments out of git.
 
-- [ ] 5. Scan default public samples. Requirements: 3, 4, 5.
+- [x] 5. Scan default public samples. Requirements: 3, 4, 5.
   - [x] Scan .NET modern sample.
   - [x] Scan .NET endpoint server sample.
   - [x] Scan TypeScript endpoint client sample.
@@ -114,7 +114,7 @@
   - [ ] Document troubleshooting.
   - [ ] Document optional OSS workflow or state that it remains separate.
 
-- [ ] 14. Validate implementation. Requirements: 8.
+- [x] 14. Validate implementation. Requirements: 8.
   - [x] `dotnet build src/dotnet/TraceMap.sln`
   - [x] `dotnet test src/dotnet/TraceMap.sln`
   - [x] TypeScript build/check commands required by the demo
