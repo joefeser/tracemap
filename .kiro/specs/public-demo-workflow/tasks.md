@@ -40,7 +40,7 @@
   - [ ] Scan .NET endpoint server sample.
   - [ ] Scan TypeScript endpoint client sample.
   - [ ] Scan TypeScript modern sample.
-  - [ ] Scan Python FastAPI or Flask sample only when `--include-python` is supplied.
+  - [ ] Scan Python FastAPI or Flask sample only when `--include-python` is supplied; otherwise mark the Python section `not_requested`.
   - [ ] Scan JVM sample if Java 21 is available; otherwise mark the JVM section unavailable unless `--require-jvm` is supplied.
   - [ ] Assert required scan artifacts exist.
   - [ ] Assert expected fact outputs are non-empty.
