@@ -143,7 +143,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- snapshot-diff \
   --out .tracemap-snapshot-diff
 ```
 
-The snapshot diff command writes `snapshot-diff-report.md` and `snapshot-diff-report.json` when `--out` is a directory. The first slice validates same-kind inputs, source identity, commit SHA availability, coverage, and extractor-version changes. Endpoint, contract-shape, surface, graph, gap, and path sections are present but marked with explicit availability gaps until deeper evidence readers are implemented.
+The snapshot diff command writes `snapshot-diff-report.md` and `snapshot-diff-report.json` when `--out` is a directory. It validates same-kind inputs, source identity, commit SHA availability, coverage, and extractor-version changes. Combined indexes delegate endpoint, surface, graph, and opt-in path comparison to the combined diff engine; single-index projector sections and contract-shape comparison remain explicit availability gaps until deeper evidence readers are implemented.
 
 Summarize static change-impact evidence from two combined snapshots:
 

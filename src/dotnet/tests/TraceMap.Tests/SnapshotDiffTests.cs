@@ -271,6 +271,80 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_combined_delegates_endpoint_surface_and_graph_sections()
+    {
+        using var temp = new TempDirectory();
+        var beforeClient = Path.Combine(temp.Path, "before-client.sqlite");
+        var beforeServer = Path.Combine(temp.Path, "before-server.sqlite");
+        var afterClient = Path.Combine(temp.Path, "after-client.sqlite");
+        var afterServer = Path.Combine(temp.Path, "after-server.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0", commitSha: "1111111");
+        var serverBefore = Manifest("server", ScannerVersions.TraceMap, commitSha: "1111111");
+        var serverAfter = Manifest("server", ScannerVersions.TraceMap, commitSha: "2222222");
+        const string controller = "M:Sample.Controllers.OrdersController.Get";
+        const string repository = "M:Sample.Infrastructure.OrderRepository.Get";
+        SqliteIndexWriter.Write(beforeClient, client, [HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)]);
+        SqliteIndexWriter.Write(beforeServer, serverBefore, [RouteFact(serverBefore, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10, controller)]);
+        SqliteIndexWriter.Write(afterClient, client, [HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)]);
+        SqliteIndexWriter.Write(afterServer, serverAfter, [
+            RouteFact(serverAfter, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 20, controller),
+            QueryPatternFact(serverAfter, repository, "Infrastructure/OrderRepository.cs", 31),
+            CallFact(serverAfter, controller, repository, "Controllers/OrdersController.cs", 21)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeClient, beforeServer], beforeCombined, ["client", "server"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterClient, afterServer], afterCombined, ["client", "server"]));
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "report"),
+            Scope: "endpoints,surfaces,graph",
+            AllowIdentityMismatch: true));
+
+        Assert.NotEmpty(result.Report.EndpointDiffs);
+        Assert.NotEmpty(result.Report.SurfaceDiffs);
+        Assert.NotEmpty(result.Report.GraphDiffs);
+        Assert.Contains(result.Report.EndpointDiffs.SelectMany(row => row.RuleIds), ruleId => ruleId == "combined.diff.endpoint.v1");
+        Assert.Contains(result.Report.SurfaceDiffs.SelectMany(row => row.RuleIds), ruleId => ruleId == "combined.diff.surface.v1");
+        Assert.Contains(result.Report.GraphDiffs.SelectMany(row => row.RuleIds), ruleId => ruleId == "combined.diff.edge.v1");
+        Assert.Contains(result.Report.GraphDiffs, row => row.SupportingEdgeIds.Count > 0 || row.SupportingFactIds.Count > 0);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "UnavailableEvidence" && (gap.Section == "endpointDiffs" || gap.Section == "surfaceDiffs" || gap.Section == "graphDiffs"));
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "snapshot-diff-report.json"));
+        Assert.DoesNotContain("select * from orders", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Snapshot_diff_combined_coverage_scope_maps_without_source_rows()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysis", buildStatus: "Succeeded", commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "1111111");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeIndex], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterIndex], afterCombined, ["api"]));
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "report"),
+            Scope: "coverage"));
+
+        Assert.Empty(result.Report.SourceDiffs);
+        Assert.Single(result.Report.CoverageDiffs);
+        Assert.Equal(0, result.Report.Summary.SourceDiffCount);
+        Assert.Equal(1, result.Report.Summary.CoverageDiffCount);
+        Assert.Contains(result.Report.CoverageDiffs.SelectMany(row => row.RuleIds), ruleId => ruleId == "combined.diff.coverage.v1");
+    }
+
+    [Fact]
     public async Task Snapshot_diff_cli_exit_code_is_opt_in()
     {
         using var temp = new TempDirectory();
@@ -320,5 +394,84 @@ public sealed class SnapshotDiffTests
             ".",
             FactFactory.Hash(repo, 32),
             FactFactory.Hash($"{repo}-git-root", 32));
+    }
+
+    private static CodeFact HttpClientFact(ScanManifest manifest, string method, string template, string key, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpCallDetected,
+            RuleIds.HttpClientInvocation,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: $"{method} {template}",
+            contractElement: method,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethod"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["urlKind"] = "template"
+            });
+    }
+
+    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string file, int line, string? methodSymbol = null)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol ?? $"{method} {template}",
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["routeTemplates"] = template
+            });
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.QueryPatternDetected,
+            RuleIds.CSharpSyntaxQueryPattern,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "orders",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["operationName"] = "SELECT",
+                ["tableName"] = "orders",
+                ["columnNames"] = "id;status",
+                ["queryShapeHash"] = "shape123",
+                ["sqlSourceKind"] = "literal-string",
+                ["rawSql"] = "select * from orders"
+            });
+    }
+
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callerSymbol"] = caller,
+                ["calleeSymbol"] = callee
+            });
     }
 }
