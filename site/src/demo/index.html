@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Run the checked-in TraceMap public demo to generate static analysis artifacts and public-shareable summaries."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Public Demo | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/demo/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Public Demo">
+    <meta property="og:description" content="The public demo scans sample repositories and writes deterministic artifact summaries.">
+    <meta property="og:url" content="https://tracemap.tools/demo/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/validation/">Validation</a>
+        <a href="/demo/" aria-current="page">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Public demo</p>
+        <h1>Generate a local evidence packet from checked-in samples.</h1>
+        <p class="hero-subhead">
+          The public demo scans sample repositories, writes generated artifacts, and
+          produces public-shareable summaries that avoid local absolute paths.
+        </p>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Run it</p>
+          <h2>The demo is one script from a clean checkout.</h2>
+          <p>
+            The output is static-analysis evidence. It is not deployment evidence,
+            production traffic evidence, or release approval.
+          </p>
+        </div>
+        <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
+cd tracemap
+./scripts/demo-public.sh
+./scripts/demo-public.sh .tracemap-demo</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Expected result</p>
+          <h2>The demo writes summaries and generated artifacts.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Scans</strong><span>Checked-in sample repositories produce scan artifacts.</span></div>
+          <div><strong>Summary Markdown</strong><span>A human-readable demo summary describes what ran and what was deferred.</span></div>
+          <div><strong>Summary JSON</strong><span>Machine-readable status rows make the demo result inspectable.</span></div>
+          <div><strong>Sentinel checks</strong><span>Public-shareable output avoids raw local paths and raw sensitive values.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Demo source:
+        <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">scripts/demo-public.sh</a>.
+      </p>
+    </footer>
+  </body>
+</html>

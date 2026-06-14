@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap scan outputs include scan-manifest.json, facts.ndjson, index.sqlite, report.md, and analyzer logs."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Scan Outputs | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/outputs/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Scan Outputs">
+    <meta property="og:description" content="TraceMap emits deterministic files that humans and machines can inspect.">
+    <meta property="og:url" content="https://tracemap.tools/outputs/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/" aria-current="page">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/validation/">Validation</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Scan artifacts</p>
+        <h1>TraceMap writes evidence you can inspect.</h1>
+        <p class="hero-subhead">
+          The scanner emits machine-readable facts, a queryable SQLite index, a
+          manifest that records coverage and commit state, a human report, and logs
+          for analyzer diagnostics.
+        </p>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Required scan output</p>
+          <h2>Five files define the scan packet.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>scan-manifest.json</code><span>Repository identity, commit SHA, scanner version, analysis level, build status, and coverage.</span></div>
+          <div><code>facts.ndjson</code><span>One deterministic fact per line, including rule IDs, tiers, spans, and extractor metadata.</span></div>
+          <div><code>index.sqlite</code><span>Queryable facts plus tables for symbols, relationships, edges, surfaces, aliases, and flows when available.</span></div>
+          <div><code>report.md</code><span>Human-readable summary of coverage, gaps, facts, surfaces, and limitations.</span></div>
+          <div><code>logs/analyzer.log</code><span>Analyzer diagnostics and project-load details for failed or partial analysis.</span></div>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Example</p>
+          <h2>Scan a sample repository.</h2>
+          <p>Restore is explicit. Failed project load is not treated as clean analysis.</p>
+        </div>
+        <pre class="command-block"><code>dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/modern-sample \
+  --out .tracemap</code></pre>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        See the
+        <a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">acceptance plan</a>
+        for artifact checks.
+      </p>
+    </footer>
+  </body>
+</html>

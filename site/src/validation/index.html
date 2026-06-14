@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap validation uses deterministic tests, sample repositories, pinned smoke checks, and artifact acceptance criteria."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Validation | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/validation/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Validation">
+    <meta property="og:description" content="Build, test, smoke, and artifact checks for TraceMap.">
+    <meta property="og:url" content="https://tracemap.tools/validation/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/validation/" aria-current="page">Validation</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Validation</p>
+        <h1>TraceMap is meant to be checked, not trusted on vibes.</h1>
+        <p class="hero-subhead">
+          The project uses unit tests, sample repositories, pinned smoke checks,
+          generated-output guards, and artifact acceptance criteria to keep static
+          evidence deterministic.
+        </p>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Local checks</p>
+          <h2>Run the relevant language checks before finishing analyzer work.</h2>
+          <p>Site-only changes usually need the site build and browser preview checks.</p>
+        </div>
+        <pre class="command-block"><code>dotnet test src/dotnet/TraceMap.sln
+cd src/typescript && npm run check
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m pytest src/python/tests
+
+cd site && npm run build</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Acceptance</p>
+          <h2>Validation includes outputs, not just exit codes.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Artifacts exist</strong><span>Scans produce manifest, facts, SQLite, report, and logs.</span></div>
+          <div><strong>Coverage is labeled</strong><span>Reduced analysis stays visible in reports and reducer outcomes.</span></div>
+          <div><strong>No raw snippets by default</strong><span>Outputs store spans and hashes unless explicitly configured otherwise.</span></div>
+          <div><strong>Deterministic rows</strong><span>JSON, Markdown, and SQLite outputs should remain stable for repeatable inputs.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Full details:
+        <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">validation guide</a>
+        and
+        <a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">acceptance plan</a>.
+      </p>
+    </footer>
+  </body>
+</html>
