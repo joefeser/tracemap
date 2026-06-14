@@ -162,6 +162,54 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_renders_package_surface_metadata_without_unsafe_version_values()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        const string unsafeVersion = "git+https://token@example.invalid/private/package.git";
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.PackageReferenced,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/App.csproj", 9, 9, null, "test", "test/1.0"),
+                targetSymbol: "Private.Package",
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["dependencyGroup"] = "PackageReference",
+                    ["dependencyScope"] = "runtime",
+                    ["ecosystem"] = "nuget",
+                    ["manifestKind"] = "csproj",
+                    ["packageManager"] = "nuget",
+                    ["packageName"] = "Private.Package",
+                    ["surfaceKind"] = "package-config",
+                    ["version"] = unsafeVersion
+                })
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["api"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "package-config");
+        Assert.Equal("Private.Package", surface.PackageName);
+        Assert.Equal("nuget", surface.Ecosystem);
+        Assert.Equal("csproj", surface.ManifestKind);
+        Assert.Equal("runtime", surface.DependencyScope);
+        Assert.Null(surface.Version);
+        Assert.NotNull(surface.VersionHash);
+        Assert.Equal("unsafe-package-version", surface.RedactionReason);
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
+        Assert.DoesNotContain(unsafeVersion, markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(unsafeVersion, json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unsafe-package-version", json);
+    }
+
+    [Fact]
     public async Task Report_includes_same_source_endpoint_matches_and_directory_row_caps()
     {
         using var temp = new TempDirectory();
@@ -430,7 +478,14 @@ public sealed class CombinedDependencyReportTests
             targetSymbol: $"Package.{index:000}",
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["dependencyGroup"] = "PackageReference",
+                ["dependencyScope"] = "runtime",
+                ["ecosystem"] = "nuget",
+                ["manifestKind"] = "csproj",
                 ["package"] = $"Package.{index:000}",
+                ["packageManager"] = "nuget",
+                ["packageName"] = $"Package.{index:000}",
+                ["surfaceKind"] = "package-config",
                 ["version"] = "1.0.0"
             });
     }

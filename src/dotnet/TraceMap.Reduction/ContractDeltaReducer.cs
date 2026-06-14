@@ -643,9 +643,16 @@ public static class ContractDeltaReducer
             "sql-table" => Has(reference, "tableName", "name"),
             "sql-column" => Has(reference, "columnName", "name"),
             "sql-query" => Has(reference, "queryShapeHash", "textHash", "tableName", "operationName", "name"),
-            "dependency-surface" => Has(reference, "surfaceKind", "surfaceName", "stableKey", "name"),
+            "dependency-surface" => Has(reference, "surfaceKind", "surfaceName", "stableKey", "packageName", "name"),
             _ => hasAny
         };
+        if (kind == "dependency-surface"
+            && string.Equals(NormalizeSurfaceKind(Value(reference, "surfaceKind", "kind")), "package-config", StringComparison.OrdinalIgnoreCase)
+            && !Has(reference, "surfaceName", "packageName", "stableKey", "name"))
+        {
+            valid = false;
+        }
+
         if (!valid || !hasAny)
         {
             throw new InvalidDataException("Contract delta v2 reference is missing required identity fields.");
@@ -666,7 +673,7 @@ public static class ContractDeltaReducer
             "endpoint" when Has(reference, "method") && Has(reference, "path", "pathKey", "normalizedPathKey") => "endpoint-method-path",
             "package" when Has(reference, "ecosystem") => "package-ecosystem",
             "sql-column" when Has(reference, "tableName") => "sql-table-column",
-            "dependency-surface" when Has(reference, "surfaceKind") && Has(reference, "surfaceName", "stableKey") => "surface-kind-name",
+            "dependency-surface" when Has(reference, "surfaceKind") && Has(reference, "surfaceName", "stableKey", "packageName") => "surface-kind-name",
             _ => "name-only"
         };
     }
@@ -682,7 +689,7 @@ public static class ContractDeltaReducer
             "sql-table" => Value(reference, "tableName", "name") ?? "sql-table",
             "sql-column" => JoinNonEmpty(".", Value(reference, "tableName"), Value(reference, "columnName", "name")),
             "sql-query" => Value(reference, "queryShapeHash", "textHash", "operationName", "name", "tableName") ?? "sql-query",
-            "dependency-surface" => JoinNonEmpty(":", Value(reference, "surfaceKind"), Value(reference, "surfaceName", "stableKey", "name")),
+            "dependency-surface" => JoinNonEmpty(":", Value(reference, "surfaceKind"), Value(reference, "surfaceName", "packageName", "stableKey", "name")),
             _ => Value(reference, "typeName", "fullyQualifiedName", "schemaName", "name") ?? kind
         } ?? kind;
     }
@@ -761,7 +768,8 @@ public static class ContractDeltaReducer
 
         if (!string.IsNullOrWhiteSpace(options.Surface))
         {
-            selected = selected.Where(change => change.Kind == "dependency-surface" && Value(change.Reference, "surfaceKind") == options.Surface);
+            selected = selected.Where(change => change.Kind == "dependency-surface"
+                && string.Equals(NormalizeSurfaceKind(Value(change.Reference, "surfaceKind")), NormalizeSurfaceKind(options.Surface), StringComparison.OrdinalIgnoreCase));
         }
 
         if (!string.IsNullOrWhiteSpace(options.Surface) && !changes.Any(change => change.Kind == "dependency-surface"))
@@ -1250,8 +1258,8 @@ public static class ContractDeltaReducer
 
     private static EvidenceMatch MatchDependencySurface(NormalizedChange change, IndexedFact fact)
     {
-        var expectedKind = Value(change.Reference, "surfaceKind", "kind");
-        var expectedName = Value(change.Reference, "surfaceName", "name", "stableKey");
+        var expectedKind = NormalizeSurfaceKind(Value(change.Reference, "surfaceKind", "kind"));
+        var expectedName = Value(change.Reference, "surfaceName", "packageName", "name", "stableKey");
         var actualKind = SurfaceKind(fact);
         var kindMatches = expectedKind is null || string.Equals(expectedKind, actualKind, StringComparison.OrdinalIgnoreCase);
         if (!kindMatches || expectedName is null)
@@ -1260,7 +1268,7 @@ public static class ContractDeltaReducer
         }
 
         var nameMatches = fact.SearchTextCandidates.Any(candidate => NamesMatch(expectedName, candidate))
-            || PropertyValues(fact, "surfaceName", "stableKey", "name", "tableName", "packageName", "path", "normalizedPathKey", "routeTemplate")
+            || PropertyValues(fact, "surfaceName", "stableKey", "name", "tableName", "packageName", "package", "path", "normalizedPathKey", "routeTemplate")
                 .Any(value => NamesMatch(expectedName, value) || string.Equals(expectedName, value, StringComparison.OrdinalIgnoreCase));
         return nameMatches
             ? new EvidenceMatch(expectedKind is null ? MatchStrength.Member : MatchStrength.TypeAndMember, expectedKind is null, "dependency-surface")
@@ -1283,7 +1291,7 @@ public static class ContractDeltaReducer
     {
         if (fact.Properties.TryGetValue("surfaceKind", out var surfaceKind) && !string.IsNullOrWhiteSpace(surfaceKind))
         {
-            return surfaceKind;
+            return NormalizeSurfaceKind(surfaceKind) ?? surfaceKind;
         }
 
         if (IsSqlFact(fact))
@@ -1303,7 +1311,7 @@ public static class ContractDeltaReducer
 
         if (fact.FactType is FactTypes.PackageReferenced)
         {
-            return "package";
+            return "package-config";
         }
 
         if (fact.FactType is FactTypes.ConfigKeyDeclared or FactTypes.ConnectionStringDeclared or FactTypes.ConfigBinding)
@@ -1312,6 +1320,18 @@ public static class ContractDeltaReducer
         }
 
         return "symbol";
+    }
+
+    private static string? NormalizeSurfaceKind(string? surfaceKind)
+    {
+        if (string.IsNullOrWhiteSpace(surfaceKind))
+        {
+            return null;
+        }
+
+        return surfaceKind.Trim().Equals("package", StringComparison.OrdinalIgnoreCase)
+            ? "package-config"
+            : surfaceKind.Trim();
     }
 
     private static IEnumerable<string> PropertyValues(IndexedFact fact, params string[] keys)

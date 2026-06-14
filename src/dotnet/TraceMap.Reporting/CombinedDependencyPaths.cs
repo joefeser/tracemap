@@ -1192,6 +1192,11 @@ public static class CombinedDependencyPathReporter
 
     private static bool IsDependencySurfaceFact(CombinedFactRow fact)
     {
+        if (fact.Properties.TryGetValue("surfaceKind", out var surfaceKind) && !string.IsNullOrWhiteSpace(surfaceKind))
+        {
+            return true;
+        }
+
         return fact.FactType is FactTypes.QueryPatternDetected
             or FactTypes.SqlTextUsed
             or FactTypes.DatabaseColumnMapping
@@ -1201,13 +1206,7 @@ public static class CombinedDependencyPathReporter
             or FactTypes.PackageReferenced
             or FactTypes.ConfigBinding
             or FactTypes.ConfigKeyDeclared
-            or FactTypes.ConnectionStringDeclared
-            || fact.FactType.Contains("Package", StringComparison.Ordinal)
-            || fact.FactType.Contains("Dependency", StringComparison.Ordinal)
-            || fact.FactType.Contains("ProjectReference", StringComparison.Ordinal)
-            || fact.FactType.Contains("Config", StringComparison.Ordinal)
-            || fact.FactType.Contains("ConnectionString", StringComparison.Ordinal)
-            || fact.FactType.Contains("EnvironmentVariable", StringComparison.Ordinal);
+            or FactTypes.ConnectionStringDeclared;
     }
 
     private static CombinedPathGap TruncatedGap(string reason, string nodeId, EvidenceGraph graph)

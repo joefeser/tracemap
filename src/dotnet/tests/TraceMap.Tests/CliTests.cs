@@ -78,6 +78,10 @@ public sealed class CliTests
         Assert.True(File.Exists(Path.Combine(outputPath, "logs", "analyzer.log")));
         var facts = await File.ReadAllTextAsync(Path.Combine(outputPath, "facts.ndjson"));
         Assert.Contains("\"factType\":\"PackageReferenced\"", facts);
+        Assert.Contains("\"surfaceKind\":\"package-config\"", facts);
+        Assert.Contains("\"ecosystem\":\"nuget\"", facts);
+        Assert.Contains("\"packageName\":\"Example.Package\"", facts);
+        Assert.Contains("\"dependencyScope\":\"runtime\"", facts);
         Assert.Contains("\"factType\":\"SqlFileDeclared\"", facts);
         Assert.Contains("\"analysisLevel\": \"Level1SemanticAnalysisReduced\"", await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-manifest.json")));
         Assert.Equal(string.Empty, error.ToString());
