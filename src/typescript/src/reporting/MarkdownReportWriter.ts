@@ -181,7 +181,13 @@ function safePath(filePath: string): string {
   if (!filePath || filePath.trim().length === 0) {
     return "n/a";
   }
-  return path.isAbsolute(filePath) || filePath.includes("://") ? `absolute-path-hash:${hash(filePath, 16)}` : filePath.replace(/\\/g, "/");
+  const absolute = filePath.startsWith("/")
+    || filePath.startsWith("\\")
+    || filePath.includes("://")
+    || filePath.includes(":/")
+    || filePath.includes(":\\")
+    || path.isAbsolute(filePath);
+  return absolute ? `absolute-path-hash:${hash(filePath, 16)}` : filePath.replace(/\\/g, "/");
 }
 
 function displayCodeValue(value: string): string {
