@@ -44,6 +44,8 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `index.sqlite` includes a `local_aliases` table when local-alias facts are emitted.
 - `index.sqlite` includes a `field_aliases` table when field-alias facts are emitted.
 - `index.sqlite` includes a `parameter_forward_edges` table derived from parameter-to-parameter argument-flow facts.
+- `parameter_forward_edges` includes direct parameter forwarding, same-method local alias forwarding up to 3 alias hops, and unique constructor field-origin forwarding when evidence exists.
+- `parameter_forward_edges` omits ambiguous constructor field origins and alias chains beyond the documented bound instead of inventing a flow path.
 
 For every successful `tracemap-ts scan --repo <repo> --out <out>` run, verify:
 
