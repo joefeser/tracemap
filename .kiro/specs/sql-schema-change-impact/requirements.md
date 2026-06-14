@@ -106,14 +106,15 @@ Out of scope:
 
 1. WHEN evidence comes from SQL-shape `QueryPatternDetected` THEN TraceMap SHALL label it as static query-shape evidence.
 2. WHEN evidence comes from `SqlTextUsed` without shape metadata THEN TraceMap SHALL label it as hash-only SQL text evidence and include `HashOnlyEvidence`.
-3. WHEN evidence comes from `DatabaseColumnMapping`, `mappedName`, or ORM declarative mapping THEN TraceMap SHALL label it as mapping/persistence evidence and SHALL NOT imply a query executes.
-4. WHEN evidence comes from `mappedName` without a table and column anchor THEN TraceMap SHALL keep the finding review-tier and include a mapped-name-only caveat.
-5. WHEN evidence comes from `.sql` file declaration or SQL resource inventory THEN TraceMap SHALL label it as resource evidence and SHALL NOT imply the file is executed.
-6. WHEN evidence comes from path/reverse traversal THEN TraceMap SHALL label it as static reachability evidence and include path/reverse classifications and caveats.
-7. WHEN evidence comes from syntax/textual fallback THEN TraceMap SHALL label it as `Tier3SyntaxOrTextual` and keep the finding review-tier.
-8. WHEN evidence exists only as an unlinked surface THEN TraceMap SHALL include an `UnlinkedSurface` or equivalent caveat and SHALL NOT report a successful endpoint-to-SQL path.
-9. WHEN unsafe fact properties contain raw SQL, snippets, connection strings, URLs, or local absolute paths THEN output SHALL omit or hash them.
-10. WHEN supporting IDs are emitted THEN they SHALL be deterministic for identical inputs and options even if the report includes a volatile identity caveat.
+3. WHEN evidence comes from safe schema/table/column metadata without query-shape or mapping evidence THEN TraceMap SHALL label it as static schema-metadata evidence and SHALL NOT imply the database schema exists at runtime.
+4. WHEN evidence comes from `DatabaseColumnMapping`, `mappedName`, or ORM declarative mapping THEN TraceMap SHALL label it as mapping/persistence evidence and SHALL NOT imply a query executes.
+5. WHEN evidence comes from `mappedName` without a table and column anchor THEN TraceMap SHALL keep the finding review-tier and include a mapped-name-only caveat.
+6. WHEN evidence comes from `.sql` file declaration or SQL resource inventory THEN TraceMap SHALL label it as resource evidence and SHALL NOT imply the file is executed.
+7. WHEN evidence comes from path/reverse traversal THEN TraceMap SHALL label it as static reachability evidence and include path/reverse classifications and caveats.
+8. WHEN evidence comes from syntax/textual fallback THEN TraceMap SHALL label it as `Tier3SyntaxOrTextual` and keep the finding review-tier.
+9. WHEN evidence exists only as an unlinked surface THEN TraceMap SHALL include an `UnlinkedSurface` or equivalent caveat and SHALL NOT report a successful endpoint-to-SQL path.
+10. WHEN unsafe fact properties contain raw SQL, snippets, connection strings, URLs, or local absolute paths THEN output SHALL omit or hash them.
+11. WHEN supporting IDs are emitted THEN they SHALL be deterministic for identical inputs and options even if the report includes a volatile identity caveat.
 
 ### Requirement 5: Path And Reverse Context
 
@@ -166,7 +167,7 @@ Out of scope:
 3. WHEN both `--contract-delta` and `--sql-schema-delta` are provided THEN TraceMap SHALL reject the command with a clear mutual-exclusion error.
 4. WHEN neither `--contract-delta` nor `--sql-schema-delta` is provided to `reduce` THEN TraceMap SHALL reject the command with a clear missing-input error.
 5. WHEN `--sql-schema-delta` is active and output path is a file with no format provided THEN TraceMap SHALL write Markdown to that file.
-6. WHEN `--sql-schema-delta` is active and output path is a directory or has no extension THEN TraceMap SHALL write `sql-impact-report.md` and `sql-impact-report.json`.
+6. WHEN `--sql-schema-delta` is active, output path is a directory or has no extension, and `--format` is omitted or `--format markdown` is provided THEN TraceMap SHALL write `sql-impact-report.md` and `sql-impact-report.json`.
 7. WHEN `--contract-delta` is active THEN existing contract-delta output file names SHALL remain unchanged.
 8. WHEN `--format json` is provided with file output THEN TraceMap SHALL write deterministic JSON to that file.
 9. WHEN the command completes THEN the CLI SHALL print output path, change count, finding count, gap count, source count, and report coverage.
