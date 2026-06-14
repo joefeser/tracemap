@@ -104,6 +104,7 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
       if (scripts && typeof scripts === "object" && !Array.isArray(scripts)) {
         for (const scriptName of Object.keys(scripts as Record<string, unknown>).sort()) {
           const value = (scripts as Record<string, unknown>)[scriptName];
+          const scriptText = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
           facts.push(
             createFact(
               manifest,
@@ -118,9 +119,9 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
                   keyPath: `scripts:${scriptName}`,
                   name: scriptName,
                   redactionReason: "script-command-redacted",
-                  valueHash: hash(typeof value === "string" ? value : JSON.stringify(value)),
+                  valueHash: hash(scriptText),
                   valueKind: typeof value,
-                  valueLength: String(typeof value === "string" ? value.length : JSON.stringify(value).length)
+                  valueLength: String(scriptText.length)
                 }
               }
             )
