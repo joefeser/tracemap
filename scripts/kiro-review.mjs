@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
+import assert from "node:assert/strict";
 
 const cwd = process.cwd();
 const validKinds = new Set(["spec", "re-review", "implementation"]);
@@ -24,6 +26,7 @@ Options:
   --prompt-file <path>                    Use an explicit prompt file
   --save-review-text                      Persist prompt/raw/clean text artifacts
   --dry-run                               Build prompt/meta only; do not invoke Kiro
+  --self-test                             Run wrapper unit tests and exit
   --help                                  Show this help
 
 Examples:
@@ -154,6 +157,156 @@ function loadEnvFile(envPath) {
   }
 
   return values;
+}
+
+function loadConfiguredEnvFiles(baseEnv = process.env, baseDir = cwd) {
+  const loaded = [];
+  const values = {};
+  const sourceByKey = {};
+  const configuredPath = baseEnv.KIRO_ENV_FILE;
+  const candidates = [];
+  if (configuredPath) {
+    candidates.push({ path: configuredPath, source: "KIRO_ENV_FILE" });
+  }
+
+  const configuredFullPath = configuredPath ? path.resolve(baseDir, configuredPath) : null;
+  if (!configuredFullPath || !existsSync(configuredFullPath)) {
+    candidates.push({ path: path.join(baseDir, ".env.kiro.local"), source: ".env.kiro.local" });
+  }
+
+  for (const candidate of candidates) {
+    const fullPath = path.resolve(baseDir, candidate.path);
+    if (!existsSync(fullPath)) {
+      continue;
+    }
+
+    const loadedValues = loadEnvFile(fullPath);
+    Object.assign(values, loadedValues);
+    for (const key of Object.keys(loadedValues)) {
+      sourceByKey[key] = candidate.source;
+    }
+    loaded.push(candidate.source);
+    break;
+  }
+
+  return { values, loaded, sourceByKey };
+}
+
+function kiroProfileAvailable(env) {
+  const result = spawnSync("kiro-cli", ["chat", "--list-models", "--format", "json"], {
+    cwd,
+    env,
+    encoding: "utf8",
+    timeout: 30_000,
+    maxBuffer: 5 * 1024 * 1024,
+  });
+
+  return result.status === 0 && Boolean(result.stdout?.trim());
+}
+
+function resolveAuthMode(env, loadedEnvFiles, sourceByKey = {}, baseEnv = process.env, profileProbe = kiroProfileAvailable) {
+  if (env.KIRO_API_KEY) {
+    const keySource = baseEnv.KIRO_API_KEY ? "env" : sourceByKey.KIRO_API_KEY;
+    const mode = keySource === "KIRO_ENV_FILE"
+      ? "configured-env-file"
+      : keySource === ".env.kiro.local"
+        ? "env-file"
+        : "env";
+
+    return {
+      mode,
+      kiroApiKeyPresent: true,
+      profileAvailable: null,
+      loadedEnvFiles,
+      kiroApiKeySource: keySource,
+    };
+  }
+
+  const profileAvailable = profileProbe(env);
+  const mode = profileAvailable === null
+    ? "not-checked"
+    : profileAvailable
+      ? "profile"
+      : "missing";
+  return {
+    mode,
+    kiroApiKeyPresent: false,
+    profileAvailable,
+    loadedEnvFiles,
+    kiroApiKeySource: null,
+  };
+}
+
+function runSelfTests() {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "tracemap-kiro-review-"));
+  try {
+    const configured = path.join(tempDir, "configured.env");
+    const fallback = path.join(tempDir, ".env.kiro.local");
+    writeFileSync(configured, "KIRO_API_KEY=configured-key\nOTHER=configured\n", "utf8");
+    writeFileSync(fallback, "KIRO_API_KEY=fallback-key\nOTHER=fallback\n", "utf8");
+
+    const configuredLoad = loadConfiguredEnvFiles({ KIRO_ENV_FILE: configured }, tempDir);
+    assert.deepEqual(configuredLoad.loaded, ["KIRO_ENV_FILE"]);
+    assert.equal(configuredLoad.values.KIRO_API_KEY, "configured-key");
+    assert.equal(configuredLoad.sourceByKey.KIRO_API_KEY, "KIRO_ENV_FILE");
+
+    const fallbackLoad = loadConfiguredEnvFiles({ KIRO_ENV_FILE: path.join(tempDir, "missing.env") }, tempDir);
+    assert.deepEqual(fallbackLoad.loaded, [".env.kiro.local"]);
+    assert.equal(fallbackLoad.values.KIRO_API_KEY, "fallback-key");
+    assert.equal(fallbackLoad.sourceByKey.KIRO_API_KEY, ".env.kiro.local");
+
+    const noFileDir = path.join(tempDir, "empty");
+    mkdirSync(noFileDir);
+    const noFileLoad = loadConfiguredEnvFiles({}, noFileDir);
+    assert.deepEqual(noFileLoad.loaded, []);
+    assert.deepEqual(noFileLoad.values, {});
+
+    const configuredAuth = resolveAuthMode(
+      { KIRO_API_KEY: "configured-key" },
+      configuredLoad.loaded,
+      configuredLoad.sourceByKey,
+      {},
+      () => false,
+    );
+    assert.equal(configuredAuth.mode, "configured-env-file");
+    assert.equal(configuredAuth.kiroApiKeySource, "KIRO_ENV_FILE");
+
+    const fallbackAuth = resolveAuthMode(
+      { KIRO_API_KEY: "fallback-key" },
+      fallbackLoad.loaded,
+      fallbackLoad.sourceByKey,
+      {},
+      () => false,
+    );
+    assert.equal(fallbackAuth.mode, "env-file");
+    assert.equal(fallbackAuth.kiroApiKeySource, ".env.kiro.local");
+
+    const processEnvAuth = resolveAuthMode(
+      { KIRO_API_KEY: "process-key" },
+      configuredLoad.loaded,
+      configuredLoad.sourceByKey,
+      { KIRO_API_KEY: "process-key" },
+      () => false,
+    );
+    assert.equal(processEnvAuth.mode, "env");
+    assert.equal(processEnvAuth.kiroApiKeySource, "env");
+
+    const profileAuth = resolveAuthMode({}, [], {}, {}, () => true);
+    assert.equal(profileAuth.mode, "profile");
+    assert.equal(profileAuth.profileAvailable, true);
+
+    const missingAuth = resolveAuthMode({}, [], {}, {}, () => false);
+    assert.equal(missingAuth.mode, "missing");
+    assert.equal(missingAuth.profileAvailable, false);
+
+    const notCheckedAuth = resolveAuthMode({}, [], {}, {}, () => null);
+    assert.equal(notCheckedAuth.mode, "not-checked");
+    assert.equal(notCheckedAuth.profileAvailable, null);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+
+  console.log("kiro-review self-test passed");
 }
 
 function nowStamp() {
@@ -382,6 +535,11 @@ function buildAnalysisGaps({ toolDenied, spawnError }) {
 }
 
 function main() {
+  if (process.argv.includes("--self-test")) {
+    runSelfTests();
+    return;
+  }
+
   let options;
   try {
     options = parseArgs(process.argv.slice(2));
@@ -402,8 +560,15 @@ function main() {
   const cleanPath = path.join(outputDir, `${baseName}.clean.md`);
   const metaPath = path.join(outputDir, `${baseName}.meta.json`);
 
-  const envFileValues = loadEnvFile(path.join(cwd, ".env.kiro.local"));
-  const env = { ...process.env, ...envFileValues };
+  const { values: envFileValues, loaded: loadedEnvFiles, sourceByKey } = loadConfiguredEnvFiles();
+  const env = { ...envFileValues, ...process.env };
+  const auth = resolveAuthMode(
+    env,
+    loadedEnvFiles,
+    sourceByKey,
+    process.env,
+    options.dryRun ? () => null : kiroProfileAvailable,
+  );
   const prompt = buildPrompt(options);
   if (options.saveReviewText) {
     writeFileSync(promptPath, prompt, "utf8");
@@ -444,7 +609,11 @@ function main() {
     gitBranch,
     dryRun: options.dryRun,
     auth: {
-      kiroApiKeyPresent: Boolean(env.KIRO_API_KEY),
+      mode: auth.mode,
+      kiroApiKeyPresent: auth.kiroApiKeyPresent,
+      profileAvailable: auth.profileAvailable,
+      loadedEnvFiles: auth.loadedEnvFiles,
+      kiroApiKeySource: auth.kiroApiKeySource,
     },
   };
 
@@ -464,8 +633,8 @@ function main() {
     return;
   }
 
-  if (!env.KIRO_API_KEY) {
-    console.error("KIRO_API_KEY is missing. Set it in .env.kiro.local or the process environment.");
+  if (auth.mode === "missing") {
+    console.error("Kiro auth is missing. Set KIRO_API_KEY in the environment, .env.kiro.local, or KIRO_ENV_FILE; or run kiro-cli login/profile so profile auth is available.");
     meta.status = 1;
     meta.reviewCoverage = "NotRun";
     meta.finishedAt = new Date().toISOString();
