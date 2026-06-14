@@ -169,9 +169,43 @@ public sealed record SnapshotDiffGap(
     IReadOnlyList<SnapshotDiffFileSpan> FileSpans,
     IReadOnlyList<KeyValuePair<string, string>> Metadata);
 
-internal sealed record SnapshotIndexInfo(string Kind, SnapshotDiffSnapshot Snapshot);
+internal sealed record SnapshotIndexInfo(string Kind, SnapshotDiffSnapshot Snapshot, IReadOnlyList<SnapshotDiffGap> Gaps);
 
 internal sealed record SnapshotSourcePair(string Label, SnapshotDiffSourceInfo? Before, SnapshotDiffSourceInfo? After);
+
+internal sealed record SnapshotFactRow(
+    string FactId,
+    string ScanId,
+    string Repo,
+    string CommitSha,
+    string FactType,
+    string RuleId,
+    string EvidenceTier,
+    string? SourceSymbol,
+    string? TargetSymbol,
+    string? ContractElement,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    IReadOnlyDictionary<string, string> Properties);
+
+internal sealed record SnapshotComparableRecord(
+    string EvidenceKind,
+    string StableKey,
+    string MetadataHash,
+    string EvidenceHash,
+    SnapshotDiffEvidence Evidence,
+    string RuleId,
+    string EvidenceTier,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SupportingEdgeIds,
+    IReadOnlyList<string> CoverageCaveats,
+    IReadOnlyList<string> Notes,
+    bool NeedsReview);
+
+internal sealed record SnapshotSingleDiffs(
+    IReadOnlyList<SnapshotDiffRow> EndpointDiffs,
+    IReadOnlyList<SnapshotDiffRow> SurfaceDiffs);
 
 public static class SnapshotDiffClassifications
 {
@@ -229,7 +263,7 @@ public static class SnapshotDiffReporter
         "Snapshot diff compares deterministic static evidence between TraceMap indexes; it does not prove runtime behavior, deployment behavior, traffic, compatibility, or business impact.",
         "Source pairing is exact-label based and does not infer repository renames, label renames, branch topology, or merge ancestry.",
         "Missing, unknown, or conflicting source identity and commit metadata downgrade conclusions to review-tier gaps.",
-        "Combined-index endpoint, surface, graph, and path evidence is delegated to the existing combined diff engine when requested; single-index projector sections remain explicit availability gaps until deeper evidence readers are implemented.",
+        "Combined-index endpoint, surface, graph, and path evidence is delegated to the existing combined diff engine when requested; single-index graph, contract-shape, and analysis-gap projectors remain explicit availability gaps until deeper evidence readers are implemented.",
         "Reports omit or hash raw URLs, local absolute paths, source snippets, raw SQL, config values, connection strings, and secret-looking values."
     ];
 
@@ -263,6 +297,8 @@ public static class SnapshotDiffReporter
         }
 
         var allGaps = new List<SnapshotDiffGap>();
+        allGaps.AddRange(before.Gaps);
+        allGaps.AddRange(after.Gaps);
         var sourcePairs = PairSources(before.Snapshot, after.Snapshot, options.Source);
         AddIdentityGaps(sourcePairs, allGaps, before.Kind == "combined");
         if (allGaps.Any(gap => gap.GapKind == "SourceIdentityConflict") && !options.AllowIdentityMismatch)
@@ -279,6 +315,9 @@ public static class SnapshotDiffReporter
         var combinedReport = before.Kind == "combined"
             ? await BuildCombinedDelegatedReportAsync(options, scopes, cancellationToken)
             : null;
+        var singleDiffs = before.Kind == "single"
+            ? await BuildSingleDiffsAsync(options, scopes, sourcePairs, allGaps, cancellationToken)
+            : null;
 
         IReadOnlyList<SnapshotDiffRow> sourceDiffs = combinedReport is not null && scopes.Contains("sources", StringComparer.Ordinal)
             ? MapCombinedRows(combinedReport.SourceDiffs, "source").ToArray()
@@ -292,9 +331,13 @@ public static class SnapshotDiffReporter
             : [];
         IReadOnlyList<SnapshotDiffRow> endpointDiffs = combinedReport is not null && scopes.Contains("endpoints", StringComparer.Ordinal)
             ? MapCombinedRows(combinedReport.EndpointDiffs, "endpoint").ToArray()
+            : singleDiffs is not null && scopes.Contains("endpoints", StringComparer.Ordinal)
+            ? singleDiffs.EndpointDiffs
             : [];
         IReadOnlyList<SnapshotDiffRow> surfaceDiffs = combinedReport is not null && scopes.Contains("surfaces", StringComparer.Ordinal)
             ? MapCombinedRows(combinedReport.SurfaceDiffs, "surface").ToArray()
+            : singleDiffs is not null && scopes.Contains("surfaces", StringComparer.Ordinal)
+            ? singleDiffs.SurfaceDiffs
             : [];
         IReadOnlyList<SnapshotDiffRow> graphDiffs = combinedReport is not null && scopes.Contains("graph", StringComparer.Ordinal)
             ? MapCombinedRows(combinedReport.EdgeDiffs, "graph").ToArray()
@@ -311,7 +354,7 @@ public static class SnapshotDiffReporter
             allGaps.AddRange(MapCombinedGaps(combinedReport.Gaps));
         }
 
-        AddUnavailableGaps(scopes, before.Kind, options.IncludePaths, combinedReport is not null, allGaps);
+        AddUnavailableGaps(scopes, before.Kind, options.IncludePaths, combinedReport is not null, singleDiffs is not null, allGaps);
         var gaps = allGaps
             .OrderBy(gap => gap.Section, StringComparer.Ordinal)
             .ThenBy(gap => gap.GapKind, StringComparer.Ordinal)
@@ -531,19 +574,21 @@ public static class SnapshotDiffReporter
         var hasCombinedFacts = await TableExistsAsync(connection, "combined_facts", cancellationToken);
         if (hasSources && hasCombinedFacts)
         {
-            return new SnapshotIndexInfo("combined", await ReadCombinedSnapshotAsync(connection, side, cancellationToken));
+            var gaps = new List<SnapshotDiffGap>();
+            return new SnapshotIndexInfo("combined", await ReadCombinedSnapshotAsync(connection, side, gaps, cancellationToken), gaps);
         }
 
         if (hasScanManifest && hasFacts)
         {
-            return new SnapshotIndexInfo("single", await ReadSingleSnapshotAsync(connection, side, cancellationToken));
+            var gaps = new List<SnapshotDiffGap>();
+            return new SnapshotIndexInfo("single", await ReadSingleSnapshotAsync(connection, side, gaps, cancellationToken), gaps);
         }
 
         var missing = !hasScanManifest && !hasSources ? "scan_manifest/index_sources" : !hasFacts && !hasCombinedFacts ? "facts/combined_facts" : "TraceMap index tables";
         throw new InvalidDataException($"{side} input is not a valid TraceMap index; missing {missing}.");
     }
 
-    private static async Task<SnapshotDiffSnapshot> ReadCombinedSnapshotAsync(SqliteConnection connection, string side, CancellationToken cancellationToken)
+    private static async Task<SnapshotDiffSnapshot> ReadCombinedSnapshotAsync(SqliteConnection connection, string side, List<SnapshotDiffGap> gaps, CancellationToken cancellationToken)
     {
         var sources = new List<SnapshotDiffSourceInfo>();
         await using var command = connection.CreateCommand();
@@ -567,11 +612,16 @@ public static class SnapshotDiffReporter
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var manifest = DeserializeManifest(StringOrNull(reader, 11));
+            var manifest = DeserializeManifest(StringOrNull(reader, 11), out var malformedManifest);
             var label = StringOrDefault(reader, 0, "unknown");
+            if (malformedManifest)
+            {
+                gaps.Add(MalformedMetadataGap(side, "index_sources.manifest_json", label, null));
+            }
+
             var scannerVersion = StringOrDefault(reader, 10, "unknown");
             extractorVersions[$"{label}:{scannerVersion}"] = scannerVersion;
-            var gaps = manifest?.KnownGaps ?? [];
+            var knownGaps = manifest?.KnownGaps ?? [];
             var analysisLevel = StringOrDefault(reader, 8, "unknown");
             var buildStatus = StringOrDefault(reader, 9, "unknown");
             sources.Add(new SnapshotDiffSourceInfo(
@@ -581,18 +631,18 @@ public static class SnapshotDiffReporter
                 NullIfUnknown(StringOrNull(reader, 3)),
                 RepositoryIdentityHash(StringOrNull(reader, 5), StringOrNull(reader, 4)),
                 StringOrNull(reader, 6),
-                CoverageFrom(analysisLevel, buildStatus, gaps),
+                CoverageFrom(analysisLevel, buildStatus, knownGaps),
                 buildStatus,
                 analysisLevel,
                 scannerVersion,
-                gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray()));
+                knownGaps.OrderBy(value => value, StringComparer.Ordinal).ToArray()));
         }
 
         var warnings = CoverageWarnings(sources);
         return new SnapshotDiffSnapshot(side, "combined", sources, warnings.Count == 0 ? "Full" : "Reduced", warnings, extractorVersions.ToArray());
     }
 
-    private static async Task<SnapshotDiffSnapshot> ReadSingleSnapshotAsync(SqliteConnection connection, string side, CancellationToken cancellationToken)
+    private static async Task<SnapshotDiffSnapshot> ReadSingleSnapshotAsync(SqliteConnection connection, string side, List<SnapshotDiffGap> gaps, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -613,8 +663,13 @@ public static class SnapshotDiffReporter
             throw new InvalidDataException($"{side} input is not a valid TraceMap index; missing scan_manifest row.");
         }
 
-        var manifest = DeserializeManifest(StringOrNull(reader, 6));
-        var gaps = manifest?.KnownGaps ?? [];
+        var manifest = DeserializeManifest(StringOrNull(reader, 6), out var malformedManifest);
+        if (malformedManifest)
+        {
+            gaps.Add(MalformedMetadataGap(side, "scan_manifest.manifest_json", "single", null));
+        }
+
+        var knownGaps = manifest?.KnownGaps ?? [];
         var scannerVersion = StringOrDefault(reader, 3, "unknown");
         var analysisLevel = StringOrDefault(reader, 4, "unknown");
         var buildStatus = StringOrDefault(reader, 5, "unknown");
@@ -623,13 +678,13 @@ public static class SnapshotDiffReporter
             InferLanguage(scannerVersion),
             StringOrNull(reader, 0),
             NullIfUnknown(StringOrNull(reader, 2)),
-            RepositoryIdentityHash(manifest?.RemoteUrl, StringOrNull(reader, 1)),
+            malformedManifest ? null : RepositoryIdentityHash(manifest?.RemoteUrl, StringOrNull(reader, 1)),
             manifest?.ScanRootPathHash,
-            CoverageFrom(analysisLevel, buildStatus, gaps),
+            CoverageFrom(analysisLevel, buildStatus, knownGaps),
             buildStatus,
             analysisLevel,
             scannerVersion,
-            gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            knownGaps.OrderBy(value => value, StringComparer.Ordinal).ToArray());
         var warnings = CoverageWarnings([source]);
         return new SnapshotDiffSnapshot(side, "single", [source], warnings.Count == 0 ? "Full" : "Reduced", warnings, [new KeyValuePair<string, string>($"single:{scannerVersion}", scannerVersion)]);
     }
@@ -671,7 +726,14 @@ public static class SnapshotDiffReporter
                 : !string.IsNullOrWhiteSpace(pair.Before.Language)
                   && !string.IsNullOrWhiteSpace(pair.After.Language)
                   && !string.Equals(pair.Before.Language, pair.After.Language, StringComparison.OrdinalIgnoreCase);
-            if (!string.Equals(pair.Before.RepositoryIdentityHash, pair.After.RepositoryIdentityHash, StringComparison.Ordinal)
+            if (string.IsNullOrWhiteSpace(pair.Before.RepositoryIdentityHash) || string.IsNullOrWhiteSpace(pair.After.RepositoryIdentityHash))
+            {
+                gaps.Add(Gap("identity", "SourceIdentityUnverified", "sources", pair.Label, IdentityRuleId, SnapshotDiffClassifications.UnknownAnalysisGap, $"Source `{pair.Label}` is missing repository identity metadata on one or both sides."));
+            }
+
+            if ((!string.IsNullOrWhiteSpace(pair.Before.RepositoryIdentityHash)
+                    && !string.IsNullOrWhiteSpace(pair.After.RepositoryIdentityHash)
+                    && !string.Equals(pair.Before.RepositoryIdentityHash, pair.After.RepositoryIdentityHash, StringComparison.Ordinal))
                 || languageConflict)
             {
                 gaps.Add(Gap("identity", "SourceIdentityConflict", "sources", pair.Label, IdentityRuleId, SnapshotDiffClassifications.UnknownAnalysisGap, $"Source `{pair.Label}` identity differs between snapshots."));
@@ -744,6 +806,610 @@ public static class SnapshotDiffReporter
             .OrderBy(row => row.StableKey, StringComparer.Ordinal)
             .ToArray();
         return TruncateRows("extractorVersionDiffs", rows, maxRows, gaps);
+    }
+
+    private static async Task<SnapshotSingleDiffs> BuildSingleDiffsAsync(
+        SnapshotDiffOptions options,
+        IReadOnlyList<string> scopes,
+        IReadOnlyList<SnapshotSourcePair> sourcePairs,
+        List<SnapshotDiffGap> gaps,
+        CancellationToken cancellationToken)
+    {
+        if (!sourcePairs.Any(pair => pair.Label == "single" && (pair.Before is not null || pair.After is not null)))
+        {
+            return new SnapshotSingleDiffs([], []);
+        }
+
+        var beforeFacts = await ReadSingleFactsAsync(options.BeforePath, "before", gaps, cancellationToken);
+        var afterFacts = await ReadSingleFactsAsync(options.AfterPath, "after", gaps, cancellationToken);
+        var sourcePair = sourcePairs.First(pair => pair.Label == "single");
+        var endpointSelector = ParseEndpointSelector(options.Endpoint);
+
+        var beforeEndpoints = ProjectSingleEndpoints(beforeFacts, sourcePair.Before, endpointSelector);
+        var afterEndpoints = ProjectSingleEndpoints(afterFacts, sourcePair.After, endpointSelector);
+        if (scopes.Contains("endpoints", StringComparer.Ordinal) && endpointSelector is not null && beforeEndpoints.Count == 0 && afterEndpoints.Count == 0)
+        {
+            gaps.Add(Gap("selector", "SelectorNoMatch", "endpointDiffs", sourcePair.Label, EvidenceRuleId, SnapshotDiffClassifications.SelectorNoMatch, $"Endpoint selector `{options.Endpoint}` matched no single-index endpoint evidence."));
+        }
+
+        var beforeSurfaces = ProjectSingleSurfaces(beforeFacts, sourcePair.Before, options.Surface, options.SurfaceName);
+        var afterSurfaces = ProjectSingleSurfaces(afterFacts, sourcePair.After, options.Surface, options.SurfaceName);
+        if (scopes.Contains("surfaces", StringComparer.Ordinal)
+            && (!string.IsNullOrWhiteSpace(options.Surface) || !string.IsNullOrWhiteSpace(options.SurfaceName))
+            && beforeSurfaces.Count == 0
+            && afterSurfaces.Count == 0)
+        {
+            gaps.Add(Gap("selector", "SelectorNoMatch", "surfaceDiffs", sourcePair.Label, EvidenceRuleId, SnapshotDiffClassifications.SelectorNoMatch, "Surface selector matched no single-index surface evidence."));
+        }
+
+        var endpointDiffs = scopes.Contains("endpoints", StringComparer.Ordinal)
+            ? CompareSingleRecords(beforeEndpoints, afterEndpoints, "endpointDiffs", sourcePair, gaps, options.MaxDiffRows)
+            : [];
+        var surfaceDiffs = scopes.Contains("surfaces", StringComparer.Ordinal)
+            ? CompareSingleRecords(beforeSurfaces, afterSurfaces, "surfaceDiffs", sourcePair, gaps, options.MaxDiffRows)
+            : [];
+
+        return new SnapshotSingleDiffs(endpointDiffs, surfaceDiffs);
+    }
+
+    private static async Task<IReadOnlyList<SnapshotFactRow>> ReadSingleFactsAsync(string path, string side, List<SnapshotDiffGap> gaps, CancellationToken cancellationToken)
+    {
+        await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select fact_id,
+                   scan_id,
+                   repo,
+                   commit_sha,
+                   fact_type,
+                   rule_id,
+                   evidence_tier,
+                   source_symbol,
+                   target_symbol,
+                   contract_element,
+                   file_path,
+                   start_line,
+                   end_line,
+                   properties_json
+            from facts
+            order by file_path, start_line, fact_type, fact_id;
+            """;
+        var rows = new List<SnapshotFactRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var factId = reader.GetString(0);
+            var properties = ParseProperties(StringOrDefault(reader, 13, "{}"), out var malformed);
+            if (malformed)
+            {
+                gaps.Add(MalformedMetadataGap(side, "facts.properties_json", "single", factId));
+            }
+
+            rows.Add(new SnapshotFactRow(
+                factId,
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                StringOrNull(reader, 7),
+                StringOrNull(reader, 8),
+                StringOrNull(reader, 9),
+                reader.GetString(10),
+                reader.GetInt32(11),
+                reader.GetInt32(12),
+                properties));
+        }
+
+        return rows;
+    }
+
+    private static IReadOnlyList<SnapshotComparableRecord> ProjectSingleEndpoints(
+        IReadOnlyList<SnapshotFactRow> facts,
+        SnapshotDiffSourceInfo? source,
+        (string Method, string PathKey)? endpointSelector)
+    {
+        if (source is null)
+        {
+            return [];
+        }
+
+        return facts
+            .Where(fact => fact.FactType is FactTypes.HttpRouteBinding or FactTypes.HttpCallDetected)
+            .Select(fact => ProjectSingleEndpoint(fact, source))
+            .OfType<SnapshotComparableRecord>()
+            .Where(record => endpointSelector is null || EndpointSelectorMatches(record, endpointSelector.Value))
+            .OrderBy(record => record.StableKey, StringComparer.Ordinal)
+            .ThenBy(record => record.EvidenceHash, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static SnapshotComparableRecord? ProjectSingleEndpoint(SnapshotFactRow fact, SnapshotDiffSourceInfo source)
+    {
+        var endpointKind = fact.FactType == FactTypes.HttpRouteBinding ? "http-route" : "http-client";
+        var method = NormalizeEndpointMethod(FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName") ?? fact.ContractElement);
+        var rawPathKey = FirstValue(fact.Properties, "normalizedPathKey");
+        var pathKey = NullIfUnknown(rawPathKey) ?? SafeFallbackIdentity("path", FirstValue(fact.Properties, "normalizedPathTemplate") ?? fact.TargetSymbol ?? fact.ContractElement ?? fact.FactId);
+        var handlerIdentity = fact.SourceSymbol ?? fact.TargetSymbol;
+        var handlerIdentityOrNone = NullIfUnknown(handlerIdentity) ?? "none";
+        var stableKey = $"endpoint:{source.SourceLabel}:{endpointKind}:{method}:{pathKey}:{handlerIdentityOrNone}";
+        var metadata = CombinedReportHelpers.SortedMetadata([
+            Pair("endpointKind", endpointKind),
+            Pair("httpMethod", method),
+            Pair("normalizedPathKey", pathKey),
+            Pair("handlerIdentity", handlerIdentityOrNone),
+            Pair("pathIdentityFallback", rawPathKey is null ? "true" : null),
+            Pair("factType", fact.FactType),
+            Pair("ruleId", fact.RuleId),
+            Pair("evidenceTier", fact.EvidenceTier)
+        ]);
+        var evidence = SingleEvidence(source, fact, metadata);
+        return new SnapshotComparableRecord(
+            "endpoint",
+            stableKey,
+            MetadataHash(metadata),
+            EvidenceHash(evidence),
+            evidence,
+            fact.RuleId,
+            fact.EvidenceTier,
+            [fact.FactId],
+            [],
+            rawPathKey is null ? ["FallbackEndpointIdentity"] : [],
+            rawPathKey is null ? ["FallbackEndpointIdentity: endpoint path identity used a deterministic hash because normalizedPathKey was unavailable."] : [],
+            fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual || rawPathKey is null);
+    }
+
+    private static bool EndpointSelectorMatches(SnapshotComparableRecord record, (string Method, string PathKey) selector)
+    {
+        var method = record.Evidence.Metadata.FirstOrDefault(pair => pair.Key == "httpMethod").Value;
+        var pathKey = record.Evidence.Metadata.FirstOrDefault(pair => pair.Key == "normalizedPathKey").Value;
+        return CombinedDependencyReporter.MethodsCompatible(selector.Method, method)
+            && string.Equals(pathKey, selector.PathKey, StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<SnapshotComparableRecord> ProjectSingleSurfaces(
+        IReadOnlyList<SnapshotFactRow> facts,
+        SnapshotDiffSourceInfo? source,
+        string? surfaceKind,
+        string? surfaceName)
+    {
+        if (source is null)
+        {
+            return [];
+        }
+
+        var combinedFacts = facts
+            .Select(fact => new CombinedFactRow(
+                fact.FactId,
+                "single",
+                source.SourceLabel,
+                fact.FactId,
+                fact.ScanId,
+                fact.Repo,
+                fact.CommitSha,
+                fact.FactType,
+                fact.RuleId,
+                fact.EvidenceTier,
+                fact.SourceSymbol,
+                fact.TargetSymbol,
+                fact.ContractElement,
+                fact.FilePath,
+                fact.StartLine,
+                fact.EndLine,
+                fact.Properties))
+            .ToArray();
+        return CombinedDependencyReporter.BuildSurfaces(combinedFacts)
+            .Where(surface => string.IsNullOrWhiteSpace(surfaceKind) || string.Equals(surface.SurfaceKind, surfaceKind.Trim(), StringComparison.Ordinal))
+            .Where(surface => string.IsNullOrWhiteSpace(surfaceName) || SingleSurfaceNameMatches(surface, surfaceName.Trim()))
+            .Select(surface => ProjectSingleSurface(surface, source))
+            .OrderBy(record => record.StableKey, StringComparer.Ordinal)
+            .ThenBy(record => record.EvidenceHash, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static SnapshotComparableRecord ProjectSingleSurface(CombinedDependencySurfaceRow surface, SnapshotDiffSourceInfo source)
+    {
+        var metadata = SingleSurfaceMetadata(surface);
+        var stableKey = $"surface:{source.SourceLabel}:{surface.SurfaceKind}:{MetadataHash(SingleSurfaceIdentityMetadata(surface))}";
+        var caveats = SingleSurfaceCaveats(surface);
+        var evidence = new SnapshotDiffEvidence(
+            source.SourceLabel,
+            source.CommitSha,
+            source.ScanId,
+            source.Language,
+            source.RepositoryIdentityHash,
+            source.RootPathHash,
+            source.Coverage,
+            source.AnalysisLevel,
+            source.BuildStatus,
+            source.ScannerVersion,
+            [new SnapshotDiffFileSpan(CombinedReportHelpers.SafePath(surface.FilePath), surface.StartLine, surface.EndLine, source.SourceLabel)],
+            metadata);
+        return new SnapshotComparableRecord(
+            "surface",
+            stableKey,
+            MetadataHash(metadata),
+            EvidenceHash(evidence),
+            evidence,
+            surface.RuleId,
+            surface.EvidenceTier,
+            [surface.OriginalFactId],
+            [],
+            caveats.Select(caveat => caveat.Code).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            caveats.Select(caveat => $"{caveat.Code}: {caveat.Message}").OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            surface.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual || caveats.Count > 0);
+    }
+
+    private static IReadOnlyList<SnapshotDiffRow> CompareSingleRecords(
+        IReadOnlyList<SnapshotComparableRecord> before,
+        IReadOnlyList<SnapshotComparableRecord> after,
+        string section,
+        SnapshotSourcePair sourcePair,
+        List<SnapshotDiffGap> gaps,
+        int maxRows)
+    {
+        var rows = new List<SnapshotDiffRow>();
+        var beforeGroups = before.GroupBy(record => record.StableKey, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var afterGroups = after.GroupBy(record => record.StableKey, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        foreach (var duplicate in beforeGroups.Where(group => group.Value.Length > 1).Concat(afterGroups.Where(group => group.Value.Length > 1)))
+        {
+            gaps.Add(DuplicateIdentityGap(section, sourcePair.Label, duplicate.Key, duplicate.Value.SelectMany(record => record.SupportingFactIds)));
+        }
+
+        foreach (var key in beforeGroups.Keys.Concat(afterGroups.Keys).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+        {
+            beforeGroups.TryGetValue(key, out var beforeRows);
+            afterGroups.TryGetValue(key, out var afterRows);
+            var beforeRecord = beforeRows?.OrderBy(record => record.MetadataHash, StringComparer.Ordinal).FirstOrDefault();
+            var afterRecord = afterRows?.OrderBy(record => record.MetadataHash, StringComparer.Ordinal).FirstOrDefault();
+            if (beforeRecord is not null
+                && afterRecord is not null
+                && beforeRecord.MetadataHash == afterRecord.MetadataHash
+                && beforeRecord.EvidenceHash == afterRecord.EvidenceHash
+                && beforeRows!.Length == afterRows!.Length)
+            {
+                continue;
+            }
+
+            rows.Add(SingleRow(key, beforeRecord, afterRecord, sourcePair, gaps));
+        }
+
+        return TruncateRows(section, rows
+            .OrderBy(row => row.StableKey, StringComparer.Ordinal)
+            .ThenBy(row => row.DiffId, StringComparer.Ordinal)
+            .ToArray(), maxRows, gaps);
+    }
+
+    private static SnapshotDiffRow SingleRow(
+        string stableKey,
+        SnapshotComparableRecord? before,
+        SnapshotComparableRecord? after,
+        SnapshotSourcePair sourcePair,
+        IReadOnlyList<SnapshotDiffGap> gaps)
+    {
+        var classification = SingleClassification(before, after, sourcePair, gaps);
+        var sameSha = SameKnownCommitSha(sourcePair);
+        var sameShaNote = sameSha
+            ? "SameCommitShaDivergentEvidence: Indexed evidence changed while both snapshots report the same commit SHA; rule snapshot.diff.identity.v1."
+            : null;
+        var ruleIds = RuleIds(EvidenceRuleId, before?.RuleId, after?.RuleId, sameSha ? IdentityRuleId : null);
+        var evidenceTiers = EvidenceTiersFor(before?.EvidenceTier, after?.EvidenceTier);
+        var sourceGaps = gaps.Where(gap => gap.SourceLabel == sourcePair.Label).ToArray();
+        var coverageCaveats = (before?.CoverageCaveats ?? [])
+            .Concat(after?.CoverageCaveats ?? [])
+            .Concat(sourceGaps.Select(gap => gap.GapKind))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var notes = (before?.Notes ?? [])
+            .Concat(after?.Notes ?? [])
+            .Concat(sourceGaps.Select(gap => gap.GapId))
+            .Concat(sameShaNote is null ? [] : [sameShaNote])
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        return new SnapshotDiffRow(
+            StableId("diff", before?.EvidenceKind ?? after?.EvidenceKind, stableKey, classification),
+            stableKey,
+            ChangeType(before, after),
+            classification,
+            Confidence(classification),
+            before?.EvidenceKind ?? after?.EvidenceKind ?? "evidence",
+            sourcePair.Label,
+            before?.Evidence,
+            after?.Evidence,
+            ruleIds,
+            evidenceTiers,
+            (before?.SupportingFactIds ?? []).Concat(after?.SupportingFactIds ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            (before?.SupportingEdgeIds ?? []).Concat(after?.SupportingEdgeIds ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            [],
+            (before?.Evidence.FileSpans ?? []).Concat(after?.Evidence.FileSpans ?? []).GroupBy(span => $"{span.SourceLabel}:{span.FilePath}:{span.StartLine}:{span.EndLine}", StringComparer.Ordinal).Select(group => group.First()).OrderBy(span => span.FilePath, StringComparer.Ordinal).ThenBy(span => span.StartLine).ThenBy(span => span.EndLine).ToArray(),
+            coverageCaveats,
+            notes);
+    }
+
+    private static string SingleClassification(
+        SnapshotComparableRecord? before,
+        SnapshotComparableRecord? after,
+        SnapshotSourcePair sourcePair,
+        IReadOnlyList<SnapshotDiffGap> gaps)
+    {
+        var sourceClassification = Classify(sourcePair.Label, gaps);
+        if (sourceClassification == SnapshotDiffClassifications.UnknownAnalysisGap)
+        {
+            return sourceClassification;
+        }
+
+        var sameSha = SameKnownCommitSha(sourcePair);
+        var needsReview = before?.NeedsReview == true || after?.NeedsReview == true;
+        if (before is null || after is null)
+        {
+            if (sameSha)
+            {
+                return needsReview ? SnapshotDiffClassifications.NeedsReview : SnapshotDiffClassifications.ChangedEvidence;
+            }
+
+            var coverageReduced = before is null
+                ? !string.Equals(sourcePair.Before?.Coverage, "Full", StringComparison.Ordinal)
+                : !string.Equals(sourcePair.After?.Coverage, "Full", StringComparison.Ordinal);
+            if (coverageReduced)
+            {
+                return SnapshotDiffClassifications.ChangedWithReducedCoverage;
+            }
+
+            return needsReview
+                ? SnapshotDiffClassifications.NeedsReview
+                : before is null ? SnapshotDiffClassifications.Added : SnapshotDiffClassifications.Removed;
+        }
+
+        if (needsReview)
+        {
+            return SnapshotDiffClassifications.NeedsReview;
+        }
+
+        return sourceClassification;
+    }
+
+    private static bool SameKnownCommitSha(SnapshotSourcePair sourcePair)
+    {
+        return !string.IsNullOrWhiteSpace(sourcePair.Before?.CommitSha)
+            && !string.IsNullOrWhiteSpace(sourcePair.After?.CommitSha)
+            && string.Equals(sourcePair.Before.CommitSha, sourcePair.After.CommitSha, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ChangeType(SnapshotComparableRecord? before, SnapshotComparableRecord? after)
+    {
+        if (before is null)
+        {
+            return "added";
+        }
+
+        if (after is null)
+        {
+            return "removed";
+        }
+
+        return "changed";
+    }
+
+    private static SnapshotDiffEvidence SingleEvidence(
+        SnapshotDiffSourceInfo source,
+        SnapshotFactRow fact,
+        IReadOnlyList<KeyValuePair<string, string>> metadata)
+    {
+        return new SnapshotDiffEvidence(
+            source.SourceLabel,
+            source.CommitSha,
+            source.ScanId,
+            source.Language,
+            source.RepositoryIdentityHash,
+            source.RootPathHash,
+            source.Coverage,
+            source.AnalysisLevel,
+            source.BuildStatus,
+            source.ScannerVersion,
+            [new SnapshotDiffFileSpan(CombinedReportHelpers.SafePath(fact.FilePath), fact.StartLine, fact.EndLine, source.SourceLabel)],
+            metadata);
+    }
+
+    private static string NormalizeEndpointMethod(string? method)
+    {
+        if (string.IsNullOrWhiteSpace(method))
+        {
+            return "ANY";
+        }
+
+        return method.Trim().ToUpperInvariant();
+    }
+
+    private static (string Method, string PathKey)? ParseEndpointSelector(string? endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return null;
+        }
+
+        var parts = endpoint.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return (NormalizeEndpointMethod(parts[0]), parts[1]);
+    }
+
+    private static string? FirstValue(IReadOnlyDictionary<string, string> properties, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static string SafeFallbackIdentity(string prefix, string value)
+    {
+        return $"{prefix}-hash:{CombinedReportHelpers.Hash(value, 24)}";
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> SingleSurfaceMetadata(CombinedDependencySurfaceRow surface)
+    {
+        return CombinedReportHelpers.SortedMetadata([
+            Pair("surfaceKind", surface.SurfaceKind),
+            Pair("httpMethod", surface.HttpMethod),
+            Pair("normalizedPathKey", surface.NormalizedPathKey),
+            Pair("operationName", surface.OperationName),
+            Pair("tableName", surface.TableName),
+            Pair("columnNames", surface.ColumnNames),
+            Pair("sqlSourceKind", surface.SourceKind),
+            Pair("queryShapeHash", surface.ShapeHash),
+            Pair("textHash", surface.TextHash),
+            Pair("textLength", surface.TextLength),
+            Pair("ecosystem", surface.Ecosystem),
+            Pair("manifestKind", surface.ManifestKind),
+            Pair("packageName", surface.PackageName),
+            Pair("packageManager", surface.PackageManager),
+            Pair("dependencyScope", surface.DependencyScope),
+            Pair("dependencyGroup", surface.DependencyGroup),
+            Pair("version", surface.Version),
+            Pair("versionHash", surface.VersionHash),
+            Pair("redactionReason", surface.RedactionReason),
+            Pair("configKey", surface.ConfigKey),
+            Pair("factType", surface.FactType),
+            Pair("ruleId", surface.RuleId),
+            Pair("evidenceTier", surface.EvidenceTier),
+            Pair("identityFallbackHash", IsVolatileSqlIdentity(surface) ? CombinedReportHelpers.Hash(surface.OriginalFactId ?? surface.CombinedFactId, 24) : null)
+        ]);
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> SingleSurfaceIdentityMetadata(CombinedDependencySurfaceRow surface)
+    {
+        if (surface.SurfaceKind == "package-config" && !string.IsNullOrWhiteSpace(surface.PackageName))
+        {
+            return CombinedReportHelpers.SortedMetadata([
+                Pair("surfaceKind", surface.SurfaceKind),
+                Pair("ecosystem", surface.Ecosystem),
+                Pair("manifestKind", surface.ManifestKind),
+                Pair("packageName", surface.PackageName),
+                Pair("manifestPath", surface.FilePath),
+                Pair("configKey", surface.ConfigKey)
+            ]);
+        }
+
+        return SingleSurfaceMetadata(surface);
+    }
+
+    private static IReadOnlyList<(string Code, string Message)> SingleSurfaceCaveats(CombinedDependencySurfaceRow surface)
+    {
+        if (surface.SurfaceKind == "package-config")
+        {
+            var caveats = new List<(string Code, string Message)>();
+            if (!string.IsNullOrWhiteSpace(surface.VersionHash) && string.IsNullOrWhiteSpace(surface.Version))
+            {
+                caveats.Add(("HashOnlyEvidence", "Package version evidence is hash-only or redacted; diff classification remains review-tier."));
+            }
+
+            if (string.IsNullOrWhiteSpace(surface.PackageName) || string.IsNullOrWhiteSpace(surface.Ecosystem))
+            {
+                caveats.Add(("VolatileIdentity", "Package surface identity is missing package name or ecosystem metadata; diff classification remains review-tier."));
+            }
+
+            return caveats;
+        }
+
+        if (surface.SurfaceKind != "sql-query")
+        {
+            return [];
+        }
+
+        var sqlCaveats = new List<(string Code, string Message)>();
+        if (IsHashOnlySqlEvidence(surface))
+        {
+            sqlCaveats.Add(("HashOnlyEvidence", "SQL surface has text hash evidence without credible shape metadata; diff classification remains review-tier."));
+        }
+
+        if (IsVolatileSqlIdentity(surface))
+        {
+            sqlCaveats.Add(("VolatileIdentity", "SQL surface identity fell back to a fact hash because stable SQL metadata was unavailable; diff classification remains review-tier."));
+        }
+
+        return sqlCaveats;
+    }
+
+    private static bool IsHashOnlySqlEvidence(CombinedDependencySurfaceRow surface)
+    {
+        return surface.SurfaceKind == "sql-query"
+            && HasSqlValue(surface.TextHash)
+            && !HasSqlValue(surface.ShapeHash)
+            && !HasSqlValue(surface.OperationName)
+            && !HasSqlValue(surface.TableName)
+            && !HasSqlValue(surface.ColumnNames);
+    }
+
+    private static bool IsVolatileSqlIdentity(CombinedDependencySurfaceRow surface)
+    {
+        return surface.SurfaceKind == "sql-query"
+            && !HasSqlValue(surface.ShapeHash)
+            && !HasSqlValue(surface.TextHash)
+            && !HasSqlValue(surface.OperationName)
+            && !HasSqlValue(surface.TableName)
+            && !HasSqlValue(surface.ColumnNames);
+    }
+
+    private static bool HasSqlValue(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && !value.Equals("n/a", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool SingleSurfaceNameMatches(CombinedDependencySurfaceRow surface, string selector)
+    {
+        return string.Equals(surface.DisplayName, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(surface.PackageName, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(surface.ConfigKey, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(surface.TableName, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(surface.ShapeHash, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(surface.TextHash, selector, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(surface.NormalizedPathKey, selector, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string MetadataHash(IReadOnlyList<KeyValuePair<string, string>> metadata)
+    {
+        return CombinedReportHelpers.Hash(string.Join("\n", metadata.Select(pair => $"{pair.Key}={pair.Value}")));
+    }
+
+    private static string EvidenceHash(SnapshotDiffEvidence evidence)
+    {
+        var values = new List<string?>
+        {
+            evidence.SourceLabel,
+            evidence.Language,
+        };
+        values.AddRange(evidence.FileSpans.Select(span => $"{span.SourceLabel}:{span.FilePath}:{span.StartLine}:{span.EndLine}"));
+        values.AddRange(evidence.Metadata.Select(pair => $"{pair.Key}={pair.Value}"));
+        return CombinedReportHelpers.Hash(string.Join("\n", values.Where(value => !string.IsNullOrWhiteSpace(value))));
+    }
+
+    private static SnapshotDiffGap DuplicateIdentityGap(string section, string sourceLabel, string stableKey, IEnumerable<string> supportingFactIds)
+    {
+        return new SnapshotDiffGap(
+            StableId("gap", "duplicate", section, sourceLabel, stableKey),
+            "DuplicateIdentity",
+            section,
+            sourceLabel,
+            EvidenceRuleId,
+            EvidenceTiers.Tier4Unknown,
+            SnapshotDiffClassifications.NeedsReview,
+            $"Duplicate stable identity `{stableKey}` has multiple instances in one snapshot.",
+            [],
+            supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            [],
+            [],
+            CombinedReportHelpers.SortedMetadata([
+                Pair("section", section),
+                Pair("sourceLabel", sourceLabel),
+                Pair("stableKeyHash", CombinedReportHelpers.Hash(stableKey, 24))
+            ]));
     }
 
     private static IReadOnlyList<SnapshotDiffRow> TruncateRows(string section, IReadOnlyList<SnapshotDiffRow> rows, int maxRows, List<SnapshotDiffGap> gaps)
@@ -1196,14 +1862,18 @@ public static class SnapshotDiffReporter
             .ToArray();
     }
 
-    private static void AddUnavailableGaps(IReadOnlyList<string> scopes, string kind, bool includePaths, bool hasCombinedDelegation, List<SnapshotDiffGap> gaps)
+    private static void AddUnavailableGaps(IReadOnlyList<string> scopes, string kind, bool includePaths, bool hasCombinedDelegation, bool hasSingleProjection, List<SnapshotDiffGap> gaps)
     {
         AddUnavailable(scopes, "contract-shapes", "contractShapeDiffs", gaps);
         AddUnavailable(scopes, "gaps", "gapDiffs", gaps);
-        if (!hasCombinedDelegation)
+        if (!hasCombinedDelegation && !hasSingleProjection)
         {
             AddUnavailable(scopes, "endpoints", "endpointDiffs", gaps);
             AddUnavailable(scopes, "surfaces", "surfaceDiffs", gaps);
+        }
+
+        if (!hasCombinedDelegation)
+        {
             AddUnavailable(scopes, "graph", "graphDiffs", gaps);
         }
 
@@ -1431,8 +2101,9 @@ public static class SnapshotDiffReporter
         return scannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase) ? "csharp" : null;
     }
 
-    private static ScanManifest? DeserializeManifest(string? manifestJson)
+    private static ScanManifest? DeserializeManifest(string? manifestJson, out bool malformed)
     {
+        malformed = false;
         if (string.IsNullOrWhiteSpace(manifestJson))
         {
             return null;
@@ -1444,8 +2115,60 @@ public static class SnapshotDiffReporter
         }
         catch (JsonException)
         {
+            malformed = true;
             return null;
         }
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseProperties(string json, out bool malformed)
+    {
+        malformed = false;
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            var values = JsonSerializer.Deserialize<SortedDictionary<string, string>>(json, CombinedDependencyReporter.JsonOptions);
+            var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            if (values is not null)
+            {
+                foreach (var pair in values.Where(pair => pair.Value is not null))
+                {
+                    result[pair.Key] = pair.Value;
+                }
+            }
+
+            return result;
+        }
+        catch (JsonException)
+        {
+            malformed = true;
+            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+    }
+
+    private static SnapshotDiffGap MalformedMetadataGap(string side, string field, string? sourceLabel, string? supportingFactId)
+    {
+        return new SnapshotDiffGap(
+            StableId("gap", "malformed-metadata", side, field, sourceLabel ?? "all", supportingFactId),
+            "MalformedMetadataGap",
+            "metadata",
+            sourceLabel,
+            SchemaRuleId,
+            EvidenceTiers.Tier4Unknown,
+            SnapshotDiffClassifications.UnknownAnalysisGap,
+            $"Malformed metadata was omitted from `{side}` `{field}` and analysis continued with reduced coverage.",
+            [],
+            string.IsNullOrWhiteSpace(supportingFactId) ? [] : [supportingFactId],
+            [],
+            [],
+            CombinedReportHelpers.SortedMetadata([
+                Pair("side", side),
+                Pair("field", field),
+                Pair("sourceLabel", sourceLabel)
+            ]));
     }
 
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
