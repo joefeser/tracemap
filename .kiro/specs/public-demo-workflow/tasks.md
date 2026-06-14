@@ -126,5 +126,6 @@
 
 - Prepare a fresh Python temporary environment under the output root only when Python scans are requested.
 - Leave separate `tracemap endpoints` output as optional/follow-up unless implementation explicitly adds it.
+- Add an optional Obsidian/vault export demo that turns generated dependency evidence into human-browsable Markdown notes and links.
 - Document troubleshooting.
 - Document optional OSS workflow or state that it remains separate.
