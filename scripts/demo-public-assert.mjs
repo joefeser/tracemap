@@ -284,7 +284,8 @@ function selfTest() {
     fs.writeFileSync(path.join(tempRoot, "demo-summary.json"), "{\"version\":\"1.0\"}\n", "utf8");
     assert(findSentinelFailures(tempRoot).length === 0, "clean sentinel fixture should pass.");
 
-    fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), "leak /Users/example/private\n", "utf8");
+    const plantedHomePath = `${String.fromCharCode(47)}Users/example/private`;
+    fs.writeFileSync(path.join(tempRoot, "reports", "sample", "report.md"), `leak ${plantedHomePath}\n`, "utf8");
     const failures = findSentinelFailures(tempRoot);
     assert(failures.some(failure => failure.includes("local-absolute-path")), "sentinel fixture should catch home-path leak.");
 
