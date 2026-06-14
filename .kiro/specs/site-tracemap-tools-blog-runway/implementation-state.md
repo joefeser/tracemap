@@ -2,7 +2,7 @@
 
 Status: not-started
 Last verified: 2026-06-14
-Branch: codex/site-examples-and-blog-runway
+Branch: codex/site-demo-guided-path
 Source of truth: planning note only
 
 ## Summary
@@ -45,6 +45,28 @@ Avoid:
 - claiming formal endorsement, partnership, sponsorship, or integration
 - implying TraceMap core scanner/reducer uses LLM calls or prompt-based
   classification
+
+### What TraceMap Solves for Engineering Teams
+
+Purpose: explain the manager-level value in plain language. The article should
+describe how TraceMap turns manual dependency indexing and contract-impact
+questions into auditable evidence packets that can be reviewed, handed off, and
+revisited when scope or coverage changes.
+
+Tone: higher-level, practical, and delivery-focused.
+
+Cover:
+
+- manual indexing work and why it does not scale well
+- auditable evidence for review and planning conversations
+- coverage-aware decisions when repositories do not build cleanly
+- handoff value for reviewers, managers, and external teams
+
+Avoid:
+
+- claiming runtime proof, production usage, or release safety
+- implying TraceMap replaces engineering judgment
+- using vague ROI claims that are not backed by project evidence
 
 ## Follow-ups
 
