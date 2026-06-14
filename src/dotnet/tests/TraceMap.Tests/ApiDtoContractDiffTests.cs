@@ -222,6 +222,30 @@ public sealed class ApiDtoContractDiffTests
     }
 
     [Fact]
+    public async Task Contract_diff_preserves_route_parameter_names_from_adapter_metadata()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(beforeIndex, manifest, [
+            RouteFactWithRouteParameterNames(manifest, "GET", "/api/orders/{id:int}", "/api/orders/{}", "Controllers/OrdersController.cs", 10, "Api.OrdersController.Get(System.Int32)", "id")
+        ]);
+        SqliteIndexWriter.Write(afterIndex, manifest, [
+            RouteFactWithRouteParameterNames(manifest, "GET", "/api/orders/{orderId:int}", "/api/orders/{}", "Controllers/OrdersController.cs", 10, "Api.OrdersController.Get(System.Int32)", "orderId")
+        ]);
+
+        var result = await ApiDtoContractDiffReporter.WriteAsync(new ApiDtoContractDiffOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "diff"), Scope: "route-shapes"));
+
+        var row = Assert.Single(result.Report.RouteShapeDiffs);
+        Assert.Equal(ApiDtoContractDiffClassifications.ChangedEvidence, row.Classification);
+        Assert.Equal("id", Assert.Single(row.Before!.Metadata, item => item.Key == "routeParameters").Value);
+        Assert.Equal("1", Assert.Single(row.Before.Metadata, item => item.Key == "routeParameterCount").Value);
+        Assert.Equal("orderId", Assert.Single(row.After!.Metadata, item => item.Key == "routeParameters").Value);
+        Assert.Equal("1", Assert.Single(row.After.Metadata, item => item.Key == "routeParameterCount").Value);
+    }
+
+    [Fact]
     public async Task Contract_diff_mixed_index_modes_fail_without_writing_output()
     {
         using var temp = new TempDirectory();
@@ -377,6 +401,38 @@ public sealed class ApiDtoContractDiffTests
                 ["normalizedPathTemplate"] = template,
                 ["normalizedPathKey"] = key,
                 ["routeParameters"] = routeParameters,
+                ["routeTemplates"] = template,
+                ["handlerSymbol"] = methodSymbol
+            });
+    }
+
+    private static CodeFact RouteFactWithRouteParameterNames(
+        ScanManifest manifest,
+        string method,
+        string template,
+        string key,
+        string file,
+        int line,
+        string methodSymbol,
+        string routeParameterNames,
+        string tier = EvidenceTiers.Tier2Structural)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            tier,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol,
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["routeParameterNames"] = routeParameterNames,
                 ["routeTemplates"] = template,
                 ["handlerSymbol"] = methodSymbol
             });

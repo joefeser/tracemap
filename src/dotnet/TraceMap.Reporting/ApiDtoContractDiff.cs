@@ -782,6 +782,7 @@ public static class ApiDtoContractDiffReporter
             return false;
         }
 
+        var routeParameters = RouteParameters(fact);
         var strongIdentity = !string.IsNullOrWhiteSpace(method) && !string.IsNullOrWhiteSpace(pathKey);
         var handler = FirstValue(fact.Properties, "handlerSymbol", "actionSymbol", "methodSymbol") ?? fact.TargetSymbol ?? fact.SourceSymbol;
         var display = $"{method ?? "ANY"} {pathKey ?? SafeHashDisplay(FirstValue(fact.Properties, "routeTemplate", "path"))}";
@@ -790,7 +791,7 @@ public static class ApiDtoContractDiffReporter
             Pair("httpMethod", method),
             Pair("normalizedPathKey", pathKey),
             Pair("routeTemplateHash", SafeMaybeHash(FirstValue(fact.Properties, "routeTemplate", "path"))),
-            Pair("routeParameters", RouteParameters(fact)),
+            Pair("routeParameters", routeParameters.Names),
             Pair("handlerSymbol", SafeSymbol(handler)),
             Pair("containingType", SafeSymbol(FirstValue(fact.Properties, "containingType", "controllerName"))),
             Pair("framework", FirstValue(fact.Properties, "framework", "serverFramework"))
@@ -822,8 +823,8 @@ public static class ApiDtoContractDiffReporter
         var metadata = CombinedReportHelpers.SortedMetadata([
             Pair("httpMethod", method),
             Pair("normalizedPathKey", pathKey),
-            Pair("routeParameters", parameters),
-            Pair("routeParameterCount", string.IsNullOrWhiteSpace(parameters) ? "0" : parameters.Split(',', StringSplitOptions.RemoveEmptyEntries).Length.ToString())
+            Pair("routeParameters", parameters.Names),
+            Pair("routeParameterCount", parameters.Count.ToString())
         ]);
         var stable = strongIdentity
             ? $"route-shape:{fact.SourceLabel}:{method!.ToUpperInvariant()}:{pathKey}"
@@ -1484,13 +1485,125 @@ public static class ApiDtoContractDiffReporter
             || value.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string RouteParameters(ApiDtoFactRow fact)
+    private sealed record RouteParameterMetadata(string Names, int Count);
+
+    private static RouteParameterMetadata RouteParameters(ApiDtoFactRow fact)
     {
-        return FirstValue(fact.Properties, "routeParameters", "parameters")
-            ?? string.Join(",", SplitList(FirstValue(fact.Properties, "normalizedPathKey", "routeTemplate", "path"))
-                .Where(value => value.StartsWith("{", StringComparison.Ordinal) && value.EndsWith("}", StringComparison.Ordinal))
-                .Select(value => value.Trim('{', '}', '?', '*'))
-                .OrderBy(value => value, StringComparer.Ordinal));
+        var names = ParameterNamesFromList(FirstValue(
+            fact.Properties,
+            "routeParameters",
+            "routeParameterNames",
+            "parameterNames",
+            "optionalParameterNames",
+            "parameters"));
+        if (names.Length > 0)
+        {
+            return new RouteParameterMetadata(string.Join(",", names), names.Length);
+        }
+
+        names = ParameterNamesFromTemplate(FirstValue(
+            fact.Properties,
+            "normalizedPathTemplate",
+            "routeTemplate",
+            "routeTemplates",
+            "path"));
+        if (names.Length > 0)
+        {
+            return new RouteParameterMetadata(string.Join(",", names), names.Length);
+        }
+
+        var placeholderCount = CountRoutePlaceholders(FirstValue(fact.Properties, "normalizedPathKey", "pathKey"));
+        return new RouteParameterMetadata(string.Empty, placeholderCount);
+    }
+
+    private static string[] ParameterNamesFromList(string? value)
+    {
+        return SplitList(value)
+            .Select(CleanRouteParameterName)
+            .Where(value => !string.IsNullOrWhiteSpace(value) && value != "{}")
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string[] ParameterNamesFromTemplate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        var names = new List<string>();
+        var cursor = 0;
+        while (cursor < value.Length)
+        {
+            var start = value.IndexOf('{', cursor);
+            if (start < 0)
+            {
+                break;
+            }
+
+            var end = value.IndexOf('}', start + 1);
+            if (end < 0)
+            {
+                break;
+            }
+
+            var name = CleanRouteParameterName(value.Substring(start, end - start + 1));
+            if (!string.IsNullOrWhiteSpace(name) && name != "{}")
+            {
+                names.Add(name);
+            }
+
+            cursor = end + 1;
+        }
+
+        return names
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static int CountRoutePlaceholders(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return 0;
+        }
+
+        var count = 0;
+        var cursor = 0;
+        while (cursor < value.Length)
+        {
+            var start = value.IndexOf('{', cursor);
+            if (start < 0)
+            {
+                break;
+            }
+
+            var end = value.IndexOf('}', start + 1);
+            if (end < 0)
+            {
+                break;
+            }
+
+            count++;
+            cursor = end + 1;
+        }
+
+        return count;
+    }
+
+    private static string CleanRouteParameterName(string value)
+    {
+        var trimmed = value.Trim().Trim('{', '}', '?', '*');
+        var colon = trimmed.IndexOf(':');
+        if (colon >= 0)
+        {
+            trimmed = trimmed[..colon];
+        }
+
+        return trimmed.Trim().Trim('?', '*');
     }
 
     private static IEnumerable<string> SplitList(string? value)
@@ -1500,7 +1613,7 @@ public static class ApiDtoContractDiffReporter
             yield break;
         }
 
-        foreach (var item in value.Split([',', '/', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        foreach (var item in value.Split([',', ';', '|'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
             yield return item;
         }
