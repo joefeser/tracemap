@@ -451,6 +451,7 @@ rules:
       - Syntax-only evidence does not prove the query provider, database table, generated SQL, runtime branch feasibility, or whether the query executes.
       - Field names are extracted from member access inside query arguments and can include unrelated member reads in complex expressions.
       - Literal values and raw expressions are not stored; pattern hashes, field names, operation names, and spans are emitted.
+      - Reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 
   - id: csharp.syntax.objectshape.v1
     name: C# syntax object shape
@@ -1002,6 +1003,7 @@ rules:
       - Structural query evidence does not prove generated SQL, runtime execution, database schema existence, or branch feasibility.
       - Only statically visible object-literal and simple string sort arguments are inspected in MVP; variables, spreads, helper-built filters, and dynamic keys need later flow rules.
       - Literal values and raw object text are not stored; field names, operation names, hashes, and spans are emitted.
+      - Reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 
   - id: typescript.integration.angular-httpclient.v1
     name: TypeScript Angular HttpClient integration
@@ -1260,6 +1262,7 @@ rules:
     limitations:
       - SQL hashes do not participate in reducer matching unless paired with a reducer-recognized contract element or symbol.
       - Runtime query execution, database schema existence, generated SQL, and branch feasibility are not proven.
+      - When JVM query-pattern facts are emitted, reports may display safe derived query metadata and hashes, but must not display raw SQL text, literal values, or unsafe identifiers.
 
   - id: jvm.integration.jpa.v1
     name: JVM JPA mapping integration
@@ -1442,7 +1445,7 @@ rules:
     limitations:
       - SQL text is hashed and operation-shaped; raw SQL text and literal values are not stored by default.
       - Query-pattern extraction is best-effort for simple static SQL operation, table, and column shapes; full SQL parsing, dialect behavior, schema existence, generated SQL, and runtime execution are not proven.
-      - Reports may display derived table, column, source-kind, and shape-hash metadata, but must not display raw SQL text or literal values.
+      - Reports may display safe derived table, column, source-kind, and shape-hash metadata, but must not display raw SQL text, literal values, or unsafe identifiers.
       - Quoted identifiers may be treated conservatively as string literals by lightweight SQL shape extraction and missed until a shared SQL parser exists.
       - Tier2 query patterns are structural evidence only; Tier3 query patterns are review-routing evidence and should not be treated as semantic database proof.
 
