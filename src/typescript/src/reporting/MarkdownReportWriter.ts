@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { CodeFact, FactTypes, ScanResult } from "../facts/Models";
+import { hash } from "../util/Hash";
 
 export async function writeMarkdownReport(filePath: string, result: ScanResult): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -39,7 +40,7 @@ export async function writeMarkdownReport(filePath: string, result: ScanResult):
     "",
     ...factList(
       result.facts.filter((fact) => fact.factType === FactTypes.QueryPatternDetected),
-      (fact) => `- \`${fact.properties.operationName ?? fact.contractElement ?? "unknown"}\` fields \`${displayFields(fact)}\` (${fact.evidenceTier}) at \`${fact.evidence.filePath}:${fact.evidence.startLine}\``
+      formatQueryPattern
     ),
     "",
     "## Object Shapes",
@@ -53,6 +54,9 @@ export async function writeMarkdownReport(filePath: string, result: ScanResult):
     "",
     "- TypeScript `buildStatus = Succeeded` means semantic analysis succeeded; it does not mean target repo tests or bundlers ran.",
     "- Missing dependencies, unresolved path mappings, decorators, dependency injection, and runtime routing can reduce evidence quality.",
+    ...(result.facts.some((fact) => fact.factType === FactTypes.QueryPatternDetected)
+      ? ["- Query-pattern rows are static shape evidence. They do not prove runtime execution, database schema existence, SQL dialect validity, generated SQL equivalence, or branch feasibility."]
+      : []),
     "- Facts store hashes and spans, not raw source snippets."
   ];
   await fs.writeFile(filePath, `${lines.join("\n")}\n`, "utf8");
@@ -96,3 +100,111 @@ function displayFields(fact: CodeFact): string {
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
   return fields.length === 0 ? "none" : [...new Set(fields)].join(";");
 }
+
+function formatQueryPattern(fact: CodeFact): string {
+  return isSqlShapeQueryPattern(fact) ? formatSqlShapeQueryPattern(fact) : formatQueryBuilderPattern(fact);
+}
+
+function isSqlShapeQueryPattern(fact: CodeFact): boolean {
+  const value = fact.properties.sqlSourceKind;
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function formatSqlShapeQueryPattern(fact: CodeFact): string {
+  const operation = displayCodeValue(fact.properties.operationName ?? "unknown");
+  const table = displayIdentifierValue(fact.properties.tableName ?? fact.properties.tableNames, "table", "unknown");
+  const columns = displayIdentifierValue(fact.properties.columnNames ?? fact.properties.fieldNames, "column", "none");
+  const sourceKind = displayCodeValue(fact.properties.sqlSourceKind ?? "unknown");
+  const shapeHash = displayCodeValue(fact.properties.queryShapeHash ?? "n/a");
+  const evidencePath = safePath(fact.evidence.filePath);
+  return `- SQL shape \`${operation}\` table \`${table}\` columns \`${columns}\` source \`${sourceKind}\` shape \`${shapeHash}\` rule \`${fact.ruleId}\` (${fact.evidenceTier}) at \`${evidencePath}:${fact.evidence.startLine}\``;
+}
+
+function formatQueryBuilderPattern(fact: CodeFact): string {
+  const operation = displayCodeValue(fact.properties.operationName ?? fact.contractElement ?? "unknown");
+  const patternHash = fact.properties.patternHash;
+  const hashPart = patternHash ? ` pattern \`${displayCodeValue(patternHash)}\`` : "";
+  const evidencePath = safePath(fact.evidence.filePath);
+  return `- Query builder \`${operation}\` fields \`${displayFields(fact)}\`${hashPart} rule \`${fact.ruleId}\` (${fact.evidenceTier}) at \`${evidencePath}:${fact.evidence.startLine}\``;
+}
+
+type IdentifierKind = "table" | "column";
+
+function displayIdentifierValue(rawValue: string | undefined, kind: IdentifierKind, missingValue: string): string {
+  if (!rawValue || rawValue.trim().length === 0) {
+    return missingValue;
+  }
+
+  const values = rawValue
+    .split(/[,;|]/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => displayIdentifier(value, kind));
+  const distinct = [...new Set(values)];
+  if (distinct.length === 0) {
+    return missingValue;
+  }
+  if (distinct.length <= 20) {
+    return distinct.join(";");
+  }
+  return `${distinct.slice(0, 20).join(";")};... and ${distinct.length - 20} more`;
+}
+
+function displayIdentifier(value: string, kind: IdentifierKind): string {
+  return isSafeIdentifier(value, kind) ? value : `unsafe-identifier-hash:${hash(value, 32)}`;
+}
+
+function isSafeIdentifier(value: string, kind: IdentifierKind): boolean {
+  if (value.length === 0 || value.length > maxIdentifierLength(kind)) {
+    return false;
+  }
+  if (value.includes("://") || value.includes("--") || value.includes("/*") || value.includes("*/")) {
+    return false;
+  }
+
+  for (const ch of value) {
+    const allowed = /[A-Za-z0-9_.-]/.test(ch) || (kind === "table" && ch === " ");
+    if (!allowed) {
+      return false;
+    }
+  }
+
+  const tokens = value.split(/[ ._-]+/).filter((token) => token.length > 0);
+  return !tokens.some((token) => sqlKeywords.has(token.toLowerCase()));
+}
+
+function maxIdentifierLength(kind: IdentifierKind): number {
+  return kind === "table" ? 100 : 80;
+}
+
+function safePath(filePath: string): string {
+  return path.isAbsolute(filePath) ? `absolute-path-hash:${hash(filePath, 16)}` : filePath.replace(/\\/g, "/");
+}
+
+function displayCodeValue(value: string): string {
+  return value.replace(/`/g, "'").replace(/\r?\n/g, " ");
+}
+
+const sqlKeywords = new Set([
+  "select",
+  "from",
+  "insert",
+  "into",
+  "values",
+  "update",
+  "set",
+  "delete",
+  "where",
+  "join",
+  "having",
+  "group",
+  "order",
+  "by",
+  "union",
+  "create",
+  "alter",
+  "drop",
+  "truncate",
+  "merge",
+  "exec"
+]);

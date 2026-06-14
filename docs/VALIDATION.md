@@ -41,6 +41,15 @@ For JVM CLI smoke, also run:
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
 ```
 
+For query-pattern report rendering changes, inspect generated scan reports from the affected adapters:
+
+```bash
+rg -n "Query Patterns|SQL shape|Query builder|static shape evidence|runtime execution" <scan-output>/report.md
+rg -n "fields none" <scan-output>/report.md
+```
+
+`fields none` is acceptable for query-builder facts with no extracted field metadata. SQL-shape facts should render derived operation/table/column/source/hash metadata instead, and reports must not render raw SQL text, literal values, unsafe identifiers, or developer-local absolute paths.
+
 For combined dependency report, path-query, reverse-query, or diff changes, run a combine/report/paths/reverse/diff smoke over any two existing local scan outputs:
 For combined change-impact changes, include the `impact` command in the same smoke.
 
