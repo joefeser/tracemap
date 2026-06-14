@@ -168,7 +168,7 @@ Table changes match:
 - combined `sql-persistence` surface `TableName`
 - SQL file/resource facts when safe table metadata exists
 
-Table-only matches are useful but can be high fan-out. Without matching column, shape hash, text hash, or path/reverse context, table-only findings should remain review-tier in combined mode and no stronger than probable/review-tier in single-index mode.
+Table-only matches are useful but can be high fan-out. Without matching column, shape hash, text hash, or path/reverse context, table-only findings must remain review-tier in both modes: `NeedsReview` for single-index output and `NeedsReviewImpact` for combined output.
 
 ### Column
 
