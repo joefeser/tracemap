@@ -132,9 +132,9 @@
 - [x] 9.3 Add `samples/python-broken-sample` for parse errors and dynamic reduced coverage.
 - [x] 9.4 Add Python sample contract delta.
 - [x] 9.5 Add synthetic Tier1 reducer contract delta fixture and label it as synthetic compatibility evidence.
-- [ ] 9.6 Pin Python OSS smoke targets in `docs/VALIDATION.md` before scripting smoke execution.
-- [ ] 9.7 Add Python section to open-source smoke script after public repos are selected/pinned.
-- [ ] 9.8 Smoke-test at least one FastAPI repo, one Flask repo, and one SQLAlchemy-heavy repo from public pinned SHAs.
+- 9.6 Pin Python OSS smoke targets in `docs/VALIDATION.md` before scripting smoke execution.
+- 9.7 Add Python section to open-source smoke script after public repos are selected/pinned.
+- 9.8 Smoke-test at least one FastAPI repo, one Flask repo, and one SQLAlchemy-heavy repo from public pinned SHAs.
 - [x] 9.9 Verify existing `.NET` endpoint alignment can read Python `HttpRouteBinding` and `HttpCallDetected` rows without error.
 - [x] 9.10 Record smoke results without committing absolute local paths or sensitive repository names.
 
@@ -150,22 +150,22 @@
 
 ### Phase 11: Post-MVP Backlog
 
-- [ ] 11.1 Type-checker-backed Tier1 facts using Pyright/MyPy metadata or another deterministic static source.
-- [ ] 11.2 Real Python `PropertyAccessed` and `MethodInvoked` facts after receiver types can be proven.
-- [ ] 11.3 Cross-module route prefix/include expansion for FastAPI/Django/Flask.
-- [ ] 11.4 Django route/view facts.
-- [ ] 11.5 aiohttp and urllib HTTP client facts.
-- [ ] 11.6 attrs and TypedDict schema facts.
-- [ ] 11.7 Poetry and uv lockfile parsing.
-- [ ] 11.8 Logic-shape/business-logic facts.
-- [ ] 11.9 Celery task graph and background job boundary facts.
-- [ ] 11.10 Airflow DAG/task boundary facts.
-- [ ] 11.11 GraphQL schema/resolver facts.
-- [ ] 11.12 Pandas/Spark/dataframe schema and SQL facts.
-- [ ] 11.13 Deep SQL dialect parser shared across all adapters.
-- [ ] 11.14 Field/attribute aliasing and derived `parameter_forward_edges`.
-- [ ] 11.15 Framework-specific dependency injection containers.
-- [ ] 11.16 Jupyter notebook source extraction.
+- 11.1 Type-checker-backed Tier1 facts using Pyright/MyPy metadata or another deterministic static source.
+- 11.2 Real Python `PropertyAccessed` and `MethodInvoked` facts after receiver types can be proven.
+- 11.3 Cross-module route prefix/include expansion for FastAPI/Django/Flask.
+- 11.4 Django route/view facts.
+- 11.5 aiohttp and urllib HTTP client facts.
+- 11.6 attrs and TypedDict schema facts.
+- 11.7 Poetry and uv lockfile parsing.
+- 11.8 Logic-shape/business-logic facts.
+- 11.9 Celery task graph and background job boundary facts.
+- 11.10 Airflow DAG/task boundary facts.
+- 11.11 GraphQL schema/resolver facts.
+- 11.12 Pandas/Spark/dataframe schema and SQL facts.
+- 11.13 Deep SQL dialect parser shared across all adapters.
+- 11.14 Field/attribute aliasing and derived `parameter_forward_edges`.
+- 11.15 Framework-specific dependency injection containers.
+- 11.16 Jupyter notebook source extraction.
 
 ## Definition of Done
 
