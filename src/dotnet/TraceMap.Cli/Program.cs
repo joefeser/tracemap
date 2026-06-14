@@ -45,9 +45,10 @@ public static class TraceMapCommand
                 "impact" => ImpactHelp(),
                 "reverse" => ReverseHelp(),
                 "release-review" => ReleaseReviewHelp(),
+                "portfolio" => PortfolioHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "impact" or "reverse" or "release-review" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "impact" or "reverse" or "release-review" or "portfolio" ? 0 : 1;
         }
 
         try
@@ -67,6 +68,7 @@ public static class TraceMapCommand
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
+                "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -514,6 +516,80 @@ public static class TraceMapCommand
         return 0;
     }
 
+    private static async Task<int> RunPortfolioAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: portfolio requires --out <path>.");
+            return 1;
+        }
+
+        if (values.HasFlag("--exit-code") || values.HasFlag("--allow-mixed-inputs") || values.HasFlag("--release-review"))
+        {
+            await error.WriteLineAsync("error: portfolio deferred v1 flag is not supported.");
+            return 1;
+        }
+
+        var indexes = values.GetMany("--index");
+        var labels = values.GetMany("--label");
+        if (indexes.Count != labels.Count)
+        {
+            await error.WriteLineAsync("error: portfolio requires each --index to have exactly one --label.");
+            return 1;
+        }
+
+        var inputs = indexes
+            .Select((index, i) => new PortfolioInputSpec(labels[i], index))
+            .ToArray();
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: portfolio --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await PortfolioReporter.WriteAsync(
+            new PortfolioReportOptions(
+                inputs,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--manifest"),
+                values.GetValueOrDefault("--before-manifest"),
+                values.GetValueOrDefault("--after-manifest"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--group"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--surface-name"),
+                values.HasFlag("--include-impact"),
+                values.HasFlag("--include-paths"),
+                values.HasFlag("--include-reverse"),
+                ParsePositiveInt(values, "--max-sources", 200),
+                ParsePositiveInt(values, "--max-surface-rows", 500),
+                ParsePositiveInt(values, "--max-endpoint-findings", 500),
+                ParsePositiveInt(values, "--max-shared-surfaces", 200),
+                ParsePositiveInt(values, "--max-edge-rows", 500),
+                ParsePositiveInt(values, "--max-diff-rows", 200),
+                ParsePositiveInt(values, "--max-impact-items", 100),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-roots", 100),
+                ParsePositiveInt(values, "--max-depth", 8),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap portfolio completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
+        await output.WriteLineAsync($"Inputs: {result.Report.Summary.InputCount}");
+        await output.WriteLineAsync($"Surfaces: {result.Report.Summary.SurfaceCount}");
+        await output.WriteLineAsync($"Edges: {result.Report.Summary.EdgeCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.Summary.ReportCoverage}");
+        return 0;
+    }
+
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
@@ -716,7 +792,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--allow-identity-mismatch" or "--exit-code")
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review")
             {
                 flags.Add(arg);
                 continue;
@@ -823,6 +899,7 @@ public static class TraceMapCommand
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
+              tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -838,6 +915,7 @@ public static class TraceMapCommand
               impact    Explain static change evidence between two combined indexes.
               reverse   Trace reverse static reachability from dependency surfaces.
               release-review Assemble a deterministic before/after release evidence packet.
+              portfolio Summarize dependency evidence across many TraceMap indexes.
             """;
     }
 
@@ -1040,6 +1118,51 @@ public static class TraceMapCommand
 
             Outputs:
               release-review.md and/or release-review.json
+            """;
+    }
+
+    private static string PortfolioHelp()
+    {
+        return """
+            Usage:
+              tracemap portfolio --out <path> --index <index.sqlite> --label <label> [--index <path> --label <label> ...]
+              tracemap portfolio --out <path> --manifest <portfolio.json>
+              tracemap portfolio --out <path> --before-manifest <portfolio.json> --after-manifest <portfolio.json>
+
+            Required:
+              --out <path>               Output directory or file path.
+
+            Inputs:
+              --index <path>             TraceMap single-language or combined index. Repeatable.
+              --label <label>            Label paired with each --index. Repeatable.
+              --manifest <path>          Portfolio manifest with version 1.0 and inputs.
+              --before-manifest <path>   Earlier portfolio manifest for source-level comparison.
+              --after-manifest <path>    Later portfolio manifest for source-level comparison.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --source <label>           Filter to one source or combined container label.
+              --group <tag>              Filter to manifest group or role tag.
+              --surface <kind>           http-client, http-route, sql-query, sql-persistence, or package-config.
+              --surface-name <text>      Case-insensitive contained surface name.
+              --include-impact           Request deferred portfolio impact context.
+              --include-paths            Request deferred path context.
+              --include-reverse          Request deferred reverse context.
+              --max-sources <n>          Source rows. Default: 200.
+              --max-surface-rows <n>     Dependency surface rows. Default: 500.
+              --max-endpoint-findings <n> Endpoint findings. Default: 500.
+              --max-shared-surfaces <n>  Shared surface groups. Default: 200.
+              --max-edge-rows <n>        Dependency edge rows. Default: 500.
+              --max-diff-rows <n>        Source comparison rows. Default: 200.
+              --max-impact-items <n>     Deferred impact item cap. Default: 100.
+              --max-paths <n>            Deferred path cap. Default: 100.
+              --max-roots <n>            Deferred reverse root cap. Default: 100.
+              --max-depth <n>            Deferred graph depth. Default: 8.
+              --max-frontier <n>         Deferred graph frontier. Default: 10000.
+              --max-gaps <n>             Gap rows. Default: 1000.
+
+            Outputs:
+              portfolio-report.md and/or portfolio-report.json
             """;
     }
 

@@ -90,6 +90,20 @@ dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combine
 
 The combined dependency report writes `dependency-report.md` and `dependency-report.json` when `--out` is a directory. It summarizes source coverage, endpoint alignment, HTTP/SQL/package/config surfaces, dependency edges, needs-review rows, known gaps, and static-analysis limitations without mutating the combined database.
 
+Summarize a portfolio of single-language and/or combined indexes:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
+  --index .tracemap-ts/index.sqlite --label web-client \
+  --index .tracemap/index.sqlite --label orders-api \
+  --out .tracemap-portfolio
+dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
+  --manifest samples/portfolio.example.json \
+  --out .tracemap-portfolio
+```
+
+The portfolio command writes `portfolio-report.md` and `portfolio-report.json` when `--out` is a directory. It expands combined indexes into source records, reads single-language indexes directly, and reports source coverage, endpoint alignment, dependency surfaces, dependency edges, shared static surfaces, gaps, and limitations across many repositories. Portfolio reports are static evidence inventories; they do not infer runtime topology, ownership, deployment, production traffic, package compatibility, vulnerabilities, or release approval.
+
 The combined dependency paths command writes `paths-report.md` and `paths-report.json` when `--out` is a directory. It follows static evidence from endpoint, symbol, or source selectors to terminal dependency surfaces such as `sql-query`, `http-client`, `http-route`, and `package-config`. Paths are evidence trails, not runtime traces.
 
 The combined reverse query command writes `reverse-report.md` and `reverse-report.json` when `--out` is a directory. It starts from dependency surfaces and walks static evidence backward to endpoints, symbols, sources, or all supported roots. Reverse paths answer "what static roots can reach this dependency evidence?" and remain coverage-relative rather than runtime usage proof.

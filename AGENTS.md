@@ -21,6 +21,8 @@ This is not an AI impact-analysis tool. Do not add LLM calls, embeddings, vector
 - Build as a .NET CLI solution.
 - Prefer small, reviewable commits.
 - Add or update tests with each meaningful change.
+- When implementing a Kiro spec, update that spec's `tasks.md` checkboxes as tasks are completed. Do not leave task status stale when the implementation is done.
+- For longer specs, keep a spec-local implementation state note such as `.kiro/specs/<spec-name>/implementation-state.md` with current branch, scope decisions, oddities, validation, and follow-up items so future contexts can resume without guessing.
 - Keep the scanner useful even when MSBuild project load fails.
 - Use Roslyn semantic analysis where possible, but always include syntax fallback.
 - Emit machine-readable `facts.ndjson` and `index.sqlite`.
