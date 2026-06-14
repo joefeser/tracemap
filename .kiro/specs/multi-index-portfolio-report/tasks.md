@@ -155,8 +155,8 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [x] Pair sources by manifest label plus repo identity when available.
   - [x] Emit `IdentityAmbiguous` and downgrade to `ReviewRecommended` when labels match but extracted repo identity differs without manifest expected identity.
   - [x] Render added, removed, changed, and unpaired sources.
-  - [ ] Project surfaces and edges into stable safe identities.
-  - [ ] Compare projected evidence with coverage-relative downgrade rules.
+  - [x] Project surfaces and edges into stable safe identities.
+  - [x] Compare projected evidence with coverage-relative downgrade rules.
   - [ ] Reuse combined diff semantics where compatible.
   - [ ] Emit unavailable/deferred gaps where combined diff reuse is not possible.
   - [x] Keep local paths and unsafe values out of diff rows.
@@ -178,14 +178,14 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [x] Render `releaseReviewContext` as `not_requested` or `deferred`; do not implement release-review import in v1.
 
 - [ ] 16. Add safety and redaction tests. Requirements: 9, 10, 11, 12.
-  - [ ] Prove no raw SQL renders.
-  - [ ] Prove no snippets render.
+  - [x] Prove no raw SQL renders.
+  - [x] Prove no snippets render.
   - [x] Prove no config values or connection strings render.
-  - [ ] Prove no raw URLs render.
-  - [ ] Prove no secret-looking values render.
+  - [x] Prove no raw URLs render.
+  - [x] Prove no secret-looking values render.
   - [x] Prove no local absolute paths render in Markdown, JSON, or stderr.
   - [x] Prove Markdown escaping for table delimiters and link-like syntax.
-  - [ ] Prove manifest `portfolioId`, `snapshotId`, `label`, `group`, and `roleTags` cannot inject Markdown or unsafe JSON display strings.
+  - [x] Prove manifest `portfolioId`, `snapshotId`, `label`, `group`, and `roleTags` cannot inject Markdown or unsafe JSON display strings.
   - [x] Prove JSON metadata ordering.
 
 - [ ] 17. Add integration tests. Requirements: 1-12.
@@ -220,8 +220,8 @@ Recommended first implementation PR: command shell, manifest parsing, read-only 
   - [x] Add sample portfolio manifest.
   - [x] Document command options and output files.
   - [x] Document static-analysis limitations and redaction policy.
-  - [ ] Update `docs/ACCEPTANCE.md` if public acceptance workflow changes.
-  - [ ] Update `docs/VALIDATION.md` if smoke validation changes.
+  - [x] Update `docs/ACCEPTANCE.md` if public acceptance workflow changes.
+  - [x] Update `docs/VALIDATION.md` if smoke validation changes.
 
 - [x] 19. Validate implementation PRs. Requirements: 12.
   - [x] `dotnet build src/dotnet/TraceMap.sln`

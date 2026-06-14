@@ -2,7 +2,7 @@
 
 ## Current State
 
-Implemented v1 portfolio report in `dev`.
+Implemented v1 portfolio report in `dev`; follow-up surface/edge comparison slice is implemented on `codex/portfolio-report-followups`.
 
 ## Intended Implementation Boundary
 
@@ -43,25 +43,27 @@ Implemented a useful v1 portfolio command:
 - Added `tracemap portfolio`.
 - Added direct `--index/--label` and manifest input modes.
 - Added paired `--before-manifest/--after-manifest` source-level comparison.
+- Added paired `--before-manifest/--after-manifest` projected surface and edge comparison using stable safe identities.
 - Added deterministic Markdown/JSON output.
 - Added portfolio source coverage, endpoint alignment, dependency surface inventory, dependency edge inventory, shared surface grouping, gaps, limitations, and optional-section statuses.
 - Added rule catalog entries for `portfolio.*.v1`.
 - Added README quickstart and `samples/portfolio.example.json`.
 - Added focused tests in `PortfolioReportTests`.
+- Added comparison redaction tests for raw SQL, snippets, raw URLs, secret-looking values, connection strings, local absolute paths, and manifest display field injection.
 
 ## Remaining Follow-Ups
 
-- Full surface/edge before/after diff semantics.
+- Combined diff engine reuse for compatible combined before/after snapshots where safe; current portfolio comparison projects sources, surfaces, and edges directly from already-read evidence.
 - Real impact composition over compatible before/after combined snapshots.
 - Real path/reverse composition through existing bounded graph APIs.
 - Stable symbol identity grouping.
 - Ignored selector gaps for selectors that apply only to disabled/unavailable sections.
-- Deeper redaction tests for raw SQL, raw URLs, snippets, and secret-looking values.
+- Additional integration coverage for object creation and parameter-forwarding rendering, mixed single/combined input, duplicate-label rejection, unknown commit coverage, duplicate source identity, optional path/reverse unavailable states, and truncation caps.
 
 ## Validation
 
 - `dotnet build src/dotnet/TraceMap.sln` passed.
-- `dotnet test src/dotnet/TraceMap.sln --no-build` passed: 153 tests.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 201 tests.
 - `./scripts/check-private-paths.sh` passed.
 - `git diff --check` passed.
-- `./scripts/smoke-combined-paths.sh` passed.
+- Relevant pinned smoke checks are deferred for this branch because the change is limited to portfolio report comparison projection and does not change language adapters, combined indexes, path/reverse traversal, combined report, combined diff, impact, or release-review behavior.
