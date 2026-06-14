@@ -92,7 +92,7 @@ public sealed class ReducerTests
         var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
 
         Assert.Contains("Classification: `NeedsReview`", report);
-        Assert.Contains("Generic member name `status` matched 12 facts", report);
+        Assert.Contains("Generic member name \\`status\\` matched 12 facts", report);
         Assert.Contains("High fan-out match set: 12 facts across 12 files", report);
     }
 

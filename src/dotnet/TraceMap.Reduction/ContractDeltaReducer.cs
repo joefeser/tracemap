@@ -373,6 +373,11 @@ public static class ContractDeltaReducer
 
         var isCombined = await TableExistsAsync(connection, "index_sources", cancellationToken)
             && await TableExistsAsync(connection, "combined_facts", cancellationToken);
+        if (!isCombined && !string.IsNullOrWhiteSpace(options.Source))
+        {
+            throw new ArgumentException("reduce --source requires a combined TraceMap index.");
+        }
+
         if ((options.IncludePaths || options.IncludeReverse) && !isCombined)
         {
             throw new ArgumentException("reduce --include-paths and --include-reverse require a combined TraceMap index.");
@@ -908,11 +913,6 @@ public static class ContractDeltaReducer
 
     private static string NoEvidenceClassification(IndexData index, bool isCombined)
     {
-        if (index.Facts.Any(fact => fact.FactType == FactTypes.AnalysisGap))
-        {
-            return ImpactClassifications.UnknownAnalysisGap;
-        }
-
         if (isCombined)
         {
             return HasFullCoverage(index) ? ImpactClassifications.NoImpactEvidence : ImpactClassifications.UnknownAnalysisGap;
@@ -1095,10 +1095,26 @@ public static class ContractDeltaReducer
 
     private static EvidenceMatch MatchMember(NormalizedChange change, IndexedFact fact, IReadOnlyList<string> memberKeys)
     {
-        var memberName = Value(change.Reference, memberKeys.ToArray());
         var typeName = Value(change.Reference, "typeName", "fullyQualifiedName", "declaringType");
-        var memberMatches = memberName is not null && fact.MemberCandidates.Any(candidate => NamesMatch(memberName, candidate));
+        var typeIsConstrained = !string.IsNullOrWhiteSpace(typeName);
         var typeMatches = typeName is not null && fact.TypeCandidates.Any(candidate => NamesMatch(typeName, candidate));
+        var signature = Value(change.Reference, "signature");
+        if (!string.IsNullOrWhiteSpace(signature))
+        {
+            var signatureMatches = SignatureCandidates(fact).Any(candidate => SignaturesMatch(signature, candidate));
+            if (signatureMatches && (!typeIsConstrained || typeMatches))
+            {
+                return new EvidenceMatch(MatchStrength.Exact, false, "signature");
+            }
+
+            if (signatureMatches)
+            {
+                return new EvidenceMatch(MatchStrength.Member, true, "signature-type-unverified");
+            }
+        }
+
+        var memberName = Value(change.Reference, memberKeys.ToArray());
+        var memberMatches = memberName is not null && fact.MemberCandidates.Any(candidate => NamesMatch(memberName, candidate));
         if (memberMatches && typeMatches)
         {
             return new EvidenceMatch(MatchStrength.TypeAndMember, false, "type-member");
@@ -1106,7 +1122,7 @@ public static class ContractDeltaReducer
 
         if (memberMatches)
         {
-            return new EvidenceMatch(MatchStrength.Member, string.IsNullOrWhiteSpace(typeName), "member");
+            return new EvidenceMatch(MatchStrength.Member, typeIsConstrained, typeIsConstrained ? "member-type-unverified" : "member");
         }
 
         return EvidenceMatch.None;
@@ -1121,8 +1137,9 @@ public static class ContractDeltaReducer
 
         var expectedMethod = Value(change.Reference, "method", "httpMethod");
         var expectedPath = NormalizeEndpointPath(Value(change.Reference, "normalizedPathKey", "pathKey", "path", "routeTemplate"));
-        var actualMethod = Value(fact.Properties, "httpMethod", "method", "verb");
-        var actualPath = NormalizeEndpointPath(Value(fact.Properties, "normalizedPathKey", "pathKey", "path", "routeTemplate", "routePath"));
+        var actualPathValue = Value(fact.Properties, "normalizedPathKey", "pathKey", "path", "routeTemplate", "routePath", "normalizedPathTemplate");
+        var actualMethod = Value(fact.Properties, "httpMethod", "method", "verb") ?? HttpMethodFromEndpointKey(actualPathValue);
+        var actualPath = NormalizeEndpointPath(actualPathValue);
         var methodMatches = expectedMethod is null || actualMethod is null || string.Equals(expectedMethod, actualMethod, StringComparison.OrdinalIgnoreCase);
         if (!string.IsNullOrWhiteSpace(expectedPath) && string.Equals(expectedPath, actualPath, StringComparison.OrdinalIgnoreCase) && methodMatches)
         {
@@ -1939,7 +1956,75 @@ public static class ContractDeltaReducer
         }
 
         var trimmed = value.Trim();
+        var withoutMethod = StripHttpMethodPrefix(trimmed);
+        if (!string.IsNullOrWhiteSpace(withoutMethod))
+        {
+            trimmed = withoutMethod;
+        }
+
         return trimmed.StartsWith("/", StringComparison.Ordinal) ? trimmed : "/" + trimmed;
+    }
+
+    private static string? HttpMethodFromEndpointKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var parts = value.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 2 && IsHttpMethod(parts[0]) ? parts[0] : null;
+    }
+
+    private static string? StripHttpMethodPrefix(string value)
+    {
+        var parts = value.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 2 && IsHttpMethod(parts[0]) ? parts[1] : null;
+    }
+
+    private static bool IsHttpMethod(string value)
+    {
+        return value is "GET" or "POST" or "PUT" or "PATCH" or "DELETE" or "HEAD" or "OPTIONS" or "TRACE"
+            || value.Equals("get", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("post", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("put", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("patch", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("delete", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("head", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("options", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("trace", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> SignatureCandidates(IndexedFact fact)
+    {
+        foreach (var value in PropertyValues(fact, "signature", "methodSignature", "sourceSymbolDisplayName", "targetSymbolDisplayName", "sourceSymbol", "targetSymbol"))
+        {
+            yield return value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fact.SourceSymbol))
+        {
+            yield return fact.SourceSymbol;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fact.TargetSymbol))
+        {
+            yield return fact.TargetSymbol;
+        }
+    }
+
+    private static bool SignaturesMatch(string expected, string actual)
+    {
+        return string.Equals(NormalizeSignature(expected), NormalizeSignature(actual), StringComparison.Ordinal);
+    }
+
+    private static string NormalizeSignature(string value)
+    {
+        return new string(value
+            .Replace("global::", string.Empty, StringComparison.Ordinal)
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToLowerInvariant)
+            .ToArray());
     }
 
     private static bool NamesMatch(string expected, string actual)
@@ -2271,16 +2356,32 @@ public static class ImpactMarkdownWriter
             $"- Commit SHA: `{report.Index.CommitSha ?? report.Manifest.CommitSha}`",
             $"- Analysis level: `{report.Index.AnalysisLevel ?? report.Manifest.AnalysisLevel}`",
             $"- Build status: `{report.Index.BuildStatus ?? report.Manifest.BuildStatus}`",
+            $"- Scanner version: `{Cell(report.Index.Sources.Count == 1 ? report.Index.Sources[0].ScannerVersion ?? report.Manifest.ScannerVersion : report.Manifest.ScannerVersion)}`",
             "",
             "## Contract Delta",
             "",
             $"- Contract: `{Cell(report.Input.Contract ?? report.Delta.Contract ?? "unknown")}`",
             $"- Source: `{Cell(report.Input.Source.TryGetValue("label", out var inputSourceLabel) ? inputSourceLabel : report.Delta.Source ?? "unknown")}`",
             $"- Changes: `{report.Summary.ChangeCount}`",
-            "",
-            "## Findings",
             ""
         };
+
+        if (report.Index.Sources.Count > 0)
+        {
+            lines.Add("## Sources");
+            lines.Add("");
+            lines.Add("| Label | Language | Scanner version | Commit | Analysis | Build |");
+            lines.Add("| --- | --- | --- | --- | --- | --- |");
+            foreach (var source in report.Index.Sources.OrderBy(source => source.Label, StringComparer.Ordinal))
+            {
+                lines.Add($"| `{Cell(source.Label)}` | `{Cell(source.Language ?? "unknown")}` | `{Cell(source.ScannerVersion ?? "unknown")}` | `{Cell(source.CommitSha ?? "unknown")}` | `{Cell(source.AnalysisLevel ?? "unknown")}` | `{Cell(source.BuildStatus ?? "unknown")}` |");
+            }
+
+            lines.Add("");
+        }
+
+        lines.Add("## Findings");
+        lines.Add("");
 
         if (report.Findings.Count == 0)
         {
@@ -2393,7 +2494,13 @@ public static class ImpactMarkdownWriter
     {
         return value
             .Replace("|", "\\|", StringComparison.Ordinal)
-            .Replace("\r", " ", StringComparison.Ordinal)
-            .Replace("\n", " ", StringComparison.Ordinal);
+            .ReplaceLineEndings(" ")
+            .Replace("[", "\\[", StringComparison.Ordinal)
+            .Replace("]", "\\]", StringComparison.Ordinal)
+            .Replace("(", "\\(", StringComparison.Ordinal)
+            .Replace(")", "\\)", StringComparison.Ordinal)
+            .Replace("`", "\\`", StringComparison.Ordinal)
+            .Replace("<", "\\<", StringComparison.Ordinal)
+            .Replace(">", "\\>", StringComparison.Ordinal);
     }
 }
