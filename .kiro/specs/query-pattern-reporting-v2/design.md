@@ -87,6 +87,8 @@ unsafe-identifier-hash:<32-char-lowercase-hex>
 
 The hash is a display hash for the unsafe identifier value, not a new evidence claim. It must not be confused with `queryShapeHash`.
 
+`operationName`, `sqlSourceKind`, `queryShapeHash`, and `patternHash` are not table/column identifiers and do not use the identifier guard. Reports may display them only as derived producer metadata, with Markdown control characters neutralized. Producers remain responsible for emitting operation/source/hash fields as safe derived values rather than raw SQL or literal text.
+
 ## SQL-Shape Rendering
 
 SQL-shape rows should use only derived safe metadata:
