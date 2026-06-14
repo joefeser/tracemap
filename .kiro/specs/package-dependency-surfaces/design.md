@@ -84,10 +84,11 @@ sourceLabel
 ecosystem
 packageName
 manifestKind
+safe relative manifest/project path
 targetFramework or module coordinate when available
 ```
 
-Version, dependency scope, and dependency group are compared as changed metadata, not part of the stable identity, so version or scope changes produce `ChangedEvidence` rows rather than added/removed pairs. If identity is still ambiguous, add a safe line/file discriminator and downgrade the row with a caveat such as `VolatileIdentity`.
+Version, dependency scope, and dependency group are compared as changed metadata, not part of the stable identity, so version or scope changes produce `ChangedEvidence` rows rather than added/removed pairs. The manifest/project path must be the normalized repository-relative path, never a developer-local absolute path, so multi-project and workspace repos can keep distinct package declarations separate. If identity is still ambiguous, add a safe line discriminator and downgrade the row with a caveat such as `VolatileIdentity`.
 
 Hash-only version evidence should use a caveat such as `HashOnlyEvidence`.
 

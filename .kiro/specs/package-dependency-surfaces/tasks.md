@@ -105,7 +105,7 @@ Tests:
 ## 6. Combined Diff
 
 - [ ] Support `diff --scope surfaces --surface package-config`.
-- [ ] Compare package identity separately from version/scope metadata; stable package keys must exclude version, dependency scope, and dependency group.
+- [ ] Compare package identity separately from version/scope metadata; stable package keys must include a safe repository-relative manifest/project path and exclude version, dependency scope, and dependency group.
 - [ ] Classify added, removed, changed, needs-review, no-evidence, selector no-match, and truncation cases.
 - [ ] Add package-config caveats for hash-only evidence and volatile identity.
 
@@ -117,6 +117,7 @@ Tests:
 - [ ] Scope/group changed.
 - [ ] Hash-only version changed.
 - [ ] Duplicate package identity downgrades to needs review.
+- [ ] Same package declared in two different manifests under one source label remains two distinct surface identities.
 - [ ] Hash-only and volatile-identity package caveats are present when package version evidence or identity is weak.
 - [ ] Reduced coverage downgrades no-diff confidence.
 
