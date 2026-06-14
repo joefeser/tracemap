@@ -393,6 +393,46 @@ h3 {
   min-height: 170px;
 }
 
+.example-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.example-grid a {
+  display: grid;
+  min-height: 220px;
+  align-content: start;
+  gap: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 24px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.example-grid a:hover {
+  border-color: var(--accent);
+}
+
+.example-grid span {
+  color: var(--gold);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.example-grid strong {
+  font-size: 1.16rem;
+  line-height: 1.24;
+}
+
+.example-grid p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
 .command-block {
   overflow-x: auto;
   border: 1px solid rgba(16, 58, 50, 0.2);
@@ -480,6 +520,15 @@ h3 {
   margin-bottom: 0;
 }
 
+.site-footer p + p {
+  margin-top: 10px;
+}
+
+.copyright {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 @media (max-width: 900px) {
   .site-header,
   .hero,
@@ -519,6 +568,7 @@ h3 {
 
   .tier-grid,
   .workflow-grid,
+  .example-grid,
   .link-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -539,6 +589,7 @@ h3 {
 
   .tier-grid,
   .workflow-grid,
+  .example-grid,
   .link-grid,
   .preview-stats,
   .output-list div {
