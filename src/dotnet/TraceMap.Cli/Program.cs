@@ -42,11 +42,14 @@ public static class TraceMapCommand
                 "combine" => CombineHelp(),
                 "paths" => PathsHelp(),
                 "diff" => DiffHelp(),
+                "snapshot-diff" => SnapshotDiffHelp(),
                 "impact" => ImpactHelp(),
                 "reverse" => ReverseHelp(),
+                "release-review" => ReleaseReviewHelp(),
+                "portfolio" => PortfolioHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "impact" or "reverse" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" ? 0 : 1;
         }
 
         try
@@ -63,8 +66,11 @@ public static class TraceMapCommand
                 "combine" => await RunCombineAsync(rest, output, error, cancellationToken),
                 "paths" => await RunPathsAsync(rest, output, error, cancellationToken),
                 "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
+                "snapshot-diff" => await RunSnapshotDiffAsync(rest, output, error, cancellationToken),
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
+                "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
+                "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -96,16 +102,43 @@ public static class TraceMapCommand
             return 1;
         }
 
-        var report = await ContractDeltaReducer.ReduceAsync(
-            new ReduceOptions(indexPath, contractDeltaPath, outputPath),
-            cancellationToken);
-        var reportPath = Path.GetExtension(Path.GetFullPath(outputPath)).Equals(".md", StringComparison.OrdinalIgnoreCase)
-            ? Path.GetFullPath(outputPath)
-            : Path.Combine(Path.GetFullPath(outputPath), "impact-report.md");
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: reduce --format must be markdown or json.");
+            return 1;
+        }
 
-        await output.WriteLineAsync($"TraceMap reduce completed: {reportPath}");
-        await output.WriteLineAsync($"Findings written: {report.Findings.Count}");
-        return 0;
+        var result = await ContractDeltaReducer.ReduceAsync(
+            new ReduceOptions(
+                indexPath,
+                contractDeltaPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--scope"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--change-id"),
+                values.GetValueOrDefault("--kind"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--endpoint"),
+                values.HasFlag("--include-paths"),
+                values.HasFlag("--include-reverse"),
+                values.HasFlag("--exit-code"),
+                ParsePositiveInt(values, "--max-findings", 100),
+                ParsePositiveInt(values, "--max-evidence-rows", 500),
+                ParsePositiveInt(values, "--max-paths-per-change", 5),
+                ParsePositiveInt(values, "--max-context-queries", 50),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap reduce completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Findings written: {result.Report.Findings.Count}");
+        await output.WriteLineAsync($"Evidence rows: {result.Report.Summary.EvidenceRowCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasActionableFindings ? 1 : 0;
     }
 
     private static async Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -307,6 +340,67 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasDiffs ? 1 : 0;
     }
 
+    private static async Task<int> RunSnapshotDiffAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--before", out var beforePath) || string.IsNullOrWhiteSpace(beforePath))
+        {
+            await error.WriteLineAsync("error: snapshot-diff requires --before <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--after", out var afterPath) || string.IsNullOrWhiteSpace(afterPath))
+        {
+            await error.WriteLineAsync("error: snapshot-diff requires --after <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: snapshot-diff requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: snapshot-diff --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await SnapshotDiffReporter.WriteAsync(
+            new SnapshotDiffOptions(
+                beforePath,
+                afterPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--scope"),
+                values.HasFlag("--include-paths"),
+                values.HasFlag("--allow-identity-mismatch"),
+                values.HasFlag("--exit-code"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--endpoint"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--surface-name"),
+                ParsePositiveInt(values, "--max-depth", 8),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-diff-rows", 1000),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap snapshot-diff completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
+        await output.WriteLineAsync($"Source diffs: {result.Report.Summary.SourceDiffCount}");
+        await output.WriteLineAsync($"Coverage diffs: {result.Report.Summary.CoverageDiffCount}");
+        await output.WriteLineAsync($"Extractor diffs: {result.Report.Summary.ExtractorVersionDiffCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasDiffs ? 1 : 0;
+    }
+
     private static async Task<int> RunImpactAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
@@ -420,6 +514,143 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.HasReverseEvidence ? 1 : 0;
+    }
+
+    private static async Task<int> RunReleaseReviewAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--before", out var beforePath) || string.IsNullOrWhiteSpace(beforePath))
+        {
+            await error.WriteLineAsync("error: release-review requires --before <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--after", out var afterPath) || string.IsNullOrWhiteSpace(afterPath))
+        {
+            await error.WriteLineAsync("error: release-review requires --after <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: release-review requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: release-review --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await ReleaseReviewReporter.WriteAsync(
+            new ReleaseReviewOptions(
+                beforePath,
+                afterPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--scope"),
+                values.HasFlag("--include-paths"),
+                values.HasFlag("--include-reverse"),
+                values.HasFlag("--allow-identity-mismatch"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--endpoint"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--surface-name"),
+                values.GetValueOrDefault("--contract-delta"),
+                values.GetValueOrDefault("--sql-schema-delta"),
+                values.GetValueOrDefault("--package-delta"),
+                ParsePositiveInt(values, "--max-findings", 100),
+                ParsePositiveInt(values, "--max-surface-rows", 50),
+                ParsePositiveInt(values, "--max-paths", 25),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                ParsePositiveInt(values, "--max-checklist-items", 50)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap release-review completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Mode: {result.Report.Mode}");
+        await output.WriteLineAsync($"Rollup: {result.Report.Summary.RollupClassification}");
+        await output.WriteLineAsync($"Top changed surfaces: {result.Report.Summary.TopChangedSurfaceCount}");
+        await output.WriteLineAsync($"Contract findings: {result.Report.Summary.ContractFindingCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        return 0;
+    }
+
+    private static async Task<int> RunPortfolioAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: portfolio requires --out <path>.");
+            return 1;
+        }
+
+        if (values.HasFlag("--exit-code") || values.HasFlag("--allow-mixed-inputs") || values.HasFlag("--release-review"))
+        {
+            await error.WriteLineAsync("error: portfolio deferred v1 flag is not supported.");
+            return 1;
+        }
+
+        var indexes = values.GetMany("--index");
+        var labels = values.GetMany("--label");
+        if (indexes.Count != labels.Count)
+        {
+            await error.WriteLineAsync("error: portfolio requires each --index to have exactly one --label.");
+            return 1;
+        }
+
+        var inputs = indexes
+            .Select((index, i) => new PortfolioInputSpec(labels[i], index))
+            .ToArray();
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: portfolio --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await PortfolioReporter.WriteAsync(
+            new PortfolioReportOptions(
+                inputs,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--manifest"),
+                values.GetValueOrDefault("--before-manifest"),
+                values.GetValueOrDefault("--after-manifest"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--group"),
+                values.GetValueOrDefault("--surface"),
+                values.GetValueOrDefault("--surface-name"),
+                values.HasFlag("--include-impact"),
+                values.HasFlag("--include-paths"),
+                values.HasFlag("--include-reverse"),
+                ParsePositiveInt(values, "--max-sources", 200),
+                ParsePositiveInt(values, "--max-surface-rows", 500),
+                ParsePositiveInt(values, "--max-endpoint-findings", 500),
+                ParsePositiveInt(values, "--max-shared-surfaces", 200),
+                ParsePositiveInt(values, "--max-edge-rows", 500),
+                ParsePositiveInt(values, "--max-diff-rows", 200),
+                ParsePositiveInt(values, "--max-impact-items", 100),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-roots", 100),
+                ParsePositiveInt(values, "--max-depth", 8),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap portfolio completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
+        await output.WriteLineAsync($"Inputs: {result.Report.Summary.InputCount}");
+        await output.WriteLineAsync($"Surfaces: {result.Report.Summary.SurfaceCount}");
+        await output.WriteLineAsync($"Edges: {result.Report.Summary.EdgeCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.Summary.ReportCoverage}");
+        return 0;
     }
 
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -624,7 +855,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--allow-identity-mismatch" or "--exit-code")
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review")
             {
                 flags.Add(arg);
                 continue;
@@ -728,8 +959,11 @@ public static class TraceMapCommand
               tracemap combine --index <path> [--index <path>] --out <combined.sqlite> [--label <label>]
               tracemap paths --index <combined.sqlite> --out <path> [selectors]
               tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path>
+              tracemap snapshot-diff --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
+              tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
+              tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -742,8 +976,11 @@ public static class TraceMapCommand
               combine   Combine multiple TraceMap indexes into one queryable SQLite database.
               paths     Trace deterministic dependency paths through a combined index.
               diff      Compare two combined indexes and report static evidence changes.
+              snapshot-diff Compare two TraceMap snapshots by source, coverage, and extractor evidence.
               impact    Explain static change evidence between two combined indexes.
               reverse   Trace reverse static reachability from dependency surfaces.
+              release-review Assemble a deterministic before/after release evidence packet.
+              portfolio Summarize dependency evidence across many TraceMap indexes.
             """;
     }
 
@@ -852,6 +1089,38 @@ public static class TraceMapCommand
             """;
     }
 
+    private static string SnapshotDiffHelp()
+    {
+        return """
+            Usage:
+              tracemap snapshot-diff --before <index.sqlite> --after <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --before <path>            Earlier TraceMap index, single-language or combined.
+              --after <path>             Later TraceMap index of the same mode.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+              --scope <value>            all, sources, coverage, endpoints, contract-shapes, surfaces, graph, gaps, extractors, or paths.
+              --include-paths            Reserve bounded path comparison for combined indexes.
+              --allow-identity-mismatch  Continue when same source labels point at different source identities.
+              --exit-code                Return exit code 1 when snapshot diff rows are present.
+              --source <label>           Filter to one source label.
+              --endpoint "<M> <P>"       Filter future endpoint/path evidence to method/path key.
+              --surface <kind>           Filter future surface evidence.
+              --surface-name <text>      Filter future surface evidence by name.
+              --max-depth <n>            Path diff depth. Default: 8.
+              --max-paths <n>            Path diff paths per snapshot. Default: 100.
+              --max-frontier <n>         Path diff frontier cap. Default: 10000.
+              --max-diff-rows <n>        Diff rows per kind. Default: 1000.
+              --max-gaps <n>             Gap rows. Default: 1000.
+
+            Outputs:
+              snapshot-diff-report.md and/or snapshot-diff-report.json
+            """;
+    }
+
     private static string ImpactHelp()
     {
         return """
@@ -914,6 +1183,86 @@ public static class TraceMapCommand
             """;
     }
 
+    private static string ReleaseReviewHelp()
+    {
+        return """
+            Usage:
+              tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --before <path>            Earlier TraceMap index, single-language or combined.
+              --after <path>             Later TraceMap index of the same mode.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+              --scope <value>            all, sources, coverage, surfaces, contracts, api-dto, sql-schema, packages, paths, reverse, gaps, or checklist.
+              --contract-delta <path>    Include contract delta impact context.
+              --sql-schema-delta <path>  Validate SQL/schema delta input and report workflow status.
+              --package-delta <path>     Validate package delta input and report deferred package-upgrade status.
+              --include-paths            Include bounded path context where combined indexes support it.
+              --include-reverse          Include bounded reverse context where combined indexes support it.
+              --allow-identity-mismatch  Continue when combined source labels point at different source identities.
+              --source <label>           Filter to one source label.
+              --endpoint "<M> <P>"       Filter endpoint/path evidence to method/path key where compatible.
+              --surface <kind>           sql-query, http-route, http-client, or package-config.
+              --surface-name <text>      Exact case-insensitive surface name where compatible.
+              --max-findings <n>         Release findings. Default: 100.
+              --max-surface-rows <n>     Top changed surface rows. Default: 50.
+              --max-paths <n>            Path/reverse rows exposed by release review. Default: 25.
+              --max-gaps <n>             Gap rows. Default: 1000.
+              --max-checklist-items <n>  Checklist rows. Default: 50.
+
+            Outputs:
+              release-review.md and/or release-review.json
+            """;
+    }
+
+    private static string PortfolioHelp()
+    {
+        return """
+            Usage:
+              tracemap portfolio --out <path> --index <index.sqlite> --label <label> [--index <path> --label <label> ...]
+              tracemap portfolio --out <path> --manifest <portfolio.json>
+              tracemap portfolio --out <path> --before-manifest <portfolio.json> --after-manifest <portfolio.json>
+
+            Required:
+              --out <path>               Output directory or file path.
+
+            Inputs:
+              --index <path>             TraceMap single-language or combined index. Repeatable.
+              --label <label>            Label paired with each --index. Repeatable.
+              --manifest <path>          Portfolio manifest with version 1.0 and inputs.
+              --before-manifest <path>   Earlier portfolio manifest for source-level comparison.
+              --after-manifest <path>    Later portfolio manifest for source-level comparison.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --source <label>           Filter to one source or combined container label.
+              --group <tag>              Filter to manifest group or role tag.
+              --surface <kind>           http-client, http-route, sql-query, sql-persistence, or package-config.
+              --surface-name <text>      Case-insensitive contained surface name.
+              --include-impact           Request deferred portfolio impact context.
+              --include-paths            Request deferred path context.
+              --include-reverse          Request deferred reverse context.
+              --max-sources <n>          Source rows. Default: 200.
+              --max-surface-rows <n>     Dependency surface rows. Default: 500.
+              --max-endpoint-findings <n> Endpoint findings. Default: 500.
+              --max-shared-surfaces <n>  Shared surface groups. Default: 200.
+              --max-edge-rows <n>        Dependency edge rows. Default: 500.
+              --max-diff-rows <n>        Source comparison rows. Default: 200.
+              --max-impact-items <n>     Deferred impact item cap. Default: 100.
+              --max-paths <n>            Deferred path cap. Default: 100.
+              --max-roots <n>            Deferred reverse root cap. Default: 100.
+              --max-depth <n>            Deferred graph depth. Default: 8.
+              --max-frontier <n>         Deferred graph frontier. Default: 10000.
+              --max-gaps <n>             Gap rows. Default: 1000.
+
+            Outputs:
+              portfolio-report.md and/or portfolio-report.json
+            """;
+    }
+
     private static string ReduceHelp()
     {
         return """
@@ -923,10 +1272,27 @@ public static class TraceMapCommand
             Required:
               --index <path>             Existing TraceMap index.sqlite.
               --contract-delta <path>    Contract delta JSON file.
-              --out <path>               Output directory or impact-report.md path.
+              --out <path>               Output directory, impact-report.md, or impact-report.json path.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --scope <value>            all or comma-separated contract kinds. Default: all.
+              --source <label>           Combined-index source label filter.
+              --change-id <id>           v2 contract-delta change id filter.
+              --kind <kind>              Filter to one v2 contract kind.
+              --endpoint "<M> <P>"       Filter endpoint contract changes by method/path.
+              --surface <kind>           Filter dependency-surface contract changes by kind.
+              --include-paths            Request bounded combined-index path context.
+              --include-reverse          Request bounded combined-index reverse context.
+              --exit-code                Return exit code 1 when actionable findings are present.
+              --max-findings <n>         Finding rows. Default: 100.
+              --max-evidence-rows <n>    Evidence rows across all findings. Default: 500.
+              --max-paths-per-change <n> Reserved path context cap. Default: 5.
+              --max-context-queries <n>  Reserved context query cap. Default: 50.
+              --max-gaps <n>             Gap rows. Default: 1000.
 
             Outputs:
-              impact-report.md
+              impact-report.md and/or impact-report.json
             """;
     }
 

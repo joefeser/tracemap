@@ -6,6 +6,8 @@ namespace TraceMap.Storage;
 
 public static class SqliteIndexWriter
 {
+    internal const int MaxParameterForwardAliasDepth = 3;
+
     private sealed record SymbolRoleProperties(
         string Role,
         string SymbolId,
@@ -869,7 +871,7 @@ public static class SqliteIndexWriter
         var currentSymbol = argumentSymbol;
         var currentKind = argumentSymbolKind;
         var seen = new HashSet<string>(StringComparer.Ordinal) { $"{currentKind}:{currentSymbol}" };
-        for (var depth = 0; depth < 8; depth++)
+        for (var depth = 0; depth < MaxParameterForwardAliasDepth; depth++)
         {
             var origin = string.Equals(currentKind, "Field", StringComparison.Ordinal)
                 ? ReadNearestFieldAliasOrigin(connection, transaction, callerSymbol, currentSymbol, callStartLine)
@@ -908,9 +910,7 @@ public static class SqliteIndexWriter
             currentKind = origin.Value.Kind;
         }
 
-        return string.Equals(argumentSymbolKind, "Field", StringComparison.Ordinal)
-            ? ResolveConstructorFieldSource(connection, transaction, callerSymbol, argumentSymbol)
-            : null;
+        return null;
     }
 
     private static ResolvedForwardSource? ResolveConstructorFieldSource(
@@ -964,7 +964,6 @@ public static class SqliteIndexWriter
 
         return candidates
             .Where(candidate => IsConstructorSymbol(candidate.ContainingSymbol))
-            .Distinct()
             .ToArray();
     }
 

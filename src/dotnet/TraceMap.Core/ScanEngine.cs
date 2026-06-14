@@ -235,6 +235,20 @@ public static class ScanEngine
 
         foreach (var item in packageReferences)
         {
+            var packageProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dependencyGroup"] = item.DependencyGroup,
+                ["dependencyScope"] = item.DependencyScope,
+                ["ecosystem"] = "nuget",
+                ["manifestKind"] = item.ManifestKind,
+                ["package"] = item.PackageName,
+                ["packageManager"] = "nuget",
+                ["packageName"] = item.PackageName,
+                ["sourceKind"] = item.ManifestKind == "packages.config" ? "manifest" : "build-file",
+                ["surfaceKind"] = "package-config",
+                ["targetFramework"] = item.TargetFramework ?? string.Empty
+            };
+            AddSafeVersionProperties(packageProperties, item.Version);
             facts.Add(FactFactory.Create(
                 manifest,
                 FactTypes.PackageReferenced,
@@ -243,11 +257,7 @@ public static class ScanEngine
                 new EvidenceSpan(item.ProjectPath, item.Line, item.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
                 projectPath: item.ProjectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ? item.ProjectPath : null,
                 targetSymbol: item.PackageName,
-                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["package"] = item.PackageName,
-                    ["version"] = item.Version ?? string.Empty
-                }));
+                properties: packageProperties));
         }
 
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
@@ -273,6 +283,39 @@ public static class ScanEngine
         return gap.Properties is not null && gap.Properties.TryGetValue("message", out var message)
             ? message
             : "Roslyn semantic analysis reported a gap.";
+    }
+
+    private static void AddSafeVersionProperties(SortedDictionary<string, string> properties, string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            properties["version"] = string.Empty;
+            return;
+        }
+
+        var trimmed = version.Trim();
+        if (IsUnsafePackageVersion(trimmed))
+        {
+            properties["versionHash"] = FactFactory.Hash(trimmed, 32);
+            properties["redactionReason"] = "unsafe-package-version";
+            return;
+        }
+
+        properties["version"] = trimmed;
+    }
+
+    private static bool IsUnsafePackageVersion(string value)
+    {
+        return value.Contains("://", StringComparison.Ordinal)
+            || value.Contains("\\", StringComparison.Ordinal)
+            || value.StartsWith("/", StringComparison.Ordinal)
+            || value.StartsWith("./", StringComparison.Ordinal)
+            || value.StartsWith("../", StringComparison.Ordinal)
+            || value.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("git+", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("${", StringComparison.Ordinal)
+            || value.Contains("$(", StringComparison.Ordinal)
+            || value.Contains("%", StringComparison.Ordinal);
     }
 
     private static IReadOnlyList<FileInventoryItem> ApplyScope(

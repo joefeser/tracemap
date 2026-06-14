@@ -1,4 +1,75 @@
 rules:
+  - id: public.demo.summary.v1
+    name: Public demo summary section
+    description: Records public demo workflow section status, coverage labels, artifact references, and deterministic counts produced by checked-in validation scripts.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - demo summary section row
+    limitations:
+      - Demo summary rows describe validation workflow status and generated artifact availability; they are not scanner facts and do not prove runtime execution, deployment, production traffic, release approval, vulnerability, or compatibility.
+      - Deferred, unavailable, and failed sections are explicit analysis gaps and remain Tier4Unknown.
+      - Artifact paths are output-root-relative and public-shareable summaries must not render local absolute paths, raw SQL, source snippets, raw secrets, or credential-bearing URLs.
+
+  - id: snapshot.diff.source.v1
+    name: Snapshot diff source comparison
+    description: Compares source inventory and source metadata between two TraceMap snapshots by exact source label and stable source identity metadata.
+    evidenceTier: Tier2Structural
+    emits:
+      - source diff row
+      - SourceOnlyOnOneSide gap
+    limitations:
+      - Source pairing is exact-label based and does not infer renamed repositories, source labels, branches, or merge ancestry.
+      - Source diffs compare static scan metadata and do not prove code behavior changed.
+      - Single-index snapshots use the synthetic source label `single`.
+
+  - id: snapshot.diff.coverage.v1
+    name: Snapshot diff coverage comparison
+    description: Compares source-level scan coverage, build status, analysis level, known gaps, and commit SHA credibility between paired TraceMap snapshot sources.
+    evidenceTier: Tier4Unknown
+    emits:
+      - coverage diff row
+      - ReducedCoverage gap
+      - UnknownCommitSha gap
+    limitations:
+      - Coverage is source-level unless language adapters emit more precise gap metadata.
+      - Reduced coverage makes absence of evidence coverage-relative, not proof that evidence was removed.
+      - Unknown commit SHAs prevent history-dependent conclusions.
+
+  - id: snapshot.diff.evidence.v1
+    name: Snapshot diff evidence comparison
+    description: Carries deterministic snapshot-diff evidence rows and selector/truncation gaps for implemented static evidence sections.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - extractor version diff row
+      - SelectorNoMatch gap
+      - TruncatedByLimit gap
+    limitations:
+      - Extractor version changes describe scanner metadata only and do not prove source-code behavior changed.
+      - Selector gaps describe the current static evidence and query bounds only.
+      - Truncated output is intentionally partial and must not be treated as complete evidence coverage.
+
+  - id: snapshot.diff.identity.v1
+    name: Snapshot diff source identity validation
+    description: Validates comparable source identity for snapshot diffs and emits review-tier or unknown gaps when identity is missing, partial, or conflicting.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SourceIdentityConflict gap
+      - SourceOnlyOnOneSide gap
+    limitations:
+      - Repository identity is hash-based and omits raw remote URLs, raw repository names, and local absolute paths.
+      - Identity validation cannot prove two differently labeled or renamed repositories are equivalent.
+      - Conflicting identity fails by default unless the caller explicitly allows review-tier mismatch output.
+
+  - id: snapshot.diff.schema.v1
+    name: Snapshot diff schema and availability gap
+    description: Emits gaps when snapshot-diff evidence sections are unavailable because required precision tables or implementation slices are absent.
+    evidenceTier: Tier4Unknown
+    emits:
+      - UnavailableEvidence gap
+    limitations:
+      - Availability gaps explicitly mark partial analysis and must not be interpreted as no changes.
+      - Missing optional precision tables can reduce comparison precision and downgrade conclusions.
+
   - id: combined.diff.source.v1
     name: Combined dependency diff source comparison
     description: Compares source inventory and source metadata between two combined indexes by exact source label and stable source identity metadata.
@@ -43,6 +114,9 @@ rules:
       - Raw SQL, URLs, config values, connection strings, and source snippets are not rendered by default.
       - Hash-only SQL text surfaces emit a HashOnlyEvidence caveat and remain review-tier evidence.
       - SQL surfaces that fall back to fact-hash identity emit a VolatileIdentity caveat and remain review-tier evidence.
+      - Package surface diffs compare static manifest metadata only; they do not prove package restore, installation, loading, import/use, vulnerability, exploitability, deployment, or transitive dependency impact.
+      - Package version values that resemble URLs, local paths, or environment-expanded values are rendered as hashes with redaction caveats.
+      - Package identity is ecosystem- and manifest-scoped; matching package names across ecosystems does not imply cross-language identity.
 
   - id: combined.diff.edge.v1
     name: Combined dependency diff edge comparison
@@ -372,6 +446,8 @@ rules:
     limitations:
       - XML files that cannot be parsed are still inventoried but do not emit project metadata facts.
       - Conditional MSBuild properties are not evaluated in Milestone 1.
+      - PackageReferenced facts are static project-file or packages.config declarations and do not prove NuGet restore, resolved transitive dependencies, runtime loading, or deployment.
+      - Central package management, imported props/targets, and unresolved property interpolation may reduce package metadata precision.
 
   - id: csharp.syntax.memberaccess.v1
     name: C# syntax member access
@@ -555,7 +631,8 @@ rules:
       - ParameterForwardEdge
     limitations:
       - Requires an `ArgumentPassed` fact where the argument is resolved as a method parameter, as a local/field with alias evidence back to a parameter in the same containing method, or as a field with exactly one constructor assignment from a parameter in the same containing type.
-      - Follows parameter forwarding, bounded same-method alias chains, and unique constructor field initialization only; it does not infer arbitrary cross-method field lifetime, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
+      - Follows parameter forwarding, same-method alias chains up to 3 alias hops, and unique constructor field initialization only; it does not infer arbitrary cross-method field lifetime, mutations, runtime branches, dependency injection, reflection, dynamic dispatch, or serializer-created values.
+      - Constructor field forwarding requires exactly one visible constructor assignment from a parameter in the analyzed containing type; multiple visible assignments or constructors suppress the derived edge.
       - Path reports are bounded by max depth and max path count, so large or cyclic graphs can be intentionally truncated.
       - Paths are evidence chains, not proof that a runtime request always reaches the terminal method.
 
@@ -763,6 +840,44 @@ rules:
       - UnknownAnalysisGap is emitted only when analysis-gap evidence names the changed contract element; unrelated reduced coverage is reported as NoEvidenceReducedCoverage.
       - Generic or high fan-out name matches are still reported when evidence exists, but warnings mark them as review-sensitive.
 
+  - id: contract.delta.input.v2
+    name: Contract delta v2 input validation
+    description: Validates structured contract delta v2 changes and records selector/input gaps without echoing raw unsafe values.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ContractDeltaInputGap
+      - SelectorNoMatch gap
+    limitations:
+      - Legacy v1 input is compatibility-mapped to type/property references only.
+      - Unsupported kinds or change types fail closed before reduction.
+      - Selector gaps describe query shape, not source-code impact evidence.
+
+  - id: contract.delta.impact.v2
+    name: Contract delta impact v2
+    description: Matches structured contract delta references against single-index and combined-index TraceMap facts and emits evidence-backed static impact findings.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - ImpactFinding
+      - ContractDeltaImpactGap
+    limitations:
+      - Findings describe deterministic static evidence, not runtime reachability, traffic, or business impact.
+      - Endpoint, package, SQL, schema, and dependency-surface matches are limited to indexed static facts.
+      - Generic, high fan-out, name-only, and syntax/text matches are review-sensitive.
+      - NoEvidence and NoImpactEvidence classifications are coverage-relative and depend on scan identity, commit SHA, build status, and known gaps.
+      - Raw SQL, literal values, connection strings, URLs, local absolute paths, and source snippets are not rendered in public reports.
+
+  - id: contract.delta.context.v2
+    name: Contract delta impact context v2
+    description: Records bounded path or reverse-context availability for contract delta v2 findings when stable combined-index selectors can be derived.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PathContextUnavailable gap
+      - ReverseContextUnavailable gap
+    limitations:
+      - Path and reverse context are optional bounded static context, not complete dependency coverage.
+      - Context is emitted only when stable selectors are available without overclaiming.
+      - Missing context is reported as an explicit gap rather than inferred impact or inferred safety.
+
   - id: typescript.project.v1
     name: TypeScript project loading
     description: Records explicit tsconfig project evidence and project-load gaps for the TypeScript scanner.
@@ -786,6 +901,8 @@ rules:
     limitations:
       - Package scripts are stored as hashes and key paths only.
       - Package metadata is structural evidence; it does not prove runtime loading.
+      - Package dependency rows are static package.json declarations and do not prove install, lockfile resolution, bundler inclusion, import/use, or deployment.
+      - Workspace resolution, registry metadata, package-manager execution, and transitive dependency solving are out of scope.
 
   - id: typescript.config.v1
     name: TypeScript config keys
@@ -1099,6 +1216,7 @@ rules:
       - Maven parent POMs are resolved only when local files are present.
       - Gradle extraction is literal-only; version catalogs, convention plugins, buildSrc, composite builds, and interpolation are reduced-coverage gaps.
       - Dependency metadata is structural and does not prove the dependency is resolved on the scanner classpath.
+      - JVM package facts do not prove Maven/Gradle execution, dependency cache contents, transitive dependency resolution, runtime class loading, or deployment.
 
   - id: jvm.config.v1
     name: JVM config files
@@ -1343,6 +1461,7 @@ rules:
     limitations:
       - setup.py is parsed for literal dependency lists only and is never executed.
       - Dependency resolution, extras, lockfile solving, environment markers, and installed package versions are not proven.
+      - Direct URLs, editable installs, local paths, and dynamic declarations are represented as hash-only metadata or gaps; raw values are not rendered.
 
   - id: python.ast.declarations.v1
     name: Python AST declarations
@@ -1519,3 +1638,200 @@ rules:
       - InfrastructureBoilerplate
     limitations:
       - Boilerplate classification is a review-routing heuristic and not proof of business intent.
+
+  - id: release.review.rollup.v1
+    name: Release review rollup
+    description: Emits deterministic release-review summary classifications from underlying TraceMap findings and gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewSummary
+    limitations:
+      - Rollups summarize static evidence only and are not release approval, CI policy, runtime risk prediction, or production usage proof.
+      - Rollup strength is bounded by source identity, commit SHA availability, coverage, truncation, and unavailable workflow gaps.
+      - Underlying classifications, rule IDs, evidence tiers, and limitations remain authoritative.
+
+  - id: release.review.checklist.v1
+    name: Release review checklist
+    description: Emits deterministic checklist items derived only from release-review findings and gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewChecklistItem
+    limitations:
+      - Checklist items are review-routing prompts, not generated advice or release decisions.
+      - Items are derived from static findings and gaps and may omit runtime, deployment, and business context.
+
+  - id: release.review.source.v1
+    name: Release review source identity and coverage
+    description: Emits source pairing, commit SHA, identity, and coverage gaps for release-review comparisons.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewSourceCoverage
+      - ReleaseReviewGap
+    limitations:
+      - Repository identity is hash-based and cannot prove ownership or runtime deployment equivalence.
+      - Missing or reduced coverage makes absence of evidence coverage-relative.
+      - Unknown commit SHAs prevent history-completeness claims.
+
+  - id: release.review.section.v1
+    name: Release review section status
+    description: Emits unavailable, deferred, unsupported-mode, and workflow-status gaps for release-review sections.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewGap
+    limitations:
+      - Unavailable or deferred sections are explicit analysis gaps, not clean results.
+      - Section status does not imply an underlying workflow ran unless the status is available with findings or gaps from that workflow.
+
+  - id: release.review.selector.v1
+    name: Release review selector handling
+    description: Emits gaps when release-review selectors are ignored or cannot apply to enabled scopes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewGap
+    limitations:
+      - Selector no-match or ignored-selector output reflects static indexed evidence only.
+      - Dynamic routes, generated configuration, reduced coverage, or unavailable sections can hide otherwise relevant evidence.
+
+  - id: release.review.truncation.v1
+    name: Release review truncation
+    description: Emits gaps when release-review caps omit findings, path rows, reverse rows, checklist items, or gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReleaseReviewGap
+    limitations:
+      - Truncated reports are incomplete by construction and must not be interpreted as comprehensive.
+      - Omitted counts are deterministic for the selected scope and caps, but not evidence of lower importance.
+
+  - id: portfolio.identity.v1
+    name: Portfolio source identity
+    description: Emits portfolio source identity rows and gaps from TraceMap scan metadata, commit SHAs, labels, and manifest expectations.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioSource
+      - PortfolioGap
+    limitations:
+      - Repository identity is hash-based and cannot prove runtime deployment, ownership, or service equivalence.
+      - Duplicate source identity is excluded from cross-source grouping to avoid double-counting evidence.
+      - Manifest expected identity is a validation hint, not a replacement for indexed source provenance.
+
+  - id: portfolio.coverage.v1
+    name: Portfolio coverage summary
+    description: Emits portfolio source coverage rows from analysis level, build status, commit SHA availability, and known analysis gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioSourceCoverage
+      - PortfolioGap
+    limitations:
+      - Reduced coverage makes absence of evidence coverage-relative.
+      - Coverage is static analysis coverage, not runtime exercise or test coverage.
+
+  - id: portfolio.schema.v1
+    name: Portfolio schema gap
+    description: Emits portfolio gaps when an input index lacks required or optional TraceMap schema objects.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Missing schema prevents only the affected portfolio section from making stronger claims.
+      - Schema gaps are not evidence that dependencies are absent.
+
+  - id: portfolio.endpoint.alignment.v1
+    name: Portfolio endpoint alignment
+    description: Emits cross-source endpoint findings by reusing TraceMap static method/path matching over indexed HTTP client and route facts.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - PortfolioEndpointFinding
+    limitations:
+      - Endpoint alignment is static method/path evidence and does not prove runtime traffic, deployment paths, auth, proxy, CORS, or reachability.
+      - Dynamic or unnormalized URLs are review-tier evidence only.
+      - Source-local ambiguity prevents stronger endpoint conclusions.
+
+  - id: portfolio.surface.inventory.v1
+    name: Portfolio dependency surface inventory
+    description: Emits source-scoped portfolio dependency surface rows from indexed HTTP, SQL, package, config, resource, and persistence evidence.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - PortfolioSurface
+    limitations:
+      - Surface rows are static evidence and do not prove runtime use, compatibility, schema existence, package restore, or deployment topology.
+      - Raw SQL, snippets, config values, URLs, local paths, and secret-looking values must be omitted, redacted, or hashed.
+
+  - id: portfolio.surface.group.v1
+    name: Portfolio shared surface grouping
+    description: Groups safe portfolio surface identities across sources while preserving all supporting source evidence.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - PortfolioSharedSurface
+    limitations:
+      - Shared surface identity does not prove runtime coupling, ownership, traffic, or business dependency.
+      - Tier3, dynamic, hash-only, duplicate, or reduced-coverage support keeps the group review-tier.
+
+  - id: portfolio.edge.inventory.v1
+    name: Portfolio dependency edge inventory
+    description: Emits source-scoped static call, object creation, symbol relationship, argument-flow, and parameter-forwarding edge rows.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - PortfolioEdge
+    limitations:
+      - Static edges do not prove dynamic dispatch targets, runtime DI registrations, reflection targets, branch feasibility, or collection contents.
+
+  - id: portfolio.diff.v1
+    name: Portfolio source diff
+    description: Emits source-level before/after portfolio comparison rows from manifest labels and source identity evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioDiffRow
+    limitations:
+      - V1 source diff does not replace combined diff, impact, path, or reverse workflows.
+      - Identity ambiguity downgrades comparisons to review-tier evidence.
+
+  - id: portfolio.impact.context.v1
+    name: Portfolio impact context status
+    description: Emits portfolio impact context status and deferred/unavailable gaps when impact composition is requested but not available in v1.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Deferred impact context is an explicit analysis gap, not a clean result.
+      - Portfolio impact does not introduce a competing impact classifier.
+
+  - id: portfolio.optional-context.v1
+    name: Portfolio optional context status
+    description: Emits path, reverse, and release-review context statuses for portfolio reports.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Not-requested sections did not run and must not be interpreted as no evidence.
+      - Deferred or unavailable sections are explicit analysis gaps for that context.
+
+  - id: portfolio.selector.v1
+    name: Portfolio selector handling
+    description: Emits portfolio selector no-match and ignored-selector gaps for source, group, surface, and surface-name filters.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Selector no-match reflects indexed static evidence only.
+      - Dynamic evidence, reduced coverage, or unavailable sections can hide otherwise relevant evidence.
+
+  - id: portfolio.truncation.v1
+    name: Portfolio truncation
+    description: Emits gaps and omitted counts when portfolio row caps truncate sources, endpoints, surfaces, edges, groups, diffs, paths, roots, or gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PortfolioGap
+    limitations:
+      - Truncated portfolio reports are incomplete by construction.
+      - Omitted counts are deterministic for selected caps and scope, but not evidence of lower importance.
+
+  - id: portfolio.redaction.v1
+    name: Portfolio redaction
+    description: Documents portfolio safe-rendering behavior for paths, URLs, SQL, snippets, config values, and secret-looking metadata.
+    evidenceTier: Tier4Unknown
+    emits:
+      - RedactedValue
+      - UnsafePropertyOmitted
+    limitations:
+      - Redaction preserves review safety at the cost of losing raw values.
+      - Hashes are comparison aids only and must not be treated as decoded or verified secrets.

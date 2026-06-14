@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using TraceMap.Cli;
 using TraceMap.Combine;
@@ -323,6 +324,35 @@ public sealed class CombinedDependencyDiffTests
     }
 
     [Fact]
+    public void Diff_path_file_spans_do_not_guess_source_for_conflicting_duplicate_node_ids()
+    {
+        var method = typeof(CombinedDependencyDiffer).GetMethod("PathFileSpans", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var path = new CombinedPath(
+            "path-1",
+            "NeedsReviewPath",
+            "Review",
+            2,
+            "node-1",
+            "node-2",
+            [
+                PathNode("node-1", "api", "Controllers/OrdersController.cs", 10),
+                PathNode("node-1", "worker", "Workers/OrdersWorker.cs", 20),
+                PathNode("node-2", "db", "Infrastructure/Orders.sql", 1)
+            ],
+            [
+                new CombinedPathEdge("edge-1", "CallEdge", "node-1", "node-2", "NeedsReviewPath", RuleIds.CSharpSyntaxCallGraph, EvidenceTiers.Tier3SyntaxOrTextual, [], [], "Edges/edge.cs", 30, 30)
+            ],
+            [],
+            [],
+            []);
+
+        var spans = Assert.IsAssignableFrom<IReadOnlyList<CombinedPathFileSpan>>(method.Invoke(null, [path]));
+
+        Assert.Contains(spans, span => span.FilePath == "Edges/edge.cs" && span.SourceLabel is null);
+    }
+
+    [Fact]
     public async Task Diff_does_not_collapse_same_sql_shape_with_different_source_kind()
     {
         using var temp = new TempDirectory();
@@ -376,6 +406,90 @@ public sealed class CombinedDependencyDiffTests
         Assert.Contains(result.Report.SurfaceDiffs, row =>
             row.Classification == CombinedDependencyDiffClassifications.NeedsReviewDiff
             && row.CoverageCaveats.Any(caveat => caveat.Code == "VolatileIdentity"));
+    }
+
+    [Fact]
+    public async Task Diff_treats_package_version_and_scope_as_changed_metadata_not_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, [
+            PackageFact(manifest, "Newtonsoft.Json", "13.0.1", "runtime", "src/App.csproj", 12)
+        ]);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            PackageFact(manifest, "Newtonsoft.Json", "13.0.3", "development", "src/App.csproj", 12)
+        ]);
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "surfaces",
+            Surface: "package-config"));
+
+        var row = Assert.Single(result.Report.SurfaceDiffs);
+        Assert.Equal(CombinedDependencyDiffClassifications.ChangedEvidence, row.Classification);
+        Assert.Contains(row.After!.SafeMetadata, pair => pair.Key == "version" && pair.Value == "13.0.3");
+        Assert.Contains(row.After.SafeMetadata, pair => pair.Key == "dependencyScope" && pair.Value == "development");
+        Assert.DoesNotContain(result.Report.SurfaceDiffs, diff => diff.Classification == CombinedDependencyDiffClassifications.Added);
+        Assert.DoesNotContain(result.Report.SurfaceDiffs, diff => diff.Classification == CombinedDependencyDiffClassifications.Removed);
+    }
+
+    [Fact]
+    public async Task Diff_keeps_same_package_name_in_different_ecosystems_distinct()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, []);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            PackageFact(manifest, "logging", "1.0.0", "runtime", "src/App.csproj", 12, ecosystem: "nuget", manifestKind: "csproj"),
+            PackageFact(manifest, "logging", "1.0.0", "runtime", "package.json", 4, ecosystem: "npm", manifestKind: "package.json")
+        ]);
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "surfaces",
+            Surface: "package-config"));
+
+        Assert.Equal(2, result.Report.SurfaceDiffs.Count(row => row.Classification == CombinedDependencyDiffClassifications.Added));
+        Assert.Equal(2, result.Report.SurfaceDiffs.Select(row => row.StableKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(result.Report.SurfaceDiffs, row => row.After!.SafeMetadata.Any(pair => pair.Key == "ecosystem" && pair.Value == "nuget"));
+        Assert.Contains(result.Report.SurfaceDiffs, row => row.After!.SafeMetadata.Any(pair => pair.Key == "ecosystem" && pair.Value == "npm"));
+    }
+
+    [Fact]
+    public async Task Diff_keeps_same_package_in_different_manifests_distinct()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, []);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            PackageFact(manifest, "Newtonsoft.Json", "13.0.3", "runtime", "src/App/App.csproj", 12),
+            PackageFact(manifest, "Newtonsoft.Json", "13.0.3", "runtime", "tests/App.Tests/App.Tests.csproj", 9)
+        ]);
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "diff"),
+            Scope: "surfaces",
+            Surface: "package-config"));
+
+        Assert.Equal(2, result.Report.SurfaceDiffs.Count(row => row.Classification == CombinedDependencyDiffClassifications.Added));
+        Assert.Equal(2, result.Report.SurfaceDiffs.Select(row => row.StableKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(result.Report.SurfaceDiffs, row => row.After!.FilePath == "src/App/App.csproj");
+        Assert.Contains(result.Report.SurfaceDiffs, row => row.After!.FilePath == "tests/App.Tests/App.Tests.csproj");
     }
 
     private static async Task WriteSimpleCombinedAsync(TempDirectory temp, string combinedPath, string prefix)
@@ -537,5 +651,67 @@ public sealed class CombinedDependencyDiffTests
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             targetSymbol: "sql",
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal));
+    }
+
+    private static CodeFact PackageFact(
+        ScanManifest manifest,
+        string packageName,
+        string version,
+        string dependencyScope,
+        string file,
+        int line,
+        string ecosystem = "nuget",
+        string manifestKind = "csproj")
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.PackageReferenced,
+            RuleIds.ProjectFile,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: packageName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dependencyGroup"] = manifestKind == "package.json" ? "dependencies" : "PackageReference",
+                ["dependencyScope"] = dependencyScope,
+                ["ecosystem"] = ecosystem,
+                ["manifestKind"] = manifestKind,
+                ["packageManager"] = ecosystem,
+                ["packageName"] = packageName,
+                ["surfaceKind"] = "package-config",
+                ["version"] = version
+            });
+    }
+
+    private static CombinedPathNode PathNode(string nodeId, string sourceLabel, string filePath, int line)
+    {
+        return new CombinedPathNode(
+            nodeId,
+            "Symbol",
+            nodeId,
+            $"source-{sourceLabel}",
+            sourceLabel,
+            $"scan-{sourceLabel}",
+            "abc1234567890",
+            null,
+            null,
+            RuleIds.CSharpSyntaxCallGraph,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            filePath,
+            line,
+            line,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     }
 }

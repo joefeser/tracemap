@@ -2,7 +2,7 @@
 
 ## Implementation Tasks
 
-- [ ] Confirm MVP command and scope.
+- [x] Confirm MVP command and scope.
   - [ ] Confirm command shape: `tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path>`.
   - [ ] Confirm default scopes are sources, coverage, endpoints, surfaces, and edges.
   - [ ] Confirm `--include-paths` is required for path diffing.
@@ -20,7 +20,7 @@
   - [ ] Confirm non-combined indexes are rejected.
   - [ ] Confirm both inputs are opened read-only.
 
-- [ ] Refactor shared combined infrastructure before adding diff behavior.
+- [x] Refactor shared combined infrastructure before adding diff behavior.
   - [ ] Identify reusable pieces from combined report and path query code.
   - [ ] Extract combined index validation without changing report/path behavior.
   - [ ] Extract source inventory and coverage reading if not already shared.
@@ -40,7 +40,7 @@
   - [ ] Preserve existing report/path output before adding diff behavior.
   - [ ] Add parity tests proving report/path behavior did not change after extraction.
 
-- [ ] Add diff models.
+- [x] Add diff models.
   - [ ] Define query, snapshot, summary, diff row, evidence, caveat, gap, and limitation models.
   - [ ] Define JSON version `1.0`.
   - [ ] Define closed-set classification values.
@@ -55,7 +55,7 @@
   - [ ] Serialize dictionaries as sorted key-value arrays.
   - [ ] Ensure no generated timestamp is emitted.
 
-- [ ] Add snapshot projector.
+- [x] Add snapshot projector.
   - [ ] Read and normalize source inventory.
   - [ ] Project comparable endpoint records.
   - [ ] Project comparable dependency surface records.
@@ -73,7 +73,7 @@
   - [ ] Treat `endpoint_matches` as off-limits for diff reads.
   - [ ] Emit schema errors with side-specific table names.
 
-- [ ] Implement stable identity construction.
+- [x] Implement stable identity construction.
   - [ ] Pair sources by exact source label.
   - [ ] Build source identity summaries and identity-change warnings.
   - [ ] Fail by default on known source identity conflicts.
@@ -92,7 +92,7 @@
   - [ ] Emit `DuplicateIdentity` gaps.
   - [ ] Preserve duplicate provenance in JSON and cap Markdown duplicate rendering deterministically.
 
-- [ ] Implement selector filtering.
+- [x] Implement selector filtering.
   - [ ] Filter sources by exact source label.
   - [ ] Filter endpoints by method and normalized path key.
   - [ ] Filter surfaces by kind.
@@ -105,7 +105,7 @@
   - [ ] Reject endpoint selectors missing either method or path key.
   - [ ] Validate unsupported or invalid selector combinations with clear errors.
 
-- [ ] Implement diff engine.
+- [x] Implement diff engine.
   - [ ] Compare source key sets.
   - [ ] Compare coverage metadata for paired sources.
   - [ ] Compare endpoint key sets.
@@ -125,7 +125,7 @@
   - [ ] Sort diff rows deterministically.
   - [ ] Sort gaps, limitations, supporting fact IDs, and supporting edge IDs deterministically.
 
-- [ ] Add Markdown writer.
+- [x] Add Markdown writer.
   - [ ] Render sections: Summary, Compared Snapshots, Sources, Coverage Changes, Endpoint Diffs, Surface Diffs, Edge Diffs, Path Diffs, Gaps, Limitations.
   - [ ] Render `Path comparison: not requested` in Summary when `--include-paths` is omitted.
   - [ ] Render path-not-run notice when `--include-paths` is omitted.
@@ -135,7 +135,7 @@
   - [ ] Escape Markdown table/link delimiters.
   - [ ] Avoid raw SQL, raw URLs, config values, connection strings, raw snippets, and local absolute paths.
 
-- [ ] Add JSON writer.
+- [x] Add JSON writer.
   - [ ] Emit stable top-level shape.
   - [ ] Include normalized query metadata.
   - [ ] Include before and after snapshot metadata.
@@ -148,7 +148,7 @@
   - [ ] Emit empty required arrays even when there are no rows.
   - [ ] Produce byte-stable output for identical inputs.
 
-- [ ] Wire CLI.
+- [x] Wire CLI.
   - [ ] Add `tracemap diff --help`.
   - [ ] Parse `--before`, `--after`, `--out`, `--format`, `--scope`, `--include-paths`, `--allow-identity-mismatch`, `--exit-code`, selectors, row/gap caps, and path limits.
   - [ ] Validate required arguments.
@@ -158,7 +158,7 @@
   - [ ] Return non-zero exit codes for invalid inputs and schema errors.
   - [ ] Return non-zero for diffs only when `--exit-code` is provided.
 
-- [ ] Add tests.
+- [x] Add tests.
   - [ ] Non-combined input rejection for before and after.
   - [ ] Missing required table names side-specific schema error.
   - [ ] Read-only database byte unchanged after diff.
@@ -220,14 +220,14 @@
   - [ ] Supporting fact IDs, supporting edge IDs, gaps, and limitations are sorted deterministically.
   - [ ] No raw SQL, raw URL, config value, connection string, snippet, local absolute path, or private repo name output.
 
-- [ ] Update docs.
+- [x] Update docs.
   - [ ] README quickstart for `combine -> report -> paths -> diff`.
   - [ ] `docs/ACCEPTANCE.md` diff acceptance criteria.
   - [ ] `docs/VALIDATION.md` local smoke command for diffing two public sample snapshots.
   - [ ] `docs/LANGUAGE_ADAPTER_CONTRACT.md` if diff identity requirements expose adapter contract gaps.
   - [ ] Rule catalog entries for new `combined.diff.*.v1` rule IDs, including limitations for each rule.
 
-- [ ] Validate.
+- [x] Validate.
   - [ ] `dotnet build src/dotnet/TraceMap.sln`
   - [ ] `dotnet test src/dotnet/TraceMap.sln`
   - [ ] `./scripts/check-private-paths.sh`
