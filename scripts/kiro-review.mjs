@@ -156,6 +156,63 @@ function loadEnvFile(envPath) {
   return values;
 }
 
+function loadConfiguredEnvFiles() {
+  const loaded = [];
+  const values = {};
+  const candidates = [];
+  if (process.env.KIRO_ENV_FILE) {
+    candidates.push({ path: process.env.KIRO_ENV_FILE, source: "KIRO_ENV_FILE" });
+  }
+  candidates.push({ path: path.join(cwd, ".env.kiro.local"), source: ".env.kiro.local" });
+
+  for (const candidate of candidates) {
+    const fullPath = path.resolve(cwd, candidate.path);
+    if (!existsSync(fullPath)) {
+      continue;
+    }
+
+    Object.assign(values, loadEnvFile(fullPath));
+    loaded.push(candidate.source);
+  }
+
+  return { values, loaded };
+}
+
+function kiroProfileAvailable(env) {
+  const result = spawnSync("kiro-cli", ["chat", "--list-models", "--format", "json"], {
+    cwd,
+    env,
+    encoding: "utf8",
+    timeout: 30_000,
+    maxBuffer: 5 * 1024 * 1024,
+  });
+
+  return result.status === 0 && Boolean(result.stdout.trim());
+}
+
+function resolveAuthMode(env, loadedEnvFiles) {
+  if (env.KIRO_API_KEY) {
+    return {
+      mode: loadedEnvFiles.includes(".env.kiro.local")
+        ? "env-file"
+        : loadedEnvFiles.includes("KIRO_ENV_FILE")
+          ? "configured-env-file"
+          : "env",
+      kiroApiKeyPresent: true,
+      profileAvailable: null,
+      loadedEnvFiles,
+    };
+  }
+
+  const profileAvailable = kiroProfileAvailable(env);
+  return {
+    mode: profileAvailable ? "profile" : "missing",
+    kiroApiKeyPresent: false,
+    profileAvailable,
+    loadedEnvFiles,
+  };
+}
+
 function nowStamp() {
   return new Date().toISOString().replace(/[:]/g, "").replace(".", "-");
 }
@@ -402,8 +459,9 @@ function main() {
   const cleanPath = path.join(outputDir, `${baseName}.clean.md`);
   const metaPath = path.join(outputDir, `${baseName}.meta.json`);
 
-  const envFileValues = loadEnvFile(path.join(cwd, ".env.kiro.local"));
+  const { values: envFileValues, loaded: loadedEnvFiles } = loadConfiguredEnvFiles();
   const env = { ...process.env, ...envFileValues };
+  const auth = resolveAuthMode(env, loadedEnvFiles);
   const prompt = buildPrompt(options);
   if (options.saveReviewText) {
     writeFileSync(promptPath, prompt, "utf8");
@@ -444,7 +502,10 @@ function main() {
     gitBranch,
     dryRun: options.dryRun,
     auth: {
-      kiroApiKeyPresent: Boolean(env.KIRO_API_KEY),
+      mode: auth.mode,
+      kiroApiKeyPresent: auth.kiroApiKeyPresent,
+      profileAvailable: auth.profileAvailable,
+      loadedEnvFiles: auth.loadedEnvFiles,
     },
   };
 
@@ -464,8 +525,8 @@ function main() {
     return;
   }
 
-  if (!env.KIRO_API_KEY) {
-    console.error("KIRO_API_KEY is missing. Set it in .env.kiro.local or the process environment.");
+  if (auth.mode === "missing") {
+    console.error("Kiro auth is missing. Set KIRO_API_KEY in the environment, .env.kiro.local, or KIRO_ENV_FILE; or run kiro-cli login/profile so profile auth is available.");
     meta.status = 1;
     meta.reviewCoverage = "NotRun";
     meta.finishedAt = new Date().toISOString();
