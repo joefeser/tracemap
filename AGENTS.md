@@ -30,6 +30,16 @@ This is not an AI impact-analysis tool. Do not add LLM calls, embeddings, vector
 - Do not store source snippets by default. Store file paths, line spans, and snippet hashes. Only add raw snippets behind an explicit option.
 - Preserve stable JSON schemas where possible.
 
+## Static site workflow
+
+- The public `tracemap.tools` site lives under `site/` in this same repository; do not treat it as a separate repo.
+- Site specs should use names beginning with `site-`, for example `.kiro/specs/site-tracemap-tools-launch/`.
+- Prefer doing site work in a separate worktree so scanner/reducer implementation branches do not collide with static-site changes.
+- `site/src/` is the source of truth. `site/dist/` and `site/output/` are generated outputs, are ignored by git, and should not be edited by hand.
+- AWS Amplify builds from the repository root using `amplify.yml`, uses `site` as `appRoot`, and publishes only `site/dist`.
+- Site changes should run `npm run build` from `site/`. For layout or interaction changes, also do a desktop and mobile browser sanity check.
+- Keep public site copy bounded to TraceMap's deterministic static evidence model: rule IDs, evidence tiers, coverage labels, limitations, and generated artifacts. Do not add LLM/AI impact-analysis claims to site copy.
+
 ## Suggested package choices
 
 - `Microsoft.CodeAnalysis.CSharp.Workspaces`

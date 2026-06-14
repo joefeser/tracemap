@@ -4,12 +4,14 @@ Date: 2026-06-14
 
 ## Workspace Cleanup
 
-- Main checkout is on `dev` at `e542b77`.
+- Main checkout is on `dev` at `115d0a3`.
 - `dev` is up to date with `origin/dev`.
 - Removed stale local worktrees from the recent spec and implementation loops.
 - Removed empty worktree parent folders.
 - Removed local merged branches for completed spec/implementation loops.
 - Left remote branches alone.
+- PR #58, snapshot-diff combined delegation, is merged into `dev`.
+- PR #59, the first `tracemap.tools` static site, is merged into `dev`.
 
 ## Current Product Shape
 
@@ -31,6 +33,8 @@ TraceMap now has a useful static analysis base across multiple language families
 - Contract delta impact v2.
 - Kiro review wrapper with profile-auth fallback.
 - Private path guard.
+- Snapshot diff by commit/index now delegates combined endpoint, surface, graph, and opt-in path evidence to the combined diff engine.
+- Initial static `tracemap.tools` site under `site/`, with root `amplify.yml` for AWS Amplify deployment from this repository.
 
 Current CLI surface includes:
 
@@ -46,6 +50,14 @@ Current CLI surface includes:
 - `tracemap diff`
 - `tracemap impact`
 - `tracemap reverse`
+- `tracemap snapshot-diff`
+
+Public site surface:
+
+- `site/src/` is the editable static site source.
+- `site/dist/` is generated and ignored.
+- Amplify app root is `site`; publish directory is `dist`.
+- Future site specs should use the `site-` prefix.
 
 ## Specs Already In The Repo
 
@@ -56,19 +68,20 @@ Current CLI surface includes:
 - `query-pattern-reporting`
 - `query-pattern-reporting-v2`
 - `reverse-impact-query`
+- `snapshot-diff-by-sha`
 - `python-depth-pass`
 - `python-endpoint-sql-details`
 - `typescript-indexer`
 - `cross-app-endpoint-alignment`
 - `sql-dependency-surfaces`
 - `contract-delta-impact-v2`
+- `site-tracemap-tools-launch`
 
 Some implemented specs still have stale unchecked task boxes. Treat code and tests as the source of truth, then reconcile task files only if we want a tidy documentation pass.
 
 ### Spec-Ready, Not Yet Implemented
 
 - `release-review-report`
-- `snapshot-diff-by-sha`
 - `api-dto-contract-diff`
 - `sql-schema-change-impact`
 - `parameter-value-origin-flow`
@@ -206,10 +219,12 @@ Suggested later spec loops:
 - Add a small `docs/BACKLOG.md` or generate one from issue labels if we want this inventory to stay easy to refresh.
 - Consider a smoke script that runs a small "release review style" flow once `release-review-report` lands.
 - Keep `.env.kiro.local` ignored and use the wrapper's profile-auth fallback for worktree spec loops.
+- Promote `dev` to `main` once this runway/site-state cleanup lands, so AWS Amplify can be configured from `main` with `amplify.yml` and `site/` present.
+- Configure Amplify for `tracemap.tools` after `main` contains the site setup.
 
 ## My Next Move
 
-Start with `release-review-report` implementation, while queueing two spec loops in parallel for:
+After the site workflow cleanup, create the dev-to-main promotion PR. Then continue with `release-review-report` implementation, while queueing two spec loops in parallel for:
 
 - Package and dependency surfaces.
 - Multi-index portfolio dependency report.
