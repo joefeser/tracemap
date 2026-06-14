@@ -374,6 +374,76 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_combined_path_rows_preserve_provenance()
+    {
+        using var temp = new TempDirectory();
+        var beforeClient = Path.Combine(temp.Path, "before-client.sqlite");
+        var beforeServer = Path.Combine(temp.Path, "before-server.sqlite");
+        var afterClient = Path.Combine(temp.Path, "after-client.sqlite");
+        var afterServer = Path.Combine(temp.Path, "after-server.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0", commitSha: "1111111");
+        var serverBefore = Manifest("server", ScannerVersions.TraceMap, commitSha: "1111111");
+        var serverAfter = Manifest("server", ScannerVersions.TraceMap, commitSha: "2222222");
+        const string controller = "M:Sample.Controllers.OrdersController.Get";
+        const string repository = "M:Sample.Infrastructure.OrderRepository.Get";
+        SqliteIndexWriter.Write(beforeClient, client, [HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)]);
+        SqliteIndexWriter.Write(beforeServer, serverBefore, [RouteFact(serverBefore, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10, controller)]);
+        SqliteIndexWriter.Write(afterClient, client, [HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5)]);
+        SqliteIndexWriter.Write(afterServer, serverAfter, [
+            RouteFact(serverAfter, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 20, controller),
+            QueryPatternFact(serverAfter, repository, "Infrastructure/OrderRepository.cs", 31),
+            CallFact(serverAfter, controller, repository, "Controllers/OrdersController.cs", 21)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeClient, beforeServer], beforeCombined, ["client", "server"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterClient, afterServer], afterCombined, ["client", "server"]));
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "report"),
+            Scope: "paths",
+            IncludePaths: true,
+            AllowIdentityMismatch: true));
+
+        var pathDiff = Assert.Single(result.Report.PathDiffs);
+        Assert.NotEmpty(pathDiff.FileSpans);
+        Assert.NotEmpty(pathDiff.SupportingFactIds);
+        Assert.NotEmpty(pathDiff.SupportingEdgeIds);
+        Assert.NotNull(pathDiff.After);
+        var evidence = pathDiff.After!;
+        Assert.False(string.IsNullOrWhiteSpace(evidence.CommitSha));
+        Assert.False(string.IsNullOrWhiteSpace(evidence.ScanId));
+        Assert.NotEmpty(evidence.FileSpans);
+    }
+
+    [Fact]
+    public async Task Snapshot_diff_combined_gaps_scope_keeps_gap_diff_availability_gap()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeIndex], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterIndex], afterCombined, ["api"]));
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "report"),
+            Scope: "gaps"));
+
+        Assert.Empty(result.Report.GapDiffs);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnavailableEvidence" && gap.Section == "gapDiffs");
+    }
+
+    [Fact]
     public async Task Snapshot_diff_cli_exit_code_is_opt_in()
     {
         using var temp = new TempDirectory();

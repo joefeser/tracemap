@@ -939,6 +939,7 @@ public static class SnapshotDiffReporter
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray();
+                var fileSpans = PathFileSpans(row.Before, row.After);
                 return new SnapshotDiffRow(
                     StableId("diff", "path", row.PathSignature, row.ChangeType, row.Classification),
                     row.PathSignature,
@@ -946,7 +947,7 @@ public static class SnapshotDiffReporter
                     MapClassification(row.Classification),
                     row.Confidence,
                     "path",
-                    null,
+                    row.Before?.SourceLabel ?? row.After?.SourceLabel,
                     beforeEvidence,
                     afterEvidence,
                     [row.DiffRuleId],
@@ -954,7 +955,7 @@ public static class SnapshotDiffReporter
                     supportingFactIds,
                     supportingEdgeIds,
                     supportingPathIds,
-                    [],
+                    fileSpans,
                     coverageCaveats,
                     notes);
             })
@@ -989,38 +990,30 @@ public static class SnapshotDiffReporter
 
     private static string MapCombinedGapSection(CombinedDiffGap gap)
     {
-        var message = gap.Message ?? string.Empty;
-        if (message.Contains("combined.diff.source.v1", StringComparison.Ordinal))
+        var ruleSection = CombinedRuleSection(gap.RuleId);
+        if (ruleSection is not null)
         {
-            return "sourceDiffs";
+            return ruleSection;
         }
 
-        if (message.Contains("combined.diff.coverage.v1", StringComparison.Ordinal))
+        var gapIdSection = CombinedRuleSectionFromText(gap.GapId);
+        if (gapIdSection is not null)
         {
-            return "coverageDiffs";
+            return gapIdSection;
         }
 
-        if (message.Contains("combined.diff.endpoint.v1", StringComparison.Ordinal))
+        var evidenceKindSection = CombinedEvidenceKindSection(gap.EvidenceKind);
+        if (evidenceKindSection is not null)
         {
-            return "endpointDiffs";
+            return evidenceKindSection;
         }
 
-        if (message.Contains("combined.diff.surface.v1", StringComparison.Ordinal))
-        {
-            return "surfaceDiffs";
-        }
+        return "combinedDiff";
+    }
 
-        if (message.Contains("combined.diff.edge.v1", StringComparison.Ordinal))
-        {
-            return "graphDiffs";
-        }
-
-        if (message.Contains("combined.diff.path.v1", StringComparison.Ordinal))
-        {
-            return "pathDiffs";
-        }
-
-        return gap.RuleId switch
+    private static string? CombinedRuleSection(string? ruleId)
+    {
+        return ruleId switch
         {
             "combined.diff.source.v1" => "sourceDiffs",
             "combined.diff.coverage.v1" => "coverageDiffs",
@@ -1028,7 +1021,39 @@ public static class SnapshotDiffReporter
             "combined.diff.surface.v1" => "surfaceDiffs",
             "combined.diff.edge.v1" => "graphDiffs",
             "combined.diff.path.v1" => "pathDiffs",
-            _ => "combinedDiff"
+            _ => null
+        };
+    }
+
+    private static string? CombinedRuleSectionFromText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        foreach (var ruleId in new[] { "combined.diff.source.v1", "combined.diff.coverage.v1", "combined.diff.endpoint.v1", "combined.diff.surface.v1", "combined.diff.edge.v1", "combined.diff.path.v1" })
+        {
+            if (value.Contains(ruleId, StringComparison.Ordinal))
+            {
+                return CombinedRuleSection(ruleId);
+            }
+        }
+
+        return null;
+    }
+
+    private static string? CombinedEvidenceKindSection(string? evidenceKind)
+    {
+        return evidenceKind switch
+        {
+            "source" => "sourceDiffs",
+            "coverage" => "coverageDiffs",
+            "endpoint" => "endpointDiffs",
+            "surface" => "surfaceDiffs",
+            "edge" => "graphDiffs",
+            "path" => "pathDiffs",
+            _ => null
         };
     }
 
@@ -1057,6 +1082,9 @@ public static class SnapshotDiffReporter
     private static SnapshotDiffEvidence MapCombinedPathEvidence(CombinedPathEvidence evidence)
     {
         return new SnapshotDiffEvidence(
+            evidence.SourceLabel,
+            evidence.CommitSha,
+            evidence.ScanId,
             null,
             null,
             null,
@@ -1064,10 +1092,7 @@ public static class SnapshotDiffReporter
             null,
             null,
             null,
-            null,
-            null,
-            null,
-            [],
+            PathFileSpans(evidence).ToArray(),
             CombinedReportHelpers.SortedMetadata(evidence.TerminalSurfaceMetadata.Select(pair => Pair(pair.Key, pair.Value)).Concat([
                 Pair("pathId", evidence.PathId),
                 Pair("pathClassification", evidence.PathClassification),
@@ -1151,15 +1176,35 @@ public static class SnapshotDiffReporter
             : [new SnapshotDiffFileSpan(CombinedReportHelpers.SafePath(evidence.FilePath), evidence.StartLine, evidence.EndLine, evidence.SourceLabel)];
     }
 
+    private static IReadOnlyList<SnapshotDiffFileSpan> PathFileSpans(CombinedPathEvidence? before, CombinedPathEvidence? after)
+    {
+        return (before is null ? [] : PathFileSpans(before))
+            .Concat(after is null ? [] : PathFileSpans(after))
+            .GroupBy(span => $"{span.SourceLabel}:{span.FilePath}:{span.StartLine}:{span.EndLine}", StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(span => span.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(span => span.FilePath, StringComparer.Ordinal)
+            .ThenBy(span => span.StartLine)
+            .ThenBy(span => span.EndLine)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<SnapshotDiffFileSpan> PathFileSpans(CombinedPathEvidence evidence)
+    {
+        return evidence.FileSpans
+            .Select(span => new SnapshotDiffFileSpan(CombinedReportHelpers.SafePath(span.FilePath), span.StartLine, span.EndLine, span.SourceLabel))
+            .ToArray();
+    }
+
     private static void AddUnavailableGaps(IReadOnlyList<string> scopes, string kind, bool includePaths, bool hasCombinedDelegation, List<SnapshotDiffGap> gaps)
     {
         AddUnavailable(scopes, "contract-shapes", "contractShapeDiffs", gaps);
+        AddUnavailable(scopes, "gaps", "gapDiffs", gaps);
         if (!hasCombinedDelegation)
         {
             AddUnavailable(scopes, "endpoints", "endpointDiffs", gaps);
             AddUnavailable(scopes, "surfaces", "surfaceDiffs", gaps);
             AddUnavailable(scopes, "graph", "graphDiffs", gaps);
-            AddUnavailable(scopes, "gaps", "gapDiffs", gaps);
         }
 
         if (includePaths && kind == "single")
