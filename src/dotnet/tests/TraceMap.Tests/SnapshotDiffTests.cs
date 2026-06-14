@@ -28,6 +28,7 @@ public sealed class SnapshotDiffTests
         Assert.Equal("snapshot-diff", result.Report.ReportType);
         Assert.Equal("single", Assert.Single(result.Report.BeforeSnapshot.Sources).SourceLabel);
         Assert.Single(result.Report.SourceDiffs);
+        Assert.Empty(Assert.Single(result.Report.SourceDiffs).FileSpans);
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnavailableEvidence" && gap.Section == "endpointDiffs");
         Assert.All(result.Report.SourceDiffs, row => Assert.All(row.RuleIds, ruleId => Assert.False(string.IsNullOrWhiteSpace(ruleId))));
         Assert.All(result.Report.Gaps, gap => Assert.False(string.IsNullOrWhiteSpace(gap.RuleId)));
@@ -199,6 +200,74 @@ public sealed class SnapshotDiffTests
             AllowIdentityMismatch: true));
         Assert.Contains(allowed.Report.Gaps, gap => gap.GapKind == "SourceIdentityConflict");
         Assert.Equal(SnapshotDiffClassifications.UnknownAnalysisGap, allowed.Report.Summary.RollupClassification);
+    }
+
+    [Fact]
+    public async Task Snapshot_diff_unknown_commit_sha_rolls_up_as_analysis_gap()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        SqliteIndexWriter.Write(beforeIndex, Manifest("api", ScannerVersions.TraceMap, commitSha: "unknown"), []);
+        SqliteIndexWriter.Write(afterIndex, Manifest("api", ScannerVersions.TraceMap, commitSha: "unknown"), []);
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "sources"));
+
+        Assert.Equal(SnapshotDiffClassifications.UnknownAnalysisGap, result.Report.Summary.RollupClassification);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnknownCommitSha" && gap.Classification == SnapshotDiffClassifications.UnknownAnalysisGap);
+    }
+
+    [Fact]
+    public async Task Snapshot_diff_single_index_missing_language_metadata_does_not_fail_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        SqliteIndexWriter.Write(beforeIndex, Manifest("api", "custom-scanner/1.0.0", commitSha: "1111111"), []);
+        SqliteIndexWriter.Write(afterIndex, Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222"), []);
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "sources"));
+
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "SourceIdentityConflict");
+        Assert.Single(result.Report.SourceDiffs);
+    }
+
+    [Fact]
+    public async Task Snapshot_diff_row_cap_emits_truncation_gap_and_partial_rollup()
+    {
+        using var temp = new TempDirectory();
+        var beforeFirst = Path.Combine(temp.Path, "before-first.sqlite");
+        var beforeSecond = Path.Combine(temp.Path, "before-second.sqlite");
+        var afterFirst = Path.Combine(temp.Path, "after-first.sqlite");
+        var afterSecond = Path.Combine(temp.Path, "after-second.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        SqliteIndexWriter.Write(beforeFirst, Manifest("first", ScannerVersions.TraceMap, commitSha: "1111111"), []);
+        SqliteIndexWriter.Write(beforeSecond, Manifest("second", ScannerVersions.TraceMap, commitSha: "1111111"), []);
+        SqliteIndexWriter.Write(afterFirst, Manifest("first", ScannerVersions.TraceMap, commitSha: "2222222"), []);
+        SqliteIndexWriter.Write(afterSecond, Manifest("second", ScannerVersions.TraceMap, commitSha: "2222222"), []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeFirst, beforeSecond], beforeCombined, ["first", "second"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterFirst, afterSecond], afterCombined, ["first", "second"]));
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "report"),
+            Scope: "sources",
+            MaxDiffRows: 1));
+
+        Assert.Single(result.Report.SourceDiffs);
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.Equal(SnapshotDiffClassifications.TruncatedByLimit, result.Report.Summary.RollupClassification);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Section == "sourceDiffs");
     }
 
     [Fact]
