@@ -297,8 +297,8 @@ public static class SnapshotDiffReporter
         }
 
         var allGaps = new List<SnapshotDiffGap>();
-        allGaps.AddRange(before.Gaps);
-        allGaps.AddRange(after.Gaps);
+        allGaps.AddRange(FilterGapsBySource(before.Gaps, options.Source));
+        allGaps.AddRange(FilterGapsBySource(after.Gaps, options.Source));
         var sourcePairs = PairSources(before.Snapshot, after.Snapshot, options.Source);
         AddIdentityGaps(sourcePairs, allGaps, before.Kind == "combined");
         if (allGaps.Any(gap => gap.GapKind == "SourceIdentityConflict") && !options.AllowIdentityMismatch)
@@ -704,6 +704,18 @@ public static class SnapshotDiffReporter
                 label,
                 beforeSources[label].FirstOrDefault(),
                 afterSources[label].FirstOrDefault()))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<SnapshotDiffGap> FilterGapsBySource(IReadOnlyList<SnapshotDiffGap> gaps, string? sourceSelector)
+    {
+        if (string.IsNullOrWhiteSpace(sourceSelector))
+        {
+            return gaps;
+        }
+
+        return gaps
+            .Where(gap => string.IsNullOrWhiteSpace(gap.SourceLabel) || string.Equals(gap.SourceLabel, sourceSelector, StringComparison.Ordinal))
             .ToArray();
     }
 
