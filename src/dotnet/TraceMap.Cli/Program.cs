@@ -47,9 +47,10 @@ public static class TraceMapCommand
                 "reverse" => ReverseHelp(),
                 "release-review" => ReleaseReviewHelp(),
                 "portfolio" => PortfolioHelp(),
+                "contract-diff" => ContractDiffHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "contract-diff" ? 0 : 1;
         }
 
         try
@@ -71,6 +72,7 @@ public static class TraceMapCommand
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
+                "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -399,6 +401,66 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.HasDiffs ? 1 : 0;
+    }
+
+    private static async Task<int> RunContractDiffAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--before", out var beforePath) || string.IsNullOrWhiteSpace(beforePath))
+        {
+            await error.WriteLineAsync("error: contract-diff requires --before <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--after", out var afterPath) || string.IsNullOrWhiteSpace(afterPath))
+        {
+            await error.WriteLineAsync("error: contract-diff requires --after <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: contract-diff requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: contract-diff --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await ApiDtoContractDiffReporter.WriteAsync(
+            new ApiDtoContractDiffOptions(
+                beforePath,
+                afterPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--scope"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--endpoint"),
+                values.GetValueOrDefault("--type"),
+                values.GetValueOrDefault("--property"),
+                values.GetValueOrDefault("--change-kind"),
+                ParsePositiveInt(values, "--max-diff-rows", 1000),
+                ParsePositiveInt(values, "--max-evidence-rows", 500),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                values.HasFlag("--exit-code")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap contract-diff completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Endpoint diffs: {result.Report.Summary.EndpointDiffCount}");
+        await output.WriteLineAsync($"DTO type diffs: {result.Report.Summary.DtoTypeDiffCount}");
+        await output.WriteLineAsync($"DTO property diffs: {result.Report.Summary.DtoPropertyDiffCount}");
+        await output.WriteLineAsync($"Method diffs: {result.Report.Summary.MethodDiffCount}");
+        await output.WriteLineAsync($"Request/response diffs: {result.Report.Summary.RequestResponseDiffCount}");
+        await output.WriteLineAsync($"Route shape diffs: {result.Report.Summary.RouteShapeDiffCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasActionableDiffs ? 1 : 0;
     }
 
     private static async Task<int> RunImpactAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -960,6 +1022,7 @@ public static class TraceMapCommand
               tracemap paths --index <combined.sqlite> --out <path> [selectors]
               tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap snapshot-diff --before <index.sqlite> --after <index.sqlite> --out <path>
+              tracemap contract-diff --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
@@ -977,6 +1040,7 @@ public static class TraceMapCommand
               paths     Trace deterministic dependency paths through a combined index.
               diff      Compare two combined indexes and report static evidence changes.
               snapshot-diff Compare two TraceMap snapshots by source, coverage, and extractor evidence.
+              contract-diff Compare API/DTO static contract evidence between two indexes.
               impact    Explain static change evidence between two combined indexes.
               reverse   Trace reverse static reachability from dependency surfaces.
               release-review Assemble a deterministic before/after release evidence packet.
@@ -1118,6 +1182,35 @@ public static class TraceMapCommand
 
             Outputs:
               snapshot-diff-report.md and/or snapshot-diff-report.json
+            """;
+    }
+
+    private static string ContractDiffHelp()
+    {
+        return """
+            Usage:
+              tracemap contract-diff --before <index.sqlite> --after <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --before <path>            Earlier TraceMap index, single-language or combined.
+              --after <path>             Later TraceMap index of the same mode.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+              --scope <value>            all, endpoints, dto-types, dto-properties, methods, request-response, or route-shapes.
+              --exit-code                Return exit code 1 only for Added, Removed, or ChangedEvidence rows.
+              --source <label>           Filter combined indexes to one source label.
+              --endpoint "<M> <P>"       Filter endpoint/route evidence to method/path key.
+              --type <name>              Filter DTO/type evidence by exact safe identity or display name.
+              --property <name>          Filter DTO property/member evidence by exact name.
+              --change-kind <kind>       endpoint, dto-type, dto-property, method, request-response, or route-shape.
+              --max-diff-rows <n>        Diff rows per kind. Default: 1000.
+              --max-evidence-rows <n>    Reserved evidence row budget. Default: 500.
+              --max-gaps <n>             Gap rows. Default: 1000.
+
+            Outputs:
+              contract-diff-report.md and/or contract-diff-report.json
             """;
     }
 

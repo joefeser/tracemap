@@ -206,6 +206,20 @@ For every successful `tracemap snapshot-diff --before <before.sqlite> --after <a
 - `--exit-code` returns a non-zero exit only when requested and diff rows are present.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
 
+For every successful `tracemap contract-diff --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are the same TraceMap index kind: single-language indexes or combined indexes. Mixed single/combined inputs fail clearly without writing output.
+- inputs are opened read-only.
+- directory or extensionless output writes `contract-diff-report.md` and `contract-diff-report.json`.
+- JSON includes `reportType`, `version`, `reportCoverage`, `coverageWarnings`, `query`, before/after snapshots, source pairs, endpoint diffs, DTO type diffs, DTO property diffs, method diffs, request/response diffs, route-shape diffs, gaps, and limitations.
+- endpoint rows compare indexed static method/path/handler/route metadata and do not claim runtime traffic, auth, deployment, proxy, or reachability behavior.
+- DTO rows compare only indexed type/member metadata and do not infer runtime serializer aliases, generated OpenAPI completeness, or binary compatibility.
+- request/response rows are emitted only for explicit endpoint-to-DTO attachment evidence; otherwise `AttachmentEvidenceUnavailable` is a rule-backed gap.
+- reduced coverage, unknown commit SHA, source identity conflict, duplicate identity, syntax-only evidence, and generic property-only identity downgrade rows.
+- `--scope`, `--source`, `--endpoint`, `--type`, `--property`, `--change-kind`, `--max-diff-rows`, `--max-evidence-rows`, `--max-gaps`, and `--exit-code` behave deterministically.
+- `--exit-code` returns a non-zero exit only when requested and `Added`, `Removed`, or `ChangedEvidence` rows exist.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
+
 For every successful `tracemap impact --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
 
 - both inputs are combined indexes and are opened read-only through the shared diff pipeline.

@@ -9,7 +9,7 @@ The current language scanners are:
 - `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
 - `Python` under `src/python`, including AST/package/config/SQL extraction, FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests integration facts, reduced coverage labeling, and reducer-compatible SQLite output.
 
-TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, diff combined snapshots, compare single or combined snapshots by source/coverage/extractor metadata, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
+TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, diff combined snapshots, compare API/DTO contract evidence, compare single or combined snapshots by source/coverage/extractor metadata, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
 Start here:
 
@@ -144,6 +144,24 @@ dotnet run --project src/dotnet/TraceMap.Cli -- snapshot-diff \
 ```
 
 The snapshot diff command writes `snapshot-diff-report.md` and `snapshot-diff-report.json` when `--out` is a directory. It validates same-kind inputs, source identity, commit SHA availability, coverage, and extractor-version changes. Combined indexes delegate endpoint, surface, graph, and opt-in path comparison to the combined diff engine; single-index projector sections and contract-shape comparison remain explicit availability gaps until deeper evidence readers are implemented.
+
+Compare API/DTO static contract evidence between two single-language or combined snapshots:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- contract-diff \
+  --before .tracemap-before/index.sqlite \
+  --after .tracemap-after/index.sqlite \
+  --out .tracemap-contract-diff
+dotnet run --project src/dotnet/TraceMap.Cli -- contract-diff \
+  --before .tracemap-before/index.sqlite \
+  --after .tracemap-after/index.sqlite \
+  --scope endpoints,dto-properties \
+  --endpoint "GET /api/orders/{}" \
+  --exit-code \
+  --out .tracemap-contract-diff
+```
+
+The contract diff command writes `contract-diff-report.md` and `contract-diff-report.json` when `--out` is a directory. It compares indexed endpoint routes, route shapes, DTO/type declarations, DTO property/member declarations, method signatures, and explicit request/response attachment facts when available. Missing attachment evidence is reported as a gap rather than inferred as no change. The report is static evidence only; it is not OpenAPI completeness, runtime serializer mapping proof, binary compatibility, traffic analysis, deployment reachability, or auth behavior proof.
 
 Summarize static change-impact evidence from two combined snapshots:
 
