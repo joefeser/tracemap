@@ -198,6 +198,7 @@ public static class RuleIds
     public const string DatabaseEntityFramework = "database.ef.v1";
     public const string DatabaseDapperInvocation = "database.dapper.invocation.v1";
     public const string DatabaseSqlText = "database.sql.text.v1";
+    public const string DatabaseSqlShape = "database.sql.shape.v1";
     public const string ConfigKey = "config.key.v1";
     public const string ContractDeltaReduction = "contract.delta.reduce.v1";
     public const string EndpointAlignment = "endpoint.alignment.v1";
@@ -215,5 +216,6 @@ public static class ScannerVersions
     public const string CSharpSemanticExtractor = "csharp-semantic/0.10.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
+    public const string SqlShapeExtractor = "sql-shape/0.1.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
 }

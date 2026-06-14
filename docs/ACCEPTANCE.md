@@ -137,7 +137,7 @@ For every successful `tracemap report --index <combined.sqlite> --out <out>` run
 - reduced coverage and known gaps are labeled as coverage-relative.
 - endpoint findings distinguish two-sided pairwise comparisons from one-sided global inventory rows.
 - endpoint JSON rows include side-specific scan IDs, commit SHAs, rule IDs, evidence tiers, file spans, and fact IDs.
-- HTTP, SQL/query, package/config, and dependency-edge surfaces preserve source labels and evidence spans.
+- HTTP, SQL query/persistence, package/config, and dependency-edge surfaces preserve source labels and evidence spans.
 - SQL and dynamic URL rows do not display raw SQL text, raw URLs, source snippets, or local absolute paths.
 - `endpoint_matches` is not mutated by report generation.
 
@@ -148,11 +148,58 @@ For every successful `tracemap paths --index <combined.sqlite> --out <out>` run,
 - the command opens the combined database read-only and does not mutate `endpoint_matches` or source evidence tables.
 - no-selector mode starts from in-memory endpoint matches and searches to terminal dependency surfaces.
 - `--from-endpoint`, `--from-symbol`, `--from-source`, `--to-surface`, `--surface-name`, `--source-pair`, `--max-depth`, `--max-paths`, and `--max-frontier` behave deterministically.
-- terminal surfaces are limited to `sql-query`, `http-route`, `http-client`, and `package-config`.
+- terminal surfaces are limited to `sql-query`, `sql-persistence`, `http-route`, `http-client`, and `package-config`.
+- `DatabaseColumnMapping` terminal surfaces are `sql-persistence` evidence and do not claim query execution.
 - path rows include source labels, scan IDs, commit SHAs, rule IDs, evidence tiers, file spans, node IDs, edge IDs, and supporting fact or edge IDs where available.
 - classifications use `StrongStaticPath`, `ProbableStaticPath`, `NeedsReviewPath`, `UnknownAnalysisGap`, `NoPathFound`, and `SelectorNoMatch`.
 - no-path conclusions are coverage-relative when contributing sources have reduced coverage.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, or local absolute paths.
+
+For every successful `tracemap reverse --index <combined.sqlite> --out <out>` run, verify:
+
+- reverse reports reject single-language indexes with a clear combined-index error.
+- directory output writes `reverse-report.md` and `reverse-report.json`.
+- the command opens the combined database read-only and does not mutate `endpoint_matches` or source evidence tables.
+- JSON includes `reportType: combined-reverse-query`, required empty arrays, stable query metadata, source snapshots, selected surfaces, reverse roots, paths, gaps, and limitations.
+- selected surfaces are limited to dependency surfaces such as `sql-query`, `sql-persistence`, `http-route`, `http-client`, and `package-config`.
+- `--source` matches source labels case-insensitively, `--surface-name` uses exact case-insensitive matching, and `--surface`, `--to`, `--max-depth`, `--max-frontier`, `--max-surfaces`, `--max-roots`, `--max-paths-per-root`, and `--max-gaps` behave deterministically.
+- `--to endpoints`, `--to symbols`, `--to sources`, and `--to all` select the requested reverse root families without implying runtime reachability.
+- selected surfaces, reverse roots, paths, and gaps carry rule IDs, evidence tiers, source labels, stable keys, file spans, and supporting fact or edge IDs where available.
+- classifications use `SelectedSurfaceEvidence`, `NeedsReviewSurfaceEvidence`, `StrongStaticReversePath`, `ProbableStaticReversePath`, `NeedsReviewReversePath`, `UnknownAnalysisGap`, `NoReversePathEvidence`, `SelectorNoMatch`, and `TruncatedByLimit`.
+- no-reverse-path conclusions are coverage-relative; reduced coverage emits an `UnknownAnalysisGap` instead of proof that no roots exist.
+- `--exit-code` returns a non-zero exit only when requested and reverse roots or paths are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
+
+For every successful `tracemap diff --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are combined indexes and are opened read-only.
+- directory output writes `diff-report.md` and `diff-report.json`, even when `--format json` is supplied.
+- JSON includes `reportType: combined-dependency-diff`, required empty arrays, stable query metadata, source snapshots, diff rows, gaps, and limitations.
+- source labels are paired exactly, and known source identity conflicts fail by default unless `--allow-identity-mismatch` is supplied.
+- source-only metadata changes do not create endpoint, surface, edge, or path churn.
+- endpoint, surface, and edge rows use stable evidence keys, not volatile SQLite row IDs.
+- `--scope paths` requires `--include-paths`; path diffing is otherwise explicitly reported as not requested.
+- `--endpoint "<METHOD> <PATH_KEY>"`, `--source`, `--surface`, and `--surface-name` selectors behave deterministically.
+- `--max-diff-rows` and `--max-gaps` cap output deterministically and emit truncation gaps.
+- `--exit-code` returns a non-zero exit only when requested and diff rows are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
+
+For every successful `tracemap impact --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are combined indexes and are opened read-only through the shared diff pipeline.
+- directory output writes `impact-report.md` and `impact-report.json`, even when `--format json` is supplied.
+- JSON includes `reportType: combined-change-impact`, required empty arrays, stable query metadata, source snapshots, impact items, gaps, and limitations.
+- every impact item carries an impact rule ID, the delegated diff rule ID, evidence tier, source label, stable key, file span when available, and supporting fact/edge IDs when available.
+- `NoImpactEvidence` is emitted as a rule-backed gap when no comparable static impact items exist for the selected snapshots and scopes.
+- default scope includes sources, coverage, endpoints, surfaces, and edges; path context is off by default.
+- `coverage` scope maps to the delegated diff `sources` scope and filters the resulting report to coverage impact items.
+- `--scope paths` requires `--include-paths`; path context runs bounded before/after path queries only for impact items with safe endpoint, surface, or edge selectors.
+- source and coverage impact rows do not run path context unless a future rule defines safe mapping semantics.
+- path-context classifications distinguish `ReachabilityChanged`, `ReachabilityEvidenceChanged`, `ReachabilityUnchanged`, `PathContextUnavailable`, `NoPathEvidence`, `UnknownAnalysisGap`, and `TruncatedByLimit`.
+- reduced coverage or source identity uncertainty downgrades confidence rather than producing strong static impact claims.
+- `--source`, `--endpoint`, `--surface`, `--surface-name`, `--max-impact-items`, `--max-paths-per-item`, `--max-path-queries`, `--max-depth`, `--max-frontier`, `--max-gaps`, and `--exit-code` behave deterministically.
+- `--exit-code` returns a non-zero exit only when requested and impact items are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, or local absolute paths.
 
 ## Language Adapter Acceptance
 
@@ -516,10 +563,15 @@ Each fixture should document:
 | TypeScript semantic property usage match | `DefiniteImpact` through existing .NET reducer |
 | TypeScript syntax-only fallback | reduced or syntax-only coverage, never clean |
 | TypeScript integration boundary | Tier1/Tier2/Tier3 according to compiler/package/shape evidence |
+| TypeScript direct SQL literal | `SqlTextUsed` plus SQL-shape `QueryPatternDetected` under `typescript.integration.sql.v1` when complete static SQL text is visible |
+| TypeScript Prisma/Base44 query pattern | `QueryPatternDetected` remains query-builder evidence and does not gain `sqlSourceKind` unless direct SQL text is present |
 | Python Pydantic DTO member match | `ProbableImpact` through Tier2 `SerializerContractMember` |
 | Python Flask/FastAPI route | `HttpRouteBinding` with normalized route key when static decorator syntax is visible |
 | Python SQLAlchemy column | `DatabaseColumnMapping` with table/column/member evidence when declarative syntax is visible |
-| Python static SQL pattern | `QueryPatternDetected` with operation, table/column metadata, text hash, and query shape hash |
+| Python static SQL pattern | `QueryPatternDetected` with operation, table/column metadata, text hash, and query shape hash; SQL-like `WITH`/CTE may be shape-hash-only |
+| Cross-adapter SQL shape fixture | `.NET`, TypeScript, JVM, and Python SQL-shape helpers match `samples/sql-shape-fixtures/sql-shape-v1.json` for v1 text/shape hashes |
+| Combined SQL surface identity | SQL surface display prefers `queryShapeHash`, keeps same-table/different-shape surfaces separate, and preserves different `sqlSourceKind` values in diff/reverse identity |
+| Combined SQL weak evidence caveat | hash-only SQL evidence emits `HashOnlyEvidence`, fact-hash fallback emits `VolatileIdentity`, and both remain review-tier in diff/impact |
 | Python endpoint smoke | `MatchedEndpoint` from public Python client/server sample indexes |
 | Python syntax invocation | `CallEdge` with containing function/module and callee syntax name |
 | Python broken file | reduced coverage with `AnalysisGap`, while other files continue scanning |

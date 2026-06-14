@@ -356,11 +356,11 @@ public final class JavaSyntaxExtractor {
         Matcher queryMatcher = Pattern.compile("@Query\\s*\\(\\s*\"((?:\\\\.|[^\"\\\\])*)\"").matcher(line);
         if (queryMatcher.find()) {
             String sql = queryMatcher.group(1);
-            facts.add(sqlFact(manifest, file, currentSymbol, containingType, sql, lineNo, "JpaQuery"));
+            facts.addAll(sqlFacts(manifest, file, currentSymbol, containingType, sql, lineNo, "JpaQuery"));
         }
-        Matcher jdbcMatcher = Pattern.compile("\\.(prepareStatement|execute|executeQuery|executeUpdate)\\s*\\(\\s*\"((?:\\\\.|[^\"\\\\])*)\"").matcher(line);
+        Matcher jdbcMatcher = Pattern.compile("\\.(prepareStatement|execute|executeQuery|executeUpdate)\\s*\\(\\s*\"((?:\\\\.|[^\"\\\\])*)\"\\s*\\)").matcher(line);
         if (jdbcMatcher.find()) {
-            facts.add(sqlFact(manifest, file, currentSymbol, containingType, jdbcMatcher.group(2), lineNo, jdbcMatcher.group(1)));
+            facts.addAll(sqlFacts(manifest, file, currentSymbol, containingType, jdbcMatcher.group(2), lineNo, jdbcMatcher.group(1)));
         }
         Matcher valueMatcher = Pattern.compile("@Value\\s*\\(\\s*\"((?:\\\\.|[^\"\\\\])*)\"").matcher(line);
         if (valueMatcher.find()) {
@@ -386,8 +386,15 @@ public final class JavaSyntaxExtractor {
         }
     }
 
-    private static CodeFact sqlFact(ScanManifest manifest, FileInventoryItem file, String currentSymbol, String containingType, String sql, int lineNo, String operation) {
-        return FactFactory.create(
+    private static List<CodeFact> sqlFacts(ScanManifest manifest, FileInventoryItem file, String currentSymbol, String containingType, String sql, int lineNo, String methodName) {
+        String sourceKind = "JpaQuery".equals(methodName) ? "orm-text" : "literal-string";
+        Map<String, String> textProps = props("textHash", Hashes.sha256(sql, 32), "textLength", String.valueOf(sql.length()), "sqlSourceKind", sourceKind, "targetSymbol", safe(currentSymbol), "containingType", containingType, "methodName", methodName);
+        String operation = SqlShapeExtractor.operationName(sql);
+        if (!operation.isBlank()) {
+            textProps.put("operationName", operation);
+        }
+        List<CodeFact> facts = new ArrayList<>();
+        facts.add(FactFactory.create(
             manifest,
             FactTypes.SQL_TEXT_USED,
             RuleIds.SQL,
@@ -397,7 +404,26 @@ public final class JavaSyntaxExtractor {
             currentSymbol,
             currentSymbol,
             currentSymbol,
-            props("operationName", operation, "textHash", Hashes.sha256(sql, 32), "textLength", String.valueOf(sql.length()), "targetSymbol", safe(currentSymbol), "containingType", containingType));
+            textProps));
+        if (SqlShapeExtractor.isSqlLike(sql)) {
+            Map<String, String> shapeProps = new LinkedHashMap<>(SqlShapeExtractor.queryShapeProperties(sql, sourceKind));
+            shapeProps.put("containingType", containingType);
+            shapeProps.put("methodName", methodName);
+            String target = shapeProps.getOrDefault("tableName", safe(currentSymbol));
+            shapeProps.put("targetSymbol", target);
+            facts.add(FactFactory.create(
+                manifest,
+                FactTypes.QUERY_PATTERN_DETECTED,
+                RuleIds.SQL,
+                EvidenceTiers.TIER2_STRUCTURAL,
+                FactFactory.evidence(file.relativePath(), lineNo, lineNo, "JavaSyntaxExtractor", ScannerVersions.INTEGRATION),
+                file.relativePath(),
+                currentSymbol,
+                target,
+                target,
+                shapeProps));
+        }
+        return facts;
     }
 
     private static CodeFact configUseFact(ScanManifest manifest, FileInventoryItem file, String currentSymbol, String key, int lineNo, String operation) {

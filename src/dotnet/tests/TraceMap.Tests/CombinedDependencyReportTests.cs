@@ -140,6 +140,28 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_keeps_same_table_sql_surfaces_separate_by_shape_hash()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            QueryPatternFact(manifest, "Infrastructure/Orders.cs", 10, "shape-select-id", "id"),
+            QueryPatternFact(manifest, "Infrastructure/Orders.cs", 20, "shape-select-status", "status")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["api"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        var sqlSurfaces = result.Report.DependencySurfaces.Where(surface => surface.SurfaceKind == "sql-query").ToArray();
+        Assert.Equal(2, sqlSurfaces.Length);
+        Assert.Contains(sqlSurfaces, surface => surface.DisplayName == "shape:shape-select-id" && surface.TableName == "orders" && surface.ColumnNames == "id");
+        Assert.Contains(sqlSurfaces, surface => surface.DisplayName == "shape:shape-select-status" && surface.TableName == "orders" && surface.ColumnNames == "status");
+    }
+
+    [Fact]
     public async Task Report_includes_same_source_endpoint_matches_and_directory_row_caps()
     {
         using var temp = new TempDirectory();
@@ -344,6 +366,11 @@ public sealed class CombinedDependencyReportTests
 
     private static CodeFact QueryPatternFact(ScanManifest manifest, string file, int line)
     {
+        return QueryPatternFact(manifest, file, line, "shape123", "id;status");
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string file, int line, string shapeHash, string columns)
+    {
         return FactFactory.Create(
             manifest,
             FactTypes.QueryPatternDetected,
@@ -355,9 +382,9 @@ public sealed class CombinedDependencyReportTests
             {
                 ["operationName"] = "SELECT",
                 ["tableName"] = "orders",
-                ["columnNames"] = "id;status",
+                ["columnNames"] = columns,
                 ["sqlSourceKind"] = "literal-string",
-                ["queryShapeHash"] = "shape123"
+                ["queryShapeHash"] = shapeHash
             });
     }
 

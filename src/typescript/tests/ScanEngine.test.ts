@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
 import { FactTypes } from "../src/facts/Models";
+import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
 
@@ -176,6 +177,44 @@ describe("ScanEngine", () => {
       factType: FactTypes.AnalysisGap,
       properties: expect.objectContaining({ category: "ordinary-type-error", diagnosticCode: "2322" })
     }));
+  });
+
+  it("emits direct SQL text and shape facts without relabeling Prisma query patterns", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }, null, 2));
+    await fsp.writeFile(path.join(repo, "src", "sql.ts"), `
+      declare const client: any;
+      declare const sql: any;
+      declare const prisma: any;
+
+      export async function loadOrders(table: string) {
+        await client.query("SELECT id, status FROM orders WHERE id = $1");
+        await client.execute(\`SELECT id FROM \${table}\`);
+        await sql\`SELECT id, status FROM orders\`;
+        await prisma.order.findMany({ where: { status: "open" }, select: { id: true } });
+      }
+    `);
+    initGitRepo(repo);
+
+    const result = await scan(scanOptions(repo, path.join(root, "out")));
+    const sqlText = result.facts.filter((fact) => fact.factType === FactTypes.SqlTextUsed && fact.ruleId === RuleIds.TypeScriptIntegrationSql);
+    const sqlShapes = result.facts.filter((fact) => fact.factType === FactTypes.QueryPatternDetected && fact.ruleId === RuleIds.TypeScriptIntegrationSql);
+    const prismaPattern = result.facts.find((fact) => fact.factType === FactTypes.QueryPatternDetected && fact.properties.orm === "prisma");
+
+    expect(sqlText).toContainEqual(expect.objectContaining({
+      properties: expect.objectContaining({ sqlSourceKind: "literal-string", textHash: expect.stringMatching(/^[0-9a-f]{32}$/) })
+    }));
+    expect(sqlShapes).toContainEqual(expect.objectContaining({
+      properties: expect.objectContaining({ sqlSourceKind: "literal-string", tableName: "orders", columnNames: "id;status", queryShapeHash: expect.stringMatching(/^[0-9a-f]{32}$/) })
+    }));
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      ruleId: RuleIds.TypeScriptIntegrationSql,
+      properties: expect.objectContaining({ sqlSourceKind: "dynamic-boundary", gapKind: "dynamic-sql-boundary" })
+    }));
+    expect(prismaPattern?.properties.sqlSourceKind).toBeUndefined();
   });
 
   it("resolves sql.js wasm assets to an existing file", () => {
