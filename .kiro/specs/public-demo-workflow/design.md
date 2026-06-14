@@ -325,14 +325,14 @@ It is acceptable to defer this mode and only document the existing OSS smoke.
 
 A future demo slice may add an Obsidian-friendly export so managers and skeptical reviewers can visually inspect TraceMap's static dependency evidence without reading SQLite tables first. The export should remain a view layer over existing evidence:
 
-- generate Markdown notes under the demo output root, such as `Start Here.md`, source notes, endpoint notes, dependency-surface notes, and path/reverse notes;
+- generate Markdown notes under `reports/obsidian/**` in the demo output root, such as `Start Here.md`, source notes, endpoint notes, dependency-surface notes, and path/reverse notes, so public-shareable vault files remain covered by the existing generated-output sentinel scan;
 - use Obsidian wikilinks to connect endpoints, symbols, packages, SQL/config surfaces, and source labels;
 - include frontmatter or visible metadata for rule IDs, evidence tiers, source labels, commit SHAs, coverage labels, supporting fact/edge IDs, and limitations;
 - avoid raw source snippets, raw SQL, config values, connection strings, local absolute paths, raw repository remotes, or secrets;
 - label partial/reduced coverage and analysis gaps explicitly;
 - optionally emit an Obsidian Canvas file later, but do not require Canvas for the first export.
 
-This should be implemented as an export/demo target, for example `tracemap export obsidian` or a public-demo generated vault step. It must not become a new analysis engine, runtime topology claim, or authority layer.
+This should be implemented as an export/demo target, for example `tracemap export obsidian` or a public-demo generated vault step. It must not become a new analysis engine, runtime topology claim, or authority layer. Vault Markdown and any future Canvas files are public-shareable artifacts and must be included in the generated-output sentinel scan before the demo succeeds.
 
 ## Error Handling
 
