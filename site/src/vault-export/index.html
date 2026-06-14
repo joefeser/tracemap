@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A future TraceMap vault export concept: make rule-backed static evidence browsable as linked Markdown notes without changing the source of truth."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Open the Evidence Trail as a Vault | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/vault-export/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Open the Evidence Trail as a Vault">
+    <meta
+      property="og:description"
+      content="A future optional export could turn TraceMap evidence packets into linked Markdown notes for human review."
+    >
+    <meta property="og:url" content="https://tracemap.tools/vault-export/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Future concept</p>
+        <h1>Open the evidence trail as a vault.</h1>
+        <p class="hero-subhead">
+          A future optional export could turn the same rule-backed TraceMap
+          evidence packet into linked Markdown notes for managers, reviewers,
+          architects, and engineers who want to inspect the map visually.
+        </p>
+      </section>
+
+      <section class="section callout-section">
+        <h2>This is not a prettier claim.</h2>
+        <p>
+          It would be the same evidence packet made browsable. The source of
+          truth would remain the facts, SQLite index, reports, logs, rule
+          catalog, commit metadata, coverage labels, supporting IDs, and
+          limitations emitted by TraceMap.
+        </p>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Why a vault</p>
+          <h2>Some reviews need a map people can click through.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Managers</strong><span>Start from `Start Here.md` and see which evidence shaped the review without reading SQLite directly.</span></div>
+          <div><strong>Reviewers</strong><span>Move from endpoint to route to symbol to dependency surface while keeping rule IDs and tiers visible.</span></div>
+          <div><strong>Architects</strong><span>Inspect cross-service and cross-language paths as linked notes instead of a prose-only summary.</span></div>
+          <div><strong>Engineers</strong><span>Jump from a path or finding back to the source file span and supporting fact IDs that justify it.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Possible workflow</p>
+          <h2>A future demo could make the evidence trail browsable.</h2>
+        </div>
+        <div class="path-grid">
+          <a href="/demo/">
+            <span>1</span>
+            <strong>Run the public demo.</strong>
+            <p>Generate the existing static evidence packet from checked-in sample repositories.</p>
+          </a>
+          <a href="/outputs/">
+            <span>2</span>
+            <strong>Generate a vault export.</strong>
+            <p>Convert selected facts, paths, surfaces, gaps, and summaries into linked Markdown notes.</p>
+          </a>
+          <a href="/evidence/">
+            <span>3</span>
+            <strong>Open `Start Here.md`.</strong>
+            <p>Begin with the manifest, coverage state, source labels, and safe entry points for review.</p>
+          </a>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Exploration path</p>
+          <h2>The notes would keep evidence attached to every hop.</h2>
+          <p>
+            A reviewer could click from frontend endpoint to backend route to
+            service or code path to SQL, package, or config surface. Each note
+            and edge would carry its rule ID, evidence tier, commit SHA,
+            coverage label, supporting IDs, and documented limitations.
+          </p>
+        </div>
+        <pre class="command-block"><code>Start Here.md
+sources/sample-client.md
+endpoints/GET-api-admin-runner-id.md
+routes/sample-server-runner-controller.md
+symbols/RunnerService.getById.md
+surfaces/sql-query-8f4d3a.md
+paths/frontend-to-sql.md</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Source of truth</p>
+          <h2>The vault would not replace TraceMap artifacts.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>facts.ndjson</code><span>Rule-backed facts remain the evidence rows.</span></div>
+          <div><code>index.sqlite</code><span>The queryable index remains the machine-readable graph and surface store.</span></div>
+          <div><code>report.md</code><span>The human report remains the summary of coverage, gaps, and limitations.</span></div>
+          <div><code>rule-catalog.yml</code><span>Rule documentation remains the place to inspect rule intent and limitations.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>The export layer would stay inside TraceMap's evidence rules.</h2>
+        </div>
+        <ul>
+          <li>It would not prove runtime behavior, production traffic, deployment state, or release approval.</li>
+          <li>It would not be AI impact analysis and would not add prompt-based classification to the scanner or reducer.</li>
+          <li>It would not require Obsidian. Any Markdown viewer that follows links should be able to inspect the notes.</li>
+          <li>It would not export raw source snippets, raw SQL, config values, secrets, local absolute paths, or raw repo remotes.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Start with the shipped
+        <a href="/demo/">public demo</a>
+        and current
+        <a href="/outputs/">scan outputs</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
