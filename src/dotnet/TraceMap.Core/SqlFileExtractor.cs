@@ -44,6 +44,11 @@ public static class SqlFileExtractor
                     properties: textProperties));
 
                 var shapeProperties = SqlShapeExtractor.QueryShapeProperties(text, "sql-file");
+                if (!shapeProperties.ContainsKey("queryShapeHash"))
+                {
+                    continue;
+                }
+
                 var target = shapeProperties.GetValueOrDefault("tableName") ?? file.RelativePath;
                 shapeProperties["targetSymbol"] = target;
                 facts.Add(FactFactory.Create(

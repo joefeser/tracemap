@@ -80,11 +80,18 @@ public static class SqlShapeExtractor
 
     public static SqlQueryShape QueryShape(string value)
     {
-        var normalized = NormalizeSql(value);
-        var operation = ShapeOperation(normalized);
-        var tables = TableNames(normalized, operation);
-        var columns = ColumnNames(normalized, operation);
-        return new SqlQueryShape(operation, tables, columns, FactFactory.Hash(normalized, 32));
+        try
+        {
+            var normalized = NormalizeSql(value);
+            var operation = ShapeOperation(normalized);
+            var tables = TableNames(normalized, operation);
+            var columns = ColumnNames(normalized, operation);
+            return new SqlQueryShape(operation, tables, columns, FactFactory.Hash(normalized, 32));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return new SqlQueryShape(string.Empty, [], [], string.Empty);
+        }
     }
 
     public static SortedDictionary<string, string> QueryShapeProperties(string value, string sourceKind)
@@ -93,9 +100,13 @@ public static class SqlShapeExtractor
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["textHash"] = FactFactory.Hash(value, 32),
-            ["queryShapeHash"] = shape.QueryShapeHash,
             ["sqlSourceKind"] = sourceKind
         };
+        if (!string.IsNullOrWhiteSpace(shape.QueryShapeHash))
+        {
+            properties["queryShapeHash"] = shape.QueryShapeHash;
+        }
+
         if (!string.IsNullOrWhiteSpace(shape.OperationName))
         {
             properties["operationName"] = shape.OperationName;
@@ -139,14 +150,58 @@ public static class SqlShapeExtractor
 
     private static string FirstToken(string value)
     {
-        var trimmed = value.TrimStart();
+        var trimmed = StripLeadingComments(value);
         if (trimmed.Length == 0)
         {
             return string.Empty;
         }
 
-        var match = Regex.Match(trimmed, @"\S+", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-        return match.Success ? match.Value.ToUpperInvariant() : string.Empty;
+        var end = 0;
+        while (end < trimmed.Length && !char.IsWhiteSpace(trimmed[end]))
+        {
+            end++;
+        }
+
+        return trimmed[..end].ToUpperInvariant();
+    }
+
+    private static string StripLeadingComments(string value)
+    {
+        var offset = 0;
+        while (offset < value.Length)
+        {
+            while (offset < value.Length && char.IsWhiteSpace(value[offset]))
+            {
+                offset++;
+            }
+
+            if (offset + 1 < value.Length && value[offset] == '-' && value[offset + 1] == '-')
+            {
+                offset += 2;
+                while (offset < value.Length && value[offset] != '\n' && value[offset] != '\r')
+                {
+                    offset++;
+                }
+
+                continue;
+            }
+
+            if (offset + 1 < value.Length && value[offset] == '/' && value[offset + 1] == '*')
+            {
+                var end = value.IndexOf("*/", offset + 2, StringComparison.Ordinal);
+                if (end < 0)
+                {
+                    return string.Empty;
+                }
+
+                offset = end + 2;
+                continue;
+            }
+
+            break;
+        }
+
+        return offset >= value.Length ? string.Empty : value[offset..];
     }
 
     private static IReadOnlyList<string> TableNames(string sql, string operation)

@@ -271,9 +271,9 @@ public static class CSharpIntegrationSyntaxExtractor
                 continue;
             }
 
-            var containingSymbol = GetContainingSymbol(token.Parent, filePath);
             var containingType = GetContainingType(token.Parent);
             var containingMethod = GetContainingMemberName(token.Parent);
+            var containingSymbol = ContainingSymbol(filePath, containingType, containingMethod);
             var sourceKind = GetSqlSourceKind(token.Parent);
             var operationName = SqlShapeExtractor.OperationName(value);
             var textProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -319,6 +319,11 @@ public static class CSharpIntegrationSyntaxExtractor
                 shapeProperties["containingMethod"] = containingMethod;
             }
 
+            if (!shapeProperties.ContainsKey("queryShapeHash"))
+            {
+                continue;
+            }
+
             var target = shapeProperties.GetValueOrDefault("tableName") ?? containingSymbol;
             shapeProperties["targetSymbol"] = target;
             facts.Add(FactFactory.Create(
@@ -351,8 +356,9 @@ public static class CSharpIntegrationSyntaxExtractor
 
     private static void AddDynamicSqlBoundary(ScanManifest manifest, List<CodeFact> facts, string filePath, SyntaxNode node, string methodName)
     {
-        var containingSymbol = GetContainingSymbol(node, filePath);
+        var containingType = GetContainingType(node);
         var containingMethod = GetContainingMemberName(node);
+        var containingSymbol = ContainingSymbol(filePath, containingType, containingMethod);
         facts.Add(FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
@@ -458,11 +464,9 @@ public static class CSharpIntegrationSyntaxExtractor
         return "literal-string";
     }
 
-    private static string GetContainingSymbol(SyntaxNode? node, string filePath)
+    private static string ContainingSymbol(string filePath, string? containingType, string? containingMethod)
     {
-        return GetContainingMemberName(node)
-            ?? GetContainingType(node)
-            ?? FileInventory.NormalizeRelativePath(filePath);
+        return containingMethod ?? containingType ?? FileInventory.NormalizeRelativePath(filePath);
     }
 
     private static string? GetContainingMemberName(SyntaxNode? node)

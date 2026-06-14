@@ -57,18 +57,12 @@ class QueryShape:
 
 
 def is_sql_like(value: str) -> bool:
-    text = value.lstrip()
-    if not text:
-        return False
-    first = re.split(r"\s+", text, maxsplit=1)[0].upper()
+    first = _first_token(value)
     return first in SQL_VERBS or first == "WITH"
 
 
 def operation_name(value: str) -> str:
-    text = value.lstrip()
-    if not text:
-        return ""
-    first = re.split(r"\s+", text, maxsplit=1)[0].upper()
+    first = _first_token(value)
     return first if first in SQL_VERBS else ""
 
 
@@ -113,11 +107,38 @@ def _normalized_sql(value: str) -> str:
 
 
 def _shape_operation(value: str) -> str:
-    text = value.lstrip()
+    text = _strip_leading_comments(value)
     if not text:
         return ""
     first = re.split(r"\s+", text, maxsplit=1)[0].upper()
     return first if first in SQL_VERBS else ""
+
+
+def _first_token(value: str) -> str:
+    text = _strip_leading_comments(value)
+    if not text:
+        return ""
+    return re.split(r"\s+", text, maxsplit=1)[0].upper()
+
+
+def _strip_leading_comments(value: str) -> str:
+    offset = 0
+    while offset < len(value):
+        while offset < len(value) and value[offset].isspace():
+            offset += 1
+        if value.startswith("--", offset):
+            offset += 2
+            while offset < len(value) and value[offset] not in "\n\r":
+                offset += 1
+            continue
+        if value.startswith("/*", offset):
+            end = value.find("*/", offset + 2)
+            if end < 0:
+                return ""
+            offset = end + 2
+            continue
+        break
+    return value[offset:]
 
 
 def _table_names(sql: str, operation: str) -> list[str]:
