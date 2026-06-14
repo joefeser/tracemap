@@ -1,12 +1,12 @@
 # Public Demo Workflow Implementation State
 
-## Current Branch
+## Current State
 
-`codex/implement-public-demo-workflow`
+Implemented first public-demo slice in `dev`.
 
 ## Spec Status
 
-Implementation branch for PR 1a. This branch adds the public demo script, assertion helper, ignore rule, and documentation for the first public-demo slice.
+The first public-demo slice adds the public demo script, assertion helper, ignore rule, and documentation. Follow-up slices are still open for combine/report/path/reverse/portfolio and before/after workflows.
 
 ## Scope Decisions
 
@@ -53,7 +53,7 @@ PR 1a scope:
 - summary skeleton with `demo-summary.md` and `demo-summary.json`
 - generated public-report sentinel scan
 - Python marked `not_requested` by default
-- Python marked `deferred` when explicitly requested in this first slice; it does not create a virtual environment until Python scanning is implemented
+- Python scan support is available when explicitly requested and uses a fresh output-root virtual environment
 - JVM marked `unavailable` when Java 21 is absent
 - combine/report, paths/reverse, portfolio, diff, impact, and release-review marked `deferred`
 

@@ -2,14 +2,14 @@
 
 ## Implementation Tasks
 
-- [ ] 1. Confirm current SQL evidence behavior. Requirements: 1, 3, 4, 5, 6, 7.
+- [x] 1. Confirm current SQL evidence behavior. Requirements: 1, 3, 4, 5, 6, 7.
   - [ ] Inspect .NET SQL text, Dapper, ADO.NET, EF raw SQL, and `.sql` file facts.
   - [ ] Inspect TypeScript Prisma/Base44 query-builder facts and direct SQL coverage gaps.
   - [ ] Inspect JVM SQL resource, JDBC, and JPA facts.
   - [ ] Inspect Python SQL-shape behavior and tests.
   - [ ] Inspect combined `sql-query` and `sql-persistence` surface projection, path, reverse, diff, and impact behavior.
 
-- [ ] 2. Add shared SQL-shape extraction contract. Requirements: 1, 2, 8, 9.
+- [x] 2. Add shared SQL-shape extraction contract. Requirements: 1, 2, 8, 9.
   - [ ] Define supported operations and unsupported constructs.
   - [ ] Define Python-compatible normalized masked SQL text as the v1 `queryShapeHash` input.
   - [ ] Define safe table/column identifier extraction rules.
@@ -18,7 +18,7 @@
   - [ ] Add unit tests for supported shapes.
   - [ ] Add unit tests for unsupported shapes that produce no table/column overclaim.
 
-- [ ] 3. Implement .NET SQL-shape backfill. Requirements: 1, 2, 3, 8, 9.
+- [x] 3. Implement .NET SQL-shape backfill. Requirements: 1, 2, 3, 8, 9.
   - [ ] Add `database.sql.shape.v1` to the rule catalog with normalization and static-evidence limitations.
   - [ ] Add or reuse a .NET SQL shape helper.
   - [ ] Emit SQL-shape `QueryPatternDetected` for simple `.sql` files.
@@ -29,7 +29,7 @@
   - [ ] Add raw SQL suppression tests.
   - [ ] Add dynamic/unsupported SQL no-overclaim tests.
 
-- [ ] 4. Implement TypeScript direct SQL surfaces. Requirements: 1, 2, 4, 8, 9.
+- [x] 4. Implement TypeScript direct SQL surfaces. Requirements: 1, 2, 4, 8, 9.
   - [ ] Add `typescript.integration.sql.v1` to the rule catalog with limitations before emitting new direct SQL evidence.
   - [ ] Preserve Prisma/Base44 query-builder facts without `sqlSourceKind`.
   - [ ] Detect simple direct SQL literals in supported client calls.
@@ -38,7 +38,7 @@
   - [ ] Emit dynamic boundary evidence or gaps without raw SQL.
   - [ ] Add query-builder regression tests proving Prisma/Base44 facts do not gain `sqlSourceKind`.
 
-- [ ] 5. Implement JVM SQL-shape backfill. Requirements: 1, 2, 5, 8, 9.
+- [x] 5. Implement JVM SQL-shape backfill. Requirements: 1, 2, 5, 8, 9.
   - [ ] Emit SQL-shape `QueryPatternDetected` for `.sql` resources where safe.
   - [ ] Emit SQL-shape `QueryPatternDetected` for JDBC literals where safe.
   - [ ] Emit SQL-shape `QueryPatternDetected` for JPA literals where safe, or document the deferral if current extractor behavior is not credible.
@@ -46,14 +46,14 @@
   - [ ] Omit routine names from `CALL`/`EXEC` table fields in v1.
   - [ ] Add unsupported/dynamic no-overclaim tests.
 
-- [ ] 6. Align Python only where needed. Requirements: 1, 2, 6, 8, 9.
+- [x] 6. Align Python only where needed. Requirements: 1, 2, 6, 8, 9.
   - [ ] Preserve existing Python SQL tests.
   - [ ] Align source-kind values if the shared contract changes.
   - [ ] Keep Python's normalized masked SQL text `queryShapeHash` behavior as the v1 reference.
   - [ ] Add or update Python fixture tests to export expected golden SQL shape values.
   - [ ] Keep raw SQL suppression tests green.
 
-- [ ] 7. Harden combined SQL surface projection. Requirements: 7, 8, 9.
+- [x] 7. Harden combined SQL surface projection. Requirements: 7, 8, 9.
   - [ ] Verify `CombinedDependencySurfaceRow` contains all SQL surface fields.
   - [ ] Apply display/grouping label precedence for SQL surfaces.
   - [ ] Preserve full-metadata diff/reverse identity and prove different `sqlSourceKind` values do not collapse.
@@ -65,18 +65,18 @@
   - [ ] Add grouping/identity collision tests for same table / different shape hash.
   - [ ] Add combined SQL surface byte-stability tests.
 
-- [ ] 8. Harden paths and reverse SQL behavior. Requirements: 7, 8, 10.
+- [x] 8. Harden paths and reverse SQL behavior. Requirements: 7, 8, 10.
   - [ ] Verify reachable SQL surfaces become terminal path nodes.
   - [ ] Verify unlinked SQL surfaces remain gaps, not successful paths.
   - [ ] Verify reverse SQL-surface queries find endpoints only with path evidence.
   - [ ] Add reduced-coverage caveat tests where appropriate.
 
-- [ ] 9. Update diff and impact SQL behavior if needed. Requirements: 7, 8, 9.
+- [x] 9. Update diff and impact SQL behavior if needed. Requirements: 7, 8, 9.
   - [ ] Verify SQL surface diffs use stable metadata, not volatile IDs.
   - [ ] Verify hash-only evidence does not overclaim semantic changes.
   - [ ] Verify reduced coverage downgrades remain intact.
 
-- [ ] 10. Update docs and rule catalog. Requirements: 1, 8, 9, 10.
+- [x] 10. Update docs and rule catalog. Requirements: 1, 8, 9, 10.
   - [ ] Update `docs/LANGUAGE_ADAPTER_CONTRACT.md`.
   - [ ] Update `docs/VALIDATION.md`.
   - [ ] Update `docs/ACCEPTANCE.md`.
@@ -88,7 +88,7 @@
   - [ ] Document dynamic SQL boundary behavior and migration-file production deferral.
   - [ ] Add any additional new rule IDs only when genuinely required.
 
-- [ ] 11. Validate. Requirements: 10.
+- [x] 11. Validate. Requirements: 10.
   - [ ] `dotnet build src/dotnet/TraceMap.sln`
   - [ ] `dotnet test src/dotnet/TraceMap.sln`
   - [ ] `npm run check --prefix src/typescript`
@@ -100,12 +100,12 @@
 
 ## Recommended PR Slices
 
-- [ ] PR 1: Shared SQL-shape contract + golden fixtures + Python reference expected values.
-- [ ] PR 2: .NET SQL backfill + combined surface projection/display tests.
-- [ ] PR 3: TypeScript direct SQL surfaces + query-builder regression tests.
-- [ ] PR 4: JVM SQL-shape backfill.
-- [ ] PR 5: Python alignment, only if contract documentation requires it.
-- [ ] PR 6: Combined path/reverse/diff/impact smoke hardening.
+- [x] PR 1: Shared SQL-shape contract + golden fixtures + Python reference expected values.
+- [x] PR 2: .NET SQL backfill + combined surface projection/display tests.
+- [x] PR 3: TypeScript direct SQL surfaces + query-builder regression tests.
+- [x] PR 4: JVM SQL-shape backfill.
+- [x] PR 5: Python alignment, only if contract documentation requires it.
+- [x] PR 6: Combined path/reverse/diff/impact smoke hardening.
 
 ## Deferred Follow-Ups
 

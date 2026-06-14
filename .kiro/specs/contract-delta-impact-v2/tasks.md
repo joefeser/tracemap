@@ -2,27 +2,27 @@
 
 ## Implementation Tasks
 
-- [ ] 1. Confirm current reducer and combined evidence behavior. Requirements: 1, 2, 3, 4.
+- [x] 1. Confirm current reducer and combined evidence behavior. Requirements: 1, 2, 3, 4.
   - [ ] Inspect `ContractDeltaReducer` legacy input parsing, v1 classification behavior, and current Markdown-only output.
   - [ ] Inspect reducer-compatible fact keys across .NET, TypeScript, JVM, and Python for type, property, method, endpoint, package, and SQL evidence.
   - [ ] Inspect combined report/path/reverse/diff/impact readers that can be reused without adding a second graph traversal or second dependency-surface projection.
   - [ ] Identify which matchers are already possible from existing facts and which must emit schema/coverage gaps until future adapter work exists.
 
-- [ ] 2. Add rule catalog skeleton before implementation code. Requirements: 6, 9.
+- [x] 2. Add rule catalog skeleton before implementation code. Requirements: 6, 9.
   - [ ] Add `contract.delta.impact.v2` with emitted finding/gap classifications and documented limitations.
   - [ ] Add `contract.delta.input.v2` only if input validation or compatibility gaps use a separate rule boundary.
   - [ ] Add `contract.delta.context.v2` only if path/reverse context rows or unavailable gaps use a separate rule boundary.
   - [ ] Update `contract.delta.reduce.v1` limitations only if legacy compatibility behavior intentionally changes.
   - [ ] Ensure every new finding, gap, or context row has a documented rule ID before code emits it.
 
-- [ ] 3. Add v2 input model and legacy compatibility adapter. Requirements: 1, 7, 8, 10.
+- [x] 3. Add v2 input model and legacy compatibility adapter. Requirements: 1, 7, 8, 10.
   - [ ] Define `ContractDeltaV2`, change, reference, old/new, source, and metadata models.
   - [ ] Detect legacy v1 deltas and adapt them using the documented `Type.member` and name-only mapping rules.
   - [ ] Preserve v1 generic/high-fan-out classification behavior unless the implementation deliberately changes it with explicit regression tests and rule limitations.
   - [ ] Validate unknown kinds/change types with sanitized errors that do not echo unsafe raw input.
   - [ ] Add parser tests for valid v2, legacy v1, malformed JSON, unknown kind, missing reference fields, and ambiguous legacy `Type.member` behavior.
 
-- [ ] 4. Add report model and deterministic output. Requirements: 7, 8, 10.
+- [x] 4. Add report model and deterministic output. Requirements: 7, 8, 10.
   - [ ] Add report models for `ContractDeltaImpactSingleV2` and `ContractDeltaImpactCombinedV2`.
   - [ ] Enforce the closed classification set for each report type and never expose both vocabularies as peer classifications in one finding.
   - [ ] Add deterministic finding IDs, evidence row IDs, gap IDs, and context row IDs from documented stable inputs.
@@ -31,7 +31,7 @@
   - [ ] Add byte-stability tests for Markdown and JSON, including array ordering, metadata ordering, empty arrays, and `null` scalar handling.
   - [ ] Add unsafe-value redaction tests for raw SQL, snippets, config values, connection strings, raw URLs, and local absolute paths.
 
-- [ ] 5. Implement single-index matchers. Requirements: 2, 4, 6, 10.
+- [x] 5. Implement single-index matchers. Requirements: 2, 4, 6, 10.
   - [ ] Match type references against semantic/syntax type evidence and symbols.
   - [ ] Match property references against property/member/DTO/serializer/database column evidence.
   - [ ] Match method references against declarations, invocations, call edges, and parameter-forward evidence.
@@ -40,14 +40,14 @@
   - [ ] Match SQL/schema references against SQL-shape, table, column, ORM, and database mapping facts where present without rendering raw SQL.
   - [ ] Add tests for classification ordering, generic-name downgrade, high-fan-out downgrade, endpoint method mismatch, and SQL field matching.
 
-- [ ] 6. Implement coverage and gap handling. Requirements: 2, 3, 6, 9, 10.
+- [x] 6. Implement coverage and gap handling. Requirements: 2, 3, 6, 9, 10.
   - [ ] Preserve scan coverage, commit SHA, extractor versions, build status, and known gaps in findings.
   - [ ] Enforce all `NoEvidenceFullCoverage` preconditions.
   - [ ] Emit `NoEvidenceReducedCoverage` or `UnknownAnalysisGap` when reduced coverage or relevant gaps prevent a credible absence conclusion.
   - [ ] Treat missing commit SHA as a coverage/identity caveat, not a clean no-evidence result.
   - [ ] Add tests for reduced coverage, relevant `AnalysisGap` facts, failed/partial builds, missing commit SHA, and gap-only `--exit-code` behavior.
 
-- [ ] 7. Implement combined-index support. Requirements: 3, 4, 6, 8, 10.
+- [x] 7. Implement combined-index support. Requirements: 3, 4, 6, 8, 10.
   - [ ] Detect combined indexes and load source provenance from existing combined source tables.
   - [ ] Match contract references against `combined_facts`, `combined_symbols`, `combined_fact_symbols`, and existing computed dependency surfaces.
   - [ ] Map SQL query references to existing combined surface fields: `queryShapeHash` to `ShapeHash`, `textHash` to `TextHash`, `tableName` to `TableName`, and `columnNames` to `ColumnNames`.
@@ -55,7 +55,7 @@
   - [ ] Downgrade findings for identity conflicts, duplicate identities, missing optional precision schema, hash-only surfaces, and source coverage caveats.
   - [ ] Add tests for multiple-source grouping, source identity caveats, duplicate stable identities, hash-only surfaces, and selector no-match behavior.
 
-- [ ] 8. Add optional combined-only path/reverse context. Requirements: 5, 6, 9, 10.
+- [x] 8. Add optional combined-only path/reverse context. Requirements: 5, 6, 9, 10.
   - [ ] Reject `--include-paths` and `--include-reverse` for single-language indexes with clear errors in v2.
   - [ ] Derive path selectors only from matched endpoints, symbol-identity-backed matches, and stable-key dependency surfaces.
   - [ ] Derive reverse selectors only from matched dependency surfaces with stable identity.
@@ -64,13 +64,13 @@
   - [ ] Emit `PathContextUnavailable`, `ReverseContextUnavailable`, `TruncatedByLimit`, or `UnknownAnalysisGap` where context cannot be safely gathered.
   - [ ] Add tests proving name-only, syntax-only, generic, high-fan-out, and ambiguous matches do not seed traversal.
 
-- [ ] 9. Add samples and validation docs. Requirements: 1, 10.
+- [x] 9. Add samples and validation docs. Requirements: 1, 10.
   - [ ] Add v2 sample deltas for type, property, method, endpoint, package, SQL/table/column/query, and dependency-surface references where useful.
   - [ ] Update validation docs with reduce v2 commands and expected classifications.
   - [ ] Document single-index vs combined-index behavior, path/reverse availability, source identity caveats, and coverage caveats.
   - [ ] Add acceptance notes for the first supported matcher set and the intentionally deferred matcher set.
 
-- [ ] 10. Validate implementation. Requirements: 10.
+- [x] 10. Validate implementation. Requirements: 10.
   - [ ] `dotnet build src/dotnet/TraceMap.sln`
   - [ ] `dotnet test src/dotnet/TraceMap.sln`
   - [ ] Language adapter validation if facts or adapter behavior change.
@@ -80,12 +80,12 @@
 
 ## Recommended PR Slices
 
-- [ ] PR 1: Rule catalog skeleton, v2 input model, legacy adapter, report shell, closed classification vocabularies, deterministic JSON/Markdown, and v1 byte-stability guard.
-- [ ] PR 2: Single-index type/property/method matchers, coverage/gap handling, and no-evidence preconditions.
-- [ ] PR 3: Single-index endpoint/package/SQL/schema/dependency-surface matchers.
-- [ ] PR 4: Combined-index matching, source provenance, dependency-surface reuse, and identity/coverage caveats.
-- [ ] PR 5: Optional combined-only path/reverse context with stable selector derivation and caps.
-- [ ] PR 6: Samples, validation docs, acceptance docs, and cross-language hardening.
+- [x] PR 1: Rule catalog skeleton, v2 input model, legacy adapter, report shell, closed classification vocabularies, deterministic JSON/Markdown, and v1 byte-stability guard.
+- [x] PR 2: Single-index type/property/method matchers, coverage/gap handling, and no-evidence preconditions.
+- [x] PR 3: Single-index endpoint/package/SQL/schema/dependency-surface matchers.
+- [x] PR 4: Combined-index matching, source provenance, dependency-surface reuse, and identity/coverage caveats.
+- [x] PR 5: Optional combined-only path/reverse context with stable selector derivation and caps.
+- [x] PR 6: Samples, validation docs, acceptance docs, and cross-language hardening.
 
 ## Deferred Follow-Ups
 

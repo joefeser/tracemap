@@ -40,7 +40,7 @@
   - [x] Project analysis-gap availability and extractor-version records.
   - [ ] Use single-index endpoint keys shaped as `endpoint:{sourceLabel}:{endpointKind}:{normalizedMethod}:{normalizedPathKey}:{handlerIdentityOrNone}`.
 
-- [ ] 5. Reuse combined diff for combined indexes. Requirements: 3, 4, 5, 6.
+- [x] 5. Reuse combined diff for combined indexes. Requirements: 3, 4, 5, 6.
   - [x] Expose or reuse no-write combined read/comparison helpers rather than copying comparison logic.
   - [x] Delegate endpoint/surface/edge/path comparison to existing combined diff where possible.
   - [x] Map combined `SourceDiffs`, `CoverageDiffs`, `EndpointDiffs`, `SurfaceDiffs`, `EdgeDiffs`, `PathDiffs`, and `Gaps` into snapshot sections.
@@ -49,11 +49,11 @@
   - [x] Preserve combined diff rule IDs as supporting rules.
   - [x] Ensure `--allow-identity-mismatch` downgrades affected rows.
 
-- [ ] 6. Implement stable keys and classifications. Requirements: 5, 8.
+- [x] 6. Implement stable keys and classifications. Requirements: 5, 8.
   - [x] Add stable key helpers for source, coverage, and extractor-version evidence.
   - [x] Ensure row ID churn alone does not emit diffs for source, coverage, and extractor-version evidence.
   - [x] Detect changed safe metadata under source identity.
-  - [ ] Add duplicate identity handling.
+  - [x] Add duplicate identity handling.
   - [x] Add coverage-aware classification downgrades.
   - [x] Add deterministic confidence mapping.
 
@@ -79,18 +79,18 @@
   - [x] Combined-index delegation.
   - [x] Single-index manifest JSON identity derivation.
   - [x] Single-index source label is the constant `single` and never derived from path or raw repo metadata.
-  - [ ] Single-index comparison with missing language metadata.
+  - [x] Single-index comparison with missing language metadata.
   - [x] Mixed single/combined rejection.
   - [x] Combined edge-to-graph output mapping.
   - [x] Delegated combined metadata is re-redacted before snapshot output.
   - [x] Unavailable snapshot-specific arrays emitting availability gaps.
   - [x] Source identity conflict and allowed mismatch downgrade.
   - [x] Redacted identity conflict errors and reports.
-  - [ ] Unknown commit SHA.
+  - [x] Unknown commit SHA.
   - [ ] Same SHA with changed evidence warning.
-  - [ ] Reduced coverage downgrade.
-  - [ ] Row ID churn avoidance.
-  - [ ] Extractor-version change.
+  - [x] Reduced coverage downgrade.
+  - [x] Row ID churn avoidance.
+  - [x] Extractor-version change.
   - [ ] Malformed metadata gap.
   - [x] Unsafe value redaction.
   - [x] Path comparison opt-in.
@@ -99,7 +99,7 @@
   - [x] Byte-stable Markdown/JSON.
   - [x] Read-only input databases.
 
-- [ ] 10. Update user-facing docs only during implementation. Requirements: 1, 6, 9.
+- [x] 10. Update user-facing docs only during implementation. Requirements: 1, 6, 9.
   - [x] Add README/acceptance/validation notes in implementation PR, not this spec PR.
   - [x] Update `docs/ACCEPTANCE.md` and `docs/VALIDATION.md` when implementation merges.
   - [x] Document relationship to `tracemap diff`, `impact`, and future release review.
