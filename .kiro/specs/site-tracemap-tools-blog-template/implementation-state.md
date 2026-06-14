@@ -20,6 +20,7 @@ database, auth, or runtime service was added.
 ## Validation
 
 - `npm run build`
+- `npm test`
 - Browser smoke at desktop and mobile widths
 
 ## Follow-ups
