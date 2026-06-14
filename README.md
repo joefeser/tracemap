@@ -9,7 +9,7 @@ The current language scanners are:
 - `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
 - `Python` under `src/python`, including AST/package/config/SQL extraction, FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests integration facts, reduced coverage labeling, and reducer-compatible SQLite output.
 
-TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, diff two combined snapshots, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
+TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, diff combined snapshots, compare single or combined snapshots by source/coverage/extractor metadata, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
 Start here:
 
@@ -133,6 +133,17 @@ dotnet run --project src/dotnet/TraceMap.Cli -- diff \
 ```
 
 The combined dependency diff command writes `diff-report.md` and `diff-report.json` when `--out` is a directory. It compares static evidence keys for sources, coverage, endpoints, dependency surfaces, dependency edges, and opt-in path signatures. Added/removed conclusions are coverage-relative; reduced coverage or source identity uncertainty is labeled as a gap or review-tier diff rather than runtime impact.
+
+Compare two single-language or combined snapshots by source, coverage, and extractor metadata:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- snapshot-diff \
+  --before .tracemap-before/index.sqlite \
+  --after .tracemap-after/index.sqlite \
+  --out .tracemap-snapshot-diff
+```
+
+The snapshot diff command writes `snapshot-diff-report.md` and `snapshot-diff-report.json` when `--out` is a directory. The first slice validates same-kind inputs, source identity, commit SHA availability, coverage, and extractor-version changes. Endpoint, contract-shape, surface, graph, gap, and path sections are present but marked with explicit availability gaps until deeper evidence readers are implemented.
 
 Summarize static change-impact evidence from two combined snapshots:
 
