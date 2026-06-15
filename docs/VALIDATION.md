@@ -218,6 +218,29 @@ grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out
 
 WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 
+## Legacy Data Metadata Smoke
+
+When changing DBML, EDMX, typed DataSet/TableAdapter, legacy data config, generated data-code linkage, XML parser safety, or safe identifier redaction, run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, config provider/connection metadata, generated-code links, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite.
+
+Useful inspection queries:
+
+```bash
+sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts where fact_type like 'LegacyData%' group by fact_type order by fact_type;"
+sqlite3 <out>/index.sqlite "select fact_type, rule_id, evidence_tier, file_path, start_line, properties_json from facts where fact_type like 'LegacyData%' or rule_id like 'legacy.data.%' order by fact_type, file_path, start_line;"
+grep -E "Legacy Data Metadata|Legacy Data Metadata Limitations" <out>/report.md
+```
+
+Legacy data metadata smoke summaries remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw DBML/EDMX/XSD/XML snippets, raw SQL, connection strings, config values, provider secrets, URLs, local absolute paths, or generated private outputs. Legacy data metadata evidence is static design-time evidence and does not prove runtime data access, SQL execution, database existence, provider compatibility, transform selection, generated-code freshness, branch feasibility, deployment, or production usage.
+
 ## Public OSS Smoke
 
 Use `scripts/smoke-open-source-repos.sh` to clone pinned public repositories into a cache directory and scan them into a separate output directory:

@@ -109,6 +109,22 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 
 These facts are static evidence only. They do not prove runtime page lifecycle execution, postbacks, event bubbling, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
 
+### Legacy Data Metadata Facts
+
+The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX, typed DataSet XSD/TableAdapter, data-provider config, and deterministic generated-code linkage.
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `LegacyDataMetadataDeclared` | Inventories parseable legacy data metadata documents and generated-designer candidates. | `metadataKind`, `metadataHash`, `inventoryKind`, `path` |
+| `LegacyDataEntityDeclared` | Records static conceptual/generated entity, context, DataSet, row, or TableAdapter descriptors. | `metadataKind`, `entityKind`, `entityName`, `typeName`, `entityNameHash`, `typeNameHash` |
+| `LegacyDataStorageObjectDeclared` | Records static table, view, routine, DataTable, or storage entity-set descriptors. | `metadataKind`, `storageObjectKind`, `storageObjectName`, `tableName`, `storageObjectHash`, `tableNameHash` |
+| `LegacyDataColumnDeclared` | Records static property/field/column descriptors from metadata. | `metadataKind`, `columnKind`, `ownerName`, `propertyName`, `fieldName`, `columnName`, hash variants |
+| `LegacyDataMappingDeclared` | Records unambiguous descriptor-to-descriptor mappings such as entity-table or property-column. | `metadataKind`, `mappingKind`, `entityName`, `tableName`, `propertyName`, `columnName`, hash variants |
+| `LegacyDataProviderConfigDeclared` | Records safe provider, connection-name, provider factory, and EF provider metadata without raw values. | `configKind`, `connectionName`, `providerName`, `connectionNameHash`, `providerNameHash`, `valueHash` |
+| `LegacyDataGeneratedCodeLinked` | Links metadata descriptors to generated files or compiler-resolved symbols when deterministic. | `linkKind`, `symbolRole`, `typeName`, `generatedCodeFileName`, `supportingFactIds` |
+
+These facts are static design-time metadata evidence. DBML, EDMX, typed DataSet, TableAdapter, and config descriptor facts are capped at `Tier2Structural`; generated-code links may be `Tier1Semantic` only when compiler-resolved symbol evidence is available, and that link does not upgrade descriptor facts. Raw SQL, connection strings, config values, namespace URIs, provider secrets, URLs, local paths, remotes, source snippets, and secret-looking values must be hashed or omitted. Metadata facts must not emit `DatabaseColumnMapping` without code-level mapping evidence owned by another rule.
+
 ## Symbol Identity
 
 Each adapter should emit stable symbol IDs for its own ecosystem and include a language discriminator in `symbols`.
