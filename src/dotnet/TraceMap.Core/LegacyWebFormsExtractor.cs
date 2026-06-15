@@ -74,10 +74,16 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var allFacts = existingFacts.Concat(facts).ToArray();
+        var wcfMappings = allFacts
+            .Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping)
+            .ToArray();
+        var candidateDirectFacts = allFacts
+            .Where(fact => fact.FactType is not (FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared))
+            .ToArray();
         foreach (var resolution in facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).ToArray())
         {
-            facts.Add(CreateFlowFact(manifest, resolution, allFacts));
-            var logicSignal = CreateLogicSignalFact(manifest, resolution, context, allFacts);
+            facts.Add(CreateFlowFact(manifest, resolution, candidateDirectFacts, wcfMappings));
+            var logicSignal = CreateLogicSignalFact(manifest, resolution, context, candidateDirectFacts, wcfMappings);
             if (logicSignal is not null)
             {
                 facts.Add(logicSignal);
@@ -102,8 +108,14 @@ public static partial class LegacyWebFormsExtractor
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(item => ParseMarkupFile(repoPath, item))
             .ToArray();
+        var linkedPaths = pages
+            .Select(page => page.LinkedCodePath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path!)
+            .ToHashSet(StringComparer.Ordinal);
         var codeFiles = inventory
-            .Where(item => item.Kind is "WebFormsCodeBehind" or "CSharp")
+            .Where(item => item.Kind == "WebFormsCodeBehind"
+                || item.Kind == "CSharp" && linkedPaths.Contains(item.RelativePath))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(item => ParseCodeFile(repoPath, item.RelativePath))
             .Where(file => file is not null)
@@ -125,11 +137,11 @@ public static partial class LegacyWebFormsExtractor
         {
             var text = File.ReadAllText(fullPath);
             var source = SourceText.From(text);
-            var directive = DirectiveRegex().Matches(text).Cast<Match>().FirstOrDefault();
-            var directiveAttributes = directive is null
+            var directive = DirectiveRegex().Match(text);
+            var directiveAttributes = !directive.Success
                 ? new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 : ParseAttributes(directive.Groups["attrs"].Value);
-            var directiveKind = directive?.Groups["kind"].Value ?? MarkupKind(file.RelativePath);
+            var directiveKind = directive.Success ? directive.Groups["kind"].Value : MarkupKind(file.RelativePath);
             var pageTypeName = SafeIdentifier(directiveAttributes.GetValueOrDefault("Inherits"))
                 ?? SafeIdentifier(Path.GetFileNameWithoutExtension(file.RelativePath))
                 ?? "unknown";
@@ -146,17 +158,17 @@ public static partial class LegacyWebFormsExtractor
                 SafeMarkupPath(directiveAttributes.GetValueOrDefault("MasterPageFile")),
                 linkedCodePath,
                 autoEventWireup,
-                directive is null ? 1 : LineAt(source, directive.Index),
+                directive.Success ? LineAt(source, directive.Index) : 1,
                 [],
                 [],
-                directive is null
+                !directive.Success
                     ? [new WebFormsGap("MalformedWebFormsDirective", "Unable to parse a WebForms page/control/master directive.", 1)]
                     : []);
 
             var controls = new List<WebFormsControl>();
             var bindings = new List<WebFormsBinding>();
             var gaps = page.Gaps.ToList();
-            foreach (Match match in ServerControlRegex().Matches(text).Cast<Match>().OrderBy(match => match.Index))
+            foreach (Match match in ServerControlRegex().Matches(text))
             {
                 var attrs = ParseAttributes(match.Groups["attrs"].Value);
                 if (!IsServerControl(attrs))
@@ -526,17 +538,21 @@ public static partial class LegacyWebFormsExtractor
             properties: properties);
     }
 
-    private static CodeFact CreateFlowFact(ScanManifest manifest, CodeFact resolution, IReadOnlyList<CodeFact> allFacts)
+    private static CodeFact CreateFlowFact(
+        ScanManifest manifest,
+        CodeFact resolution,
+        IReadOnlyList<CodeFact> candidateDirectFacts,
+        IReadOnlyList<CodeFact> wcfMappings)
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? resolution.TargetSymbol ?? handlerName;
-        var directFacts = allFacts
+        var directFacts = candidateDirectFacts
             .Where(fact => IsDirectHandlerEvidence(fact, handlerName, handlerSymbol))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
         var terminals = directFacts
             .Where(IsTerminalSurfaceFact)
-            .Concat(WcfMappingsForCalls(allFacts, directFacts))
+            .Concat(WcfMappingsForCalls(wcfMappings, directFacts))
             .DistinctBy(fact => fact.FactId)
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
@@ -587,7 +603,12 @@ public static partial class LegacyWebFormsExtractor
             properties: properties);
     }
 
-    private static CodeFact? CreateLogicSignalFact(ScanManifest manifest, CodeFact resolution, WebFormsContext context, IReadOnlyList<CodeFact> allFacts)
+    private static CodeFact? CreateLogicSignalFact(
+        ScanManifest manifest,
+        CodeFact resolution,
+        WebFormsContext context,
+        IReadOnlyList<CodeFact> candidateDirectFacts,
+        IReadOnlyList<CodeFact> wcfMappings)
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var methodPath = resolution.Evidence.FilePath;
@@ -597,8 +618,8 @@ public static partial class LegacyWebFormsExtractor
             return null;
         }
 
-        var directFacts = allFacts.Where(fact => IsDirectHandlerEvidence(fact, handlerName, resolution.TargetSymbol ?? handlerName)).ToArray();
-        var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(allFacts, directFacts).Any();
+        var directFacts = candidateDirectFacts.Where(fact => IsDirectHandlerEvidence(fact, handlerName, resolution.TargetSymbol ?? handlerName)).ToArray();
+        var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(wcfMappings, directFacts).Any();
         var hasLogic = hasBackend
             || method.Declaration.DescendantNodes().Any(node => node is IfStatementSyntax or SwitchStatementSyntax or ConditionalExpressionSyntax)
             || method.Declaration.DescendantNodes().OfType<BinaryExpressionSyntax>().Any(binary => binary.IsKind(SyntaxKind.MultiplyExpression) || binary.IsKind(SyntaxKind.DivideExpression) || binary.IsKind(SyntaxKind.ModuloExpression))
@@ -688,7 +709,7 @@ public static partial class LegacyWebFormsExtractor
                 || right.EndsWith("." + handlerName, StringComparison.Ordinal));
     }
 
-    private static IEnumerable<CodeFact> WcfMappingsForCalls(IReadOnlyList<CodeFact> allFacts, IReadOnlyList<CodeFact> directFacts)
+    private static IEnumerable<CodeFact> WcfMappingsForCalls(IReadOnlyList<CodeFact> wcfMappings, IReadOnlyList<CodeFact> directFacts)
     {
         var callees = directFacts
             .Where(fact => fact.FactType == FactTypes.CallEdge)
@@ -702,10 +723,9 @@ public static partial class LegacyWebFormsExtractor
             .Select(value => value!)
             .ToHashSet(StringComparer.Ordinal);
 
-        return allFacts.Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping
-            && (callees.Contains(fact.ContractElement ?? string.Empty)
+        return wcfMappings.Where(fact => callees.Contains(fact.ContractElement ?? string.Empty)
                 || callees.Contains(fact.Properties.GetValueOrDefault("clientOperationName") ?? string.Empty)
-                || callees.Contains(fact.Properties.GetValueOrDefault("operationName") ?? string.Empty)));
+                || callees.Contains(fact.Properties.GetValueOrDefault("operationName") ?? string.Empty));
     }
 
     private static CodeFact? FindSemanticHandlerEvidence(WebFormsMethod method, IReadOnlyList<CodeFact> existingFacts)
@@ -777,9 +797,9 @@ public static partial class LegacyWebFormsExtractor
             return null;
         }
 
-        var trimmed = value.Trim();
+        var trimmed = value.Trim().Replace('\\', '/');
         if (trimmed.Contains("://", StringComparison.Ordinal)
-            || trimmed.Contains('\\', StringComparison.Ordinal)
+            || trimmed.Contains(':', StringComparison.Ordinal)
             || trimmed.StartsWith("/", StringComparison.Ordinal)
             || trimmed.Contains("..", StringComparison.Ordinal)
             || trimmed.Contains('$', StringComparison.Ordinal)

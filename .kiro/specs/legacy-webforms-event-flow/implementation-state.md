@@ -42,11 +42,14 @@ State Notes:
 - The existing `legacy.validation.ui-events.v1` summary now lets precise
   `WebForms*` evidence supersede the coarse UI token probe when those facts are
   present.
+- PR review loop follow-up fixed Windows-style relative markup path handling and
+  pre-filtered WebForms code-file/fact scans so large non-WebForms repositories
+  do not pay avoidable extractor cost.
 
 Validation:
 
 - `dotnet build src/dotnet/TraceMap.sln` passed with 0 warnings.
-- `dotnet test src/dotnet/TraceMap.sln` passed: 274 tests.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 275 tests.
 - `python3 -m unittest scripts.tests.test_legacy_codebase_validation` passed:
   11 tests.
 - `./scripts/check-private-paths.sh` passed.
