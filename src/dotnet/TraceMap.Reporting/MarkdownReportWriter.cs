@@ -105,6 +105,18 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Legacy Data Metadata",
+            result.Facts.Where(fact => fact.FactType is FactTypes.LegacyDataMetadataDeclared
+                or FactTypes.LegacyDataEntityDeclared
+                or FactTypes.LegacyDataStorageObjectDeclared
+                or FactTypes.LegacyDataColumnDeclared
+                or FactTypes.LegacyDataMappingDeclared
+                or FactTypes.LegacyDataProviderConfigDeclared
+                or FactTypes.LegacyDataGeneratedCodeLinked),
+            FormatLegacyDataMetadataFact);
+
+        AddFactSection(
+            lines,
             "Call Flow",
             result.Facts.Where(fact => fact.FactType == FactTypes.CallEdge),
             fact => $"- `{DisplaySource(fact)}` -> `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -231,6 +243,16 @@ public static class MarkdownReportWriter
             lines.Add("- Query-pattern rows are static shape evidence. They do not prove runtime execution, database schema existence, SQL dialect validity, generated SQL equivalence, or branch feasibility.");
         }
 
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## Legacy Data Metadata Limitations");
+            lines.Add("");
+            lines.Add("- Legacy data metadata rows are static design-time metadata evidence from checked-in DBML, EDMX, typed DataSet, TableAdapter, config, or generated-code descriptors.");
+            lines.Add("- They do not prove runtime data access, SQL execution, database existence, provider compatibility, config transform selection, generated-code freshness, deployment, or production usage.");
+            lines.Add("- Raw SQL, connection strings, config values, URLs, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.");
+        }
+
         if (result.Facts.Any(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal)))
         {
             lines.Add("");
@@ -342,9 +364,40 @@ public static class MarkdownReportWriter
         };
     }
 
+    private static string FormatLegacyDataMetadataFact(CodeFact fact)
+    {
+        var metadataKind = DisplayCodeValue(fact.Properties.GetValueOrDefault("metadataKind") ?? "unknown");
+        var label = FirstPresentValue(
+            fact.Properties.GetValueOrDefault("entityName"),
+            fact.Properties.GetValueOrDefault("storageObjectName"),
+            fact.Properties.GetValueOrDefault("columnName"),
+            fact.Properties.GetValueOrDefault("connectionName"),
+            fact.Properties.GetValueOrDefault("typeName"),
+            fact.Properties.GetValueOrDefault("targetName"),
+            fact.ContractElement,
+            fact.TargetSymbol,
+            "hash-only");
+        var role = FirstPresentValue(
+            fact.Properties.GetValueOrDefault("entityKind"),
+            fact.Properties.GetValueOrDefault("storageObjectKind"),
+            fact.Properties.GetValueOrDefault("columnKind"),
+            fact.Properties.GetValueOrDefault("mappingKind"),
+            fact.Properties.GetValueOrDefault("configKind"),
+            fact.Properties.GetValueOrDefault("linkKind"),
+            fact.Properties.GetValueOrDefault("inventoryKind"),
+            fact.FactType);
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return $"- `{fact.FactType}` `{DisplayCodeValue(metadataKind)}` `{DisplayIdentifierValue(label, IdentifierKind.Column, "hash-only")}` role `{DisplayCodeValue(role)}` rule `{fact.RuleId}` ({fact.EvidenceTier}) at `{path}:{fact.Evidence.StartLine}`";
+    }
+
     private static bool IsSqlShapeQueryPattern(CodeFact fact)
     {
         return fact.Properties.TryGetValue("sqlSourceKind", out var value) && !string.IsNullOrWhiteSpace(value);
+    }
+
+    private static string FirstPresentValue(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
     }
 
     private static string FormatSqlShapeQueryPattern(CodeFact fact)

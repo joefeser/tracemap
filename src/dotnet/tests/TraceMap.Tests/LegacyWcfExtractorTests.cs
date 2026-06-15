@@ -419,7 +419,8 @@ public sealed class LegacyWcfExtractorTests
 
         var result = ScanEngine.Scan(new ScanOptions(repo, output));
 
-        Assert.DoesNotContain(result.Inventory, item => item.RelativePath.StartsWith("Loose.", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Inventory, item => item.RelativePath is "Loose.wsdl" or "Loose.disco");
+        Assert.Contains(result.Inventory, item => item.RelativePath == "Loose.xsd" && item.Kind == "XsdSchema");
         Assert.Contains(result.Inventory, item => item.RelativePath == "Client/Rating/Rating.wsdl" && item.Kind == "ServiceReferenceMetadata");
         Assert.Contains(result.Inventory, item => item.RelativePath == "Client/Rating/Rating.disco" && item.Kind == "ServiceReferenceMetadata");
         Assert.Contains(result.Inventory, item => item.RelativePath == "Client/Rating/Rating.xsd" && item.Kind == "ServiceReferenceMetadata");
