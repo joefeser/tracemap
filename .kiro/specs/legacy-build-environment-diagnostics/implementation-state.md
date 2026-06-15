@@ -38,6 +38,9 @@ IDs/versions, conservative guidance, and limitation text.
   properties, fact IDs, SQLite rows, reports, or analyzer logs.
 - `messageHash` is derived from the sanitized category message, not raw native
   output, so same-category raw messages remain fact-ID stable.
+- Compiler diagnostic `AnalysisGap` facts retain only bounded, safe C#
+  identifier tokens as reducer match keys; raw compiler prose remains
+  sanitized away.
 - Generated/designer diagnostics cover deterministic missing, malformed, and
   structurally unlinked WebForms, WCF service-reference, resource, and settings
   patterns.
@@ -59,6 +62,8 @@ Completed:
 
 - `dotnet build src/dotnet/TraceMap.sln` passed.
 - `dotnet test src/dotnet/TraceMap.sln` passed.
+- Focused review-loop regression test passed:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "CSharpSemanticExtractorTests|ReducerTests"`.
 - CLI scan against checked-in `samples/modern-sample` passed and produced:
   `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
   `logs/analyzer.log`.
