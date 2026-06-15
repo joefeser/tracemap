@@ -23,7 +23,8 @@ export async function validateSite(options = {}) {
 export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoot } = {}) {
   const dist = resolve(root, "dist");
   const errors = [];
-  const files = await collectFiles(dist);
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl, errors);
+  const files = await collectFiles(dist, errors);
   const htmlFiles = files.filter((file) => extname(file) === ".html");
   const sitemapPath = resolve(dist, "sitemap.xml");
   const robotsPath = resolve(dist, "robots.txt");
@@ -32,16 +33,22 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
   await validateRequiredFile(robotsPath, "robots.txt", errors);
 
   const sitemapUrls = await readSitemapUrls(sitemapPath, errors);
-  await validateSitemapUrls({ baseUrl, dist, errors, sitemapUrls });
+  if (normalizedBaseUrl) {
+    await validateSitemapUrls({ baseUrl: normalizedBaseUrl, dist, errors, sitemapUrls });
+  }
 
-  const internalReferenceCount = await validateHtmlReferences({
-    baseUrl,
-    dist,
-    errors,
-    htmlFiles
-  });
+  const internalReferenceCount = normalizedBaseUrl
+    ? await validateHtmlReferences({
+        baseUrl: normalizedBaseUrl,
+        dist,
+        errors,
+        htmlFiles
+      })
+    : 0;
 
-  await validateRobotsSitemap({ baseUrl, errors, robotsPath });
+  if (normalizedBaseUrl) {
+    await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
+  }
 
   if (errors.length > 0) {
     throw new Error(`Site validation failed:\n- ${errors.join("\n- ")}`);
@@ -54,14 +61,22 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
   };
 }
 
-async function collectFiles(directory) {
+async function collectFiles(directory, errors) {
   const files = [];
+  let entries;
 
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    errors.push(`Unable to read generated output directory ${directory}: ${error.message}`);
+    return files;
+  }
+
+  for (const entry of entries) {
     const path = resolve(directory, entry.name);
 
     if (entry.isDirectory()) {
-      files.push(...(await collectFiles(path)));
+      files.push(...(await collectFiles(path, errors)));
       continue;
     }
 
@@ -105,7 +120,7 @@ async function validateSitemapUrls({ baseUrl, dist, errors, sitemapUrls }) {
 
     seen.add(url);
 
-    const path = publicPathFromUrl(url, { baseUrl, source: "sitemap.xml" });
+    const path = publicPathFromUrl(url, { baseUrl });
     if (!path) {
       errors.push(`Sitemap URL is not on ${baseUrl}: ${url}`);
       continue;
@@ -171,7 +186,7 @@ function resolveReference(reference, { baseUrl, dist, file }) {
   }
 
   if (/^https?:\/\//.test(reference)) {
-    return publicPathFromUrl(reference, { baseUrl, source: formatDistPath(dist, file) });
+    return publicPathFromUrl(reference, { baseUrl });
   }
 
   if (reference.startsWith("//")) {
@@ -183,7 +198,7 @@ function resolveReference(reference, { baseUrl, dist, file }) {
   }
 
   const fileRoute = `/${relative(dist, file).split(sep).join("/")}`;
-  const url = new URL(reference, `${defaultBaseUrl}${fileRoute}`);
+  const url = new URL(reference, `${baseUrl}${fileRoute}`);
   return stripQueryAndHash(url.pathname);
 }
 
@@ -207,7 +222,16 @@ async function publicPathExists(dist, pathname) {
   const publicPath = stripQueryAndHash(pathname);
   const resolved = resolvePublicPath(dist, publicPath);
 
-  return resolved ? fileExists(resolved) : false;
+  if (resolved && (await fileExists(resolved))) {
+    return true;
+  }
+
+  if (!publicPath.endsWith("/")) {
+    const indexPath = resolvePublicPath(dist, `${publicPath}/`);
+    return indexPath ? fileExists(indexPath) : false;
+  }
+
+  return false;
 }
 
 function resolvePublicPath(dist, pathname) {
@@ -246,6 +270,24 @@ async function fileExists(path) {
 
 function stripQueryAndHash(value) {
   return value.split("#", 1)[0].split("?", 1)[0];
+}
+
+function normalizeBaseUrl(value, errors) {
+  let url;
+
+  try {
+    url = new URL(value);
+  } catch {
+    errors.push(`baseUrl must be a valid absolute URL: ${value}`);
+    return null;
+  }
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    errors.push(`baseUrl must use http or https: ${value}`);
+    return null;
+  }
+
+  return url.origin;
 }
 
 function decodeXml(value) {
