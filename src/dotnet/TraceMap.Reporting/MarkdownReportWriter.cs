@@ -59,6 +59,8 @@ public static class MarkdownReportWriter
             lines.AddRange(manifest.KnownGaps.Select(gap => $"- {gap}"));
         }
 
+        AddBuildEnvironmentDiagnostics(lines, result);
+
         lines.Add("");
         lines.Add("## Facts By Type");
         lines.Add("");
@@ -258,6 +260,42 @@ public static class MarkdownReportWriter
         lines.AddRange(selectedFacts.Length == 0 ? ["- None found."] : selectedFacts.Select(format));
     }
 
+    private static void AddBuildEnvironmentDiagnostics(List<string> lines, ScanResult result)
+    {
+        var diagnostics = result.Facts
+            .Where(fact => fact.FactType == FactTypes.BuildEnvironmentDiagnostic)
+            .OrderBy(fact => fact.Properties.GetValueOrDefault("diagnosticKind"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("diagnosticCode"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (diagnostics.Length == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## Build Environment Diagnostics");
+        lines.Add("");
+        if (result.Manifest.BuildStatus == "FailedOrPartial")
+        {
+            lines.Add("Build or project load coverage is reduced; syntax/config fallback analysis continued where possible.");
+            lines.Add("");
+        }
+
+        lines.Add("| Code | Tier | Rule | Evidence | Guidance | Limitation |");
+        lines.Add("| --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in diagnostics.Take(100))
+        {
+            var code = DisplayCodeValue(fact.Properties.GetValueOrDefault("diagnosticCode") ?? fact.ContractElement ?? "unknown");
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}";
+            var guidance = DisplayTableValue(fact.Properties.GetValueOrDefault("guidance") ?? fact.Properties.GetValueOrDefault("guidanceCode") ?? "Review the diagnostic evidence.");
+            var limitation = DisplayTableValue(fact.Properties.GetValueOrDefault("limitation") ?? "Static diagnostic evidence only.");
+            lines.Add($"| `{code}` | `{fact.EvidenceTier}` | `{fact.RuleId}` | `{evidence}` | {guidance} | {limitation} |");
+        }
+    }
+
     private static string DisplayFactName(CodeFact fact)
     {
         return fact.ContractElement ?? fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("keyPath") ?? "unknown";
@@ -415,6 +453,11 @@ public static class MarkdownReportWriter
     private static string DisplayCodeValue(string value)
     {
         return value.Replace('`', '\'').ReplaceLineEndings(" ");
+    }
+
+    private static string DisplayTableValue(string value)
+    {
+        return DisplayCodeValue(value).Replace("|", "/");
     }
 
     private static string? FirstPresent(string? first, string? second)
