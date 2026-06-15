@@ -158,6 +158,15 @@ public static class CombinedDependencyPathClassifications
     public const string SelectorNoMatch = nameof(SelectorNoMatch);
 }
 
+public static class CombinedValueOriginClassifications
+{
+    public const string StrongStaticValuePath = nameof(StrongStaticValuePath);
+    public const string ProbableStaticValuePath = nameof(ProbableStaticValuePath);
+    public const string NeedsReviewValuePath = nameof(NeedsReviewValuePath);
+    public const string UnknownAnalysisGap = nameof(UnknownAnalysisGap);
+    public const string NoValuePathEvidence = nameof(NoValuePathEvidence);
+}
+
 public static class CombinedDependencyPathReporter
 {
     private const string Version = "1.0";
@@ -903,6 +912,14 @@ public static class CombinedDependencyPathReporter
     private static IReadOnlyList<CombinedPathNote> NotesFor(IReadOnlyList<CombinedPathEdge> edges)
     {
         var notes = new List<CombinedPathNote>();
+        var valueOriginClassification = ClassifyValueOrigin(edges);
+        if (valueOriginClassification is not null)
+        {
+            notes.Add(new CombinedPathNote(
+                "ValueOriginClassification",
+                $"{valueOriginClassification}: value-origin context is additive and does not replace the canonical path classification."));
+        }
+
         if (edges.Any(edge => edge.EdgeKind == "endpoint-match"))
         {
             notes.Add(new CombinedPathNote("StaticEndpointEvidence", "Endpoint hops are static method/path evidence and do not prove runtime traffic or reachability."));
@@ -923,7 +940,42 @@ public static class CombinedDependencyPathReporter
             notes.Add(new CombinedPathNote("SymbolReconciliationBoundary", "Symbol reconciliation hops connect source-local symbol names when deterministic aliases match; they are review-tier evidence, not compiler-resolved call evidence."));
         }
 
-        return notes;
+        return notes
+            .OrderBy(note => note.Code, StringComparer.Ordinal)
+            .ThenBy(note => note.Message, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    internal static string? ClassifyValueOrigin(IReadOnlyList<CombinedPathEdge> edges)
+    {
+        var valueEdges = edges
+            .Where(edge => edge.EdgeKind is "parameter-forward" or "argument-passed")
+            .ToArray();
+        if (valueEdges.Length == 0)
+        {
+            return null;
+        }
+
+        if (valueEdges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier4Unknown)
+            || Classify(edges) == CombinedDependencyPathClassifications.UnknownAnalysisGap)
+        {
+            return CombinedValueOriginClassifications.UnknownAnalysisGap;
+        }
+
+        if (edges.Any(edge => edge.EdgeKind == "symbol-reconciliation")
+            || valueEdges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+            || edges.Any(edge => edge.EdgeKind == "endpoint-match" && edge.Classification != CombinedEndpointClassifications.MatchedEndpoint))
+        {
+            return CombinedValueOriginClassifications.NeedsReviewValuePath;
+        }
+
+        if (edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier2Structural)
+            || valueEdges.Any(edge => edge.EvidenceTier != EvidenceTiers.Tier1Semantic))
+        {
+            return CombinedValueOriginClassifications.ProbableStaticValuePath;
+        }
+
+        return CombinedValueOriginClassifications.StrongStaticValuePath;
     }
 
     private static SelectorResolution ResolveStartNodes(CombinedDependencyPathOptions options, EvidenceGraph graph, string? sourceFilter)
@@ -1478,6 +1530,7 @@ public static class CombinedDependencyPathReporter
                     builder.AppendLine($"| {index} | {Cell(node.SourceLabel)} | {Cell($"{node.NodeKind} {node.DisplayName}")} | {Cell(Evidence(node.RuleId, node.EvidenceTier, node.FilePath, node.StartLine))} | {Cell(boundary + (edge?.EdgeKind ?? "start"))} |");
                 }
 
+                AppendPathNotes(builder, path.Notes);
                 builder.AppendLine();
             }
         }
@@ -1552,6 +1605,21 @@ public static class CombinedDependencyPathReporter
         foreach (var value in values)
         {
             builder.AppendLine($"  - {Cell(value)}");
+        }
+    }
+
+    private static void AppendPathNotes(StringBuilder builder, IReadOnlyList<CombinedPathNote> notes)
+    {
+        if (notes.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Notes:");
+        foreach (var note in notes.OrderBy(note => note.Code, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- `{Cell(note.Code)}`: {Cell(note.Message)}");
         }
     }
 

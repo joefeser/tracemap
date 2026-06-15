@@ -674,7 +674,7 @@ rules:
 
   - id: csharp.semantic.flowboundary.v1
     name: C# semantic flow boundary
-    description: Records deterministic evidence for runtime-sensitive flow boundaries such as DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, and branch conditions.
+    description: Records deterministic evidence for runtime-sensitive flow boundaries such as DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, branch conditions, callbacks, and async scheduling points.
     evidenceTier: Tier1Semantic
     emits:
       - DependencyResolved
@@ -684,9 +684,13 @@ rules:
       - CollectionMutation
       - ObjectMutation
       - BranchCondition
+      - CallbackBoundary
+      - AsyncBoundary
     limitations:
       - Requires Roslyn semantic binding except for dynamic invocations where Roslyn intentionally cannot bind a static callee.
-      - These facts mark review-routing boundaries and do not prove runtime execution, concrete runtime types, branch feasibility, collection contents, object identity, dependency injection registrations, reflection targets, or serializer contract mappings.
+      - Callback boundary facts cover syntactically visible lambdas, anonymous methods, delegate arguments on invocations and object creation, delegate creation, expression-tree lambdas, captured outer parameters/locals, and event subscriptions; they do not prove delegate invocation, event firing, subscriber ordering, callback target execution, closure lifetime, expression-tree execution, or mutation safety.
+      - Async boundary facts cover syntactically visible `await`, `await foreach`, `await using`, task scheduling/continuation calls, thread-pool queueing calls, and iterator `yield` statements; they do not prove runtime scheduling, execution ordering, thread interleaving, task completion, async-stream enumeration, async disposal execution, or continuation reachability.
+      - These facts mark review-routing boundaries and do not prove runtime execution, concrete runtime types, branch feasibility, collection contents, object identity, dependency injection registrations, reflection targets, serializer contract mappings, callback invocation, event firing, or async ordering.
       - Use `csharp.semantic.runtimeevidence.v1` facts for statically visible registrations, reflection targets, serializer member names, collection element inputs, mutation semantics, and simple branch feasibility evidence.
       - Raw expressions are not stored; expression hashes, expression kinds, resolved symbols, and line spans are emitted.
       - Specialized flow rules are still required before TraceMap can carry value provenance across these boundaries.
@@ -1038,12 +1042,13 @@ rules:
 
   - id: typescript.semantic.valueflow.v1
     name: TypeScript semantic argument value flow
-    description: Records direct call-site argument-to-parameter facts with expression hashes.
+    description: Records direct call-site argument-to-parameter facts with expression hashes and shared argument/parameter role metadata when compiler symbols are available.
     evidenceTier: Tier1Semantic
     emits:
       - ArgumentPassed
     limitations:
       - Tracks direct call-site arguments only; field/property aliases and interprocedural parameter-forward edges are follow-up work.
+      - Parameter role metadata is emitted only when the TypeScript compiler resolves the call signature; unresolved syntax fallback remains lower-tier evidence.
 
   - id: typescript.semantic.localalias.v1
     name: TypeScript semantic local alias
@@ -1344,13 +1349,14 @@ rules:
 
   - id: jvm.java.semantic.valueflow.v1
     name: Java semantic argument value flow
-    description: Maps resolved Java call-site argument expressions to callee parameter names and records simple local aliases when the initializer resolves to a symbol.
+    description: Maps resolved Java call-site argument expressions to callee parameter names with shared argument/parameter role metadata and records simple local aliases when the initializer resolves to a symbol.
     evidenceTier: Tier1Semantic
     emits:
       - ArgumentPassed
       - LocalAlias
     limitations:
       - Tracks direct call-site arguments only.
+      - Argument role metadata is emitted only when javac resolves the argument expression to a symbol.
       - Local aliases are limited to direct local variable initializers with a resolved origin symbol.
       - Does not perform interprocedural aliasing, field aliasing, mutation tracking, collection contents, branch feasibility, or async/callback flow.
 
@@ -1517,7 +1523,7 @@ rules:
 
   - id: python.ast.argumentflow.v1
     name: Python AST argument flow
-    description: Emits direct parameter-to-call argument flow, simple local alias facts, and direct self-field alias facts when a function parameter or simple name is passed or assigned by name.
+    description: Emits direct parameter-to-call argument flow, simple local alias facts, and direct self-field alias facts with shared role metadata where AST-visible names are available.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - ArgumentPassed
@@ -1525,6 +1531,7 @@ rules:
       - FieldAlias
     limitations:
       - Tracks direct same-function call arguments, local aliases, and self-field assignments only.
+      - Callee parameters are ordinal placeholders unless a future Python semantic layer resolves callable signatures.
       - Does not model transitive aliasing, mutation, collection contents, interprocedural return values, branch feasibility, async/callback flow, or dynamic kwargs expansion.
 
   - id: python.ast.relationships.v1
@@ -1835,3 +1842,105 @@ rules:
     limitations:
       - Redaction preserves review safety at the cost of losing raw values.
       - Hashes are comparison aids only and must not be treated as decoded or verified secrets.
+
+  - id: api.dto.contract.diff.endpoint.v1
+    name: API/DTO endpoint contract diff
+    description: Compares indexed static endpoint route and route-shape evidence between two TraceMap snapshots.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - ApiDtoContractDiffRow
+    limitations:
+      - Endpoint rows compare static method/path/handler/route metadata only and do not prove runtime traffic, deployment base paths, proxies, auth, CORS, or reachability.
+      - Path-only, display-only, syntax-only, duplicate, or identity-unverified endpoints are review-tier.
+      - Handler changes under a stable route identity are changed static evidence, not proof of runtime dispatch.
+
+  - id: api.dto.contract.diff.dto.v1
+    name: API/DTO type and member contract diff
+    description: Compares indexed DTO/type/member/method evidence between two TraceMap snapshots.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - ApiDtoContractDiffRow
+    limitations:
+      - DTO rows compare only metadata indexed by language adapters and do not prove OpenAPI completeness, runtime serializer mapping, binary compatibility, generated code coverage, or runtime object mutation.
+      - Missing declared type, nullability, requiredness, containing type, alias, assembly, package, or module metadata downgrades affected rows.
+      - Generic property-only identities such as id, type, name, and status are review-tier unless containing type identity is available.
+
+  - id: api.dto.contract.diff.attachment.v1
+    name: API/DTO request-response attachment diff
+    description: Compares endpoint-to-DTO request/response attachment evidence where adapters emit credible attachment facts; otherwise emits explicit attachment gaps.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - ApiDtoContractDiffRow
+      - ApiDtoContractDiffGap
+    limitations:
+      - Absence of endpoint-to-DTO attachment evidence is an analysis gap, not proof that request or response contracts did not change.
+      - Status-code and response-kind behavior is preserved only when explicitly indexed and is not inferred from framework conventions.
+      - Runtime serializer, model binding, dependency injection, filters, and dynamic response behavior are not resolved.
+
+  - id: api.dto.contract.diff.identity.v1
+    name: API/DTO contract diff source and stable identity
+    description: Emits source identity, duplicate contract identity, and stable-key downgrade gaps for API/DTO contract diffs.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractSourcePair
+      - ApiDtoContractDiffGap
+    limitations:
+      - Repository identity is hash-based and cannot prove ownership, deployment equivalence, or branch ancestry.
+      - Duplicate stable identities are preserved as review-tier evidence and TraceMap does not pick an arbitrary winner.
+      - Missing source identity, language identity, commit SHA, assembly, package, or module metadata downgrades comparisons.
+
+  - id: api.dto.contract.diff.coverage.v1
+    name: API/DTO contract diff coverage
+    description: Emits reduced coverage, no-diff evidence, and coverage-relative API/DTO contract diff gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractDiffGap
+    limitations:
+      - Reduced scan coverage makes absence of evidence coverage-relative.
+      - NoDiffEvidence means no comparable static evidence matched the selected scope, not proof that no runtime contract changed.
+      - Build failures, syntax fallback, unavailable generated artifacts, and missing adapter precision can hide otherwise relevant evidence.
+
+  - id: api.dto.contract.diff.schema.v1
+    name: API/DTO contract diff schema gap
+    description: Emits gaps when required or optional TraceMap index schema objects needed by API/DTO contract diff are absent.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractDiffGap
+    limitations:
+      - Missing schema prevents only the affected evidence projection from making stronger claims.
+      - Schema gaps are not evidence that endpoints, DTOs, properties, methods, or attachments are absent.
+
+  - id: api.dto.contract.diff.selector.v1
+    name: API/DTO contract diff selector handling
+    description: Emits selector no-match and ignored-selector metadata for API/DTO contract diff queries.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractDiffGap
+    limitations:
+      - Selector no-match reflects indexed static evidence only.
+      - Dynamic routes, generated contracts, reduced coverage, unavailable attachment evidence, or unsupported adapter metadata can hide otherwise relevant evidence.
+
+  - id: api.dto.contract.diff.truncation.v1
+    name: API/DTO contract diff truncation
+    description: Emits gaps when API/DTO contract diff row or gap caps truncate deterministic output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ApiDtoContractDiffGap
+    limitations:
+      - Truncated reports are incomplete by construction and must not be interpreted as comprehensive.
+      - Omitted counts and retained rows are deterministic for selected scopes and caps, but not evidence of lower importance.
+
+  - id: package.upgrade.impact.v1
+    name: Package upgrade static impact report
+    description: Matches package-delta.v1 changes against indexed PackageReferenced/package-config static evidence in single or combined TraceMap indexes.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - PackageImpactFinding
+      - PackageImpactGap
+    limitations:
+      - Package findings are static package declaration evidence only and do not prove package restore, installed versions, transitive dependency resolution, runtime loading, deployment, or API compatibility.
+      - Lockfile, import/usage, and package-call evidence is adapter-dependent and is only included when deterministic package identity facts with documented limitations exist.
+      - Version values are descriptive and safely rendered or hashed; TraceMap does not interpret semantic versioning, changelog impact, or compatibility.
+      - Missing package evidence under reduced coverage is an analysis gap, not proof that a package is absent.
+      - Exact package-name matching can miss aliases, relocated packages, shaded dependencies, generated manifests, imported build files, and dynamically declared dependencies.
+      - No vulnerability database, registry, changelog, license, LLM, embedding, vector, or prompt-based analysis is used.

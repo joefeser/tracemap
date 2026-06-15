@@ -349,6 +349,10 @@ public final class SqliteIndexWriter {
     private static void insertSymbolRows(Connection connection, CodeFact fact) throws SQLException {
         insertSymbolRole(connection, fact, "source", fact.properties().get("sourceSymbolId"), fact.sourceSymbol(), fact.properties().get("sourceSymbolKind"));
         insertSymbolRole(connection, fact, "target", fact.properties().get("targetSymbolId"), fact.targetSymbol(), fact.properties().get("targetSymbolKind"));
+        insertSymbolRole(connection, fact, "argument", fact.properties().get("argumentSymbolId"), fact.properties().get("argumentSymbolDisplayName"), fact.properties().get("argumentSymbolKind"));
+        insertSymbolRole(connection, fact, "parameter", fact.properties().get("parameterSymbolId"), fact.properties().get("parameterSymbolDisplayName"), fact.properties().get("parameterSymbolKind"));
+        insertSymbolRole(connection, fact, "origin", fact.properties().get("originSymbolId"), fact.properties().get("originSymbolDisplayName"), fact.properties().get("originSymbolKind"));
+        insertSymbolRole(connection, fact, "constructor", fact.properties().get("constructorSymbolId"), fact.properties().get("constructorSymbolDisplayName"), fact.properties().get("constructorSymbolKind"));
     }
 
     private static void insertSymbolRole(Connection connection, CodeFact fact, String role, String symbolId, String displayName, String symbolKind) throws SQLException {

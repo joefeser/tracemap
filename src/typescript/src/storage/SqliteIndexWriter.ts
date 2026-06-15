@@ -313,7 +313,7 @@ function insertSymbolRows(db: initSqlJs.Database, fact: CodeFact): void {
     if (!symbolId) {
       continue;
     }
-    const displayName = fact.properties[`${role}DisplayName`] ?? fact.properties[`${role}Symbol`] ?? symbolId;
+    const displayName = fact.properties[`${role}SymbolDisplayName`] ?? fact.properties[`${role}DisplayName`] ?? fact.properties[`${role}Symbol`] ?? symbolId;
     insertSymbol(db, fact, role, symbolId, displayName);
   }
 }
@@ -325,7 +325,7 @@ function insertSymbol(db: initSqlJs.Database, fact: CodeFact, role: string, symb
     [
       fact.scanId,
       symbolId,
-      "typescript",
+      fact.properties[`${role}SymbolLanguage`] ?? "typescript",
       fact.properties[`${role}SymbolKind`] ?? "unknown",
       displayName,
       fact.properties[`${role}AssemblyName`] ?? fact.properties.packageName ?? null,

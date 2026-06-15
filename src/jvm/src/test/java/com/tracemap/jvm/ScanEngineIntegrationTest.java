@@ -12,6 +12,7 @@ import com.tracemap.jvm.scan.ScanEngine;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.DriverManager;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,23 @@ final class ScanEngineIntegrationTest {
                 && "runtime".equals(fact.properties().get("dependencyScope"))
                 && "package-config".equals(fact.properties().get("surfaceKind"))
                 && "org.springframework:spring-web".equals(fact.properties().get("packageName"))));
+        assertTrue(result.facts().stream().anyMatch(fact ->
+            FactTypes.ARGUMENT_PASSED.equals(fact.factType())
+                && "jvm.java.semantic.valueflow.v1".equals(fact.ruleId())
+                && fact.properties().getOrDefault("argumentSymbol", "").endsWith(".id")
+                && fact.properties().containsKey("argumentSymbolId")
+                && "java".equals(fact.properties().get("argumentSymbolLanguage"))
+                && fact.properties().containsKey("argumentSymbolDisplayName")
+                && "status".equals(fact.properties().get("parameterName"))
+                && fact.properties().containsKey("parameterSymbolId")
+                && "java".equals(fact.properties().get("parameterSymbolLanguage"))
+                && fact.properties().containsKey("parameterSymbolDisplayName")));
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + out.resolve("index.sqlite").toAbsolutePath());
+             var statement = connection.createStatement();
+             var rows = statement.executeQuery("select count(*) from fact_symbols where role in ('argument', 'parameter')")) {
+            assertTrue(rows.next());
+            assertTrue(rows.getInt(1) > 0);
+        }
 
         Path report = temp.resolve("impact.md");
         Process process = new ProcessBuilder(

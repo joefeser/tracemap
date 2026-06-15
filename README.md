@@ -9,7 +9,7 @@ The current language scanners are:
 - `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
 - `Python` under `src/python`, including AST/package/config/SQL extraction, FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests integration facts, reduced coverage labeling, and reducer-compatible SQLite output.
 
-TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, diff combined snapshots, compare single or combined snapshots by source/coverage/extractor metadata, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
+TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, diff combined snapshots, compare API/DTO contract evidence, compare single or combined snapshots by source/coverage/extractor metadata, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
 Start here:
 
@@ -32,7 +32,7 @@ Run the public demo from a clean checkout:
 ./scripts/demo-public.sh .tracemap-demo
 ```
 
-The demo scans checked-in .NET and TypeScript samples, writes a generated artifact bundle, and produces `demo-summary.md` plus `demo-summary.json`. The first implementation slice intentionally marks combine/report paths, reverse, portfolio, diff, impact, and release-review sections as `deferred` until their demo assertions land. Generated scan artifacts are local-only; public-shareable summaries and reports use relative paths or hashes and run a generated-output sentinel scan.
+The demo scans checked-in .NET and TypeScript samples, including a synthetic before/after fixture pair, combines endpoint, mixed-stack, and before/after indexes with deterministic labels, runs dependency, path, reverse, diff, impact, portfolio, and release-review reports, then writes `demo-summary.md` plus `demo-summary.json`. Generated scan artifacts are local-only; public-shareable summaries and reports use relative paths or hashes and run a generated-output sentinel scan.
 
 Build and test everything:
 
@@ -109,9 +109,24 @@ dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
 dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
   --manifest samples/portfolio.example.json \
   --out .tracemap-portfolio
+dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
+  --before-manifest .tracemap-before/portfolio.json \
+  --after-manifest .tracemap-after/portfolio.json \
+  --out .tracemap-portfolio-comparison
 ```
 
-The portfolio command writes `portfolio-report.md` and `portfolio-report.json` when `--out` is a directory. It expands combined indexes into source records, reads single-language indexes directly, and reports source coverage, endpoint alignment, dependency surfaces, dependency edges, shared static surfaces, gaps, and limitations across many repositories. Portfolio reports are static evidence inventories; they do not infer runtime topology, ownership, deployment, production traffic, package compatibility, vulnerabilities, or release approval.
+The portfolio command writes `portfolio-report.md` and `portfolio-report.json` when `--out` is a directory. It expands combined indexes into source records, reads single-language indexes directly, and reports source coverage, endpoint alignment, dependency surfaces, dependency edges, shared static surfaces, gaps, and limitations across many repositories. Before/after portfolio comparison reports source changes plus projected safe surface and edge changes from manifest-paired snapshots. Portfolio reports are static evidence inventories; they do not infer runtime topology, ownership, deployment, production traffic, package compatibility, vulnerabilities, or release approval.
+
+Summarize static package-upgrade evidence from a single-language or combined index:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- package-impact \
+  --index .tracemap-combined.sqlite \
+  --package-delta samples/package-deltas/package-delta.example.json \
+  --out .tracemap-package-impact
+```
+
+The package impact command writes `package-impact-report.md` and `package-impact-report.json` when `--out` is a directory. It matches `package-delta.v1` changes against indexed `PackageReferenced`/`package-config` evidence and reports source labels, commit SHAs, rule IDs, evidence tiers, file spans, safe version metadata, gaps, and limitations. Package impact reports are static evidence inventories; they do not infer compatibility, transitive dependency resolution, runtime loading, vulnerabilities, licenses, deployment, or release approval.
 
 The combined dependency paths command writes `paths-report.md` and `paths-report.json` when `--out` is a directory. It follows static evidence from endpoint, symbol, or source selectors to terminal dependency surfaces such as `sql-query`, `http-client`, `http-route`, and `package-config`. Paths are evidence trails, not runtime traces.
 
@@ -145,6 +160,24 @@ dotnet run --project src/dotnet/TraceMap.Cli -- snapshot-diff \
 
 The snapshot diff command writes `snapshot-diff-report.md` and `snapshot-diff-report.json` when `--out` is a directory. It validates same-kind inputs, source identity, commit SHA availability, coverage, and extractor-version changes. Combined indexes delegate endpoint, surface, graph, and opt-in path comparison to the combined diff engine; single-index projector sections and contract-shape comparison remain explicit availability gaps until deeper evidence readers are implemented.
 
+Compare API/DTO static contract evidence between two single-language or combined snapshots:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- contract-diff \
+  --before .tracemap-before/index.sqlite \
+  --after .tracemap-after/index.sqlite \
+  --out .tracemap-contract-diff
+dotnet run --project src/dotnet/TraceMap.Cli -- contract-diff \
+  --before .tracemap-before/index.sqlite \
+  --after .tracemap-after/index.sqlite \
+  --scope endpoints,dto-properties \
+  --endpoint "GET /api/orders/{}" \
+  --exit-code \
+  --out .tracemap-contract-diff
+```
+
+The contract diff command writes `contract-diff-report.md` and `contract-diff-report.json` when `--out` is a directory. It compares indexed endpoint routes, route shapes, DTO/type declarations, DTO property/member declarations, method signatures, and explicit request/response attachment facts when available. Missing attachment evidence is reported as a gap rather than inferred as no change. The report is static evidence only; it is not OpenAPI completeness, runtime serializer mapping proof, binary compatibility, traffic analysis, deployment reachability, or auth behavior proof.
+
 Summarize static change-impact evidence from two combined snapshots:
 
 ```bash
@@ -172,7 +205,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- release-review \
   --out .tracemap-release-review
 ```
 
-The release review command writes `release-review.md` and `release-review.json` when `--out` is a directory. It composes available TraceMap evidence from source coverage, combined change impact, contract delta impact, optional path/reverse context, section gaps, and a deterministic reviewer checklist. It is a static evidence packet, not release approval, CI policy, runtime risk prediction, deployment verification, or production usage proof. Future API/DTO, SQL/schema, and package-upgrade workflows are rendered as explicit unavailable or deferred sections until those workflows exist.
+The release review command writes `release-review.md` and `release-review.json` when `--out` is a directory. It composes available TraceMap evidence from source coverage, combined change impact, contract delta impact, optional path/reverse context, section gaps, and a deterministic reviewer checklist. It is a static evidence packet, not release approval, CI policy, runtime risk prediction, deployment verification, or production usage proof. API/DTO, SQL/schema, and package-upgrade sections are rendered from available deterministic workflows or as explicit unavailable/deferred sections when compatible inputs are not supplied.
 
 TypeScript scanner:
 

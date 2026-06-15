@@ -143,11 +143,19 @@ Adapters that emit value-origin evidence should use these shared fact/table role
 | direct same-method local alias | `LocalAlias` facts and `local_aliases` rows |
 | direct field/member alias | `FieldAlias` facts and `field_aliases` rows |
 | derived parameter-to-parameter forwarding | `parameter_forward_edges` rows derived from rule-backed facts |
-| runtime-sensitive stop point | `FlowBoundary`-style facts or `AnalysisGap` facts with safe `boundaryKind` metadata |
+| runtime-sensitive stop point | `FlowBoundary`-style facts such as `CallbackBoundary`/`AsyncBoundary`, or `AnalysisGap` facts with safe `boundaryKind` metadata |
 
 Every value-origin fact should preserve rule ID, evidence tier, file span, source/target/argument/parameter/origin role properties, scan ID, commit SHA, extractor ID, and extractor version through the normal fact contract.
 
+Current adapter alignment:
+
+- TypeScript semantic `ArgumentPassed` facts include shared `argument` and `parameter` role metadata when the compiler resolves those symbols; syntax fallback remains lower-tier and does not invent parameter identities.
+- Java semantic `ArgumentPassed` facts include shared `parameter` role metadata and include `argument` role metadata when javac resolves the argument expression to a symbol.
+- Python AST `ArgumentPassed`, `LocalAlias`, and `FieldAlias` facts include shared role metadata for syntax-visible names. Callee parameters remain `unresolvedOrdinalPlaceholder` symbols such as `arg0` because the AST adapter does not resolve callable signatures.
+
 Derived parameter-forwarding rows may use direct parameter arguments, same-method local/field aliases, and unique constructor field origins only when every hop has deterministic evidence. The current .NET storage derivation follows same-method alias chains up to 3 alias hops. A field argument may resolve through constructor initialization only when exactly one visible constructor assignment in the analyzed containing type assigns that field from a constructor parameter. Multiple constructors, multiple visible assignments, mutation boundaries, property setter side effects, collection mutation, factory construction, DI activation, serializer construction, reflection, and dynamic dispatch must stop or downgrade value-origin evidence rather than inventing a path.
+
+Callback and async boundary evidence is additive review context. The .NET adapter emits `CallbackBoundary` facts for syntactically visible lambdas, anonymous methods, delegate arguments on invocations and object creation, delegate creation, expression-tree lambdas, captured outer parameters/locals, and event subscriptions. It emits `AsyncBoundary` facts for `await`, `await foreach`, `await using`, task scheduling/continuation calls, thread-pool queueing calls, and iterator `yield` statements. These facts may sit beside direct `ArgumentPassed` rows from calls inside callback bodies, but they do not prove delegate invocation, event firing, expression-tree execution, runtime scheduling, execution ordering, closure lifetime, object mutation safety, async disposal, async-stream enumeration, or task completion.
 
 Value-origin path classifications, when added to reports, must be additive notes or metadata such as `StrongStaticValuePath`, `ProbableStaticValuePath`, `NeedsReviewValuePath`, `UnknownAnalysisGap`, or `NoValuePathEvidence`. They must not replace existing canonical path classifications unless a future compatibility spec changes the public path contract.
 

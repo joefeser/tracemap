@@ -47,9 +47,11 @@ public static class TraceMapCommand
                 "reverse" => ReverseHelp(),
                 "release-review" => ReleaseReviewHelp(),
                 "portfolio" => PortfolioHelp(),
+                "package-impact" => PackageImpactHelp(),
+                "contract-diff" => ContractDiffHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "contract-diff" ? 0 : 1;
         }
 
         try
@@ -71,6 +73,8 @@ public static class TraceMapCommand
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
+                "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
+                "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -90,9 +94,17 @@ public static class TraceMapCommand
             return 1;
         }
 
-        if (!values.TryGetValue("--contract-delta", out var contractDeltaPath) || string.IsNullOrWhiteSpace(contractDeltaPath))
+        var hasContractDelta = values.TryGetValue("--contract-delta", out var contractDeltaPath) && !string.IsNullOrWhiteSpace(contractDeltaPath);
+        var hasSqlSchemaDelta = values.TryGetValue("--sql-schema-delta", out var sqlSchemaDeltaPath) && !string.IsNullOrWhiteSpace(sqlSchemaDeltaPath);
+        if (hasContractDelta && hasSqlSchemaDelta)
         {
-            await error.WriteLineAsync("error: reduce requires --contract-delta <path>.");
+            await error.WriteLineAsync("error: reduce accepts either --contract-delta <path> or --sql-schema-delta <path>, not both.");
+            return 1;
+        }
+
+        if (!hasContractDelta && !hasSqlSchemaDelta)
+        {
+            await error.WriteLineAsync("error: reduce requires --contract-delta <path> or --sql-schema-delta <path>.");
             return 1;
         }
 
@@ -130,13 +142,19 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--max-evidence-rows", 500),
                 ParsePositiveInt(values, "--max-paths-per-change", 5),
                 ParsePositiveInt(values, "--max-context-queries", 50),
-                ParsePositiveInt(values, "--max-gaps", 1000)),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                sqlSchemaDeltaPath,
+                values.GetValueOrDefault("--table"),
+                values.GetValueOrDefault("--column"),
+                values.GetValueOrDefault("--query-shape")),
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap reduce completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Changes analyzed: {result.Report.Summary.ChangeCount}");
         await output.WriteLineAsync($"Findings written: {result.Report.Findings.Count}");
         await output.WriteLineAsync($"Evidence rows: {result.Report.Summary.EvidenceRowCount}");
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Sources: {result.Report.Index.SourceCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.HasActionableFindings ? 1 : 0;
     }
@@ -401,6 +419,66 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasDiffs ? 1 : 0;
     }
 
+    private static async Task<int> RunContractDiffAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--before", out var beforePath) || string.IsNullOrWhiteSpace(beforePath))
+        {
+            await error.WriteLineAsync("error: contract-diff requires --before <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--after", out var afterPath) || string.IsNullOrWhiteSpace(afterPath))
+        {
+            await error.WriteLineAsync("error: contract-diff requires --after <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: contract-diff requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: contract-diff --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await ApiDtoContractDiffReporter.WriteAsync(
+            new ApiDtoContractDiffOptions(
+                beforePath,
+                afterPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--scope"),
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--endpoint"),
+                values.GetValueOrDefault("--type"),
+                values.GetValueOrDefault("--property"),
+                values.GetValueOrDefault("--change-kind"),
+                ParsePositiveInt(values, "--max-diff-rows", 1000),
+                ParsePositiveInt(values, "--max-evidence-rows", 500),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                values.HasFlag("--exit-code")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap contract-diff completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Endpoint diffs: {result.Report.Summary.EndpointDiffCount}");
+        await output.WriteLineAsync($"DTO type diffs: {result.Report.Summary.DtoTypeDiffCount}");
+        await output.WriteLineAsync($"DTO property diffs: {result.Report.Summary.DtoPropertyDiffCount}");
+        await output.WriteLineAsync($"Method diffs: {result.Report.Summary.MethodDiffCount}");
+        await output.WriteLineAsync($"Request/response diffs: {result.Report.Summary.RequestResponseDiffCount}");
+        await output.WriteLineAsync($"Route shape diffs: {result.Report.Summary.RouteShapeDiffCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasActionableDiffs ? 1 : 0;
+    }
+
     private static async Task<int> RunImpactAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
@@ -651,6 +729,60 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.Summary.ReportCoverage}");
         return 0;
+    }
+
+    private static async Task<int> RunPackageImpactAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: package-impact requires --index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--package-delta", out var packageDeltaPath) || string.IsNullOrWhiteSpace(packageDeltaPath))
+        {
+            await error.WriteLineAsync("error: package-impact requires --package-delta <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: package-impact requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: package-impact --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await PackageUpgradeImpactReporter.WriteAsync(
+            new PackageImpactOptions(
+                indexPath,
+                packageDeltaPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--package"),
+                values.GetValueOrDefault("--ecosystem"),
+                ParsePositiveInt(values, "--max-findings", 100),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                values.HasFlag("--exit-code")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap package-impact completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
+        await output.WriteLineAsync($"Delta changes: {result.Report.Summary.SelectedChangeCount}");
+        await output.WriteLineAsync($"Package evidence: {result.Report.Summary.PackageEvidenceCount}");
+        await output.WriteLineAsync($"Findings: {result.Report.Summary.FindingCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasFindings ? 1 : 0;
     }
 
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -960,10 +1092,12 @@ public static class TraceMapCommand
               tracemap paths --index <combined.sqlite> --out <path> [selectors]
               tracemap diff --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap snapshot-diff --before <index.sqlite> --after <index.sqlite> --out <path>
+              tracemap contract-diff --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
+              tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -977,10 +1111,12 @@ public static class TraceMapCommand
               paths     Trace deterministic dependency paths through a combined index.
               diff      Compare two combined indexes and report static evidence changes.
               snapshot-diff Compare two TraceMap snapshots by source, coverage, and extractor evidence.
+              contract-diff Compare API/DTO static contract evidence between two indexes.
               impact    Explain static change evidence between two combined indexes.
               reverse   Trace reverse static reachability from dependency surfaces.
               release-review Assemble a deterministic before/after release evidence packet.
               portfolio Summarize dependency evidence across many TraceMap indexes.
+              package-impact Report static package upgrade evidence from indexed package declarations.
             """;
     }
 
@@ -1118,6 +1254,35 @@ public static class TraceMapCommand
 
             Outputs:
               snapshot-diff-report.md and/or snapshot-diff-report.json
+            """;
+    }
+
+    private static string ContractDiffHelp()
+    {
+        return """
+            Usage:
+              tracemap contract-diff --before <index.sqlite> --after <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --before <path>            Earlier TraceMap index, single-language or combined.
+              --after <path>             Later TraceMap index of the same mode.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
+              --scope <value>            all, endpoints, dto-types, dto-properties, methods, request-response, or route-shapes.
+              --exit-code                Return exit code 1 only for Added, Removed, or ChangedEvidence rows.
+              --source <label>           Filter combined indexes to one source label.
+              --endpoint "<M> <P>"       Filter endpoint/route evidence to method/path key.
+              --type <name>              Filter DTO/type evidence by exact safe identity or display name.
+              --property <name>          Filter DTO property/member evidence by exact name.
+              --change-kind <kind>       endpoint, dto-type, dto-property, method, request-response, or route-shape.
+              --max-diff-rows <n>        Diff rows per kind. Default: 1000.
+              --max-evidence-rows <n>    Reserved evidence row budget. Default: 500.
+              --max-gaps <n>             Gap rows. Default: 1000.
+
+            Outputs:
+              contract-diff-report.md and/or contract-diff-report.json
             """;
     }
 
@@ -1263,15 +1428,45 @@ public static class TraceMapCommand
             """;
     }
 
+    private static string PackageImpactHelp()
+    {
+        return """
+            Usage:
+              tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --index <path>             TraceMap single-language or combined index.
+              --package-delta <path>     package-delta.v1 JSON file.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --source <label>           Filter to one source label.
+              --package <name>           Filter delta changes by package name.
+              --ecosystem <name>         Filter delta changes by ecosystem.
+              --max-findings <n>         Finding rows. Default: 100.
+              --max-gaps <n>             Gap rows. Default: 1000.
+              --exit-code                Return exit code 1 when static package evidence findings are present.
+
+            Delta schema:
+              { "version": "package-delta.v1", "changes": [{ "id": "pkg-1", "packageName": "Newtonsoft.Json", "ecosystem": "nuget", "changeType": "updated", "oldVersion": "13.0.1", "newVersion": "13.0.3" }] }
+
+            Outputs:
+              package-impact-report.md and/or package-impact-report.json
+            """;
+    }
+
     private static string ReduceHelp()
     {
         return """
             Usage:
               tracemap reduce --index <path> --contract-delta <path> --out <path>
+              tracemap reduce --index <path> --sql-schema-delta <path> --out <path>
 
             Required:
               --index <path>             Existing TraceMap index.sqlite.
-              --contract-delta <path>    Contract delta JSON file.
+              --contract-delta <path>    Contract delta JSON file. Mutually exclusive with --sql-schema-delta.
+              --sql-schema-delta <path>  SQL/schema delta JSON file. Mutually exclusive with --contract-delta.
               --out <path>               Output directory, impact-report.md, or impact-report.json path.
 
             Optional:
@@ -1280,11 +1475,14 @@ public static class TraceMapCommand
               --source <label>           Combined-index source label filter.
               --change-id <id>           v2 contract-delta change id filter.
               --kind <kind>              Filter to one v2 contract kind.
+              --table <name>             Filter SQL/schema changes by table selector.
+              --column <name>            Filter SQL/schema changes by column or mapped-name selector.
+              --query-shape <hash>       Filter SQL/schema changes by query shape hash.
               --endpoint "<M> <P>"       Filter endpoint contract changes by method/path.
               --surface <kind>           Filter dependency-surface contract changes by kind.
               --include-paths            Request bounded combined-index path context.
               --include-reverse          Request bounded combined-index reverse context.
-              --exit-code                Return exit code 1 when actionable findings are present.
+              --exit-code                Return 1 for actionable findings; SQL/schema review-tier findings return 0.
               --max-findings <n>         Finding rows. Default: 100.
               --max-evidence-rows <n>    Evidence rows across all findings. Default: 500.
               --max-paths-per-change <n> Reserved path context cap. Default: 5.

@@ -16,7 +16,8 @@ This validation layer remains deterministic. It must not use LLM calls, embeddin
 - `tracemap paths` traces bounded static evidence paths through a combined index.
 - `docs/VALIDATION.md` documents language-adapter validation and a minimal combine/report/paths smoke using pre-existing local scan outputs.
 - `scripts/smoke-open-source-repos.sh` clones and scans pinned public repositories.
-- `scripts/smoke-typescript-endpoints.sh` proves endpoint alignment on checked-in samples.
+- `scripts/demo-public.sh` proves the checked-in public sample demo bundle.
+- `scripts/smoke-combined-paths.sh` proves endpoint alignment and dependency paths on checked-in samples.
 - The current endpoint server sample is route-only. It must be extended with a small public controller-to-repository-to-SQL path before SQL path assertions can pass.
 - Existing `tracemap paths` tests use synthetic facts written directly to SQLite. No current test or script proves path traversal against freshly scanned TypeScript/.NET indexes.
 - The current .NET extractor stack can emit route, call, and SQL facts with different source-symbol naming schemes. A freshly scanned route-to-query chain may require rule-backed source-local symbol reconciliation before endpoint-to-SQL paths can connect.

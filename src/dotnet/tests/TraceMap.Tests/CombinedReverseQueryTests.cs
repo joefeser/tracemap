@@ -224,6 +224,59 @@ public sealed class CombinedReverseQueryTests
     }
 
     [Fact]
+    public async Task Reverse_preserves_value_origin_notes_and_supporting_edge_ids()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "reverse");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.String)";
+        var service = "Server.OrderService.Query(System.String)";
+        var targetParameter = $"{service}:System.String id";
+
+        SqliteIndexWriter.Write(index, manifest, [
+            ArgumentPassedFact(manifest, controller, service, "System.String request", "id", "System.String", "Controllers/OrdersController.cs", 12),
+            QueryPatternFact(manifest, targetParameter, "Infrastructure/OrderService.cs", 24)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedReverseReporter.WriteAsync(new CombinedReverseOptions(
+            combinedPath,
+            outDir,
+            Surface: "sql-query",
+            SurfaceName: "orders",
+            To: "all"));
+
+        var valueOriginPaths = result.Report.Paths
+            .Where(candidate => candidate.Edges.Any(edge => edge.EdgeKind == "parameter-forward"))
+            .ToArray();
+        Assert.NotEmpty(valueOriginPaths);
+        var path = valueOriginPaths[0];
+        Assert.NotEmpty(path.SupportingEdgeIds);
+        Assert.All(valueOriginPaths, candidate =>
+        {
+            Assert.Contains(candidate.Notes, note => note.Code == "ValueOriginClassification" && note.Message.Contains("ProbableStaticValuePath", StringComparison.Ordinal));
+            Assert.Contains(candidate.Notes, note => note.Code == "ParameterForwardingBoundary");
+        });
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.json"));
+        Assert.Contains("ValueOriginClassification", markdown);
+        Assert.Contains("ProbableStaticValuePath", json);
+
+        var secondOutDir = Path.Combine(temp.Path, "reverse-second");
+        await CombinedReverseReporter.WriteAsync(new CombinedReverseOptions(
+            combinedPath,
+            secondOutDir,
+            Surface: "sql-query",
+            SurfaceName: "orders",
+            To: "all"));
+        Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "reverse-report.md")));
+        Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "reverse-report.json")));
+    }
+
+    [Fact]
     public async Task Reverse_traversal_caps_emit_rule_backed_truncation_gaps()
     {
         using var temp = new TempDirectory();
@@ -502,6 +555,39 @@ public sealed class CombinedReverseQueryTests
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["callKind"] = "method"
+            });
+    }
+
+    private static CodeFact ArgumentPassedFact(
+        ScanManifest manifest,
+        string caller,
+        string callee,
+        string argumentSymbol,
+        string parameterName,
+        string parameterType,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ArgumentPassed,
+            RuleIds.CSharpSemanticValueFlow,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["argumentExpressionHash"] = "arg-hash",
+                ["argumentExpressionKind"] = "IdentifierName",
+                ["argumentOrdinal"] = "0",
+                ["argumentSymbol"] = argumentSymbol,
+                ["argumentSymbolKind"] = "Parameter",
+                ["argumentType"] = parameterType,
+                ["callKind"] = "method",
+                ["parameterName"] = parameterName,
+                ["parameterOrdinal"] = "0",
+                ["parameterType"] = parameterType
             });
     }
 
