@@ -263,6 +263,48 @@ describe("ScanEngine", () => {
     }));
   });
 
+  it("scopes TypeScript callee parameter symbol IDs by declaration", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }, null, 2));
+    await fsp.writeFile(path.join(repo, "src", "service.ts"), `
+      export function save(status: string): string {
+        return status;
+      }
+
+      export function audit(status: string): string {
+        return status;
+      }
+    `);
+    await fsp.writeFile(path.join(repo, "src", "caller.ts"), `
+      import { audit, save } from "./service";
+
+      export function run(status: string): void {
+        save(status);
+        audit(status);
+      }
+    `);
+    initGitRepo(repo);
+
+    const result = await scan(scanOptions(repo, path.join(root, "out")));
+    const parameterIds = result.facts
+      .filter((fact) =>
+        fact.factType === FactTypes.ArgumentPassed
+        && fact.ruleId === RuleIds.TypeScriptSemanticValueFlow
+        && fact.properties.parameterName === "status"
+        && fact.properties.argumentSymbol === "status")
+      .map((fact) => fact.properties.parameterSymbolId)
+      .filter(Boolean);
+
+    expect(parameterIds).toHaveLength(2);
+    expect(new Set(parameterIds).size).toBe(2);
+    expect(parameterIds).toEqual(expect.arrayContaining([
+      expect.stringContaining("save parameter 0:status"),
+      expect.stringContaining("audit parameter 0:status")
+    ]));
+  });
+
   it("emits direct SQL text and shape facts without relabeling Prisma query patterns", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");

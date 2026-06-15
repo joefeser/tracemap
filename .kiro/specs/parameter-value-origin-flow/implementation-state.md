@@ -25,15 +25,20 @@ This branch implements recommended PR 5:
 
 ## Validation
 
-- `npm test -- --run` from `src/typescript`: passed, 27 tests.
+- `npm test -- --run` from `src/typescript`: passed, 28 tests.
 - `npm run build` from `src/typescript`: passed.
 - `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle test` from `src/jvm`: passed.
-- `/tmp/tracemap-python-venv/bin/python -m pytest src/python/tests`: passed, 26 tests.
+- `/tmp/tracemap-python-venv/bin/python -m pytest src/python/tests`: passed, 27 tests.
 - `dotnet build src/dotnet/TraceMap.sln`: passed.
 - `dotnet test src/dotnet/TraceMap.sln`: passed, 226 tests.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke`: passed and emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+
+## Review Fixes
+
+- Qodo/Codex: TypeScript parameter role symbol IDs now use the callee parameter declaration source and include containing callable plus ordinal context, avoiding same-name call-site collisions.
+- Qodo: Python name-origin role IDs are now scoped by containing function/module for local and field alias facts, avoiding bare-name collisions while preserving legacy `originSymbol` display values.
 
 ## Remaining Follow-Ups
 
