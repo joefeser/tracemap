@@ -41,7 +41,7 @@ public static class ConfigExtractor
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["classification"] = ex.Classification,
-                        ["message"] = $"Unable to parse config file safely: {ex.Message}"
+                        ["message"] = "Unable to parse config file safely."
                     }));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or XmlException)
@@ -54,7 +54,7 @@ public static class ConfigExtractor
                     new EvidenceSpan(file.RelativePath, 1, 1, null, "ConfigExtractor", ScannerVersions.ConfigExtractor),
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["message"] = $"Unable to parse config file: {ex.Message}"
+                        ["message"] = "Unable to parse config file."
                     }));
             }
         }
