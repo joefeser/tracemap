@@ -108,7 +108,7 @@ fresh local demo run.
   demo output for fixture refresh.
 - Passed: `node scripts/refresh-demo-summary.mjs ../.tracemap-demo` from
   `site/`; wrote `site/src/_data/demo-public-summary.json`.
-- Passed: `npm test` from `site/` with 31 tests passing.
+- Passed: `npm test` from `site/` with 32 tests passing.
 - Passed: `npm run validate` from `site/`; it built `dist/`, validated the demo
   summary fixture and affected pages, then validated 27 HTML files, 605
   internal references, and 26 sitemap URLs.
@@ -123,9 +123,15 @@ fresh local demo run.
   readable pages individually, scoping proof-assets count extraction to the
   relevant article cards, and tightening article extraction. Added focused tests
   for invalid portfolio manifest JSON and nested `reports/combined/` collection.
-- PR review loop: Qodo posted a summary/walkthrough with no actionable bug
-  finding. Sourcery reported a weekly diff-character rate limit. Macroscope was
-  still pending at the time of the follow-up patch.
+- PR review loop: Qodo marked its initial parse/count findings resolved and
+  raised an optional rule ID contract mismatch. Patched the rule ID check and
+  added a focused test. Codex raised an actionable P2 that public report bodies
+  could still contain raw repository remotes because refresh validation excluded
+  those categories; patched the public demo helper to scrub raw remote fields
+  from generated report JSON, tightened both demo sentinel and refresh validation
+  to reject raw remotes and `.git` paths, regenerated `.tracemap-demo`, and
+  refreshed the committed fixture. Sourcery reported a weekly diff-character
+  rate limit. Macroscope finished as skipping.
 
 Core scanner/reducer suites are intentionally deferred because this branch only
 adds site/tooling/docs changes and runs the public demo as the source fixture.
@@ -140,15 +146,13 @@ adds site/tooling/docs changes and runs the public demo as the source fixture.
 - The earlier ignored `.tracemap-demo` output was stale and still showed
   deferred proof-upgrade rows. Reran `./scripts/demo-public.sh .tracemap-demo`
   before refreshing the committed fixture.
-- The refreshed demo showed `paths-and-reverse.reversePaths=29` and
-  `reverseRoots=7`, while two public pages still showed the previous 25/6
-  values. Updated `/demo/proof-upgrades/` and `/demo/proof-assets/` so page copy
-  validates against the fixture.
-- Current generated public report JSON files still include
-  `remoteUrl: git@github.com:joefeser/tracemap.git`. The existing
-  `scripts/demo-public-assert.mjs sentinel-scan` accepts those local generated
-  reports, and they are not committed or copied into the fixture. The fixture
-  validator still rejects raw repository remotes in committed fixture data.
+- A first local demo run briefly produced `paths-and-reverse.reversePaths=29`
+  and `reverseRoots=7`, but the regenerated scrubbed public demo output settled
+  on `reversePaths=25` and `reverseRoots=6`. The fixture and pages now validate
+  against the regenerated 25/6 values.
+- Generated public report JSON previously included raw `remoteUrl` fields. The
+  public demo helper now removes raw remote fields from report JSON before
+  `demo-summary.*` is written and before the public sentinel runs.
 - Added explicit `portfolio-manifest.json` and `reports/portfolio/**`
   references to proof pages so portfolio artifact families are validated
   against the fixture instead of only described in prose.
@@ -161,8 +165,8 @@ adds site/tooling/docs changes and runs the public demo as the source fixture.
 
 ## Follow-Ups For Implementation
 
-- Consider teaching generated public report JSON writers to omit or hash
-  `remoteUrl` if future specs want the refresh command to read report bodies
-  with stricter-than-sentinel raw remote rejection.
+- Consider moving public report remote scrubbing from `scripts/demo-public.sh`
+  into the report writers themselves if future specs want all generated report
+  JSON, not only public demo output, to omit raw remotes by default.
 - Keep browser sanity checks scoped to future page layout or visible site-copy
   changes.

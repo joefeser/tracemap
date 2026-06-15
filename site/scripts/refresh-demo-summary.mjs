@@ -42,9 +42,7 @@ const unsafeValueChecks = [
   ["secret-looking-value", /\b(?:token|secret|password|apikey|api_key|credential)\b\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{8,}/i],
   ["sql-sentinel", /\b(?:TRACEMAP_SQL_SENTINEL|select\s+\*\s+from\s+private)\b/i]
 ];
-const publicOutputContentChecks = unsafeValueChecks.filter(
-  ([category]) => category !== "raw-repository-remote" && category !== "git-path"
-);
+const publicOutputContentChecks = unsafeValueChecks;
 
 export async function refreshDemoSummary({ demoRoot, fixturePath = defaultFixturePath } = {}) {
   if (!demoRoot) {
@@ -184,7 +182,7 @@ function validateSummaryInput(summary) {
       }
     }
 
-    if (!Array.isArray(section.ruleIds) || section.ruleIds.length === 0) {
+    if (!Array.isArray(section.ruleIds) || section.ruleIds.length === 0 || !section.ruleIds.every(nonEmptyString)) {
       throw new Error(`Section ${section.name} is missing ruleIds.`);
     }
 
