@@ -39,7 +39,8 @@
 
 - [ ] 5. Implement regression comparison output. Requirements: 4.
   - [ ] Compare baseline and candidate redacted manifests by total counts, fact type, rule ID, evidence tier, extractor, surface, known gap, coverage label, and build status.
-  - [ ] Emit movement labels: `increase`, `decrease`, `unchanged`, `new-category`, `removed-category`, `coverage-changed`, `not-comparable`, and `review-needed`.
+  - [ ] Emit movement labels: `increase`, `decrease`, `unchanged`, `new-category`, `removed-category`, `coverage-changed`, and `not-comparable`.
+  - [ ] Emit `overallStatus: review-needed` and `reviewNeeded` entries separately from movement labels when human review is required.
   - [ ] Require explicit migration maps for renamed rule IDs, fact types, or incompatible schema versions.
   - [ ] Implement `legacy-baseline-migration-map.v1` with rule ID and fact type rename entries, schema version fields, reasons, and limitations.
   - [ ] Flag decreases, removed categories, reduced coverage, rejected safety state, and unmapped schema changes as review-needed.

@@ -76,6 +76,12 @@ addresses, secrets, or analyzer logs.
   hashes, label rejection examples, comparison schema shape, tracked synthetic
   fixtures, and migration-map wording; those were folded into requirements,
   design, and tasks.
+- PR review loop found three Gemini medium comments:
+  - add artifact metadata to the baseline manifest shape;
+  - keep `review-needed` as an overall status/review flag rather than a movement
+    label;
+  - define `factTypeRenames` entries in the migration-map example.
+- Gemini findings were addressed in `design.md` and `tasks.md`.
 - Spec is ready for implementation.
 
 ## Validation
