@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap public demo result guide: current available scan sections, deferred sections, generated summaries, and static evidence claim boundaries."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Public Demo Result | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/demo/result/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Public Demo Result">
+    <meta
+      property="og:description"
+      content="What the current public demo produces, what is deferred, and how to read the generated static evidence summaries."
+    >
+    <meta property="og:url" content="https://tracemap.tools/demo/result/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Demo result</p>
+        <h1>The public demo already produces a readable first evidence packet.</h1>
+        <p class="hero-subhead">
+          The current public demo scans checked-in .NET and TypeScript samples,
+          writes local scan artifacts, and produces public-safe summary files
+          that show available sections, deferred sections, evidence tiers, rule
+          IDs, coverage labels, counts, and reasons.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. This page describes the current first-slice
+          demo result. It does not claim runtime behavior, production traffic,
+          deployment state, endpoint performance, release safety, or AI impact
+          analysis.
+        </p>
+        <nav class="hero-actions" aria-label="Demo result links">
+          <a class="button primary" href="/demo/start-here/">Run the walkthrough</a>
+          <a class="button secondary" href="/packets/">Read the packet guide</a>
+        </nav>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Run</p>
+          <h2>Generate the result from a clean checkout.</h2>
+          <p>
+            Use an ignored output directory when running inside the repository.
+            The summary files are designed for public-safe inspection; raw scan
+            artifacts stay local.
+          </p>
+        </div>
+        <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
+cd tracemap
+./scripts/demo-public.sh .tracemap-demo
+
+sed -n '1,160p' .tracemap-demo/demo-summary.md</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What runs today</p>
+          <h2>The first demo slice demonstrates the scan packet shape across checked-in samples.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Toolchain checks</strong><span>Status: available. The script checks `git`, `.NET`, `node`, and `npm` before writing the summary.</span></div>
+          <div><strong>Build</strong><span>Status: available. The demo builds the .NET CLI and TypeScript adapter used by the sample scans.</span></div>
+          <div><strong>.NET modern sample</strong><span>Status: available. Produces the required scan artifacts under the generated output root.</span></div>
+          <div><strong>.NET endpoint server sample</strong><span>Status: available. Produces static endpoint and scan evidence from checked-in sample code.</span></div>
+          <div><strong>TypeScript modern sample</strong><span>Status: available. Produces reducer-compatible TypeScript scan artifacts.</span></div>
+          <div><strong>TypeScript endpoint client sample</strong><span>Status: available. Produces static client-side endpoint evidence from checked-in sample code.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Summary files</p>
+          <h2>The public-safe result is a status ledger, not a raw artifact dump.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>demo-summary.md</code><span>Human-readable table with section name, status, evidence tier, rule IDs, coverage, counts, and reasons.</span></div>
+          <div><code>demo-summary.json</code><span>Machine-readable section rows with a hashed output-root label instead of an absolute local path.</span></div>
+          <div><code>public.demo.summary.v1</code><span>Rule ID used for demo summary rows so each public conclusion remains rule-backed.</span></div>
+          <div><code>Tier2Structural</code><span>Evidence tier for available demo sections such as toolchain checks, build, and sample scans.</span></div>
+          <div><code>Tier4Unknown</code><span>Evidence tier for deferred, unavailable, or failed sections where the demo cannot make a stronger claim.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Representative section rows</p>
+          <h2>The exact counts can vary with toolchain coverage, but the statuses are explicit.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>toolchains</h3>
+            <p>Status: available. Evidence tier: Tier2Structural. Counts required local tools before analysis runs.</p>
+          </article>
+          <article>
+            <h3>python</h3>
+            <p>Status: not_requested by default. Python scanning is opt-in for this demo slice and must use an isolated environment when requested.</p>
+          </article>
+          <article>
+            <h3>jvm</h3>
+            <p>Status: unavailable when Java 21 is absent, or deferred when Java 21 exists but JVM demo assertions are still follow-up work.</p>
+          </article>
+          <article>
+            <h3>build</h3>
+            <p>Status: available. The demo builds the .NET and TypeScript tooling needed for the checked-in sample scans.</p>
+          </article>
+          <article>
+            <h3>sample-scans</h3>
+            <p>Status: available. Four checked-in samples produce manifests, facts, SQLite indexes, reports, and analyzer logs.</p>
+          </article>
+          <article>
+            <h3>deferred sections</h3>
+            <p>Status: deferred. Follow-up slices will add combined report, paths/reverse, portfolio, diff, impact, and release-review assertions.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Current deferred work</p>
+          <h2>Deferred rows are part of the result because silence would be misleading.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>combine-and-dependency-report</strong><span>Deferred: a follow-up slice will combine generated sample indexes and run dependency report assertions.</span></div>
+          <div><strong>paths-and-reverse</strong><span>Deferred: a follow-up slice will run path and reverse assertions after combined report wiring lands.</span></div>
+          <div><strong>portfolio</strong><span>Deferred: a follow-up slice will generate a portfolio manifest from generated indexes.</span></div>
+          <div><strong>diff</strong><span>Deferred: no concrete checked-in before/after fixture pair exists yet.</span></div>
+          <div><strong>impact</strong><span>Deferred: no concrete checked-in before/after fixture pair exists yet.</span></div>
+          <div><strong>release-review</strong><span>Deferred: compatible before/after inputs and delta fixtures are not part of the first public demo slice.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Artifact safety</p>
+          <h2>Share summaries; keep raw generated internals local.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>demo-summary.*</code><span>Public-shareable after the generated-output sentinel scan passes.</span></div>
+          <div><code>reports/**/*.md</code><span>Public-shareable only when generated from public samples and scrubbed by sentinel checks.</span></div>
+          <div><code>scans/**/scan-manifest.json</code><span>Local-only generated artifact; may contain temporary execution details.</span></div>
+          <div><code>scans/**/facts.ndjson</code><span>Local-only fact stream for deeper inspection and reducer input.</span></div>
+          <div><code>scans/**/index.sqlite</code><span>Local-only queryable index; do not publish private-repo SQLite artifacts raw.</span></div>
+          <div><code>scans/**/logs/analyzer.log</code><span>Local-only diagnostic log for extraction and coverage troubleshooting.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Claim boundary</p>
+          <h2>What this demo result supports right now.</h2>
+        </div>
+        <ul>
+          <li>Safe: the demo can generate scan packets and public-safe summary rows from checked-in .NET and TypeScript samples.</li>
+          <li>Safe: the current result makes deferred sections visible instead of hiding them.</li>
+          <li>Safe: the summaries can orient a review conversation around static evidence, rule IDs, evidence tiers, coverage labels, and gaps.</li>
+          <li>Not safe: claiming the first demo slice proves combined paths, reverse queries, portfolio reports, diff, impact, release review, runtime behavior, production traffic, or release safety.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Source material</p>
+          <h2>Trace the page back to repository evidence.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">Demo script source</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public-assert.mjs">Demo assertion helper</a>
+          <a href="/demo/start-here/">Demo walkthrough</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/examples/scan-packet/">Scan packet example</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/demo/start-here/">walkthrough</a>,
+        the
+        <a href="/packets/">packet guide</a>,
+        or the
+        <a href="/capabilities/">capability matrix</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
