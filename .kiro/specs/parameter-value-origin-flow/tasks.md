@@ -28,6 +28,13 @@
   - [x] Add unique constructor parameter-to-member-to-call tests.
   - [x] Add ambiguous multiple-constructor/multiple-assignment downgrade tests.
 
+- [x] 5. Add callback/lambda/async boundary evidence initial .NET slice. Requirements: 6, 8, 11.
+  - [x] Preserve normal `ArgumentPassed` evidence for direct calls inside lambda/callback bodies.
+  - [x] Emit rule-backed `CallbackBoundary` facts for syntactically visible lambdas, anonymous methods, delegate arguments, delegate creation, captured outer parameters/locals, and event subscriptions.
+  - [x] Emit rule-backed `AsyncBoundary` facts for `await`, task scheduling/continuation calls, thread-pool queueing calls, and iterator `yield`.
+  - [x] Add direct forwarding/argument evidence tests and review-tier captured-value/boundary tests.
+  - [x] Document callback/async boundary limitations in rules and docs.
+
 - [x] 8. Update rule catalog and docs. Requirements: 1, 8, 10.
   - [x] Reuse existing rule IDs where behavior is unchanged.
   - [x] Document limitations for every changed rule.
@@ -44,8 +51,8 @@
 ## Recommended PR Slices
 
 - [x] PR 1: Current-state audit + shared value-origin model + focused .NET tests for direct forwarding and alias boundaries.
-- PR 2: Constructor/member origin hardening + ambiguous constructor downgrade tests.
-- PR 3: Callback/lambda/async boundary evidence across supported adapters.
+- [x] PR 2: Constructor/member origin hardening + ambiguous constructor downgrade tests.
+- [x] PR 3: Callback/lambda/async boundary evidence initial .NET slice.
 - PR 4: Combined path/reverse/report value-origin notes and deterministic output tests after task 3 boundary semantics are available.
 - PR 5: TypeScript/JVM/Python adapter alignment where current behavior differs from the shared contract.
 
@@ -59,10 +66,10 @@
 - Emit gaps for unresolved or ambiguous argument mapping.
 - Confirm syntax-only adapters use ordinal placeholders or gaps where named mapping is unavailable.
 - Add mutation/collection/property/ref/out/destructuring boundary tests where relevant.
-- Add callback, lambda, async, and closure boundaries, including direct forwarding tests and review-tier captured-value tests.
-- Add callback/delegate/event/promise/task/async boundary gap tests.
-- Add or update rule catalog entries before emitting `CallbackBoundary`, `AsyncBoundary`, or `CapturedValueFlow`.
-- Ensure callback/async reports do not claim runtime scheduling or ordering.
+- Extend callback/lambda/async and closure boundary support to TypeScript/JVM/Python adapters where deterministic evidence exists.
+- Add callback/delegate/event/promise/task/async boundary gap tests outside the .NET initial slice.
+- Add a dedicated `CapturedValueFlow` rule only if a future slice promotes captured-value evidence beyond boundary review context.
+- Ensure future callback/async reports do not claim runtime scheduling or ordering.
 - Connect value origins to endpoints and dependency surfaces after boundary semantics are available.
 - Add endpoint/request parameter root tests.
 - Add service-call forwarding path tests.
