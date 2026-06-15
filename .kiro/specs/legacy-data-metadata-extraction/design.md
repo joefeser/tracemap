@@ -151,7 +151,7 @@ release-review sections. This spec only supplies additional static evidence.
 | `legacy.data.dbml.v1` | `LegacyDataEntityDeclared`, `LegacyDataStorageObjectDeclared`, `LegacyDataColumnDeclared`, `LegacyDataMappingDeclared`, `AnalysisGap` | `Tier2Structural` for descriptor evidence; `Tier4Unknown` for gaps |
 | `legacy.data.edmx.v1` | `LegacyDataEntityDeclared`, `LegacyDataStorageObjectDeclared`, `LegacyDataColumnDeclared`, `LegacyDataMappingDeclared`, `AnalysisGap` | `Tier2Structural` for descriptor and unambiguous mapping evidence; `Tier4Unknown` for gaps |
 | `legacy.data.typed-dataset.v1` | `LegacyDataEntityDeclared`, `LegacyDataStorageObjectDeclared`, `LegacyDataColumnDeclared`, `LegacyDataMappingDeclared`, `SqlTextUsed`, `QueryPatternDetected`, `AnalysisGap` | `Tier2Structural` for descriptor and complete static command-text evidence; `Tier4Unknown` for gaps |
-| `legacy.data.config.v1` | `LegacyDataProviderConfigDeclared`, `ConfigKeyDeclared` where generic config-key evidence is reused, `AnalysisGap` | `Tier2Structural` for checked-in config evidence; `Tier4Unknown` for gaps |
+| `legacy.data.config.v1` | `LegacyDataProviderConfigDeclared`, `AnalysisGap` | `Tier2Structural` for checked-in config evidence; `Tier4Unknown` for gaps |
 | `legacy.data.generated-link.v1` | `LegacyDataGeneratedCodeLinked`, `AnalysisGap` | `Tier1Semantic` for compiler-resolved generated-code links, `Tier2Structural` or `Tier3SyntaxOrTextual` for fallback links, `Tier4Unknown` for gaps |
 
 Generated-code linkage tier is independent from metadata descriptor tier. A
@@ -229,7 +229,6 @@ Task 1 should add catalog entries equivalent to:
   evidenceTier: Tier2Structural or Tier4Unknown
   emits:
     - LegacyDataProviderConfigDeclared
-    - ConfigKeyDeclared
     - AnalysisGap
   limitations:
     - Config metadata is static checked-in evidence and does not prove runtime environment selection, transform application, secret availability, provider installation, database reachability, or production usage.

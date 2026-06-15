@@ -63,6 +63,9 @@ Review outcomes:
 - The six `legacy.data.*` rule catalog entries were also added to
   `rules/rule-catalog.yml` during spec delivery so implementation starts with
   documented rule IDs.
+- PR review loop addressed Gemini's actionable note about config fact ownership:
+  `legacy.data.config.v1` no longer lists `ConfigKeyDeclared` as an emitted fact;
+  generic config-key evidence remains under existing config rules.
 
 ## Suggested PR Boundaries
 
