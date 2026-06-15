@@ -1,8 +1,7 @@
 # tracemap.tools Launch Implementation State
 
-## Status
-
-`implemented`
+Status: implemented
+Public claim level: shipped
 
 ## Branch And PR
 
