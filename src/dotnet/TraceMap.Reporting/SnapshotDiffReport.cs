@@ -205,7 +205,8 @@ internal sealed record SnapshotComparableRecord(
 
 internal sealed record SnapshotSingleDiffs(
     IReadOnlyList<SnapshotDiffRow> EndpointDiffs,
-    IReadOnlyList<SnapshotDiffRow> SurfaceDiffs);
+    IReadOnlyList<SnapshotDiffRow> SurfaceDiffs,
+    IReadOnlyList<SnapshotDiffRow> GapDiffs);
 
 public static class SnapshotDiffClassifications
 {
@@ -263,7 +264,7 @@ public static class SnapshotDiffReporter
         "Snapshot diff compares deterministic static evidence between TraceMap indexes; it does not prove runtime behavior, deployment behavior, traffic, compatibility, or business impact.",
         "Source pairing is exact-label based and does not infer repository renames, label renames, branch topology, or merge ancestry.",
         "Missing, unknown, or conflicting source identity and commit metadata downgrade conclusions to review-tier gaps.",
-        "Combined-index endpoint, surface, graph, and path evidence is delegated to the existing combined diff engine when requested; single-index graph, contract-shape, and analysis-gap projectors remain explicit availability gaps until deeper evidence readers are implemented.",
+        "Combined-index endpoint, surface, graph, and path evidence is delegated to the existing combined diff engine when requested; single-index graph and contract-shape projectors remain explicit availability gaps until deeper evidence readers are implemented.",
         "Reports omit or hash raw URLs, local absolute paths, source snippets, raw SQL, config values, connection strings, and secret-looking values."
     ];
 
@@ -345,6 +346,9 @@ public static class SnapshotDiffReporter
         IReadOnlyList<SnapshotDiffRow> pathDiffs = combinedReport is not null && scopes.Contains("paths", StringComparer.Ordinal)
             ? MapCombinedPathRows(combinedReport.PathDiffs).ToArray()
             : [];
+        IReadOnlyList<SnapshotDiffRow> gapDiffs = singleDiffs is not null && scopes.Contains("gaps", StringComparer.Ordinal)
+            ? singleDiffs.GapDiffs
+            : [];
         IReadOnlyList<SnapshotDiffRow> extractorVersionDiffs = scopes.Contains("extractors", StringComparer.Ordinal)
             ? BuildExtractorDiffs(sourcePairs, allGaps, options.MaxDiffRows)
             : [];
@@ -368,10 +372,11 @@ public static class SnapshotDiffReporter
             gaps = gaps.Append(Gap("truncation", "TruncatedByLimit", "gaps", null, EvidenceRuleId, SnapshotDiffClassifications.TruncatedByLimit, $"Gap output was truncated at --max-gaps {options.MaxGaps}.")).ToArray();
         }
 
-        var diffCount = sourceDiffs.Count + coverageDiffs.Count + endpointDiffs.Count + surfaceDiffs.Count + graphDiffs.Count + pathDiffs.Count + extractorVersionDiffs.Count;
-        var allRows = sourceDiffs.Concat(coverageDiffs).Concat(endpointDiffs).Concat(surfaceDiffs).Concat(graphDiffs).Concat(pathDiffs).Concat(extractorVersionDiffs).ToArray();
+        var diffCount = sourceDiffs.Count + coverageDiffs.Count + endpointDiffs.Count + surfaceDiffs.Count + graphDiffs.Count + gapDiffs.Count + pathDiffs.Count + extractorVersionDiffs.Count;
+        var allRows = sourceDiffs.Concat(coverageDiffs).Concat(endpointDiffs).Concat(surfaceDiffs).Concat(graphDiffs).Concat(gapDiffs).Concat(pathDiffs).Concat(extractorVersionDiffs).ToArray();
         var rollup = Rollup(diffCount, allRows, gaps);
         var coverage = gaps.Any(gap => gap.Classification == SnapshotDiffClassifications.UnknownAnalysisGap || gap.GapKind == "UnavailableEvidence" || gap.GapKind == "ReducedCoverage")
+            || allRows.Any(row => row.Classification == SnapshotDiffClassifications.UnknownAnalysisGap || row.CoverageCaveats.Contains("AnalysisGap", StringComparer.Ordinal))
             ? "Partial"
             : "Full";
         var summary = new SnapshotDiffSummary(
@@ -384,7 +389,7 @@ public static class SnapshotDiffReporter
             0,
             surfaceDiffs.Count,
             graphDiffs.Count,
-            0,
+            gapDiffs.Count,
             extractorVersionDiffs.Count,
             pathDiffs.Count,
             gaps.Length,
@@ -407,7 +412,7 @@ public static class SnapshotDiffReporter
             [],
             surfaceDiffs,
             graphDiffs,
-            [],
+            gapDiffs,
             extractorVersionDiffs,
             pathDiffs,
             gaps,
@@ -830,14 +835,15 @@ public static class SnapshotDiffReporter
     {
         if (!sourcePairs.Any(pair => pair.Label == "single" && (pair.Before is not null || pair.After is not null)))
         {
-            return new SnapshotSingleDiffs([], []);
+            return new SnapshotSingleDiffs([], [], []);
         }
 
         var includeEndpoints = scopes.Contains("endpoints", StringComparer.Ordinal);
         var includeSurfaces = scopes.Contains("surfaces", StringComparer.Ordinal);
-        if (!includeEndpoints && !includeSurfaces)
+        var includeGaps = scopes.Contains("gaps", StringComparer.Ordinal);
+        if (!includeEndpoints && !includeSurfaces && !includeGaps)
         {
-            return new SnapshotSingleDiffs([], []);
+            return new SnapshotSingleDiffs([], [], []);
         }
 
         var sourcePair = sourcePairs.First(pair => pair.Label == "single");
@@ -868,8 +874,13 @@ public static class SnapshotDiffReporter
         var surfaceDiffs = includeSurfaces
             ? CompareSingleRecords(beforeSurfaces, afterSurfaces, "surfaceDiffs", sourcePair, gaps, options.MaxDiffRows)
             : [];
+        var beforeGaps = includeGaps ? ProjectSingleAnalysisGaps(beforeFacts, sourcePair.Before) : [];
+        var afterGaps = includeGaps ? ProjectSingleAnalysisGaps(afterFacts, sourcePair.After) : [];
+        var gapDiffs = includeGaps
+            ? CompareSingleRecords(beforeGaps, afterGaps, "gapDiffs", sourcePair, gaps, options.MaxDiffRows)
+            : [];
 
-        return new SnapshotSingleDiffs(endpointDiffs, surfaceDiffs);
+        return new SnapshotSingleDiffs(endpointDiffs, surfaceDiffs, gapDiffs);
     }
 
     private static async Task<IReadOnlyList<SnapshotFactRow>> ReadSingleFactsAsync(string path, string side, List<SnapshotDiffGap> gaps, CancellationToken cancellationToken)
@@ -1062,6 +1073,57 @@ public static class SnapshotDiffReporter
             surface.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual || caveats.Count > 0);
     }
 
+    private static IReadOnlyList<SnapshotComparableRecord> ProjectSingleAnalysisGaps(
+        IReadOnlyList<SnapshotFactRow> facts,
+        SnapshotDiffSourceInfo? source)
+    {
+        if (source is null)
+        {
+            return [];
+        }
+
+        return facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap)
+            .Select(fact => ProjectSingleAnalysisGap(fact, source))
+            .OrderBy(record => record.StableKey, StringComparer.Ordinal)
+            .ThenBy(record => record.EvidenceHash, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static SnapshotComparableRecord ProjectSingleAnalysisGap(SnapshotFactRow fact, SnapshotDiffSourceInfo source)
+    {
+        var gapKind = NullIfUnknown(FirstValue(fact.Properties, "gapKind", "gapCode", "kind", "reason", "dynamicReason", "sqlSourceKind")) ?? FactTypes.AnalysisGap;
+        var safePath = CombinedReportHelpers.SafePath(fact.FilePath);
+        var pathHash = CombinedReportHelpers.Hash(fact.FilePath, 24);
+        var messageHash = MessageHash(fact.Properties);
+        var metadata = CombinedReportHelpers.SortedMetadata([
+            Pair("gapKind", gapKind),
+            Pair("factType", fact.FactType),
+            Pair("ruleId", fact.RuleId),
+            Pair("evidenceTier", fact.EvidenceTier),
+            Pair("safePath", safePath),
+            Pair("pathHash", pathHash),
+            Pair("startLine", fact.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            Pair("endLine", fact.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            Pair("messageHash", messageHash)
+        ]);
+        var stableKey = $"gap:{source.SourceLabel}:{gapKind}:{safePath}:{fact.StartLine}:{fact.EndLine}:{fact.RuleId}:{messageHash ?? "no-message"}";
+        var evidence = SingleEvidence(source, fact, metadata);
+        return new SnapshotComparableRecord(
+            "gap",
+            stableKey,
+            MetadataHash(metadata),
+            EvidenceHash(evidence),
+            evidence,
+            fact.RuleId,
+            fact.EvidenceTier,
+            [fact.FactId],
+            [],
+            ["AnalysisGap"],
+            ["AnalysisGap: snapshot evidence includes an indexed analysis gap; conclusions remain review-oriented."],
+            true);
+    }
+
     private static IReadOnlyList<SnapshotDiffRow> CompareSingleRecords(
         IReadOnlyList<SnapshotComparableRecord> before,
         IReadOnlyList<SnapshotComparableRecord> after,
@@ -1162,6 +1224,11 @@ public static class SnapshotDiffReporter
         IReadOnlyList<SnapshotDiffGap> gaps)
     {
         var sourceClassification = Classify(sourcePair.Label, gaps);
+        if ((before?.EvidenceKind ?? after?.EvidenceKind) == "gap")
+        {
+            return SnapshotDiffClassifications.UnknownAnalysisGap;
+        }
+
         if (sourceClassification == SnapshotDiffClassifications.UnknownAnalysisGap)
         {
             return sourceClassification;
@@ -1273,6 +1340,21 @@ public static class SnapshotDiffReporter
             {
                 return value.Trim();
             }
+        }
+
+        return null;
+    }
+
+    private static string? MessageHash(IReadOnlyDictionary<string, string> properties)
+    {
+        if (FirstValue(properties, "message") is { } message)
+        {
+            return CombinedReportHelpers.Hash(message, 24);
+        }
+
+        if (FirstValue(properties, "messageHash", "messageSha256", "messageDigest") is { } existingHash)
+        {
+            return CombinedReportHelpers.Hash(existingHash, 24);
         }
 
         return null;
@@ -1548,8 +1630,9 @@ public static class SnapshotDiffReporter
         return classification switch
         {
             SnapshotDiffClassifications.Added or SnapshotDiffClassifications.Removed or SnapshotDiffClassifications.ChangedEvidence => "high",
-            SnapshotDiffClassifications.ChangedWithReducedCoverage or SnapshotDiffClassifications.NeedsReview => "medium",
-            _ => "low"
+            SnapshotDiffClassifications.ChangedWithReducedCoverage => "medium",
+            SnapshotDiffClassifications.NeedsReview => "review",
+            _ => "unknown"
         };
     }
 
@@ -1896,7 +1979,11 @@ public static class SnapshotDiffReporter
     private static void AddUnavailableGaps(IReadOnlyList<string> scopes, string kind, bool includePaths, bool hasCombinedDelegation, bool hasSingleProjection, List<SnapshotDiffGap> gaps)
     {
         AddUnavailable(scopes, "contract-shapes", "contractShapeDiffs", gaps);
-        AddUnavailable(scopes, "gaps", "gapDiffs", gaps);
+        if (!hasSingleProjection)
+        {
+            AddUnavailable(scopes, "gaps", "gapDiffs", gaps);
+        }
+
         if (!hasCombinedDelegation && !hasSingleProjection)
         {
             AddUnavailable(scopes, "endpoints", "endpointDiffs", gaps);
