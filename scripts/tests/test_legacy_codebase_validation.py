@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -54,6 +55,15 @@ class LegacyCodebaseValidationTests(unittest.TestCase):
         self.assertEqual("legacy-winforms-app", loaded.samples[0].label)
         with self.assertRaises(legacy.ValidationError):
             legacy.load_manifest(self.tmp / "repos.local.json", self.tmp)
+
+    def test_invalid_manifest_json_reports_validation_error(self) -> None:
+        manifest = self.tmp / ".tmp/legacy-codebase-validation/repos.local.json"
+        manifest.write_text("{not-json", encoding="utf-8")
+
+        with self.assertRaises(legacy.ValidationError) as context:
+            legacy.load_manifest(manifest, self.tmp)
+
+        self.assertEqual("manifest", context.exception.category)
 
     def test_output_path_must_remain_under_legacy_tmp(self) -> None:
         output = legacy.validate_output_path(Path(".tmp/legacy-codebase-validation/out"), self.tmp)
@@ -228,6 +238,31 @@ class LegacyCodebaseValidationTests(unittest.TestCase):
         )
 
         self.assertIn("legacy.wcf.mapping.v1", legacy.sample_to_json(summary)["ruleIds"])
+
+    def test_summary_uses_sqlite_counts_without_parsing_oversized_facts(self) -> None:
+        output = self.tmp / ".tmp/legacy-codebase-validation/out"
+        sample_out = output / "large-public-dotnet-client"
+        sample_out.mkdir(parents=True)
+        (sample_out / "scan-manifest.json").write_text(
+            json.dumps({"analysisLevel": "Level1SemanticAnalysisReduced", "buildStatus": "Succeeded", "commitSha": "abc123"}),
+            encoding="utf-8",
+        )
+        (sample_out / "facts.ndjson").write_text("{not-json}\n" * 20, encoding="utf-8")
+        with sqlite3.connect(sample_out / "index.sqlite") as connection:
+            connection.execute("create table facts (fact_type text not null)")
+            connection.executemany(
+                "insert into facts (fact_type) values (?)",
+                [("AnalysisGap",), ("WcfServiceReferenceMapping",), ("WcfServiceReferenceMapping",)],
+            )
+
+        sample = legacy.Sample("large-public-dotnet-client", self.tmp / "large", "large-public", max_artifact_bytes=1)
+
+        summary = legacy.summarize_sample(sample, output, "completed", 0, 0.0, [])
+
+        self.assertEqual(3, summary.facts_count)
+        self.assertEqual(1, summary.analysis_gap_count)
+        self.assertEqual(2, summary.wcf_fact_counts["WcfServiceReferenceMapping"])
+        self.assertIn("facts.ndjson parsing skipped", " ".join(summary.limitations))
 
 
 if __name__ == "__main__":

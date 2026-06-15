@@ -43,7 +43,9 @@ public sealed class LegacyWcfExtractorTests
         Assert.Contains(facts, fact =>
             fact.FactType == FactTypes.WcfServiceReferenceMapping
             && fact.EvidenceTier == EvidenceTiers.Tier2Structural
-            && fact.ContractElement == "Rate");
+            && fact.ContractElement == "Rate"
+            && fact.Properties.GetValueOrDefault("clientContractName") == "Sample.Contracts.IRatingService"
+            && fact.Properties.GetValueOrDefault("hostCount") == "1");
 
         var serializedProperties = string.Join(
             "\n",
@@ -127,6 +129,96 @@ public sealed class LegacyWcfExtractorTests
     }
 
     [Fact]
+    public void Scan_requires_generated_client_contract_to_match_operation_contract()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "Service References", "Rating"));
+        WriteContract(repo, "Sample.Contracts");
+        WriteGeneratedClient(repo, "Other.Contracts", "ClientBase<Other.Contracts.IRatingService>");
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <system.serviceModel>
+                <client>
+                  <endpoint address="https://services.example.test/Rating.svc" binding="basicHttpBinding" contract="Sample.Contracts.IRatingService" />
+                </client>
+              </system.serviceModel>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
+    }
+
+    [Fact]
+    public void Scan_disambiguates_repeated_operation_names_with_client_contract()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "Service References", "Rating"));
+        WriteContract(repo, "Sample.Contracts");
+        File.WriteAllText(Path.Combine(repo, "OtherContracts.cs"), """
+            using System.ServiceModel;
+
+            namespace Other.Contracts;
+
+            [ServiceContract]
+            public interface ILookupService
+            {
+                [OperationContract]
+                string Rate(string request);
+            }
+            """);
+        WriteGeneratedClient(repo, "Sample.Contracts", "ClientBase<Sample.Contracts.IRatingService>");
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <system.serviceModel>
+                <client>
+                  <endpoint address="https://services.example.test/Rating.svc" binding="basicHttpBinding" contract="Sample.Contracts.IRatingService" />
+                </client>
+              </system.serviceModel>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var mappings = result.Facts
+            .Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping)
+            .ToArray();
+
+        var mapping = Assert.Single(mappings);
+        Assert.Equal("Sample.Contracts.IRatingService", mapping.Properties.GetValueOrDefault("contractName"));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWcfMapping
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousWcfServiceReferenceMapping");
+    }
+
+    [Fact]
+    public void Scan_ignores_non_service_model_endpoint_elements()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <client>
+                <endpoint address="https://not-wcf.example.test" binding="custom" contract="Not.Wcf.IContract" />
+              </client>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfClientEndpointDeclared);
+    }
+
+    [Fact]
     public void Scan_extracts_asmx_class_attribute_as_host_service_name()
     {
         using var temp = new TempDirectory();
@@ -165,6 +257,53 @@ public sealed class LegacyWcfExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(repo, output));
 
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfGeneratedClientDeclared);
+    }
+
+    [Fact]
+    public void Scan_does_not_treat_custom_clientbase_substring_as_wcf_client()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Reference.cs"), """
+            public sealed class SearchClient : MyCustomClientBase
+            {
+                public void Query() { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfGeneratedClientDeclared);
+    }
+
+    [Fact]
+    public void Scan_includes_containing_type_for_nested_generated_clients()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Reference.cs"), """
+            using System.ServiceModel;
+
+            namespace Sample.Clients;
+
+            public sealed class Container
+            {
+                public sealed class RatingServiceClient : ClientBase<Sample.Contracts.IRatingService>
+                {
+                    public void Rate() { }
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WcfGeneratedClientDeclared
+            && fact.TargetSymbol == "Sample.Clients.Container.RatingServiceClient");
     }
 
     private static void WriteContract(string repo, string contractNamespace)
