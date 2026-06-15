@@ -172,7 +172,9 @@ public static class FileInventory
 
     private static bool IsWebFormsDesignerFile(string fileName)
     {
-        return fileName.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase);
+        return fileName.EndsWith(".aspx.designer.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".ascx.designer.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".master.designer.cs", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsWcfMetadataExtension(string extension)

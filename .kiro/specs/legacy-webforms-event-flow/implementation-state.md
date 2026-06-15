@@ -46,7 +46,9 @@ State Notes:
   pre-filtered WebForms code-file/fact scans so large non-WebForms repositories
   do not pay avoidable extractor cost. It also scoped unqualified syntax
   evidence to the resolved handler file and suppressed designer facts without
-  matching WebForms markup.
+  matching WebForms markup. Later review-loop fixes narrowed WebForms designer
+  inventory classification and mapped AnalysisGap facts to their originating
+  WebForms rule IDs.
 
 Validation:
 

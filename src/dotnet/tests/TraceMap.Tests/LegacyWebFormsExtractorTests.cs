@@ -334,7 +334,9 @@ public sealed class LegacyWebFormsExtractorTests
 
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
 
-        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsDesignerControlDeclared);
+        Assert.Contains(result.Inventory, item => item is { RelativePath: "Settings.designer.cs", Kind: "CSharp" });
+        Assert.DoesNotContain(result.Inventory, item => item is { RelativePath: "Settings.designer.cs", Kind: "WebFormsDesigner" });
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -358,9 +360,11 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.DoesNotContain("UnsafeMasterPagePath", serialized);
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsInventory
             && fact.Properties.GetValueOrDefault("gapKind") == "MalformedWebFormsDirective");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsEventBinding
             && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsEventAttribute");
     }
 
