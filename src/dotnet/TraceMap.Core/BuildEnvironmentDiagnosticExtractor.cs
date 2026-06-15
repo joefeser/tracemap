@@ -298,7 +298,8 @@ public static class BuildEnvironmentDiagnosticExtractor
             }
         }
 
-        foreach (var packageReference in Elements(document, "PackageReference"))
+        var packageReference = Elements(document, "PackageReference").FirstOrDefault();
+        if (packageReference is not null)
         {
             diagnostics.Add(Candidate(
                 "PackageReferencePresent",
