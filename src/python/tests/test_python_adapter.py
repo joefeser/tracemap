@@ -426,6 +426,35 @@ def test_dynamic_sql_name_argument_records_gap(tmp_path: Path) -> None:
     assert any(fact.fact_type == "AnalysisGap" and fact.properties.get("gapKind") == "dynamic-sql" for fact in facts)
 
 
+def test_python_local_alias_origin_symbol_ids_are_scoped(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "aliases.py"
+    source.write_text(
+        "def first():\n"
+        "    status = load_first()\n"
+        "    alias = status\n\n"
+        "def second():\n"
+        "    status = load_second()\n"
+        "    alias = status\n",
+        encoding="utf-8",
+    )
+
+    facts = extract_python_files(repo, _manifest("scoped-origin-alias"), [source], [repo], {}, [])
+    origin_ids = [
+        fact.properties["originSymbolId"]
+        for fact in facts
+        if fact.fact_type == "LocalAlias"
+        and fact.properties.get("aliasSymbol") == "alias"
+        and fact.properties.get("originSymbol") == "status"
+    ]
+
+    assert len(origin_ids) == 2
+    assert len(set(origin_ids)) == 2
+    assert "py:name:aliases.first(status)" in origin_ids
+    assert "py:name:aliases.second(status)" in origin_ids
+
+
 def test_route_method_without_framework_evidence_is_not_http_route(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

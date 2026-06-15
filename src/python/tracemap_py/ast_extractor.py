@@ -355,7 +355,7 @@ class AstVisitor(ast.NodeVisitor):
         field_symbol = f"{'.'.join([self.module, *self.class_stack])}.{target.attr}" if self.class_stack else f"{self.module}.{target.attr}"
         origin = _safe_name(node.value)
         origin_kind = "parameter" if self.parameters_stack and isinstance(node.value, ast.Name) and node.value.id in self.parameters_stack[-1] else "name"
-        origin_symbol = f"{containing}({origin})" if origin_kind == "parameter" else origin
+        origin_symbol = _scoped_value_symbol(containing, origin)
         self.facts.append(
             create_fact(
                 self.manifest,
@@ -534,7 +534,7 @@ class AstVisitor(ast.NodeVisitor):
         origin = _safe_name(node.value)
         alias_symbol = f"{self.containing_symbol}({alias})" if self.containing_symbol else alias
         origin_kind = "parameter" if self.parameters_stack and isinstance(node.value, ast.Name) and node.value.id in self.parameters_stack[-1] else "name"
-        origin_symbol = f"{self.containing_symbol}({origin})" if origin_kind == "parameter" and self.containing_symbol else origin
+        origin_symbol = _scoped_value_symbol(self.containing_symbol, origin)
         self.facts.append(
             create_fact(
                 self.manifest,
@@ -791,6 +791,10 @@ def _node_hash(node: ast.AST) -> str:
 
 def _symbol_id(display: str, kind: str) -> str:
     return f"py:{kind}:{display}"
+
+
+def _scoped_value_symbol(containing: str | None, display: str) -> str:
+    return f"{containing}({display})" if containing else display
 
 
 def _symbol_props(role: str, symbol_id: str, kind: str, display: str) -> dict[str, str]:
