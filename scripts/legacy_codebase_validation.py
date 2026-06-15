@@ -26,6 +26,8 @@ WCF_RULE_IDS = [
     "legacy.wcf.config.v1",
     "legacy.wcf.contract.v1",
     "legacy.wcf.host.v1",
+    "legacy.wcf.metadata.v1",
+    "legacy.wcf.operation-normalization.v1",
     "legacy.wcf.mapping.v1",
 ]
 
@@ -456,16 +458,33 @@ def collect_wcf_counts(sql_counts: dict[str, int], facts: list[dict[str, Any]]) 
         "WcfOperationContractDeclared",
         "WcfGeneratedClientDeclared",
         "WcfServiceHostDeclared",
+        "WcfServiceReferenceMetadataDeclared",
+        "WcfMetadataOperationDeclared",
         "WcfServiceReferenceMapping",
     ]
+    gap_classifications = [
+        "AmbiguousWcfNormalizedMapping",
+        "AmbiguousWcfMetadataContractMapping",
+        "MissingLocalWcfMetadata",
+        "MalformedWcfMetadata",
+        "UnlinkedWcfMetadata",
+    ]
     if sql_counts:
-        return {fact_type: int(sql_counts.get(fact_type, 0)) for fact_type in fact_types}
+        counts = {fact_type: int(sql_counts.get(fact_type, 0)) for fact_type in fact_types}
+        counts.update({f"AnalysisGap:{classification}": 0 for classification in gap_classifications})
+        return counts
 
     counts = {fact_type: 0 for fact_type in fact_types}
+    counts.update({f"AnalysisGap:{classification}": 0 for classification in gap_classifications})
     for fact in facts:
         fact_type = fact.get("factType")
         if isinstance(fact_type, str) and fact_type in counts:
             counts[fact_type] += 1
+        if fact_type == "AnalysisGap":
+            properties = fact.get("properties")
+            classification = properties.get("classification") if isinstance(properties, dict) else None
+            if isinstance(classification, str) and f"AnalysisGap:{classification}" in counts:
+                counts[f"AnalysisGap:{classification}"] += 1
     return counts
 
 

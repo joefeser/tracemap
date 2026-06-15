@@ -97,17 +97,47 @@ rules:
       - Host declarations are static file evidence and do not prove IIS configuration, deployment, route reachability, service activation, or runtime factory behavior.
       - Malformed or unsupported host declarations are emitted as gaps rather than absence of service evidence.
 
+  - id: legacy.wcf.metadata.v1
+    name: Legacy WCF checked-in metadata evidence
+    description: Extracts safe service-reference metadata and WSDL portType operation declarations from checked-in .svcmap, gated .wsdl, .disco, and .xsd files.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WcfServiceReferenceMetadataDeclared
+      - WcfMetadataOperationDeclared
+      - AnalysisGap
+    limitations:
+      - Checked-in service-reference metadata is static design-time evidence and does not prove runtime reachability, deployment, service activation, generated proxy freshness, service version compatibility, authorization, or binding compatibility.
+      - TraceMap does not fetch remote WSDL, DISCO, schema imports, service URLs, or endpoint addresses.
+      - Raw URLs, SOAP actions, schema locations, namespace URIs, local absolute paths, raw schemas, and source snippets are hashed or omitted.
+      - WSDL/DISCO/XSD inventory is gated to service-reference folders or files co-located with .svcmap metadata to avoid unrelated schemas and vendor specifications.
+      - Malformed or rejected XML is emitted as `MalformedWcfMetadata` rather than treated as clean absence of metadata.
+
+  - id: legacy.wcf.operation-normalization.v1
+    name: Legacy WCF operation name normalization
+    description: Applies conservative deterministic generated-client operation aliases such as FooAsync to Foo and BeginFoo/EndFoo to Foo when WCF evidence corroborates the alias.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WcfServiceReferenceMapping
+      - AnalysisGap
+    limitations:
+      - Normalization is case-sensitive deterministic name handling only; it does not use fuzzy matching, edit distance, stemming, prompts, embeddings, LLM calls, or runtime service behavior.
+      - Async suffix aliases require WCF-generated client evidence and corroboration from connected checked-in WSDL metadata, a same-contract sync sibling, or an aligned service operation.
+      - Begin/End aliases require both members on the same generated client or operation contract; lone Begin or End methods are not normalized.
+      - Lifecycle methods such as Open, Close, Abort, Dispose, OpenAsync, CloseAsync, and Begin/End lifecycle pairs are excluded unless an exact metadata operation is explicitly present.
+
   - id: legacy.wcf.mapping.v1
     name: Legacy WCF service-reference mapping evidence
-    description: Emits probable static mappings from generated service-client methods to service operation contracts when method names and config/contract metadata align.
+    description: Emits probable static mappings from generated service-client methods to service operation contracts when method names, checked-in metadata, normalization, and config/contract metadata align.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WcfServiceReferenceMapping
       - AnalysisGap
     limitations:
       - Mappings are static evidence and do not prove runtime execution, endpoint reachability, generated proxy freshness, or backend implementation selection.
-      - Name-only matches remain review-tier evidence.
-      - Multiple matching endpoints, hosts, contracts, or operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
+      - Name-only and generated-code-only normalized matches remain review-tier evidence.
+      - Metadata-backed normalized mappings require generated client contract, normalized operation name, connected WSDL operation metadata, and service contract evidence; a random repository-level WSDL operation name is not sufficient.
+      - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
+      - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
 
   - id: snapshot.diff.source.v1
     name: Snapshot diff source comparison

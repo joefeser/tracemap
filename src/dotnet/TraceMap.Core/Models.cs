@@ -171,6 +171,8 @@ public static class FactTypes
     public const string WcfOperationContractDeclared = nameof(WcfOperationContractDeclared);
     public const string WcfGeneratedClientDeclared = nameof(WcfGeneratedClientDeclared);
     public const string WcfServiceHostDeclared = nameof(WcfServiceHostDeclared);
+    public const string WcfServiceReferenceMetadataDeclared = nameof(WcfServiceReferenceMetadataDeclared);
+    public const string WcfMetadataOperationDeclared = nameof(WcfMetadataOperationDeclared);
     public const string WcfServiceReferenceMapping = nameof(WcfServiceReferenceMapping);
 }
 
@@ -212,6 +214,8 @@ public static class RuleIds
     public const string LegacyWcfConfig = "legacy.wcf.config.v1";
     public const string LegacyWcfContract = "legacy.wcf.contract.v1";
     public const string LegacyWcfHost = "legacy.wcf.host.v1";
+    public const string LegacyWcfMetadata = "legacy.wcf.metadata.v1";
+    public const string LegacyWcfOperationNormalization = "legacy.wcf.operation-normalization.v1";
     public const string LegacyWcfMapping = "legacy.wcf.mapping.v1";
     public const string ContractDeltaReduction = "contract.delta.reduce.v1";
     public const string ContractDeltaInput = "contract.delta.input.v2";
@@ -233,6 +237,6 @@ public static class ScannerVersions
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
-    public const string LegacyWcfExtractor = "legacy-wcf/0.1.0";
+    public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
 }
