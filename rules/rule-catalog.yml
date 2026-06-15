@@ -205,7 +205,6 @@ rules:
     evidenceTier: Tier2Structural or Tier4Unknown
     emits:
       - LegacyDataProviderConfigDeclared
-      - ConfigKeyDeclared
       - AnalysisGap
     limitations:
       - Config metadata is static checked-in evidence and does not prove runtime environment selection, transform application, secret availability, provider installation, database reachability, or production usage.
