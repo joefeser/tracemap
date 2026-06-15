@@ -53,7 +53,13 @@ Suggested additions:
 
 - `WcfServiceReferenceMetadataDeclared`
 - `WcfMetadataOperationDeclared`
-- `WcfOperationAliasDeclared`
+
+Operation alias facts are not proposed for the first implementation. Operation
+aliases should be computed in-process and rendered on mapping facts or ambiguity
+gaps through safe properties such as `normalizationKind`,
+`normalizedOperationName`, and supporting fact IDs or metadata hashes. This
+avoids a new stable-key surface and keeps the public fact stream focused on
+evidence, not intermediate join state.
 
 Existing fact types reused:
 
@@ -73,7 +79,8 @@ Suggested new rules:
     reachability, no binding compatibility proof.
 
 - `legacy.wcf.operation-normalization.v1`
-  - Emits generated operation alias facts such as `FooAsync -> Foo` and
+  - Governs deterministic operation aliasing used by metadata-backed mappings
+    and ambiguity gaps, such as `FooAsync -> Foo` and
     `BeginFoo`/`EndFoo -> Foo`.
   - Limitations: deterministic naming convention only, no fuzzy matching, no
     semantic proof of implementation dispatch.
@@ -90,8 +97,10 @@ inventory:
 
 - `.svcmap`
 - `.wsdl`
-- `.disco`
-- `.xsd` when under a service-reference metadata folder
+- `.disco` for inventory-only metadata presence
+- `.xsd` for inventory-only metadata presence when co-located with a `.svcmap`
+  file or when its repository-relative path contains a service-reference segment
+  such as `Service Reference` or `ServiceReference`
 
 Recommended inventory kind: `ServiceReferenceMetadata`.
 
@@ -133,13 +142,19 @@ Avoid over-parsing:
 - no endpoint location raw URLs;
 - no schema body storage;
 - no message payload shape inference in this slice.
+- no raw `targetNamespace`, XML namespace URI, schema namespace, or SOAP action
+  namespace values; URL-like namespace values must be hashed or omitted, and only
+  safe local NCName identifiers may be retained.
 
 ### DISCO and XSD
 
-For `.disco`, record safe metadata presence and hash URL-like references.
+For `.disco`, record safe metadata presence and hash URL-like references. Do not
+derive operation metadata from `.disco` in this slice.
 
 For `.xsd`, inventory and hash metadata documents but do not infer DTO/property
-contract mappings in this slice. Schema-to-DTO mapping is a future spec.
+contract mappings in this slice. Schema-to-DTO mapping is a future spec. Do not
+globally inventory all `.xsd` files; use the service-reference folder/co-location
+gate from file selection to avoid typed-DataSet and unrelated schema noise.
 
 ## Operation Alias Strategy
 
@@ -151,12 +166,16 @@ For `WcfGeneratedClientDeclared` method facts:
 
 | Original | Alias | Rule |
 | --- | --- | --- |
-| `FooAsync` | `Foo` | suffix `Async` removal |
+| `FooAsync` | `Foo` | suffix `Async` removal only when the client is WCF-generated and the alias is corroborated by WSDL metadata, a same-contract sync sibling, or an aligned service operation |
 | `BeginFoo` | `Foo` | APM begin alias only when paired with `EndFoo` on same contract/type |
 | `EndFoo` | `Foo` | APM end alias only when paired with `BeginFoo` on same contract/type |
 
-Do not alias framework lifecycle operations unless metadata explicitly contains
-the same operation name:
+Keep the original operation name as a live candidate. The normalized alias is an
+additional candidate for mapping, not a replacement.
+
+Do not alias framework lifecycle operations unless checked-in metadata explicitly
+contains the same operation name. Apply the exclusion to both raw method names and
+normalized base names:
 
 - `Open`
 - `Close`
@@ -164,19 +183,24 @@ the same operation name:
 - `Dispose`
 - `OpenAsync`
 - `CloseAsync`
+- `BeginOpen` / `EndOpen`
+- `BeginClose` / `EndClose`
+- `BeginAbort` / `EndAbort`
+- any `BeginX` / `EndX` pair where `X` is an excluded lifecycle verb
 
 ### Operation Contracts
 
 For `WcfOperationContractDeclared` facts:
 
 - Keep the original `operationName`.
-- Add alias facts for APM pairs when the same contract has both `BeginFoo` and
+- Derive alias data for APM pairs when the same contract has both `BeginFoo` and
   `EndFoo`.
 - Add metadata operation support when checked-in WSDL names `Foo`.
 
-### Alias Fact Properties
+### Alias Data Properties
 
-Suggested properties:
+Alias data should be carried on final mapping facts or ambiguity gaps when it is
+used. Suggested properties:
 
 | Property | Meaning |
 | --- | --- |
@@ -188,9 +212,10 @@ Suggested properties:
 | `metadataHash` | Supporting metadata hash when available |
 | `supportingFactIds` | Semicolon-delimited sorted fact IDs where safe and stable enough |
 
-Alias evidence should be `Tier2Structural` when backed by checked-in WCF metadata
-or a credible APM pair. It should be `Tier3SyntaxOrTextual` when derived only from
-generated-code naming.
+Alias evidence can be considered `Tier2Structural` when backed by checked-in WCF
+metadata or a credible APM pair. The final mapping fact still follows the mapping
+tier rules: without aligned config endpoint evidence, the mapping is no stronger
+than `Tier3SyntaxOrTextual`.
 
 ## Mapping Strategy
 
@@ -205,6 +230,32 @@ Map in this order:
 4. Generated-code-only normalized path:
    no stronger than `Tier3SyntaxOrTextual`, and only when contract identity is
    already aligned.
+
+Before ambiguity counting, group candidates by logical operation identity:
+
+```text
+clientContractName + contractName + normalizedOperationName + metadata identity
+```
+
+Convergent generated forms such as `Foo`, `FooAsync`, `BeginFoo`, and `EndFoo`
+on the same contract represent one logical operation when they share the same
+normalized operation name and supporting metadata/contract identity. They should
+collapse to one mapping candidate. They must not re-trigger the existing
+`matchingOperations.Length > 1` ambiguity behavior merely because Begin/End or
+sync/async forms both exist.
+
+When several generated forms support the same logical operation, choose one
+mapping fact by deterministic confidence order and record the selected
+`normalizationKind`:
+
+1. Exact original operation name.
+2. Metadata-backed async suffix alias.
+3. Metadata-backed APM pair alias.
+4. Generated-code-only alias.
+
+If two candidates have the same confidence but distinct contracts, metadata
+identities, endpoint identities, or host candidates, emit ambiguity instead of
+choosing a winner.
 
 Mapping properties should include:
 
@@ -224,7 +275,8 @@ Mapping properties should include:
 
 Ambiguity rules:
 
-- If more than one operation remains after contract and normalized-name filtering,
+- If more than one logical operation remains after contract, normalized-name, and
+  metadata filtering,
   emit `AnalysisGap` with classification `AmbiguousWcfNormalizedMapping`.
 - If metadata links multiple local WSDL files that each define the same operation
   under different safe contracts, emit an ambiguity gap.
@@ -264,8 +316,12 @@ Focused tests:
 - WSDL `portType/operation` emits safe metadata operation facts.
 - `FooAsync` generated client maps to WSDL/operation `Foo`.
 - `BeginFoo`/`EndFoo` pair maps to normalized operation `Foo`.
+- `Foo`, `FooAsync`, and `BeginFoo`/`EndFoo` converging on one contract collapse
+  to one logical operation and produce one mapping candidate.
 - lone `BeginFoo` does not normalize.
 - lifecycle methods such as `CloseAsync` do not map without explicit metadata.
+- `BeginOpen`/`EndOpen`, `BeginClose`/`EndClose`, and `BeginAbort`/`EndAbort` do
+  not produce lifecycle aliases.
 - ambiguous normalized candidates emit gap and no normal mapping.
 - malformed metadata emits `AnalysisGap`.
 
@@ -298,4 +354,3 @@ git diff --check
 - DBML/EDMX entity/table mapping.
 - WSDL/XSD DTO schema-to-code mapping.
 - Progress reporting and artifact-size controls for very large legacy smokes.
-

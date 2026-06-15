@@ -15,9 +15,15 @@
         normalized mapping paths.
   - [ ] Document no remote WSDL fetch, no runtime reachability, no binding
         compatibility proof, and no fuzzy matching.
+  - [ ] Add required `FactTypes`, `RuleIds`, and `ScannerVersions.LegacyWcfExtractor`
+        version bump in `src/dotnet/TraceMap.Core/Models.cs`.
 
 - [ ] 3. Extend inventory for service-reference metadata. Requirements: 1.
-  - [ ] Add `.svcmap`, `.wsdl`, `.disco`, and service-reference `.xsd` handling.
+  - [ ] Add `.svcmap`, `.wsdl`, `.disco`, and gated service-reference `.xsd`
+        handling.
+  - [ ] Gate `.xsd` to files co-located with `.svcmap` or paths containing
+        `Service Reference` / `ServiceReference`; do not globally inventory all
+        `.xsd` files.
   - [ ] Keep metadata files distinct from config and service host files.
   - [ ] Add tests for metadata inventory and ignored local/raw values.
 
@@ -34,29 +40,47 @@
   - [ ] Capture safe service/port/binding identifiers only when valid.
   - [ ] Hash or omit SOAP actions, endpoint locations, imports, and unsafe
         identifiers.
+  - [ ] Hash or omit URL-like namespace values including `targetNamespace`,
+        XML namespace URIs, SOAP action namespaces, and schema namespaces.
   - [ ] Add tests for safe operations, unsafe identifiers, and malformed WSDL.
 
 - [ ] 6. Add operation alias derivation. Requirements: 3.
   - [ ] Derive `FooAsync -> Foo` aliases for WCF-generated client methods.
   - [ ] Derive `BeginFoo`/`EndFoo -> Foo` aliases only when the pair exists on
         the same contract/type.
-  - [ ] Exclude lifecycle methods unless metadata explicitly supports them.
+  - [ ] Keep original operation names as live candidates; do not replace them
+        with aliases.
+  - [ ] Require `FooAsync -> Foo` aliases to be corroborated by WSDL metadata,
+        same-contract sync sibling, or aligned service operation before they feed
+        mapping.
+  - [ ] Exclude lifecycle methods by raw name and normalized base name unless
+        metadata explicitly supports them.
+  - [ ] Cover `BeginOpen`/`EndOpen`, `BeginClose`/`EndClose`, `BeginAbort`/`EndAbort`,
+        and any `Begin`/`End` pair whose base name is excluded.
   - [ ] Preserve original names and normalization kind in properties.
-  - [ ] Add tests for async suffix, APM pair, lone begin, and lifecycle exclusion.
+  - [ ] Add tests for async suffix, APM pair, lone begin, lifecycle exclusion,
+        and non-WCF-generated no-alias behavior.
 
 - [ ] 7. Improve service-reference mapping. Requirements: 4.
   - [ ] Prefer exact existing mapping behavior first.
   - [ ] Add metadata-backed normalized mapping path.
   - [ ] Add APM-pair normalized mapping path.
   - [ ] Keep generated-code-only normalized mapping no stronger than review-tier.
+  - [ ] Collapse convergent aliases (`Foo`, `FooAsync`, `BeginFoo`/`EndFoo`) on
+        the same contract/metadata identity into one logical operation before
+        ambiguity counting.
+  - [ ] Deduplicate mapping facts by logical operation identity so sync/async/APM
+        generated forms do not create duplicate mappings.
   - [ ] Emit ambiguity gaps instead of choosing arbitrary winners.
   - [ ] Include supporting fact IDs or safe metadata hashes where possible.
   - [ ] Add tests for clear metadata-backed mapping, APM mapping, generated-only
-        mapping, and ambiguity.
+        mapping, convergent alias deduplication, and ambiguity.
 
 - [ ] 8. Update validation summary and docs. Requirements: 5, 6.
   - [ ] Include metadata fact counts and normalized mapping counts in the legacy
         validation summary.
+  - [ ] Extend `collect_wcf_counts` in `scripts/legacy_codebase_validation.py`
+        for new metadata fact types and metadata/normalization gap counts.
   - [ ] Update validation docs with label-only WCF/SVC smoke guidance.
   - [ ] Update language adapter contract or acceptance docs if new fact types are
         added.
@@ -85,4 +109,3 @@
 - DBML/EDMX mapping.
 - WSDL/XSD DTO schema-to-code mapping.
 - Legacy smoke progress reporting and artifact pruning.
-
