@@ -102,7 +102,7 @@ python3 scripts/legacy_codebase_validation.py \
 Completed on branch `codex/legacy-wcf-metadata-normalization`:
 
 - `dotnet build src/dotnet/TraceMap.sln` passed.
-- `dotnet test src/dotnet/TraceMap.sln` passed: 264 tests.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 266 tests.
 - `python3 -m unittest scripts.tests.test_legacy_codebase_validation` passed:
   11 tests.
 - `./scripts/check-private-paths.sh` passed.
