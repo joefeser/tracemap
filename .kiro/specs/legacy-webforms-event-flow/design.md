@@ -138,8 +138,9 @@ Do not match handlers globally across the repository by name alone. If multiple
 candidate methods remain after page/type scoping, emit an ambiguity gap.
 
 Auto-event-wireup MVP scope is intentionally narrow: only `Page_Load` and
-`Page_Init` may be emitted as review-tier evidence, and only when page/type
-identity is clear. Other lifecycle conventions such as `Page_PreRender` and
+`Page_Init` may be emitted as `Tier3SyntaxOrTextual` or `Tier4Unknown`
+evidence, and only when page/type identity is clear. Other lifecycle
+conventions such as `Page_PreRender` and
 control-name patterns such as `Button1_Click` are out of MVP unless the markup
 declares the handler explicitly.
 
@@ -196,7 +197,8 @@ Minimum safe properties for `WebFormsEventFlowProjected`:
 | `pageTypeName` | Safe page/control type identity when known. |
 | `markupFile` | Repo-relative markup path. |
 | `handlerName` | Static handler identifier. |
-| `handlerSymbolId` | Fully qualified method identity when semantic evidence exists. |
+| `sourceSymbolId` | Shared symbol role for the resolved handler method when semantic evidence exists, so existing symbol tables and graph consumers can see the event root. |
+| `handlerSymbolId` | WebForms-specific alias for the same resolved handler identity, retained only as display/compatibility metadata. |
 | `controlId` | Markup/designer control identifier when known. |
 | `eventName` | Event attribute or auto-wireup event name. |
 | `flowClassification` | One of the event-flow classifications above. |

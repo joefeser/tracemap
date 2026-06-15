@@ -73,14 +73,19 @@ Acceptance Criteria:
 2. WHEN semantic analysis resolves the method symbol THEN the fact SHALL include
    the fully qualified method identity, assembly/package metadata when available,
    evidence tier, file span, and supporting fact IDs.
-3. WHEN semantic analysis is unavailable but syntax matching links the markup
-   handler to a method with compatible name and common event signature THEN the
-   fact SHALL be emitted at syntax/textual tier.
-4. WHEN multiple methods or partial classes could satisfy the same handler THEN
+3. WHEN semantic analysis is unavailable but structural matching links the
+   markup handler by directive/page identity plus method name and common event
+   signature THEN the fact SHALL be emitted at structural tier
+   (`Tier2Structural`).
+4. WHEN structural matching is unavailable but syntax matching links the markup
+   handler by linked code-behind filename and method name THEN the fact SHALL be
+   emitted at syntax/textual tier (`Tier3SyntaxOrTextual`).
+5. WHEN multiple methods or partial classes could satisfy the same handler THEN
    TraceMap SHALL emit an ambiguity gap and SHALL NOT choose an arbitrary winner.
-5. WHEN handler resolution depends on runtime auto-event-wireup conventions such
-   as `Page_Load` THEN TraceMap MAY emit review-tier evidence only when page/type
-   identity is clear; otherwise it SHALL emit a gap.
+6. WHEN handler resolution depends on runtime auto-event-wireup conventions such
+   as `Page_Load` THEN TraceMap MAY emit `Tier3SyntaxOrTextual` or
+   `Tier4Unknown` evidence only when page/type identity is clear; otherwise it
+   SHALL emit a gap.
 
 ### Requirement 4: Designer Control Field Linkage
 
@@ -159,7 +164,11 @@ Acceptance Criteria:
 3. WHEN optional precise WebForms flow tables are absent from older indexes THEN
    reports SHALL continue to work and label the missing precision as unavailable
    rather than failing.
-4. Generated Markdown/JSON SHALL be deterministic and safe for public or
+4. WHEN precise `WebForms*` facts are available THEN legacy validation SHALL feed
+   or supersede the existing coarse `legacy.validation.ui-events.v1` summary with
+   the precise evidence and SHALL NOT emit a second divergent UI-event count with
+   different semantics.
+5. Generated Markdown/JSON SHALL be deterministic and safe for public or
    redacted summaries.
 
 ### Requirement 8: Validation Baseline
