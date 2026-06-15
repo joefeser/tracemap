@@ -20,7 +20,7 @@ public static partial class LegacyWcfExtractor
             ExtractConfig(repoPath, manifest, file, facts);
         }
 
-        foreach (var file in files.Where(item => item.Kind == "CSharp"))
+        foreach (var file in files.Where(item => FileInventory.IsCSharpKind(item.Kind)))
         {
             ExtractCSharp(repoPath, manifest, file, facts);
         }
