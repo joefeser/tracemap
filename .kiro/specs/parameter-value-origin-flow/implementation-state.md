@@ -2,51 +2,50 @@
 
 ## Current Branch
 
-`codex/value-origin-callback-boundaries`
+`codex/value-origin-combined-notes`
 
 ## Implemented Slice
 
-Earlier implementation already shipped the recommended PR 2 constructor/member hardening, including:
+Earlier implementation already shipped recommended PRs 2 and 3:
 
-- unique constructor parameter-to-field-to-call forwarding,
-- ambiguous constructor/member origin omission,
-- reassigned constructor field omission beyond the alias bound,
-- repeated constructor assignment omission.
+- unique constructor parameter-to-field-to-call forwarding and ambiguous constructor/member origin omission,
+- `CallbackBoundary` and `AsyncBoundary` fact types under `csharp.semantic.flowboundary.v1`,
+- callback/lambda/async boundary limitations in rules and docs.
 
-This branch reconciles that stale task state and implements the recommended PR 3 initial .NET slice:
+This branch implements recommended PR 4:
 
-- explicit `CallbackBoundary` fact type under `csharp.semantic.flowboundary.v1`,
-- explicit `AsyncBoundary` fact type under `csharp.semantic.flowboundary.v1`,
-- callback boundaries for syntactically visible lambdas, anonymous methods, delegate arguments on invocations and object creation, delegate creation, expression-tree lambdas, captured outer parameters/locals, and event subscriptions,
-- async boundaries for `await`, `await foreach`, `await using`, task scheduling/continuation calls, thread-pool queueing calls, and iterator `yield`,
-- focused storage-level tests proving direct calls inside lambda bodies still emit normal `ArgumentPassed` evidence,
-- focused tests proving captured-value, event, await, and task scheduling boundary evidence remains review-tier context.
+- combined report summaries now include deterministic value-origin evidence counts for `combined_argument_flows`, `combined_local_aliases`, `combined_field_aliases`, `combined_parameter_forward_edges`, `CallbackBoundary`, and `AsyncBoundary` evidence when present,
+- combined report needs-review rows now surface callback/async boundary facts as value-origin review context without runtime scheduling, callback invocation, event firing, closure lifetime, or task completion claims,
+- combined paths now add deterministic `ValueOriginClassification` notes for paths containing `parameter-forward` or `argument-passed` edges while preserving the canonical `Classification` field,
+- combined reverse paths now carry the same additive notes and continue to preserve supporting fact IDs and combined edge IDs,
+- Markdown renderers now show path/reverse notes, and JSON remains deterministic.
 
 ## Scope Decisions
 
-- No new public `tracemap flow`, combined path, reverse, diff, impact, or report output contract changes in this slice.
-- No new `combined.flow.*` rule IDs were added because no new combined/public report row was introduced.
-- No dedicated `CapturedValueFlow` fact/rule was added. Captured outer parameters/locals are represented as `CallbackBoundary` review context until a future slice promotes captured-value evidence beyond boundary labeling.
+- No `tracemap flow`, diff, or impact behavior changed in this slice.
+- No new `combined.flow.*` rule IDs were added because the slice adds report/path/reverse notes derived from existing rule-backed facts and edges rather than emitting new evidence rows.
 - Existing rules `csharp.semantic.valueflow.v1`, `csharp.semantic.localalias.v1`, `csharp.semantic.fieldalias.v1`, and `csharp.semantic.parameterforwarding.v1` remain authoritative for forwarding.
-- `csharp.semantic.flowboundary.v1` is extended to emit `CallbackBoundary` and `AsyncBoundary`; its limitations now explicitly exclude callback invocation, event firing, expression-tree execution, runtime scheduling, execution ordering, task completion, async-stream enumeration, async disposal execution, closure lifetime, and mutation safety.
-- Value-origin classifications remain future additive metadata/notes for combined report/path/reverse layers; they do not replace existing path classifications.
+- Existing `csharp.semantic.flowboundary.v1` remains authoritative for callback/async boundary facts.
+- Value-origin classifications are additive notes only; they do not replace existing path/reverse classifications.
+- This slice does not infer endpoint/request DTO roots, runtime DI state, callback invocation, event firing, runtime scheduling, task completion, closure lifetime, mutation safety, object identity, or collection contents.
 - TypeScript, JVM, and Python alignment remain follow-up slices.
-- TypeScript/JVM/Python tests were not run because this branch only changes the .NET semantic extractor, .NET tests, shared docs, and the rule catalog.
+- TypeScript/JVM/Python tests are not required unless those adapters change.
 
 ## Validation
 
-- `dotnet test src/dotnet/TraceMap.sln --filter SqliteIndexWriterTests` passed: 11 focused tests.
+- Focused combined output validation passed: `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~CombinedDependencyPathTests|FullyQualifiedName~CombinedReverseQueryTests|FullyQualifiedName~CombinedDependencyReportTests"` passed, 39 tests.
 - `dotnet build src/dotnet/TraceMap.sln` passed.
-- `dotnet test src/dotnet/TraceMap.sln` passed: 221 tests.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 225 tests.
 - `./scripts/check-private-paths.sh` passed.
 - `git diff --check` passed.
 
 ## Remaining Follow-Ups
 
 - Add TypeScript/JVM/Python callback/lambda/async boundary alignment where deterministic evidence exists.
-- Add combined path/reverse/report value-origin notes now that .NET callback/async boundaries are available.
 - Add a dedicated `CapturedValueFlow` rule only if a future slice needs stronger captured-value evidence than review-tier boundary facts.
-- Keep callback/async reports from claiming runtime scheduling, ordering, callback invocation, event firing, closure lifetime, or task completion.
+- Expand endpoint/request-root value-origin traversal and tests beyond currently supported parameter-forward/surface notes.
+- Add diff/impact value-origin downgrade behavior for reduced coverage or unstable identity.
+- Keep future callback/async reports from claiming runtime scheduling, ordering, callback invocation, event firing, closure lifetime, or task completion.
 
 ## Review Fixes
 

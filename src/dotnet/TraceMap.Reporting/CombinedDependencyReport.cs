@@ -37,7 +37,8 @@ public sealed record CombinedReportSummary(
     int EndpointFindingCount,
     IReadOnlyDictionary<string, int> EndpointFindingsByClassification,
     IReadOnlyDictionary<string, int> SurfacesByKind,
-    IReadOnlyDictionary<string, int> EdgesByKind);
+    IReadOnlyDictionary<string, int> EdgesByKind,
+    IReadOnlyDictionary<string, int> ValueOriginEvidenceCounts);
 
 public sealed record CombinedReportSource(
     string SourceIndexId,
@@ -190,7 +191,8 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<CombinedKnownGapRow> KnownGaps,
     IReadOnlyList<string> CoverageWarnings,
     IReadOnlyList<CombinedFactRow> Facts,
-    IReadOnlyList<CombinedDependencyEdgeRow> Edges);
+    IReadOnlyList<CombinedDependencyEdgeRow> Edges,
+    IReadOnlyDictionary<string, int> ValueOriginEvidenceCounts);
 
 internal sealed record CombinedSourceReadRow(
     CombinedReportSource Source,
@@ -272,7 +274,8 @@ public static class CombinedDependencyReporter
                 endpointFindings.Count,
                 CountBy(endpointFindings, finding => finding.Classification),
                 CountBy(surfaces, surface => surface.SurfaceKind),
-                CountBy(read.Edges, edge => edge.EdgeKind)),
+                CountBy(read.Edges, edge => edge.EdgeKind),
+                read.ValueOriginEvidenceCounts),
             endpointFindings,
             surfaces,
             read.Edges
@@ -324,7 +327,47 @@ public static class CombinedDependencyReporter
 
         var facts = await ReadFactsAsync(connection, cancellationToken);
         var edges = await ReadEdgesAsync(connection, cancellationToken);
-        return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges);
+        var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
+        return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges, valueOriginCounts);
+    }
+
+    private static async Task<IReadOnlyDictionary<string, int>> ReadValueOriginEvidenceCountsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        await AddTableCountAsync(connection, counts, "argument-flows", "combined_argument_flows", cancellationToken);
+        await AddTableCountAsync(connection, counts, "field-aliases", "combined_field_aliases", cancellationToken);
+        await AddTableCountAsync(connection, counts, "local-aliases", "combined_local_aliases", cancellationToken);
+        await AddTableCountAsync(connection, counts, "parameter-forward-edges", "combined_parameter_forward_edges", cancellationToken);
+        counts["async-boundaries"] = await CountFactsAsync(connection, FactTypes.AsyncBoundary, cancellationToken);
+        counts["callback-boundaries"] = await CountFactsAsync(connection, FactTypes.CallbackBoundary, cancellationToken);
+        return counts
+            .Where(pair => pair.Value > 0)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+    }
+
+    private static async Task AddTableCountAsync(
+        SqliteConnection connection,
+        IDictionary<string, int> counts,
+        string kind,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(connection, tableName, cancellationToken))
+        {
+            return;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"select count(*) from {tableName};";
+        counts[kind] = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private static async Task<int> CountFactsAsync(SqliteConnection connection, string factType, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from combined_facts where fact_type = $fact_type;";
+        command.Parameters.AddWithValue("$fact_type", factType);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
     }
 
     private static async Task<IReadOnlyList<CombinedSourceReadRow>> ReadSourcesAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -866,12 +909,29 @@ public static class CombinedDependencyReporter
                 SafePath(fact.FilePath),
                 fact.StartLine)));
 
+        rows.AddRange(facts
+            .Where(fact => fact.FactType is FactTypes.CallbackBoundary or FactTypes.AsyncBoundary)
+            .Select(fact => new CombinedNeedsReviewRow(
+                fact.FactType,
+                ValueOriginBoundaryMessage(fact),
+                fact.SourceIndexId,
+                fact.SourceLabel,
+                fact.CombinedFactId,
+                SafePath(fact.FilePath),
+                fact.StartLine)));
+
         return rows
             .OrderBy(row => row.ReviewKind, StringComparer.Ordinal)
             .ThenBy(row => row.SourceLabel, StringComparer.Ordinal)
             .ThenBy(row => row.FilePath, StringComparer.Ordinal)
             .ThenBy(row => row.StartLine ?? 0)
             .ToArray();
+    }
+
+    private static string ValueOriginBoundaryMessage(CombinedFactRow fact)
+    {
+        var boundaryKind = FirstValue(fact.Properties, "boundaryKind") ?? fact.FactType;
+        return $"{boundaryKind} is value-origin review context only; it does not prove callback invocation, event firing, runtime scheduling, ordering, task completion, closure lifetime, or mutation safety.";
     }
 
     private static CombinedDependencyEdgeRow SanitizeEdge(CombinedDependencyEdgeRow edge)
@@ -923,6 +983,7 @@ public static class CombinedDependencyReporter
         AppendDictionary(builder, "Endpoint findings by classification", report.Summary.EndpointFindingsByClassification);
         AppendDictionary(builder, "Dependency surfaces by kind", report.Summary.SurfacesByKind);
         AppendDictionary(builder, "Dependency edges by kind", report.Summary.EdgesByKind);
+        AppendDictionary(builder, "Value-origin evidence by kind", report.Summary.ValueOriginEvidenceCounts);
         AppendList(builder, "Coverage warnings", report.CoverageWarnings);
 
         builder.AppendLine("## Sources");
