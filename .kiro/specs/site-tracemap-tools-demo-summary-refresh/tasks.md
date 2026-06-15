@@ -45,7 +45,8 @@
 - [ ] 4. Update affected pages to avoid manual drift.
   - Validate `/demo/result/` against the fixture.
   - Validate `/demo/proof-upgrades/` against the fixture.
-  - Validate `/demo/proof-assets/` against the fixture.
+  - Validate `/demo/proof-assets/`, including hard-coded counts, against the
+    fixture.
   - Validate `/packets/` against the fixture.
   - Validate `/manager-packet/` against the fixture.
   - Validate `/capabilities/` against the fixture.
