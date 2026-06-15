@@ -49,7 +49,7 @@ public sealed class CSharpSyntaxExtractorTests
 
         Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
         Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
-        Assert.Contains(result.Manifest.KnownGaps, gap => gap.Contains("Compilation diagnostic", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Manifest.KnownGaps, gap => gap.Contains("Workspace diagnostic category", StringComparison.OrdinalIgnoreCase));
         AssertFact(result, FactTypes.TypeDeclared, "CustomerProfile", "src/Broken/CustomerProfile.cs", 6, 18);
         AssertFact(result, FactTypes.PropertyDeclared, "PrimaryEmail", "src/Broken/CustomerProfile.cs", 9, 9);
         AssertFact(result, FactTypes.MethodDeclared, "LoadAsync", "src/Broken/CustomerProfile.cs", 11, 17);
