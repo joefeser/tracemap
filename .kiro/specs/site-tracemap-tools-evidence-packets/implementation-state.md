@@ -1,12 +1,7 @@
 # site-tracemap-tools-evidence-packets implementation state
 
-## Status
-
-Implemented.
-
-## Public claim level
-
-demo
+Status: implemented
+Public claim level: demo
 
 ## Branch
 
@@ -44,4 +39,3 @@ orientation layer.
   checked-in public-safe packet exists.
 - Consider linking future vault export copy back to `/packets/` once an
   implementation lands.
-

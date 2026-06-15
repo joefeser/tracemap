@@ -1,12 +1,7 @@
 # site-tracemap-tools-legacy-validation-concept implementation state
 
-## Status
-
-Implemented.
-
-## Public claim level
-
-concept
+Status: implemented
+Public claim level: concept
 
 ## Branch
 
@@ -48,4 +43,3 @@ problem and safety boundaries, not completed validation evidence.
   is the real test for static evidence."
 - Link future `legacy-ui-event-surfaces` or `legacy-scan-performance-bounds`
   specs if core creates them.
-
