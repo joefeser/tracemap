@@ -85,8 +85,8 @@ async function readArticles(context) {
   }
 
   const slugs = new Set();
-  for (const article of articles) {
-    validateArticle(article, slugs);
+  for (const [index, article] of articles.entries()) {
+    validateArticle(article, slugs, index);
     slugs.add(article.slug);
   }
 
@@ -105,7 +105,11 @@ async function readBlogSourceFile(context, relativePath, missingMessage) {
   }
 }
 
-function validateArticle(article, slugs) {
+function validateArticle(article, slugs, index) {
+  if (!isPlainObject(article)) {
+    throw new Error(`Blog article at index ${index} must be an object.`);
+  }
+
   const requiredFields = [
     "body",
     "calloutHeading",
@@ -124,25 +128,41 @@ function validateArticle(article, slugs) {
 
   for (const field of requiredFields) {
     if (typeof article[field] !== "string" || article[field].trim() === "") {
-      throw new Error(`Blog article is missing required string field: ${field}`);
+      throw new Error(
+        `Blog article at ${formatArticleContext(article, index)} is missing required string field: ${field}`
+      );
     }
   }
 
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(article.slug)) {
-    throw new Error(`Blog article slug is invalid: ${article.slug}`);
+    throw new Error(`Blog article slug is invalid at index ${index}: ${article.slug}`);
   }
 
   if (!/^articles\/[a-z0-9]+(?:-[a-z0-9]+)*\.html$/.test(article.body)) {
-    throw new Error(`Blog article body path is invalid: ${article.slug}`);
+    throw new Error(
+      `Blog article body path is invalid for ${formatArticleContext(article, index)}: ${article.body}`
+    );
   }
 
   if (slugs.has(article.slug)) {
-    throw new Error(`Blog article slug is duplicated: ${article.slug}`);
+    throw new Error(
+      `Blog article slug is duplicated for ${formatArticleContext(article, index)}: ${article.slug}`
+    );
   }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(article.published)) {
-    throw new Error(`Blog article published date must use YYYY-MM-DD: ${article.slug}`);
+    throw new Error(
+      `Blog article published date must use YYYY-MM-DD for ${formatArticleContext(article, index)}: ${article.published}`
+    );
   }
+}
+
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatArticleContext(article, index) {
+  return typeof article.slug === "string" && article.slug.trim() !== "" ? `slug "${article.slug}"` : `index ${index}`;
 }
 
 async function writeOutput(context, pathname, html) {
