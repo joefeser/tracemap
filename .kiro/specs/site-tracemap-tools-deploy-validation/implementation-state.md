@@ -10,7 +10,7 @@ Source of truth: working tree
 This spec wires the generated-site validation command into deployment and pull
 request automation. Amplify now runs `npm run validate`, which builds `site/dist`
 and validates the generated output before publishing. GitHub Actions now runs a
-site validation workflow on site-related pull requests and pushes.
+site validation workflow on site-related pull requests and `main` pushes.
 
 The deployment output remains static files under `site/dist`. No backend,
 runtime service, database, auth, crawler, or dependency was added.

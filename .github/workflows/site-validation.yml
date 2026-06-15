@@ -9,7 +9,7 @@ on:
       - ".kiro/specs/site-*/**"
   push:
     branches:
-      - "**"
+      - main
     paths:
       - ".github/workflows/site-validation.yml"
       - "amplify.yml"
