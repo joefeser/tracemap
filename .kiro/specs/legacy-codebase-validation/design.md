@@ -27,19 +27,19 @@ Example shape:
   "samples": [
     {
       "label": "legacy-winforms-app",
-      "path": "/local/path/not/committed",
+      "path": "<operator-local-repo>",
       "kind": "legacy-ui",
       "timeoutSeconds": 1200,
       "maxArtifactBytes": 524288000
     },
     {
       "label": "large-public-dotnet-client",
-      "path": "/local/path/not/committed",
+      "path": "<operator-local-repo>",
       "kind": "large-public"
     },
     {
       "label": "legacy-unknown-dotnet-app",
-      "path": "/local/path/not/committed",
+      "path": "<operator-local-repo>",
       "kind": "unknown-legacy"
     }
   ]
@@ -58,7 +58,7 @@ result with a visible limitation.
 Prefer a script first:
 
 ```text
-scripts/validate-legacy-codebases.sh .tmp/legacy-codebase-validation/repos.local.json .tmp/legacy-codebase-validation/out
+./scripts/validate-legacy-codebases.sh .tmp/legacy-codebase-validation/repos.local.json .tmp/legacy-codebase-validation/out
 ```
 
 The script should:
@@ -91,6 +91,12 @@ validation summary may report:
 - missing SDK/runtime/build-tool hints emitted by TraceMap
 
 These are environment clues, not guaranteed remediation instructions.
+
+Representative load failures to record include missing SDK/runtime, missing or
+unsupported MSBuild toolset, broken solution/project files, unsupported legacy
+project types, package restore failures, and project references that cannot be
+resolved. Each scenario should surface as reduced coverage with a visible
+limitation and any available fallback evidence, not as a clean scan.
 
 ### UI Event Probe
 
@@ -186,6 +192,11 @@ config values, private repository names, or source snippets.
 
 The validation script and tests should also fail if any path under
 `.tmp/legacy-codebase-validation/` becomes git-tracked.
+
+Redaction failures should be surfaced as a non-zero validation result plus a
+category-only explanation such as `absolute-path`, `raw-remote`, `private-name`,
+`raw-sql`, `connection-string`, `config-value`, `secret`, or `snippet`. Failure
+messages must not echo the rejected value.
 
 ## Pre-Publish Checklist
 
