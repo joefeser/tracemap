@@ -1,0 +1,13 @@
+{
+  "version": "package-delta.v1",
+  "changes": [
+    {
+      "id": "pkg-newtonsoft-json",
+      "packageName": "Newtonsoft.Json",
+      "ecosystem": "nuget",
+      "changeType": "updated",
+      "oldVersion": "13.0.1",
+      "newVersion": "13.0.3"
+    }
+  ]
+}
