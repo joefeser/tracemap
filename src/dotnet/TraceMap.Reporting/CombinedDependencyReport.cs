@@ -336,32 +336,39 @@ public static class CombinedDependencyReporter
     private static async Task<IReadOnlyDictionary<string, long>> ReadValueOriginEvidenceCountsAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
-        await AddTableCountAsync(connection, counts, "argument-flows", "combined_argument_flows", cancellationToken);
-        await AddTableCountAsync(connection, counts, "field-aliases", "combined_field_aliases", cancellationToken);
-        await AddTableCountAsync(connection, counts, "local-aliases", "combined_local_aliases", cancellationToken);
-        await AddTableCountAsync(connection, counts, "parameter-forward-edges", "combined_parameter_forward_edges", cancellationToken);
+        if (await TableExistsAsync(connection, "combined_argument_flows", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_argument_flows;";
+            counts["argument-flows"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_field_aliases", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_field_aliases;";
+            counts["field-aliases"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_local_aliases", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_local_aliases;";
+            counts["local-aliases"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_parameter_forward_edges", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_parameter_forward_edges;";
+            counts["parameter-forward-edges"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
         counts["async-boundaries"] = await CountFactsAsync(connection, FactTypes.AsyncBoundary, cancellationToken);
         counts["callback-boundaries"] = await CountFactsAsync(connection, FactTypes.CallbackBoundary, cancellationToken);
         return counts
             .Where(pair => pair.Value > 0)
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-    }
-
-    private static async Task AddTableCountAsync(
-        SqliteConnection connection,
-        IDictionary<string, long> counts,
-        string kind,
-        string tableName,
-        CancellationToken cancellationToken)
-    {
-        if (!await TableExistsAsync(connection, tableName, cancellationToken))
-        {
-            return;
-        }
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"select count(*) from {tableName};";
-        counts[kind] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
     private static async Task<long> CountFactsAsync(SqliteConnection connection, string factType, CancellationToken cancellationToken)
