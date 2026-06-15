@@ -112,11 +112,12 @@ metadata. For workspace diagnostics without a reliable source span, use the
 nearest project path if known; otherwise use `.` line `1` with a
 `workspace-scope` property.
 
-Diagnostic fact IDs must be derived from sanitized properties only. Existing
-`FactFactory` IDs hash fact properties, so the implementation must sanitize or
-replace raw workspace/restore message properties before facts are created. Raw
-native messages, local absolute paths, temporary directories, usernames, package
-source URLs, credentials, and source-like snippets must not feed fact ID hashes.
+Diagnostic fact IDs and gap fingerprints must be derived from sanitized
+properties only. Existing `FactFactory` IDs hash fact properties, so the
+implementation must sanitize or replace raw workspace/restore message properties
+before facts are created. Raw native messages, local absolute paths, temporary
+directories, usernames, package source URLs, credentials, and source-like
+snippets must not feed fact ID or gap fingerprint hashes.
 
 ## Hash Algorithm
 
@@ -131,6 +132,12 @@ gap fingerprint readers can stay stable. The core implementation can compute the
 hash with the core stable hash helper and reporting code can continue honoring
 `messageHash`/`messageSha256`/`messageDigest` before falling back to hashing a
 message.
+
+Redaction hash input may include raw unsafe values when the value is safe to
+hash. Secrets, credentials, tokens, and values that cannot be safely hashed
+should be omitted or represented as category-only. Redaction hashes are stored as
+properties such as `observedValueHash` or `messageHash`; they are not fact IDs,
+gap fingerprints, or stronger evidence.
 
 Hash input should include context so identical raw values in different property
 roles do not become ambiguous:
@@ -415,6 +422,7 @@ Focused tests:
 - snapshot-diff or equivalent gap fingerprinting remains deterministic after
   raw messages migrate to `messageHash`-style properties.
 - distinct unsafe observed values produce distinct hashes in ordinary cases.
+- secret-like unsafe values are omitted or category-only rather than hashed.
 - modern SDK-style successful scans do not emit noisy restore-not-requested
   report sections.
 - multiple diagnostics for the same project remain separate facts.
