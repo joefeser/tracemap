@@ -104,8 +104,9 @@ cannot load the project.
    it SHALL document that the mapping is static guidance and not proof that the
    runtime is installed, supported, secure, or sufficient.
 5. WHEN the repository targets frameworks that may not be installable on the
-   current platform THEN TraceMap SHALL label the scan partial/reduced and keep
-   syntax/config scanning available.
+   current platform THEN TraceMap SHALL emit conservative guidance; it SHALL
+   label the scan partial/reduced only when an actual semantic load, project
+   load, restore, reference assembly, SDK/runtime, or toolset gap is observed.
 6. WHEN old and modern projects coexist THEN diagnostics SHALL be per-project
    where evidence permits and SHALL NOT imply the entire repository has one
    toolchain requirement.
@@ -118,9 +119,11 @@ as evidence-backed gaps without leaking package sources or config values.
 #### Acceptance Criteria
 
 1. WHEN `packages.config`, `PackageReference`, `packages.lock.json`,
-   `nuget.config`, `packages` directories, or legacy restore markers are
-   present THEN diagnostics SHALL summarize safe metadata such as manifest kind,
-   package manager shape, and target framework where available.
+   `nuget.config`, or supported legacy restore markers are present THEN
+   diagnostics SHALL summarize safe metadata such as manifest kind, package
+   manager shape, and target framework where available; checked-in `packages/`
+   directory markers are out of scope unless directory inventory support is
+   added with tests.
 2. WHEN restore is not requested THEN diagnostics SHALL state that package
    resolution was not attempted only as scan-option state in manifest/report
    coverage context and SHALL NOT emit a standalone diagnostic fact or claim
@@ -233,14 +236,18 @@ redacted, and safe for existing TraceMap workflows.
    compatible.
 6. Rule catalog entries SHALL document limitations for every new rule ID before
    the implementation is considered complete.
-7. Diagnostic fact IDs and diagnostic hashes SHALL be derived only from
-   sanitized fields, safe relative paths, stable diagnostic codes, commit SHA,
-   scanner version, and scan scope; raw native messages, temp paths, usernames,
-   machine paths, package source URLs, and secrets SHALL NOT feed fact ID hashes.
-8. Hashes used to replace unsafe observed values SHALL use the project's stable
-   hash helper or a documented SHA-256-based equivalent with fixed truncation,
-   deterministic input construction, and tests covering stability and
-   distinct-value behavior.
+7. Diagnostic fact IDs and gap fingerprints SHALL be derived only from sanitized
+   fields, safe relative paths, stable diagnostic codes, commit SHA, scanner
+   version, and scan scope; raw native messages, temp paths, usernames, machine
+   paths, package source URLs, and secrets SHALL NOT feed fact ID or gap
+   fingerprint hashes.
+8. Redaction hashes used to replace unsafe observed values MAY include the raw
+   unsafe value as hash input when the value is safe to hash; secrets,
+   credentials, tokens, and values that cannot be safely hashed SHALL be omitted
+   or represented category-only.
+9. Redaction hashes SHALL use the project's stable hash helper or a documented
+   SHA-256-based equivalent with fixed truncation, deterministic input
+   construction, and tests covering stability and distinct-value behavior.
 
 ### Requirement 8: Validation
 

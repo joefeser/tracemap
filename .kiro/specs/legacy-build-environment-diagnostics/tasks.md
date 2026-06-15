@@ -6,7 +6,7 @@
   - [ ] Define the minimal fact type/property shape for build environment diagnostics.
   - [ ] Add stable diagnostic codes and guidance codes.
   - [ ] Ensure diagnostic fact IDs are derived from sanitized fields only.
-  - [ ] Specify and test the observed-value hash algorithm, deterministic input construction, and `messageHash` convention.
+  - [ ] Specify and test the observed-value hash algorithm, deterministic input construction, `messageHash` convention, and category-only handling for secrets.
   - [ ] Add rule IDs for target-framework, toolset, project-format, restore, generated-file, and workspace diagnostics.
   - [ ] Document every new rule ID in `rules/rule-catalog.yml` with limitations before emitting that rule from scanner code.
   - [ ] Add tests that facts include rule IDs, evidence tiers, commit SHA, spans, and extractor versions.
@@ -65,6 +65,7 @@
   - [ ] Test the real restore stdout/stderr capture path with unsafe output.
   - [ ] Test sanitized-only fact ID stability when raw diagnostics differ but categories match.
   - [ ] Test observed-value hash stability and distinct-value behavior.
+  - [ ] Test secret-like unsafe values are omitted or category-only rather than hashed.
   - [ ] Test snapshot-diff or equivalent gap fingerprint stability after migration to `messageHash`-style properties.
   - [ ] Test clean SDK-style successful scans do not emit noisy restore-not-requested diagnostics.
   - [ ] Test multiple diagnostics for one project remain separate facts.

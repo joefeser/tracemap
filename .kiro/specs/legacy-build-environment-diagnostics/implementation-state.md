@@ -1,9 +1,10 @@
 # Legacy Build Environment Diagnostics Implementation State
 
-Status: ready-for-implementation
+Status: not-started
 Branch: codex/legacy-build-environment-diagnostics-spec
 Scope: spec-only
 Public claim level: hidden
+Readiness: ready-for-implementation
 
 ## Summary
 
@@ -46,7 +47,6 @@ generated/designer-file gaps prevent full semantic analysis.
   - combine/snapshot/portfolio compatibility tests are required;
   - `check-private-paths.sh` is documented as a tracked-file guard, not the
     artifact redaction gate.
-- Re-review pending.
 - Opus re-review completed with no blocking issues. It recommended precision
   fixes around capture-time sanitization, the `KnownGaps` fan-out,
   `RestoreNotRequested` representation, and `messageHash` compatibility; those
@@ -55,6 +55,12 @@ generated/designer-file gaps prevent full semantic analysis.
   `design.md`: non-C# project files now require distinct inventory kinds or C#
   extractor filtering, and the report table template includes a Markdown
   separator row.
+- Later PR review feedback was addressed by aligning the status value with
+  `.kiro/specs/README.md` and removing the stale re-review-pending note.
+- Codex PR review feedback was addressed by separating fact ID/gap fingerprint
+  inputs from redaction hash inputs, making legacy target framework guidance
+  coverage-neutral until an observed gap exists, and scoping checked-in
+  `packages/` directory markers behind future directory inventory support.
 - Spec is ready for implementation after safety checks.
 
 ## Validation
