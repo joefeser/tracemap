@@ -107,11 +107,15 @@
   - [x] `git diff --check`
   - [x] Rerun the ignored local WCF/SVC smoke and compare label-only counts. Deferred because `.tmp/legacy-codebase-validation/wcf-svc-smoke.local.json` is absent in this worktree.
 
-## Recommended PR Slices
+## Historical PR Slice Notes
 
-- [ ] PR 1: Rule catalog + fact model + metadata inventory/extraction tests.
-- [ ] PR 2: Operation alias derivation + mapping improvements.
-- [ ] PR 3: Validation summary/docs + ignored local smoke comparison.
+These were planning slices, not remaining tasks. The implementation shipped as a
+single reviewed feature and the implementation tasks above are the source of
+truth for completion.
+
+- PR 1: Rule catalog + fact model + metadata inventory/extraction tests.
+- PR 2: Operation alias derivation + mapping improvements.
+- PR 3: Validation summary/docs + ignored local smoke comparison.
 
 ## Deferred Follow-Ups
 
