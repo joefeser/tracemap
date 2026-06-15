@@ -103,6 +103,95 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_adds_deterministic_value_origin_notes_without_replacing_canonical_classification()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "paths");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.String)";
+        var service = "Server.OrderService.Query(System.String)";
+        var sourceParameter = $"{controller}:System.String request";
+        var targetParameter = $"{service}:System.String id";
+
+        SqliteIndexWriter.Write(index, manifest, [
+            ArgumentPassedFact(manifest, controller, service, "System.String request", "id", "System.String", "Controllers/OrdersController.cs", 12),
+            QueryPatternFact(manifest, targetParameter, "Infrastructure/OrderService.cs", 24)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            combinedPath,
+            outDir,
+            FromSymbol: sourceParameter,
+            ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.ProbableStaticPath, path.Classification);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "parameter-forward");
+        Assert.Contains(path.Notes, note => note.Code == "ValueOriginClassification" && note.Message.Contains("ProbableStaticValuePath", StringComparison.Ordinal));
+        Assert.Contains(path.Notes, note => note.Code == "ParameterForwardingBoundary");
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.json"));
+        Assert.Contains("ValueOriginClassification", markdown);
+        Assert.Contains("ProbableStaticValuePath", markdown);
+        Assert.Contains("\"notes\"", json);
+        Assert.Contains("ProbableStaticValuePath", json);
+
+        var secondOutDir = Path.Combine(temp.Path, "paths-second");
+        await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            combinedPath,
+            secondOutDir,
+            FromSymbol: sourceParameter,
+            ToSurface: "sql-query"));
+        Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "paths-report.md")));
+        Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "paths-report.json")));
+    }
+
+    [Fact]
+    public void Value_origin_classification_preserves_unknown_analysis_gap()
+    {
+        var method = typeof(CombinedDependencyPathReporter).GetMethod(
+            "ClassifyValueOrigin",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        var edges = new CombinedPathEdge[]
+        {
+            new CombinedPathEdge(
+                "edge-endpoint",
+                "endpoint-match",
+                "client",
+                "server",
+                CombinedEndpointClassifications.UnknownAnalysisGap,
+                "combined.paths.endpoint-match.v1",
+                EvidenceTiers.Tier4Unknown,
+                ["fact-client"],
+                [],
+                "src/client.ts",
+                10,
+                10),
+            new CombinedPathEdge(
+                "edge-value",
+                "parameter-forward",
+                "server",
+                "service",
+                "EvidenceEdge",
+                RuleIds.CSharpSemanticParameterForwarding,
+                EvidenceTiers.Tier1Semantic,
+                ["fact-flow"],
+                ["edge-flow"],
+                "Controllers/OrdersController.cs",
+                12,
+                12)
+        };
+        var classification = method.Invoke(null, [edges]);
+
+        Assert.Equal(CombinedValueOriginClassifications.UnknownAnalysisGap, classification);
+    }
+
+    [Fact]
     public async Task Paths_from_endpoint_matches_multi_method_route_without_stored_path_key()
     {
         using var temp = new TempDirectory();
@@ -646,6 +735,39 @@ public sealed class CombinedDependencyPathTests
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["callKind"] = "method"
+            });
+    }
+
+    private static CodeFact ArgumentPassedFact(
+        ScanManifest manifest,
+        string caller,
+        string callee,
+        string argumentSymbol,
+        string parameterName,
+        string parameterType,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ArgumentPassed,
+            RuleIds.CSharpSemanticValueFlow,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["argumentExpressionHash"] = "arg-hash",
+                ["argumentExpressionKind"] = "IdentifierName",
+                ["argumentOrdinal"] = "0",
+                ["argumentSymbol"] = argumentSymbol,
+                ["argumentSymbolKind"] = "Parameter",
+                ["argumentType"] = parameterType,
+                ["callKind"] = "method",
+                ["parameterName"] = parameterName,
+                ["parameterOrdinal"] = "0",
+                ["parameterType"] = parameterType
             });
     }
 

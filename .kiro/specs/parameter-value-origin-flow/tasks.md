@@ -53,7 +53,7 @@
 - [x] PR 1: Current-state audit + shared value-origin model + focused .NET tests for direct forwarding and alias boundaries.
 - [x] PR 2: Constructor/member origin hardening + ambiguous constructor downgrade tests.
 - [x] PR 3: Callback/lambda/async boundary evidence initial .NET slice.
-- PR 4: Combined path/reverse/report value-origin notes and deterministic output tests after task 3 boundary semantics are available.
+- [x] PR 4: Combined path/reverse/report value-origin notes and deterministic output tests after task 3 boundary semantics are available.
 - PR 5: TypeScript/JVM/Python adapter alignment where current behavior differs from the shared contract.
 
 ## Deferred Follow-Ups
@@ -70,18 +70,13 @@
 - Add callback/delegate/event/promise/task/async boundary gap tests outside the .NET initial slice.
 - Add a dedicated `CapturedValueFlow` rule only if a future slice promotes captured-value evidence beyond boundary review context.
 - Ensure future callback/async reports do not claim runtime scheduling or ordering.
-- Connect value origins to endpoints and dependency surfaces after boundary semantics are available.
+- Expand endpoint/request-root value-origin traversal beyond currently supported parameter-forward/surface notes.
 - Add endpoint/request parameter root tests.
 - Add service-call forwarding path tests.
 - Add terminal SQL/HTTP/package/config surface tests where existing surfaces support them.
 - Ensure unlinked surfaces remain gaps.
 - Preserve source labels, scan IDs, commit SHAs, and supporting fact/edge IDs in combined output.
-- Add value-origin counts/limitations to combined report if useful.
-- Add path notes for value-origin edges.
-- Preserve existing canonical path `Classification` values; add value-origin classification as notes or additive fields only.
-- Preserve value-origin support in reverse query.
 - Ensure diff/impact downgrade added/removed flow under reduced coverage.
-- Add byte-stability tests for changed outputs.
 - Add new `combined.flow.*.v1` or adapter-local rules only for new evidence behavior.
 - Run TypeScript/JVM/Python tests if those adapters change.
 - Run relevant smoke scripts if combined path/reverse behavior changes.

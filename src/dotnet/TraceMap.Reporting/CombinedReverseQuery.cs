@@ -129,7 +129,8 @@ public sealed record CombinedReversePath(
     IReadOnlyList<string> RuleIds,
     IReadOnlyList<string> EvidenceTiers,
     IReadOnlyList<string> SupportingFactIds,
-    IReadOnlyList<string> SupportingEdgeIds);
+    IReadOnlyList<string> SupportingEdgeIds,
+    IReadOnlyList<CombinedPathNote> Notes);
 
 public sealed record CombinedReverseGap(
     string GapId,
@@ -882,7 +883,35 @@ public static class CombinedReverseReporter
             edges.Select(edge => edge.RuleId).Append(PathRuleId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             edges.Select(edge => edge.EvidenceTier).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             edges.SelectMany(edge => edge.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            edges.SelectMany(edge => edge.SupportingCombinedEdgeIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            edges.SelectMany(edge => edge.SupportingCombinedEdgeIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            ReverseNotesFor(edges));
+    }
+
+    private static IReadOnlyList<CombinedPathNote> ReverseNotesFor(IReadOnlyList<CombinedPathEdge> edges)
+    {
+        var notes = new List<CombinedPathNote>();
+        var valueOriginClassification = CombinedDependencyPathReporter.ClassifyValueOrigin(edges);
+        if (valueOriginClassification is not null)
+        {
+            notes.Add(new CombinedPathNote(
+                "ValueOriginClassification",
+                $"{valueOriginClassification}: reverse value-origin context preserves supporting fact and edge IDs, but does not prove runtime execution or ordering."));
+        }
+
+        if (edges.Any(edge => edge.EdgeKind == "parameter-forward"))
+        {
+            notes.Add(new CombinedPathNote("ParameterForwardingBoundary", "Parameter-forwarding hops are direct static argument evidence, not full taint analysis or mutation tracking."));
+        }
+
+        if (edges.Any(edge => edge.EdgeKind == "symbol-reconciliation"))
+        {
+            notes.Add(new CombinedPathNote("SymbolReconciliationBoundary", "Symbol reconciliation hops are review-tier evidence, not compiler-resolved call evidence."));
+        }
+
+        return notes
+            .OrderBy(note => note.Code, StringComparer.Ordinal)
+            .ThenBy(note => note.Message, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static IEnumerable<CombinedReversePath> SortPaths(IEnumerable<CombinedReversePath> paths)
@@ -1423,6 +1452,7 @@ public static class CombinedReverseReporter
                     builder.AppendLine($"| {index} | {Cell(node.SourceLabel)} | {Cell($"{node.NodeKind} {node.DisplayName}")} | {Cell(Evidence(node.RuleId, node.EvidenceTier, node.FilePath, node.StartLine))} | {Cell(edge?.EdgeKind ?? "terminal")} |");
                 }
 
+                AppendPathNotes(builder, path.Notes);
                 builder.AppendLine();
             }
         }
@@ -1478,6 +1508,21 @@ public static class CombinedReverseReporter
         foreach (var value in values)
         {
             builder.AppendLine($"  - {Cell(value)}");
+        }
+    }
+
+    private static void AppendPathNotes(StringBuilder builder, IReadOnlyList<CombinedPathNote> notes)
+    {
+        if (notes.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Notes:");
+        foreach (var note in notes.OrderBy(note => note.Code, StringComparer.Ordinal).ThenBy(note => note.Message, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- `{Cell(note.Code)}`: {Cell(note.Message)}");
         }
     }
 
