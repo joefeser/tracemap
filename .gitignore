@@ -42,6 +42,7 @@ ScaffoldingReadMe.txt
 
 # Local review artifacts
 .tmp/kiro-reviews/
+.tmp/legacy-baselines/
 .tmp/legacy-codebase-validation/
 
 # Local TraceMap demo output
