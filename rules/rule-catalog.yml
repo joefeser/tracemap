@@ -1038,6 +1038,73 @@ rules:
     limitations:
       - Workspace diagnostics can be environment-specific because they depend on installed SDKs and available project references.
       - Compilation gaps do not prevent syntax fallback facts from being emitted.
+      - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
+
+  - id: build.environment.target-framework.v1
+    name: Build environment target framework diagnostics
+    description: Records static target framework declarations that may explain required reference assemblies or SDK families for semantic analysis.
+    evidenceTier: Tier2Structural
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Target framework diagnostics are static project-file evidence and do not prove runtime installation, support status, security posture, deployment compatibility, or sufficient tooling.
+      - Guidance is environment compatibility context, not an instruction to install obsolete or unsafe runtimes.
+      - Legacy target framework evidence is coverage-neutral unless a separate project-load, reference assembly, SDK, runtime, or toolset gap is observed.
+
+  - id: build.environment.toolset.v1
+    name: Build environment toolset diagnostics
+    description: Records static MSBuild, Visual Studio, and import indicators such as ToolsVersion, VisualStudioVersion, and safe target basenames.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Toolset indicators are static clues and do not prove that a build can run or that a particular installed tool version is sufficient.
+      - TraceMap does not evaluate arbitrary imported build logic or MSBuild conditions.
+      - Unsafe import values are hashed or omitted before fact IDs and artifacts are created.
+
+  - id: build.environment.project-format.v1
+    name: Build environment project format diagnostics
+    description: Records legacy or unsupported project-format clues such as non-SDK-style C# projects, Web Application targets, known unsupported project GUIDs, and unknown project formats.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Project-format diagnostics are static repository evidence and do not prove runtime IIS, desktop, database, setup, deployment, or service behavior.
+      - Unsupported and unknown formats are analysis gaps; they do not prove absence of code evidence.
+      - Missing compatible tooling means semantic coverage may be reduced, while syntax/config fallback evidence can still be useful.
+
+  - id: build.environment.restore.v1
+    name: Build environment restore diagnostics
+    description: Records safe NuGet and restore-shape diagnostics from packages.config, PackageReference, packages.lock.json, nuget.config, and sanitized explicit restore failures.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Restore diagnostics do not prove package absence, vulnerability, transitive dependency resolution, runtime loading, deployment, or API compatibility.
+      - Package source URLs, credentials, config values, command output, and local paths are omitted or categorized before shareable artifacts are written.
+      - When restore is not requested, TraceMap records scan-option context rather than claiming packages are missing.
+
+  - id: build.environment.generated-files.v1
+    name: Build environment generated and designer file diagnostics
+    description: Records deterministic generated/designer-file gaps for supported WebForms, WCF service-reference, resource, and settings patterns.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Generated-file diagnostics are analysis gaps and do not prove runtime generation, freshness, service reachability, page lifecycle behavior, or absence of code.
+      - Missing or malformed generated/design-time files can cap semantic confidence but must not suppress syntax/config facts already found.
+      - TraceMap does not rewrite, regenerate, or repair generated files.
+
+  - id: build.environment.workspace-diagnostic.v1
+    name: Build environment workspace diagnostics
+    description: Records sanitized MSBuildWorkspace, SDK resolution, reference assembly, restore, and compilation setup categories that explain reduced semantic coverage.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Workspace diagnostics are sanitized categories and do not include raw native output, local paths, private repository names, remotes, package sources, config values, credentials, or source snippets.
+      - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
+      - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
 
   - id: http.client.invocation.v1
     name: HTTP client invocation

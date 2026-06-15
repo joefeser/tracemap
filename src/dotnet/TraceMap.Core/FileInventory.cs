@@ -6,6 +6,12 @@ public static class FileInventory
     {
         ".sln",
         ".csproj",
+        ".vbproj",
+        ".fsproj",
+        ".props",
+        ".targets",
+        ".resx",
+        ".settings",
         ".config",
         ".json",
         ".cs",
@@ -24,6 +30,8 @@ public static class FileInventory
     private static readonly HashSet<string> IncludedFileNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "packages.config",
+        "packages.lock.json",
+        "nuget.config",
         "Web.config",
         "App.config"
     };
@@ -32,7 +40,9 @@ public static class FileInventory
     {
         ".git",
         ".tracemap",
+        ".nuget",
         "bin",
+        "node_modules",
         "obj"
     };
 
@@ -94,7 +104,8 @@ public static class FileInventory
 
         var relativePath = Path.GetRelativePath(root, fullPath);
         var parts = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return parts.Any(part => ExcludedDirectoryNames.Contains(part));
+        return IsRootPackagesDirectory(parts)
+            || parts.Any(part => ExcludedDirectoryNames.Contains(part));
     }
 
     private static bool ShouldInclude(string root, string path, ISet<string> serviceReferenceFolders)
@@ -117,6 +128,11 @@ public static class FileInventory
             || path.StartsWith(normalizedDirectory, StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsRootPackagesDirectory(IReadOnlyList<string> parts)
+    {
+        return parts.Count > 1 && parts[0].Equals("packages", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string GetKind(string path)
     {
         var fileName = Path.GetFileName(path);
@@ -125,6 +141,16 @@ public static class FileInventory
         if (fileName.Equals("packages.config", StringComparison.OrdinalIgnoreCase))
         {
             return "PackagesConfig";
+        }
+
+        if (fileName.Equals("packages.lock.json", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PackagesLock";
+        }
+
+        if (fileName.Equals("nuget.config", StringComparison.OrdinalIgnoreCase))
+        {
+            return "NuGetConfig";
         }
 
         if (fileName.Equals("Web.config", StringComparison.OrdinalIgnoreCase)
@@ -138,6 +164,12 @@ public static class FileInventory
         {
             ".sln" => "Solution",
             ".csproj" => "Project",
+            ".vbproj" => "NonCSharpProject",
+            ".fsproj" => "NonCSharpProject",
+            ".props" => "MSBuildProps",
+            ".targets" => "MSBuildTargets",
+            ".resx" => "Resource",
+            ".settings" => "Settings",
             ".json" => "Json",
             ".cs" when IsWebFormsDesignerFile(fileName) => "WebFormsDesigner",
             ".cs" when IsWebFormsCodeBehindFile(fileName) => "WebFormsCodeBehind",
