@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap demo proof assets: public-safe visual examples of generated report summaries, paths, diff and impact rows, and release-review checklists."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Demo Proof Assets | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/demo/proof-assets/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Demo Proof Assets">
+    <meta
+      property="og:description"
+      content="Public-safe visual orientation for the demo evidence rows without publishing raw local artifacts."
+    >
+    <meta property="og:url" content="https://tracemap.tools/demo/proof-assets/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Demo proof assets</p>
+        <h1>Visuals can make proof scannable without becoming the proof.</h1>
+        <p class="hero-subhead">
+          This page shows public-safe, screenshot-style representations of the
+          public demo report outputs: summary rows, static paths, before/after
+          change rows, impact rows, and release-review checklist items.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. These visuals are orientation aids over
+          deterministic static evidence. Generated reports, rule IDs, evidence
+          tiers, coverage labels, limitations, facts, and indexes remain the
+          source of truth.
+        </p>
+        <nav class="hero-actions" aria-label="Demo proof asset links">
+          <a class="button primary" href="/demo/proof-upgrades/">Read proof ledger</a>
+          <a class="button secondary" href="/demo/result/">Read current result</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Purpose</p>
+          <h2>The visual layer helps humans orient before they inspect artifacts.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Public-safe</strong><span>The cards use status labels, rule IDs, evidence tiers, coverage labels, counts, and limitations that are already safe for the public demo.</span></div>
+          <div><strong>Secondary</strong><span>The cards do not replace generated summaries, Markdown reports, fact streams, SQLite indexes, or the rule catalog.</span></div>
+          <div><strong>Bounded</strong><span>The cards do not claim runtime behavior, production traffic, deployment state, endpoint performance, release safety, or AI impact analysis.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Visual proof board</p>
+          <h2>Each card keeps the rule/status frame and limitation visible.</h2>
+        </div>
+        <div class="workflow-grid proof-visual-grid">
+          <article>
+            <h3>Report summary</h3>
+            <div class="proof-visual">
+              <div class="proof-visual-row">
+                <span>Status</span>
+                <strong>available demo evidence</strong>
+              </div>
+              <div class="proof-visual-row">
+                <span>Rule</span>
+                <strong>public.demo.summary.v1</strong>
+              </div>
+              <div class="proof-visual-row">
+                <span>Tier</span>
+                <strong>Tier2Structural</strong>
+              </div>
+              <div class="proof-visual-meter" role="progressbar" aria-valuenow="72" aria-valuemin="0" aria-valuemax="100" aria-label="Coverage includes partial analysis">
+                <span style="width: 72%"></span>
+              </div>
+              <p>Coverage: PartialAnalysis. Counts stay visible beside gaps and reasons.</p>
+            </div>
+          </article>
+          <article>
+            <h3>Paths and reverse</h3>
+            <div class="proof-visual path-visual">
+              <div><span>endpoint</span></div>
+              <div><span>static path</span></div>
+              <div><span>data surface</span></div>
+              <p>12 paths, 25 reverse paths, 37 path gaps, and 23 reverse gaps. Static orientation only, not runtime traces.</p>
+            </div>
+          </article>
+          <article>
+            <h3>Diff and impact</h3>
+            <div class="proof-visual">
+              <div class="proof-change-row">
+                <span>before</span>
+                <strong>public fixture surface</strong>
+              </div>
+              <div class="proof-change-row changed">
+                <span>after</span>
+                <strong>changed public fixture surface</strong>
+              </div>
+              <div class="proof-change-row">
+                <span>impact</span>
+                <strong>NeedsReview under demo coverage</strong>
+              </div>
+              <p>14 diff rows considered, 12 surface impacts, 0 endpoint impacts, 0 edge impacts, 0 gaps.</p>
+            </div>
+          </article>
+          <article>
+            <h3>Release review</h3>
+            <div class="proof-visual checklist-visual">
+              <div><strong>50</strong><span>static findings</span></div>
+              <div><strong>53</strong><span>checklist items</span></div>
+              <div><strong>3</strong><span>gaps</span></div>
+              <p>Checklist output supports review orientation. It is not release approval or CI policy enforcement.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Evidence handoff</p>
+          <h2>The cards point back to generated public-demo artifacts.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>demo-summary.*</code><span>Public-safe status ledger with rule IDs, evidence tiers, coverage labels, counts, reasons, and limitations.</span></div>
+          <div><code>reports/dependency/**</code><span>Combined dependency report families for endpoint-stack and mixed-stack demo outputs.</span></div>
+          <div><code>reports/paths/**</code><span>Endpoint-to-surface path reports with static coverage and gap framing.</span></div>
+          <div><code>reports/reverse/**</code><span>Surface-to-endpoint reverse lookup reports with selected roots and visible gaps.</span></div>
+          <div><code>reports/diff/**</code><span>Before/after report families generated from checked-in public fixtures.</span></div>
+          <div><code>reports/impact/**</code><span>Static impact rows derived from the public demo diff, not runtime impact proof.</span></div>
+          <div><code>reports/release-review/**</code><span>Review checklist reports that keep static findings, gaps, and non-claims together.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Artifact safety</p>
+          <h2>What this page can show, and what must stay local.</h2>
+        </div>
+        <ul>
+          <li>Safe: public demo row names, statuses, rule IDs, evidence tiers, coverage labels, demo counts, report-family names, and limitation labels.</li>
+          <li>Safe: visual representations of public-safe report summaries when they remain tied to evidence and limitations.</li>
+          <li>Local-only: raw source snippets, raw SQL, config values, secrets, local absolute paths, raw repository remotes, and private sample identities.</li>
+          <li>Local-only: raw fact streams, SQLite indexes, combined SQLite files, generated scan directories, analyzer logs, and copied local report archives.</li>
+          <li>Not safe: claiming the visual board proves full impact, runtime reachability, production dependency understanding, endpoint performance, or release approval.</li>
+        </ul>
+      </section>
+
+      <section class="section callout-section">
+        <h2>The visual board is a map legend, not the territory.</h2>
+        <p>
+          Use it to help reviewers recognize the shape of a demo evidence
+          packet. Then follow the generated reports, rule IDs, evidence tiers,
+          coverage labels, counts, and limitations before making any public
+          conclusion.
+        </p>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Source material</p>
+          <h2>Follow the visuals back to public-demo evidence.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+          <a href="/demo/result/">Current demo result</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/roadmap/">Public roadmap</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">Demo script source</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public-assert.mjs">Demo assertion helper</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/demo/proof-upgrades/">proof ledger</a>,
+        the
+        <a href="/demo/result/">current demo result</a>,
+        or the
+        <a href="/packets/">packet guide</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
