@@ -51,6 +51,10 @@ generated/designer-file gaps prevent full semantic analysis.
   fixes around capture-time sanitization, the `KnownGaps` fan-out,
   `RestoreNotRequested` representation, and `messageHash` compatibility; those
   fixes were folded into requirements, design, and tasks.
+- PR review loop found two Gemini medium comments. Both were addressed in
+  `design.md`: non-C# project files now require distinct inventory kinds or C#
+  extractor filtering, and the report table template includes a Markdown
+  separator row.
 - Spec is ready for implementation after safety checks.
 
 ## Validation

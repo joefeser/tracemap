@@ -208,7 +208,9 @@ compatibility.
 
 Non-C# project files such as `.vbproj` or `.fsproj` are structural
 project-format clues only in this spec. They should not imply language adapter
-support or semantic analysis for those languages.
+support or semantic analysis for those languages, and they must be mapped to a
+distinct inventory kind or filtered out in `CSharpSemanticExtractor` so the C#
+extractor does not attempt to load them standalone.
 
 Do not evaluate arbitrary MSBuild conditions. Record the declared condition text
 only as a hash or omit it. Prefer line-aware XML parsing; when parsing fails,
@@ -338,6 +340,7 @@ sections:
 ## Build Environment Diagnostics
 
 | Code | Tier | Rule | Evidence | Guidance | Limitation |
+| --- | --- | --- | --- | --- | --- |
 ```
 
 Rows should use safe relative paths and line spans. The report should also state
