@@ -90,7 +90,7 @@ Public site surface:
 Notes:
 
 - `python-indexer` and `jvm-indexer` now have `implementation-state.md` files because their original task lists contain both shipped MVP work and explicit post-MVP backlog.
-- `snapshot-diff-by-sha` still has some single-index projector and malformed-metadata work open. Combined-index delegation is implemented.
+- `snapshot-diff-by-sha` still has single-index graph and contract-shape projector work open. Combined-index delegation plus single-index endpoint, surface, malformed-metadata, and analysis-gap diff slices are implemented.
 - `public-demo-workflow` has the first script/scan/summary slice implemented. Combine/report/path/reverse/portfolio demo sections remain follow-up slices.
 
 ### Spec-Ready, Not Yet Implemented
