@@ -41,6 +41,8 @@ The reports are demo evidence with `PartialAnalysis` coverage where applicable. 
 - Keep the page focused on the demo evidence ledger, not a broad product roadmap.
 - Use `/roadmap/` for the general claim ledger and `/demo/proof-upgrades/` for demo-row evidence details and remaining boundaries.
 - Preserve promotion gates for stronger claims: static demo evidence is not runtime proof, production proof, release approval, or endpoint performance proof.
+- Implement the page using the existing `/demo/result/` long-form pattern: page hero, split sections, repeated evidence cards or detail rows, boundary section, and source-material link section.
+- Update `/demo/result/` and `/roadmap/` in the same implementation slice so they do not contradict the new demo-evidence page.
 
 ## Claim Boundaries
 
@@ -88,6 +90,8 @@ When implemented:
 - `npm test` from `site/`
 - `npm run validate` from `site/`
 - `git diff --check`
+- Confirm `site/package.json` still defines `validate` before relying on `npm run validate`.
+- Confirm `samples/public-demo/before/` and `samples/public-demo/after/` exist before publishing before/after fixture copy.
 - Desktop browser sanity check for `/demo/proof-upgrades/`
 - Mobile browser sanity check for `/demo/proof-upgrades/`
 

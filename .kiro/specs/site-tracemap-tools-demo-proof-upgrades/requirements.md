@@ -29,6 +29,8 @@ Acceptance criteria:
 - The page states that the reports are static, rule-backed, coverage-labeled, and may include `PartialAnalysis`.
 - The page links to `/demo/result/`, `/roadmap/`, `/packets/`, and `/capabilities/`.
 - The page uses existing static site layout patterns and does not introduce a new runtime service.
+- The page uses the existing long-form page pattern from `/demo/result/`: page hero, split sections, repeated evidence cards or detail rows, boundary section, and source-material link section.
+- The evidence ledger SHOULD use one section/card per demo area instead of a dense table so limitations, artifacts, and non-claims remain readable on mobile.
 
 ### Requirement 2: Show the demo evidence ledger
 
@@ -77,6 +79,8 @@ Acceptance criteria:
 - `/roadmap/` links to `/demo/proof-upgrades/`.
 - `/demo/` links to `/demo/proof-upgrades/` near the current demo-result and roadmap callouts.
 - `/demo/proof-upgrades/` is included in sitemap metadata.
+- `/demo/result/` updates the formerly deferred-row language so it does not contradict the new demo-evidence page.
+- `/roadmap/` updates the demo proof-upgrades lane so it no longer describes the six rows as future-only.
 - The implementation-state note records scope, branch, validation, and follow-up items when implementation begins.
 
 ## Implementation Notes
@@ -93,6 +97,10 @@ Suggested row framing:
 | release-review | demo | `scripts/demo-public.sh`, before/after public fixtures, `ReleaseReviewTests.cs` | release-review reports under `<out>/reports/release-review/public-demo/` |
 
 ## Demo Evidence Details
+
+The counts below are a snapshot from the coordinator evidence report. Before
+writing page copy, rerun or re-check the public demo output and update these
+counts if the generated reports changed.
 
 ### combine-and-dependency-report
 
