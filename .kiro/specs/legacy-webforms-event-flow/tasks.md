@@ -49,6 +49,7 @@
 
 - [ ] 8. Update reports, validation, and docs. Requirements: 7, 8.
   - [ ] Add scan report counts and known-gap summaries.
+  - [ ] Reconcile precise `WebForms*` evidence with existing `legacy.validation.ui-events.v1` summaries so the legacy validation harness does not report divergent UI-event counts.
   - [ ] Update legacy validation summary counts.
   - [ ] Update acceptance or adapter-contract docs for new facts.
   - [ ] Keep public claim level hidden until redacted evidence is available.
