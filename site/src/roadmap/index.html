@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap public roadmap: a claim ledger for shipped, demo, concept, and hidden proof lanes on tracemap.tools."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Roadmap | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/roadmap/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Public Roadmap">
+    <meta
+      property="og:description"
+      content="The public TraceMap roadmap explains which claims are backed by main, demo evidence, concepts, or hidden validation work."
+    >
+    <meta property="og:url" content="https://tracemap.tools/roadmap/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Roadmap</p>
+        <h1>The public roadmap is a claim ledger, not a promise board.</h1>
+        <p class="hero-subhead">
+          TraceMap site work moves forward by upgrading public claims only when
+          there is evidence: code on main, checked-in demo samples, generated
+          public-safe summaries, rule IDs, evidence tiers, coverage labels, and
+          limitations.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. This page explains how public copy earns
+          stronger status over time. It does not claim runtime behavior,
+          production traffic, deployment state, endpoint performance, release
+          safety, or AI impact analysis.
+        </p>
+        <nav class="hero-actions" aria-label="Roadmap links">
+          <a class="button primary" href="/demo/result/">Current demo result</a>
+          <a class="button secondary" href="/capabilities/">Capability matrix</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Claim levels</p>
+          <h2>Every public page should know what kind of proof it has.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Shipped</strong><span>True on <code>main</code>, backed by repository code, docs, rules, tests, or validation commands that can be inspected.</span></div>
+          <div><strong>Demo</strong><span>Reproducible from checked-in samples or public-safe generated summaries, with the limits visible in the output.</span></div>
+          <div><strong>Concept</strong><span>Future-facing or planning copy that names the desired workflow without implying it exists yet.</span></div>
+          <div><strong>Hidden</strong><span>Not suitable for public copy yet, usually because the proof is local-only, private, raw, unredacted, or still not validated.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Current public surface</p>
+          <h2>The site already has proof-backed entry points.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Capability matrix</h3>
+            <p>Status: demo with per-row main, demo, dev, and future labels. It maps workflows to proof paths without treating the matrix as a completeness promise.</p>
+            <p><a href="/capabilities/">Read capabilities</a></p>
+          </article>
+          <article>
+            <h3>Public demo result</h3>
+            <p>Status: demo. It explains the current first-slice generated summary rows, available sections, deferred sections, and public-safe artifact boundary.</p>
+            <p><a href="/demo/result/">Read demo result</a></p>
+          </article>
+          <article>
+            <h3>Evidence packet guide</h3>
+            <p>Status: demo guidance. It shows how managers, reviewers, architects, and engineers should read static evidence packets without overstating them.</p>
+            <p><a href="/packets/">Read packet guide</a></p>
+          </article>
+          <article>
+            <h3>Legacy validation</h3>
+            <p>Status: concept. It describes how messy old repositories should be validated safely before any support claim is upgraded.</p>
+            <p><a href="/legacy-validation/">Read legacy validation</a></p>
+          </article>
+          <article>
+            <h3>Vault export</h3>
+            <p>Status: concept. It frames a future optional human exploration layer over the same evidence packet, not a new source of truth.</p>
+            <p><a href="/vault-export/">Read vault concept</a></p>
+          </article>
+          <article>
+            <h3>Docs map</h3>
+            <p>Status: shipped navigation. It points back to repository docs that define requirements, validation, acceptance, decisions, and adapter contracts.</p>
+            <p><a href="/docs/">Read docs map</a></p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Next proof upgrades</p>
+          <h2>The next site phases should turn gaps into visible evidence, not louder copy.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Demo proof upgrades</strong><span>Promote combined reports, paths, reverse lookups, portfolio summaries, diff, impact, and release-review examples only after reproducible public demo assertions exist.</span></div>
+          <div><strong>Legacy validation summary</strong><span>Move from concept to demo when redacted local validation output can show labels, counts, rule IDs, evidence tiers, coverage, and limitations without raw private details.</span></div>
+          <div><strong>Public-safe screenshots</strong><span>Add richer visual examples after generated summaries and reports can be reproduced from public samples and pass the private-path guard.</span></div>
+          <div><strong>Vault export demo</strong><span>Upgrade the vault story only when an implementation lands and the export remains a human exploration layer over SQLite, facts, reports, and the rule catalog.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Upgrade rules</p>
+          <h2>A claim changes status only when the evidence changes.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>concept -> demo</code><span>Requires checked-in samples, public-safe generated summaries, and visible limitations.</span></div>
+          <div><code>demo -> shipped</code><span>Requires the relevant capability to be true on main and traceable to repository code, docs, tests, rules, or validation commands.</span></div>
+          <div><code>hidden -> concept</code><span>Requires removing local/private details and reframing the work as future-facing planning copy.</span></div>
+          <div><code>hidden -> demo</code><span>Requires redaction plus reproducible public-safe evidence, not just a local result.</span></div>
+          <div><code>dev -> shipped</code><span>Requires promotion to main before the site presents the capability as generally available.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The roadmap keeps several tempting claims out of public copy.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, deployment state, endpoint performance, or release safety.</li>
+          <li>TraceMap site copy should not refer to the scanner or reducer as AI analysis.</li>
+          <li>Concept pages do not make a feature shipped, and hidden local validation does not make a public demo.</li>
+          <li>Public pages must not publish raw source snippets, SQL, config values, secrets, local absolute paths, raw repository remotes, or private sample identities.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Source material</p>
+          <h2>Follow the roadmap back to current proof.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/demo/">Public demo</a>
+          <a href="/demo/result/">Current demo result</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/legacy-validation/">Legacy validation concept</a>
+          <a href="/vault-export/">Vault export concept</a>
+          <a href="/docs/">Docs map</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="https://github.com/joefeser/tracemap">GitHub repository</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/demo/result/">current demo result</a>,
+        the
+        <a href="/capabilities/">capability matrix</a>,
+        or the
+        <a href="/packets/">packet guide</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
