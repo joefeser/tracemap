@@ -22,6 +22,8 @@ public static class FileInventory
         ".svc",
         ".asmx",
         ".svcmap",
+        ".dbml",
+        ".edmx",
         ".wsdl",
         ".disco",
         ".xsd"
@@ -69,7 +71,7 @@ public static class FileInventory
 
         var items = candidates
             .Where(path => ShouldInclude(root, path, serviceReferenceFolders))
-            .Select(path => TryCreateItem(root, path))
+            .Select(path => TryCreateItem(root, path, serviceReferenceFolders))
             .Where(item => item is not null)
             .Select(item => item!)
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
@@ -78,14 +80,14 @@ public static class FileInventory
         return items;
     }
 
-    private static FileInventoryItem? TryCreateItem(string root, string path)
+    private static FileInventoryItem? TryCreateItem(string root, string path, ISet<string> serviceReferenceFolders)
     {
         try
         {
             var info = new FileInfo(path);
             return new FileInventoryItem(
                 NormalizeRelativePath(Path.GetRelativePath(root, path)),
-                GetKind(path),
+                GetKind(root, path, serviceReferenceFolders),
                 info.Length);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -113,6 +115,11 @@ public static class FileInventory
         var fullPath = Path.GetFullPath(path);
         var fileName = Path.GetFileName(fullPath);
         var extension = Path.GetExtension(fullPath);
+        if (extension.Equals(".xsd", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         if (IsWcfMetadataExtension(extension))
         {
             return IsServiceReferenceMetadataPath(root, fullPath, serviceReferenceFolders);
@@ -133,7 +140,7 @@ public static class FileInventory
         return parts.Count > 1 && parts[0].Equals("packages", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string GetKind(string path)
+    private static string GetKind(string root, string path, ISet<string> serviceReferenceFolders)
     {
         var fileName = Path.GetFileName(path);
         var extension = Path.GetExtension(path);
@@ -183,7 +190,10 @@ public static class FileInventory
             ".svcmap" => "ServiceReferenceMetadata",
             ".wsdl" => "ServiceReferenceMetadata",
             ".disco" => "ServiceReferenceMetadata",
-            ".xsd" => "ServiceReferenceMetadata",
+            ".xsd" when IsServiceReferenceMetadataPath(root, path, serviceReferenceFolders) => "ServiceReferenceMetadata",
+            ".xsd" => "XsdSchema",
+            ".dbml" => "Dbml",
+            ".edmx" => "Edmx",
             _ => "File"
         };
     }

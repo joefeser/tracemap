@@ -150,6 +150,7 @@ rules:
       - Metadata inventory is static repository evidence and does not prove runtime data access, database existence, provider compatibility, deployment, or production usage.
       - Arbitrary XSD files are gated; unrelated schemas are not treated as typed DataSet metadata.
       - Malformed, unsupported, too-large, or parser-rejected metadata is emitted as an analysis gap rather than clean absence.
+      - Safe properties include metadataKind, metadataHash, inventoryKind, repo-relative path, coverage, and limitation.
       - Raw SQL, connection strings, config values, URLs, remotes, local absolute paths, source snippets, and secrets are hashed or omitted.
 
   - id: legacy.data.dbml.v1
@@ -165,6 +166,7 @@ rules:
     limitations:
       - DBML metadata is static design-time evidence and does not prove database existence, LINQ runtime behavior, routine existence, lazy loading, query execution, or provider compatibility.
       - Generated-code linkage is separate evidence and does not upgrade metadata descriptor tier.
+      - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Unsafe names, provider metadata, database names, connection names, and routine identifiers are hashed or omitted when required.
 
   - id: legacy.data.edmx.v1
@@ -180,6 +182,7 @@ rules:
     limitations:
       - EDMX metadata is static design-time evidence and does not prove EF runtime model loading, lazy loading, change tracking, query execution, provider compatibility, migrations, or schema existence.
       - Complex, inherited, split, conditional, many-to-many, duplicate-container, and provider-extension mappings are gaps unless a future spec defines deterministic handling.
+      - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Namespace URIs, provider details, unsafe identifiers, and raw metadata content are hashed or omitted.
 
   - id: legacy.data.typed-dataset.v1
@@ -197,6 +200,7 @@ rules:
     limitations:
       - Typed DataSet metadata is static design-time evidence and does not prove adapter execution, stored-procedure existence, command reachability, SQL execution, provider compatibility, or database schema existence.
       - Raw SQL command text is never stored; complete static command text may produce only existing hash/length and safe shape evidence.
+      - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, textHash, textLength, queryShapeHash, and hash variants for unsafe identifiers.
       - Unrelated XSD files, dynamic commands, incomplete schemas, unsupported provider metadata, and stale or missing generated code remain gaps or unsupported evidence.
 
   - id: legacy.data.config.v1
@@ -209,6 +213,7 @@ rules:
     limitations:
       - Config metadata is static checked-in evidence and does not prove runtime environment selection, transform application, secret availability, provider installation, database reachability, or production usage.
       - Raw connection strings, usernames, passwords, server names, catalog names, file paths, URLs, secret-looking values, and config values are hashed or omitted.
+      - Safe reducer-facing properties include configKind, connectionName, providerName, connectionNameHash, providerNameHash, valueHash, coverage, and limitation.
       - Encrypted sections, external config includes, transforms, and code-built connections are reduced-coverage gaps.
 
   - id: legacy.data.generated-link.v1
@@ -221,6 +226,7 @@ rules:
     limitations:
       - Generated-code linkage is static evidence and does not prove generated files are fresh, runtime code paths execute, query execution occurs, or database access happens.
       - Global short-name matching is not allowed; ambiguous or missing generated-code candidates are gaps.
+      - Safe reducer-facing properties include linkKind, symbolRole, typeName, generatedCodeFileName, supportingFactIds, metadataPath, and hash variants for unsafe identifiers.
       - Linkage tier is recorded separately and does not upgrade the descriptor tier of the metadata evidence.
 
   - id: legacy.webforms.inventory.v1
