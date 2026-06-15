@@ -27,6 +27,9 @@ upgraded from demo/dev language to shipped language with proof paths.
 
 - `npm test`
 - `npm run validate`
+- Browser sanity check for `/capabilities/` at 1280px and 390px widths:
+  navigation renders, `Capabilities` is current, no horizontal overflow, no
+  console errors.
 
 ## Follow-ups
 
