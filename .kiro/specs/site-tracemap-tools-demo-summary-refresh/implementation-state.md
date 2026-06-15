@@ -1,0 +1,128 @@
+# Site Demo Summary Refresh Implementation State
+
+Status: spec-ready
+Branch: codex/spec-site-demo-summary-refresh
+Target PR base: main
+Public claim level: hidden
+
+## Summary
+
+This spec queues a future site/tooling phase to reduce drift between generated
+public demo summaries and static site copy. It proposes a committed
+public-safe fixture refreshed from bounded `./scripts/demo-public.sh` output,
+plus validation that rejects unsafe paths and raw artifacts.
+
+This branch is spec-only. It does not implement the refresh command, fixture,
+site page changes, or validation wiring.
+
+## Scope Decisions
+
+- Use a generated public-safe fixture rather than validation-only or build-time
+  local artifact reads.
+- Keep the mechanism hidden because it is maintainer tooling, not a public
+  product claim.
+- Let affected public pages remain demo-level when they summarize checked-in
+  sample evidence.
+- Keep the future fixture under an underscore-prefixed `site/src/` directory so
+  validation can read committed public-safe data and the current plain static
+  copier does not publish the fixture to `site/dist/`.
+- Validate current static HTML against the fixture in the first implementation;
+  do not add a site templating/data layer in this spec's scope.
+- Map from the real `demo-summary.json` section fields: `name`, `status`,
+  `classification`, `evidenceTier`, `ruleIds`, `reportCoverage`,
+  `artifactPaths`, `counts`, and `reason`.
+- Use a known-name mapping table if the fixture adds stable `id` values.
+- Do not invent limitations from `demo-summary.json`; only extract them from
+  approved public-safe reports with a bounded extractor, or leave them as page
+  prose validated against status and coverage.
+- Read the source summary `version` field, not a nonexistent
+  `summaryVersion` field.
+- Preserve the current `ruleIds: ["public.demo.summary.v1"]` array verbatim for
+  all sections.
+- Validate `portfolio-manifest.json` `indexPath` values as approved relative
+  paths before using any manifest-derived field.
+- Do not read or publish raw generated internals such as scans, facts, SQLite
+  indexes, combined SQLite files, manifests, logs, copied reports, raw source,
+  raw SQL, config values, local paths, raw remotes, or private identities.
+
+## Affected Future Pages
+
+- `/demo/result/`
+- `/demo/proof-upgrades/`
+- `/demo/proof-assets/`
+- `/packets/`
+- `/manager-packet/`
+- `/capabilities/`
+
+## Review Artifacts
+
+- Read `AGENTS.md`.
+- Reviewed existing site spec patterns for `/demo/result/`, `/demo/start-here/`,
+  `/demo/proof-upgrades/`, `/packets/`, `/manager-packet/`, and
+  `/capabilities/`.
+- Inspected `scripts/kiro-review.mjs` and `site/package.json` for available
+  review and validation commands.
+- Ran Kiro Opus spec review with
+  `node scripts/kiro-review.mjs --phase site-tracemap-tools-demo-summary-refresh --kind spec --model claude-opus-4.8 --fresh --timeout-ms 900000`.
+- Opus returned blocking findings that the original draft used fixture fields
+  that did not match the real `demo-summary.json` writer, assumed stable IDs
+  that were not present, and treated limitations as if they existed in the
+  summary.
+- Patched the spec to use real source fields, add explicit mapping rules, choose
+  validation of static HTML against the fixture, document the current static
+  copier behavior, and add a page fact mapping table.
+- Ran Kiro Sonnet spec review with
+  `node scripts/kiro-review.mjs --phase site-tracemap-tools-demo-summary-refresh --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 900000`.
+- Sonnet returned reduced coverage because shell access was denied inside the
+  review, but it still inspected the relevant files and returned actionable
+  findings.
+- Patched the Sonnet findings by naming the real `version` source field,
+  requiring relative `portfolio-manifest.json` `indexPath` validation,
+  documenting the constant current rule ID array, clarifying underscore
+  directory exclusion, co-locating the known-section mapping table with the
+  refresh script, and requiring HTML-source extraction in page validation.
+
+## Validation Completed
+
+- Passed: Kiro Opus spec review with
+  `claude-opus-4.8`; patched the blocking and important findings.
+- Passed with reduced review-tool coverage: Kiro Sonnet spec review with
+  `claude-sonnet-4.6`; patched the blocking and important findings.
+- Passed: `git diff --check`.
+- Passed: `npm test` from `site/` with 19 tests passing.
+- Passed: `npm run validate` from `site/`; it built `dist/` and validated 27
+  HTML files, 605 internal references, and 26 sitemap URLs.
+
+Core scanner/reducer suites are intentionally deferred because this branch only
+adds site spec files.
+
+## Oddities
+
+- The local worktree had an unrelated untracked `c-sharp-sample-repos/`
+  directory before this branch's spec work. It is intentionally left untouched.
+- The Opus review completed with full coverage, but the Kiro wrapper emitted a
+  post-review MCP-settings warning and one failed tool-parameter retry. The
+  review text was still returned successfully.
+- The Sonnet review completed with reduced coverage because a shell command was
+  denied by Kiro's non-interactive tool policy. The review still produced
+  concrete findings, and those findings were patched.
+- During validation, the shared checkout appeared on
+  `codex/spec-site-incident-review-use-case` while these spec files were still
+  untracked. Switched back to `codex/spec-site-demo-summary-refresh` before any
+  staging or commit work and rebased onto the current `origin/main`.
+- PR review loop found actionable Qodo and Gemini feedback after PR creation:
+  clarify the fixture example's nested source metadata and explicitly require
+  `/demo/proof-assets/` hard-coded count validation. Patched both in the
+  follow-up commit.
+- PR review loop also found actionable Codex feedback that current
+  `sample-scans` source rows emit `scans/.../report.md` paths. Patched the spec
+  to require omitting raw scan paths from public fixture artifacts and,
+  optionally, recording only a generic local-only family label.
+
+## Follow-Ups For Implementation
+
+- Add the fixture contract and refresh command in a future PR.
+- Wire fixture validation into the existing site validation path.
+- Update or validate all affected pages against the fixture.
+- Keep browser sanity checks scoped to future page layout or interaction
+  changes.
