@@ -83,7 +83,7 @@ The refresh maps from the real `demo-summary.json` section fields:
 | `evidenceTier` | `evidenceTier` | Preserve source value. |
 | `ruleIds` | `ruleIds` | Preserve source array and require at least one rule ID. |
 | `reportCoverage` | `coverage` | Alias is allowed only with tests documenting the mapping. |
-| `artifactPaths` | `artifacts` | Alias is allowed only after path validation and public-safe allowlist checks. |
+| `artifactPaths` | `artifacts` | Alias is allowed only for paths that pass validation and public-safe allowlist checks. Raw local-only paths such as current `sample-scans` `scans/.../report.md` values are omitted from `artifacts`. |
 | `counts` | `counts` | Preserve numeric keys used by affected pages. |
 | `reason` | `reason` | Preserve, and require for deferred, unavailable, or failed statuses. |
 
@@ -93,6 +93,9 @@ future spec explicitly approves a smaller sanitized excerpt format. Per-section
 limitations should not be fabricated from `demo-summary.json`; they can be
 extracted only from approved public-safe report data with a documented bounded
 extractor, or remain page prose validated against status and coverage labels.
+If the source summary row contains raw local-only artifact paths, the refresh
+may record a generic `localOnlyArtifactFamilies` value such as `scan-reports`
+without storing the raw path.
 
 All sections produced by the current `demo-public.sh` summary writer carry
 `ruleIds: ["public.demo.summary.v1"]`; the fixture preserves this array
@@ -109,6 +112,9 @@ The refresh command should:
   public-safe summary metadata;
 - optionally read public-safe report JSON files when listed by the summary,
   selected by the public-file allowlist, and accepted by leak rejection checks;
+- omit source `artifactPaths` entries that point to local-only raw artifact
+  families such as `scans/`, optionally recording only a pathless local-only
+  family label;
 - validate every `portfolio-manifest.json` `indexPath` value as an approved
   relative path before reading or copying any manifest-derived field;
 - derive fixture `id` values from a checked mapping table keyed by known

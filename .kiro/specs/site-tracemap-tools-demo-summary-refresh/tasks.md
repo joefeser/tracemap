@@ -21,6 +21,9 @@
     names, and missing reasons for deferred, unavailable, or failed sections.
   - Reject any `portfolio-manifest.json` whose `indexPath` values are not
     approved relative paths before using manifest-derived fields.
+  - Omit current raw `sample-scans` `scans/.../report.md` source paths from
+    public fixture artifacts, optionally recording only a generic local-only
+    family label.
   - Write deterministic fixture JSON with stable ordering and a trailing
     newline.
 
@@ -34,6 +37,8 @@
     JSON.
   - Add an unsupported `demo-summary.json` `version` rejection test.
   - Add field-mapping tests for `reportCoverage` and `artifactPaths`.
+  - Add a test proving raw `scans/...` source artifact paths are not committed
+    as public fixture artifacts.
   - Add focused rejection tests for each unsafe path and value class.
   - Add tests that refresh input selection ignores files under `scans/`,
     `combined/`, and `logs/`.

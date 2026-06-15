@@ -57,7 +57,8 @@ Acceptance criteria:
   table for known section names. Unknown names must fail until the mapping is
   updated.
 - The fixture may rename `reportCoverage` to `coverage` and `artifactPaths` to
-  `artifacts`, but the mapping must be documented and tested.
+  `artifacts`, but only for the public-safe subset of `artifactPaths`; the
+  mapping must be documented and tested.
 - The fixture may include statuses, classification labels, evidence tiers, rule
   IDs, coverage labels, counts, reasons, public-safe report-family paths, and
   generated summary names.
@@ -65,6 +66,10 @@ Acceptance criteria:
   limitations may be carried only if a bounded extractor reads them from
   approved public-safe report families, or they may remain page prose validated
   against section status and coverage.
+- If a source section contains raw local-only artifact paths such as the current
+  `sample-scans` row's `scans/.../report.md` paths, the fixture must omit those
+  paths from `artifacts` and may record only a generic local-only artifact
+  family label without a path.
 - The fixture may include a hashed output-root label such as
   `path-hash:<hex>` only if it is already present in `demo-summary.json`.
 - The fixture must not include raw snippets, raw SQL, config values, secrets,
@@ -84,6 +89,9 @@ Acceptance criteria:
 - The refresh may read generated public-safe report Markdown/JSON families only
   when they are selected by the same allowlist shape as `collectPublicFiles()`
   and pass the same leak rejection checks as `findSentinelFailures()`.
+- The refresh must not read files under source `artifactPaths` that point to raw
+  generated families such as `scans/`; those paths are source metadata only and
+  must not be copied into committed fixture artifacts.
 - The refresh must not read from `scans/`, `combined/`, `logs/`, raw fact
   streams, SQLite indexes, analyzer logs, generated scan manifests, or copied
   private/local reports.
@@ -110,7 +118,8 @@ Acceptance criteria:
   under approved public-safe families such as `demo-summary.md`,
   `demo-summary.json`, `reports/...`, and `portfolio-manifest.json`.
 - Any path traversal segment, empty path segment, backslash-only path, or
-  generated raw-artifact family causes the refresh or validation to fail.
+  generated raw-artifact family in committed fixture data or public page
+  references causes the refresh or validation to fail.
 - Scrubbing must not replace unsafe values with vague placeholders in committed
   data; unsafe values should fail validation so a maintainer can fix the
   generator or source summary.
