@@ -6,6 +6,19 @@ import { buildSite } from "./build.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultBaseUrl = "https://tracemap.tools";
+const expectedTopNavLinks = [
+  { href: "/evidence/", text: "Evidence" },
+  { href: "/outputs/", text: "Outputs" },
+  { href: "/workflows/", text: "Workflows" },
+  { href: "/examples/", text: "Examples" },
+  { href: "/blog/", text: "Blog" },
+  { href: "/capabilities/", text: "Capabilities" },
+  { href: "/docs/", text: "Docs" },
+  { href: "/validation/", text: "Validation" },
+  { href: "/limitations/", text: "Limitations" },
+  { href: "/demo/", text: "Demo" },
+  { href: "https://github.com/joefeser/tracemap", text: "GitHub" }
+];
 
 export async function validateSite(options = {}) {
   const { log = console.log, root = defaultRoot } = options;
@@ -49,6 +62,8 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
   if (normalizedBaseUrl) {
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
   }
+
+  await validateTopNavigation({ dist, errors, htmlFiles });
 
   if (errors.length > 0) {
     throw new Error(`Site validation failed:\n- ${errors.join("\n- ")}`);
@@ -167,6 +182,61 @@ async function validateRobotsSitemap({ baseUrl, errors, robotsPath }) {
   if (!robots.split(/\r?\n/).some((line) => line.trim() === expected)) {
     errors.push(`robots.txt must include "${expected}".`);
   }
+}
+
+async function validateTopNavigation({ dist, errors, htmlFiles }) {
+  for (const file of htmlFiles) {
+    const html = await readFile(file, "utf8");
+    const links = extractTopNavLinks(html);
+    const label = formatDistPath(dist, file);
+
+    if (!links) {
+      errors.push(`${label} is missing <nav class="top-nav">.`);
+      continue;
+    }
+
+    if (!sameNavLinks(links, expectedTopNavLinks)) {
+      errors.push(
+        `${label} top navigation does not match the canonical links. Expected: ${formatNavLinks(
+          expectedTopNavLinks
+        )}. Found: ${formatNavLinks(links)}.`
+      );
+    }
+  }
+}
+
+function extractTopNavLinks(html) {
+  const nav = html.match(/<nav\b[^>]*class=["'][^"']*\btop-nav\b[^"']*["'][^>]*>([\s\S]*?)<\/nav>/);
+
+  if (!nav) {
+    return null;
+  }
+
+  return [...nav[1].matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((match) => ({
+    href: getAttribute(match[1], "href") ?? "",
+    text: normalizeHtmlText(match[2])
+  }));
+}
+
+function getAttribute(attributes, name) {
+  const match = attributes.match(new RegExp(`\\b${name}=["']([^"']*)["']`));
+  return match ? decodeXml(match[1]) : null;
+}
+
+function normalizeHtmlText(value) {
+  return decodeXml(value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+}
+
+function sameNavLinks(actual, expected) {
+  if (actual.length !== expected.length) {
+    return false;
+  }
+
+  return actual.every((link, index) => link.href === expected[index].href && link.text === expected[index].text);
+}
+
+function formatNavLinks(links) {
+  return links.map((link) => `${link.text} (${link.href})`).join(", ");
 }
 
 function extractHtmlReferences(html) {
