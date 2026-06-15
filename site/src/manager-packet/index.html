@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A manager-facing TraceMap packet that explains deterministic static evidence, rule IDs, coverage labels, generated summaries, gaps, and limitations."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Manager Packet | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/manager-packet/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Manager Packet">
+    <meta
+      property="og:description"
+      content="What TraceMap solves for teams: a concrete static-evidence conversation before claiming impact, safety, or production behavior."
+    >
+    <meta property="og:url" content="https://tracemap.tools/manager-packet/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Manager packet</p>
+        <h1>TraceMap gives teams an evidence conversation before the claim.</h1>
+        <p class="hero-subhead">
+          The manager view is simple: TraceMap turns repository scans into
+          deterministic static evidence so a team can discuss what is known,
+          what is reduced, and where proof stops before saying a change is safe
+          or impacted.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. This page summarizes public demo evidence
+          from checked-in samples. It does not claim runtime behavior,
+          production traffic, deployment state, endpoint performance, release
+          safety, incident root cause, or AI impact analysis.
+        </p>
+        <nav class="hero-actions" aria-label="Manager packet links">
+          <a class="button primary" href="/demo/proof-upgrades/">See demo proof</a>
+          <a class="button secondary" href="/packets/">Read packet guide</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What it solves</p>
+          <h2>It replaces prose-only certainty with an inspectable trail.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Before the review claim</strong><span>Teams can see which static dependencies, changed surfaces, rule IDs, evidence tiers, and coverage labels support the conversation.</span></div>
+          <div><strong>Before the safety claim</strong><span>Managers can ask whether gaps, partial analysis, generated summaries, and limitations are visible enough for human review.</span></div>
+          <div><strong>Before the escalation claim</strong><span>Incident follow-up can use static evidence to orient questions without saying TraceMap proves production cause or runtime behavior.</span></div>
+          <div><strong>Before the handoff</strong><span>Reviewers get paths back to public-safe reports, capability status, roadmap gates, and known non-claims.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Reader questions</p>
+          <h2>Different leaders can use the same packet without changing the evidence.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Engineering managers</h3>
+            <p>What proof do we have, what is only partial, and which review decision still needs a person?</p>
+          </article>
+          <article>
+            <h3>Reviewers</h3>
+            <p>Which rule IDs, evidence tiers, file spans, supporting IDs, and limitations explain this finding?</p>
+          </article>
+          <article>
+            <h3>Architects</h3>
+            <p>Which static paths, packages, endpoints, SQL surfaces, config surfaces, or gaps point to coupling?</p>
+          </article>
+          <article>
+            <h3>Engineering leads</h3>
+            <p>Which teams need more context before a change is described as safe, risky, or needing review?</p>
+          </article>
+          <article>
+            <h3>Tool owners</h3>
+            <p>Which generated summaries are public-safe, and which raw artifacts must stay local or private?</p>
+          </article>
+          <article>
+            <h3>Future reviewers</h3>
+            <p>Can they follow the same source paths and limitations without reconstructing the story from memory?</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Evidence ingredients</p>
+          <h2>The useful parts are concrete, small, and named.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>rule IDs</code><span>Every public conclusion should stay attached to the rule or status framing that produced it.</span></div>
+          <div><code>evidence tiers</code><span>Readers can separate semantic, structural, syntax/textual, and unknown evidence instead of treating all findings alike.</span></div>
+          <div><code>coverage labels</code><span><code>PartialAnalysis</code>, reduced coverage, gaps, and unavailable sections stay part of the packet.</span></div>
+          <div><code>generated summaries</code><span>Markdown and JSON summaries help humans read the evidence without replacing source facts and local indexes.</span></div>
+          <div><code>proof paths</code><span>Public pages point back to checked-in demos, reports, capability rows, roadmap gates, and limitations.</span></div>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Proof path</p>
+          <h2>Start with the summary, then follow the links to the evidence ledger.</h2>
+          <p>
+            The checked-in public demo can generate public-safe summaries for
+            combined reports, paths, reverse lookup, portfolio, diff, impact,
+            and release review. Raw fact streams, SQLite files, scan folders,
+            and analyzer logs remain local-only.
+          </p>
+        </div>
+        <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
+cd tracemap
+./scripts/demo-public.sh /tmp/tracemap-demo
+
+# Read the public-safe summary first.
+sed -n '1,220p' /tmp/tracemap-demo/demo-summary.md</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">How to use it</p>
+          <h2>The packet narrows the conversation without approving the release.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Use it in review</strong><span>Ask which static evidence supports a concern, which gaps remain, and whether the summary is enough for the next human decision.</span></div>
+          <div><strong>Use it in planning</strong><span>Identify repeated dependency surfaces, package or config surfaces, and coverage limits that should shape follow-up work.</span></div>
+          <div><strong>Use it in incident follow-up</strong><span>Orient code questions after an event without claiming TraceMap proved the production cause.</span></div>
+          <div><strong>Use it in handoff</strong><span>Give managers and reviewers the same bounded evidence map instead of separate verbal summaries.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The page is intentionally not a runtime or approval story.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not replace Dynatrace, telemetry, logs, traces, incident response, ownership, tests, human review, or release approval.</li>
+          <li>TraceMap does not prove production traffic, deployment state, endpoint performance, runtime reachability, P1 root cause, or that an endpoint is bad.</li>
+          <li>TraceMap does not validate a release or turn partial static evidence into a safety decision.</li>
+          <li>TraceMap does not use LLM calls, embeddings, vector databases, or prompt-based classification in the scanner or reducer.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Public-safe boundary</p>
+          <h2>Share the summary, not the raw internals.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe to summarize</strong><span>Public routes, checked-in demo paths, generated report families, rule/status framing, evidence tiers, coverage labels, gap counts, and limitations.</span></div>
+          <div><strong>Keep local</strong><span>Raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, <code>facts.ndjson</code>, <code>index.sqlite</code>, combined SQLite files, scan directories, analyzer logs, and private sample identities.</span></div>
+          <div><strong>Keep visible</strong><span>Limitations, reduced coverage, unavailable evidence, and human-review requirements should stay next to any conclusion.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Detailed proof</p>
+          <h2>Follow the manager packet into the existing evidence pages.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/demo/result/">Current demo result</a>
+          <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/roadmap/">Claim roadmap</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/outputs/">Output artifacts</a>
+          <a href="/evidence/">Evidence tiers</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        The manager packet connects the
+        <a href="/demo/proof-upgrades/">demo proof ledger</a>,
+        <a href="/packets/">packet guide</a>,
+        and
+        <a href="/capabilities/">capability matrix</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
