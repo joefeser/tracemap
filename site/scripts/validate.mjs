@@ -3,6 +3,7 @@ import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
+import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultBaseUrl = "https://tracemap.tools";
@@ -10,6 +11,7 @@ export async function validateSite(options = {}) {
   const { log = console.log, root = defaultRoot } = options;
 
   await buildSite({ log, root });
+  await validateDemoSummary({ root });
   const result = await validateDist({ root });
 
   log(
