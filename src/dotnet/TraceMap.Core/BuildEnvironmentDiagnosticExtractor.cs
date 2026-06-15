@@ -27,7 +27,6 @@ public static class BuildEnvironmentDiagnosticExtractor
         string repoPath,
         ScanManifest manifest,
         IReadOnlyList<FileInventoryItem> inventory,
-        ScanOptions options,
         SemanticExtractionResult semanticResult)
     {
         var diagnostics = new List<BuildEnvironmentDiagnosticCandidate>();
@@ -109,7 +108,7 @@ public static class BuildEnvironmentDiagnosticExtractor
         }
 
         var root = document.Root;
-        var isSdkStyle = root?.Attributes().Any(attribute => attribute.Name.LocalName == "Sdk" && !string.IsNullOrWhiteSpace(attribute.Value)) == true;
+        var isSdkStyle = IsSdkStyleProject(root);
         var projectStyle = ProjectStyle(project, isSdkStyle);
         if (!isSdkStyle || project.Kind == "NonCSharpProject")
         {
@@ -193,6 +192,11 @@ public static class BuildEnvironmentDiagnosticExtractor
 
         foreach (var import in Elements(document, "Import"))
         {
+            if (HasSdkAttribute(import))
+            {
+                continue;
+            }
+
             var importValue = AttributeValue(import, "Project");
             if (string.IsNullOrWhiteSpace(importValue))
             {
@@ -355,7 +359,7 @@ public static class BuildEnvironmentDiagnosticExtractor
         var byPath = inventory.Select(item => item.RelativePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var projectDirectories = inventory
             .Where(item => item.Kind == "Project")
-            .Select(item => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(item.RelativePath) ?? "."))
+            .Select(item => NormalizeDirectory(Path.GetDirectoryName(item.RelativePath)))
             .ToArray();
         var diagnostics = new List<BuildEnvironmentDiagnosticCandidate>();
         foreach (var item in inventory.Where(item => item.Kind is "WebFormsMarkup" or "ServiceReferenceMetadata" or "Resource" or "Settings"))
@@ -420,12 +424,24 @@ public static class BuildEnvironmentDiagnosticExtractor
 
     private static bool HasNearbyProject(string relativePath, IReadOnlyList<string> projectDirectories)
     {
-        var directory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(relativePath) ?? ".");
+        var directory = NormalizeDirectory(Path.GetDirectoryName(relativePath));
         return projectDirectories.Any(projectDirectory =>
             projectDirectory == "."
-            || directory.Equals(projectDirectory, StringComparison.OrdinalIgnoreCase)
-            || directory.StartsWith(projectDirectory.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase)
-            || projectDirectory.StartsWith(directory.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase));
+            || IsSameOrChildDirectory(directory, projectDirectory)
+            || (directory != "." && IsSameOrChildDirectory(projectDirectory, directory)));
+    }
+
+    private static bool IsSameOrChildDirectory(string child, string parent)
+    {
+        return child.Equals(parent, StringComparison.OrdinalIgnoreCase)
+            || child.StartsWith(parent.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeDirectory(string? directory)
+    {
+        return string.IsNullOrWhiteSpace(directory)
+            ? "."
+            : FileInventory.NormalizeRelativePath(directory);
     }
 
     private static IEnumerable<string> ExpectedGeneratedFiles(FileInventoryItem item)
@@ -595,6 +611,19 @@ public static class BuildEnvironmentDiagnosticExtractor
         }
 
         return isSdkStyle ? "sdk-style" : "non-sdk-style";
+    }
+
+    private static bool IsSdkStyleProject(XElement? root)
+    {
+        return root?.Attributes().Any(attribute => attribute.Name.LocalName == "Sdk" && !string.IsNullOrWhiteSpace(attribute.Value)) == true
+            || root?.Descendants().Any(element =>
+                element.Name.LocalName == "Import"
+                && HasSdkAttribute(element)) == true;
+    }
+
+    private static bool HasSdkAttribute(XElement element)
+    {
+        return element.Attributes().Any(attribute => attribute.Name.LocalName == "Sdk" && !string.IsNullOrWhiteSpace(attribute.Value));
     }
 
     private static string? SafeShortValue(string value)
