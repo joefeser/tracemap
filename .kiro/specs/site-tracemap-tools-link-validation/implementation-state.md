@@ -24,5 +24,5 @@ gate before publishing static output.
 
 ## Follow-ups
 
-- Consider adding `npm run validate` to Amplify or repository CI once the site
-  validation command has run cleanly for a few PRs.
+- Deployment and pull request validation are handled by
+  `.kiro/specs/site-tracemap-tools-deploy-validation/`.
