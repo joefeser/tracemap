@@ -140,6 +140,45 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_summarizes_value_origin_evidence_and_boundary_review_notes_deterministically()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "api.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        var controller = "Api.OrdersController.Get(System.String)";
+        var service = "Api.OrderService.Query(System.String)";
+
+        SqliteIndexWriter.Write(index, manifest, [
+            ArgumentPassedFact(manifest, controller, service, "System.String request", "id", "System.String", "Controllers/OrdersController.cs", 12),
+            FlowBoundaryFact(manifest, FactTypes.CallbackBoundary, "CapturedValueCallbackBoundary", "Controllers/OrdersController.cs", 16),
+            FlowBoundaryFact(manifest, FactTypes.AsyncBoundary, "AwaitBoundary", "Controllers/OrdersController.cs", 18)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["api"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        Assert.Equal(1, result.Report.Summary.ValueOriginEvidenceCounts["argument-flows"]);
+        Assert.Equal(1, result.Report.Summary.ValueOriginEvidenceCounts["parameter-forward-edges"]);
+        Assert.Equal(1, result.Report.Summary.ValueOriginEvidenceCounts["callback-boundaries"]);
+        Assert.Equal(1, result.Report.Summary.ValueOriginEvidenceCounts["async-boundaries"]);
+        Assert.Contains(result.Report.NeedsReview, row => row.ReviewKind == FactTypes.CallbackBoundary && row.Message.Contains("does not prove callback invocation", StringComparison.Ordinal));
+        Assert.Contains(result.Report.NeedsReview, row => row.ReviewKind == FactTypes.AsyncBoundary && row.Message.Contains("runtime scheduling", StringComparison.Ordinal));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
+        Assert.Contains("Value-origin evidence by kind", markdown);
+        Assert.Contains("callback-boundaries", json);
+        Assert.Contains("does not prove callback invocation", markdown);
+
+        var secondOutDir = Path.Combine(temp.Path, "report-second");
+        await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, secondOutDir));
+        Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "dependency-report.md")));
+        Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "dependency-report.json")));
+    }
+
+    [Fact]
     public async Task Report_keeps_same_table_sql_surfaces_separate_by_shape_hash()
     {
         using var temp = new TempDirectory();
@@ -437,6 +476,54 @@ public sealed class CombinedDependencyReportTests
                 ["methodName"] = "GET",
                 ["urlKind"] = "dynamic",
                 ["dynamicReason"] = dynamicReason
+            });
+    }
+
+    private static CodeFact ArgumentPassedFact(
+        ScanManifest manifest,
+        string caller,
+        string callee,
+        string argumentSymbol,
+        string parameterName,
+        string parameterType,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ArgumentPassed,
+            RuleIds.CSharpSemanticValueFlow,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["argumentExpressionHash"] = "arg-hash",
+                ["argumentExpressionKind"] = "IdentifierName",
+                ["argumentOrdinal"] = "0",
+                ["argumentSymbol"] = argumentSymbol,
+                ["argumentSymbolKind"] = "Parameter",
+                ["argumentType"] = parameterType,
+                ["callKind"] = "method",
+                ["parameterName"] = parameterName,
+                ["parameterOrdinal"] = "0",
+                ["parameterType"] = parameterType
+            });
+    }
+
+    private static CodeFact FlowBoundaryFact(ScanManifest manifest, string factType, string boundaryKind, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            factType,
+            RuleIds.CSharpSemanticFlowBoundary,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: "Api.OrdersController.Get(System.String)",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["boundaryKind"] = boundaryKind
             });
     }
 
