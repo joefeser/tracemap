@@ -105,6 +105,7 @@ public static class FactTypes
     public const string RepoScanned = nameof(RepoScanned);
     public const string BuildStatus = nameof(BuildStatus);
     public const string AnalysisGap = nameof(AnalysisGap);
+    public const string BuildEnvironmentDiagnostic = nameof(BuildEnvironmentDiagnostic);
     public const string FileInventoried = nameof(FileInventoried);
     public const string SolutionDeclared = nameof(SolutionDeclared);
     public const string ProjectDeclared = nameof(ProjectDeclared);
@@ -212,6 +213,12 @@ public static class RuleIds
     public const string CSharpSemanticFlowBoundary = "csharp.semantic.flowboundary.v1";
     public const string CSharpSemanticRuntimeEvidence = "csharp.semantic.runtimeevidence.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
+    public const string BuildEnvironmentTargetFramework = "build.environment.target-framework.v1";
+    public const string BuildEnvironmentToolset = "build.environment.toolset.v1";
+    public const string BuildEnvironmentProjectFormat = "build.environment.project-format.v1";
+    public const string BuildEnvironmentRestore = "build.environment.restore.v1";
+    public const string BuildEnvironmentGeneratedFiles = "build.environment.generated-files.v1";
+    public const string BuildEnvironmentWorkspaceDiagnostic = "build.environment.workspace-diagnostic.v1";
     public const string HttpClientInvocation = "http.client.invocation.v1";
     public const string DatabaseEntityFramework = "database.ef.v1";
     public const string DatabaseDapperInvocation = "database.dapper.invocation.v1";
@@ -243,10 +250,11 @@ public static class ScannerVersions
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
+    public const string BuildEnvironmentExtractor = "build-environment/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.11.1";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.12.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";

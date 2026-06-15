@@ -3724,10 +3724,17 @@ public static class CSharpSemanticExtractor
         int endLine = 1,
         string? diagnosticId = null)
     {
+        var sanitized = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(gapKind, message, diagnosticId);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
+            ["coverageEffect"] = sanitized.CoverageEffect,
+            ["diagnosticCode"] = sanitized.DiagnosticCode,
+            ["diagnosticKind"] = sanitized.DiagnosticKind,
             ["gapKind"] = gapKind,
-            ["message"] = message
+            ["guidanceCode"] = sanitized.GuidanceCode,
+            ["message"] = sanitized.Message,
+            ["messageHash"] = FactFactory.Hash(sanitized.Message, 32),
+            ["sanitization"] = sanitized.Sanitization
         };
         if (!string.IsNullOrWhiteSpace(diagnosticId))
         {

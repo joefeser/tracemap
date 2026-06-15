@@ -6,6 +6,12 @@ public static class FileInventory
     {
         ".sln",
         ".csproj",
+        ".vbproj",
+        ".fsproj",
+        ".props",
+        ".targets",
+        ".resx",
+        ".settings",
         ".config",
         ".json",
         ".cs",
@@ -24,6 +30,8 @@ public static class FileInventory
     private static readonly HashSet<string> IncludedFileNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "packages.config",
+        "packages.lock.json",
+        "nuget.config",
         "Web.config",
         "App.config"
     };
@@ -127,6 +135,16 @@ public static class FileInventory
             return "PackagesConfig";
         }
 
+        if (fileName.Equals("packages.lock.json", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PackagesLock";
+        }
+
+        if (fileName.Equals("nuget.config", StringComparison.OrdinalIgnoreCase))
+        {
+            return "NuGetConfig";
+        }
+
         if (fileName.Equals("Web.config", StringComparison.OrdinalIgnoreCase)
             || fileName.Equals("App.config", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".config", StringComparison.OrdinalIgnoreCase))
@@ -138,6 +156,12 @@ public static class FileInventory
         {
             ".sln" => "Solution",
             ".csproj" => "Project",
+            ".vbproj" => "NonCSharpProject",
+            ".fsproj" => "NonCSharpProject",
+            ".props" => "MSBuildProps",
+            ".targets" => "MSBuildTargets",
+            ".resx" => "Resource",
+            ".settings" => "Settings",
             ".json" => "Json",
             ".cs" when IsWebFormsDesignerFile(fileName) => "WebFormsDesigner",
             ".cs" when IsWebFormsCodeBehindFile(fileName) => "WebFormsCodeBehind",

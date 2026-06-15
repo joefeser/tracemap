@@ -260,6 +260,7 @@ public static class ScanEngine
                 properties: packageProperties));
         }
 
+        facts.AddRange(BuildEnvironmentDiagnosticExtractor.Extract(repoPath, manifest, inventory, options, semanticResult));
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyWcfExtractor.Extract(repoPath, manifest, inventory));
