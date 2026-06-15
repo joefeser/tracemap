@@ -957,7 +957,7 @@ public static class CombinedDependencyPathReporter
         }
 
         if (valueEdges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier4Unknown)
-            || edges.Any(edge => edge.Classification == CombinedDependencyPathClassifications.UnknownAnalysisGap))
+            || Classify(edges) == CombinedDependencyPathClassifications.UnknownAnalysisGap)
         {
             return CombinedValueOriginClassifications.UnknownAnalysisGap;
         }

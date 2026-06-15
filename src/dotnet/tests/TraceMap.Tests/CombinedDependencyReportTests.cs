@@ -159,17 +159,27 @@ public sealed class CombinedDependencyReportTests
 
         var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
 
-        Assert.Equal(1, result.Report.Summary.ValueOriginEvidenceCounts["argument-flows"]);
-        Assert.Equal(1, result.Report.Summary.ValueOriginEvidenceCounts["parameter-forward-edges"]);
-        Assert.Equal(1, result.Report.Summary.ValueOriginEvidenceCounts["callback-boundaries"]);
-        Assert.Equal(1, result.Report.Summary.ValueOriginEvidenceCounts["async-boundaries"]);
-        Assert.Contains(result.Report.NeedsReview, row => row.ReviewKind == FactTypes.CallbackBoundary && row.Message.Contains("does not prove callback invocation", StringComparison.Ordinal));
-        Assert.Contains(result.Report.NeedsReview, row => row.ReviewKind == FactTypes.AsyncBoundary && row.Message.Contains("runtime scheduling", StringComparison.Ordinal));
+        Assert.Equal(1L, result.Report.Summary.ValueOriginEvidenceCounts["argument-flows"]);
+        Assert.Equal(1L, result.Report.Summary.ValueOriginEvidenceCounts["parameter-forward-edges"]);
+        Assert.Equal(1L, result.Report.Summary.ValueOriginEvidenceCounts["callback-boundaries"]);
+        Assert.Equal(1L, result.Report.Summary.ValueOriginEvidenceCounts["async-boundaries"]);
+        Assert.Contains(result.Report.NeedsReview, row =>
+            row.ReviewKind == FactTypes.CallbackBoundary
+            && row.RuleId == RuleIds.CSharpSemanticFlowBoundary
+            && row.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && row.Message.Contains("does not prove callback invocation", StringComparison.Ordinal));
+        Assert.Contains(result.Report.NeedsReview, row =>
+            row.ReviewKind == FactTypes.AsyncBoundary
+            && row.RuleId == RuleIds.CSharpSemanticFlowBoundary
+            && row.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && row.Message.Contains("runtime scheduling", StringComparison.Ordinal));
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
         Assert.Contains("Value-origin evidence by kind", markdown);
         Assert.Contains("callback-boundaries", json);
+        Assert.Contains("\"ruleId\": \"csharp.semantic.flowboundary.v1\"", json);
+        Assert.Contains("\"evidenceTier\": \"Tier3SyntaxOrTextual\"", json);
         Assert.Contains("does not prove callback invocation", markdown);
 
         var secondOutDir = Path.Combine(temp.Path, "report-second");

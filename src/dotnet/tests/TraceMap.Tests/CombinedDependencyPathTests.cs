@@ -151,6 +151,47 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public void Value_origin_classification_preserves_unknown_analysis_gap()
+    {
+        var method = typeof(CombinedDependencyPathReporter).GetMethod(
+            "ClassifyValueOrigin",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        var edges = new CombinedPathEdge[]
+        {
+            new CombinedPathEdge(
+                "edge-endpoint",
+                "endpoint-match",
+                "client",
+                "server",
+                CombinedEndpointClassifications.UnknownAnalysisGap,
+                "combined.paths.endpoint-match.v1",
+                EvidenceTiers.Tier4Unknown,
+                ["fact-client"],
+                [],
+                "src/client.ts",
+                10,
+                10),
+            new CombinedPathEdge(
+                "edge-value",
+                "parameter-forward",
+                "server",
+                "service",
+                "EvidenceEdge",
+                RuleIds.CSharpSemanticParameterForwarding,
+                EvidenceTiers.Tier1Semantic,
+                ["fact-flow"],
+                ["edge-flow"],
+                "Controllers/OrdersController.cs",
+                12,
+                12)
+        };
+        var classification = method.Invoke(null, [edges]);
+
+        Assert.Equal(CombinedValueOriginClassifications.UnknownAnalysisGap, classification);
+    }
+
+    [Fact]
     public async Task Paths_from_endpoint_matches_multi_method_route_without_stored_path_key()
     {
         using var temp = new TempDirectory();
