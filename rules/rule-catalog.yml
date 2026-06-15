@@ -10,6 +10,18 @@ rules:
       - Deferred, unavailable, and failed sections are explicit analysis gaps and remain Tier4Unknown.
       - Artifact paths are output-root-relative and public-shareable summaries must not render local absolute paths, raw SQL, source snippets, raw secrets, or credential-bearing URLs.
 
+  - id: legacy.validation.summary.v1
+    name: Legacy codebase validation summary
+    description: Records redacted operator-local legacy validation results using neutral sample labels, scan metadata counts, coverage labels, UI event probe counts, and bounded-output status.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy validation summary row
+      - LegacyUiEventEvidenceUnavailable gap
+    limitations:
+      - Legacy validation summaries describe static scan artifacts and harness observations; they do not prove runtime execution, UI reachability, deployed behavior, remediation success, or compatibility.
+      - Operator-local sample paths, repository names, remotes, raw artifacts, raw SQL, config values, connection strings, secrets, and source snippets are intentionally excluded from public-safe summaries.
+      - Reduced coverage, timeouts, artifact-size truncation, missing outputs, and all-gaps UI event probes remain explicit limitations and must not be interpreted as absence of behavior.
+
   - id: snapshot.diff.source.v1
     name: Snapshot diff source comparison
     description: Compares source inventory and source metadata between two TraceMap snapshots by exact source label and stable source identity metadata.
