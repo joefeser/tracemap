@@ -26,7 +26,8 @@
   - [ ] Resolve handler methods semantically when possible.
   - [ ] Add syntax fallback for failed builds.
   - [ ] Emit ambiguity gaps instead of arbitrary matches.
-  - [ ] Add tests for semantic, syntax-only, missing, ambiguous, and auto-wireup cases.
+  - [ ] Gate auto-event-wireup handlers on explicit `AutoEventWireup` enabled evidence or explicit static event subscription evidence.
+  - [ ] Add tests for semantic, syntax-only, missing, ambiguous, auto-wireup enabled, auto-wireup false, auto-wireup unknown, and explicit subscription cases.
 
 - [ ] 5. Extract and link designer control fields. Requirements: 4.
   - [ ] Parse `.designer.cs` partial control fields.

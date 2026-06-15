@@ -83,9 +83,13 @@ Acceptance Criteria:
 5. WHEN multiple methods or partial classes could satisfy the same handler THEN
    TraceMap SHALL emit an ambiguity gap and SHALL NOT choose an arbitrary winner.
 6. WHEN handler resolution depends on runtime auto-event-wireup conventions such
-   as `Page_Load` THEN TraceMap MAY emit `Tier3SyntaxOrTextual` or
-   `Tier4Unknown` evidence only when page/type identity is clear; otherwise it
-   SHALL emit a gap.
+   as `Page_Load` THEN TraceMap MAY emit `Tier3SyntaxOrTextual` evidence only
+   when page/type identity is clear and the page directive or config evidence
+   shows `AutoEventWireup` is enabled, or when explicit static wiring such as
+   event subscription evidence is present.
+7. WHEN `AutoEventWireup` is false, unknown, contradictory, or unavailable and
+   no explicit static wiring exists THEN TraceMap SHALL emit `Tier4Unknown` gap
+   evidence rather than a handler-resolution fact or event-flow root.
 
 ### Requirement 4: Designer Control Field Linkage
 
