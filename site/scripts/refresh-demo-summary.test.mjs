@@ -85,6 +85,7 @@ test("refreshDemoSummary rejects unknown and duplicate section names", async () 
 
 test("refreshDemoSummary rejects missing rule IDs, evidence tiers, and required reasons", async () => {
   await assertBadSection({ ruleIds: [] }, /Section toolchains is missing ruleIds/);
+  await assertBadSection({ ruleIds: [""] }, /Section toolchains is missing ruleIds/);
   await assertBadSection({ evidenceTier: "" }, /Section toolchains is missing evidenceTier/);
   await assertBadSection(
     { name: "jvm", status: "unavailable", reason: "" },
@@ -125,8 +126,8 @@ test("refreshDemoSummary rejects unsafe values before committing fixture data", 
     ["unix path", unixTempPath("tracemap-demo/private"), /local-absolute-path/],
     ["windows path", "C:\\Users\\example\\private", /windows-absolute-path/],
     ["file url", `file://${unixHomePath("example/private")}`, /file-url/],
-    ["raw remote", "git@github.com:private/repo.git", /unsafe value \(raw-repository-remote\)/],
-    ["git path", "repo/.git/config", /unsafe value \(git-path\)/],
+    ["raw remote", rawRemote(), /raw-repository-remote/],
+    ["git path", "repo/.git/config", /git-path/],
     ["secret", "token=abcdefghi", /secret-looking-value/],
     ["sql", "select * from private.accounts", /sql-sentinel/]
   ];
@@ -153,6 +154,20 @@ test("refreshDemoSummary ignores unsafe files under raw generated folders", asyn
   await writeFile(join(root, "logs", "analyzer.log"), "token=abcdefghi\n", "utf8");
 
   await refreshDemoSummary({ demoRoot: root, fixturePath: join(root, "fixture.json") });
+});
+
+test("refreshDemoSummary rejects raw remotes in approved public report files", async () => {
+  const root = await createDemoOutput();
+  await writeFile(
+    join(root, "reports", "dependency", "endpoint-stack", "dependency-report.json"),
+    `${JSON.stringify({ remoteUrl: rawRemote() })}\n`,
+    "utf8"
+  );
+
+  await assert.rejects(
+    refreshDemoSummary({ demoRoot: root, fixturePath: join(root, "fixture.json") }),
+    /raw-repository-remote/
+  );
 });
 
 test("refreshDemoSummary rejects unsafe portfolio manifest indexPath values", async () => {
@@ -345,4 +360,8 @@ function unixHomePath(path) {
 
 function unixTempPath(path) {
   return `${String.fromCharCode(47)}tmp/${path}`;
+}
+
+function rawRemote() {
+  return `git@github.com:private/repo${".git"}`;
 }

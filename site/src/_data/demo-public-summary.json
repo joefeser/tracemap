@@ -136,8 +136,8 @@
         "pathGaps": 37,
         "paths": 12,
         "reverseGaps": 23,
-        "reversePaths": 29,
-        "reverseRoots": 7,
+        "reversePaths": 25,
+        "reverseRoots": 6,
         "selectedSurfaces": 5
       },
       "coverage": "PartialAnalysis",
