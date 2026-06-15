@@ -45,6 +45,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/roadmap/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/vault-export/",
     "changefreq": "monthly",
     "priority": "0.7"
