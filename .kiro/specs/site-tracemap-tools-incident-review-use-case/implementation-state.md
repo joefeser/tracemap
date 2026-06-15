@@ -29,8 +29,8 @@ scanner/reducer code.
 - Require public copy to stay tied to static evidence, rule IDs or status
   framing, evidence tiers, coverage labels, proof paths, and limitations.
 - Require links to `/manager-packet/`, `/packets/`, `/demo/proof-assets/`,
-  `/demo/proof-upgrades/`, `/capabilities/`, `/limitations/`, and `/roadmap/`
-  in the future implementation.
+  `/demo/proof-upgrades/`, `/capabilities/`, `/limitations/`, `/roadmap/`,
+  `/evidence/`, and `/outputs/` in the future implementation.
 - Leave all implementation tasks unchecked because this branch only delivers the
   ready spec packet.
 
@@ -61,6 +61,8 @@ scanner/reducer code.
 - Passed `node scripts/kiro-review.mjs --self-test`.
 - Passed `npm test` from `site/`.
 - Passed `npm run validate` from `site/`.
+- Re-ran the same four validation commands after patching PR review-loop
+  feedback.
 - Deferred `npm run build` and browser checks because this PR is spec-only and
   does not change `site/src/`.
 
@@ -85,6 +87,12 @@ scanner/reducer code.
   descriptions, and durable manual claim review.
 - Both Kiro reviews emitted an MCP settings warning, but the wrapper completed
   with full coverage and saved prompt/raw/clean/meta review artifacts.
+- PR review loop patched current Gemini Medium findings:
+  - clarified that future source HTML should include a placeholder
+    `<header class="site-header">` for build-time replacement instead of
+    hand-synchronizing navigation links;
+  - added `/evidence/` and `/outputs/` to the future page's canonical proof
+    link set.
 
 ## Future Manual Review Checklist
 
