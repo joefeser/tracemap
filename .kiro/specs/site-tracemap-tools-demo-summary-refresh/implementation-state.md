@@ -114,6 +114,10 @@ adds site spec files.
   clarify the fixture example's nested source metadata and explicitly require
   `/demo/proof-assets/` hard-coded count validation. Patched both in the
   follow-up commit.
+- PR review loop also found actionable Codex feedback that current
+  `sample-scans` source rows emit `scans/.../report.md` paths. Patched the spec
+  to require omitting raw scan paths from public fixture artifacts and,
+  optionally, recording only a generic local-only family label.
 
 ## Follow-Ups For Implementation
 
