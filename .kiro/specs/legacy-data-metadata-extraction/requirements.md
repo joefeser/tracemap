@@ -75,10 +75,13 @@ Acceptance Criteria:
    spans where available, commit SHA, extractor version, rule ID, and evidence
    tier.
 2. WHEN `.xsd` files are evaluated for typed DataSet evidence THEN TraceMap SHALL
-   require typed DataSet indicators such as dataset namespaces, DataSet designer
-   annotations, TableAdapter annotations, or deterministic generated-code
-   linkage; arbitrary schemas SHALL NOT become data metadata facts merely because
-   they use `.xsd`.
+   require XSD-intrinsic typed DataSet indicators such as the `msdata`
+   namespace/prefix, `msdata:IsDataSet`, `Generator_*` annotations,
+   `msdata:DataType`, or `msdata:Relationship`; arbitrary schemas SHALL NOT
+   become data metadata facts merely because they use `.xsd`.
+   Checked-in `.designer.cs` files or generated-code linkage SHALL be
+   corroborating evidence only after XSD-intrinsic indicators are present and
+   SHALL NOT qualify an `.xsd` by themselves.
 3. WHEN generated `.designer.cs` files are inspected for data metadata linkage
    THEN TraceMap SHALL treat them as generated static evidence and SHALL NOT
    classify them as hand-authored business logic.

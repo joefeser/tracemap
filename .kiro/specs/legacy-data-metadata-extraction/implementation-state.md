@@ -66,6 +66,9 @@ Review outcomes:
 - PR review loop addressed Gemini's actionable note about config fact ownership:
   `legacy.data.config.v1` no longer lists `ConfigKeyDeclared` as an emitted fact;
   generic config-key evidence remains under existing config rules.
+- PR review loop addressed Qodo's actionable note about typed DataSet `.xsd`
+  gating: requirements now require XSD-intrinsic indicators first and treat
+  `.designer.cs` or generated-code linkage as corroborating evidence only.
 
 ## Suggested PR Boundaries
 
