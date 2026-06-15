@@ -4,6 +4,7 @@ using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
+using Microsoft.Data.Sqlite;
 
 namespace TraceMap.Tests;
 
@@ -16,7 +17,8 @@ public sealed class PackageUpgradeImpactTests
         var indexPath = Path.Combine(temp.Path, "index.sqlite");
         var outDir = Path.Combine(temp.Path, "package-impact");
         var deltaPath = Path.Combine(temp.Path, "package-delta.json");
-        var manifest = Manifest("api", "tracemap-milestone15");
+        const string privateRemote = "https://token@example.invalid/private/repo.git";
+        var manifest = Manifest("api", "tracemap-milestone15", remoteUrl: privateRemote);
         SqliteIndexWriter.Write(indexPath, manifest, [
             PackageFact(manifest, "Newtonsoft.Json", "nuget", "Api.csproj", "PackageReference", "13.0.1")
         ]);
@@ -55,6 +57,8 @@ public sealed class PackageUpgradeImpactTests
         Assert.Contains("package.upgrade.impact.v1", markdown);
         Assert.DoesNotContain("token@example", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("token@example", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(privateRemote, json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("remoteUrlHash", json);
 
         var document = JsonSerializer.Deserialize<PackageImpactDocument>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(document);
@@ -134,6 +138,67 @@ public sealed class PackageUpgradeImpactTests
     }
 
     [Fact]
+    public async Task PackageImpact_no_package_rows_under_full_coverage_is_not_reduced()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var deltaPath = Path.Combine(temp.Path, "delta.json");
+        var outDir = Path.Combine(temp.Path, "package-impact");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        SqliteIndexWriter.Write(indexPath, manifest, []);
+        await File.WriteAllTextAsync(deltaPath, """
+            {
+              "version": "package-delta.v1",
+              "changes": [
+                { "id": "pkg-missing", "packageName": "Missing.Package", "ecosystem": "nuget", "changeType": "updated" }
+              ]
+            }
+            """);
+
+        var result = await PackageUpgradeImpactReporter.WriteAsync(new PackageImpactOptions(indexPath, deltaPath, outDir));
+
+        Assert.Empty(result.Report.Findings);
+        Assert.Equal("FullEvidenceAvailable", result.Report.ReportCoverage);
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == "NoStaticPackageEvidence" && gap.ChangeId == "pkg-missing");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.Classification == "ReducedCoverage");
+    }
+
+    [Fact]
+    public async Task PackageImpact_source_filter_ignores_other_source_coverage_warnings()
+    {
+        using var temp = new TempDirectory();
+        var apiIndex = Path.Combine(temp.Path, "api.sqlite");
+        var webIndex = Path.Combine(temp.Path, "web.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var deltaPath = Path.Combine(temp.Path, "delta.json");
+        var outDir = Path.Combine(temp.Path, "package-impact");
+        var apiManifest = Manifest("api", "tracemap-milestone15");
+        var webManifest = Manifest(
+            "web",
+            "tracemap-typescript/0.1.0",
+            analysisLevel: "Level1SemanticAnalysisReduced",
+            buildStatus: "FailedOrPartial",
+            knownGaps: ["dependency missing"]);
+        SqliteIndexWriter.Write(apiIndex, apiManifest, []);
+        SqliteIndexWriter.Write(webIndex, webManifest, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([apiIndex, webIndex], combinedPath, ["api", "web"]));
+        await File.WriteAllTextAsync(deltaPath, """
+            {
+              "version": "package-delta.v1",
+              "changes": [
+                { "id": "pkg-missing", "packageName": "Missing.Package", "ecosystem": "nuget", "changeType": "updated" }
+              ]
+            }
+            """);
+
+        var result = await PackageUpgradeImpactReporter.WriteAsync(new PackageImpactOptions(combinedPath, deltaPath, outDir, Source: "api"));
+
+        Assert.Equal("FullEvidenceAvailable", result.Report.ReportCoverage);
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == "NoStaticPackageEvidence" && gap.SourceLabel == "api");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.Message.Contains("web", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task PackageImpact_does_not_match_missing_ecosystem_when_delta_requires_one()
     {
         using var temp = new TempDirectory();
@@ -160,6 +225,91 @@ public sealed class PackageUpgradeImpactTests
     }
 
     [Fact]
+    public async Task PackageImpact_does_not_match_config_surfaces_as_packages()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var deltaPath = Path.Combine(temp.Path, "delta.json");
+        var outDir = Path.Combine(temp.Path, "package-impact");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            ConfigFact(manifest, "Ambiguous.Package")
+        ]);
+        await File.WriteAllTextAsync(deltaPath, """
+            {
+              "version": "package-delta.v1",
+              "changes": [
+                { "id": "pkg-ambiguous", "packageName": "Ambiguous.Package", "changeType": "updated" }
+              ]
+            }
+            """);
+
+        var result = await PackageUpgradeImpactReporter.WriteAsync(new PackageImpactOptions(indexPath, deltaPath, outDir));
+
+        Assert.Empty(result.Report.Findings);
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == "NoStaticPackageEvidence" && gap.ChangeId == "pkg-ambiguous");
+    }
+
+    [Fact]
+    public async Task PackageImpact_rejects_duplicate_ids_after_trimming()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var deltaPath = Path.Combine(temp.Path, "delta.json");
+        var outDir = Path.Combine(temp.Path, "package-impact");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        SqliteIndexWriter.Write(indexPath, manifest, []);
+        await File.WriteAllTextAsync(deltaPath, """
+            {
+              "version": "package-delta.v1",
+              "changes": [
+                { "id": "pkg-1", "packageName": "A", "changeType": "updated" },
+                { "id": " pkg-1 ", "packageName": "B", "changeType": "updated" }
+              ]
+            }
+            """);
+
+        var ex = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            PackageUpgradeImpactReporter.WriteAsync(new PackageImpactOptions(indexPath, deltaPath, outDir)));
+        Assert.Contains("duplicate change id 'pkg-1'", ex.Message);
+    }
+
+    [Fact]
+    public async Task PackageImpact_tolerates_malformed_single_index_properties_json()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var deltaPath = Path.Combine(temp.Path, "delta.json");
+        var outDir = Path.Combine(temp.Path, "package-impact");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            PackageFact(manifest, "Newtonsoft.Json", "nuget", "Api.csproj", "PackageReference", "13.0.1")
+        ]);
+        await using (var connection = new SqliteConnection($"Data Source={indexPath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set properties_json = '{' where fact_type = $fact_type;";
+            command.Parameters.AddWithValue("$fact_type", FactTypes.PackageReferenced);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await File.WriteAllTextAsync(deltaPath, """
+            {
+              "version": "package-delta.v1",
+              "changes": [
+                { "id": "pkg-newtonsoft", "packageName": "Newtonsoft.Json", "ecosystem": "nuget", "changeType": "updated" }
+              ]
+            }
+            """);
+
+        var result = await PackageUpgradeImpactReporter.WriteAsync(new PackageImpactOptions(indexPath, deltaPath, outDir));
+
+        Assert.Empty(result.Report.Findings);
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == "NoStaticPackageEvidence");
+    }
+
+    [Fact]
     public async Task Cli_validates_required_package_delta()
     {
         using var output = new StringWriter();
@@ -176,12 +326,13 @@ public sealed class PackageUpgradeImpactTests
         string scannerVersion,
         string analysisLevel = "Level1SemanticAnalysis",
         string buildStatus = "Succeeded",
-        IReadOnlyList<string>? knownGaps = null)
+        IReadOnlyList<string>? knownGaps = null,
+        string? remoteUrl = null)
     {
         return new ScanManifest(
             $"scan-{repo}",
             repo,
-            null,
+            remoteUrl,
             "main",
             "0123456789abcdef0123456789abcdef01234567",
             scannerVersion,
@@ -219,6 +370,28 @@ public sealed class PackageUpgradeImpactTests
                 ["sourceKind"] = "manifest",
                 ["surfaceKind"] = "package-config",
                 ["version"] = version
+            });
+    }
+
+    private static CodeFact ConfigFact(ScanManifest manifest, string keyPath)
+    {
+        return new CodeFact(
+            $"config-{manifest.RepoName}-{keyPath}",
+            manifest.ScanId,
+            manifest.RepoName,
+            manifest.CommitSha,
+            null,
+            FactTypes.ConfigKeyDeclared,
+            RuleIds.ConfigKey,
+            EvidenceTiers.Tier2Structural,
+            null,
+            keyPath,
+            "Config",
+            new EvidenceSpan("appsettings.json", 4, 4, null, "TestExtractor", "1.0.0"),
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["keyPath"] = keyPath,
+                ["surfaceKind"] = "package-config"
             });
     }
 }

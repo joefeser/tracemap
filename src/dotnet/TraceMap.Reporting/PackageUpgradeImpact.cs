@@ -31,14 +31,33 @@ public sealed record PackageImpactDocument(
     string ReportCoverage,
     PackageImpactDelta Delta,
     PackageImpactSummary Summary,
-    IReadOnlyList<CombinedReportSource> Sources,
+    IReadOnlyList<PackageImpactSource> Sources,
     IReadOnlyList<PackageImpactFinding> Findings,
     IReadOnlyList<PackageImpactGap> Gaps,
     IReadOnlyList<string> Limitations);
 
 public sealed record PackageImpactDelta(
     string SchemaVersion,
+    string? SourceRepoHash,
+    string? SourceCommitSha,
     IReadOnlyList<PackageImpactChange> Changes);
+
+public sealed record PackageImpactSource(
+    string SourceIndexId,
+    string Label,
+    string IndexPathHash,
+    string ScanId,
+    string RepoName,
+    string? RemoteUrlHash,
+    string? Branch,
+    string CommitSha,
+    string ScannerVersion,
+    string? Language,
+    string? ScanRootRelativePath,
+    string? ScanRootPathHash,
+    string? GitRootHash,
+    string AnalysisLevel,
+    string BuildStatus);
 
 public sealed record PackageImpactSummary(
     string IndexKind,
@@ -59,7 +78,9 @@ public sealed record PackageImpactChange(
     string? OldVersion,
     string? OldVersionHash,
     string? NewVersion,
-    string? NewVersionHash);
+    string? NewVersionHash,
+    string? SourceRepoHash = null,
+    string? SourceCommitSha = null);
 
 public sealed record PackageImpactFinding(
     string FindingId,
@@ -162,6 +183,8 @@ public static class PackageUpgradeImpactReporter
         var selectedSourceIds = selectedSources.Select(source => source.SourceIndexId).ToHashSet(StringComparer.Ordinal);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts)
             .Where(surface => surface.SurfaceKind == "package-config")
+            .Where(surface => surface.FactType == FactTypes.PackageReferenced)
+            .Where(surface => !string.IsNullOrWhiteSpace(surface.PackageName))
             .Where(surface => selectedSourceIds.Contains(surface.SourceIndexId))
             .OrderBy(surface => surface.SourceLabel, StringComparer.Ordinal)
             .ThenBy(surface => surface.PackageName ?? surface.DisplayName, StringComparer.OrdinalIgnoreCase)
@@ -177,13 +200,15 @@ public static class PackageUpgradeImpactReporter
             .ThenBy(change => change.Id, StringComparer.Ordinal)
             .ToArray();
 
-        var coverageWarnings = read.CoverageWarnings.ToList();
-        if (surfaces.Length == 0)
-        {
-            coverageWarnings.Add("No package-config surfaces were present in the selected index/source scope.");
-        }
-
-        var reducedCoverage = coverageWarnings.Count > 0;
+        var coverageWarnings = selectedSources
+            .SelectMany(source => CoverageWarningsFor(source, read.KnownGaps
+                .Where(gap => gap.SourceIndexId == source.SourceIndexId || string.Equals(gap.SourceLabel, source.Label, StringComparison.Ordinal))
+                .Select(gap => $"{gap.Category}: {gap.Example}")
+                .ToArray()))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var reducedCoverage = coverageWarnings.Length > 0;
         var findings = new List<PackageImpactFinding>();
         var gaps = new List<PackageImpactGap>();
         var findingCapReached = false;
@@ -240,6 +265,7 @@ public static class PackageUpgradeImpactReporter
             selectedSources
                 .OrderBy(source => source.Label, StringComparer.Ordinal)
                 .ThenBy(source => source.SourceIndexId, StringComparer.Ordinal)
+                .Select(ToPackageSource)
                 .ToArray(),
             findings
                 .OrderBy(finding => finding.PackageName, StringComparer.OrdinalIgnoreCase)
@@ -291,41 +317,49 @@ public static class PackageUpgradeImpactReporter
         foreach (var change in input.Changes)
         {
             var packageName = change.PackageName ?? change.Name;
-            if (string.IsNullOrWhiteSpace(change.Id))
+            var id = change.Id?.Trim();
+            if (string.IsNullOrWhiteSpace(id))
             {
                 throw new InvalidDataException("Package delta change id is required.");
             }
 
-            if (!ids.Add(change.Id))
+            if (!ids.Add(id))
             {
-                throw new InvalidDataException($"Package delta contains duplicate change id '{change.Id}'.");
+                throw new InvalidDataException($"Package delta contains duplicate change id '{id}'.");
             }
 
             if (string.IsNullOrWhiteSpace(packageName))
             {
-                throw new InvalidDataException($"Package delta change '{change.Id}' requires packageName.");
+                throw new InvalidDataException($"Package delta change '{id}' requires packageName.");
             }
 
             var changeType = string.IsNullOrWhiteSpace(change.ChangeType) ? "updated" : change.ChangeType.Trim();
             if (!new[] { "added", "removed", "updated", "changed" }.Contains(changeType, StringComparer.OrdinalIgnoreCase))
             {
-                throw new InvalidDataException($"Package delta change '{change.Id}' has unsupported changeType '{changeType}'.");
+                throw new InvalidDataException($"Package delta change '{id}' has unsupported changeType '{changeType}'.");
             }
 
             var oldVersion = SafeVersion(change.OldVersion, out var oldVersionHash);
             var newVersion = SafeVersion(change.NewVersion, out var newVersionHash);
+            var changeSourceRepoHash = HashSensitiveValue(change.SourceRepo) ?? HashSensitiveValue(input.SourceRepo);
             changes.Add(new PackageImpactChange(
-                change.Id.Trim(),
+                id,
                 packageName.Trim(),
                 NullIfWhiteSpace(change.Ecosystem),
                 changeType.ToLowerInvariant(),
                 oldVersion,
                 oldVersionHash,
                 newVersion,
-                newVersionHash));
+                newVersionHash,
+                changeSourceRepoHash,
+                NormalizeCommitSha(change.SourceCommitSha) ?? NormalizeCommitSha(input.SourceCommitSha)));
         }
 
-        return new PackageImpactDelta(DeltaVersion, changes);
+        return new PackageImpactDelta(
+            DeltaVersion,
+            HashSensitiveValue(input.SourceRepo),
+            NormalizeCommitSha(input.SourceCommitSha),
+            changes);
     }
 
     private static async Task<PackageIndexReadResult> ReadIndexAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -335,7 +369,7 @@ public static class PackageUpgradeImpactReporter
         if (hasSources && hasCombinedFacts)
         {
             var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
-            return new PackageIndexReadResult("combined", read.Sources, read.Facts, read.CoverageWarnings);
+            return new PackageIndexReadResult("combined", read.Sources, read.Facts, read.KnownGaps);
         }
 
         var hasManifest = await TableExistsAsync(connection, "scan_manifest", cancellationToken);
@@ -370,8 +404,10 @@ public static class PackageUpgradeImpactReporter
             manifest.AnalysisLevel,
             manifest.BuildStatus);
         var facts = await ReadSingleFactsAsync(connection, source, cancellationToken);
-        var warnings = CoverageWarningsFor(source, manifest.KnownGaps);
-        return new PackageIndexReadResult("single", [source], facts, warnings);
+        var knownGaps = manifest.KnownGaps
+            .Select((gap, index) => new CombinedKnownGapRow(source.SourceIndexId, source.Label, $"manifest-gap-{index + 1}", 1, gap))
+            .ToArray();
+        return new PackageIndexReadResult("single", [source], facts, knownGaps);
     }
 
     private static async Task<ScanManifest> ReadSingleManifestAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -469,7 +505,9 @@ public static class PackageUpgradeImpactReporter
                 Pair("dependencyScope", surface.DependencyScope),
                 Pair("dependencyGroup", surface.DependencyGroup),
                 Pair("configKey", surface.ConfigKey),
-                Pair("displayName", surface.DisplayName)
+                Pair("displayName", surface.DisplayName),
+                Pair("deltaSourceRepoHash", change.SourceRepoHash),
+                Pair("deltaSourceCommitSha", change.SourceCommitSha)
             ]));
     }
 
@@ -549,8 +587,8 @@ public static class PackageUpgradeImpactReporter
 
     private static bool PackageMatches(CombinedDependencySurfaceRow surface, PackageImpactChange change)
     {
-        var packageName = surface.PackageName ?? surface.DisplayName;
-        if (!string.Equals(packageName, change.PackageName, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(surface.PackageName)
+            || !string.Equals(surface.PackageName, change.PackageName, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -593,6 +631,26 @@ public static class PackageUpgradeImpactReporter
         }
 
         return warnings.ToArray();
+    }
+
+    private static PackageImpactSource ToPackageSource(CombinedReportSource source)
+    {
+        return new PackageImpactSource(
+            source.SourceIndexId,
+            source.Label,
+            source.IndexPathHash,
+            source.ScanId,
+            source.RepoName,
+            HashSensitiveValue(source.RemoteUrl),
+            source.Branch,
+            source.CommitSha,
+            source.ScannerVersion,
+            source.Language,
+            source.ScanRootRelativePath,
+            source.ScanRootPathHash,
+            source.GitRootHash,
+            source.AnalysisLevel,
+            source.BuildStatus);
     }
 
     private static string RenderMarkdown(PackageImpactDocument report)
@@ -694,8 +752,22 @@ public static class PackageUpgradeImpactReporter
 
     private static IReadOnlyDictionary<string, string> ParseProperties(string json)
     {
-        return JsonSerializer.Deserialize<Dictionary<string, string>>(json, JsonOptions)
-            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, string?>>(json, JsonOptions)?
+                .Where(pair => pair.Value is not null)
+                .ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.Ordinal)
+                ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
     }
 
     private static string? SafeVersion(string? value, out string? hash)
@@ -744,6 +816,24 @@ public static class PackageUpgradeImpactReporter
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
+    private static string? HashSensitiveValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : $"value-hash:{CombinedReportHelpers.Hash(value.Trim(), 16)}";
+    }
+
+    private static string? NormalizeCommitSha(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length is >= 7 and <= 64 && trimmed.All(Uri.IsHexDigit)
+            ? trimmed.ToLowerInvariant()
+            : $"commit-hash:{CombinedReportHelpers.Hash(trimmed, 16)}";
+    }
+
     private static KeyValuePair<string, string?> Pair(string key, string? value)
     {
         return new KeyValuePair<string, string?>(key, value);
@@ -758,10 +848,12 @@ public static class PackageUpgradeImpactReporter
         string IndexKind,
         IReadOnlyList<CombinedReportSource> Sources,
         IReadOnlyList<CombinedFactRow> Facts,
-        IReadOnlyList<string> CoverageWarnings);
+        IReadOnlyList<CombinedKnownGapRow> KnownGaps);
 
     private sealed record PackageDeltaInput(
         string? Version,
+        string? SourceRepo,
+        string? SourceCommitSha,
         IReadOnlyList<PackageChangeInput>? Changes);
 
     private sealed record PackageChangeInput(
@@ -771,5 +863,7 @@ public static class PackageUpgradeImpactReporter
         string? Ecosystem,
         string? ChangeType,
         string? OldVersion,
-        string? NewVersion);
+        string? NewVersion,
+        string? SourceRepo,
+        string? SourceCommitSha);
 }
