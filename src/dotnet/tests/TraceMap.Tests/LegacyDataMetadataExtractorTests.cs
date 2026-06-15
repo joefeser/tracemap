@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Text;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -178,6 +179,7 @@ public sealed class LegacyDataMetadataExtractorTests
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataProviderConfigDeclared && fact.Properties.GetValueOrDefault("connectionName") == "MainDb");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataProviderConfigDeclared && fact.Properties.ContainsKey("valueHash"));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataProviderConfigDeclared && fact.Properties.GetValueOrDefault("configKind") == "entity-framework-provider");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataConfig
@@ -274,6 +276,26 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.DoesNotContain("prod-db", properties);
         Assert.DoesNotContain("topsecret", properties, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("<add", properties);
+    }
+
+    [Fact]
+    public void Scan_preserves_xml_declared_encoding_when_parsing_metadata()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepo(temp);
+        File.WriteAllBytes(Path.Combine(repo, "Latin1.dbml"), Encoding.Latin1.GetBytes("""
+            <?xml version="1.0" encoding="iso-8859-1"?>
+            <Database Class="CafeDataContext">
+              <Table Name="Café" Member="Cafes">
+                <Type Name="Cafe"><Column Name="Id" Member="Id" /></Type>
+              </Table>
+            </Database>
+            """));
+
+        var result = Scan(repo, temp);
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataStorageObjectDeclared && fact.Evidence.FilePath == "Latin1.dbml");
+        Assert.DoesNotContain(result.Facts, fact => fact.Evidence.FilePath == "Latin1.dbml" && fact.Properties.GetValueOrDefault("classification") == "MalformedLegacyDataMetadata");
     }
 
     [Fact]

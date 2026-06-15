@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -20,14 +21,10 @@ internal static class LegacyDataXml
             throw new LegacyDataXmlException("LegacyDataMetadataTooLarge", "metadata document exceeds configured size bound");
         }
 
-        string text;
+        byte[] bytes;
         try
         {
-            text = File.ReadAllText(fullPath);
-        }
-        catch (DecoderFallbackException ex)
-        {
-            throw new LegacyDataXmlException("MalformedLegacyDataMetadata", "metadata document could not be decoded safely", ex);
+            bytes = File.ReadAllBytes(fullPath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -44,15 +41,15 @@ internal static class LegacyDataXml
 
         try
         {
-            using var stringReader = new StringReader(text);
-            using var reader = XmlReader.Create(stringReader, settings);
+            using var stream = new MemoryStream(bytes);
+            using var reader = XmlReader.Create(stream, settings);
             var document = XDocument.Load(reader, LoadOptions.SetLineInfo);
             if (document.DescendantNodes().Take(MaxXmlNodes + 1).Count() > MaxXmlNodes)
             {
                 throw new LegacyDataXmlException("LegacyDataMetadataTooLarge", "metadata document exceeds configured node-count bound");
             }
 
-            return new LegacyDataXmlDocument(document, FactFactory.Hash(text, 32));
+            return new LegacyDataXmlDocument(document, Hash(bytes, 32));
         }
         catch (LegacyDataXmlException)
         {
@@ -68,6 +65,12 @@ internal static class LegacyDataXml
         {
             throw new LegacyDataXmlException("MalformedLegacyDataMetadata", "XML parser rejected malformed metadata", ex);
         }
+    }
+
+    private static string Hash(byte[] bytes, int length)
+    {
+        var hex = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        return hex[..Math.Min(length, hex.Length)];
     }
 }
 

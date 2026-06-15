@@ -377,7 +377,7 @@ public static partial class LegacyDataMetadataExtractor
                 }
             }
 
-            foreach (var add in xml.Document.Descendants().Where(element => element.Name.LocalName == "add").OrderBy(GetLine).ThenBy(element => Attr(element, "name") ?? Attr(element, "invariant"), StringComparer.Ordinal))
+            foreach (var add in xml.Document.Descendants().Where(element => element.Name.LocalName is "add" or "provider").OrderBy(GetLine).ThenBy(element => Attr(element, "name") ?? Attr(element, "invariant") ?? Attr(element, "invariantName"), StringComparer.Ordinal))
             {
                 var parentName = add.Parent?.Name.LocalName ?? string.Empty;
                 if (parentName.Equals("connectionStrings", StringComparison.OrdinalIgnoreCase))
