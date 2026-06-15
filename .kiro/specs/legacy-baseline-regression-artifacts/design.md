@@ -138,6 +138,23 @@ Suggested top-level shape:
     "syntaxOrTextualFacts": 0,
     "unknownOrGapFacts": 0
   },
+  "artifacts": {
+    "baselineSummary": {
+      "present": true,
+      "sizeBucket": "small",
+      "hash": "sha256:..."
+    },
+    "report": {
+      "present": true,
+      "sizeBucket": "small",
+      "hash": "sha256:..."
+    },
+    "analyzerLog": {
+      "present": true,
+      "sizeBucket": "medium",
+      "hash": "sha256:..."
+    }
+  },
   "knownGaps": [],
   "limitations": []
 }
@@ -319,11 +336,15 @@ Movement labels:
 | `removed-category` | Baseline category is absent from candidate. |
 | `coverage-changed` | Coverage or build status label changed. |
 | `not-comparable` | Schema or extractor change needs a migration map. |
-| `review-needed` | Decrease, removed category, rejected safety state, or unmapped schema change needs human review. |
 
 Reports should say "additional static evidence" or "changed evidence count".
 They must not say "new impact", "safe", "unsafe", "reachable", or "used by the
 business" unless a separate reducer feature with evidence supports that claim.
+
+Review flags are separate from movement labels. A comparison can set
+`overallStatus: review-needed` and add entries to `reviewNeeded` when movements
+such as `decrease`, `removed-category`, rejected safety state, reduced coverage,
+or unmapped schema changes need human review.
 
 Suggested comparison shape:
 
@@ -369,7 +390,13 @@ input:
       "reason": "renamed without semantic change"
     }
   ],
-  "factTypeRenames": [],
+  "factTypeRenames": [
+    {
+      "fromFactType": "old.fact.type",
+      "toFactType": "new.fact.type",
+      "reason": "renamed for clarity"
+    }
+  ],
   "limitations": []
 }
 ```
