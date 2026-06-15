@@ -6,7 +6,9 @@ Public claim level: demo
 
 Create a queued site phase for a public `/demo/proof-upgrades/` page that explains how the rows formerly deferred on the public demo became reproducible demo evidence on `main`. The page should act as a proof ledger: each row names the checked-in proof path, generated public-safe artifacts, fresh demo counts, coverage caveats, and non-claims.
 
-This spec is content planning only until implementation starts.
+This PR is spec/runway only and does not implement the page. The spec is ready
+for implementation; the unchecked tasks are the current implementation checklist
+for the next site PR.
 
 ## Current Evidence State
 

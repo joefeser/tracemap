@@ -1,10 +1,14 @@
-# Site TraceMap Tools Demo Proof Upgrades Implementation State
+# Implementation State
 
+Status: not-started
+Branch: codex/site-demo-proof-upgrades-spec
 Public claim level: demo
 
-## Status
+## Summary
 
-Spec drafted. Coordinator evidence received. Page implementation not started.
+This spec is ready for implementation, but the `/demo/proof-upgrades/` page has
+not been added yet. The unchecked boxes in `tasks.md` are the current ready
+implementation checklist for the next site PR.
 
 ## Branch
 
