@@ -25,7 +25,7 @@ Public claim level: hidden
 - EDMX support is intentionally conservative: complex types, conditions, inheritance/split mappings, many-to-many mappings, duplicate containers, and provider extensions become gaps or review evidence.
 - Typed DataSet `.designer.cs` presence is corroborating only after XSD-intrinsic indicators are present.
 - Generic config extraction now uses the same safe XML reader as legacy data metadata extraction.
-- Qodo review feedback patched after PR creation: file read failures now normalize to safe XML gaps, config parse gaps avoid raw parser text, typed DataSet XSD gating requires msdata/msprop-specific evidence, and report output preserves existing stable legacy-data hash labels.
+- Qodo review feedback patched after PR creation: file read failures now normalize to safe XML gaps, config and metadata parse gaps avoid raw parser text, typed DataSet XSD gating requires msdata/msprop-specific evidence, and report output preserves existing stable legacy-data hash labels.
 - Public claims remain hidden until redacted validation summaries are intentionally reviewed.
 
 ## Validation

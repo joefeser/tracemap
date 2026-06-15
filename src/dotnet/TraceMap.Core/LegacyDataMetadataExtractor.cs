@@ -78,13 +78,13 @@ public static partial class LegacyDataMetadataExtractor
         {
             AddGap(manifest, facts, file.RelativePath, ruleId, ex.Classification, ex.Message, metadataKind);
         }
-        catch (IOException ex)
+        catch (IOException)
         {
-            AddGap(manifest, facts, file.RelativePath, ruleId, "MalformedLegacyDataMetadata", ex.Message, metadataKind);
+            AddGap(manifest, facts, file.RelativePath, ruleId, "MalformedLegacyDataMetadata", "metadata document could not be read safely", metadataKind);
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
-            AddGap(manifest, facts, file.RelativePath, ruleId, "MalformedLegacyDataMetadata", ex.Message, metadataKind);
+            AddGap(manifest, facts, file.RelativePath, ruleId, "MalformedLegacyDataMetadata", "metadata document could not be read safely", metadataKind);
         }
     }
 
@@ -268,9 +268,9 @@ public static partial class LegacyDataMetadataExtractor
         {
             AddGap(manifest, facts, file.RelativePath, RuleIds.LegacyDataTypedDataSet, ex.Classification, ex.Message, "TypedDataSet");
         }
-        catch (IOException ex)
+        catch (IOException)
         {
-            AddGap(manifest, facts, file.RelativePath, RuleIds.LegacyDataTypedDataSet, "MalformedLegacyDataMetadata", ex.Message, "TypedDataSet");
+            AddGap(manifest, facts, file.RelativePath, RuleIds.LegacyDataTypedDataSet, "MalformedLegacyDataMetadata", "typed DataSet metadata could not be read safely", "TypedDataSet");
         }
     }
 
@@ -399,9 +399,9 @@ public static partial class LegacyDataMetadataExtractor
         {
             AddGap(manifest, facts, file.RelativePath, RuleIds.LegacyDataConfig, ex.Classification, ex.Message, "Config");
         }
-        catch (IOException ex)
+        catch (IOException)
         {
-            AddGap(manifest, facts, file.RelativePath, RuleIds.LegacyDataConfig, "MalformedLegacyDataMetadata", ex.Message, "Config");
+            AddGap(manifest, facts, file.RelativePath, RuleIds.LegacyDataConfig, "MalformedLegacyDataMetadata", "legacy data config metadata could not be read safely", "Config");
         }
     }
 
