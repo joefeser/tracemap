@@ -93,6 +93,8 @@ scanner/reducer code.
     hand-synchronizing navigation links;
   - added `/evidence/` and `/outputs/` to the future page's canonical proof
     link set.
+- PR review loop patched current Qodo finding by making the sitemap priority
+  policy consistently fixed at `0.7` in requirements and tasks.
 
 ## Future Manual Review Checklist
 
