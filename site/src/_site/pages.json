@@ -100,6 +100,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/demo/proof-assets/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/packets/",
     "changefreq": "monthly",
     "priority": "0.8"
