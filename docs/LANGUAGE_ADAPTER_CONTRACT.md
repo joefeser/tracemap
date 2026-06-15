@@ -82,6 +82,17 @@ Facts intended to participate in existing contract reduction should reuse existi
 
 Language-specific fact types can be added, but they need rule catalog entries and documented reducer/report behavior.
 
+### Legacy WCF Metadata Facts
+
+The .NET adapter emits two WCF-specific metadata fact types for checked-in service-reference evidence:
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `WcfServiceReferenceMetadataDeclared` | Inventories parseable `.svcmap`, gated `.wsdl`, `.disco`, and service-reference `.xsd` metadata. | `metadataKind`, `metadataHash`, `metadataFileName`, `serviceReferenceFolder`, `sourceFormat` |
+| `WcfMetadataOperationDeclared` | Records safe WSDL `portType/operation` declarations from checked-in metadata. | `operationName`, `portTypeName`, `contractName`, `metadataHash`, `metadataFileName`, `serviceReferenceFolder` |
+
+These facts are static design-time evidence only. They do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or generated proxy freshness. Raw URLs, SOAP actions, schema locations, namespace URIs, local absolute paths, raw schemas, and snippets must be hashed or omitted.
+
 ## Symbol Identity
 
 Each adapter should emit stable symbol IDs for its own ecosystem and include a language discriminator in `symbols`.

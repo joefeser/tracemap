@@ -294,6 +294,8 @@ Minimum checks:
 - rule catalog entries document every new rule and limitation.
 - reduced coverage is labeled whenever compiler/project/dependency gaps exist.
 - no raw snippets or raw sensitive values are stored by default.
+- legacy WCF metadata facts expose only safe basenames, hashes, service-reference folder labels, and operation identifiers; raw URLs, SOAP actions, schema locations, namespace URIs, local absolute paths, raw schemas, and snippets are hashed or omitted.
+- WCF metadata-backed mappings and operation-name normalization remain static evidence and do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
 
 ## Endpoint Alignment Acceptance
 

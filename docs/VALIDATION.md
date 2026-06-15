@@ -172,6 +172,28 @@ The smoke writes generated manifests, logs, SQLite files, and reports under a ca
 
 For portfolio report changes, run the .NET solution build and test suite plus `./scripts/check-private-paths.sh` and `git diff --check`. The focused portfolio tests cover direct inputs, manifest inputs, combined-source expansion, before/after manifest source comparison, projected surface/edge comparison, deterministic output, read-only input handling, and public-output redaction. Run the public combined-path smoke only when the portfolio change also modifies language adapters, combine/report behavior, endpoint extraction, dependency-surface projection, paths, reverse, diff, impact, or release-review code shared outside `tracemap portfolio`.
 
+## Legacy WCF/SVC Metadata Smoke
+
+When changing legacy WCF extraction, service-reference metadata parsing, or WCF operation normalization, run the .NET build/test suite plus the validation summary unit tests:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+python3 -m unittest scripts.tests.test_legacy_codebase_validation
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+If the ignored local WCF/SVC smoke manifest exists, also run:
+
+```bash
+python3 scripts/legacy_codebase_validation.py \
+  .tmp/legacy-codebase-validation/wcf-svc-smoke.local.json \
+  .tmp/legacy-codebase-validation/wcf-svc-smoke-out
+```
+
+The summary must stay label-only. Do not commit local sample paths, raw scan outputs, raw WSDL/DISCO/XSD contents, endpoint addresses, SOAP actions, namespace URIs, config values, secrets, or generated smoke outputs. WCF metadata facts are static checked-in design-time evidence; they do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
+
 ## Public OSS Smoke
 
 Use `scripts/smoke-open-source-repos.sh` to clone pinned public repositories into a cache directory and scan them into a separate output directory:
