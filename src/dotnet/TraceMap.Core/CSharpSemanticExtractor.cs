@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace TraceMap.Core;
 
@@ -27,6 +28,9 @@ public sealed record SemanticExtractionResult(
 public static class CSharpSemanticExtractor
 {
     private static readonly object MSBuildRegistrationLock = new();
+    private static readonly Regex SafeCompilerTokenRegex = new(
+        "'([A-Za-z_][A-Za-z0-9_]{0,127})'",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private sealed record CallbackConversionInfo(
         string BoundaryKind,
@@ -3741,6 +3745,13 @@ public static class CSharpSemanticExtractor
             properties["diagnosticId"] = diagnosticId;
         }
 
+        var diagnosticTokens = ExtractSafeDiagnosticTokens(gapKind, message);
+        if (diagnosticTokens.Length > 0)
+        {
+            properties["diagnosticTokens"] = string.Join(";", diagnosticTokens);
+            properties["diagnosticTokenCount"] = diagnosticTokens.Length.ToString();
+        }
+
         return new SemanticFactCandidate(
             FactTypes.AnalysisGap,
             RuleIds.CSharpSemanticWorkspace,
@@ -3754,6 +3765,37 @@ public static class CSharpSemanticExtractor
                 ScannerVersions.CSharpSemanticExtractor),
             ProjectPath: projectPath,
             Properties: properties);
+    }
+
+    private static string[] ExtractSafeDiagnosticTokens(string gapKind, string message)
+    {
+        if (gapKind != "CompilationDiagnostic" || string.IsNullOrWhiteSpace(message))
+        {
+            return [];
+        }
+
+        return SafeCompilerTokenRegex.Matches(message)
+            .Select(match => match.Groups[1].Value)
+            .Where(IsSafeDiagnosticToken)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(10)
+            .ToArray();
+    }
+
+    private static bool IsSafeDiagnosticToken(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 128)
+        {
+            return false;
+        }
+
+        if (!char.IsLetter(value[0]) && value[0] != '_')
+        {
+            return false;
+        }
+
+        return value.All(character => char.IsLetterOrDigit(character) || character == '_');
     }
 
     private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node)

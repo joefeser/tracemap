@@ -178,8 +178,10 @@ public sealed class ReducerTests
             new EvidenceSpan("src/ProfileReader.cs", 8, 8, null, "test", "test/1.0"),
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["diagnosticId"] = "CS1061",
+                ["diagnosticTokens"] = "CustomerProfile;PrimaryEmail",
                 ["gapKind"] = "CompilationDiagnostic",
-                ["message"] = "Compilation diagnostic CS1061: CustomerProfile does not contain a definition for PrimaryEmail."
+                ["message"] = "Workspace diagnostic category `CompilationDiagnostic` with compiler diagnostic `CS1061`."
             });
         SqliteIndexWriter.Write(indexPath, manifest, [fact]);
 
