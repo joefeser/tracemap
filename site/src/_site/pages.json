@@ -73,5 +73,10 @@
     "path": "/demo/",
     "changefreq": "monthly",
     "priority": "0.8"
+  },
+  {
+    "path": "/demo/start-here/",
+    "changefreq": "monthly",
+    "priority": "0.8"
   }
 ]

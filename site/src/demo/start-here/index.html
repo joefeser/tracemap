@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A guided TraceMap public demo walkthrough for running checked-in samples, inspecting public-safe summaries, following static evidence, and reading limitations."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Demo Walkthrough | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/demo/start-here/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Demo Walkthrough">
+    <meta property="og:description" content="Run the public demo and inspect a static evidence packet without runtime or AI-analysis claims.">
+    <meta property="og:url" content="https://tracemap.tools/demo/start-here/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Demo walkthrough</p>
+        <h1>Start with a static evidence packet, not a promise.</h1>
+        <p class="hero-subhead">
+          This guided path shows how to run the checked-in public demo, inspect
+          public-safe summaries, follow one static evidence trail, and read the
+          limitations before turning evidence into a review conversation.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. The walkthrough describes reproducible
+          checked-in samples and public-safe generated summaries. It does not
+          claim runtime behavior, production traffic, release safety, or AI
+          impact analysis.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="workflow-grid">
+          <article>
+            <h3>1. Run the demo</h3>
+            <p>Clone the public repository and run the checked-in demo script from a clean checkout.</p>
+            <p><strong>Proof:</strong> <code>scripts/demo-public.sh</code>.</p>
+          </article>
+          <article>
+            <h3>2. Open the summary</h3>
+            <p>Start with the public-safe Markdown or JSON summary before opening local-only artifacts.</p>
+            <p><strong>Look for:</strong> coverage labels, artifact names, and deferred work.</p>
+          </article>
+          <article>
+            <h3>3. Follow one path</h3>
+            <p>Pick an endpoint or surface and inspect the static evidence links that explain what TraceMap found.</p>
+            <p><strong>Look for:</strong> rule IDs, evidence tiers, file paths, line spans, and limitations.</p>
+          </article>
+          <article>
+            <h3>4. Check capabilities</h3>
+            <p>Use the capability matrix to understand whether a workflow is main, demo, dev, or future-facing.</p>
+            <p><strong>Proof:</strong> <a href="/capabilities/">capability status</a>.</p>
+          </article>
+          <article>
+            <h3>5. Read limitations</h3>
+            <p>Separate static repo evidence from runtime facts, monitoring data, deployment state, and approval decisions.</p>
+            <p><strong>Proof:</strong> <a href="/limitations/">public limitations</a>.</p>
+          </article>
+          <article>
+            <h3>6. Share the packet</h3>
+            <p>Use summaries and reports for review. Keep SQLite, fact streams, logs, and private repo details local.</p>
+            <p><strong>Boundary:</strong> no raw snippets, secrets, local absolute paths, or private remotes.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Run it</p>
+          <h2>The first run should be boring.</h2>
+          <p>
+            Run the public demo against checked-in samples. The output should
+            give you a repeatable static evidence packet, not an incident answer
+            or runtime diagnosis.
+          </p>
+        </div>
+        <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
+cd tracemap
+./scripts/demo-public.sh
+
+# Optional: write output to a chosen folder.
+./scripts/demo-public.sh .tracemap-demo</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What to inspect</p>
+          <h2>Start with summaries, then open local artifacts when needed.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Public-safe summary</strong><span>Use generated summary Markdown or JSON to see what ran, what was produced, and where coverage is reduced.</span></div>
+          <div><strong>Report files</strong><span>Use generated Markdown reports to inspect paths, surfaces, gaps, and limitations from public samples.</span></div>
+          <div><strong>Facts and SQLite</strong><span>Use local fact streams and SQLite indexes for deeper inspection, but keep private-repo artifacts local-only.</span></div>
+          <div><strong>Analyzer logs</strong><span>Use logs for troubleshooting extraction, not for public copy or product claims.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Pressure-test wording</p>
+          <h2>Use TraceMap beside runtime tools, not instead of them.</h2>
+        </div>
+        <ul>
+          <li>Safe: "This endpoint has a static evidence trail through these code and data surfaces."</li>
+          <li>Safe: "This review packet shows rule-backed findings and coverage gaps from the repository."</li>
+          <li>Not safe: "TraceMap proves why production is down."</li>
+          <li>Not safe: "TraceMap proves this endpoint is slow, unused, deployed, or safe to release."</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Next links</p>
+          <h2>Move from first run to evidence review.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/demo/">Public demo</a>
+          <a href="/examples/">Examples</a>
+          <a href="/capabilities/">Capabilities</a>
+          <a href="/outputs/">Output artifacts</a>
+          <a href="/evidence/">Evidence model</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/docs/">Docs map</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">Demo script source</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Demo source:
+        <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">scripts/demo-public.sh</a>.
+        Capability status:
+        <a href="/capabilities/">capabilities</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
