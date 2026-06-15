@@ -254,7 +254,7 @@ public sealed class LegacyWebFormsExtractorTests
         var repo = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(repo);
         File.WriteAllText(Path.Combine(repo, "Unsafe.aspx"), """
-            <%@ Page Language="C#" CodeBehind="/Users/private/Unsafe.aspx.cs" Inherits="Sample.Unsafe" MasterPageFile="https://private.example.test/site.master" %>
+            <%@ Page Language="C#" CodeBehind="$(UnsafeCodeBehindPath)" Inherits="Sample.Unsafe" MasterPageFile="$(UnsafeMasterPagePath)" %>
             <asp:Button runat="server" ID="SaveButton" OnClientClick="PrivateHandler" />
             """);
         File.WriteAllText(Path.Combine(repo, "Broken.aspx"), """
@@ -264,8 +264,8 @@ public sealed class LegacyWebFormsExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
         var serialized = SerializeFacts(result.Facts.Where(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal) || fact.RuleId.StartsWith("legacy.webforms", StringComparison.Ordinal)));
 
-        Assert.DoesNotContain("/Users/private", serialized);
-        Assert.DoesNotContain("private.example.test", serialized);
+        Assert.DoesNotContain("UnsafeCodeBehindPath", serialized);
+        Assert.DoesNotContain("UnsafeMasterPagePath", serialized);
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "MalformedWebFormsDirective");
