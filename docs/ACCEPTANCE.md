@@ -160,6 +160,19 @@ For every successful `tracemap portfolio --out <out>` run, verify:
 - caps such as `--max-sources`, `--max-surface-rows`, `--max-endpoint-findings`, `--max-shared-surfaces`, `--max-edge-rows`, `--max-diff-rows`, and `--max-gaps` apply deterministically and emit truncation gaps when rows are omitted.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, secret-looking values, repository remotes, or local absolute paths.
 
+For every successful `tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <out>` run, verify:
+
+- the input index is opened read-only and may be either a single-language TraceMap index or a combined index.
+- directory or extensionless output writes `package-impact-report.md` and `package-impact-report.json`.
+- JSON includes version, report coverage, package delta summary, source snapshots, findings, gaps, and limitations without generated timestamps.
+- package-delta input uses `version: package-delta.v1` and a non-empty `changes` array with stable change IDs and package names.
+- package matching is exact case-insensitive package-name matching, with optional exact case-insensitive ecosystem matching.
+- findings carry `package.upgrade.impact.v1`, the original package extractor rule ID, evidence tier, source label, scan ID, commit SHA, file span, fact IDs, and safe package metadata.
+- unsafe version strings, raw URLs, local paths, source snippets, config values, connection strings, and secret-looking values are not rendered.
+- no-match package changes under reduced coverage emit `UnknownAnalysisGap`; they are not reported as clean absence.
+- package impact reports do not claim compatibility, transitive dependency resolution, runtime loading, vulnerabilities, licenses, deployment, release approval, or production usage.
+- caps such as `--max-findings` and `--max-gaps` apply deterministically and mark truncated output.
+
 For every successful `tracemap paths --index <combined.sqlite> --out <out>` run, verify:
 
 - path reports reject single-language indexes with a clear combined-index error.
