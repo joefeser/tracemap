@@ -138,9 +138,12 @@ Do not match handlers globally across the repository by name alone. If multiple
 candidate methods remain after page/type scoping, emit an ambiguity gap.
 
 Auto-event-wireup MVP scope is intentionally narrow: only `Page_Load` and
-`Page_Init` may be emitted as `Tier3SyntaxOrTextual` or `Tier4Unknown`
-evidence, and only when page/type identity is clear. Other lifecycle
-conventions such as `Page_PreRender` and
+`Page_Init` may be emitted as `Tier3SyntaxOrTextual` evidence, and only when
+page/type identity is clear plus either `AutoEventWireup` is explicitly enabled
+by page directive or safe config evidence, or explicit static event subscription
+evidence exists. If `AutoEventWireup` is false, unknown, contradictory, or
+unavailable, emit a `Tier4Unknown` gap instead of a handler-resolution fact or
+event-flow root. Other lifecycle conventions such as `Page_PreRender` and
 control-name patterns such as `Button1_Click` are out of MVP unless the markup
 declares the handler explicitly.
 
