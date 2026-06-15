@@ -478,17 +478,21 @@ h3 {
 .path-visual div + div::before {
   position: absolute;
   top: -14px;
-  left: 18px;
+  left: -3px;
   width: 2px;
   height: 14px;
   background: var(--accent);
   content: "";
 }
 
-.proof-change-row.changed {
-  border-left: 4px solid var(--gold);
-  background: white;
+.proof-change-row {
+  border-left: 4px solid transparent;
   padding-left: 10px;
+}
+
+.proof-change-row.changed {
+  border-left-color: var(--gold);
+  background: white;
 }
 
 .checklist-visual {
