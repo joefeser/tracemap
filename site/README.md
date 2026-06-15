@@ -43,6 +43,7 @@ Validation URLs:
 npm install
 npm run dev
 npm run build
+npm run validate
 npm test
 ```
 
@@ -51,8 +52,9 @@ source of truth. Blog article metadata and body fragments live under
 `src/_blog/`; sitemap page metadata lives under `src/_site/pages.json`.
 Underscore-prefixed source folders are private build inputs and are not copied
 into `dist`. `npm run build` generates `dist/sitemap.xml` from the page and blog
-metadata. `npm run dev` runs the build first and then serves the generated
-`dist` directory.
+metadata. `npm run validate` builds the site and checks generated sitemap URLs,
+internal HTML links, and the `robots.txt` sitemap directive. `npm run dev` runs
+the build first and then serves the generated `dist` directory.
 
 ## Site Work Conventions
 
