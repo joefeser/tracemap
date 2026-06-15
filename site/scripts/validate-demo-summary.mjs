@@ -131,16 +131,24 @@ async function validateAffectedPages({ errors, fixture, root }) {
     }
   }
 
-  if (pages.size !== affectedPages.length) {
-    return;
+  if (pages.has("demo/result/index.html")) {
+    validateResultPage(pages.get("demo/result/index.html"), sections, errors);
   }
-
-  validateResultPage(pages.get("demo/result/index.html"), sections, errors);
-  validateProofUpgradesPage(pages.get("demo/proof-upgrades/index.html"), sections, errors);
-  validateProofAssetsPage(pages.get("demo/proof-assets/index.html"), sections, errors);
-  validatePacketsPage(pages.get("packets/index.html"), sections, errors);
-  validateManagerPacketPage(pages.get("manager-packet/index.html"), sections, errors);
-  validateCapabilitiesPage(pages.get("capabilities/index.html"), sections, errors);
+  if (pages.has("demo/proof-upgrades/index.html")) {
+    validateProofUpgradesPage(pages.get("demo/proof-upgrades/index.html"), sections, errors);
+  }
+  if (pages.has("demo/proof-assets/index.html")) {
+    validateProofAssetsPage(pages.get("demo/proof-assets/index.html"), sections, errors);
+  }
+  if (pages.has("packets/index.html")) {
+    validatePacketsPage(pages.get("packets/index.html"), sections, errors);
+  }
+  if (pages.has("manager-packet/index.html")) {
+    validateManagerPacketPage(pages.get("manager-packet/index.html"), sections, errors);
+  }
+  if (pages.has("capabilities/index.html")) {
+    validateCapabilitiesPage(pages.get("capabilities/index.html"), sections, errors);
+  }
 }
 
 function validateResultPage(html, sections, errors) {
@@ -206,6 +214,7 @@ function validateProofAssetsPage(html, sections, errors) {
   assertContains(html, "Coverage: PartialAnalysis", page, "partial coverage label", errors);
 
   if (paths) {
+    const pathsText = extractArticleText(html, "Paths and reverse");
     for (const [label, key] of [
       ["paths", "paths"],
       ["reverse paths", "reversePaths"],
@@ -213,7 +222,7 @@ function validateProofAssetsPage(html, sections, errors) {
       ["reverse gaps", "reverseGaps"]
     ]) {
       const expected = paths.counts[key];
-      const actual = extractCount(html, label);
+      const actual = extractCount(pathsText, label);
       if (actual !== expected) {
         errors.push(`${page} paths visual count ${key} must be ${expected}; found ${actual ?? "<missing>"}.`);
       }
@@ -221,6 +230,7 @@ function validateProofAssetsPage(html, sections, errors) {
   }
 
   if (impact) {
+    const impactText = extractArticleText(html, "Diff and impact");
     for (const [label, key] of [
       ["diff rows considered", "diffRows"],
       ["surface impacts", "surfaceImpacts"],
@@ -229,7 +239,7 @@ function validateProofAssetsPage(html, sections, errors) {
       ["gaps", "gaps"]
     ]) {
       const expected = impact.counts[key];
-      const actual = extractCount(html, label);
+      const actual = extractCount(impactText, label);
       if (actual !== expected) {
         errors.push(`${page} impact visual count ${key} must be ${expected}; found ${actual ?? "<missing>"}.`);
       }
@@ -315,7 +325,7 @@ function assertContains(html, needle, page, label, errors) {
 
 function extractArticleText(html, heading) {
   const escapedHeading = escapeRegExp(heading);
-  const match = html.match(new RegExp(`<article>[\\s\\S]*?<h3>${escapedHeading}</h3>([\\s\\S]*?)<\\/article>`));
+  const match = html.match(new RegExp(`<h3>${escapedHeading}</h3>([\\s\\S]*?)<\\/article>`));
   return match ? htmlText(match[1]) : "";
 }
 

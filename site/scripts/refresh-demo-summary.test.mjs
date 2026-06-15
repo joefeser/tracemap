@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 
 import {
+  collectPublicFiles,
   createDemoSummaryFixture,
   refreshDemoSummary,
   validateDemoSummaryFixture
@@ -163,6 +164,28 @@ test("refreshDemoSummary rejects unsafe portfolio manifest indexPath values", as
     refreshDemoSummary({ demoRoot: root, fixturePath: join(root, "fixture.json") }),
     /portfolio-manifest\.json inputs\[0\]\.indexPath must be relative/
   );
+});
+
+test("refreshDemoSummary reports invalid portfolio manifest JSON with context", async () => {
+  const root = await createDemoOutput();
+  await writeFile(join(root, "portfolio-manifest.json"), "{not-json}\n", "utf8");
+
+  await assert.rejects(
+    refreshDemoSummary({ demoRoot: root, fixturePath: join(root, "fixture.json") }),
+    /Failed to parse or validate portfolio-manifest\.json/
+  );
+});
+
+test("collectPublicFiles only skips raw generated folders at the output root", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tracemap-demo-summary-test-"));
+  await mkdir(join(root, "reports", "combined"), { recursive: true });
+  await mkdir(join(root, "combined"), { recursive: true });
+  await writeFile(join(root, "reports", "combined", "report.md"), "safe nested report\n", "utf8");
+  await writeFile(join(root, "combined", "report.md"), "raw root report\n", "utf8");
+
+  const files = (await collectPublicFiles(root)).map((file) => file.slice(root.length + 1));
+
+  assert.deepEqual(files, ["reports/combined/report.md"]);
 });
 
 test("validateDemoSummaryFixture rejects raw remotes and raw artifacts in committed fixture data", () => {
