@@ -271,18 +271,22 @@ public static class TraceMapCommand
 
         var result = await CombinedDependencyPathReporter.WriteAsync(
             new CombinedDependencyPathOptions(
-                indexPath,
-                outputPath,
-                format,
-                values.GetValueOrDefault("--from-endpoint"),
-                values.GetValueOrDefault("--from-symbol"),
-                values.GetValueOrDefault("--from-source"),
-                values.GetValueOrDefault("--to-surface"),
-                values.GetValueOrDefault("--surface-name"),
-                values.GetValueOrDefault("--source-pair"),
-                ParsePositiveInt(values, "--max-depth", 8),
-                ParsePositiveInt(values, "--max-paths", 100),
-                ParsePositiveInt(values, "--max-frontier", 10000)),
+                IndexPath: indexPath,
+                OutputPath: outputPath,
+                Format: format,
+                FromEndpoint: values.GetValueOrDefault("--from-endpoint"),
+                FromSymbol: values.GetValueOrDefault("--from-symbol"),
+                FromSource: values.GetValueOrDefault("--from-source"),
+                FromWebFormsEvent: values.GetValueOrDefault("--from-webforms-event"),
+                ToSurface: values.GetValueOrDefault("--to-surface"),
+                SurfaceName: values.GetValueOrDefault("--surface-name"),
+                SourcePair: values.GetValueOrDefault("--source-pair"),
+                Classification: values.GetValueOrDefault("--classification"),
+                View: values.GetValueOrDefault("--view"),
+                IncludeLegacyRoots: values.HasFlag("--include-legacy-roots"),
+                MaxDepth: ParsePositiveInt(values, "--max-depth", 8),
+                MaxPaths: ParsePositiveInt(values, "--max-paths", 100),
+                MaxFrontier: ParsePositiveInt(values, "--max-frontier", 10000)),
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap paths completed: {result.MarkdownPath ?? result.JsonPath}");
@@ -987,7 +991,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review")
+            if (arg is "--restore" or "--include-paths" or "--include-legacy-roots" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review")
             {
                 flags.Add(arg);
                 continue;
@@ -1169,19 +1173,28 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap paths --index <combined.sqlite> --out <path> [--format <markdown|json>] [selectors]
+              tracemap paths --index <index.sqlite|combined.sqlite> --out <path> [--format <markdown|json>] [selectors]
 
             Required:
-              --index <path>             Combined TraceMap index from tracemap combine.
+              --index <path>             TraceMap index or combined index.
               --out <path>               Output directory or file path.
 
             Selectors:
               --from-endpoint "<M> <P>"  Start from an HTTP endpoint method/path key.
               --from-symbol <symbol>     Start from matching source-local symbol candidates.
+              --from-webforms-event <id>  Start from a WebForms event/root fact or selector.
               --from-source <label>      Constrain start evidence to a source label.
-              --to-surface <kind>        sql-query, http-route, http-client, or package-config.
+              --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
+                                          package-config, wcf-operation, legacy-data, dependency-surface.
               --surface-name <text>      Exact name, or leading/trailing * wildcard.
               --source-pair <a>:<b>      Constrain endpoint crossing; escape literal colons as \:.
+              --classification <value>   StrongStaticPath, ProbableStaticPath,
+                                          NeedsReviewStaticPath, NoBackendEvidence,
+                                          ReducedCoverage, or AnalysisGap.
+
+            Legacy flow view:
+              --include-legacy-roots      Include WebForms/API/service roots in path composition.
+              --view legacy-flows         Use legacy static-flow wording and schema metadata.
 
             Bounds:
               --max-depth <n>            Default: 8.

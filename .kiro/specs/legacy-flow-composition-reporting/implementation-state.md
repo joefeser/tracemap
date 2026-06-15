@@ -1,7 +1,7 @@
 # Legacy Flow Composition Reporting Implementation State
 
-Status: ready-for-implementation
-Branch: codex/legacy-flow-composition-reporting-spec
+Status: implemented
+Branch: codex/legacy-flow-composition-reporting
 Public claim level: hidden
 
 ## Why This Spec Exists
@@ -95,10 +95,57 @@ git diff --check
 No .NET implementation validation is required for this spec-only branch unless
 review patches touch source code, docs outside the spec, or validation scripts.
 
+## Implementation Notes
+
+Implemented as an extension of the existing `tracemap paths` reporter rather
+than a parallel graph engine. The legacy flow mode adds `--include-legacy-roots`,
+`--view legacy-flows`, `--from-webforms-event`, and `--classification` selectors,
+plus `legacy-flow.v1` schema metadata on the shared path report contract.
+
+Single-index support is enabled for `tracemap paths` report building only.
+Shared graph inventory callers such as reverse query still require combined
+indexes to preserve existing behavior. Combined-index paths keep their current
+default start-node semantics unless legacy roots are explicitly requested.
+
+Legacy roots are composed from existing WebForms handler/event facts, API route
+facts, WCF service-reference mappings, SQL/query surfaces, dependency surfaces,
+and optional legacy data metadata facts. WCF operations are v1 terminals and do
+not traverse through service-side implementation evidence. Projection facts from
+`legacy.webforms.event-flow.v1` are accepted as review-tier fallback/corroborating
+edges and cannot upgrade classification.
+
+Final legacy output guards neutralize source labels, display names, paths, URLs,
+raw SQL-like values, remotes, connection strings, config-looking values, and
+secret-looking tokens before Markdown/JSON serialization.
+
 ## Implementation Validation
 
-Not started. `tasks.md` is intentionally unchecked and implementation-ready only
-after review findings are resolved.
+Completed:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln --filter LegacyFlowCompositionTests
+dotnet test src/dotnet/TraceMap.sln
+./scripts/smoke-combined-paths.sh
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+The pinned combined-path smoke is relevant because this slice extends
+`tracemap paths` and shared path rendering behavior. No language-adapter pinned
+smoke is required beyond the .NET suite because scanner extraction behavior was
+not changed.
+
+## Oddities
+
+- Existing `CombinedDependencyPathReport` is reused and extended with optional
+  legacy schema/view/query fields. This avoids a split output model but means
+  non-legacy JSON now contains additional null/default fields.
+- Availability gaps are emitted conservatively when optional parameter-forward
+  or legacy data metadata evidence is unavailable or empty; this prevents clean
+  absence claims from old indexes.
+- Source-label redaction intentionally favors neutral labels over preserving
+  private combined labels in legacy-flow output.
 
 ## Follow-Ups To Keep Out Of This Slice
 

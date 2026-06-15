@@ -13,9 +13,13 @@ public sealed record CombinedDependencyPathOptions(
     string? FromEndpoint = null,
     string? FromSymbol = null,
     string? FromSource = null,
+    string? FromWebFormsEvent = null,
     string? ToSurface = null,
     string? SurfaceName = null,
     string? SourcePair = null,
+    string? Classification = null,
+    string? View = null,
+    bool IncludeLegacyRoots = false,
     int MaxDepth = 8,
     int MaxPaths = 100,
     int MaxFrontier = 10000);
@@ -27,6 +31,8 @@ public sealed record CombinedDependencyPathResult(
 
 public sealed record CombinedDependencyPathReport(
     string Version,
+    string? SchemaVersion,
+    string View,
     string ReportCoverage,
     IReadOnlyList<string> CoverageWarnings,
     CombinedPathQuery Query,
@@ -41,9 +47,12 @@ public sealed record CombinedPathQuery(
     string? FromEndpoint,
     string? FromSymbol,
     string? FromSource,
+    string? FromWebFormsEvent,
     string? ToSurface,
     string? SurfaceName,
     string? SourcePair,
+    string? Classification,
+    bool IncludeLegacyRoots,
     int MaxDepth,
     int MaxPaths,
     int MaxFrontier,
@@ -153,9 +162,20 @@ public static class CombinedDependencyPathClassifications
     public const string StrongStaticPath = nameof(StrongStaticPath);
     public const string ProbableStaticPath = nameof(ProbableStaticPath);
     public const string NeedsReviewPath = nameof(NeedsReviewPath);
+    public const string NeedsReviewStaticPath = nameof(NeedsReviewStaticPath);
+    public const string ReducedCoverage = nameof(ReducedCoverage);
+    public const string AnalysisGap = nameof(AnalysisGap);
+    public const string NoBackendEvidence = nameof(NoBackendEvidence);
     public const string UnknownAnalysisGap = nameof(UnknownAnalysisGap);
     public const string NoPathFound = nameof(NoPathFound);
     public const string SelectorNoMatch = nameof(SelectorNoMatch);
+    public const string ClassificationFilterNoMatch = nameof(ClassificationFilterNoMatch);
+}
+
+public static class LegacyFlowReportConstants
+{
+    public const string SchemaVersion = "legacy-flow.v1";
+    public const string View = "legacy-flows";
 }
 
 public static class CombinedValueOriginClassifications
@@ -180,6 +200,7 @@ public static class CombinedDependencyPathReporter
     private const string QueryGapRuleId = "combined.paths.query-gap.v1";
     private const string TruncationGapRuleId = "combined.paths.truncation-gap.v1";
     private const string SymbolReconciliationRuleId = "combined.paths.symbol-reconciliation.v1";
+    private const int SelectorCandidateLimit = 250;
 
     private static readonly HashSet<string> TerminalSurfaceKinds = new(StringComparer.Ordinal)
     {
@@ -187,7 +208,10 @@ public static class CombinedDependencyPathReporter
         "sql-persistence",
         "http-route",
         "http-client",
-        "package-config"
+        "package-config",
+        "wcf-operation",
+        "legacy-data",
+        "dependency-surface"
     };
 
     private static readonly HashSet<string> EdgeKindTerms = new(StringComparer.Ordinal)
@@ -204,6 +228,17 @@ public static class CombinedDependencyPathReporter
         "symbol-reconciliation"
     };
 
+    private static readonly HashSet<string> LegacyTerminalSurfaceKinds = new(StringComparer.Ordinal)
+    {
+        "sql-query",
+        "sql-persistence",
+        "http-client",
+        "wcf-operation",
+        "legacy-data",
+        "dependency-surface",
+        "package-config"
+    };
+
     public static async Task<CombinedDependencyPathResult> WriteAsync(CombinedDependencyPathOptions options, CancellationToken cancellationToken = default)
     {
         var report = await BuildReportAsync(options, cancellationToken);
@@ -216,7 +251,7 @@ public static class CombinedDependencyPathReporter
     {
         ValidateOptions(options);
         var sourcePair = ParseSourcePair(options.SourcePair);
-        var (read, graph) = await BuildGraphAsync(options.IndexPath, sourcePair, cancellationToken);
+        var (read, graph) = await BuildGraphAsync(options.IndexPath, sourcePair, options.IncludeLegacyRoots || IsLegacyView(options.View), allowSingleIndex: true, cancellationToken);
         return BuildReport(options, read, graph, sourcePair);
     }
 
@@ -227,11 +262,11 @@ public static class CombinedDependencyPathReporter
     {
         if (string.IsNullOrWhiteSpace(indexPath))
         {
-            throw new ArgumentException("paths requires --index <combined.sqlite>.");
+            throw new ArgumentException("paths requires --index <index.sqlite|combined.sqlite>.");
         }
 
         var parsedSourcePair = ParseSourcePair(sourcePair);
-        var (read, graph) = await BuildGraphAsync(indexPath, parsedSourcePair, cancellationToken);
+        var (read, graph) = await BuildGraphAsync(indexPath, parsedSourcePair, includeLegacyRoots: false, allowSingleIndex: false, cancellationToken);
         return new CombinedPathGraphInventory(
             read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             read.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -257,6 +292,8 @@ public static class CombinedDependencyPathReporter
     private static async Task<(CombinedReadResult Read, EvidenceGraph Graph)> BuildGraphAsync(
         string indexPath,
         (string Client, string Server)? sourcePair,
+        bool includeLegacyRoots,
+        bool allowSingleIndex,
         CancellationToken cancellationToken)
     {
         var connectionString = new SqliteConnectionStringBuilder
@@ -266,12 +303,10 @@ public static class CombinedDependencyPathReporter
         }.ToString();
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
-        await ValidatePathSchemaAsync(connection, cancellationToken);
-
-        var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
+        var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken);
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts);
-        var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair);
+        var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots);
         return (read, graph);
     }
 
@@ -279,7 +314,7 @@ public static class CombinedDependencyPathReporter
     {
         if (string.IsNullOrWhiteSpace(options.IndexPath))
         {
-            throw new ArgumentException("paths requires --index <combined.sqlite>.");
+            throw new ArgumentException("paths requires --index <index.sqlite|combined.sqlite>.");
         }
 
         if (string.IsNullOrWhiteSpace(options.OutputPath))
@@ -312,8 +347,14 @@ public static class CombinedDependencyPathReporter
 
             if (!TerminalSurfaceKinds.Contains(surfaceKind))
             {
-                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, or package-config.");
+                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, legacy-data, or dependency-surface.");
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.Classification)
+            && ClassificationRank(NormalizeClassification(options.Classification.Trim(), options.IncludeLegacyRoots || IsLegacyView(options.View))) == 99)
+        {
+            throw new ArgumentException("paths --classification must be one of StrongStaticPath, ProbableStaticPath, NeedsReviewStaticPath, NoBackendEvidence, ReducedCoverage, or AnalysisGap.");
         }
     }
 
@@ -323,6 +364,7 @@ public static class CombinedDependencyPathReporter
         EvidenceGraph graph,
         (string Client, string Server)? sourcePair)
     {
+        var legacyMode = options.IncludeLegacyRoots || IsLegacyView(options.View);
         var sourceFilter = string.IsNullOrWhiteSpace(options.FromSource) ? null : options.FromSource.Trim();
         var resolvedStarts = ResolveStartNodes(options, graph, sourceFilter);
         var startNodes = resolvedStarts.Nodes;
@@ -381,11 +423,44 @@ public static class CombinedDependencyPathReporter
 
             if (paths.Count == 0)
             {
-                gaps.Add(CreateNoPathGap(read, graph, startNodes, options.MaxDepth, options.MaxFrontier));
+                var gap = CreateNoPathGap(read, graph, startNodes, options.MaxDepth, options.MaxFrontier, legacyMode);
+                if (legacyMode && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence)
+                {
+                    paths.AddRange(startNodes.Select((node, index) => ToNoBackendEvidencePath($"path:no-backend:{index + 1:0000}", node)));
+                }
+                else
+                {
+                    gaps.Add(gap);
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.Classification))
+        {
+            var requested = NormalizeClassification(options.Classification.Trim(), legacyMode);
+            var beforeFilterCount = paths.Count;
+            paths = paths.Where(path => string.Equals(NormalizeClassification(path.Classification, legacyMode), requested, StringComparison.Ordinal)).ToList();
+            if (beforeFilterCount > 0 && paths.Count == 0)
+            {
+                gaps.Add(new CombinedPathGap(
+                    $"gap:selector:classification:{Hash(requested, 16)}",
+                    "ClassificationFilterNoMatch",
+                    CombinedDependencyPathClassifications.ClassificationFilterNoMatch,
+                    "Static paths existed before classification filtering, but none matched the requested classification.",
+                    null,
+                    sourceFilter,
+                    null,
+                    null,
+                    RuleIds.LegacyFlowClassification,
+                    EvidenceTiers.Tier4Unknown,
+                    null,
+                    null,
+                    "classification"));
             }
         }
 
         var sortedPaths = paths
+            .Select(path => legacyMode ? ToLegacyPath(path, graph) : path)
             .OrderBy(path => ClassificationRank(path.Classification))
             .ThenBy(path => path.Length)
             .ThenBy(path => path.Nodes.FirstOrDefault()?.SourceLabel, StringComparer.Ordinal)
@@ -396,6 +471,7 @@ public static class CombinedDependencyPathReporter
             .ThenBy(path => path.PathId, StringComparer.Ordinal)
             .ToArray();
         var sortedGaps = gaps
+            .Select(gap => legacyMode ? SanitizeGap(gap) : gap)
             .GroupBy(gap => gap.GapId, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
@@ -409,6 +485,7 @@ public static class CombinedDependencyPathReporter
             .ToArray();
         var participatingNodes = sortedPaths.SelectMany(path => path.Nodes)
             .Concat(sortedGaps.Select(gap => gap.NodeId is not null && graph.Nodes.TryGetValue(gap.NodeId, out var node) ? node.ToReportNode() : null).OfType<CombinedPathNode>())
+            .Select(node => legacyMode ? SanitizeNode(node) : node)
             .GroupBy(node => node.NodeId, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
@@ -427,21 +504,26 @@ public static class CombinedDependencyPathReporter
 
         return new CombinedDependencyPathReport(
             Version,
-            warnings.Length == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
+            legacyMode ? LegacyFlowReportConstants.SchemaVersion : null,
+            legacyMode ? LegacyFlowReportConstants.View : "paths",
+            warnings.Length == 0 && !sortedGaps.Any(gap => gap.Classification is CombinedDependencyPathClassifications.AnalysisGap or CombinedDependencyPathClassifications.ReducedCoverage) ? "FullEvidenceAvailable" : "ReducedCoverage",
             warnings,
             new CombinedPathQuery(
                 options.FromEndpoint,
                 options.FromSymbol,
                 sourceFilter,
+                options.FromWebFormsEvent,
                 options.ToSurface,
                 options.SurfaceName,
                 sourcePair is null ? null : $"{EscapeSourcePairLabel(sourcePair.Value.Client)}:{EscapeSourcePairLabel(sourcePair.Value.Server)}",
+                options.Classification,
+                legacyMode,
                 options.MaxDepth,
                 options.MaxPaths,
                 options.MaxFrontier,
                 Algorithm,
                 AlgorithmVersion),
-            read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
+            read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
                 graph.Nodes.Count,
@@ -467,7 +549,8 @@ public static class CombinedDependencyPathReporter
         CombinedReadResult read,
         IReadOnlyList<CombinedEndpointFinding> endpointFindings,
         IReadOnlyList<CombinedDependencySurfaceRow> surfaces,
-        (string Client, string Server)? sourcePair)
+        (string Client, string Server)? sourcePair,
+        bool includeLegacyRoots)
     {
         var graph = new EvidenceGraph(read.Sources);
         var factsById = read.Facts.ToDictionary(fact => fact.CombinedFactId, StringComparer.Ordinal);
@@ -476,6 +559,17 @@ public static class CombinedDependencyPathReporter
             if (fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpRouteBinding)
             {
                 graph.AddNode(ToEndpointNode(fact));
+            }
+
+            if (includeLegacyRoots && fact.FactType == FactTypes.WebFormsHandlerResolved)
+            {
+                graph.AddNode(ToWebFormsRootNode(fact));
+                continue;
+            }
+
+            if (includeLegacyRoots && fact.FactType == FactTypes.WcfGeneratedClientDeclared)
+            {
+                graph.AddNode(ToWcfClientNode(fact));
             }
 
             AddSymbolNodeAndAttachment(graph, fact, fact.SourceSymbol, fact.CombinedFactId);
@@ -557,6 +651,12 @@ public static class CombinedDependencyPathReporter
             }
         }
 
+        if (includeLegacyRoots)
+        {
+            AddLegacyFlowNodesAndEdges(graph, read.Facts, surfaces);
+            AddLegacyAvailabilityGaps(graph, read);
+        }
+
         foreach (var finding in endpointFindings)
         {
             if (sourcePair is not null
@@ -596,6 +696,758 @@ public static class CombinedDependencyPathReporter
         AddSymbolReconciliationEdges(graph);
         graph.Sort();
         return graph;
+    }
+
+    private static async Task<CombinedReadResult> ReadPathIndexAsync(SqliteConnection connection, string indexPath, bool allowSingleIndex, CancellationToken cancellationToken)
+    {
+        if (await TableExistsAsync(connection, "index_sources", cancellationToken)
+            && await TableExistsAsync(connection, "combined_facts", cancellationToken)
+            && await ViewExistsAsync(connection, "combined_dependency_edges", cancellationToken))
+        {
+            await CombinedDependencyReporter.ValidateCombinedIndexAsync(connection, cancellationToken);
+            return await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
+        }
+
+        if (allowSingleIndex
+            && await TableExistsAsync(connection, "scan_manifest", cancellationToken)
+            && await TableExistsAsync(connection, "facts", cancellationToken))
+        {
+            return await ReadSingleIndexAsync(connection, indexPath, cancellationToken);
+        }
+
+        throw new InvalidDataException(allowSingleIndex
+            ? "tracemap paths requires a TraceMap index.sqlite or combined.sqlite file."
+            : "tracemap paths graph inventory requires a combined index produced by tracemap combine.");
+    }
+
+    private static async Task<CombinedReadResult> ReadSingleIndexAsync(SqliteConnection connection, string indexPath, CancellationToken cancellationToken)
+    {
+        var (source, manifestJson) = await ReadSingleSourceAsync(connection, indexPath, cancellationToken);
+        var warnings = new List<string>();
+        AddSingleCoverageWarnings(source, warnings);
+        var facts = await ReadSingleFactsAsync(connection, source, cancellationToken);
+        var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken);
+        var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
+        {
+            counts["parameter-forward-edges"] = await CountRowsAsync(connection, "parameter_forward_edges", cancellationToken);
+        }
+
+        counts["async-boundaries"] = facts.Count(fact => fact.FactType == FactTypes.AsyncBoundary);
+        counts["callback-boundaries"] = facts.Count(fact => fact.FactType == FactTypes.CallbackBoundary);
+        var knownGaps = facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap)
+            .GroupBy(fact => fact.RuleId, StringComparer.Ordinal)
+            .Select(group => new CombinedKnownGapRow(source.SourceIndexId, source.Label, group.Key, group.Count(), "Analysis gap evidence is present."))
+            .OrderBy(gap => gap.Category, StringComparer.Ordinal)
+            .ToArray();
+        _ = manifestJson;
+        return new CombinedReadResult(
+            [source],
+            knownGaps,
+            warnings.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            facts,
+            edges,
+            counts.Where(pair => pair.Value > 0).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+    }
+
+    private static async Task<(CombinedReportSource Source, string ManifestJson)> ReadSingleSourceAsync(SqliteConnection connection, string indexPath, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select scan_id, repo, commit_sha, scanner_version, analysis_level, build_status, manifest_json
+            from scan_manifest
+            order by scanned_at desc
+            limit 1;
+            """;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidDataException("TraceMap index does not contain a scan manifest.");
+        }
+
+        var source = new CombinedReportSource(
+            "single",
+            "single",
+            Hash(Path.GetFullPath(indexPath), 32),
+            reader.GetString(0),
+            "source",
+            null,
+            null,
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetString(3).Contains("tracemap", StringComparison.OrdinalIgnoreCase) ? "csharp" : null,
+            null,
+            false,
+            ".",
+            null,
+            null,
+            reader.GetString(4),
+            reader.GetString(5));
+        return (source, reader.GetString(6));
+    }
+
+    private static async Task<IReadOnlyList<CombinedFactRow>> ReadSingleFactsAsync(SqliteConnection connection, CombinedReportSource source, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
+                   source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json
+            from facts
+            order by file_path, start_line, fact_type, fact_id;
+            """;
+        var rows = new List<CombinedFactRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var factId = reader.GetString(0);
+            rows.Add(new CombinedFactRow(
+                $"{source.SourceIndexId}:{factId}",
+                source.SourceIndexId,
+                source.Label,
+                factId,
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                reader.GetString(10),
+                reader.GetInt32(11),
+                reader.GetInt32(12),
+                ParseProperties(reader.GetString(13))));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadSingleEdgesAsync(SqliteConnection connection, CombinedReportSource source, CancellationToken cancellationToken)
+    {
+        var edges = new List<CombinedDependencyEdgeRow>();
+        if (await TableExistsAsync(connection, "call_edges", cancellationToken))
+        {
+            await ReadSingleEdgeQueryAsync(connection, source, edges, """
+                select 'calls', fact_id, fact_id, caller_symbol, callee_symbol, callee_assembly_name, callee_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
+                from call_edges
+                order by file_path, start_line, fact_id;
+                """, cancellationToken);
+        }
+
+        if (await TableExistsAsync(connection, "object_creations", cancellationToken))
+        {
+            await ReadSingleEdgeQueryAsync(connection, source, edges, """
+                select 'creates', fact_id, fact_id, caller_symbol, created_type, created_type_assembly_name, created_type_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
+                from object_creations
+                order by file_path, start_line, fact_id;
+                """, cancellationToken);
+        }
+
+        if (await TableExistsAsync(connection, "symbol_relationships", cancellationToken))
+        {
+            await ReadSingleEdgeQueryAsync(connection, source, edges, """
+                select relationship_kind, relationship_id, relationship_id, source_symbol_id, target_symbol_id, null, null, rule_id, evidence_tier, file_path, start_line, end_line
+                from symbol_relationships
+                order by file_path, start_line, relationship_id;
+                """, cancellationToken);
+        }
+
+        if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
+        {
+            await ReadSingleEdgeQueryAsync(connection, source, edges, """
+                select 'parameter-forward', fact_id, fact_id,
+                       source_method_symbol || ':' || source_parameter_symbol,
+                       target_method_symbol || ':' || target_parameter_symbol,
+                       target_assembly_name, target_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
+                from parameter_forward_edges
+                order by file_path, start_line, fact_id;
+                """, cancellationToken);
+        }
+
+        return edges
+            .OrderBy(edge => edge.EdgeKind, StringComparer.Ordinal)
+            .ThenBy(edge => edge.SourceSymbol, StringComparer.Ordinal)
+            .ThenBy(edge => edge.TargetSymbol, StringComparer.Ordinal)
+            .ThenBy(edge => edge.FilePath, StringComparer.Ordinal)
+            .ThenBy(edge => edge.StartLine)
+            .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static async Task ReadSingleEdgeQueryAsync(
+        SqliteConnection connection,
+        CombinedReportSource source,
+        List<CombinedDependencyEdgeRow> edges,
+        string sql,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var originalId = reader.GetString(1);
+            edges.Add(new CombinedDependencyEdgeRow(
+                reader.GetString(0),
+                source.SourceIndexId,
+                source.Label,
+                $"{source.SourceIndexId}:{reader.GetString(1)}",
+                originalId,
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.GetString(7),
+                reader.GetString(8),
+                reader.GetString(9),
+                reader.GetInt32(10),
+                reader.GetInt32(11)));
+        }
+    }
+
+    private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from sqlite_master where type = 'table' and name = $name;";
+        command.Parameters.AddWithValue("$name", tableName);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
+    }
+
+    private static async Task<bool> ViewExistsAsync(SqliteConnection connection, string viewName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from sqlite_master where type = 'view' and name = $name;";
+        command.Parameters.AddWithValue("$name", viewName);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
+    }
+
+    private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"select count(*) from {tableName};";
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private static void AddSingleCoverageWarnings(CombinedReportSource source, List<string> warnings)
+    {
+        if (SourceHasReducedCoverage(source))
+        {
+            warnings.Add($"single has reduced coverage ({source.AnalysisLevel}, build {source.BuildStatus}).");
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseProperties(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<SortedDictionary<string, string>>(json, CombinedDependencyReporter.JsonOptions)
+                ?? new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["propertiesHash"] = Hash(json, 32)
+            };
+        }
+    }
+
+    private static void AddLegacyFlowNodesAndEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts, IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
+    {
+        var factsByOriginalId = facts
+            .GroupBy(fact => fact.OriginalFactId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).First(), StringComparer.Ordinal);
+        var surfacesByKind = surfaces
+            .GroupBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+
+        foreach (var handler in facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            var root = ToWebFormsRootNode(handler);
+            graph.AddNode(root);
+            var handlerSymbol = HandlerSymbol(handler);
+            if (!string.IsNullOrWhiteSpace(handlerSymbol))
+            {
+                var symbol = graph.GetOrAddSymbolNode(handler.SourceIndexId, handler.SourceLabel, handlerSymbol!, handler.FilePath, handler.StartLine, handler.EndLine, handler.RuleId, handler.EvidenceTier);
+                graph.AddEdge(new GraphEdge(
+                    $"legacy-root:{handler.CombinedFactId}:{symbol.NodeId}",
+                    "legacy-root-selection",
+                    root.NodeId,
+                    symbol.NodeId,
+                    "EvidenceEdge",
+                    RuleIds.LegacyFlowRootSelection,
+                    handler.EvidenceTier,
+                    SupportingFacts(handler, factsByOriginalId),
+                    [],
+                    SafePath(handler.FilePath),
+                    handler.StartLine,
+                    handler.EndLine));
+            }
+        }
+
+        AddUnresolvedRootGaps(graph, facts, factsByOriginalId);
+
+        foreach (var mapping in facts.Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            var operation = ToWcfOperationSurfaceNode(mapping);
+            graph.AddNode(operation);
+            var sourceSymbol = mapping.SourceSymbol ?? CombinedDependencyReporter.FirstValue(mapping.Properties, "clientOperationSymbol", "generatedClientOperation");
+            if (!string.IsNullOrWhiteSpace(sourceSymbol))
+            {
+                var source = graph.GetOrAddSymbolNode(mapping.SourceIndexId, mapping.SourceLabel, sourceSymbol!, mapping.FilePath, mapping.StartLine, mapping.EndLine, mapping.RuleId, mapping.EvidenceTier);
+                graph.AddEdge(new GraphEdge(
+                    $"legacy-wcf:{mapping.CombinedFactId}:{source.NodeId}",
+                    "wcf-service-reference",
+                    source.NodeId,
+                    operation.NodeId,
+                    "EvidenceEdge",
+                    RuleIds.LegacyFlowStaticTraversal,
+                    mapping.EvidenceTier,
+                    SupportingFacts(mapping, factsByOriginalId),
+                    [],
+                    SafePath(mapping.FilePath),
+                    mapping.StartLine,
+                    mapping.EndLine));
+            }
+        }
+
+        foreach (var legacyData in facts.Where(IsLegacyDataFact).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            var node = ToLegacyDataSurfaceNode(legacyData);
+            graph.AddNode(node);
+            foreach (var symbolValue in LegacyDataAttachmentSymbols(legacyData))
+            {
+                var symbol = graph.GetOrAddSymbolNode(legacyData.SourceIndexId, legacyData.SourceLabel, symbolValue, legacyData.FilePath, legacyData.StartLine, legacyData.EndLine, legacyData.RuleId, legacyData.EvidenceTier);
+                graph.AddEdge(new GraphEdge(
+                    $"legacy-data:{legacyData.CombinedFactId}:{symbol.NodeId}",
+                    "legacy-data-link",
+                    symbol.NodeId,
+                    node.NodeId,
+                    "EvidenceEdge",
+                    RuleIds.LegacyFlowStaticTraversal,
+                    legacyData.EvidenceTier,
+                    SupportingFacts(legacyData, factsByOriginalId),
+                    [],
+                    SafePath(legacyData.FilePath),
+                    legacyData.StartLine,
+                    legacyData.EndLine));
+            }
+        }
+
+        foreach (var projection in facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            AddProjectionEdge(graph, projection, factsByOriginalId, surfacesByKind);
+        }
+    }
+
+    private static void AddUnresolvedRootGaps(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts, IReadOnlyDictionary<string, CombinedFactRow> factsByOriginalId)
+    {
+        var resolvedBindingIds = facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
+            .SelectMany(fact => SplitList(CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds")))
+            .ToHashSet(StringComparer.Ordinal);
+        var resolvedHandlerKeys = facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
+            .Select(fact => WebFormsBindingKey(fact))
+            .Where(key => key is not null)
+            .Select(key => key!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var binding in facts.Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            var bindingKey = WebFormsBindingKey(binding);
+            if (resolvedBindingIds.Contains(binding.OriginalFactId)
+                || (bindingKey is not null && resolvedHandlerKeys.Contains(bindingKey)))
+            {
+                continue;
+            }
+
+            graph.Gaps.Add(new CombinedPathGap(
+                $"gap:legacy-root:unresolved:{binding.CombinedFactId}",
+                "UnresolvedRoot",
+                CombinedDependencyPathClassifications.AnalysisGap,
+                "WebForms event binding evidence had no resolved handler under available static evidence.",
+                binding.SourceIndexId,
+                binding.SourceLabel,
+                null,
+                binding.CombinedFactId,
+                RuleIds.LegacyFlowRootSelection,
+                EvidenceTiers.Tier4Unknown,
+                SafePath(binding.FilePath),
+                binding.StartLine,
+                "UnresolvedRoot"));
+        }
+    }
+
+    private static void AddLegacyAvailabilityGaps(EvidenceGraph graph, CombinedReadResult read)
+    {
+        var first = read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).FirstOrDefault();
+        if (!read.Facts.Any(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsHandlerResolved or FactTypes.HttpRouteBinding or FactTypes.WcfServiceHostDeclared or FactTypes.WcfOperationContractDeclared))
+        {
+            graph.Gaps.Add(new CombinedPathGap(
+                "gap:legacy:no-roots-found",
+                "NoRootsFound",
+                CombinedDependencyPathClassifications.AnalysisGap,
+                "No credible WebForms, API, or service root evidence was available in the index.",
+                first?.SourceIndexId,
+                first?.Label,
+                null,
+                null,
+                RuleIds.LegacyFlowInputAvailability,
+                EvidenceTiers.Tier4Unknown,
+                null,
+                null,
+                "NoRootsFound"));
+        }
+
+        if (!read.Edges.Any(edge => edge.EdgeKind == "parameter-forward"))
+        {
+            graph.Gaps.Add(new CombinedPathGap(
+                "gap:legacy:parameter-forward-unavailable",
+                "ExtractorUnavailable",
+                CombinedDependencyPathClassifications.AnalysisGap,
+                "Parameter-forward evidence was unavailable or empty; value-flow conclusions use available call/object/symbol evidence only.",
+                first?.SourceIndexId,
+                first?.Label,
+                null,
+                null,
+                RuleIds.LegacyFlowParameterForwardUnavailable,
+                EvidenceTiers.Tier4Unknown,
+                null,
+                null,
+                "ParameterForwardEvidenceUnavailable"));
+        }
+
+        if (!read.Facts.Any(IsLegacyDataFact))
+        {
+            graph.Gaps.Add(new CombinedPathGap(
+                "gap:legacy:data-metadata-unavailable",
+                "ExtractorUnavailable",
+                CombinedDependencyPathClassifications.AnalysisGap,
+                "Legacy data metadata evidence was unavailable; no-backend conclusions are capped by this missing optional extractor family.",
+                first?.SourceIndexId,
+                first?.Label,
+                null,
+                null,
+                RuleIds.LegacyFlowInputAvailability,
+                EvidenceTiers.Tier4Unknown,
+                null,
+                null,
+                "legacy-data-metadata"));
+        }
+    }
+
+    private static void AddProjectionEdge(
+        EvidenceGraph graph,
+        CombinedFactRow projection,
+        IReadOnlyDictionary<string, CombinedFactRow> factsByOriginalId,
+        IReadOnlyDictionary<string, CombinedDependencySurfaceRow[]> surfacesByKind)
+    {
+        var handlerSymbol = projection.SourceSymbol ?? CombinedDependencyReporter.FirstValue(projection.Properties, "handlerSymbolId", "handlerName");
+        var surfaceKind = CombinedDependencyReporter.FirstValue(projection.Properties, "terminalSurfaceKind");
+        if (string.IsNullOrWhiteSpace(handlerSymbol) || string.IsNullOrWhiteSpace(surfaceKind))
+        {
+            return;
+        }
+
+        var source = graph.GetOrAddSymbolNode(projection.SourceIndexId, projection.SourceLabel, handlerSymbol!, projection.FilePath, projection.StartLine, projection.EndLine, projection.RuleId, projection.EvidenceTier);
+        GraphNode terminal;
+        var terminalHash = CombinedDependencyReporter.FirstValue(projection.Properties, "terminalSurfaceNameHash");
+        if (surfacesByKind.TryGetValue(surfaceKind!, out var candidates) && !string.IsNullOrWhiteSpace(terminalHash))
+        {
+            var matched = candidates.FirstOrDefault(surface => string.Equals(Hash(surface.DisplayName, 32), terminalHash, StringComparison.Ordinal));
+            terminal = matched is null ? ToProjectionTerminalNode(projection, surfaceKind!, terminalHash) : ToSurfaceNode(matched);
+        }
+        else
+        {
+            terminal = ToProjectionTerminalNode(projection, surfaceKind!, terminalHash);
+        }
+
+        graph.AddNode(terminal);
+        graph.AddEdge(new GraphEdge(
+            $"legacy-projection:{projection.CombinedFactId}:{terminal.NodeId}",
+            "webforms-event-flow-projection",
+            source.NodeId,
+            terminal.NodeId,
+            "EvidenceEdge",
+            RuleIds.LegacyFlowStaticTraversal,
+            projection.EvidenceTier,
+            SupportingFacts(projection, factsByOriginalId),
+            [],
+            SafePath(projection.FilePath),
+            projection.StartLine,
+            projection.EndLine));
+    }
+
+    private static GraphNode ToWebFormsRootNode(CombinedFactRow fact)
+    {
+        var handlerName = CombinedDependencyReporter.FirstValue(fact.Properties, "handlerName") ?? fact.ContractElement ?? fact.TargetSymbol ?? "handler";
+        var eventName = CombinedDependencyReporter.FirstValue(fact.Properties, "eventName") ?? "event";
+        var controlId = CombinedDependencyReporter.FirstValue(fact.Properties, "controlId") ?? "control";
+        var page = CombinedDependencyReporter.FirstValue(fact.Properties, "markupFile", "pageTypeName") ?? fact.SourceSymbol ?? "page";
+        var isLifecycle = IsWebFormsLifecycle(handlerName);
+        var label = isLifecycle
+            ? $"webforms-lifecycle {SafeDisplay(handlerName)}"
+            : $"webforms-event {SafeDisplay(page)}/{SafeDisplay(controlId)}/{SafeDisplay(eventName)}";
+        return new GraphNode(
+            FactNodeId(fact.CombinedFactId),
+            isLifecycle ? "webforms-lifecycle" : "webforms-event",
+            label,
+            fact.SourceIndexId,
+            SafeSourceLabel(fact.SourceLabel),
+            fact.ScanId,
+            fact.CommitSha,
+            HandlerSymbol(fact),
+            fact.CombinedFactId,
+            RuleIds.LegacyFlowRootSelection,
+            fact.EvidenceTier,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    }
+
+    private static GraphNode ToWcfClientNode(CombinedFactRow fact)
+    {
+        var label = SafeDisplay(fact.TargetSymbol ?? fact.ContractElement ?? "wcf-client") ?? "wcf-client";
+        return new GraphNode(
+            FactNodeId(fact.CombinedFactId),
+            "wcf-client",
+            label,
+            fact.SourceIndexId,
+            SafeSourceLabel(fact.SourceLabel),
+            fact.ScanId,
+            fact.CommitSha,
+            fact.TargetSymbol,
+            fact.CombinedFactId,
+            fact.RuleId,
+            fact.EvidenceTier,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    }
+
+    private static GraphNode ToWcfOperationSurfaceNode(CombinedFactRow fact)
+    {
+        var operationName = CombinedDependencyReporter.FirstValue(fact.Properties, "normalizedOperationName", "operationName")
+            ?? fact.ContractElement
+            ?? fact.TargetSymbol
+            ?? "operation";
+        var safeOperation = SafeDisplay(operationName);
+        return new GraphNode(
+            SurfaceNodeId(fact.CombinedFactId),
+            "wcf-operation",
+            $"wcf-operation:{safeOperation}",
+            fact.SourceIndexId,
+            SafeSourceLabel(fact.SourceLabel),
+            fact.ScanId,
+            fact.CommitSha,
+            fact.TargetSymbol,
+            fact.CombinedFactId,
+            fact.RuleId,
+            fact.EvidenceTier,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            "wcf-operation",
+            safeOperation,
+            null,
+            null,
+            safeOperation,
+            null,
+            null,
+            null,
+            CombinedDependencyReporter.FirstValue(fact.Properties, "mappingHash", "metadataHash"),
+            null,
+            null,
+            null,
+            null);
+    }
+
+    private static GraphNode ToLegacyDataSurfaceNode(CombinedFactRow fact)
+    {
+        var descriptor = CombinedDependencyReporter.FirstValue(
+                fact.Properties,
+                "entityName",
+                "typeName",
+                "tableName",
+                "storageObjectName",
+                "mappingKind",
+                "metadataKind",
+                "metadataHash")
+            ?? fact.FactType;
+        var safeDescriptor = SafeDisplay(descriptor);
+        return new GraphNode(
+            SurfaceNodeId(fact.CombinedFactId),
+            "legacy-data",
+            $"legacy-data:{safeDescriptor}",
+            fact.SourceIndexId,
+            SafeSourceLabel(fact.SourceLabel),
+            fact.ScanId,
+            fact.CommitSha,
+            fact.TargetSymbol ?? fact.SourceSymbol,
+            fact.CombinedFactId,
+            fact.RuleId,
+            fact.EvidenceTier,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            "legacy-data",
+            safeDescriptor,
+            null,
+            null,
+            CombinedDependencyReporter.FirstValue(fact.Properties, "mappingKind", "metadataKind"),
+            SafeDisplay(CombinedDependencyReporter.FirstValue(fact.Properties, "tableName", "storageObjectName")),
+            SafeDisplay(CombinedDependencyReporter.FirstValue(fact.Properties, "columnName", "columnNames", "fieldName")),
+            CombinedDependencyReporter.FirstValue(fact.Properties, "metadataKind", "sourceKind"),
+            CombinedDependencyReporter.FirstValue(fact.Properties, "metadataHash", "shapeHash", "queryShapeHash"),
+            CombinedDependencyReporter.FirstValue(fact.Properties, "textHash"),
+            CombinedDependencyReporter.FirstValue(fact.Properties, "textLength"),
+            null,
+            null);
+    }
+
+    private static GraphNode ToProjectionTerminalNode(CombinedFactRow fact, string surfaceKind, string? terminalHash)
+    {
+        var safeKind = LegacyTerminalSurfaceKinds.Contains(surfaceKind) ? surfaceKind : "dependency-surface";
+        var display = string.IsNullOrWhiteSpace(terminalHash) ? $"{safeKind}:projection:{Hash(fact.CombinedFactId, 16)}" : $"{safeKind}:hash:{terminalHash}";
+        return new GraphNode(
+            $"projection:{fact.CombinedFactId}:{Hash(display, 16)}",
+            safeKind switch
+            {
+                "wcf-operation" => "wcf-operation",
+                "legacy-data" => "legacy-data",
+                "sql-query" => "SqlSurface",
+                "http-client" => "HttpClientSurface",
+                _ => "DependencySurface"
+            },
+            display,
+            fact.SourceIndexId,
+            SafeSourceLabel(fact.SourceLabel),
+            fact.ScanId,
+            fact.CommitSha,
+            null,
+            fact.CombinedFactId,
+            RuleIds.LegacyWebFormsEventFlow,
+            fact.EvidenceTier,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            safeKind,
+            display,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "projection",
+            terminalHash,
+            null,
+            null,
+            null,
+            null);
+    }
+
+    private static IReadOnlyList<string> SupportingFacts(CombinedFactRow fact, IReadOnlyDictionary<string, CombinedFactRow> factsByOriginalId)
+    {
+        return SplitList(CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds"))
+            .Select(id => factsByOriginalId.TryGetValue(id, out var supporting) ? supporting.CombinedFactId : id)
+            .Append(fact.CombinedFactId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IEnumerable<string> LegacyDataAttachmentSymbols(CombinedFactRow fact)
+    {
+        return new[]
+            {
+                fact.SourceSymbol,
+                fact.TargetSymbol,
+                CombinedDependencyReporter.FirstValue(fact.Properties, "typeName", "entityName", "generatedTypeName", "generatedSymbol", "tableAdapterTypeName")
+            }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal);
+    }
+
+    private static string? HandlerSymbol(CombinedFactRow fact)
+    {
+        return CombinedDependencyReporter.FirstValue(fact.Properties, "handlerSymbol", "handlerSymbolId")
+            ?? fact.TargetSymbol
+            ?? fact.ContractElement;
+    }
+
+    private static string? WebFormsBindingKey(CombinedFactRow fact)
+    {
+        var controlId = CombinedDependencyReporter.FirstValue(fact.Properties, "controlId");
+        var eventName = CombinedDependencyReporter.FirstValue(fact.Properties, "eventName");
+        var handlerName = CombinedDependencyReporter.FirstValue(fact.Properties, "handlerName") ?? fact.ContractElement ?? fact.TargetSymbol;
+        if (string.IsNullOrWhiteSpace(controlId) || string.IsNullOrWhiteSpace(eventName) || string.IsNullOrWhiteSpace(handlerName))
+        {
+            return null;
+        }
+
+        return $"{controlId}\0{eventName}\0{handlerName}";
+    }
+
+    private static bool IsWebFormsLifecycle(string value)
+    {
+        return value is "Page_Load" or "Page_Init" or "Page_PreRender" or "Application_Start";
+    }
+
+    private static bool IsLegacyDataFact(CombinedFactRow fact)
+    {
+        return fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)
+            || fact.RuleId.StartsWith("legacy.data.", StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<string> SplitList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return value
+            .Split([',', ';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(item => item.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(item => item, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static void AddSymbolNodeAndAttachment(EvidenceGraph graph, CombinedFactRow fact, string? symbol, string combinedFactId)
@@ -888,6 +1740,142 @@ public static class CombinedDependencyPathReporter
             NotesFor(edges));
     }
 
+    private static CombinedPath ToNoBackendEvidencePath(string pathId, GraphNode root)
+    {
+        var node = root.ToReportNode();
+        return new CombinedPath(
+            pathId,
+            CombinedDependencyPathClassifications.NoBackendEvidence,
+            "Low",
+            0,
+            node.NodeId,
+            node.NodeId,
+            [SanitizeNode(node)],
+            [],
+            node.CombinedFactId is null ? [] : [node.CombinedFactId],
+            [],
+            [
+                new CombinedPathNote("NoBackendEvidence", "No backend evidence found under available full coverage; absence is not proven."),
+                new CombinedPathNote("StaticEvidenceOnly", "Legacy flow results are static evidence and do not prove runtime execution.")
+            ]);
+    }
+
+    private static CombinedPath ToLegacyPath(CombinedPath path, EvidenceGraph graph)
+    {
+        var classification = NormalizeClassification(ClassifyLegacy(path, graph), legacyMode: true);
+        var notes = path.Notes
+            .Append(new CombinedPathNote("StaticEvidenceOnly", "Possible static path evidence only; this does not prove runtime execution, branch feasibility, service reachability, SQL execution, or production use."))
+            .Append(new CombinedPathNote("LegacyFlowRules", string.Join(",", LegacyFlowRuleIdsFor(path).OrderBy(value => value, StringComparer.Ordinal))))
+            .DistinctBy(note => $"{note.Code}\0{note.Message}")
+            .OrderBy(note => note.Code, StringComparer.Ordinal)
+            .ThenBy(note => note.Message, StringComparer.Ordinal)
+            .ToArray();
+        return path with
+        {
+            Classification = classification,
+            Confidence = Confidence(classification),
+            Nodes = path.Nodes.Select(SanitizeNode).ToArray(),
+            Edges = path.Edges.Select(SanitizeEdge).ToArray(),
+            Notes = notes
+        };
+    }
+
+    private static string ClassifyLegacy(CombinedPath path, EvidenceGraph graph)
+    {
+        if (path.Classification == CombinedDependencyPathClassifications.NoBackendEvidence)
+        {
+            return CombinedDependencyPathClassifications.NoBackendEvidence;
+        }
+
+        if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier4Unknown)
+            || path.Edges.Any(edge => edge.Classification == CombinedEndpointClassifications.UnknownAnalysisGap))
+        {
+            return CombinedDependencyPathClassifications.AnalysisGap;
+        }
+
+        if (path.Nodes.Any(node => node.EvidenceTier == EvidenceTiers.Tier4Unknown))
+        {
+            return CombinedDependencyPathClassifications.ReducedCoverage;
+        }
+
+        var terminal = path.Nodes.LastOrDefault();
+        var genericTerminal = terminal is not null && IsGenericTerminalKey(terminal.SurfaceName ?? terminal.DisplayName);
+        var highFanOut = terminal is not null
+            && graph.Edges.Count(edge => edge.ToNodeId == terminal.NodeId) >= 5;
+        if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+            || path.Edges.Any(edge => edge.EdgeKind is "symbol-reconciliation" or "webforms-event-flow-projection")
+            || path.Edges.Any(edge => edge.EdgeKind == "endpoint-match" && edge.Classification != CombinedEndpointClassifications.MatchedEndpoint)
+            || genericTerminal
+            || highFanOut)
+        {
+            return CombinedDependencyPathClassifications.NeedsReviewStaticPath;
+        }
+
+        if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier2Structural)
+            || path.Nodes.Any(node => node.EvidenceTier == EvidenceTiers.Tier2Structural)
+            || path.Edges.Any(edge => edge.EdgeKind is "wcf-service-reference" or "legacy-data-link"))
+        {
+            return CombinedDependencyPathClassifications.ProbableStaticPath;
+        }
+
+        return CombinedDependencyPathClassifications.StrongStaticPath;
+    }
+
+    private static IReadOnlyList<string> LegacyFlowRuleIdsFor(CombinedPath path)
+    {
+        var rules = new SortedSet<string>(StringComparer.Ordinal)
+        {
+            RuleIds.LegacyFlowClassification,
+            RuleIds.LegacyFlowReport
+        };
+        foreach (var node in path.Nodes)
+        {
+            if (!string.IsNullOrWhiteSpace(node.RuleId))
+            {
+                rules.Add(node.RuleId);
+            }
+        }
+
+        foreach (var edge in path.Edges)
+        {
+            rules.Add(edge.RuleId);
+        }
+
+        return rules.ToArray();
+    }
+
+    private static CombinedPathNode SanitizeNode(CombinedPathNode node)
+    {
+        return node with
+        {
+            DisplayName = SafeDisplay(node.DisplayName) ?? "redacted",
+            SourceLabel = SafeSourceLabel(node.SourceLabel),
+            FilePath = node.FilePath is null ? null : SafePath(node.FilePath),
+            SurfaceName = SafeDisplay(node.SurfaceName),
+            OperationName = SafeDisplay(node.OperationName),
+            TableName = SafeDisplay(node.TableName),
+            ColumnNames = SafeDisplay(node.ColumnNames),
+            PackageName = SafeDisplay(node.PackageName),
+            ConfigKey = SafeDisplay(node.ConfigKey)
+        };
+    }
+
+    private static CombinedPathEdge SanitizeEdge(CombinedPathEdge edge)
+    {
+        return edge with { FilePath = edge.FilePath is null ? null : SafePath(edge.FilePath) };
+    }
+
+    private static CombinedPathGap SanitizeGap(CombinedPathGap gap)
+    {
+        return gap with
+        {
+            Classification = NormalizeClassification(gap.Classification, legacyMode: true),
+            SourceLabel = gap.SourceLabel is null ? null : SafeSourceLabel(gap.SourceLabel),
+            Message = SafeDisplay(gap.Message) ?? "redacted",
+            FilePath = gap.FilePath is null ? null : SafePath(gap.FilePath)
+        };
+    }
+
     private static string Classify(IReadOnlyList<CombinedPathEdge> edges)
     {
         if (edges.Any(edge => edge.Classification == CombinedEndpointClassifications.UnknownAnalysisGap))
@@ -980,6 +1968,7 @@ public static class CombinedDependencyPathReporter
 
     private static SelectorResolution ResolveStartNodes(CombinedDependencyPathOptions options, EvidenceGraph graph, string? sourceFilter)
     {
+        var legacyMode = options.IncludeLegacyRoots || IsLegacyView(options.View);
         IEnumerable<GraphNode> candidates;
         if (!string.IsNullOrWhiteSpace(options.FromEndpoint))
         {
@@ -994,11 +1983,18 @@ public static class CombinedDependencyPathReporter
                 candidates = candidates.Where(node => EndpointNodeMatchesSymbol(graph, node, selector));
             }
         }
+        else if (!string.IsNullOrWhiteSpace(options.FromWebFormsEvent))
+        {
+            var selector = options.FromWebFormsEvent.Trim();
+            candidates = graph.Nodes.Values.Where(node =>
+                node.NodeKind is "webforms-event" or "webforms-lifecycle"
+                && WebFormsRootMatches(node, selector));
+        }
         else if (!string.IsNullOrWhiteSpace(options.FromSymbol))
         {
             var selector = options.FromSymbol.Trim();
             candidates = graph.Nodes.Values.Where(node =>
-                node.NodeKind is "Symbol" or "Method" or "Type"
+                node.NodeKind is "Symbol" or "Method" or "Type" or "webforms-event" or "webforms-lifecycle" or "EndpointRoute" or "wcf-operation"
                 && NodeMatchesSymbol(node, selector));
         }
         else if (!string.IsNullOrWhiteSpace(sourceFilter))
@@ -1011,7 +2007,9 @@ public static class CombinedDependencyPathReporter
                 .Where(edge => edge.EdgeKind == "endpoint-match")
                 .Select(edge => edge.FromNodeId)
                 .ToHashSet(StringComparer.Ordinal);
-            candidates = graph.Nodes.Values.Where(node => matchedClientIds.Contains(node.NodeId));
+            candidates = graph.Nodes.Values.Where(node =>
+                matchedClientIds.Contains(node.NodeId)
+                || (legacyMode && node.NodeKind is "webforms-event" or "webforms-lifecycle" or "EndpointRoute"));
         }
 
         if (!string.IsNullOrWhiteSpace(sourceFilter))
@@ -1026,7 +2024,15 @@ public static class CombinedDependencyPathReporter
             .ThenBy(node => node.StartLine ?? 0)
             .ThenBy(node => node.NodeId, StringComparer.Ordinal)
             .ToArray();
-        return new SelectorResolution(ordered.Take(250).ToArray(), ordered.Length);
+        return new SelectorResolution(ordered.Take(SelectorCandidateLimit).ToArray(), ordered.Length);
+    }
+
+    private static bool WebFormsRootMatches(GraphNode node, string selector)
+    {
+        return string.Equals(node.CombinedFactId, selector, StringComparison.Ordinal)
+            || string.Equals(node.DisplayName, selector, StringComparison.OrdinalIgnoreCase)
+            || node.DisplayName.Contains(selector, StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(node.SymbolId) && string.Equals(node.SymbolId, selector, StringComparison.Ordinal));
     }
 
     private static bool EndpointNodeMatchesSymbol(EvidenceGraph graph, GraphNode endpointNode, string selector)
@@ -1136,7 +2142,7 @@ public static class CombinedDependencyPathReporter
             "selector");
     }
 
-    private static CombinedPathGap CreateNoPathGap(CombinedReadResult read, EvidenceGraph graph, IReadOnlyList<GraphNode> starts, int maxDepth, int maxFrontier)
+    private static CombinedPathGap CreateNoPathGap(CombinedReadResult read, EvidenceGraph graph, IReadOnlyList<GraphNode> starts, int maxDepth, int maxFrontier, bool legacyMode)
     {
         var sourceIds = ReachableSourceIds(graph, starts, maxDepth, maxFrontier);
         var reducedSource = read.Sources
@@ -1146,8 +2152,8 @@ public static class CombinedDependencyPathReporter
         {
             return new CombinedPathGap(
                 $"gap:no-path:coverage:{reducedSource.SourceIndexId}",
-                "UnknownAnalysisGap",
-                CombinedDependencyPathClassifications.UnknownAnalysisGap,
+                legacyMode ? "ReducedCoverage" : "UnknownAnalysisGap",
+                legacyMode ? CombinedDependencyPathClassifications.ReducedCoverage : CombinedDependencyPathClassifications.UnknownAnalysisGap,
                 $"No path was found, but `{reducedSource.Label}` has reduced coverage; absence of evidence is coverage-relative.",
                 reducedSource.SourceIndexId,
                 reducedSource.Label,
@@ -1163,9 +2169,11 @@ public static class CombinedDependencyPathReporter
         var first = starts.First();
         return new CombinedPathGap(
             $"gap:no-path:{first.NodeId}",
-            "NoPathFound",
-            CombinedDependencyPathClassifications.NoPathFound,
-            "Selectors matched starting evidence, but no path reached a terminal dependency surface within the current graph and bounds.",
+            legacyMode ? "NoBackendEvidence" : "NoPathFound",
+            legacyMode ? CombinedDependencyPathClassifications.NoBackendEvidence : CombinedDependencyPathClassifications.NoPathFound,
+            legacyMode
+                ? "No backend evidence found under available full coverage; absence is not proven."
+                : "Selectors matched starting evidence, but no path reached a terminal dependency surface within the current graph and bounds.",
             first.SourceIndexId,
             first.SourceLabel,
             first.NodeId,
@@ -1470,13 +2478,20 @@ public static class CombinedDependencyPathReporter
 
     private static string RenderMarkdown(CombinedDependencyPathReport report)
     {
+        var legacyMode = report.SchemaVersion == LegacyFlowReportConstants.SchemaVersion || report.View == LegacyFlowReportConstants.View;
         var builder = new StringBuilder();
-        builder.AppendLine("# TraceMap Paths Report");
+        builder.AppendLine(legacyMode ? "# Legacy Static Flow Report" : "# TraceMap Paths Report");
         builder.AppendLine();
         builder.AppendLine("## Summary");
         builder.AppendLine();
-        builder.AppendLine("- Paths are static evidence trails, not runtime execution traces.");
+        builder.AppendLine(legacyMode
+            ? "- Results are static evidence views of possible static paths; they do not prove runtime execution, reachability, SQL execution, production dependency, or impact."
+            : "- Paths are static evidence trails, not runtime execution traces.");
         builder.AppendLine($"- Report coverage: `{report.ReportCoverage}`");
+        if (legacyMode)
+        {
+            builder.AppendLine($"- Schema version: `{report.SchemaVersion}`");
+        }
         builder.AppendLine($"- Sources: `{report.Summary.SourceCount}`");
         builder.AppendLine($"- Graph nodes: `{report.Summary.GraphNodeCount}`");
         builder.AppendLine($"- Graph edges: `{report.Summary.GraphEdgeCount}`");
@@ -1489,10 +2504,12 @@ public static class CombinedDependencyPathReporter
         builder.AppendLine();
         builder.AppendLine($"- From endpoint: `{report.Query.FromEndpoint ?? "default"}`");
         builder.AppendLine($"- From symbol: `{report.Query.FromSymbol ?? "n/a"}`");
+        builder.AppendLine($"- From WebForms event: `{report.Query.FromWebFormsEvent ?? "n/a"}`");
         builder.AppendLine($"- From source: `{report.Query.FromSource ?? "n/a"}`");
         builder.AppendLine($"- To surface: `{report.Query.ToSurface ?? "all"}`");
         builder.AppendLine($"- Surface name: `{report.Query.SurfaceName ?? "n/a"}`");
         builder.AppendLine($"- Source pair: `{report.Query.SourcePair ?? "n/a"}`");
+        builder.AppendLine($"- Classification: `{report.Query.Classification ?? "all"}`");
         builder.AppendLine($"- Bounds: depth `{report.Query.MaxDepth}`, paths `{report.Query.MaxPaths}`, frontier `{report.Query.MaxFrontier}`");
         builder.AppendLine();
 
@@ -1501,11 +2518,11 @@ public static class CombinedDependencyPathReporter
         AppendRows(builder, report.Sources, "| Label | Language | Repo | Commit | Analysis | Build |", "| --- | --- | --- | --- | --- | --- |",
             source => $"| {Cell(source.Label)} | {Cell(source.Language ?? "unknown")} | {Cell(source.RepoName)} | {Cell(source.CommitSha)} | {Cell(source.AnalysisLevel)} | {Cell(source.BuildStatus)} |");
 
-        builder.AppendLine("## Paths");
+        builder.AppendLine(legacyMode ? "## Representative Static Paths" : "## Paths");
         builder.AppendLine();
         if (report.Paths.Count == 0)
         {
-            builder.AppendLine("No dependency paths found for this query.");
+            builder.AppendLine(legacyMode ? "No possible static paths found for this query." : "No dependency paths found for this query.");
             builder.AppendLine();
         }
         else
@@ -1535,7 +2552,7 @@ public static class CombinedDependencyPathReporter
             }
         }
 
-        builder.AppendLine("## Path Gaps");
+        builder.AppendLine(legacyMode ? "## Analysis Gaps" : "## Path Gaps");
         builder.AppendLine();
         AppendRows(builder, report.Gaps, "| Kind | Classification | Source | Message | Evidence |", "| --- | --- | --- | --- | --- |",
             gap => $"| {Cell(gap.GapKind)} | {Cell(gap.Classification)} | {Cell(gap.SourceLabel ?? "n/a")} | {Cell(gap.Message)} | {Cell(Evidence(gap.RuleId, gap.EvidenceTier, gap.FilePath, gap.StartLine))} |");
@@ -1651,6 +2668,10 @@ public static class CombinedDependencyPathReporter
         {
             CombinedDependencyPathClassifications.StrongStaticPath => "High",
             CombinedDependencyPathClassifications.ProbableStaticPath => "Medium",
+            CombinedDependencyPathClassifications.NeedsReviewStaticPath => "Low",
+            CombinedDependencyPathClassifications.NoBackendEvidence => "Low",
+            CombinedDependencyPathClassifications.ReducedCoverage => "Low",
+            CombinedDependencyPathClassifications.AnalysisGap => "Low",
             _ => "Low"
         };
     }
@@ -1661,12 +2682,39 @@ public static class CombinedDependencyPathReporter
         {
             CombinedDependencyPathClassifications.StrongStaticPath => 0,
             CombinedDependencyPathClassifications.ProbableStaticPath => 1,
+            CombinedDependencyPathClassifications.NeedsReviewStaticPath => 2,
             CombinedDependencyPathClassifications.NeedsReviewPath => 2,
-            CombinedDependencyPathClassifications.UnknownAnalysisGap => 3,
-            CombinedDependencyPathClassifications.NoPathFound => 4,
-            CombinedDependencyPathClassifications.SelectorNoMatch => 5,
+            CombinedDependencyPathClassifications.NoBackendEvidence => 3,
+            CombinedDependencyPathClassifications.ReducedCoverage => 4,
+            CombinedDependencyPathClassifications.AnalysisGap => 5,
+            CombinedDependencyPathClassifications.UnknownAnalysisGap => 5,
+            CombinedDependencyPathClassifications.NoPathFound => 6,
+            CombinedDependencyPathClassifications.SelectorNoMatch => 7,
+            CombinedDependencyPathClassifications.ClassificationFilterNoMatch => 8,
             _ => 99
         };
+    }
+
+    private static string NormalizeClassification(string value, bool legacyMode)
+    {
+        if (!legacyMode)
+        {
+            return value;
+        }
+
+        return value switch
+        {
+            CombinedDependencyPathClassifications.NeedsReviewPath => CombinedDependencyPathClassifications.NeedsReviewStaticPath,
+            CombinedDependencyPathClassifications.UnknownAnalysisGap => CombinedDependencyPathClassifications.AnalysisGap,
+            CombinedDependencyPathClassifications.NoPathFound => CombinedDependencyPathClassifications.NoBackendEvidence,
+            "NoBackendEvidenceFound" => CombinedDependencyPathClassifications.NoBackendEvidence,
+            _ => value
+        };
+    }
+
+    private static bool IsLegacyView(string? view)
+    {
+        return string.Equals(view, LegacyFlowReportConstants.View, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int EdgeRank(string edgeKind)
@@ -1738,6 +2786,73 @@ public static class CombinedDependencyPathReporter
         return Path.IsPathFullyQualified(filePath)
             ? $"absolute-path-hash:{Hash(filePath, 16)}"
             : filePath.Replace('\\', '/');
+    }
+
+    private static string? SafeDisplay(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        var trimmed = value.Trim().ReplaceLineEndings(" ");
+        if (LooksUnsafe(trimmed))
+        {
+            return $"redacted-hash:{Hash(trimmed, 16)}";
+        }
+
+        return trimmed.Length > 160 ? $"{trimmed[..120]}...hash:{Hash(trimmed, 16)}" : trimmed;
+    }
+
+    private static string SafeSourceLabel(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value == "single")
+        {
+            return string.IsNullOrWhiteSpace(value) ? "source" : value;
+        }
+
+        return LooksUnsafe(value) || value.Contains('/', StringComparison.Ordinal) || value.Contains('\\', StringComparison.Ordinal) || value.Contains(':', StringComparison.Ordinal)
+            ? $"source:{Hash(value, 16)}"
+            : value;
+    }
+
+    private static CombinedReportSource SanitizeSource(CombinedReportSource source)
+    {
+        return source with
+        {
+            Label = SafeSourceLabel(source.Label),
+            RepoName = "source",
+            RemoteUrl = null,
+            ScanRootRelativePath = source.ScanRootRelativePath is null ? null : SafeDisplay(source.ScanRootRelativePath),
+        };
+    }
+
+    private static bool LooksUnsafe(string value)
+    {
+        return Path.IsPathFullyQualified(value)
+            || value.Contains("://", StringComparison.Ordinal)
+            || value.Contains("Data Source=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Password=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("User ID=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("select ", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(" from ", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("git@", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".git", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("secret", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("token", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsGenericTerminalKey(string value)
+    {
+        var normalized = value.Trim().Trim('`', '"', '\'').ToLowerInvariant();
+        return normalized is "status" or "id" or "name" or "value" or "result" or "response"
+            || normalized.EndsWith(":status", StringComparison.Ordinal)
+            || normalized.EndsWith(":id", StringComparison.Ordinal)
+            || normalized.EndsWith(":name", StringComparison.Ordinal)
+            || normalized.EndsWith(":value", StringComparison.Ordinal)
+            || normalized.EndsWith(":result", StringComparison.Ordinal)
+            || normalized.EndsWith(":response", StringComparison.Ordinal);
     }
 
     private static string Hash(string value, int length)
