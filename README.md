@@ -117,6 +117,17 @@ dotnet run --project src/dotnet/TraceMap.Cli -- portfolio \
 
 The portfolio command writes `portfolio-report.md` and `portfolio-report.json` when `--out` is a directory. It expands combined indexes into source records, reads single-language indexes directly, and reports source coverage, endpoint alignment, dependency surfaces, dependency edges, shared static surfaces, gaps, and limitations across many repositories. Before/after portfolio comparison reports source changes plus projected safe surface and edge changes from manifest-paired snapshots. Portfolio reports are static evidence inventories; they do not infer runtime topology, ownership, deployment, production traffic, package compatibility, vulnerabilities, or release approval.
 
+Summarize static package-upgrade evidence from a single-language or combined index:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- package-impact \
+  --index .tracemap-combined.sqlite \
+  --package-delta samples/package-deltas/package-delta.example.json \
+  --out .tracemap-package-impact
+```
+
+The package impact command writes `package-impact-report.md` and `package-impact-report.json` when `--out` is a directory. It matches `package-delta.v1` changes against indexed `PackageReferenced`/`package-config` evidence and reports source labels, commit SHAs, rule IDs, evidence tiers, file spans, safe version metadata, gaps, and limitations. Package impact reports are static evidence inventories; they do not infer compatibility, transitive dependency resolution, runtime loading, vulnerabilities, licenses, deployment, or release approval.
+
 The combined dependency paths command writes `paths-report.md` and `paths-report.json` when `--out` is a directory. It follows static evidence from endpoint, symbol, or source selectors to terminal dependency surfaces such as `sql-query`, `http-client`, `http-route`, and `package-config`. Paths are evidence trails, not runtime traces.
 
 The combined reverse query command writes `reverse-report.md` and `reverse-report.json` when `--out` is a directory. It starts from dependency surfaces and walks static evidence backward to endpoints, symbols, sources, or all supported roots. Reverse paths answer "what static roots can reach this dependency evidence?" and remain coverage-relative rather than runtime usage proof.
@@ -194,7 +205,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- release-review \
   --out .tracemap-release-review
 ```
 
-The release review command writes `release-review.md` and `release-review.json` when `--out` is a directory. It composes available TraceMap evidence from source coverage, combined change impact, contract delta impact, optional path/reverse context, section gaps, and a deterministic reviewer checklist. It is a static evidence packet, not release approval, CI policy, runtime risk prediction, deployment verification, or production usage proof. Future API/DTO, SQL/schema, and package-upgrade workflows are rendered as explicit unavailable or deferred sections until those workflows exist.
+The release review command writes `release-review.md` and `release-review.json` when `--out` is a directory. It composes available TraceMap evidence from source coverage, combined change impact, contract delta impact, optional path/reverse context, section gaps, and a deterministic reviewer checklist. It is a static evidence packet, not release approval, CI policy, runtime risk prediction, deployment verification, or production usage proof. API/DTO, SQL/schema, and package-upgrade sections are rendered from available deterministic workflows or as explicit unavailable/deferred sections when compatible inputs are not supplied.
 
 TypeScript scanner:
 
