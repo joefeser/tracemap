@@ -21,33 +21,41 @@
 - [ ] 3. Extend inventory for service-reference metadata. Requirements: 1.
   - [ ] Add `.svcmap`, `.wsdl`, `.disco`, and gated service-reference `.xsd`
         handling.
-  - [ ] Gate `.xsd` to files co-located with `.svcmap` or paths containing
-        `Service Reference` / `ServiceReference`; do not globally inventory all
-        `.xsd` files.
+  - [ ] Gate `.wsdl`, `.disco`, and `.xsd` to files co-located with `.svcmap` or
+        paths containing `Service Reference` / `ServiceReference`; do not
+        globally inventory all files with those extensions.
   - [ ] Keep metadata files distinct from config and service host files.
   - [ ] Add tests for metadata inventory and ignored local/raw values.
 
 - [ ] 4. Extract `.svcmap` metadata facts. Requirements: 1, 2.
   - [ ] Parse checked-in `.svcmap` XML with line info.
+  - [ ] Use XXE-safe XML parser settings: prohibit or ignore DTDs, set
+        `XmlResolver = null`, and avoid external entity expansion.
   - [ ] Emit safe metadata facts with local metadata basenames/hashes.
   - [ ] Hash or omit remote URLs and absolute paths.
-  - [ ] Emit parse gaps for malformed `.svcmap`.
+  - [ ] Emit parse gaps with classification `MalformedWcfMetadata` for malformed
+        `.svcmap`.
   - [ ] Add raw URL/path suppression tests.
 
 - [ ] 5. Extract WSDL operation metadata. Requirements: 2.
   - [ ] Parse checked-in WSDL files using local-name XML matching.
+  - [ ] Use the same XXE-safe XML parser settings as `.svcmap`.
   - [ ] Emit safe operation facts for `portType/operation`.
   - [ ] Capture safe service/port/binding identifiers only when valid.
   - [ ] Hash or omit SOAP actions, endpoint locations, imports, and unsafe
         identifiers.
   - [ ] Hash or omit URL-like namespace values including `targetNamespace`,
         XML namespace URIs, SOAP action namespaces, and schema namespaces.
+  - [ ] Do not use WSDL operation names for alias corroboration unless they are
+        connected to the generated client by `.svcmap`, service-reference folder,
+        or safe portType/contract identity.
   - [ ] Add tests for safe operations, unsafe identifiers, and malformed WSDL.
 
 - [ ] 6. Add operation alias derivation. Requirements: 3.
   - [ ] Derive `FooAsync -> Foo` aliases for WCF-generated client methods.
   - [ ] Derive `BeginFoo`/`EndFoo -> Foo` aliases only when the pair exists on
         the same contract/type.
+  - [ ] Do not derive aliases for lone `BeginFoo` or lone `EndFoo` methods.
   - [ ] Keep original operation names as live candidates; do not replace them
         with aliases.
   - [ ] Require `FooAsync -> Foo` aliases to be corroborated by WSDL metadata,
@@ -72,6 +80,10 @@
   - [ ] Deduplicate mapping facts by logical operation identity so sync/async/APM
         generated forms do not create duplicate mappings.
   - [ ] Emit ambiguity gaps instead of choosing arbitrary winners.
+  - [ ] Use exact gap classification strings:
+        `AmbiguousWcfNormalizedMapping`, `AmbiguousWcfMetadataContractMapping`,
+        `MissingLocalWcfMetadata`, `MalformedWcfMetadata`, and
+        `UnlinkedWcfMetadata`.
   - [ ] Include supporting fact IDs or safe metadata hashes where possible.
   - [ ] Add tests for clear metadata-backed mapping, APM mapping, generated-only
         mapping, convergent alias deduplication, and ambiguity.

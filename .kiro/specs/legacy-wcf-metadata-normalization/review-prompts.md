@@ -54,7 +54,8 @@ Review questions:
 
 1. Is this scope narrow enough, or does it mix too much metadata parsing and
    operation normalization?
-2. Are `.svcmap`, `.wsdl`, `.disco`, and `.xsd` handling boundaries safe?
+2. Are `.svcmap`, `.wsdl`, `.disco`, and `.xsd` handling boundaries safe,
+   including service-reference folder gating for WSDL/DISCO/XSD?
 3. Does the spec avoid runtime reachability, binding compatibility, deployment,
    authorization, and schema/DTO overclaims?
 4. Are the proposed fact types and rule IDs sufficient and not duplicative?
@@ -70,12 +71,16 @@ Review questions:
    genuinely distinct candidates?
 9. Are ambiguity rules strong enough to avoid false mappings?
 10. Are safety rules sufficient for remote WSDL URLs, SOAP actions, namespace
-   locations, and local metadata paths?
+   locations, local metadata paths, and XXE/entity-expansion parser risks?
 11. Are validation expectations realistic with old reduced-coverage public
     samples?
 12. Are the tasks reviewable and traceable to requirements, including model
     wiring, scanner-version bump, and legacy summary count updates?
-13. What tests are missing before implementation?
+13. Are metadata fact property contracts and gap classification strings precise
+    enough for deterministic implementation/tests?
+14. Does WSDL corroboration require connection to the generated service reference,
+    not just a matching operation name anywhere in the repo?
+15. What tests are missing before implementation?
 
 Return:
 
@@ -96,9 +101,12 @@ Focus on:
 - Existing code seams in `LegacyWcfExtractor`.
 - Whether new fact types are required or existing WCF facts can carry metadata.
 - How to parse `.svcmap` and WSDL conservatively without leaking URLs.
+- How to configure XML parsing safely against XXE/entity expansion.
 - A safe operation alias model for generated clients and APM operations.
 - How to collapse convergent generated operation forms into one logical mapping
   candidate without hiding real ambiguity.
+- How to tie WSDL metadata to the generated client through `.svcmap`,
+  service-reference folder, or safe portType/contract identity.
 - How to avoid duplicate mappings from generated sync/async/Begin/End method
   combinations.
 - Minimal first PR boundary.

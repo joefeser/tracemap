@@ -63,15 +63,16 @@ project or calling a service.
 
 #### Acceptance Criteria
 
-1. WHEN a repository contains checked-in `.svcmap` files THEN TraceMap SHALL
-   inventory them as service-reference metadata evidence.
-2. WHEN a repository contains checked-in `.wsdl`, `.disco`, or `.xsd` files
-   under a service-reference folder THEN TraceMap SHALL inventory them as
-   service-reference metadata evidence.
-3. A service-reference `.xsd` file SHALL be considered in scope only when it is
-   co-located with a `.svcmap` file or when its repository-relative path contains
-   a service-reference segment such as `Service Reference` or `ServiceReference`;
-   other `.xsd` files SHALL remain out of scope for this slice.
+1. WHEN a repository contains checked-in `.svcmap` files in a service-reference
+   folder THEN TraceMap SHALL inventory them as service-reference metadata
+   evidence.
+2. WHEN a repository contains checked-in `.wsdl`, `.disco`, or `.xsd` files in a
+   service-reference folder THEN TraceMap SHALL inventory them as service-reference
+   metadata evidence.
+3. A service-reference folder SHALL be defined as either a folder co-located with
+   a `.svcmap` file or a repository-relative path containing a service-reference
+   segment such as `Service Reference` or `ServiceReference`; `.wsdl`, `.disco`,
+   and `.xsd` files outside that scope SHALL remain out of scope for this slice.
 4. WHEN metadata references remote URLs, endpoint addresses, schema locations,
    or discovery URLs THEN TraceMap SHALL hash or omit those values and SHALL NOT
    render raw URLs or addresses.
@@ -124,17 +125,20 @@ without overclaiming unrelated methods.
 3. WHEN an operation contract method is named `BeginFoo` without a credible
    matching `EndFoo` THEN TraceMap SHALL NOT derive alias `Foo`; it MAY emit a
    gap or leave the original operation unchanged.
-4. WHEN a method is a framework lifecycle method such as `Open`, `Close`,
+4. WHEN an operation contract method is named `EndFoo` without a credible
+   matching `BeginFoo` THEN TraceMap SHALL NOT derive alias `Foo`; it MAY emit a
+   gap or leave the original operation unchanged.
+5. WHEN a method is a framework lifecycle method such as `Open`, `Close`,
    `Abort`, `Dispose`, `OpenAsync`, or `CloseAsync` THEN TraceMap SHALL NOT map
    it to a service operation unless checked-in metadata explicitly names it as
    a service operation.
-5. Lifecycle exclusion SHALL apply to the normalized base name as well as the
+6. Lifecycle exclusion SHALL apply to the normalized base name as well as the
    raw method token, so `BeginOpen`/`EndOpen`, `BeginClose`/`EndClose`,
    `BeginAbort`/`EndAbort`, and any `Begin`/`End` pair whose base name is an
    excluded lifecycle verb SHALL NOT produce a service-operation alias.
-6. Operation normalization SHALL preserve original operation names in fact
+7. Operation normalization SHALL preserve original operation names in fact
    properties and SHALL record the normalization rule used.
-7. Operation normalization SHALL be deterministic, case-sensitive by default,
+8. Operation normalization SHALL be deterministic, case-sensitive by default,
    and SHALL NOT use fuzzy matching, edit distance, stemming, or prompt-based
    classification.
 

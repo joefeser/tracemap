@@ -96,7 +96,7 @@ Inspect repository files that are already inventoried or can be safely added to
 inventory:
 
 - `.svcmap`
-- `.wsdl`
+- `.wsdl` only when scoped to a service-reference folder
 - `.disco` for inventory-only metadata presence
 - `.xsd` for inventory-only metadata presence when co-located with a `.svcmap`
   file or when its repository-relative path contains a service-reference segment
@@ -104,8 +104,79 @@ inventory:
 
 Recommended inventory kind: `ServiceReferenceMetadata`.
 
+The shared service-reference folder rule is:
+
+- the file is co-located with a `.svcmap`; or
+- the repository-relative path contains a segment named `Service Reference` or
+  `ServiceReference`.
+
+Do not globally inventory arbitrary `.wsdl`, `.disco`, or `.xsd` files. Vendor
+specifications, fixtures, docs, typed DataSet schemas, and unrelated XML schemas
+must not become WCF metadata merely because of their extension.
+
 Do not inspect external URLs. Do not fetch imports. Only parse files present in
 the repository.
+
+### XML Parser Safety
+
+Metadata files come from scanned repositories and must be treated as untrusted
+input. XML parsing for `.svcmap`, `.wsdl`, `.disco`, and `.xsd` metadata must:
+
+- disable or prohibit DTD processing;
+- set `XmlResolver = null`;
+- avoid external entity resolution;
+- avoid expanding unbounded entities;
+- emit `AnalysisGap` with classification `MalformedWcfMetadata` when parsing
+  fails or parser security settings reject the document.
+
+In .NET this should use `XmlReaderSettings` with `DtdProcessing` set to
+`Prohibit` or `Ignore` and `XmlResolver = null`, then load `XDocument` from the
+configured reader.
+
+## Fact Property Contracts
+
+### `WcfServiceReferenceMetadataDeclared`
+
+Suggested evidence tier: `Tier2Structural` for parseable checked-in metadata,
+`Tier4Unknown` only through `AnalysisGap` for malformed metadata.
+
+Allowed properties:
+
+| Property | Meaning |
+| --- | --- |
+| `metadataKind` | `SvcMap`, `Wsdl`, `Disco`, or `Schema` |
+| `metadataHash` | Hash of the checked-in metadata document or logical metadata group |
+| `metadataFileName` | Safe basename only, when available |
+| `serviceReferenceFolder` | Safe folder label or hash, never a local absolute path |
+| `generatedCodeFileName` | Safe generated code basename from `.svcmap`, when available |
+| `metadataSourceHash` | Hash of remote URL/source value, when present |
+| `localMetadataFileNames` | Semicolon-delimited safe basenames from `.svcmap`, when available |
+| `sourceFormat` | `svcmap`, `wsdl`, `disco`, or `xsd` |
+
+Never store raw remote URLs, raw source URLs, SOAP action values, schema
+locations, local absolute paths, or full metadata contents.
+
+### `WcfMetadataOperationDeclared`
+
+Suggested evidence tier: `Tier2Structural` when the operation comes from a
+parseable checked-in WSDL `portType/operation`.
+
+Allowed properties:
+
+| Property | Meaning |
+| --- | --- |
+| `operationName` | Safe WSDL operation NCName |
+| `portTypeName` | Safe WSDL portType NCName, when available |
+| `contractName` | Safe contract/portType identity used for joining, when available |
+| `metadataHash` | Supporting WSDL metadata hash |
+| `metadataFileName` | Safe WSDL basename |
+| `serviceReferenceFolder` | Safe folder label or hash |
+| `metadataSourceKind` | `checked-in-wsdl` |
+| `sourceFormat` | `wsdl` |
+
+Optional `serviceName`, `bindingName`, and `portName` may be included only when
+they pass the safe identifier policy. URL-like namespace values, SOAP actions,
+endpoint locations, and schema locations must be hashed or omitted.
 
 ### `.svcmap`
 
@@ -225,6 +296,10 @@ Map in this order:
    `clientContractName + operationName + endpoint/contract`.
 2. Metadata-backed normalized path:
    `clientContractName + normalizedOperationName + WSDL operation + contract`.
+   The WSDL operation must be connected to the generated client by `.svcmap`
+   local metadata linkage, service-reference folder identity, or safe
+   `portType`/contract identity. A random repository-level WSDL operation name is
+   not sufficient corroboration.
 3. APM-pair normalized path:
    `clientContractName + normalizedOperationName + Begin/End operation pair`.
 4. Generated-code-only normalized path:
@@ -279,9 +354,16 @@ Ambiguity rules:
   metadata filtering,
   emit `AnalysisGap` with classification `AmbiguousWcfNormalizedMapping`.
 - If metadata links multiple local WSDL files that each define the same operation
-  under different safe contracts, emit an ambiguity gap.
+  under different safe contracts, emit `AnalysisGap` with classification
+  `AmbiguousWcfMetadataContractMapping`.
 - If only raw remote metadata exists and no checked-in metadata file can be parsed,
-  emit a metadata gap rather than a mapping.
+  emit `AnalysisGap` with classification `MissingLocalWcfMetadata` rather than a
+  mapping.
+- If metadata XML is malformed or rejected by safe XML parser settings, emit
+  `AnalysisGap` with classification `MalformedWcfMetadata`.
+- If metadata exists but cannot be connected to the generated client by `.svcmap`,
+  service-reference folder, or safe portType/contract identity, emit
+  `AnalysisGap` with classification `UnlinkedWcfMetadata`.
 
 ## Safety
 
@@ -318,7 +400,7 @@ Focused tests:
 - `BeginFoo`/`EndFoo` pair maps to normalized operation `Foo`.
 - `Foo`, `FooAsync`, and `BeginFoo`/`EndFoo` converging on one contract collapse
   to one logical operation and produce one mapping candidate.
-- lone `BeginFoo` does not normalize.
+- lone `BeginFoo` and lone `EndFoo` do not normalize.
 - lifecycle methods such as `CloseAsync` do not map without explicit metadata.
 - `BeginOpen`/`EndOpen`, `BeginClose`/`EndClose`, and `BeginAbort`/`EndAbort` do
   not produce lifecycle aliases.
