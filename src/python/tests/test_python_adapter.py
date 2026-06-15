@@ -144,6 +144,26 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
     assert by_type["ArgumentPassed"] >= 1
     assert by_type["FieldAlias"] >= 1
     assert by_type["SymbolRelationship"] >= 1
+    assert any(
+        fact.fact_type == "ArgumentPassed"
+        and fact.rule_id == "python.ast.argumentflow.v1"
+        and fact.properties.get("argumentSymbol") == "status"
+        and fact.properties.get("argumentSymbolId")
+        and fact.properties.get("argumentSymbolLanguage") == "python"
+        and fact.properties.get("parameterIdentityStatus") == "unresolvedOrdinalPlaceholder"
+        and fact.properties.get("parameterSymbolId")
+        and fact.properties.get("parameterSymbolKind") == "unresolved-parameter"
+        for fact in facts
+    )
+    assert any(
+        fact.fact_type == "FieldAlias"
+        and fact.properties.get("fieldSymbol", "").endswith(".client")
+        and fact.properties.get("targetSymbolId")
+        and fact.properties.get("originSymbol") == "client"
+        and fact.properties.get("originSymbolId")
+        and fact.properties.get("originSymbolKind") == "parameter"
+        for fact in facts
+    )
 
     con = sqlite3.connect(out / "index.sqlite")
     try:
@@ -152,6 +172,7 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
         assert _scalar(con, "select count(*) from argument_flows") >= 1
         assert _scalar(con, "select count(*) from field_aliases") >= 1
         assert _scalar(con, "select count(*) from parameter_forward_edges") >= 1
+        assert _scalar(con, "select count(*) from fact_symbols where role in ('argument', 'parameter', 'origin')") >= 3
         assert _scalar(con, "select count(*) from symbol_relationships") >= 1
         assert _scalar(con, "select count(*) from symbols where language = 'python'") >= 1
         route = con.execute("select properties_json from facts where fact_type='HttpRouteBinding' order by fact_id limit 1").fetchone()[0]
@@ -403,6 +424,35 @@ def test_dynamic_sql_name_argument_records_gap(tmp_path: Path) -> None:
     facts = extract_python_files(repo, _manifest("dynamic-sql"), [source], [repo], {}, [])
 
     assert any(fact.fact_type == "AnalysisGap" and fact.properties.get("gapKind") == "dynamic-sql" for fact in facts)
+
+
+def test_python_local_alias_origin_symbol_ids_are_scoped(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "aliases.py"
+    source.write_text(
+        "def first():\n"
+        "    status = load_first()\n"
+        "    alias = status\n\n"
+        "def second():\n"
+        "    status = load_second()\n"
+        "    alias = status\n",
+        encoding="utf-8",
+    )
+
+    facts = extract_python_files(repo, _manifest("scoped-origin-alias"), [source], [repo], {}, [])
+    origin_ids = [
+        fact.properties["originSymbolId"]
+        for fact in facts
+        if fact.fact_type == "LocalAlias"
+        and fact.properties.get("aliasSymbol") == "alias"
+        and fact.properties.get("originSymbol") == "status"
+    ]
+
+    assert len(origin_ids) == 2
+    assert len(set(origin_ids)) == 2
+    assert "py:name:aliases.first(status)" in origin_ids
+    assert "py:name:aliases.second(status)" in origin_ids
 
 
 def test_route_method_without_framework_evidence_is_not_http_route(tmp_path: Path) -> None:

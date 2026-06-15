@@ -54,13 +54,10 @@
 - [x] PR 2: Constructor/member origin hardening + ambiguous constructor downgrade tests.
 - [x] PR 3: Callback/lambda/async boundary evidence initial .NET slice.
 - [x] PR 4: Combined path/reverse/report value-origin notes and deterministic output tests after task 3 boundary semantics are available.
-- PR 5: TypeScript/JVM/Python adapter alignment where current behavior differs from the shared contract.
+- [x] PR 5: TypeScript/JVM/Python adapter alignment where current behavior differs from the shared contract.
 
 ## Deferred Follow-Ups
 
-- Inspect TypeScript call/argument/value-flow facts and storage rows.
-- Inspect JVM call/argument/constructor evidence.
-- Inspect Python `ArgumentPassed`, `FieldAlias`, and derived parameter-forwarding rows.
 - Add syntax/ordinal fallback tests for direct argument-to-parameter extraction.
 - Add named/optional/rest/varargs/keyword/default parameter mapping tests.
 - Emit gaps for unresolved or ambiguous argument mapping.
