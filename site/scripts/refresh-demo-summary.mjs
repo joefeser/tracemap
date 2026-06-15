@@ -108,7 +108,11 @@ export async function validatePublicDemoOutput(root) {
     }
 
     if (label === "portfolio-manifest.json") {
-      validatePortfolioManifest(JSON.parse(text), label);
+      try {
+        validatePortfolioManifest(JSON.parse(text), label);
+      } catch (error) {
+        throw new Error(`Failed to parse or validate ${label}: ${error.message}`);
+      }
     }
   }
 
@@ -416,7 +420,7 @@ async function collectPublicFilesInto(root, directory, files) {
     const relativePath = relative(root, fullPath).split(sep).join("/");
 
     if (entry.isDirectory()) {
-      if (entry.name === "scans" || entry.name === "combined" || entry.name === "logs") {
+      if (directory === root && (entry.name === "scans" || entry.name === "combined" || entry.name === "logs")) {
         continue;
       }
       await collectPublicFilesInto(root, fullPath, files);

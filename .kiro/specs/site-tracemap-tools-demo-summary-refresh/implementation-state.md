@@ -108,7 +108,7 @@ fresh local demo run.
   demo output for fixture refresh.
 - Passed: `node scripts/refresh-demo-summary.mjs ../.tracemap-demo` from
   `site/`; wrote `site/src/_data/demo-public-summary.json`.
-- Passed: `npm test` from `site/` with 29 tests passing.
+- Passed: `npm test` from `site/` with 31 tests passing.
 - Passed: `npm run validate` from `site/`; it built `dist/`, validated the demo
   summary fixture and affected pages, then validated 27 HTML files, 605
   internal references, and 26 sitemap URLs.
@@ -117,6 +117,15 @@ fresh local demo run.
 - Passed browser sanity checks on `http://localhost:4174/demo/proof-upgrades/`
   and `/demo/proof-assets/` at 1440x1000 and 390x844: updated text present, no
   horizontal overflow, visible hero, and no console errors.
+- PR review loop: Gemini returned five actionable robustness comments after PR
+  creation. Patched all five by wrapping portfolio manifest parsing with clearer
+  context, limiting raw-folder skipping to output-root directories, validating
+  readable pages individually, scoping proof-assets count extraction to the
+  relevant article cards, and tightening article extraction. Added focused tests
+  for invalid portfolio manifest JSON and nested `reports/combined/` collection.
+- PR review loop: Qodo posted a summary/walkthrough with no actionable bug
+  finding. Sourcery reported a weekly diff-character rate limit. Macroscope was
+  still pending at the time of the follow-up patch.
 
 Core scanner/reducer suites are intentionally deferred because this branch only
 adds site/tooling/docs changes and runs the public demo as the source fixture.
