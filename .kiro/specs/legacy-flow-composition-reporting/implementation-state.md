@@ -75,6 +75,12 @@ Review outcomes:
   in classifier rules. Patched by adding classifier-level WCF terminal guidance,
   schema version evolution rules, and expanded high fan-out calibration metrics.
   No known Medium+ review findings remain.
+- PR review loop addressed Qodo/Codex actionable comments: requirements now use
+  only canonical classifications (`AnalysisGap`, `NeedsReviewStaticPath`,
+  `ReducedCoverage`) for unresolved or ambiguous roots, and design/tasks now
+  preserve the existing `tracemap paths` output contract (`--format
+  markdown|json`, directory output writes both) plus existing selectors such as
+  `--from-source`, `--surface-name`, and `--source-pair`.
 
 ## Validation Commands For Spec Delivery
 
