@@ -254,6 +254,70 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.DoesNotContain("topsecret", sqliteProperties, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Scan_does_not_store_raw_config_xml_in_parse_gap_messages()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepo(temp);
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <connectionStrings>
+                <add name="MainDb" connectionString="Server=prod-db;Password=topsecret">
+              </connectionStrings>
+            </configuration>
+            """);
+
+        var result = Scan(repo, temp);
+        var properties = SerializedProperties(result);
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap && fact.Properties.GetValueOrDefault("classification") == "MalformedLegacyDataMetadata");
+        Assert.DoesNotContain("prod-db", properties);
+        Assert.DoesNotContain("topsecret", properties, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<add", properties);
+    }
+
+    [Fact]
+    public void Scan_does_not_gate_xsd_on_generic_datatype_or_relationship_tokens()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepo(temp);
+        File.WriteAllText(Path.Combine(repo, "Generic.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+              <xs:element name="DataType" type="xs:string" />
+              <xs:element name="Relationship" type="xs:string" />
+            </xs:schema>
+            """);
+
+        var result = Scan(repo, temp);
+
+        Assert.DoesNotContain(result.Facts, fact => fact.Evidence.FilePath == "Generic.xsd" && IsLegacyDataFact(fact));
+    }
+
+    [Fact]
+    public void Report_preserves_existing_legacy_data_hash_labels()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepo(temp);
+        File.WriteAllText(Path.Combine(repo, "Model.dbml"), """
+            <Database Class="SampleDataContext">
+              <Table Name="Orders" Member="Orders">
+                <Type Name="Order">
+                  <Column Name="password_token_column" Member="Secret" />
+                </Type>
+              </Table>
+            </Database>
+            """);
+
+        var result = Scan(repo, temp);
+        var columnHash = result.Facts
+            .Where(fact => fact.FactType == FactTypes.LegacyDataColumnDeclared)
+            .Select(fact => fact.Properties.GetValueOrDefault("columnHash"))
+            .Single(value => !string.IsNullOrWhiteSpace(value));
+        var report = MarkdownReportWriter.Build(result);
+
+        Assert.Contains($"column-hash:{columnHash}", report);
+    }
+
     private static bool IsLegacyDataFact(CodeFact fact)
     {
         return fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)

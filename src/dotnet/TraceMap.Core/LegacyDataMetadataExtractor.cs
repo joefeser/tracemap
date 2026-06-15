@@ -715,13 +715,26 @@ public static partial class LegacyDataMetadataExtractor
 
     private static bool HasTypedDataSetIndicator(XDocument document)
     {
-        return ((IEnumerable<XElement>)(document.Root is null ? [] : [document.Root])).DescendantsAndSelf()
-            .SelectMany(element => element.Attributes().Select(attribute => attribute.Name.LocalName)
-                .Concat([element.Name.NamespaceName, element.Name.LocalName]))
-            .Any(value => value.Contains("msdata", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("msprop", StringComparison.OrdinalIgnoreCase)
-                || value is "IsDataSet" or "DataType" or "Relationship"
-                || value.StartsWith("Generator_", StringComparison.Ordinal));
+        if (document.Root is null)
+        {
+            return false;
+        }
+
+        const string msdataNamespace = "urn:schemas-microsoft-com:xml-msdata";
+        const string mspropNamespace = "urn:schemas-microsoft-com:xml-msprop";
+        return new[] { document.Root }
+            .DescendantsAndSelf()
+            .Any(element =>
+                element.Name.NamespaceName.Equals(msdataNamespace, StringComparison.Ordinal)
+                || element.Name.NamespaceName.Equals(mspropNamespace, StringComparison.Ordinal)
+                || element.Attributes().Any(attribute =>
+                    attribute.IsNamespaceDeclaration
+                        ? attribute.Value.Equals(msdataNamespace, StringComparison.Ordinal)
+                            || attribute.Value.Equals(mspropNamespace, StringComparison.Ordinal)
+                        : attribute.Name.NamespaceName.Equals(msdataNamespace, StringComparison.Ordinal)
+                            || attribute.Name.NamespaceName.Equals(mspropNamespace, StringComparison.Ordinal)
+                            || (attribute.Name.LocalName.StartsWith("Generator_", StringComparison.Ordinal)
+                                && attribute.Name.NamespaceName.Equals(mspropNamespace, StringComparison.Ordinal))));
     }
 
     private static bool IsTypedDataTableElement(XElement element)
