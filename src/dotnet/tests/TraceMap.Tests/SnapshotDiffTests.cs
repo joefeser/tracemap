@@ -774,6 +774,77 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_single_prefers_existing_message_hash_when_raw_message_is_also_present()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        const string adapterHash = "adapter-message-hash";
+        SqliteIndexWriter.Write(beforeIndex, before, [
+            AnalysisGapPropertiesFact(before, "project-load", "logs/analyzer.log", 1, new()
+            {
+                ["gapKind"] = "project-load",
+                ["message"] = "raw message that changed",
+                ["messageHash"] = adapterHash
+            })
+        ]);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            AnalysisGapHashFact(after, "project-load", "logs/analyzer.log", 1, adapterHash)
+        ]);
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "gaps"));
+
+        Assert.Empty(result.Report.GapDiffs);
+        Assert.Equal(0, result.Report.Summary.GapDiffCount);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "DuplicateIdentity");
+    }
+
+    [Fact]
+    public async Task Snapshot_diff_single_uses_safe_gap_fingerprint_when_message_is_missing()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            AnalysisGapPropertiesFact(after, "dynamic-sql-boundary", "Orders.cs", 12, new()
+            {
+                ["gapKind"] = "dynamic-sql-boundary",
+                ["expressionHash"] = "expr-a"
+            }),
+            AnalysisGapPropertiesFact(after, "dynamic-sql-boundary", "Orders.cs", 12, new()
+            {
+                ["gapKind"] = "dynamic-sql-boundary",
+                ["expressionHash"] = "expr-b"
+            })
+        ]);
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "gaps"));
+
+        Assert.Equal(2, result.Report.GapDiffs.Count);
+        Assert.Equal(2, result.Report.Summary.GapDiffCount);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "DuplicateIdentity");
+        Assert.All(result.Report.GapDiffs, row =>
+        {
+            Assert.NotNull(row.After);
+            Assert.Contains(row.After!.Metadata, pair => pair.Key == "gapFingerprint");
+            Assert.DoesNotContain(row.After.Metadata, pair => pair.Key == "messageHash");
+        });
+    }
+
+    [Fact]
     public async Task Snapshot_diff_cli_exit_code_is_opt_in()
     {
         using var temp = new TempDirectory();
@@ -932,6 +1003,23 @@ public sealed class SnapshotDiffTests
                 ["gapKind"] = gapKind,
                 ["messageHash"] = messageHash
             });
+    }
+
+    private static CodeFact AnalysisGapPropertiesFact(
+        ScanManifest manifest,
+        string gapKind,
+        string file,
+        int line,
+        SortedDictionary<string, string> properties)
+    {
+        properties["gapKind"] = gapKind;
+        return FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            properties: properties);
     }
 
     private static string TestHash(string value, int length)

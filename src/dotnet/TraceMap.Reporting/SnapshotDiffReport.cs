@@ -1096,6 +1096,7 @@ public static class SnapshotDiffReporter
         var safePath = CombinedReportHelpers.SafePath(fact.FilePath);
         var pathHash = CombinedReportHelpers.Hash(fact.FilePath, 24);
         var messageHash = MessageHash(fact.Properties);
+        var gapFingerprint = GapFingerprint(fact.Properties, messageHash);
         var metadata = CombinedReportHelpers.SortedMetadata([
             Pair("gapKind", gapKind),
             Pair("factType", fact.FactType),
@@ -1105,9 +1106,10 @@ public static class SnapshotDiffReporter
             Pair("pathHash", pathHash),
             Pair("startLine", fact.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Pair("endLine", fact.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            Pair("messageHash", messageHash)
+            Pair("messageHash", messageHash),
+            Pair("gapFingerprint", gapFingerprint)
         ]);
-        var stableKey = $"gap:{source.SourceLabel}:{gapKind}:{safePath}:{fact.StartLine}:{fact.EndLine}:{fact.RuleId}:{messageHash ?? "no-message"}";
+        var stableKey = $"gap:{source.SourceLabel}:{gapKind}:{safePath}:{fact.StartLine}:{fact.EndLine}:{fact.RuleId}:{gapFingerprint ?? "no-fingerprint"}";
         var evidence = SingleEvidence(source, fact, metadata);
         return new SnapshotComparableRecord(
             "gap",
@@ -1347,17 +1349,53 @@ public static class SnapshotDiffReporter
 
     private static string? MessageHash(IReadOnlyDictionary<string, string> properties)
     {
-        if (FirstValue(properties, "message") is { } message)
-        {
-            return CombinedReportHelpers.Hash(message, 32);
-        }
-
         if (FirstValue(properties, "messageHash", "messageSha256", "messageDigest") is { } existingHash)
         {
             return existingHash;
         }
 
+        if (FirstValue(properties, "message") is { } message)
+        {
+            return CombinedReportHelpers.Hash(message, 32);
+        }
+
         return null;
+    }
+
+    private static string? GapFingerprint(IReadOnlyDictionary<string, string> properties, string? messageHash)
+    {
+        if (!string.IsNullOrWhiteSpace(messageHash))
+        {
+            return $"message:{messageHash}";
+        }
+
+        if (FirstValue(properties, "expressionHash", "queryShapeHash", "textHash", "diagnosticId", "errorCode", "name") is { } safeFingerprint)
+        {
+            return $"property:{CombinedReportHelpers.Hash(safeFingerprint, 32)}";
+        }
+
+        var safeProperties = properties
+            .Where(pair => IsSafeGapFingerprintProperty(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => $"{pair.Key}={pair.Value.Trim()}")
+            .ToArray();
+        return safeProperties.Length == 0
+            ? null
+            : $"properties:{CombinedReportHelpers.Hash(string.Join("\n", safeProperties), 32)}";
+    }
+
+    private static bool IsSafeGapFingerprintProperty(string key)
+    {
+        return key.EndsWith("Hash", StringComparison.OrdinalIgnoreCase)
+            || key.EndsWith("Digest", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "gapKind", StringComparison.Ordinal)
+            || string.Equals(key, "gapCode", StringComparison.Ordinal)
+            || string.Equals(key, "kind", StringComparison.Ordinal)
+            || string.Equals(key, "reason", StringComparison.Ordinal)
+            || string.Equals(key, "dynamicReason", StringComparison.Ordinal)
+            || string.Equals(key, "sqlSourceKind", StringComparison.Ordinal)
+            || string.Equals(key, "diagnosticId", StringComparison.Ordinal)
+            || string.Equals(key, "errorCode", StringComparison.Ordinal);
     }
 
     private static string SafeFallbackIdentity(string prefix, string value)
