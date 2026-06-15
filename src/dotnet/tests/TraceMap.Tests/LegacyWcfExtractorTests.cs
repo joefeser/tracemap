@@ -306,8 +306,221 @@ public sealed class LegacyWcfExtractorTests
             && fact.TargetSymbol == "Sample.Clients.Container.RatingServiceClient");
     }
 
+    [Fact]
+    public void Scan_extracts_svcmap_metadata_without_raw_url_or_absolute_path()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        var serviceRef = Path.Combine(repo, "Service References", "Rating");
+        Directory.CreateDirectory(serviceRef);
+        File.WriteAllText(Path.Combine(serviceRef, "Reference.svcmap"), """
+            <ReferenceGroup>
+              <MetadataSource Address="https://services.example.test/Rating.svc?wsdl" SourceId="/private/source/Rating.wsdl" />
+              <MetadataFile FileName="Rating.wsdl" />
+              <MetadataFile FileName="schema.xsd" />
+              <GeneratedFile FileName="/private/generated/Reference.cs" />
+            </ReferenceGroup>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var metadata = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMetadataDeclared);
+
+        Assert.Equal("SvcMap", metadata.Properties.GetValueOrDefault("metadataKind"));
+        Assert.Equal("Reference.cs", metadata.Properties.GetValueOrDefault("generatedCodeFileName"));
+        Assert.Equal("Rating.wsdl;schema.xsd", metadata.Properties.GetValueOrDefault("localMetadataFileNames"));
+        var serialized = SerializeProperties(result.Facts);
+        Assert.DoesNotContain("services.example.test", serialized);
+        Assert.DoesNotContain("/private", serialized);
+        Assert.Contains("metadataSourceHash=", serialized);
+    }
+
+    [Fact]
+    public void Scan_extracts_wsdl_operations_without_raw_namespace_or_soap_action()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        var serviceRef = Path.Combine(repo, "Service References", "Rating");
+        Directory.CreateDirectory(serviceRef);
+        WriteWsdl(serviceRef, "IRatingService", "Rate", targetNamespace: "https://secret.example.test/contracts");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var operation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WcfMetadataOperationDeclared);
+
+        Assert.Equal("Rate", operation.Properties.GetValueOrDefault("operationName"));
+        Assert.Equal("IRatingService", operation.Properties.GetValueOrDefault("portTypeName"));
+        Assert.Equal("wsdl", operation.Properties.GetValueOrDefault("sourceFormat"));
+        var serialized = SerializeProperties(result.Facts);
+        Assert.DoesNotContain("secret.example.test", serialized);
+        Assert.DoesNotContain("soapAction", serialized);
+    }
+
+    [Fact]
+    public void Scan_rejects_dtd_metadata_and_emits_malformed_wcf_metadata_gap()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        var serviceRef = Path.Combine(repo, "Service References", "Rating");
+        Directory.CreateDirectory(serviceRef);
+        File.WriteAllText(Path.Combine(serviceRef, "Rating.wsdl"), """
+            <!DOCTYPE definitions [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+            <definitions>&xxe;</definitions>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWcfMetadata
+            && fact.Properties.GetValueOrDefault("classification") == "MalformedWcfMetadata");
+    }
+
+    [Fact]
+    public void Scan_gates_wsdl_disco_and_xsd_to_service_reference_folders()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Loose.wsdl"), "<definitions />");
+        File.WriteAllText(Path.Combine(repo, "Loose.disco"), "<discovery />");
+        File.WriteAllText(Path.Combine(repo, "Loose.xsd"), "<schema />");
+        var serviceRef = Path.Combine(repo, "Client", "Rating");
+        Directory.CreateDirectory(serviceRef);
+        File.WriteAllText(Path.Combine(serviceRef, "Reference.svcmap"), "<ReferenceGroup />");
+        File.WriteAllText(Path.Combine(serviceRef, "Rating.wsdl"), "<definitions />");
+        File.WriteAllText(Path.Combine(serviceRef, "Rating.disco"), "<discovery />");
+        File.WriteAllText(Path.Combine(serviceRef, "Rating.xsd"), "<schema />");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.DoesNotContain(result.Inventory, item => item.RelativePath.StartsWith("Loose.", StringComparison.Ordinal));
+        Assert.Contains(result.Inventory, item => item.RelativePath == "Client/Rating/Rating.wsdl" && item.Kind == "ServiceReferenceMetadata");
+        Assert.Contains(result.Inventory, item => item.RelativePath == "Client/Rating/Rating.disco" && item.Kind == "ServiceReferenceMetadata");
+        Assert.Contains(result.Inventory, item => item.RelativePath == "Client/Rating/Rating.xsd" && item.Kind == "ServiceReferenceMetadata");
+    }
+
+    [Fact]
+    public void Scan_maps_async_suffix_when_corrobated_by_connected_wsdl_metadata()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        WriteContract(repo, "Sample.Contracts", "Rate");
+        WriteGeneratedClient(repo, "Sample.Contracts", "ClientBase<Sample.Contracts.IRatingService>", "RateAsync");
+        WriteClientEndpoint(repo);
+        WriteWsdl(Path.Combine(repo, "Service References", "Rating"), "IRatingService", "Rate");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var mapping = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
+
+        Assert.Equal("Rate", mapping.ContractElement);
+        Assert.Equal("AsyncSuffix", mapping.Properties.GetValueOrDefault("normalizationKind"));
+        Assert.Equal("RateAsync", mapping.Properties.GetValueOrDefault("originalOperationName"));
+    }
+
+    [Fact]
+    public void Scan_maps_begin_end_pair_but_not_lone_begin_or_lifecycle_pairs()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        WriteContract(repo, "Sample.Contracts", "BeginRate", "EndRate", "BeginLookup", "BeginOpen", "EndOpen", "Close");
+        WriteGeneratedClient(repo, "Sample.Contracts", "ClientBase<Sample.Contracts.IRatingService>", "BeginRate", "EndRate", "BeginLookup", "BeginOpen", "EndOpen", "CloseAsync");
+        WriteClientEndpoint(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var mappings = result.Facts.Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping).ToArray();
+
+        Assert.Contains(mappings, fact =>
+            fact.ContractElement == "Rate"
+            && fact.Properties.GetValueOrDefault("normalizationKind") == "ApmBeginEndPair");
+        Assert.DoesNotContain(mappings, fact => fact.ContractElement == "Lookup");
+        Assert.DoesNotContain(mappings, fact => fact.ContractElement == "Open");
+        Assert.DoesNotContain(mappings, fact => fact.ContractElement == "Close");
+    }
+
+    [Fact]
+    public void Scan_collapses_convergent_sync_and_async_aliases_to_one_mapping()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        WriteContract(repo, "Sample.Contracts", "Rate");
+        WriteGeneratedClient(repo, "Sample.Contracts", "ClientBase<Sample.Contracts.IRatingService>", "Rate", "RateAsync");
+        WriteClientEndpoint(repo);
+        WriteWsdl(Path.Combine(repo, "Service References", "Rating"), "IRatingService", "Rate");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var mappings = result.Facts.Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping && fact.ContractElement == "Rate").ToArray();
+
+        Assert.Single(mappings);
+    }
+
+    [Fact]
+    public void Scan_emits_unlinked_metadata_gap_for_unrelated_wsdl_operation()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        WriteGeneratedClient(repo, "Sample.Contracts", "ClientBase<Sample.Contracts.IRatingService>", "RateAsync");
+        WriteWsdl(Path.Combine(repo, "Service References", "Other"), "IOtherService", "Rate");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWcfOperationNormalization
+            && fact.Properties.GetValueOrDefault("classification") == "UnlinkedWcfMetadata");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
+    }
+
+    [Fact]
+    public void Scan_emits_normalized_ambiguity_gap_without_mapping_when_endpoints_are_ambiguous()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        WriteContract(repo, "Sample.Contracts", "Rate");
+        WriteGeneratedClient(repo, "Sample.Contracts", "ClientBase<Sample.Contracts.IRatingService>", "RateAsync");
+        WriteWsdl(Path.Combine(repo, "Service References", "Rating"), "IRatingService", "Rate");
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <system.serviceModel>
+                <client>
+                  <endpoint address="https://one.example.test/Rating.svc" binding="basicHttpBinding" contract="Sample.Contracts.IRatingService" />
+                  <endpoint address="https://two.example.test/Rating.svc" binding="basicHttpBinding" contract="Sample.Contracts.IRatingService" />
+                </client>
+              </system.serviceModel>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWcfMapping
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousWcfNormalizedMapping");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
+    }
+
     private static void WriteContract(string repo, string contractNamespace)
     {
+        WriteContract(repo, contractNamespace, "Rate");
+    }
+
+    private static void WriteContract(string repo, string contractNamespace, params string[] operations)
+    {
+        var operationDeclarations = string.Join(
+            Environment.NewLine,
+            operations.Select(operation => $"    [OperationContract]{Environment.NewLine}    string {operation}(RatingRequest request);"));
         File.WriteAllText(Path.Combine(repo, "Contracts.cs"), $$"""
             using System.ServiceModel;
 
@@ -316,8 +529,7 @@ public sealed class LegacyWcfExtractorTests
             [ServiceContract]
             public interface IRatingService
             {
-                [OperationContract]
-                string Rate(RatingRequest request);
+            {{operationDeclarations}}
             }
 
             public sealed class RatingRequest { }
@@ -326,7 +538,22 @@ public sealed class LegacyWcfExtractorTests
 
     private static void WriteGeneratedClient(string repo, string contractNamespace, string baseType)
     {
-        File.WriteAllText(Path.Combine(repo, "Service References", "Rating", "Reference.cs"), $$"""
+        WriteGeneratedClient(repo, contractNamespace, baseType, "Rate");
+    }
+
+    private static void WriteGeneratedClient(string repo, string contractNamespace, string baseType, params string[] operations)
+    {
+        var serviceRef = Path.Combine(repo, "Service References", "Rating");
+        Directory.CreateDirectory(serviceRef);
+        var methodDeclarations = string.Join(
+            Environment.NewLine,
+            operations.Select(operation => $$"""
+                public string {{operation}}({{contractNamespace}}.RatingRequest request)
+                {
+                    return string.Empty;
+                }
+            """));
+        File.WriteAllText(Path.Combine(serviceRef, "Reference.cs"), $$"""
             using System.CodeDom.Compiler;
             using System.ServiceModel;
 
@@ -335,11 +562,54 @@ public sealed class LegacyWcfExtractorTests
             [GeneratedCode("svcutil", "4.0")]
             public partial class RatingServiceClient : {{baseType}}
             {
-                public string Rate({{contractNamespace}}.RatingRequest request)
-                {
-                    return Channel.Rate(request);
-                }
+            {{methodDeclarations}}
             }
             """);
+    }
+
+    private static void WriteClientEndpoint(string repo)
+    {
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <system.serviceModel>
+                <client>
+                  <endpoint address="https://services.example.test/Rating.svc" binding="basicHttpBinding" contract="Sample.Contracts.IRatingService" />
+                </client>
+              </system.serviceModel>
+            </configuration>
+            """);
+    }
+
+    private static void WriteWsdl(string serviceRef, string portTypeName, string operationName, string targetNamespace = "urn:safe")
+    {
+        Directory.CreateDirectory(serviceRef);
+        File.WriteAllText(Path.Combine(serviceRef, "Rating.wsdl"), $$"""
+            <definitions xmlns="http://schemas.xmlsoap.org/wsdl/"
+                         xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+                         targetNamespace="{{targetNamespace}}">
+              <portType name="{{portTypeName}}">
+                <operation name="{{operationName}}">
+                  <input message="tns:{{operationName}}" />
+                </operation>
+              </portType>
+              <binding name="RatingBinding" type="tns:{{portTypeName}}">
+                <operation name="{{operationName}}">
+                  <soap:operation soapAction="https://secret.example.test/actions/{{operationName}}" />
+                </operation>
+              </binding>
+              <service name="RatingService">
+                <port name="RatingPort" binding="tns:RatingBinding">
+                  <soap:address location="https://secret.example.test/Rating.svc" />
+                </port>
+              </service>
+            </definitions>
+            """);
+    }
+
+    private static string SerializeProperties(IEnumerable<CodeFact> facts)
+    {
+        return string.Join(
+            "\n",
+            facts.SelectMany(fact => fact.Properties.Select(pair => $"{pair.Key}={pair.Value}")));
     }
 }

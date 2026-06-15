@@ -1,7 +1,7 @@
 # Legacy WCF Metadata Normalization Implementation State
 
-Status: not-started
-Branch: codex/legacy-wcf-metadata-normalization-spec
+Status: implemented
+Branch: codex/legacy-wcf-metadata-normalization
 Public claim level: hidden
 
 ## Why This Spec Exists
@@ -44,6 +44,22 @@ The observed mismatch is mostly naming:
 - Do not claim runtime reachability.
 - Do not use fuzzy matching.
 - Keep full semantic WCF enrichment as a separate follow-up.
+- Added `ServiceReferenceMetadata` inventory kind for `.svcmap` plus gated
+  `.wsdl`, `.disco`, and `.xsd` files. WSDL/DISCO/XSD files outside
+  service-reference folders or `.svcmap` co-location remain out of scope.
+- Added XXE-safe XML loading with DTD prohibition and `XmlResolver = null`.
+  Malformed or rejected metadata emits `AnalysisGap` with
+  `MalformedWcfMetadata`.
+- Added metadata facts `WcfServiceReferenceMetadataDeclared` and
+  `WcfMetadataOperationDeclared`; no alias fact type is persisted.
+- Operation aliases are computed in-process. Exact generated operation names
+  stay live, `FooAsync -> Foo` requires corroboration, and
+  `BeginFoo`/`EndFoo -> Foo` requires a pair on the same contract/type.
+- Lifecycle names and lifecycle Begin/End pairs are excluded from normalized
+  mapping.
+- Mapping deduplicates convergent sync/async/APM forms by logical operation and
+  carries normalization kind, original operation, metadata hash, and supporting
+  fact IDs when used.
 
 ## Local Validation Notes
 
@@ -80,6 +96,20 @@ python3 scripts/legacy_codebase_validation.py \
   .tmp/legacy-codebase-validation/wcf-svc-smoke.local.json \
   .tmp/legacy-codebase-validation/wcf-svc-smoke-out
 ```
+
+## Implementation Validation
+
+Completed on branch `codex/legacy-wcf-metadata-normalization`:
+
+- `dotnet build src/dotnet/TraceMap.sln` passed.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 264 tests.
+- `python3 -m unittest scripts.tests.test_legacy_codebase_validation` passed:
+  11 tests.
+- `./scripts/check-private-paths.sh` passed.
+- `git diff --check` passed.
+- Optional ignored local WCF/SVC smoke was not run because
+  `.tmp/legacy-codebase-validation/wcf-svc-smoke.local.json` is absent in this
+  worktree.
 
 ## Follow-Ups To Keep Out Of This Slice
 
