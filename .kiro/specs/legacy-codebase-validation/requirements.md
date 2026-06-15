@@ -69,6 +69,8 @@ Acceptance Criteria:
    coverage labels.
 5. WHEN event handlers are not captured by the current scanner THEN validation
    SHALL record a follow-up gap rather than claiming absence.
+6. WHEN handler wiring evidence is found THEN validation SHALL state that static
+   wiring does not prove the handler executes at runtime.
 
 ### Requirement 4: Large Repository Smoke
 
@@ -81,8 +83,11 @@ Acceptance Criteria:
    counts, output artifact existence, coverage level, and analyzer gaps.
 2. WHEN outputs are summarized THEN the summary SHALL include counts and labels
    only, not raw file lists or snippets.
-3. WHEN scan time or artifact size exceeds a configured bound THEN validation
+3. WHEN scan time or artifact size exceeds the configured default bounds of 20
+   minutes per sample or 500 MB per sample output directory THEN validation
    SHALL mark the result as truncated or deferred, not failed silently.
+4. WHEN operators need different bounds THEN they SHALL configure per-sample
+   `timeoutSeconds` or `maxArtifactBytes` values in the ignored local manifest.
 
 ### Requirement 5: Public-Safe Summary
 
@@ -100,4 +105,8 @@ Acceptance Criteria:
    why and keep it local-only.
 4. WHEN results suggest a product change THEN validation SHALL record a proposed
    follow-up spec or issue, not silently change scanner behavior.
-
+5. WHEN a redacted summary is promoted into committed docs or site copy THEN it
+   SHALL pass a pre-publish checklist for labels-only sample identity, no
+   absolute paths, no remotes, no raw SQL, no config values, no secrets, no
+   snippets, and visible counts, tiers, coverage labels, limitations, and rule
+   IDs where applicable.

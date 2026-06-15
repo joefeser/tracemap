@@ -28,7 +28,9 @@ Example shape:
     {
       "label": "legacy-winforms-app",
       "path": "/local/path/not/committed",
-      "kind": "legacy-ui"
+      "kind": "legacy-ui",
+      "timeoutSeconds": 1200,
+      "maxArtifactBytes": 524288000
     },
     {
       "label": "large-public-dotnet-client",
@@ -46,6 +48,11 @@ Example shape:
 
 Only the labels may appear in committed summaries.
 
+`timeoutSeconds` and `maxArtifactBytes` are optional per-sample overrides. When
+omitted, the harness defaults to 20 minutes per sample and 500 MB per sample
+output directory. Exceeding either bound should produce a truncated or deferred
+result with a visible limitation.
+
 ## Proposed Command Shape
 
 Prefer a script first:
@@ -57,6 +64,7 @@ scripts/validate-legacy-codebases.sh .tmp/legacy-codebase-validation/repos.local
 The script should:
 
 - validate that the manifest path is under `.tmp/legacy-codebase-validation/`
+- fail if any file under `.tmp/legacy-codebase-validation/` is git-tracked
 - reject absolute paths in any committed output candidate
 - run `tracemap scan` for each sample
 - capture exit code, duration, artifact existence, fact counts, coverage labels,
@@ -100,8 +108,26 @@ Potential patterns to inspect:
 - WebForms markup event attributes such as `OnClick`
 - code-behind handler methods
 
+Concrete implementation probes:
+
+- query `facts` for method declaration facts whose symbols or contract elements
+  look like event handlers
+- query call-edge facts from handler-like methods to downstream methods or
+  dependency surfaces
+- query dependency-surface facts reached from handler-like methods, if current
+  evidence can establish that link
+- search safe `facts.ndjson` properties for handler wiring tokens such as
+  `+=`, `Click`, `OnClick`, `InitializeComponent`, and code-behind method names
+  without rendering raw source snippets
+- record a validation gap when the current fact vocabulary cannot expose event
+  wiring
+
 If no current facts expose these patterns, record a validation gap and propose a
 future `legacy-ui-event-surfaces` spec.
+
+All UI event findings are static wiring evidence only. They do not prove that a
+control exists at runtime, that a handler executes, that a user can reach the
+event, or that backend behavior occurred.
 
 ### Large Repository Probe
 
@@ -153,7 +179,29 @@ The validation process must scan for and reject:
 - connection strings
 - secrets
 
-The private path guard remains mandatory before commit/PR.
+The redaction step is the primary defense. The private path guard remains
+mandatory before commit/PR, but it is a machine-specific backstop and must not
+be treated as sufficient coverage for remotes, secrets, SQL, connection strings,
+config values, private repository names, or source snippets.
+
+The validation script and tests should also fail if any path under
+`.tmp/legacy-codebase-validation/` becomes git-tracked.
+
+## Pre-Publish Checklist
+
+Before any redacted legacy validation summary is copied out of ignored `.tmp/`
+and committed or published, verify:
+
+- sample identity uses neutral labels only
+- no local absolute paths
+- no raw repository remotes
+- no private repository names
+- no raw SQL
+- no config values
+- no connection strings or secrets
+- no source snippets
+- counts, evidence tiers, coverage labels, rule IDs, and limitations are visible
+  wherever the summary makes a claim
 
 ## Follow-Up Decisions
 
@@ -163,4 +211,3 @@ Possible follow-up specs after validation:
 - `legacy-ui-event-surfaces`
 - `legacy-webforms-endpoint-alignment`
 - `legacy-scan-performance-bounds`
-
