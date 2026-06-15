@@ -1,6 +1,6 @@
 # Legacy WCF Metadata Normalization Implementation State
 
-Status: ready-for-implementation
+Status: not-started
 Branch: codex/legacy-wcf-metadata-normalization-spec
 Public claim level: hidden
 
