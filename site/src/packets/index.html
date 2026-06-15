@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap evidence packets explain how reviewers inspect deterministic static analysis artifacts, proof paths, coverage labels, and limitations."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Evidence Packets | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/packets/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Packets">
+    <meta
+      property="og:description"
+      content="A demo-level guide to reading TraceMap static evidence packets without turning them into runtime claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/packets/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Evidence packets</p>
+        <h1>Share the review trail without upgrading static evidence into a promise.</h1>
+        <p class="hero-subhead">
+          A TraceMap packet is a bounded set of generated artifacts that lets
+          people inspect what the repository scan found, which rules supported
+          the findings, where coverage was reduced, and what still needs human
+          review.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. This page explains how to read and share
+          demo-safe packet summaries. It does not claim runtime behavior,
+          production traffic, deployment state, endpoint performance, or release
+          safety.
+        </p>
+        <nav class="hero-actions" aria-label="Evidence packet links">
+          <a class="button primary" href="/demo/start-here/">Run the walkthrough</a>
+          <a class="button secondary" href="/examples/">Inspect examples</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Packet model</p>
+          <h2>The packet is not a prettier claim. It is the evidence made inspectable.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Source identity</strong><span>Repo label, commit SHA, extractor version, command context, and coverage labels say what was scanned and how complete the result was.</span></div>
+          <div><strong>Rule-backed facts</strong><span>Findings retain rule IDs, evidence tiers, source spans, supporting IDs, and limitations so readers can audit the basis for each statement.</span></div>
+          <div><strong>Queryable artifacts</strong><span><code>facts.ndjson</code> and <code>index.sqlite</code> remain the machine-readable source of truth for local inspection.</span></div>
+          <div><strong>Human summaries</strong><span><code>report.md</code>, demo summaries, and generated review notes help people navigate the evidence without replacing it.</span></div>
+          <div><strong>Gaps included</strong><span>Analysis gaps, reduced coverage, unknowns, and deferred checks stay visible instead of being edited out of the story.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Reader paths</p>
+          <h2>Different readers ask different questions, but the packet stays the same.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Managers</h3>
+            <p>Start with coverage labels, changed surfaces, limitations, and reviewer handoff notes before asking for a go/no-go conversation.</p>
+          </article>
+          <article>
+            <h3>Reviewers</h3>
+            <p>Follow rule IDs, evidence tiers, source spans, supporting IDs, and paths to decide which findings need human attention.</p>
+          </article>
+          <article>
+            <h3>Architects</h3>
+            <p>Look for repeated routes, package surfaces, config surfaces, SQL surfaces, and cross-repo paths that explain coupling.</p>
+          </article>
+          <article>
+            <h3>Engineers</h3>
+            <p>Use the packet during a review or incident-adjacent investigation to find static dependency trails without claiming runtime cause.</p>
+          </article>
+          <article>
+            <h3>Tool builders</h3>
+            <p>Consume facts, SQLite tables, reports, and summaries through stable artifacts instead of depending on hidden model state.</p>
+          </article>
+          <article>
+            <h3>Future agents</h3>
+            <p>Resume from specs, state notes, rule IDs, validation output, and generated artifacts instead of reconstructing intent from chat history.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">How to inspect</p>
+          <h2>Start broad, then drill into the artifact that supports the claim.</h2>
+          <p>
+            For the public demo, generate the packet locally and share only the
+            public-safe summaries. Keep raw private-repo facts, SQLite indexes,
+            logs, source snippets, SQL values, config values, secrets, local
+            absolute paths, and raw remotes out of public copy.
+          </p>
+        </div>
+        <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
+cd tracemap
+./scripts/demo-public.sh .tracemap-demo
+
+# Inspect summary first, then drill into local artifacts.
+sed -n '1,160p' .tracemap-demo/demo-summary.md</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Packet contents</p>
+          <h2>Each artifact answers a different review question.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>scan-manifest.json</code><span>What repo, commit, scanner, extractor version, command, and coverage context produced the packet?</span></div>
+          <div><code>facts.ndjson</code><span>Which rule-backed facts were emitted, and what evidence tier, source span, and supporting ID backs each fact?</span></div>
+          <div><code>index.sqlite</code><span>Which symbols, endpoints, relationships, packages, SQL surfaces, config surfaces, paths, and gaps are queryable locally?</span></div>
+          <div><code>report.md</code><span>What human-readable summary, coverage statement, and limitation list should reviewers read first?</span></div>
+          <div><code>logs/analyzer.log</code><span>Which analyzer diagnostics explain partial loading, fallback behavior, or reduced coverage?</span></div>
+          <div><code>demo-summary.md</code><span>Which public-safe result can be shared from checked-in sample repositories?</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Safe wording</p>
+          <h2>Use language that keeps the claim attached to evidence.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe</strong><span>"This endpoint has a static evidence trail through these code and data surfaces."</span></div>
+          <div><strong>Safe</strong><span>"This packet shows rule-backed findings and reduced-coverage labels from the scanned commit."</span></div>
+          <div><strong>Safe</strong><span>"This change needs review because the packet found a static dependency path with Tier2Structural evidence."</span></div>
+          <div><strong>Not safe</strong><span>"TraceMap proves why production is down."</span></div>
+          <div><strong>Not safe</strong><span>"TraceMap proves this endpoint is slow, unused, deployed, or safe to release."</span></div>
+          <div><strong>Not safe</strong><span>"TraceMap used AI to decide what is impacted."</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>What the packet deliberately does not prove.</h2>
+        </div>
+        <ul>
+          <li>It does not prove runtime reachability, production traffic, performance, deployment state, or incident cause.</li>
+          <li>It does not replace test results, telemetry, logs, traces, human review, or release approval.</li>
+          <li>It does not make private raw artifacts public-safe by default.</li>
+          <li>It does not remove analysis gaps; it labels them so the next reader sees where proof stops.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Next step</p>
+          <h2>Use the packet with the rest of the public site.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/demo/start-here/">Demo walkthrough</a>
+          <a href="/outputs/">Output artifacts</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/examples/scan-packet/">Scan packet example</a>
+          <a href="/evidence/">Evidence model</a>
+          <a href="/limitations/">Limitations</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Evidence packets connect the
+        <a href="/demo/">public demo</a>,
+        <a href="/outputs/">artifact model</a>,
+        and
+        <a href="/capabilities/">capability matrix</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

@@ -50,6 +50,16 @@
     "priority": "0.8"
   },
   {
+    "path": "/capabilities/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/docs/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/validation/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -61,6 +71,16 @@
   },
   {
     "path": "/demo/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/demo/start-here/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/packets/",
     "changefreq": "monthly",
     "priority": "0.8"
   }

@@ -30,6 +30,8 @@
         <a href="/workflows/">Workflows</a>
         <a href="/examples/">Examples</a>
         <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
         <a href="/validation/">Validation</a>
         <a href="/limitations/">Limitations</a>
         <a href="/demo/" aria-current="page">Demo</a>
@@ -45,6 +47,10 @@
           The public demo scans sample repositories, writes generated artifacts, and
           produces public-shareable summaries that avoid local absolute paths.
         </p>
+        <nav class="hero-actions" aria-label="Demo links">
+          <a class="button primary" href="/demo/start-here/">Start the walkthrough</a>
+          <a class="button secondary" href="/packets/">Read the packet guide</a>
+        </nav>
       </section>
 
       <section class="section command-section">
@@ -88,6 +94,25 @@ cd tracemap
       </section>
 
       <section class="section callout-section">
+        <h2>Need the guided path first?</h2>
+        <p>
+          Use the
+          <a href="/demo/start-here/">demo walkthrough</a>
+          to run the sample, inspect the public-safe summaries, follow one
+          static evidence path, and read the limitations before making claims.
+        </p>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Sharing the result?</h2>
+        <p>
+          The <a href="/packets/">evidence packet guide</a> explains what a
+          demo-safe packet can support, what should stay local, and which
+          runtime or production claims are still out of bounds.
+        </p>
+      </section>
+
+      <section class="section callout-section">
         <h2>Future concept: open the evidence trail as a vault.</h2>
         <p>
           A future optional export could make the same demo evidence browsable
@@ -102,6 +127,8 @@ cd tracemap
       <p>
         Demo source:
         <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">scripts/demo-public.sh</a>.
+        Guided path:
+        <a href="/demo/start-here/">demo walkthrough</a>.
       </p>
       <p class="copyright">© 2026 Joe Feser.</p>
     </footer>

@@ -352,6 +352,13 @@ h3 {
   align-items: start;
 }
 
+.split-section > *,
+.command-section > *,
+.boundary-section > *,
+.link-section > * {
+  min-width: 0;
+}
+
 .output-list {
   display: grid;
   gap: 10px;
@@ -365,17 +372,22 @@ h3 {
 .detail-list div {
   display: grid;
   gap: 4px;
+  min-width: 0;
   border-left: 4px solid var(--accent);
   background: rgba(255, 255, 255, 0.64);
   padding: 15px 18px;
 }
 
 .detail-list strong {
+  min-width: 0;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 .detail-list span {
+  min-width: 0;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .output-list div {

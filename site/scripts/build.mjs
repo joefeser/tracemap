@@ -32,7 +32,21 @@ function createBuildContext({ log = console.log, root = defaultRoot } = {}) {
   };
 }
 
-async function copyPublicSource(from, to) {
+export const topNavigationLinks = [
+  { href: "/evidence/", text: "Evidence" },
+  { href: "/outputs/", text: "Outputs" },
+  { href: "/workflows/", text: "Workflows" },
+  { href: "/examples/", text: "Examples" },
+  { href: "/blog/", text: "Blog" },
+  { href: "/capabilities/", text: "Capabilities" },
+  { href: "/docs/", text: "Docs" },
+  { href: "/validation/", text: "Validation" },
+  { href: "/limitations/", text: "Limitations" },
+  { href: "/demo/", text: "Demo" },
+  { href: "https://github.com/joefeser/tracemap", text: "GitHub" }
+];
+
+async function copyPublicSource(from, to, context = { dist: to }) {
   await mkdir(to, { recursive: true });
 
   for (const entry of await readdir(from, { withFileTypes: true })) {
@@ -44,11 +58,17 @@ async function copyPublicSource(from, to) {
     const targetPath = join(to, entry.name);
 
     if (entry.isDirectory()) {
-      await copyPublicSource(sourcePath, targetPath);
+      await copyPublicSource(sourcePath, targetPath, context);
       continue;
     }
 
     if (entry.isFile()) {
+      if (entry.name.endsWith(".html")) {
+        const html = await readFile(sourcePath, "utf8");
+        await writeFile(targetPath, transformStaticHtml(html, publicPathForOutput(context, targetPath)), "utf8");
+        continue;
+      }
+
       await cp(sourcePath, targetPath);
     }
   }
@@ -290,7 +310,6 @@ function renderBlogIndex(articles) {
     ogType: "website",
     ogTitle: "TraceMap Blog",
     ogDescription: "Articles about evidence-backed repository review and TraceMap project workflow.",
-    blogCurrent: "page",
     main: `<section class="page-hero">
         <p class="eyebrow">Blog</p>
         <h1>Notes on evidence-backed review.</h1>
@@ -333,7 +352,6 @@ function renderBlogArticle(article, body) {
     ogTitle: article.title,
     ogDescription: article.ogDescription,
     articlePublished: article.published,
-    blogCurrent: "location",
     main: `<article class="article">
         <header class="article-header">
           <p class="eyebrow">${escapeHtml(article.category)}</p>
@@ -381,7 +399,6 @@ ${urls}
 
 function renderPage({
   articlePublished,
-  blogCurrent,
   canonicalPath,
   description,
   footer,
@@ -395,6 +412,7 @@ function renderPage({
   const articleMeta = articlePublished
     ? `    <meta property="article:published_time" content="${escapeHtml(articlePublished)}">\n`
     : "";
+  const header = renderHeader(canonicalPath);
 
   return `<!doctype html>
 <html lang="en">
@@ -421,23 +439,7 @@ ${articleMeta}    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="TraceMap home">
-        <span class="brand-mark" aria-hidden="true">T</span>
-        <span>TraceMap</span>
-      </a>
-      <nav class="top-nav" aria-label="Primary navigation">
-        <a href="/evidence/">Evidence</a>
-        <a href="/outputs/">Outputs</a>
-        <a href="/workflows/">Workflows</a>
-        <a href="/examples/">Examples</a>
-        <a href="/blog/" aria-current="${escapeHtml(blogCurrent)}">Blog</a>
-        <a href="/validation/">Validation</a>
-        <a href="/limitations/">Limitations</a>
-        <a href="/demo/">Demo</a>
-        <a href="https://github.com/joefeser/tracemap">GitHub</a>
-      </nav>
-    </header>
+${indent(header, 4)}
 
     <main>
       ${main}
@@ -449,6 +451,61 @@ ${articleMeta}    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     </footer>
   </body>
 </html>`;
+}
+
+function transformStaticHtml(html, publicPath) {
+  const header = renderHeader(publicPath);
+  const headerPattern =
+    /(<body\b[^>]*>\s*)([ \t]*)<header\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bsite-header\b[^"']*["'])[^>]*>[\s\S]*?<\/header>/i;
+  const transformed = html.replace(headerPattern, (_match, bodyStart, sourceIndent) => {
+    return `${bodyStart}${indent(header, sourceIndent.length)}`;
+  });
+
+  if (transformed === html) {
+    throw new Error(`Static HTML page is missing a replaceable site header: ${publicPath}`);
+  }
+
+  return transformed.endsWith("\n") ? transformed : `${transformed}\n`;
+}
+
+function renderHeader(currentPath) {
+  return `<header class="site-header">
+  <a class="brand" href="/" aria-label="TraceMap home">
+    <span class="brand-mark" aria-hidden="true">T</span>
+    <span>TraceMap</span>
+  </a>
+  <nav class="top-nav" aria-label="Primary navigation">
+${topNavigationLinks.map((link) => `    ${renderNavLink(link, currentPath)}`).join("\n")}
+  </nav>
+</header>`;
+}
+
+function renderNavLink(link, currentPath) {
+  const current = currentNavValue(link.href, currentPath);
+  const currentAttribute = current ? ` aria-current="${current}"` : "";
+  return `<a href="${escapeHtml(link.href)}"${currentAttribute}>${escapeHtml(link.text)}</a>`;
+}
+
+function currentNavValue(href, currentPath) {
+  if (!href.startsWith("/")) {
+    return null;
+  }
+
+  if (href === currentPath) {
+    return "page";
+  }
+
+  const sectionPrefix = href.endsWith("/") ? href : `${href}/`;
+  if (sectionPrefix !== "/" && currentPath.startsWith(sectionPrefix)) {
+    return "location";
+  }
+
+  return null;
+}
+
+function publicPathForOutput(context, outputPath) {
+  const path = `/${relative(context.dist, outputPath).split("\\").join("/")}`;
+  return path.endsWith("/index.html") ? path.slice(0, -"index.html".length) : path;
 }
 
 function escapeHtml(value) {
