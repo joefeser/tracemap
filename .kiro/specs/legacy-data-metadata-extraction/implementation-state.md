@@ -60,9 +60,8 @@ Review outcomes:
 - Final Sonnet re-review completed with reduced coverage because Kiro reported
   denied shell access after reading files. No blocking or important issues
   remain. Spec is ready for implementation.
-- The six `legacy.data.*` rule catalog entries were also added to
-  `rules/rule-catalog.yml` during spec delivery so implementation starts with
-  documented rule IDs.
+- The six `legacy.data.*` rule catalog entries remain an implementation task;
+  this spec-only import does not change `rules/rule-catalog.yml`.
 - PR review loop addressed Gemini's actionable note about config fact ownership:
   `legacy.data.config.v1` no longer lists `ConfigKeyDeclared` as an emitted fact;
   generic config-key evidence remains under existing config rules.
