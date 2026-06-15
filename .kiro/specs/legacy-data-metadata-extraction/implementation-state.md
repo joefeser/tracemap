@@ -26,6 +26,7 @@ Public claim level: hidden
 - Typed DataSet `.designer.cs` presence is corroborating only after XSD-intrinsic indicators are present.
 - Generic config extraction now uses the same safe XML reader as legacy data metadata extraction.
 - Qodo review feedback patched after PR creation: file read failures now normalize to safe XML gaps, config and metadata parse gaps avoid raw parser text, typed DataSet XSD gating requires msdata/msprop-specific evidence, and report output preserves existing stable legacy-data hash labels.
+- Codex review feedback patched after PR creation: EF config `<provider>` elements are now extracted, and XML loading now uses byte streams so `XmlReader` honors declared XML encodings.
 - Public claims remain hidden until redacted validation summaries are intentionally reviewed.
 
 ## Validation
@@ -39,6 +40,7 @@ Public claim level: hidden
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
 - Post-review rerun: `dotnet build`, `dotnet test` (300 tests), sample scan, private-path guard, and `git diff --check` passed after the Qodo fixes.
+- Final post-Codex rerun: `dotnet build`, `dotnet test` (301 tests), sample scan, private-path guard, and `git diff --check` passed.
 
 ## Follow-Ups
 
