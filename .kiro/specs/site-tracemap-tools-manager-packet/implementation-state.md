@@ -1,6 +1,6 @@
 # Implementation State
 
-Status: spec reviewed
+Status: implemented
 Branch: codex/site-manager-packet
 Public claim level: demo
 
@@ -11,6 +11,12 @@ what TraceMap solves for teams using deterministic static evidence. The page is
 intended to connect higher-level readers to current public proof paths without
 upgrading demo evidence into runtime, production, release-safety, or AI impact
 analysis claims.
+
+Implementation is complete on `codex/site-manager-packet`. The page links to
+the current demo result, demo proof upgrades, packet guide, capability matrix,
+roadmap, limitations, outputs, and evidence tiers. Cross-links were added from
+the home packet callout, `/packets/`, `/capabilities/`, and
+`/demo/proof-upgrades/`.
 
 ## Branch
 
@@ -79,6 +85,20 @@ Do not publish:
 - Run `npm run validate` from `site/`.
 - Run desktop and mobile browser sanity checks for `/manager-packet/`.
 
+Completed validation:
+
+- Passed: `git diff --check`.
+- Passed: `npm test` from `site/` with 19 tests passing.
+- Passed: `npm run validate` from `site/`; it built `dist/` and validated 26
+  HTML files, 546 internal references, and 25 sitemap URLs.
+- Passed: desktop browser sanity check at the default 1280px-wide viewport:
+  no page-level horizontal overflow, six reader cards, required proof links
+  present, hero note visible, and no console errors.
+- Passed: mobile browser sanity check at 390px by 844px: no page-level
+  horizontal overflow, six stacked reader cards at about 362px wide, hero note
+  visible, command block contained its own horizontal scroll, and no console
+  errors.
+
 ## Oddities
 
 - `main` is checked out in another local worktree, so this branch was created
@@ -87,6 +107,8 @@ Do not publish:
   work began and is intentionally left untouched.
 - The Kiro wrapper emitted a post-review MCP-settings warning, but the review
   completed with full coverage and actionable findings.
+- Port `4173` was already in use during browser setup. The local site sanity
+  check ran on `PORT=4174 npm run dev`.
 
 ## Follow-Up Items
 
