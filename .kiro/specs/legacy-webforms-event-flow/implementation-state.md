@@ -1,6 +1,6 @@
 # Legacy WebForms Event Flow Implementation State
 
-Status: ready-for-review
+Status: ready-for-review after first Opus/Sonnet feedback pass
 
 Branch/PR:
 
@@ -24,6 +24,11 @@ State Notes:
   artifacts must use generic labels and redacted counts only.
 - Public claim level remains hidden until a checked-in public fixture or
   redacted legacy summary demonstrates the workflow.
+- First review pass found no design blockers. Follow-up edits clarified
+  validation alignment, the existing `legacy.validation.ui-events.v1`
+  relationship, Task 1 traceability, auto-event-wireup MVP scope,
+  `WebFormsEventFlowProjected` minimum safe fields, and implementation-time
+  privacy/determinism tests.
 
 Validation:
 

@@ -2,8 +2,9 @@
 
 ## Implementation Tasks
 
-- [ ] 1. Add rule catalog and model constants. Requirements: 1, 2, 3, 4, 5, 6, 7.
+- [ ] 1. Add rule catalog and model constants. Requirements: 1, 2, 3, 4, 5, 6, 7 (rule/fact model only).
   - [ ] Add WebForms fact types and rule IDs.
+  - [ ] Decide explicitly whether each proposed `WebForms*` fact type is new or reuses an existing inventory/edge fact without overloading semantics.
   - [ ] Document limitations for markup, designer, handler, event-flow, and logic-signal rules.
   - [ ] Bump the relevant extractor version.
 
@@ -18,7 +19,7 @@
   - [ ] Extract static server controls and supported event attributes.
   - [ ] Emit event-binding facts with control ID/type, event name, handler name, file span, rule ID, and evidence tier.
   - [ ] Emit needs-review/gap evidence for unsupported dynamic event wiring.
-  - [ ] Add tests for duplicate controls, malformed markup, and unsafe value suppression.
+  - [ ] Add tests for duplicate controls, deterministic ordering/stable IDs, malformed markup, and unsafe value suppression.
 
 - [ ] 4. Resolve code-behind handlers. Requirements: 3.
   - [ ] Link markup to code-behind and partial class candidates.
@@ -51,13 +52,16 @@
   - [ ] Update legacy validation summary counts.
   - [ ] Update acceptance or adapter-contract docs for new facts.
   - [ ] Keep public claim level hidden until redacted evidence is available.
+  - [ ] Align implementation validation notes with `docs/VALIDATION.md` pinned smoke guidance when scanner behavior changes.
 
 - [ ] 9. Validate. Requirements: 8.
   - [ ] `dotnet build src/dotnet/TraceMap.sln`
   - [ ] `dotnet test src/dotnet/TraceMap.sln`
   - [ ] `python3 -m unittest scripts.tests.test_legacy_codebase_validation`
+  - [ ] If Python adapter tests are required by implementation changes, use the temporary virtual environment pattern from `AGENTS.md`.
   - [ ] `./scripts/check-private-paths.sh`
   - [ ] `git diff --check`
+  - [ ] Negative privacy test proves generated facts/reports do not contain local absolute paths, private sample identifiers, raw SQL, snippets, config values, raw URLs, remotes, or secrets.
   - [ ] Optional ignored local legacy smoke with redacted label/count comparison only.
 
 ## Deferred Follow-Ups

@@ -46,6 +46,12 @@ These should be additive and backward compatible. If an existing fact type can
 carry equivalent evidence without weakening meaning, prefer reuse, but do not
 overload unrelated facts.
 
+Existing coarse legacy validation rule `legacy.validation.ui-events.v1`
+summarizes WinForms/WebForms-style event wiring today. The new precise
+`WebForms*` facts should feed or supersede that coarse summary where available;
+they should not create a second divergent UI-event count with different
+semantics.
+
 ## Proposed Rules
 
 - `legacy.webforms.inventory.v1`
@@ -131,6 +137,12 @@ Resolution order:
 Do not match handlers globally across the repository by name alone. If multiple
 candidate methods remain after page/type scoping, emit an ambiguity gap.
 
+Auto-event-wireup MVP scope is intentionally narrow: only `Page_Load` and
+`Page_Init` may be emitted as review-tier evidence, and only when page/type
+identity is clear. Other lifecycle conventions such as `Page_PreRender` and
+control-name patterns such as `Button1_Click` are out of MVP unless the markup
+declares the handler explicitly.
+
 ## Designer Control Linkage
 
 Parse `.designer.cs` partial classes for field declarations that look like
@@ -176,6 +188,28 @@ Suggested classifications:
 - `NoBackendEvidence`: no downstream backend evidence under full coverage.
 - `UnknownAnalysisGap`: reduced coverage or missing evidence prevents a credible
   conclusion.
+
+Minimum safe properties for `WebFormsEventFlowProjected`:
+
+| Property | Purpose |
+| --- | --- |
+| `pageTypeName` | Safe page/control type identity when known. |
+| `markupFile` | Repo-relative markup path. |
+| `handlerName` | Static handler identifier. |
+| `handlerSymbolId` | Fully qualified method identity when semantic evidence exists. |
+| `controlId` | Markup/designer control identifier when known. |
+| `eventName` | Event attribute or auto-wireup event name. |
+| `flowClassification` | One of the event-flow classifications above. |
+| `terminalSurfaceKind` | Safe terminal evidence kind such as `wcf-operation`, `sql-query`, `http-client`, or `dependency-surface`. |
+| `terminalSurfaceNameHash` | Hash of unsafe terminal names when cleartext is not safe. |
+| `coverage` | Full/reduced coverage label. |
+| `supportingFactIds` | Deterministically ordered supporting fact IDs. |
+| `supportingEdgeIds` | Deterministically ordered supporting edge IDs. |
+| `ruleIds` | Deterministically ordered contributing rule IDs. |
+| `evidenceTiers` | Deterministically ordered contributing evidence tiers. |
+
+Raw SQL, snippets, config values, endpoint addresses, local absolute paths, and
+private repository identifiers must not appear in these properties.
 
 ## Logic Signals
 
@@ -262,6 +296,10 @@ Unit fixtures should cover:
 - handler calling WCF generated client mapped by existing WCF facts,
 - handler reaching SQL/query evidence through existing call/query facts,
 - lifecycle/control-only handler classified as lower-strength UI signal,
+- duplicate controls and duplicate handler bindings produce deterministic
+  ordering and stable fact IDs,
+- facts and generated reports contain no local absolute paths, private sample
+  identifiers, raw SQL, source snippets, raw URLs, config values, or secrets,
 - no raw local paths, private paths, source snippets, config values, or raw SQL
   in facts/reports.
 
@@ -274,6 +312,11 @@ python3 -m unittest scripts.tests.test_legacy_codebase_validation
 ./scripts/check-private-paths.sh
 git diff --check
 ```
+
+Also follow `docs/VALIDATION.md` for pinned smoke guidance when scanner behavior
+changes. If Python adapter tests are required by a later implementation slice,
+use the temporary virtual environment pattern from `AGENTS.md` rather than a
+global interpreter install.
 
 Ignored local smoke validation may use private legacy samples, but only redacted
 label/count summaries may be committed.
