@@ -78,5 +78,10 @@
     "path": "/demo/start-here/",
     "changefreq": "monthly",
     "priority": "0.8"
+  },
+  {
+    "path": "/packets/",
+    "changefreq": "monthly",
+    "priority": "0.8"
   }
 ]
