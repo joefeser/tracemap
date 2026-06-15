@@ -50,6 +50,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/capabilities/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/docs/",
     "changefreq": "monthly",
     "priority": "0.8"
