@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -290,22 +291,29 @@ public static partial class LegacyWcfExtractor
             _ => "Metadata"
         };
         var sourceFormat = extension.TrimStart('.');
-        var metadataHash = SafeFileHash(fullPath);
         var folder = ServiceReferenceFolderLabel(file.RelativePath);
         try
         {
+            var metadataHash = SafeFileHash(fullPath);
             var document = LoadSafeXml(fullPath);
-            var localMetadataFileNames = SafeMetadataBasenames(document)
-                .OrderBy(value => value, StringComparer.Ordinal)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            var generatedCodeFileName = SafeGeneratedCodeBasenames(document)
-                .OrderBy(value => value, StringComparer.Ordinal)
-                .FirstOrDefault() ?? string.Empty;
-            var remoteSourceHash = UrlLikeValues(document)
-                .OrderBy(value => value, StringComparer.Ordinal)
-                .Select(value => FactFactory.Hash(value, 32))
-                .FirstOrDefault() ?? string.Empty;
+            var isSvcMap = extension.Equals(".svcmap", StringComparison.OrdinalIgnoreCase);
+            var localMetadataFileNames = isSvcMap
+                ? SafeMetadataBasenames(document)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+                : Array.Empty<string>();
+            var generatedCodeFileName = isSvcMap
+                ? SafeGeneratedCodeBasenames(document)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .FirstOrDefault() ?? string.Empty
+                : string.Empty;
+            var remoteSourceHash = isSvcMap
+                ? UrlLikeValues(document)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .Select(value => FactFactory.Hash(value, 32))
+                    .FirstOrDefault() ?? string.Empty
+                : string.Empty;
 
             var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -541,11 +549,20 @@ public static partial class LegacyWcfExtractor
                 continue;
             }
 
-            if (candidate.RequiresMetadata && connectedMetadata
+            var connectedMetadataHashes = connectedMetadata
+                .Select(MetadataHash)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var connectedMetadataContracts = connectedMetadata
                 .Select(fact => fact.Properties.GetValueOrDefault("contractName", string.Empty))
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Distinct(StringComparer.Ordinal)
-                .Count() > 1)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            if (candidate.RequiresMetadata
+                && (connectedMetadataContracts.Length > 1 || connectedMetadataHashes.Length > 1))
             {
                 facts.Add(FactFactory.Create(
                     manifest,
@@ -559,9 +576,11 @@ public static partial class LegacyWcfExtractor
                     {
                         ["classification"] = "AmbiguousWcfMetadataContractMapping",
                         ["clientContractName"] = clientContractName,
-                        ["message"] = "Multiple connected WCF metadata contracts matched the normalized operation; TraceMap did not choose an arbitrary winner.",
+                        ["metadataHashCount"] = connectedMetadataHashes.Length.ToString(),
+                        ["message"] = "Multiple connected WCF metadata contracts or metadata identities matched the normalized operation; TraceMap did not choose an arbitrary winner.",
                         ["normalizedOperationName"] = candidate.NormalizedOperationName,
-                        ["originalOperationName"] = candidate.OriginalOperationName
+                        ["originalOperationName"] = candidate.OriginalOperationName,
+                        ["metadataContractCount"] = connectedMetadataContracts.Length.ToString()
                     }));
                 continue;
             }
@@ -589,10 +608,8 @@ public static partial class LegacyWcfExtractor
                 var mappingKind = matchingEndpoints.Length > 0
                     ? candidate.ConfigMappingKind
                     : candidate.NoEndpointMappingKind;
-                var metadataHash = candidate.MetadataHash
-                    ?? connectedMetadata.Select(fact => fact.Properties.GetValueOrDefault("metadataHash", string.Empty)).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
-                    ?? string.Empty;
-                var logicalKey = string.Join("|", clientContractName, contractName, candidate.NormalizedOperationName, metadataHash);
+                var metadataHash = candidate.MetadataHash ?? string.Empty;
+                var logicalKey = string.Join("|", clientContractName, contractName, candidate.NormalizedOperationName);
                 if (!emittedLogicalMappings.Add(logicalKey))
                 {
                     continue;
@@ -618,9 +635,12 @@ public static partial class LegacyWcfExtractor
                 {
                     properties["metadataHash"] = metadataHash;
                 }
+                var metadataSupportFacts = string.IsNullOrWhiteSpace(metadataHash)
+                    ? Array.Empty<CodeFact>()
+                    : connectedMetadata;
                 var supportingFactIds = new[] { client.FactId, operation.Fact.FactId }
                     .Concat(operation.SupportingFactIds)
-                    .Concat(connectedMetadata.Select(fact => fact.FactId))
+                    .Concat(metadataSupportFacts.Select(fact => fact.FactId))
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray();
@@ -724,7 +744,7 @@ public static partial class LegacyWcfExtractor
                     "ExactOriginal",
                     1,
                     false,
-                    exactMetadata.Select(MetadataHash).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)),
+                    null,
                     "config-contract-and-operation-name",
                     "operation-name-only"));
             }
@@ -1126,7 +1146,10 @@ public static partial class LegacyWcfExtractor
 
     private static string SafeFileHash(string fullPath)
     {
-        return FactFactory.Hash(File.ReadAllText(fullPath), 32);
+        using var stream = File.OpenRead(fullPath);
+        var bytes = SHA256.HashData(stream);
+        var hex = Convert.ToHexString(bytes).ToLowerInvariant();
+        return hex[..32];
     }
 
     private static string ServiceReferenceFolderLabel(string relativePath)
@@ -1138,7 +1161,7 @@ public static partial class LegacyWcfExtractor
     private static IEnumerable<string> SafeMetadataBasenames(XDocument document)
     {
         return SafeDocumentValues(document)
-            .Select(Path.GetFileName)
+            .Select(SafeBasename)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!)
             .Where(value =>
@@ -1154,10 +1177,27 @@ public static partial class LegacyWcfExtractor
     private static IEnumerable<string> SafeGeneratedCodeBasenames(XDocument document)
     {
         return SafeDocumentValues(document)
-            .Select(Path.GetFileName)
+            .Select(SafeBasename)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!)
             .Where(value => Path.GetExtension(value).Equals(".cs", StringComparison.OrdinalIgnoreCase))!;
+    }
+
+    private static string SafeBasename(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || value.Contains("://", StringComparison.Ordinal)
+            || value.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value.Trim().Replace('\\', '/');
+        var lastSlash = normalized.LastIndexOf('/');
+        var fileName = lastSlash >= 0 ? normalized[(lastSlash + 1)..] : normalized;
+        return fileName.Contains(':', StringComparison.Ordinal)
+            ? string.Empty
+            : fileName;
     }
 
     private static IEnumerable<string> UrlLikeValues(XDocument document)

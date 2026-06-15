@@ -316,10 +316,10 @@ public sealed class LegacyWcfExtractorTests
         Directory.CreateDirectory(serviceRef);
         File.WriteAllText(Path.Combine(serviceRef, "Reference.svcmap"), """
             <ReferenceGroup>
-              <MetadataSource Address="https://services.example.test/Rating.svc?wsdl" SourceId="/private/source/Rating.wsdl" />
+              <MetadataSource Address="https://services.example.test/Rating.svc?wsdl" SourceId="C:\Users\operator\Rating.wsdl" />
               <MetadataFile FileName="Rating.wsdl" />
               <MetadataFile FileName="schema.xsd" />
-              <GeneratedFile FileName="/private/generated/Reference.cs" />
+              <GeneratedFile FileName="C:\Users\operator\Reference.cs" />
             </ReferenceGroup>
             """);
 
@@ -332,6 +332,7 @@ public sealed class LegacyWcfExtractorTests
         var serialized = SerializeProperties(result.Facts);
         Assert.DoesNotContain("services.example.test", serialized);
         Assert.DoesNotContain("/private", serialized);
+        Assert.DoesNotContain("Users", serialized);
         Assert.Contains("metadataSourceHash=", serialized);
     }
 
@@ -351,6 +352,10 @@ public sealed class LegacyWcfExtractorTests
         Assert.Equal("Rate", operation.Properties.GetValueOrDefault("operationName"));
         Assert.Equal("IRatingService", operation.Properties.GetValueOrDefault("portTypeName"));
         Assert.Equal("wsdl", operation.Properties.GetValueOrDefault("sourceFormat"));
+        var metadata = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WcfServiceReferenceMetadataDeclared
+            && fact.Properties.GetValueOrDefault("metadataKind") == "Wsdl");
+        Assert.False(metadata.Properties.ContainsKey("metadataSourceHash"));
         var serialized = SerializeProperties(result.Facts);
         Assert.DoesNotContain("secret.example.test", serialized);
         Assert.DoesNotContain("soapAction", serialized);
@@ -372,6 +377,24 @@ public sealed class LegacyWcfExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(repo, output));
 
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWcfMetadata
+            && fact.Properties.GetValueOrDefault("classification") == "MalformedWcfMetadata");
+    }
+
+    [Fact]
+    public void Extract_emits_malformed_metadata_gap_when_metadata_file_disappears_after_inventory()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Service References", "Rating"));
+
+        var facts = LegacyWcfExtractor.Extract(
+            repo,
+            Manifest(),
+            [new FileInventoryItem("Service References/Rating/Missing.svcmap", "ServiceReferenceMetadata", 0)]);
+
+        Assert.Contains(facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyWcfMetadata
             && fact.Properties.GetValueOrDefault("classification") == "MalformedWcfMetadata");
@@ -511,6 +534,30 @@ public sealed class LegacyWcfExtractorTests
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
     }
 
+    [Fact]
+    public void Scan_emits_metadata_ambiguity_when_duplicate_connected_wsdl_identities_match_normalized_operation()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        var serviceRef = Path.Combine(repo, "Service References", "Rating");
+        Directory.CreateDirectory(repo);
+        WriteContract(repo, "Sample.Contracts", "Rate");
+        WriteGeneratedClient(repo, "Sample.Contracts", "ClientBase<Sample.Contracts.IRatingService>", "RateAsync");
+        WriteClientEndpoint(repo);
+        WriteWsdl(serviceRef, "IRatingService", "Rate");
+        WriteWsdl(serviceRef, "IRatingService", "Rate", fileName: "Rating.Copy.wsdl", targetNamespace: "urn:copy");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWcfMapping
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousWcfMetadataContractMapping"
+            && fact.Properties.GetValueOrDefault("metadataHashCount") == "2");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
+    }
+
     private static void WriteContract(string repo, string contractNamespace)
     {
         WriteContract(repo, contractNamespace, "Rate");
@@ -582,8 +629,13 @@ public sealed class LegacyWcfExtractorTests
 
     private static void WriteWsdl(string serviceRef, string portTypeName, string operationName, string targetNamespace = "urn:safe")
     {
+        WriteWsdl(serviceRef, portTypeName, operationName, "Rating.wsdl", targetNamespace);
+    }
+
+    private static void WriteWsdl(string serviceRef, string portTypeName, string operationName, string fileName, string targetNamespace = "urn:safe")
+    {
         Directory.CreateDirectory(serviceRef);
-        File.WriteAllText(Path.Combine(serviceRef, "Rating.wsdl"), $$"""
+        File.WriteAllText(Path.Combine(serviceRef, fileName), $$"""
             <definitions xmlns="http://schemas.xmlsoap.org/wsdl/"
                          xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
                          targetNamespace="{{targetNamespace}}">
@@ -604,6 +656,24 @@ public sealed class LegacyWcfExtractorTests
               </service>
             </definitions>
             """);
+    }
+
+    private static ScanManifest Manifest()
+    {
+        return new ScanManifest(
+            "scan-test",
+            "repo",
+            null,
+            null,
+            "abc123",
+            ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch,
+            "Level3SyntaxAnalysis",
+            "NotRun",
+            [],
+            [],
+            [],
+            []);
     }
 
     private static string SerializeProperties(IEnumerable<CodeFact> facts)
