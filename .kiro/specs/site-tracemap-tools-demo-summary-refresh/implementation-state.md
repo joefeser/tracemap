@@ -1,19 +1,23 @@
 # Site Demo Summary Refresh Implementation State
 
-Status: spec-ready
-Branch: codex/spec-site-demo-summary-refresh
+Status: implemented
+Branch: codex/site-demo-summary-refresh
 Target PR base: main
 Public claim level: hidden
 
 ## Summary
 
-This spec queues a future site/tooling phase to reduce drift between generated
-public demo summaries and static site copy. It proposes a committed
-public-safe fixture refreshed from bounded `./scripts/demo-public.sh` output,
-plus validation that rejects unsafe paths and raw artifacts.
+Implemented the conservative fixture-and-validation approach. The site now has
+a committed public-safe demo fixture at
+`site/src/_data/demo-public-summary.json`, an explicit maintainer refresh
+command at `site/scripts/refresh-demo-summary.mjs`, and cheap validation wired
+into `site/scripts/validate.mjs` through
+`site/scripts/validate-demo-summary.mjs`.
 
-This branch is spec-only. It does not implement the refresh command, fixture,
-site page changes, or validation wiring.
+The implementation keeps the refresh mechanism hidden: no public page claims
+automation as a product feature. The site remains static, with no backend,
+runtime service, client-side local artifact fetch, or build-time dependency on a
+fresh local demo run.
 
 ## Scope Decisions
 
@@ -44,6 +48,22 @@ site page changes, or validation wiring.
 - Do not read or publish raw generated internals such as scans, facts, SQLite
   indexes, combined SQLite files, manifests, logs, copied reports, raw source,
   raw SQL, config values, local paths, raw remotes, or private identities.
+- The refresh command reads `demo-summary.json`, requires `demo-summary.md`,
+  checks approved public files using the existing public-demo sentinel shape,
+  validates `portfolio-manifest.json` relative `indexPath` values, maps known
+  section names to stable IDs, and writes deterministic JSON with a trailing
+  newline.
+- The committed fixture preserves status, classification, evidence tier, rule
+  IDs, coverage labels, counts, reasons, public-safe artifacts, source summary
+  version, and the hashed output-root label.
+- `sample-scans` raw `scans/.../report.md` paths are omitted from committed
+  `artifacts`; the fixture records only `localOnlyArtifactFamilies:
+  ["scan-reports"]`.
+- The site validator extracts hard-coded values from the affected HTML sources
+  and compares section statuses, coverage labels, evidence tiers, counts, and
+  public-safe artifact families to the fixture.
+- The fixture intentionally remains under `site/src/_data/`; the build test
+  verifies underscore directories are excluded from `site/dist/`.
 
 ## Affected Future Pages
 
@@ -84,45 +104,69 @@ site page changes, or validation wiring.
 
 ## Validation Completed
 
-- Passed: Kiro Opus spec review with
-  `claude-opus-4.8`; patched the blocking and important findings.
-- Passed with reduced review-tool coverage: Kiro Sonnet spec review with
-  `claude-sonnet-4.6`; patched the blocking and important findings.
+- Passed: `./scripts/demo-public.sh .tracemap-demo`; regenerated current public
+  demo output for fixture refresh.
+- Passed: `node scripts/refresh-demo-summary.mjs ../.tracemap-demo` from
+  `site/`; wrote `site/src/_data/demo-public-summary.json`.
+- Passed: `npm test` from `site/` with 32 tests passing.
+- Passed: `npm run validate` from `site/`; it built `dist/`, validated the demo
+  summary fixture and affected pages, then validated 27 HTML files, 605
+  internal references, and 26 sitemap URLs.
 - Passed: `git diff --check`.
-- Passed: `npm test` from `site/` with 19 tests passing.
-- Passed: `npm run validate` from `site/`; it built `dist/` and validated 27
-  HTML files, 605 internal references, and 26 sitemap URLs.
+- Passed: `./scripts/check-private-paths.sh`.
+- Passed browser sanity checks on `http://localhost:4174/demo/proof-upgrades/`
+  and `/demo/proof-assets/` at 1440x1000 and 390x844: updated text present, no
+  horizontal overflow, visible hero, and no console errors.
+- PR review loop: Gemini returned five actionable robustness comments after PR
+  creation. Patched all five by wrapping portfolio manifest parsing with clearer
+  context, limiting raw-folder skipping to output-root directories, validating
+  readable pages individually, scoping proof-assets count extraction to the
+  relevant article cards, and tightening article extraction. Added focused tests
+  for invalid portfolio manifest JSON and nested `reports/combined/` collection.
+- PR review loop: Qodo marked its initial parse/count findings resolved and
+  raised an optional rule ID contract mismatch. Patched the rule ID check and
+  added a focused test. Codex raised an actionable P2 that public report bodies
+  could still contain raw repository remotes because refresh validation excluded
+  those categories; patched the public demo helper to scrub raw remote fields
+  from generated report JSON, tightened both demo sentinel and refresh validation
+  to reject raw remotes and `.git` paths, regenerated `.tracemap-demo`, and
+  refreshed the committed fixture. Sourcery reported a weekly diff-character
+  rate limit. Macroscope finished as skipping.
 
 Core scanner/reducer suites are intentionally deferred because this branch only
-adds site spec files.
+adds site/tooling/docs changes and runs the public demo as the source fixture.
 
 ## Oddities
 
 - The local worktree had an unrelated untracked `c-sharp-sample-repos/`
   directory before this branch's spec work. It is intentionally left untouched.
+- The requested repo checkout had `main` checked out in a sibling site
+  worktree, so this branch was created directly from `origin/main` in the
+  delivery worktree.
+- The earlier ignored `.tracemap-demo` output was stale and still showed
+  deferred proof-upgrade rows. Reran `./scripts/demo-public.sh .tracemap-demo`
+  before refreshing the committed fixture.
+- A first local demo run briefly produced `paths-and-reverse.reversePaths=29`
+  and `reverseRoots=7`, but the regenerated scrubbed public demo output settled
+  on `reversePaths=25` and `reverseRoots=6`. The fixture and pages now validate
+  against the regenerated 25/6 values.
+- Generated public report JSON previously included raw `remoteUrl` fields. The
+  public demo helper now removes raw remote fields from report JSON before
+  `demo-summary.*` is written and before the public sentinel runs.
+- Added explicit `portfolio-manifest.json` and `reports/portfolio/**`
+  references to proof pages so portfolio artifact families are validated
+  against the fixture instead of only described in prose.
 - The Opus review completed with full coverage, but the Kiro wrapper emitted a
   post-review MCP-settings warning and one failed tool-parameter retry. The
   review text was still returned successfully.
 - The Sonnet review completed with reduced coverage because a shell command was
   denied by Kiro's non-interactive tool policy. The review still produced
   concrete findings, and those findings were patched.
-- During validation, the shared checkout appeared on
-  `codex/spec-site-incident-review-use-case` while these spec files were still
-  untracked. Switched back to `codex/spec-site-demo-summary-refresh` before any
-  staging or commit work and rebased onto the current `origin/main`.
-- PR review loop found actionable Qodo and Gemini feedback after PR creation:
-  clarify the fixture example's nested source metadata and explicitly require
-  `/demo/proof-assets/` hard-coded count validation. Patched both in the
-  follow-up commit.
-- PR review loop also found actionable Codex feedback that current
-  `sample-scans` source rows emit `scans/.../report.md` paths. Patched the spec
-  to require omitting raw scan paths from public fixture artifacts and,
-  optionally, recording only a generic local-only family label.
 
 ## Follow-Ups For Implementation
 
-- Add the fixture contract and refresh command in a future PR.
-- Wire fixture validation into the existing site validation path.
-- Update or validate all affected pages against the fixture.
-- Keep browser sanity checks scoped to future page layout or interaction
+- Consider moving public report remote scrubbing from `scripts/demo-public.sh`
+  into the report writers themselves if future specs want all generated report
+  JSON, not only public demo output, to omit raw remotes by default.
+- Keep browser sanity checks scoped to future page layout or visible site-copy
   changes.
