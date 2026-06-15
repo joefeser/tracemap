@@ -27,7 +27,11 @@ internal static class LegacyDataXml
         }
         catch (DecoderFallbackException ex)
         {
-            throw new LegacyDataXmlException("MalformedLegacyDataMetadata", ex.Message, ex);
+            throw new LegacyDataXmlException("MalformedLegacyDataMetadata", "metadata document could not be decoded safely", ex);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new LegacyDataXmlException("MalformedLegacyDataMetadata", "metadata document could not be read safely", ex);
         }
 
         var settings = new XmlReaderSettings
@@ -58,11 +62,11 @@ internal static class LegacyDataXml
             || ex.Message.Contains("entity", StringComparison.OrdinalIgnoreCase)
             || ex.Message.Contains("XmlResolver", StringComparison.OrdinalIgnoreCase))
         {
-            throw new LegacyDataXmlException("LegacyDataParserSecurityRejected", ex.Message, ex);
+            throw new LegacyDataXmlException("LegacyDataParserSecurityRejected", "XML parser rejected DTD, entity, or unsafe XML behavior", ex);
         }
         catch (XmlException ex)
         {
-            throw new LegacyDataXmlException("MalformedLegacyDataMetadata", ex.Message, ex);
+            throw new LegacyDataXmlException("MalformedLegacyDataMetadata", "XML parser rejected malformed metadata", ex);
         }
     }
 }

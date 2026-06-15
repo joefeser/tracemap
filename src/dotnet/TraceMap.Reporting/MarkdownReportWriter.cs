@@ -374,8 +374,13 @@ public static class MarkdownReportWriter
             fact.Properties.GetValueOrDefault("connectionName"),
             fact.Properties.GetValueOrDefault("typeName"),
             fact.Properties.GetValueOrDefault("targetName"),
+            HashLabel(fact, "entityNameHash", "entity"),
+            HashLabel(fact, "storageObjectHash", "storage"),
+            HashLabel(fact, "columnHash", "column"),
+            HashLabel(fact, "connectionNameHash", "connection"),
+            HashLabel(fact, "typeNameHash", "type"),
             fact.ContractElement,
-            fact.TargetSymbol,
+            IsLegacyHashToken(fact.TargetSymbol) ? fact.TargetSymbol : null,
             "hash-only");
         var role = FirstPresentValue(
             fact.Properties.GetValueOrDefault("entityKind"),
@@ -387,7 +392,7 @@ public static class MarkdownReportWriter
             fact.Properties.GetValueOrDefault("inventoryKind"),
             fact.FactType);
         var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
-        return $"- `{fact.FactType}` `{DisplayCodeValue(metadataKind)}` `{DisplayIdentifierValue(label, IdentifierKind.Column, "hash-only")}` role `{DisplayCodeValue(role)}` rule `{fact.RuleId}` ({fact.EvidenceTier}) at `{path}:{fact.Evidence.StartLine}`";
+        return $"- `{fact.FactType}` `{DisplayCodeValue(metadataKind)}` `{DisplayLegacyDataLabel(label)}` role `{DisplayCodeValue(role)}` rule `{fact.RuleId}` ({fact.EvidenceTier}) at `{path}:{fact.Evidence.StartLine}`";
     }
 
     private static bool IsSqlShapeQueryPattern(CodeFact fact)
@@ -398,6 +403,37 @@ public static class MarkdownReportWriter
     private static string FirstPresentValue(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+    }
+
+    private static string? HashLabel(CodeFact fact, string key, string prefix)
+    {
+        return fact.Properties.TryGetValue(key, out var value) && IsHexHash(value)
+            ? $"{prefix}-hash:{value}"
+            : null;
+    }
+
+    private static string DisplayLegacyDataLabel(string value)
+    {
+        return IsLegacyHashToken(value)
+            ? DisplayCodeValue(value)
+            : DisplayIdentifierValue(value, IdentifierKind.Column, "hash-only");
+    }
+
+    private static bool IsLegacyHashToken(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var index = value.IndexOf("-hash:", StringComparison.Ordinal);
+        return index > 0 && IsHexHash(value[(index + "-hash:".Length)..]);
+    }
+
+    private static bool IsHexHash(string value)
+    {
+        return value.Length is >= 8 and <= 64
+            && value.All(ch => ch is >= '0' and <= '9' or >= 'a' and <= 'f');
     }
 
     private static string FormatSqlShapeQueryPattern(CodeFact fact)
