@@ -206,6 +206,9 @@ class LegacyCodebaseValidationTests(unittest.TestCase):
             {},
             [
                 {"factType": "WcfClientEndpointDeclared"},
+                {"factType": "WcfServiceReferenceMetadataDeclared"},
+                {"factType": "WcfMetadataOperationDeclared"},
+                {"factType": "AnalysisGap", "properties": {"classification": "MalformedWcfMetadata"}},
                 {"factType": "WcfServiceReferenceMapping"},
                 {"factType": "WcfServiceReferenceMapping"},
                 {"factType": "Other"},
@@ -213,6 +216,9 @@ class LegacyCodebaseValidationTests(unittest.TestCase):
         )
 
         self.assertEqual(1, counts["WcfClientEndpointDeclared"])
+        self.assertEqual(1, counts["WcfServiceReferenceMetadataDeclared"])
+        self.assertEqual(1, counts["WcfMetadataOperationDeclared"])
+        self.assertEqual(1, counts["AnalysisGap:MalformedWcfMetadata"])
         self.assertEqual(2, counts["WcfServiceReferenceMapping"])
 
     def test_wcf_rule_ids_are_included_when_wcf_counts_exist(self) -> None:
@@ -262,6 +268,7 @@ class LegacyCodebaseValidationTests(unittest.TestCase):
         self.assertEqual(3, summary.facts_count)
         self.assertEqual(1, summary.analysis_gap_count)
         self.assertEqual(2, summary.wcf_fact_counts["WcfServiceReferenceMapping"])
+        self.assertIn("AnalysisGap:MalformedWcfMetadata", summary.wcf_fact_counts)
         self.assertIn("facts.ndjson parsing skipped", " ".join(summary.limitations))
 
 
