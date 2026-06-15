@@ -33,3 +33,7 @@ validation, limitations, and demo.
   rendered directly as site pages instead of linked to GitHub.
 - Consider generated report examples once demo artifacts are stable enough for
   public publishing.
+- Blog/editorial ideas are tracked in
+  `.kiro/specs/site-tracemap-tools-blog-runway/`.
+- Public artifact examples and use-case framing are tracked in
+  `.kiro/specs/site-tracemap-tools-examples/`.

@@ -1,0 +1,80 @@
+<p>
+  A lot of review work starts with a reasonable question: if this
+  contract, endpoint, package, DTO, schema, or configuration changes,
+  what should we look at? The hard part is that the answer often gets
+  assembled by hand. Someone searches the repository, opens a few
+  projects, follows names through code, writes down paths, and tries to
+  remember which parts were certain and which parts were guesses.
+</p>
+
+<p>
+  That can work once. It does not scale well when the system is large,
+  when the code does not build cleanly, when multiple repositories are
+  involved, or when the review has to be handed to someone else. The
+  result is usually a mix of useful knowledge and hidden uncertainty.
+  TraceMap is meant to make that uncertainty visible.
+</p>
+
+<h2>TraceMap turns the question into an evidence packet.</h2>
+
+<p>
+  A TraceMap scan emits a manifest, facts, a SQLite index, a Markdown
+  report, and analyzer logs. Those artifacts keep the repo name, commit
+  SHA, scanner version, rule IDs, evidence tiers, file paths, line
+  spans, coverage labels, and known gaps together. The point is not to
+  make review automatic. The point is to make the starting point
+  inspectable.
+</p>
+
+<p>
+  That matters for managers because it changes the shape of the
+  conversation. Instead of asking whether a summary sounds plausible,
+  the team can ask what evidence was found, what rule produced it, what
+  coverage was available, and which gaps still need human judgment.
+</p>
+
+<h2>Manual indexing becomes repeatable review work.</h2>
+
+<p>
+  TraceMap does not replace engineers reading code. It reduces the
+  repeated indexing work that happens before useful review can begin.
+  Reviewers can start from a packet of static facts instead of a blank
+  search box or a spreadsheet built during the last incident.
+</p>
+
+<p>
+  When coverage is reduced, TraceMap says so. A failed project load is
+  not reported as a clean repository. Syntax, config, package, SQL, and
+  project evidence can still be useful, but it is labeled differently
+  from compiler-resolved semantic evidence. That distinction keeps
+  review honest when the codebase is messy.
+</p>
+
+<h2>Handoff gets easier because the evidence travels.</h2>
+
+<p>
+  Engineering work often crosses team boundaries. A reviewer may need
+  to brief a manager, a platform team, a service owner, or an external
+  group. TraceMap gives that handoff something concrete: files, spans,
+  rules, tiers, hashes, reports, and gaps. The next person does not
+  have to trust a memory of the investigation. They can inspect the
+  same static evidence and decide where to dig deeper.
+</p>
+
+<p>
+  That is the practical value: fewer one-off maps, fewer unverifiable
+  summaries, and more review decisions that can be revisited when the
+  contract changes, the scan coverage improves, or the release scope
+  moves.
+</p>
+
+<h2>The boundary is intentional.</h2>
+
+<p>
+  TraceMap is not runtime proof. It does not know production traffic,
+  deployment state, feature flags, customer usage, or whether a release
+  should be approved. It is deterministic static analysis designed to
+  support engineering judgment with evidence. That narrow claim is what
+  makes the output useful: every conclusion should point back to a
+  rule, a tier, a file span, a commit, and a documented limitation.
+</p>

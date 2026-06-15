@@ -1,0 +1,87 @@
+<p>
+  Most engineering teams eventually hit the same shape of problem.
+  A contract changes. A service boundary moves. A package upgrade
+  touches more code than expected. Someone asks what depends on it,
+  which files need review, and whether the repository gives enough
+  evidence to trust the answer.
+</p>
+
+<p>
+  The usual first move is manual indexing. Search for a name. Follow a
+  few references. Check routes, DTOs, project files, config, SQL, and
+  package metadata. Open another repository. Keep notes. Decide which
+  matches are real evidence and which ones are just similar strings.
+  That work is valuable, but it is easy for the reasoning to disappear
+  into a spreadsheet, a chat thread, or one person's memory.
+</p>
+
+<h2>The hard part is not finding text. It is preserving evidence.</h2>
+
+<p>
+  Broad search can find possible matches, but it does not tell you why
+  a match matters. It does not separate compiler-resolved symbol
+  evidence from structural framework evidence. It does not preserve
+  known gaps when a project fails to load. It does not automatically
+  say which conclusion came from which rule.
+</p>
+
+<p>
+  TraceMap exists to make that review work repeatable. A scan records
+  facts with rule IDs, evidence tiers, file paths, line spans, commit
+  SHAs, extractor versions, and documented limitations. If semantic
+  analysis fails, the scan does not pretend the repo is clean. It
+  continues with syntax and structural evidence, emits gaps, and marks
+  coverage as reduced.
+</p>
+
+<h2>The reducer keeps impact language honest.</h2>
+
+<p>
+  Impact review is where wording matters. It is tempting to say a
+  change impacts a service because a name appears nearby. TraceMap
+  keeps that narrower. The reducer compares contract deltas against
+  indexed evidence and labels outcomes based on what the scan can
+  actually support.
+</p>
+
+<p>
+  A compiler-resolved property access is different from a syntax-only
+  clue. A no-match result under full coverage is different from a
+  no-match result under reduced coverage. A high fan-out name like
+  <code>status</code> may need review instead of a stronger impact
+  claim. The goal is not dramatic certainty. The goal is evidence that
+  reviewers can inspect.
+</p>
+
+<h2>The useful artifact is the audit trail.</h2>
+
+<p>
+  TraceMap emits machine-readable facts and indexes, plus a
+  human-readable report. That means another reviewer can ask: what repo
+  and commit were scanned, which rule emitted this fact, what tier was
+  it, where is the file span, what scanner version produced it, and
+  what limitations apply?
+</p>
+
+<p>
+  That audit trail is the reason the project exists. It turns
+  dependency review from an unrepeatable indexing exercise into a
+  packet of static evidence. It helps teams hand off context, revisit
+  decisions, and be honest about uncertainty.
+</p>
+
+<h2>The boundary is part of the design.</h2>
+
+<p>
+  TraceMap is not AI impact analysis. The core scanner and reducer do
+  not use LLM calls, embeddings, vector databases, or prompt-based
+  classification. TraceMap is also not runtime proof or release
+  approval. It cannot know production traffic, deployment state, or
+  whether a code path executes in a given environment.
+</p>
+
+<p>
+  It does one narrower job: produce deterministic static evidence for
+  review. That is enough to make a hard class of engineering questions
+  easier to discuss, easier to hand off, and easier to verify.
+</p>
