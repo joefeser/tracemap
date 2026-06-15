@@ -1929,3 +1929,18 @@ rules:
     limitations:
       - Truncated reports are incomplete by construction and must not be interpreted as comprehensive.
       - Omitted counts and retained rows are deterministic for selected scopes and caps, but not evidence of lower importance.
+
+  - id: package.upgrade.impact.v1
+    name: Package upgrade static impact report
+    description: Matches package-delta.v1 changes against indexed PackageReferenced/package-config static evidence in single or combined TraceMap indexes.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - PackageImpactFinding
+      - PackageImpactGap
+    limitations:
+      - Package findings are static package declaration evidence only and do not prove package restore, installed versions, transitive dependency resolution, runtime loading, deployment, or API compatibility.
+      - Lockfile, import/usage, and package-call evidence is adapter-dependent and is only included when deterministic package identity facts with documented limitations exist.
+      - Version values are descriptive and safely rendered or hashed; TraceMap does not interpret semantic versioning, changelog impact, or compatibility.
+      - Missing package evidence under reduced coverage is an analysis gap, not proof that a package is absent.
+      - Exact package-name matching can miss aliases, relocated packages, shaded dependencies, generated manifests, imported build files, and dynamically declared dependencies.
+      - No vulnerability database, registry, changelog, license, LLM, embedding, vector, or prompt-based analysis is used.

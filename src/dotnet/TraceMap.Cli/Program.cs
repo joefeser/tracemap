@@ -47,10 +47,11 @@ public static class TraceMapCommand
                 "reverse" => ReverseHelp(),
                 "release-review" => ReleaseReviewHelp(),
                 "portfolio" => PortfolioHelp(),
+                "package-impact" => PackageImpactHelp(),
                 "contract-diff" => ContractDiffHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "contract-diff" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "contract-diff" ? 0 : 1;
         }
 
         try
@@ -72,6 +73,7 @@ public static class TraceMapCommand
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
+                "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
                 "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
@@ -729,6 +731,60 @@ public static class TraceMapCommand
         return 0;
     }
 
+    private static async Task<int> RunPackageImpactAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: package-impact requires --index <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--package-delta", out var packageDeltaPath) || string.IsNullOrWhiteSpace(packageDeltaPath))
+        {
+            await error.WriteLineAsync("error: package-impact requires --package-delta <path>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: package-impact requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: package-impact --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await PackageUpgradeImpactReporter.WriteAsync(
+            new PackageImpactOptions(
+                indexPath,
+                packageDeltaPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--package"),
+                values.GetValueOrDefault("--ecosystem"),
+                ParsePositiveInt(values, "--max-findings", 100),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                values.HasFlag("--exit-code")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap package-impact completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
+        await output.WriteLineAsync($"Delta changes: {result.Report.Summary.SelectedChangeCount}");
+        await output.WriteLineAsync($"Package evidence: {result.Report.Summary.PackageEvidenceCount}");
+        await output.WriteLineAsync($"Findings: {result.Report.Summary.FindingCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.HasFindings ? 1 : 0;
+    }
+
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
@@ -1041,6 +1097,7 @@ public static class TraceMapCommand
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
+              tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -1059,6 +1116,7 @@ public static class TraceMapCommand
               reverse   Trace reverse static reachability from dependency surfaces.
               release-review Assemble a deterministic before/after release evidence packet.
               portfolio Summarize dependency evidence across many TraceMap indexes.
+              package-impact Report static package upgrade evidence from indexed package declarations.
             """;
     }
 
@@ -1367,6 +1425,34 @@ public static class TraceMapCommand
 
             Outputs:
               portfolio-report.md and/or portfolio-report.json
+            """;
+    }
+
+    private static string PackageImpactHelp()
+    {
+        return """
+            Usage:
+              tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --index <path>             TraceMap single-language or combined index.
+              --package-delta <path>     package-delta.v1 JSON file.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --source <label>           Filter to one source label.
+              --package <name>           Filter delta changes by package name.
+              --ecosystem <name>         Filter delta changes by ecosystem.
+              --max-findings <n>         Finding rows. Default: 100.
+              --max-gaps <n>             Gap rows. Default: 1000.
+              --exit-code                Return exit code 1 when static package evidence findings are present.
+
+            Delta schema:
+              { "version": "package-delta.v1", "changes": [{ "id": "pkg-1", "packageName": "Newtonsoft.Json", "ecosystem": "nuget", "changeType": "updated", "oldVersion": "13.0.1", "newVersion": "13.0.3" }] }
+
+            Outputs:
+              package-impact-report.md and/or package-impact-report.json
             """;
     }
 

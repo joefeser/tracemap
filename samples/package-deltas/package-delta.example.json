@@ -1,0 +1,15 @@
+{
+  "version": "package-delta.v1",
+  "sourceRepo": "https://example.invalid/example/tracemap-package-delta.git",
+  "sourceCommitSha": "0123456789abcdef0123456789abcdef01234567",
+  "changes": [
+    {
+      "id": "pkg-newtonsoft-json",
+      "packageName": "Newtonsoft.Json",
+      "ecosystem": "nuget",
+      "changeType": "updated",
+      "oldVersion": "13.0.1",
+      "newVersion": "13.0.3"
+    }
+  ]
+}
