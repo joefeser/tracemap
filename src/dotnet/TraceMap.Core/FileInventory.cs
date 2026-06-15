@@ -10,6 +10,9 @@ public static class FileInventory
         ".json",
         ".cs",
         ".sql",
+        ".aspx",
+        ".ascx",
+        ".master",
         ".svc",
         ".asmx",
         ".svcmap",
@@ -136,8 +139,13 @@ public static class FileInventory
             ".sln" => "Solution",
             ".csproj" => "Project",
             ".json" => "Json",
+            ".cs" when IsWebFormsDesignerFile(fileName) => "WebFormsDesigner",
+            ".cs" when IsWebFormsCodeBehindFile(fileName) => "WebFormsCodeBehind",
             ".cs" => "CSharp",
             ".sql" => "Sql",
+            ".aspx" => "WebFormsMarkup",
+            ".ascx" => "WebFormsMarkup",
+            ".master" => "WebFormsMarkup",
             ".svc" => "ServiceHost",
             ".asmx" => "ServiceHost",
             ".svcmap" => "ServiceReferenceMetadata",
@@ -146,6 +154,25 @@ public static class FileInventory
             ".xsd" => "ServiceReferenceMetadata",
             _ => "File"
         };
+    }
+
+    public static bool IsCSharpKind(string kind)
+    {
+        return kind.Equals("CSharp", StringComparison.Ordinal)
+            || kind.Equals("WebFormsCodeBehind", StringComparison.Ordinal)
+            || kind.Equals("WebFormsDesigner", StringComparison.Ordinal);
+    }
+
+    private static bool IsWebFormsCodeBehindFile(string fileName)
+    {
+        return fileName.EndsWith(".aspx.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".ascx.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".master.cs", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsWebFormsDesignerFile(string fileName)
+    {
+        return fileName.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsWcfMetadataExtension(string extension)

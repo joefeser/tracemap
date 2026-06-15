@@ -194,6 +194,30 @@ python3 scripts/legacy_codebase_validation.py \
 
 The summary must stay label-only. Do not commit local sample paths, raw scan outputs, raw WSDL/DISCO/XSD contents, endpoint addresses, SOAP actions, namespace URIs, config values, secrets, or generated smoke outputs. WCF metadata facts are static checked-in design-time evidence; they do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
 
+## Legacy WebForms Event Flow Smoke
+
+When changing WebForms markup, code-behind, designer, handler-resolution, or event-flow extraction, run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+python3 -m unittest scripts.tests.test_legacy_codebase_validation
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Checked-in fixtures should cover explicit markup event bindings, missing or stale designer files, semantic or syntax-only code-behind resolution, ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
+
+Useful inspection queries:
+
+```bash
+sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts where fact_type like 'WebForms%' group by fact_type order by fact_type;"
+sqlite3 <out>/index.sqlite "select fact_type, rule_id, evidence_tier, file_path, start_line, properties_json from facts where fact_type like 'WebForms%' order by fact_type, file_path, start_line;"
+grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out>/report.md
+```
+
+WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
+
 ## Public OSS Smoke
 
 Use `scripts/smoke-open-source-repos.sh` to clone pinned public repositories into a cache directory and scan them into a separate output directory:

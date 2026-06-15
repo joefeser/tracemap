@@ -174,6 +174,13 @@ public static class FactTypes
     public const string WcfServiceReferenceMetadataDeclared = nameof(WcfServiceReferenceMetadataDeclared);
     public const string WcfMetadataOperationDeclared = nameof(WcfMetadataOperationDeclared);
     public const string WcfServiceReferenceMapping = nameof(WcfServiceReferenceMapping);
+    public const string WebFormsPageDeclared = nameof(WebFormsPageDeclared);
+    public const string WebFormsControlDeclared = nameof(WebFormsControlDeclared);
+    public const string WebFormsEventBindingDeclared = nameof(WebFormsEventBindingDeclared);
+    public const string WebFormsDesignerControlDeclared = nameof(WebFormsDesignerControlDeclared);
+    public const string WebFormsHandlerResolved = nameof(WebFormsHandlerResolved);
+    public const string WebFormsEventFlowProjected = nameof(WebFormsEventFlowProjected);
+    public const string WebFormsLogicSignalDetected = nameof(WebFormsLogicSignalDetected);
 }
 
 public static class RuleIds
@@ -217,6 +224,12 @@ public static class RuleIds
     public const string LegacyWcfMetadata = "legacy.wcf.metadata.v1";
     public const string LegacyWcfOperationNormalization = "legacy.wcf.operation-normalization.v1";
     public const string LegacyWcfMapping = "legacy.wcf.mapping.v1";
+    public const string LegacyWebFormsInventory = "legacy.webforms.inventory.v1";
+    public const string LegacyWebFormsEventBinding = "legacy.webforms.event-binding.v1";
+    public const string LegacyWebFormsHandlerResolution = "legacy.webforms.handler-resolution.v1";
+    public const string LegacyWebFormsDesignerControl = "legacy.webforms.designer-control.v1";
+    public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
+    public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
     public const string ContractDeltaReduction = "contract.delta.reduce.v1";
     public const string ContractDeltaInput = "contract.delta.input.v2";
     public const string ContractDeltaImpact = "contract.delta.impact.v2";
@@ -226,7 +239,7 @@ public static class RuleIds
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone15";
+    public const string TraceMap = "tracemap-milestone16";
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
@@ -238,5 +251,6 @@ public static class ScannerVersions
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.1.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
 }
