@@ -1,13 +1,13 @@
 # Implementation State
 
-Status: planned
+Status: implemented
 Branch: codex/site-public-visual-proof-assets
 Public claim level: demo
 
 ## Summary
 
 This phase adds a public-safe visual proof-assets surface for the existing
-public demo proof-upgrades evidence. The planned route is
+public demo proof-upgrades evidence. The implemented route is
 `/demo/proof-assets/`.
 
 The page should make generated report shapes easier to scan without publishing
@@ -25,6 +25,8 @@ limitations, `facts.ndjson`, and `index.sqlite` remain the source of truth.
   public demo proof-upgrades surface rather than broadening product claims.
 - Keep this branch site-only under `site/` and this spec directory.
 - Do not introduce a runtime service or new public artifact format.
+- Link the page from `/demo/`, `/demo/proof-upgrades/`, `/demo/result/`,
+  `/packets/`, and `/roadmap/` with demo-level wording.
 
 ## Claim Boundaries
 
@@ -80,11 +82,16 @@ Do not show:
   patched by splitting backlink tasks, naming `/roadmap/` as the bounded
   roadmap/capability backlink surface, and documenting the intended
   `workflow-grid` plus scoped `proof-visual` styling approach.
-- Pending: `git diff --check`.
-- Pending: `npm test` from `site/`.
-- Pending: `npm run validate` from `site/`.
-- Pending: desktop browser sanity check.
-- Pending: mobile browser sanity check.
+- Passed: `git diff --check`.
+- Passed: `npm test` from `site/` (19 tests).
+- Passed: `npm run validate` from `site/` (26 HTML files, 552 internal
+  references, 25 sitemap URLs).
+- Passed: desktop browser sanity check for `/demo/proof-assets/` at the default
+  wide viewport: four proof cards, claim-level text, required links, no
+  horizontal overflow, and no console errors.
+- Passed: mobile browser sanity check for `/demo/proof-assets/` at 390x844:
+  stacked proof cards, claim-level text, roadmap link, no horizontal overflow,
+  and no console errors.
 
 ## Oddities
 
@@ -95,6 +102,8 @@ Do not show:
 - The Kiro review text reported a stale branch name (`codex/site-manager-packet`)
   from its session context. Local `git status` shows this work is on
   `codex/site-public-visual-proof-assets`.
+- The default site dev port 4173 was already in use during browser validation,
+  so the local server was started with `PORT=4174`.
 
 ## Follow-Up Items
 
