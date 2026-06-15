@@ -39,9 +39,9 @@ Scope Decisions:
 
 Validation:
 
-- Focused snapshot diff tests: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter SnapshotDiffTests` passed locally on this branch.
+- Focused snapshot diff tests: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter SnapshotDiffTests` passed locally on this branch, including duplicate same-span gap rows and existing adapter-provided `messageHash` fallback coverage.
 - Solution build: `dotnet build src/dotnet/TraceMap.sln` passed locally.
-- Full solution tests: `dotnet test src/dotnet/TraceMap.sln` passed locally.
+- Full solution tests: `dotnet test src/dotnet/TraceMap.sln` passed locally with 241 passing tests after PR review fixes.
 - CLI sample smoke: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-snapshot-gap-smoke` passed and emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`.
 - Private-path guard: `./scripts/check-private-paths.sh` passed locally.
 - Whitespace check: `git diff --check` passed locally.
@@ -51,3 +51,4 @@ Review:
 - Local `kiro` is installed but only exposed an editor/chat launcher path in this shell.
 - Local `claude --model sonnet` was installed but unavailable because the CLI is not logged in.
 - Completed a bounded self-review; fixed one finding where gap-diff-only reports could roll up `UnknownAnalysisGap` while `reportCoverage` stayed `Full`, and aligned snapshot confidence strings for unknown/review-tier classifications.
+- PR review loop fixed Qodo/Codex findings by preserving existing adapter-provided `messageHash` fingerprints and including the safe message fingerprint in gap stable keys to avoid same-span duplicate identity collisions.

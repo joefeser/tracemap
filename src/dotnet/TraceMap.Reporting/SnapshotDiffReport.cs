@@ -1095,9 +1095,7 @@ public static class SnapshotDiffReporter
         var gapKind = NullIfUnknown(FirstValue(fact.Properties, "gapKind", "gapCode", "kind", "reason", "dynamicReason", "sqlSourceKind")) ?? FactTypes.AnalysisGap;
         var safePath = CombinedReportHelpers.SafePath(fact.FilePath);
         var pathHash = CombinedReportHelpers.Hash(fact.FilePath, 24);
-        var messageHash = FirstValue(fact.Properties, "message") is { } message
-            ? CombinedReportHelpers.Hash(message, 24)
-            : null;
+        var messageHash = MessageHash(fact.Properties);
         var metadata = CombinedReportHelpers.SortedMetadata([
             Pair("gapKind", gapKind),
             Pair("factType", fact.FactType),
@@ -1109,7 +1107,7 @@ public static class SnapshotDiffReporter
             Pair("endLine", fact.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Pair("messageHash", messageHash)
         ]);
-        var stableKey = $"gap:{source.SourceLabel}:{gapKind}:{safePath}:{fact.StartLine}:{fact.EndLine}:{fact.RuleId}";
+        var stableKey = $"gap:{source.SourceLabel}:{gapKind}:{safePath}:{fact.StartLine}:{fact.EndLine}:{fact.RuleId}:{messageHash ?? "no-message"}";
         var evidence = SingleEvidence(source, fact, metadata);
         return new SnapshotComparableRecord(
             "gap",
@@ -1342,6 +1340,21 @@ public static class SnapshotDiffReporter
             {
                 return value.Trim();
             }
+        }
+
+        return null;
+    }
+
+    private static string? MessageHash(IReadOnlyDictionary<string, string> properties)
+    {
+        if (FirstValue(properties, "message") is { } message)
+        {
+            return CombinedReportHelpers.Hash(message, 24);
+        }
+
+        if (FirstValue(properties, "messageHash", "messageSha256", "messageDigest") is { } existingHash)
+        {
+            return CombinedReportHelpers.Hash(existingHash, 24);
         }
 
         return null;
