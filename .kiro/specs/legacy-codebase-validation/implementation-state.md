@@ -1,7 +1,7 @@
 # Implementation State
 
-Status: ready-for-implementation
-Branch: codex/legacy-codebase-validation-spec
+Status: implemented
+Branch: codex/legacy-codebase-validation-impl
 Public claim level: hidden
 
 ## Summary
@@ -45,6 +45,26 @@ Actual local path mappings must live under ignored
 
 ## Follow-Ups
 
-- Implement the validation script and summary generator.
 - Decide whether missing SDK/runtime guidance belongs in core scan reports.
 - Decide whether legacy UI event extraction deserves a dedicated scanner spec.
+
+## Implementation Notes
+
+- Added `scripts/validate-legacy-codebases.sh` as the public entry point.
+- Added `scripts/legacy_codebase_validation.py` for manifest validation,
+  bounded scan execution, legacy environment probes, UI event probes, redacted
+  summary generation, and category-only redaction failure reporting.
+- Added `scripts/tests/test_legacy_codebase_validation.py` for local-only
+  manifest boundaries, output boundaries, redaction categories, tracked `.tmp`
+  rejection, and deterministic summary shape.
+- Added validation rule IDs and limitations to `rules/rule-catalog.yml`:
+  `legacy.validation.summary.v1`, `legacy.validation.environment.v1`,
+  `legacy.validation.ui-events.v1`, and `legacy.validation.bounds.v1`.
+- Real legacy sample paths remain local-only in
+  `.tmp/legacy-codebase-validation/repos.local.json`.
+
+## Implemented Validation
+
+- `python3 -m unittest scripts.tests.test_legacy_codebase_validation`
+- `python3 -m py_compile scripts/legacy_codebase_validation.py scripts/tests/test_legacy_codebase_validation.py`
+- `./scripts/validate-legacy-codebases.sh .tmp/legacy-codebase-validation/repos.local.json .tmp/legacy-codebase-validation/out --dry-run`
