@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
@@ -743,6 +745,35 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_single_treats_raw_message_and_existing_message_hash_as_same_gap()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        const string message = "Project load warning: missing legacy package";
+        var messageHash = TestHash(message, 32);
+        SqliteIndexWriter.Write(beforeIndex, before, [
+            AnalysisGapFact(before, "project-load", "logs/analyzer.log", 1, message)
+        ]);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            AnalysisGapHashFact(after, "project-load", "logs/analyzer.log", 1, messageHash)
+        ]);
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "gaps"));
+
+        Assert.Empty(result.Report.GapDiffs);
+        Assert.Equal(0, result.Report.Summary.GapDiffCount);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "DuplicateIdentity");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "UnavailableEvidence" && gap.Section == "gapDiffs");
+    }
+
+    [Fact]
     public async Task Snapshot_diff_cli_exit_code_is_opt_in()
     {
         using var temp = new TempDirectory();
@@ -901,6 +932,11 @@ public sealed class SnapshotDiffTests
                 ["gapKind"] = gapKind,
                 ["messageHash"] = messageHash
             });
+    }
+
+    private static string TestHash(string value, int length)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()[..length];
     }
 
     private static void CorruptMetadata(string indexPath, string factId)

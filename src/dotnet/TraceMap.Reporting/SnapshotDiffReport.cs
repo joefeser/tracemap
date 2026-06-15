@@ -1349,12 +1349,12 @@ public static class SnapshotDiffReporter
     {
         if (FirstValue(properties, "message") is { } message)
         {
-            return CombinedReportHelpers.Hash(message, 24);
+            return CombinedReportHelpers.Hash(message, 32);
         }
 
         if (FirstValue(properties, "messageHash", "messageSha256", "messageDigest") is { } existingHash)
         {
-            return CombinedReportHelpers.Hash(existingHash, 24);
+            return existingHash;
         }
 
         return null;
