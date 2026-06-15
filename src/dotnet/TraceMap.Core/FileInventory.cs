@@ -40,7 +40,9 @@ public static class FileInventory
     {
         ".git",
         ".tracemap",
+        ".nuget",
         "bin",
+        "node_modules",
         "obj"
     };
 
@@ -102,7 +104,8 @@ public static class FileInventory
 
         var relativePath = Path.GetRelativePath(root, fullPath);
         var parts = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return parts.Any(part => ExcludedDirectoryNames.Contains(part));
+        return IsRootPackagesDirectory(parts)
+            || parts.Any(part => ExcludedDirectoryNames.Contains(part));
     }
 
     private static bool ShouldInclude(string root, string path, ISet<string> serviceReferenceFolders)
@@ -123,6 +126,11 @@ public static class FileInventory
         var normalizedDirectory = Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar;
         return path.Equals(directory, StringComparison.OrdinalIgnoreCase)
             || path.StartsWith(normalizedDirectory, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRootPackagesDirectory(IReadOnlyList<string> parts)
+    {
+        return parts.Count > 1 && parts[0].Equals("packages", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetKind(string path)

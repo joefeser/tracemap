@@ -98,6 +98,56 @@ public sealed class BuildEnvironmentDiagnosticTests
     }
 
     [Fact]
+    public void Scan_emits_one_package_reference_shape_diagnostic_per_project()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "src", "Packages"));
+        File.WriteAllText(Path.Combine(repo, "src", "Packages", "Packages.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Example.One" Version="1.0.0" />
+                <PackageReference Include="Example.Two" Version="2.0.0" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var packageShapeDiagnostics = result.Facts
+            .Where(fact => fact.FactType == FactTypes.BuildEnvironmentDiagnostic)
+            .Where(fact => fact.Properties.GetValueOrDefault("diagnosticCode") == "PackageReferencePresent")
+            .ToArray();
+
+        var diagnostic = Assert.Single(packageShapeDiagnostics);
+        Assert.Equal("src/Packages/Packages.csproj", diagnostic.Evidence.FilePath);
+        Assert.Equal(RuleIds.BuildEnvironmentRestore, diagnostic.RuleId);
+    }
+
+    [Fact]
+    public void Inventory_excludes_common_dependency_vendor_directories()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "packages", "Legacy.Package", "build"));
+        Directory.CreateDirectory(Path.Combine(repo, ".nuget", "packages", "legacy.package", "build"));
+        Directory.CreateDirectory(Path.Combine(repo, "node_modules", "vendor"));
+        Directory.CreateDirectory(Path.Combine(repo, "src", "App"));
+        File.WriteAllText(Path.Combine(repo, "packages", "Legacy.Package", "build", "Legacy.Package.targets"), "<Project />");
+        File.WriteAllText(Path.Combine(repo, ".nuget", "packages", "legacy.package", "build", "Legacy.Package.props"), "<Project />");
+        File.WriteAllText(Path.Combine(repo, "node_modules", "vendor", "package.targets"), "<Project />");
+        File.WriteAllText(Path.Combine(repo, "src", "App", "Directory.Build.props"), "<Project />");
+
+        var inventory = FileInventory.Collect(repo, Path.Combine(temp.Path, "out"));
+
+        Assert.Contains(inventory, item => item.RelativePath == "src/App/Directory.Build.props" && item.Kind == "MSBuildProps");
+        Assert.DoesNotContain(inventory, item => item.RelativePath.Contains("packages/", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(inventory, item => item.RelativePath.Contains("node_modules/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Cli_restore_failure_artifacts_are_sanitized()
     {
         using var temp = new TempDirectory();
