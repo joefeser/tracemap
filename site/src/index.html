@@ -117,29 +117,42 @@ classification: NeedsReview</code></pre>
       <section class="section" id="first-look">
         <div class="section-header">
           <p class="section-kicker">First look</p>
-          <h2>Use this path when you are showing TraceMap to someone new.</h2>
+          <h2>Start with the page that matches the question in front of you.</h2>
         </div>
         <div class="path-grid">
-          <a href="/examples/">
+          <a href="/manager-packet/">
             <span>1</span>
-            <strong>Start with the examples.</strong>
-            <p>Show the manifest, facts, report excerpt, and contract-impact output before asking anyone to run a command.</p>
+            <strong>Manager asks what this solves.</strong>
+            <p>Use the manager packet to frame static evidence, gaps, limitations, and human review before anyone claims impact or safety.</p>
           </a>
           <a href="/packets/">
             <span>2</span>
-            <strong>Read the evidence packet.</strong>
-            <p>Give managers, reviewers, architects, and engineers the same static proof trail without turning it into a runtime claim.</p>
+            <strong>Reviewer needs the packet.</strong>
+            <p>Read the packet guide to follow rule IDs, evidence tiers, coverage labels, source spans, and limitations.</p>
           </a>
-          <a href="/use-cases/">
+          <a href="/demo/proof-assets/">
             <span>3</span>
-            <strong>Map it to review work.</strong>
-            <p>Connect the artifacts to contract-change review, release packets, partial analysis, and reviewer handoff.</p>
+            <strong>Someone needs to see it.</strong>
+            <p>Open public-safe proof assets that make generated report shapes scannable without replacing the source artifacts.</p>
           </a>
           <a href="/demo/">
             <span>4</span>
-            <strong>Run the checked-in demo.</strong>
-            <p>Generate the same kind of static evidence from public samples, with local-path and sensitive-value guards.</p>
+            <strong>Engineer wants to run it.</strong>
+            <p>Run the checked-in demo and inspect public-safe summaries before drilling into local-only artifacts.</p>
           </a>
+        </div>
+      </section>
+
+      <section class="section split-section" id="evidence-journey">
+        <div>
+          <p class="section-kicker">Evidence journey</p>
+          <h2>The public site now has a deliberate path from question to proof.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Orient</strong><span>Start with the <a href="/manager-packet/">manager packet</a> when the question is why TraceMap matters to a team.</span></div>
+          <div><strong>Inspect</strong><span>Use the <a href="/packets/">packet guide</a> and <a href="/capabilities/">capability matrix</a> to keep claims tied to proof paths and status labels.</span></div>
+          <div><strong>Show</strong><span>Use <a href="/demo/proof-assets/">proof assets</a> and <a href="/demo/proof-upgrades/">proof upgrades</a> to make demo evidence visible without publishing raw internals.</span></div>
+          <div><strong>Run</strong><span>Use the <a href="/demo/start-here/">demo walkthrough</a> and <a href="/demo/result/">current result</a> to regenerate the public-safe evidence from checked-in samples.</span></div>
         </div>
       </section>
 
@@ -151,15 +164,15 @@ classification: NeedsReview</code></pre>
         <div class="audience-grid">
           <article>
             <h3>Engineering managers</h3>
-            <p>See which files, contracts, routes, packages, gaps, and coverage labels shaped the review instead of accepting a prose-only answer.</p>
+            <p>Use the <a href="/manager-packet/">manager packet</a> to see which contracts, routes, packages, gaps, and coverage labels shaped the review.</p>
           </article>
           <article>
             <h3>Reviewers</h3>
-            <p>Start from rule IDs, evidence tiers, commit SHAs, and line spans when deciding what needs human attention.</p>
+            <p>Start from the <a href="/packets/">packet guide</a>, rule IDs, evidence tiers, commit SHAs, and line spans when deciding what needs human attention.</p>
           </article>
           <article>
             <h3>Tool builders</h3>
-            <p>Consume stable JSON, NDJSON, SQLite, and Markdown outputs without depending on prompts or hidden model state.</p>
+            <p>Use the <a href="/outputs/">outputs map</a> to consume stable JSON, NDJSON, SQLite, and Markdown without depending on prompts or hidden model state.</p>
           </article>
         </div>
       </section>
@@ -293,6 +306,8 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan \
           <a href="/workflows/">Workflows</a>
           <a href="/examples/">Examples</a>
           <a href="/capabilities/">Capabilities</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/demo/proof-assets/">Demo proof assets</a>
           <a href="/demo/start-here/">Demo walkthrough</a>
           <a href="/blog/">Blog</a>
           <a href="/docs/">Docs</a>
