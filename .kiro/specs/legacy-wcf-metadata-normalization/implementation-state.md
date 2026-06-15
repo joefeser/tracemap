@@ -36,6 +36,9 @@ The observed mismatch is mostly naming:
 
 - Keep the implementation static and deterministic.
 - Parse only checked-in metadata files.
+- Use `.svcmap` and `.wsdl` for operation metadata.
+- Treat `.disco` and gated service-reference `.xsd` files as inventory-only in
+  this slice.
 - Do not fetch remote WSDL/discovery/schema URLs.
 - Do not execute services or validate bindings.
 - Do not claim runtime reachability.
@@ -86,4 +89,3 @@ python3 scripts/legacy_codebase_validation.py \
 - Semantic WCF enrichment when project load succeeds.
 - WSDL/XSD DTO contract mapping.
 - Legacy smoke progress output and raw artifact cleanup automation.
-

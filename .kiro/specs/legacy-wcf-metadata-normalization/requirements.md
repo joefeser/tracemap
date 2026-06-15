@@ -27,8 +27,9 @@ Public claim level: hidden until validated with redacted label-only summaries.
 In scope:
 
 - Parse checked-in WCF/ASMX service-reference metadata files from the repository.
-- Extract safe structural facts from `.svcmap`, `.wsdl`, `.disco`, and related
-  checked-in metadata where deterministic.
+- Extract safe structural facts from `.svcmap` and `.wsdl` where deterministic.
+- Inventory `.disco` and service-reference `.xsd` files as metadata presence
+  evidence without inferring operations or DTO/schema mappings.
 - Normalize generated-client and service-contract operation names using conservative
   WCF patterns.
 - Improve `WcfServiceReferenceMapping` when client contract, metadata, endpoint,
@@ -67,13 +68,21 @@ project or calling a service.
 2. WHEN a repository contains checked-in `.wsdl`, `.disco`, or `.xsd` files
    under a service-reference folder THEN TraceMap SHALL inventory them as
    service-reference metadata evidence.
-3. WHEN metadata references remote URLs, endpoint addresses, schema locations,
+3. A service-reference `.xsd` file SHALL be considered in scope only when it is
+   co-located with a `.svcmap` file or when its repository-relative path contains
+   a service-reference segment such as `Service Reference` or `ServiceReference`;
+   other `.xsd` files SHALL remain out of scope for this slice.
+4. WHEN metadata references remote URLs, endpoint addresses, schema locations,
    or discovery URLs THEN TraceMap SHALL hash or omit those values and SHALL NOT
    render raw URLs or addresses.
-4. WHEN metadata cannot be parsed THEN TraceMap SHALL emit an `AnalysisGap`
+5. WHEN metadata references URL-like namespace values such as WSDL
+   `targetNamespace`, XML namespace URIs, SOAP action namespaces, or schema
+   namespaces THEN TraceMap SHALL hash or omit those values and SHALL only retain
+   safe local identifiers such as NCName operation or portType names.
+6. WHEN metadata cannot be parsed THEN TraceMap SHALL emit an `AnalysisGap`
    with rule ID and `Tier4Unknown` evidence rather than claiming no metadata
    exists.
-5. Metadata inventory SHALL be deterministic and SHALL include file span,
+7. Metadata inventory SHALL be deterministic and SHALL include file span,
    commit SHA, extractor version, rule ID, and evidence tier through the
    existing fact model.
 
@@ -104,9 +113,11 @@ without overclaiming unrelated methods.
 
 #### Acceptance Criteria
 
-1. WHEN a generated client method is named `FooAsync` THEN TraceMap SHALL derive
-   normalized operation alias `Foo` only when the client is already recognized as
-   WCF-generated evidence.
+1. WHEN a generated client method is named `FooAsync` THEN TraceMap SHALL keep
+   the original `FooAsync` operation candidate and MAY derive normalized
+   operation alias `Foo` only when the client is already recognized as
+   WCF-generated evidence and the stripped alias is corroborated by checked-in
+   WSDL metadata, a same-contract sync sibling, or an aligned service operation.
 2. WHEN an operation contract method is named `BeginFoo` and a matching `EndFoo`
    exists on the same contract THEN TraceMap SHALL derive normalized operation
    alias `Foo` for APM-style WCF operations.
@@ -117,9 +128,13 @@ without overclaiming unrelated methods.
    `Abort`, `Dispose`, `OpenAsync`, or `CloseAsync` THEN TraceMap SHALL NOT map
    it to a service operation unless checked-in metadata explicitly names it as
    a service operation.
-5. Operation normalization SHALL preserve original operation names in fact
+5. Lifecycle exclusion SHALL apply to the normalized base name as well as the
+   raw method token, so `BeginOpen`/`EndOpen`, `BeginClose`/`EndClose`,
+   `BeginAbort`/`EndAbort`, and any `Begin`/`End` pair whose base name is an
+   excluded lifecycle verb SHALL NOT produce a service-operation alias.
+6. Operation normalization SHALL preserve original operation names in fact
    properties and SHALL record the normalization rule used.
-6. Operation normalization SHALL be deterministic, case-sensitive by default,
+7. Operation normalization SHALL be deterministic, case-sensitive by default,
    and SHALL NOT use fuzzy matching, edit distance, stemming, or prompt-based
    classification.
 
@@ -137,13 +152,23 @@ calls to service operations when metadata and contract evidence agree.
 2. WHEN config endpoint contract evidence also aligns THEN mapping MAY be
    `Tier2Structural`; otherwise mapping SHALL be no stronger than
    `Tier3SyntaxOrTextual` unless a future semantic pass proves stronger evidence.
-3. WHEN multiple metadata operations, endpoint contracts, service contracts, or
+   This cap applies to the final mapping fact even if supporting metadata or
+   alias evidence is itself `Tier2Structural`.
+3. WHEN multiple aliases converge on the same logical operation on the same
+   contract, such as `Foo`, `FooAsync`, and `BeginFoo`/`EndFoo`, TraceMap SHALL
+   collapse those convergent aliases into one logical operation before ambiguity
+   counting.
+4. Convergent aliases SHALL NOT be treated as ambiguity by themselves; ambiguity
+   exists only when distinct logical operations, contracts, endpoint identities,
+   metadata identities, or host candidates remain after normalization and
+   deduplication.
+5. WHEN multiple metadata operations, endpoint contracts, service contracts, or
    host candidates remain after normalization THEN TraceMap SHALL emit an
    ambiguity gap and SHALL NOT choose an arbitrary winner.
-4. WHEN metadata exists but cannot be connected to a generated client contract
+6. WHEN metadata exists but cannot be connected to a generated client contract
    or operation THEN TraceMap SHALL emit a metadata-unlinked gap or omit mapping,
    not a false positive.
-5. Mapping facts SHALL include supporting fact IDs or supporting metadata hashes
+7. Mapping facts SHALL include supporting fact IDs or supporting metadata hashes
    where the current fact model can store them safely.
 
 ### Requirement 5: Validation Against Ugly Public Samples
@@ -187,4 +212,3 @@ IDs and documented limitations.
    version compatibility, authorization, binding compatibility, or branch
    feasibility.
 4. Reports and JSON outputs SHALL remain deterministic and safe to publish.
-

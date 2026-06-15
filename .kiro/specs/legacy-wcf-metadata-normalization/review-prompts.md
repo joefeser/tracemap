@@ -58,18 +58,24 @@ Review questions:
 3. Does the spec avoid runtime reachability, binding compatibility, deployment,
    authorization, and schema/DTO overclaims?
 4. Are the proposed fact types and rule IDs sufficient and not duplicative?
-5. Is `FooAsync -> Foo` normalization safe when restricted to generated WCF
-   clients?
+5. Is `FooAsync -> Foo` normalization safe with the added corroboration
+   requirement and original-name candidate preservation?
 6. Is `BeginFoo`/`EndFoo -> Foo` normalization safe enough when requiring a pair
    on the same contract/type?
-7. Are lifecycle exclusions like `OpenAsync` and `CloseAsync` complete enough?
-8. Are ambiguity rules strong enough to avoid false mappings?
-9. Are safety rules sufficient for remote WSDL URLs, SOAP actions, schema
+7. Are lifecycle exclusions complete enough now that they apply to normalized
+   base names, including `BeginOpen`/`EndOpen`, `BeginClose`/`EndClose`, and
+   `BeginAbort`/`EndAbort`?
+8. Do the logical-operation convergence rules prevent `Foo`, `FooAsync`, and
+   `BeginFoo`/`EndFoo` from re-triggering false ambiguity while still catching
+   genuinely distinct candidates?
+9. Are ambiguity rules strong enough to avoid false mappings?
+10. Are safety rules sufficient for remote WSDL URLs, SOAP actions, namespace
    locations, and local metadata paths?
-10. Are validation expectations realistic with old reduced-coverage public
+11. Are validation expectations realistic with old reduced-coverage public
     samples?
-11. Are the tasks reviewable and traceable to requirements?
-12. What tests are missing before implementation?
+12. Are the tasks reviewable and traceable to requirements, including model
+    wiring, scanner-version bump, and legacy summary count updates?
+13. What tests are missing before implementation?
 
 Return:
 
@@ -91,6 +97,8 @@ Focus on:
 - Whether new fact types are required or existing WCF facts can carry metadata.
 - How to parse `.svcmap` and WSDL conservatively without leaking URLs.
 - A safe operation alias model for generated clients and APM operations.
+- How to collapse convergent generated operation forms into one logical mapping
+  candidate without hiding real ambiguity.
 - How to avoid duplicate mappings from generated sync/async/Begin/End method
   combinations.
 - Minimal first PR boundary.
@@ -119,4 +127,3 @@ Look for:
   methods, duplicate generated methods, and reduced coverage.
 
 Return actionable findings with exact section references and suggested fixes.
-
