@@ -76,6 +76,7 @@
 
 - [x] PR 1: Input model, validator, SQL-to-contract selector normalization, report skeleton, and reused rule IDs.
 - [x] PR 2: Single-index SQL/schema matching.
+- [x] PR 3: Combined `sql-query` and `sql-persistence` matching.
 
 ## Deferred Follow-Ups
 
@@ -88,8 +89,6 @@
 - Cover `added` with no evidence and `removed` with multiple evidence rows.
 - Deduplicate matched facts deterministically.
 - Add reduced/full coverage no-evidence tests.
-- Reuse combined surface projection for `sql-query`.
-- Reuse combined surface projection for `sql-persistence`.
 - Preserve hash-only, volatile identity, duplicate identity, and schema caveats.
 - Add tests for schema/table/column/query-shape matches across multiple source labels.
 - Derive stable path/reverse selectors only from safe SQL surface identity.
@@ -105,7 +104,6 @@
 - Fail tests if any emitted finding or gap cites a missing rule ID.
 - Run affected TypeScript/JVM/Python tests if adapter facts or fixtures change.
 - Run relevant combined path/reverse smoke checks if path/reverse behavior changes.
-- PR 3: Combined `sql-query` and `sql-persistence` matching.
 - PR 4: Optional path/reverse context.
 - PR 5: Report polish, byte-stability, public sample validation.
 - Dialect-specific SQL parser modules.
