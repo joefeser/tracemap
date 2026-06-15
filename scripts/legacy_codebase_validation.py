@@ -398,6 +398,38 @@ def probe_ui_events(facts: list[dict[str, Any]], enabled: bool = True) -> dict[s
             ],
         }
 
+    precise_webforms = [
+        fact
+        for fact in facts
+        if str(fact.get("factType", "")).startswith("WebForms")
+    ]
+    if precise_webforms:
+        tiers = sorted({str(fact.get("evidenceTier", "Tier4Unknown")) for fact in precise_webforms})
+        rule_ids = sorted({str(fact.get("ruleId", "unknown")) for fact in precise_webforms})
+        fact_types = sorted({str(fact.get("factType", "unknown")) for fact in precise_webforms})
+        classification = (
+            "semantic-static-wiring"
+            if any(str(fact.get("factType")) == "WebFormsHandlerResolved" and str(fact.get("evidenceTier")) == "Tier1Semantic" for fact in precise_webforms)
+            else "structural-static-wiring"
+            if any(str(fact.get("factType")) in {"WebFormsEventBindingDeclared", "WebFormsHandlerResolved"} for fact in precise_webforms)
+            else "syntax-or-text-static-wiring"
+        )
+        return {
+            "classification": classification,
+            "semanticMatches": sum(1 for fact in precise_webforms if str(fact.get("evidenceTier")) == "Tier1Semantic"),
+            "structuralMatches": sum(1 for fact in precise_webforms if str(fact.get("evidenceTier")) == "Tier2Structural"),
+            "syntaxOrTextMatches": sum(1 for fact in precise_webforms if str(fact.get("evidenceTier")) == "Tier3SyntaxOrTextual"),
+            "downstreamEvidenceMatches": sum(1 for fact in precise_webforms if str(fact.get("factType")) == "WebFormsEventFlowProjected"),
+            "ruleIds": rule_ids,
+            "evidenceTiers": tiers,
+            "factTypes": fact_types,
+            "limitations": [
+                "Precise WebForms evidence supersedes the coarse legacy UI token probe for this sample.",
+                "Static WebForms wiring and flow evidence does not prove runtime execution.",
+                "No match is a scanner evidence gap, not proof of absence.",
+            ],
+        }
+
     semantic = 0
     structural = 0
     syntax_text = 0

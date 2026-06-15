@@ -139,6 +139,79 @@ rules:
       - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
       - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
 
+  - id: legacy.webforms.inventory.v1
+    name: Legacy WebForms file and page inventory
+    description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, and safe page linkage metadata.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsPageDeclared
+      - WebFormsControlDeclared
+      - AnalysisGap
+    limitations:
+      - Markup and file inventory are static repository evidence and do not prove IIS configuration, page activation, runtime control tree construction, event firing, deployment, or production usage.
+      - Directive paths and linkage attributes are kept only as safe relative filenames or omitted; raw local paths, URLs, config values, snippets, and unsafe expressions are not stored.
+      - Malformed or unreadable markup is an analysis gap, not proof that no WebForms page, control, or handler exists.
+
+  - id: legacy.webforms.event-binding.v1
+    name: Legacy WebForms markup event binding evidence
+    description: Extracts supported static WebForms server-control event attributes such as OnClick, OnCommand, OnLoad, and OnInit with control IDs, handler names, and line spans.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsEventBindingDeclared
+      - AnalysisGap
+    limitations:
+      - Event bindings are static declarations and do not prove that a control exists at runtime, a user can reach the event, event bubbling occurs, or the handler executes.
+      - Unsupported event-like attributes, dynamic wiring, generated controls, data-bound command names, and unsafe handler values are needs-review or gap evidence rather than guessed handlers.
+      - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
+
+  - id: legacy.webforms.handler-resolution.v1
+    name: Legacy WebForms code-behind handler resolution
+    description: Resolves markup event handlers to linked code-behind partial methods by semantic source-symbol evidence when available, otherwise by scoped structural or syntax fallback.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsHandlerResolved
+      - AnalysisGap
+    limitations:
+      - Handler resolution is static evidence and does not prove runtime event execution, page lifecycle order, postback behavior, authorization, deployment, or production usage.
+      - Syntax and structural fallback depend on directive/linkage and partial class names; missing builds, generated code, stale files, partial classes, overloads, and event subscriptions can reduce confidence.
+      - Ambiguous methods or partial classes are emitted as gaps and TraceMap does not choose an arbitrary winner.
+      - Auto-event-wireup MVP evidence is limited to Page_Load and Page_Init and requires explicit enabled evidence; false, unknown, or contradictory evidence remains Tier4Unknown.
+
+  - id: legacy.webforms.designer-control.v1
+    name: Legacy WebForms designer control field evidence
+    description: Extracts designer-generated partial-class control fields and links them as supporting evidence for matching markup control IDs.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsDesignerControlDeclared
+      - AnalysisGap
+    limitations:
+      - Designer files can be generated, missing, stale, hand-edited, or mismatched with markup; designer evidence is supporting evidence only.
+      - Designer fields do not classify code as business logic and do not prove runtime control creation or page compilation.
+
+  - id: legacy.webforms.event-flow.v1
+    name: Legacy WebForms event-to-backend static flow projection
+    description: Projects resolved WebForms handlers to directly connected call, WCF/service-reference, HTTP, SQL/query, config, or dependency-surface evidence while preserving supporting fact IDs and coverage labels.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsEventFlowProjected
+      - AnalysisGap
+    limitations:
+      - Event-flow projection is static evidence and does not prove runtime event firing, branch feasibility, dynamic dispatch, delegate invocation, reflection targets, event bubbling, generated-code freshness, service reachability, SQL execution, database state, or production usage.
+      - MVP projection prefers direct handler-to-evidence facts and can miss multi-hop call chains, dependency injection, reflection, generated code, unsupported frameworks, or ORM metadata.
+      - Reduced semantic coverage, missing call edges, ambiguous generated clients, or unavailable terminal evidence produce partial or unknown classifications rather than clean absence claims.
+
+  - id: legacy.webforms.logic-signal.v1
+    name: Legacy WebForms static logic and UI-boilerplate signals
+    description: Emits bounded deterministic handler-level signals for visible calculations, branches, service/database calls, domain object construction, and UI-only assignments or data binding.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsLogicSignalDetected
+      - AnalysisGap
+    limitations:
+      - Logic signals are deterministic static heuristics, not proof of business logic, code quality, risk, runtime behavior, or production usage.
+      - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
+      - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
+
   - id: snapshot.diff.source.v1
     name: Snapshot diff source comparison
     description: Compares source inventory and source metadata between two TraceMap snapshots by exact source label and stable source identity metadata.

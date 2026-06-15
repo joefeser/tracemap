@@ -89,7 +89,7 @@ public static class CSharpSemanticExtractor
         var gaps = new List<SemanticFactCandidate>();
         var projects = inventory.Where(item => item.Kind == "Project").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var solutions = inventory.Where(item => item.Kind == "Solution").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
-        var csharpFiles = inventory.Where(item => item.Kind == "CSharp").ToArray();
+        var csharpFiles = inventory.Where(item => FileInventory.IsCSharpKind(item.Kind)).ToArray();
 
         if (projects.Length == 0 && csharpFiles.Length > 0)
         {
