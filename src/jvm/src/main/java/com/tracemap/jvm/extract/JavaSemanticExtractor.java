@@ -296,8 +296,28 @@ public final class JavaSemanticExtractor {
         private void emitArguments(MethodInvocationTree node, ExecutableElement executable, String callee) {
             List<? extends ExpressionTree> args = node.getArguments();
             for (int i = 0; i < args.size(); i++) {
-                String parameterName = i < executable.getParameters().size() ? executable.getParameters().get(i).getSimpleName().toString() : "arg" + i;
-                String parameterType = i < executable.getParameters().size() ? executable.getParameters().get(i).asType().toString() : "";
+                VariableElement parameter = i < executable.getParameters().size() ? executable.getParameters().get(i) : null;
+                Element argumentElement = trees.getElement(new TreePath(getCurrentPath(), args.get(i)));
+                String parameterName = parameter == null ? "arg" + i : parameter.getSimpleName().toString();
+                String parameterType = parameter == null ? "" : parameter.asType().toString();
+                Map<String, String> properties = props(
+                    "language", "java",
+                    "parameterOrdinal", String.valueOf(i),
+                    "parameterName", parameterName,
+                    "parameterType", parameterType,
+                    "argumentOrdinal", String.valueOf(i),
+                    "argumentExpressionKind", args.get(i).getKind().name(),
+                    "argumentExpressionHash", Hashes.sha256(args.get(i).toString(), 32),
+                    "callKind", "Method");
+                if (parameter != null) {
+                    addSymbolProperties(properties, "parameter", parameter, "Parameter");
+                }
+                if (argumentElement != null) {
+                    properties.put("argumentSymbol", displayName(argumentElement));
+                    properties.put("argumentSymbolKind", argumentElement.getKind().name());
+                    properties.put("argumentType", argumentElement.asType().toString());
+                    addSymbolProperties(properties, "argument", argumentElement, argumentElement.getKind().name());
+                }
                 facts.add(FactFactory.create(
                     manifest,
                     FactTypes.ARGUMENT_PASSED,
@@ -308,7 +328,7 @@ public final class JavaSemanticExtractor {
                     currentMethod,
                     callee,
                     callee,
-                    props("language", "java", "parameterOrdinal", String.valueOf(i), "parameterName", parameterName, "parameterType", parameterType, "argumentOrdinal", String.valueOf(i), "argumentExpressionKind", args.get(i).getKind().name(), "argumentExpressionHash", Hashes.sha256(args.get(i).toString(), 32), "callKind", "Method")));
+                    properties));
             }
         }
 
@@ -373,6 +393,13 @@ public final class JavaSemanticExtractor {
         private static String packageName(String qualifiedType) {
             int dot = qualifiedType.lastIndexOf('.');
             return dot > 0 ? qualifiedType.substring(0, dot) : "";
+        }
+
+        private static void addSymbolProperties(Map<String, String> properties, String role, Element element, String symbolKind) {
+            properties.put(role + "SymbolId", symbolId(element));
+            properties.put(role + "SymbolLanguage", "java");
+            properties.put(role + "SymbolKind", symbolKind);
+            properties.put(role + "SymbolDisplayName", displayName(element));
         }
     }
 

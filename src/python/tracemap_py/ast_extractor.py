@@ -355,6 +355,7 @@ class AstVisitor(ast.NodeVisitor):
         field_symbol = f"{'.'.join([self.module, *self.class_stack])}.{target.attr}" if self.class_stack else f"{self.module}.{target.attr}"
         origin = _safe_name(node.value)
         origin_kind = "parameter" if self.parameters_stack and isinstance(node.value, ast.Name) and node.value.id in self.parameters_stack[-1] else "name"
+        origin_symbol = f"{containing}({origin})" if origin_kind == "parameter" else origin
         self.facts.append(
             create_fact(
                 self.manifest,
@@ -365,7 +366,15 @@ class AstVisitor(ast.NodeVisitor):
                 source_symbol=containing,
                 target_symbol=field_symbol,
                 contract_element=target.attr,
-                properties={"fieldSymbol": field_symbol, "fieldSymbolKind": "field", "originSymbol": origin, "originSymbolKind": origin_kind, "expressionHash": _node_hash(node.value)},
+                properties={
+                    **_symbol_props("target", _symbol_id(field_symbol, "field"), "field", field_symbol),
+                    **_symbol_props("origin", _symbol_id(origin_symbol, origin_kind), origin_kind, origin_symbol),
+                    "fieldSymbol": field_symbol,
+                    "fieldSymbolKind": "field",
+                    "originSymbol": origin,
+                    "originSymbolKind": origin_kind,
+                    "expressionHash": _node_hash(node.value),
+                },
             )
         )
 
@@ -485,7 +494,36 @@ class AstVisitor(ast.NodeVisitor):
             return
         for idx, arg in enumerate(node.args):
             if isinstance(arg, ast.Name) and arg.id in params:
-                self.facts.append(create_fact(self.manifest, FactTypes.ARGUMENT_PASSED, RuleIds.PY_ARGUMENT, EvidenceTiers.TIER3, self._span(node, "PythonAstExtractor", ScannerVersions.AST), source_symbol=self.containing_symbol, target_symbol=callee, contract_element=callee.split(".")[-1], properties={"parameterOrdinal": idx, "parameterName": f"arg{idx}", "argumentOrdinal": idx, "argumentExpressionKind": "Name", "argumentExpressionHash": _node_hash(arg), "argumentSymbol": arg.id, "argumentSymbolKind": "parameter", "targetSymbol": callee}))
+                source_parameter_symbol = f"{self.containing_symbol}({arg.id})" if self.containing_symbol else arg.id
+                target_parameter_name = f"arg{idx}"
+                target_parameter_symbol = f"{callee}({target_parameter_name})"
+                self.facts.append(
+                    create_fact(
+                        self.manifest,
+                        FactTypes.ARGUMENT_PASSED,
+                        RuleIds.PY_ARGUMENT,
+                        EvidenceTiers.TIER3,
+                        self._span(node, "PythonAstExtractor", ScannerVersions.AST),
+                        source_symbol=self.containing_symbol,
+                        target_symbol=callee,
+                        contract_element=callee.split(".")[-1],
+                        properties={
+                            **_symbol_props("argument", _symbol_id(source_parameter_symbol, "parameter"), "parameter", source_parameter_symbol),
+                            **_symbol_props("parameter", _symbol_id(target_parameter_symbol, "unresolved-parameter"), "unresolved-parameter", target_parameter_symbol),
+                            "parameterOrdinal": idx,
+                            "parameterName": target_parameter_name,
+                            "parameterIdentityStatus": "unresolvedOrdinalPlaceholder",
+                            "argumentOrdinal": idx,
+                            "argumentExpressionKind": "Name",
+                            "argumentExpressionHash": _node_hash(arg),
+                            "argumentSymbol": arg.id,
+                            "argumentSymbolKind": "parameter",
+                            "sourceParameterSymbol": source_parameter_symbol,
+                            "targetParameterSymbol": target_parameter_symbol,
+                            "targetSymbol": callee,
+                        },
+                    )
+                )
 
     def _record_local_alias(self, node: ast.Assign) -> None:
         if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
@@ -494,7 +532,30 @@ class AstVisitor(ast.NodeVisitor):
             return
         alias = node.targets[0].id
         origin = _safe_name(node.value)
-        self.facts.append(create_fact(self.manifest, FactTypes.LOCAL_ALIAS, RuleIds.PY_ARGUMENT, EvidenceTiers.TIER3, self._span(node, "PythonAstExtractor", ScannerVersions.AST), source_symbol=self.containing_symbol, target_symbol=alias, contract_element=alias, properties={"aliasSymbolKind": "local", "originSymbol": origin, "originSymbolKind": "name", "expressionHash": _node_hash(node.value)}))
+        alias_symbol = f"{self.containing_symbol}({alias})" if self.containing_symbol else alias
+        origin_kind = "parameter" if self.parameters_stack and isinstance(node.value, ast.Name) and node.value.id in self.parameters_stack[-1] else "name"
+        origin_symbol = f"{self.containing_symbol}({origin})" if origin_kind == "parameter" and self.containing_symbol else origin
+        self.facts.append(
+            create_fact(
+                self.manifest,
+                FactTypes.LOCAL_ALIAS,
+                RuleIds.PY_ARGUMENT,
+                EvidenceTiers.TIER3,
+                self._span(node, "PythonAstExtractor", ScannerVersions.AST),
+                source_symbol=self.containing_symbol,
+                target_symbol=alias,
+                contract_element=alias,
+                properties={
+                    **_symbol_props("target", _symbol_id(alias_symbol, "local"), "local", alias_symbol),
+                    **_symbol_props("origin", _symbol_id(origin_symbol, origin_kind), origin_kind, origin_symbol),
+                    "aliasSymbol": alias,
+                    "aliasSymbolKind": "local",
+                    "originSymbol": origin,
+                    "originSymbolKind": origin_kind,
+                    "expressionHash": _node_hash(node.value),
+                },
+            )
+        )
 
     def _call_name(self, node: ast.AST | None) -> str:
         if not isinstance(node, ast.Call):

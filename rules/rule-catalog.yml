@@ -1042,12 +1042,13 @@ rules:
 
   - id: typescript.semantic.valueflow.v1
     name: TypeScript semantic argument value flow
-    description: Records direct call-site argument-to-parameter facts with expression hashes.
+    description: Records direct call-site argument-to-parameter facts with expression hashes and shared argument/parameter role metadata when compiler symbols are available.
     evidenceTier: Tier1Semantic
     emits:
       - ArgumentPassed
     limitations:
       - Tracks direct call-site arguments only; field/property aliases and interprocedural parameter-forward edges are follow-up work.
+      - Parameter role metadata is emitted only when the TypeScript compiler resolves the call signature; unresolved syntax fallback remains lower-tier evidence.
 
   - id: typescript.semantic.localalias.v1
     name: TypeScript semantic local alias
@@ -1348,13 +1349,14 @@ rules:
 
   - id: jvm.java.semantic.valueflow.v1
     name: Java semantic argument value flow
-    description: Maps resolved Java call-site argument expressions to callee parameter names and records simple local aliases when the initializer resolves to a symbol.
+    description: Maps resolved Java call-site argument expressions to callee parameter names with shared argument/parameter role metadata and records simple local aliases when the initializer resolves to a symbol.
     evidenceTier: Tier1Semantic
     emits:
       - ArgumentPassed
       - LocalAlias
     limitations:
       - Tracks direct call-site arguments only.
+      - Argument role metadata is emitted only when javac resolves the argument expression to a symbol.
       - Local aliases are limited to direct local variable initializers with a resolved origin symbol.
       - Does not perform interprocedural aliasing, field aliasing, mutation tracking, collection contents, branch feasibility, or async/callback flow.
 
@@ -1521,7 +1523,7 @@ rules:
 
   - id: python.ast.argumentflow.v1
     name: Python AST argument flow
-    description: Emits direct parameter-to-call argument flow, simple local alias facts, and direct self-field alias facts when a function parameter or simple name is passed or assigned by name.
+    description: Emits direct parameter-to-call argument flow, simple local alias facts, and direct self-field alias facts with shared role metadata where AST-visible names are available.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - ArgumentPassed
@@ -1529,6 +1531,7 @@ rules:
       - FieldAlias
     limitations:
       - Tracks direct same-function call arguments, local aliases, and self-field assignments only.
+      - Callee parameters are ordinal placeholders unless a future Python semantic layer resolves callable signatures.
       - Does not model transitive aliasing, mutation, collection contents, interprocedural return values, branch feasibility, async/callback flow, or dynamic kwargs expansion.
 
   - id: python.ast.relationships.v1

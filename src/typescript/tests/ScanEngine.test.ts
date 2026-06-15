@@ -3,6 +3,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import initSqlJs from "sql.js";
 import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
 import { FactTypes, ScanManifest } from "../src/facts/Models";
@@ -36,6 +37,19 @@ describe("ScanEngine", () => {
     expect(result.manifest.buildStatus).toBe("Succeeded");
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.PropertyAccessed, evidenceTier: "Tier1Semantic" }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.MethodInvoked, evidenceTier: "Tier1Semantic" }));
+    const roleBackedArgument = result.facts.find((fact) =>
+      fact.factType === FactTypes.ArgumentPassed
+      && fact.ruleId === RuleIds.TypeScriptSemanticValueFlow
+      && Boolean(fact.properties.argumentSymbolId)
+      && Boolean(fact.properties.parameterSymbolId)
+    );
+    expect(roleBackedArgument?.properties).toEqual(expect.objectContaining({
+      argumentSymbolLanguage: "typescript",
+      argumentSymbolDisplayName: expect.any(String),
+      parameterName: expect.any(String),
+      parameterSymbolLanguage: "typescript",
+      parameterSymbolDisplayName: expect.any(String)
+    }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.HttpRouteBinding }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.ConfigKeyDeclared, targetSymbol: "CUSTOMER_ENDPOINT" }));
     expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.QueryPatternDetected }));
@@ -68,6 +82,20 @@ describe("ScanEngine", () => {
     expect(entityPattern?.properties.sortFields).toContain("updated_at");
     expect(JSON.stringify(result.facts)).not.toContain("organization_id: \"org_1\"");
     expect(JSON.stringify(result.facts)).not.toContain("tsc -p tsconfig.json");
+
+    const sqlJs = await initSqlJs({ locateFile: (file) => findSqlJsFile(file) });
+    const db = new sqlJs.Database(fs.readFileSync(path.join(out, "index.sqlite")));
+    try {
+      const rows = db.exec("select role, count(*) from fact_symbols where role in ('argument', 'parameter') group by role order by role");
+      expect(rows[0]?.values).toEqual([
+        ["argument", expect.any(Number)],
+        ["parameter", expect.any(Number)]
+      ]);
+      expect(Number(rows[0].values[0][1])).toBeGreaterThan(0);
+      expect(Number(rows[0].values[1][1])).toBeGreaterThan(0);
+    } finally {
+      db.close();
+    }
   });
 
   it("runs syntax fallback for a repo with no tsconfig and broken syntax", async () => {

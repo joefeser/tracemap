@@ -144,6 +144,26 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
     assert by_type["ArgumentPassed"] >= 1
     assert by_type["FieldAlias"] >= 1
     assert by_type["SymbolRelationship"] >= 1
+    assert any(
+        fact.fact_type == "ArgumentPassed"
+        and fact.rule_id == "python.ast.argumentflow.v1"
+        and fact.properties.get("argumentSymbol") == "status"
+        and fact.properties.get("argumentSymbolId")
+        and fact.properties.get("argumentSymbolLanguage") == "python"
+        and fact.properties.get("parameterIdentityStatus") == "unresolvedOrdinalPlaceholder"
+        and fact.properties.get("parameterSymbolId")
+        and fact.properties.get("parameterSymbolKind") == "unresolved-parameter"
+        for fact in facts
+    )
+    assert any(
+        fact.fact_type == "FieldAlias"
+        and fact.properties.get("fieldSymbol", "").endswith(".client")
+        and fact.properties.get("targetSymbolId")
+        and fact.properties.get("originSymbol") == "client"
+        and fact.properties.get("originSymbolId")
+        and fact.properties.get("originSymbolKind") == "parameter"
+        for fact in facts
+    )
 
     con = sqlite3.connect(out / "index.sqlite")
     try:
@@ -152,6 +172,7 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
         assert _scalar(con, "select count(*) from argument_flows") >= 1
         assert _scalar(con, "select count(*) from field_aliases") >= 1
         assert _scalar(con, "select count(*) from parameter_forward_edges") >= 1
+        assert _scalar(con, "select count(*) from fact_symbols where role in ('argument', 'parameter', 'origin')") >= 3
         assert _scalar(con, "select count(*) from symbol_relationships") >= 1
         assert _scalar(con, "select count(*) from symbols where language = 'python'") >= 1
         route = con.execute("select properties_json from facts where fact_type='HttpRouteBinding' order by fact_id limit 1").fetchone()[0]
