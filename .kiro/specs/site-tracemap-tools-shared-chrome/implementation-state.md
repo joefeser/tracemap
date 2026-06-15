@@ -15,6 +15,9 @@ blog pages use the same renderer.
 
 The validator now imports the canonical navigation data from the build script,
 so generation and validation share one link list instead of duplicating it.
+The static HTML transform is scoped to the layout header directly under
+`<body>`, tolerates additional header attributes and class order changes, and
+fails the build when a static HTML page has no replaceable site header.
 
 ## Validation
 

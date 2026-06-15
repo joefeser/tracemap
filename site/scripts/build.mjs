@@ -455,7 +455,15 @@ ${indent(header, 4)}
 
 function transformStaticHtml(html, publicPath) {
   const header = renderHeader(publicPath);
-  const transformed = html.replace(/<header class="site-header">[\s\S]*?<\/header>/, indent(header, 4).trimStart());
+  const headerPattern =
+    /(<body\b[^>]*>\s*)([ \t]*)<header\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bsite-header\b[^"']*["'])[^>]*>[\s\S]*?<\/header>/i;
+  const transformed = html.replace(headerPattern, (_match, bodyStart, sourceIndent) => {
+    return `${bodyStart}${indent(header, sourceIndent.length)}`;
+  });
+
+  if (transformed === html) {
+    throw new Error(`Static HTML page is missing a replaceable site header: ${publicPath}`);
+  }
 
   return transformed.endsWith("\n") ? transformed : `${transformed}\n`;
 }
@@ -487,7 +495,8 @@ function currentNavValue(href, currentPath) {
     return "page";
   }
 
-  if (href !== "/" && currentPath.startsWith(href)) {
+  const sectionPrefix = href.endsWith("/") ? href : `${href}/`;
+  if (sectionPrefix !== "/" && currentPath.startsWith(sectionPrefix)) {
     return "location";
   }
 

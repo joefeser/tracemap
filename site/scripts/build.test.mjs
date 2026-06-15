@@ -38,6 +38,43 @@ test("buildSite publishes generated blog pages and keeps private blog folders ou
   await assert.rejects(stat(join(root, "dist", "_site")), /ENOENT/);
 });
 
+test("buildSite replaces source headers with additional attributes and class order changes", async () => {
+  const root = await createSiteFixture({
+    articles: [article("first-post")],
+    bodies: { "first-post": "<p>Body content.</p>" },
+    indexHtml: `<!doctype html>
+<html>
+  <body>
+    <header id="top" data-source="fixture" class="old site-header stale">
+      <nav class="top-nav"><a href="/old/">Old Nav</a></nav>
+    </header>
+  </body>
+</html>`
+  });
+
+  await buildSite({ log: () => {}, root });
+
+  const home = await readFile(join(root, "dist", "index.html"), "utf8");
+
+  assert.match(home, /<header class="site-header">/);
+  assert.match(home, /href="\/capabilities\/">Capabilities<\/a>/);
+  assert.doesNotMatch(home, /Old Nav/);
+  assert.doesNotMatch(home, /data-source="fixture"/);
+});
+
+test("buildSite reports static HTML pages without replaceable site headers", async () => {
+  const root = await createSiteFixture({
+    articles: [article("first-post")],
+    bodies: { "first-post": "<p>Body content.</p>" },
+    indexHtml: "<!doctype html><html><body><main>Fixture</main></body></html>"
+  });
+
+  await assert.rejects(
+    buildSite({ log: () => {}, root }),
+    /Static HTML page is missing a replaceable site header: \//
+  );
+});
+
 test("buildSite reports missing blog metadata with site-relative context", async () => {
   const root = await createSiteFixture({ skipMetadata: true });
 
@@ -130,6 +167,12 @@ test("buildSite reports non-object sitemap page metadata with index context", as
 async function createSiteFixture({
   articles = [],
   bodies = {},
+  indexHtml = `<!doctype html>
+<html>
+  <body>
+    <header class="site-header"><nav class="top-nav"><a href="/old/">Old Nav</a></nav></header>
+  </body>
+</html>`,
   sitePages = [sitemapPage("/")],
   skipMetadata = false,
   skipSiteMetadata = false
@@ -142,12 +185,7 @@ async function createSiteFixture({
 
   await mkdir(articleDir, { recursive: true });
   await mkdir(siteData, { recursive: true });
-  await writeFile(
-    join(src, "index.html"),
-    `<!doctype html><title>Fixture</title>
-    <header class="site-header"><nav class="top-nav"><a href="/old/">Old Nav</a></nav></header>`,
-    "utf8"
-  );
+  await writeFile(join(src, "index.html"), indexHtml, "utf8");
 
   if (!skipMetadata) {
     await writeFile(join(blog, "articles.json"), JSON.stringify(articles, null, 2), "utf8");
