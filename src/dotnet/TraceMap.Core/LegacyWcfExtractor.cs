@@ -41,6 +41,7 @@ public static partial class LegacyWcfExtractor
             var document = XDocument.Load(fullPath, LoadOptions.SetLineInfo);
             foreach (var endpoint in document.Descendants()
                 .Where(element => element.Name.LocalName == "endpoint")
+                .Where(IsServiceModelEndpoint)
                 .OrderBy(GetLine)
                 .ThenBy(element => AttributeValue(element, "name") ?? string.Empty, StringComparer.Ordinal))
             {
@@ -118,7 +119,7 @@ public static partial class LegacyWcfExtractor
                     facts.Add(FactFactory.Create(
                         manifest,
                         FactTypes.WcfServiceContractDeclared,
-                        RuleIds.LegacyWcfContract,
+                            RuleIds.LegacyWcfContract,
                         EvidenceTiers.Tier3SyntaxOrTextual,
                         Span(tree, file.RelativePath, type),
                         sourceSymbol: typeName,
@@ -131,19 +132,21 @@ public static partial class LegacyWcfExtractor
                         }));
                 }
 
-                var isGeneratedClient = IsGeneratedClient(type);
+                var clientContractName = GetClientBaseContractName(type);
+                var isGeneratedClient = !string.IsNullOrWhiteSpace(clientContractName);
                 if (isGeneratedClient)
                 {
                     facts.Add(FactFactory.Create(
-                        manifest,
-                        FactTypes.WcfGeneratedClientDeclared,
-                        RuleIds.LegacyWcfContract,
-                        EvidenceTiers.Tier2Structural,
+                                manifest,
+                                FactTypes.WcfGeneratedClientDeclared,
+                                RuleIds.LegacyWcfContract,
+                                EvidenceTiers.Tier2Structural,
                         Span(tree, file.RelativePath, type),
                         sourceSymbol: typeName,
                         targetSymbol: typeName,
                         properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                         {
+                            ["clientContractName"] = clientContractName,
                             ["clientName"] = type.Identifier.ValueText,
                             ["matchedBy"] = generatedFile ? "GeneratedServiceReferenceFile" : "ClientBaseOrClientSuffix",
                             ["typeName"] = typeName
@@ -177,7 +180,7 @@ public static partial class LegacyWcfExtractor
                         facts.Add(FactFactory.Create(
                             manifest,
                             FactTypes.WcfGeneratedClientDeclared,
-                            RuleIds.LegacyWcfContract,
+                        RuleIds.LegacyWcfContract,
                             EvidenceTiers.Tier2Structural,
                             Span(tree, file.RelativePath, method),
                             sourceSymbol: typeName,
@@ -185,6 +188,7 @@ public static partial class LegacyWcfExtractor
                             contractElement: methodName,
                             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                             {
+                                ["clientContractName"] = clientContractName,
                                 ["clientName"] = type.Identifier.ValueText,
                                 ["operationName"] = methodName,
                                 ["typeName"] = typeName
@@ -287,13 +291,33 @@ public static partial class LegacyWcfExtractor
         foreach (var client in generatedMethods.OrderBy(fact => fact.TargetSymbol, StringComparer.Ordinal))
         {
             var operationName = client.Properties.GetValueOrDefault("operationName", string.Empty);
+            var clientContractName = client.Properties.GetValueOrDefault("clientContractName", string.Empty);
             if (string.IsNullOrWhiteSpace(operationName))
             {
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(clientContractName))
+            {
+                facts.Add(FactFactory.Create(
+                    manifest,
+                    FactTypes.AnalysisGap,
+                    RuleIds.LegacyWcfMapping,
+                    EvidenceTiers.Tier4Unknown,
+                    client.Evidence,
+                    sourceSymbol: client.TargetSymbol,
+                    contractElement: operationName,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["classification"] = "MissingWcfClientContract",
+                        ["message"] = "Generated WCF client did not expose a parseable ClientBase<TContract> contract.",
+                        ["operationName"] = operationName
+                    }));
                 continue;
             }
 
             var matchingOperations = operations
                 .Where(operation => operation.Properties.GetValueOrDefault("operationName", string.Empty).Equals(operationName, StringComparison.Ordinal))
+                .Where(operation => NamesAlign(clientContractName, operation.Properties.GetValueOrDefault("contractName", string.Empty)))
                 .OrderBy(operation => operation.TargetSymbol, StringComparer.Ordinal)
                 .ToArray();
             foreach (var operation in matchingOperations)
@@ -304,7 +328,7 @@ public static partial class LegacyWcfExtractor
                     .OrderBy(endpoint => endpoint.TargetSymbol, StringComparer.Ordinal)
                     .ToArray();
                 var matchingHosts = hosts
-                    .Where(host => NamesAlign(host.Properties.GetValueOrDefault("serviceName", string.Empty), contractName))
+                    .Where(host => HostMatchesContract(host.Properties.GetValueOrDefault("serviceName", string.Empty), contractName))
                     .OrderBy(host => host.TargetSymbol, StringComparer.Ordinal)
                     .ToArray();
                 var ambiguous = matchingEndpoints.Length > 1 || matchingHosts.Length > 1 || matchingOperations.Length > 1;
@@ -323,6 +347,7 @@ public static partial class LegacyWcfExtractor
                 var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["clientName"] = client.Properties.GetValueOrDefault("clientName", string.Empty),
+                    ["clientContractName"] = clientContractName,
                     ["contractName"] = contractName,
                     ["endpointCount"] = matchingEndpoints.Length.ToString(),
                     ["hostCount"] = matchingHosts.Length.ToString(),
@@ -383,13 +408,39 @@ public static partial class LegacyWcfExtractor
             || text.Contains("[GeneratedCode", StringComparison.Ordinal);
     }
 
-    private static bool IsGeneratedClient(TypeDeclarationSyntax type)
+    private static string GetClientBaseContractName(TypeDeclarationSyntax type)
     {
         var typeName = type.Identifier.ValueText;
-        var baseText = type.BaseList?.ToString() ?? string.Empty;
-        return typeName.EndsWith("Client", StringComparison.Ordinal)
-            && (baseText.Contains("ClientBase", StringComparison.Ordinal)
-                || baseText.Contains("System.ServiceModel.ClientBase", StringComparison.Ordinal));
+        if (!typeName.EndsWith("Client", StringComparison.Ordinal) || type.BaseList is null)
+        {
+            return string.Empty;
+        }
+
+        foreach (var baseType in type.BaseList.Types)
+        {
+            var baseName = baseType.Type;
+            if (baseName is QualifiedNameSyntax qualifiedName)
+            {
+                baseName = qualifiedName.Right;
+            }
+            if (baseName is AliasQualifiedNameSyntax aliasQualifiedName)
+            {
+                baseName = aliasQualifiedName.Name;
+            }
+            if (baseName is not GenericNameSyntax genericName || genericName.TypeArgumentList.Arguments.Count != 1)
+            {
+                continue;
+            }
+
+            var identifier = genericName.Identifier.ValueText;
+            if (identifier is "ClientBase"
+                || baseType.Type.ToString().StartsWith("System.ServiceModel.ClientBase<", StringComparison.Ordinal))
+            {
+                return genericName.TypeArgumentList.Arguments[0].ToString().Trim();
+            }
+        }
+
+        return string.Empty;
     }
 
     private static bool HasAttribute(SyntaxList<AttributeListSyntax> attributes, string expectedName)
@@ -408,14 +459,24 @@ public static partial class LegacyWcfExtractor
 
     private static string GetTypeName(TypeDeclarationSyntax type)
     {
+        var parts = new List<string> { type.Identifier.ValueText };
+        SyntaxNode? parent = type.Parent;
+        while (parent is TypeDeclarationSyntax parentType)
+        {
+            parts.Add(parentType.Identifier.ValueText);
+            parent = parent.Parent;
+        }
+
+        parts.Reverse();
+        var typeName = string.Join(".", parts);
         var namespaces = type.Ancestors()
             .OfType<BaseNamespaceDeclarationSyntax>()
             .Select(ns => ns.Name.ToString())
             .Reverse()
             .ToArray();
         return namespaces.Length == 0
-            ? type.Identifier.ValueText
-            : string.Join(".", namespaces) + "." + type.Identifier.ValueText;
+            ? typeName
+            : string.Join(".", namespaces) + "." + typeName;
     }
 
     private static EvidenceSpan Span(SyntaxTree tree, string relativePath, SyntaxNode node)
@@ -441,6 +502,56 @@ public static partial class LegacyWcfExtractor
         return left.Equals(right, StringComparison.Ordinal)
             || left.EndsWith("." + right, StringComparison.Ordinal)
             || right.EndsWith("." + left, StringComparison.Ordinal);
+    }
+
+    private static bool HostMatchesContract(string serviceName, string contractName)
+    {
+        if (NamesAlign(serviceName, contractName))
+        {
+            return true;
+        }
+
+        var serviceSimpleName = SimpleName(serviceName);
+        var contractSimpleName = StripInterfacePrefix(SimpleName(contractName));
+        return !string.IsNullOrWhiteSpace(serviceSimpleName)
+            && serviceSimpleName.Equals(contractSimpleName, StringComparison.Ordinal);
+    }
+
+    private static bool IsServiceModelEndpoint(XElement endpoint)
+    {
+        var serviceModelAncestor = endpoint.Ancestors().FirstOrDefault(element => element.Name.LocalName == "system.serviceModel");
+        if (serviceModelAncestor is null)
+        {
+            return false;
+        }
+
+        var clientAncestor = endpoint.Ancestors().FirstOrDefault(element => element.Name.LocalName == "client");
+        if (clientAncestor is not null)
+        {
+            return clientAncestor.Parent == serviceModelAncestor;
+        }
+
+        var serviceAncestor = endpoint.Ancestors().FirstOrDefault(element => element.Name.LocalName == "service");
+        return serviceAncestor?.Parent?.Name.LocalName == "services"
+            && serviceAncestor.Parent.Parent == serviceModelAncestor;
+    }
+
+    private static string SimpleName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var lastDot = value.LastIndexOf('.');
+        return lastDot >= 0 ? value[(lastDot + 1)..] : value;
+    }
+
+    private static string StripInterfacePrefix(string value)
+    {
+        return value.Length > 1 && value[0] == 'I' && char.IsUpper(value[1])
+            ? value[1..]
+            : value;
     }
 
     private static void AddMissing(SortedDictionary<string, string> properties, string key, string value)

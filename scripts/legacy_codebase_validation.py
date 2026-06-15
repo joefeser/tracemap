@@ -106,7 +106,12 @@ def require_under_legacy_root(path: Path, root: Path, *, allow_file: bool) -> Pa
 
 def load_manifest(path: Path, root: Path) -> Manifest:
     manifest_path = require_under_legacy_root(path, root, allow_file=True)
-    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValidationError("manifest", f"failed to read or parse manifest: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValidationError("manifest", "manifest root must be an object")
     raw_samples = data.get("samples")
     if not isinstance(raw_samples, list) or not raw_samples:
         raise ValidationError("manifest", "manifest must contain a non-empty samples array")
@@ -238,12 +243,16 @@ def summarize_sample(sample: Sample, output_dir: Path, status: str, exit_code: i
     if output_size > sample.max_artifact_bytes:
         limitations.append("artifact size exceeded configured bound")
 
-    manifest = read_json_file(sample_out / "scan-manifest.json")
-    facts = read_facts(sample_out / "facts.ndjson")
     if artifacts["index.sqlite"]:
         sql_counts = read_sqlite_counts(sample_out / "index.sqlite")
     else:
         sql_counts = {}
+    parse_facts = not truncated or not sql_counts
+    if not parse_facts:
+        limitations.append("facts.ndjson parsing skipped because artifact size exceeded configured bound and SQLite counts were available")
+
+    manifest = read_json_file(sample_out / "scan-manifest.json")
+    facts = read_facts(sample_out / "facts.ndjson") if parse_facts else []
 
     gap_count = int(sql_counts.get("AnalysisGap", 0)) if sql_counts else sum(1 for fact in facts if fact.get("factType") == "AnalysisGap")
     fact_count = int(sql_counts.get("__facts__", 0)) if sql_counts else len(facts)
@@ -288,15 +297,19 @@ def read_facts(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     facts: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not line.strip():
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            facts.append(value)
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(value, dict):
+                    facts.append(value)
+    except OSError:
+        return []
     return facts
 
 
