@@ -10,7 +10,9 @@ export async function buildSite(options = {}) {
   await rm(context.dist, { recursive: true, force: true });
   await mkdir(context.dist, { recursive: true });
   await copyPublicSource(context.src, context.dist);
-  await generateBlog(context);
+  const articles = await readArticles(context);
+  await generateBlog(context, articles);
+  await generateSitemap(context, articles);
 
   context.log("Built static site to dist/");
 }
@@ -25,6 +27,7 @@ function createBuildContext({ log = console.log, root = defaultRoot } = {}) {
     dist,
     log,
     root: siteRoot,
+    siteSource: resolve(src, "_site"),
     src
   };
 }
@@ -51,9 +54,7 @@ async function copyPublicSource(from, to) {
   }
 }
 
-async function generateBlog(context) {
-  const articles = await readArticles(context);
-
+async function generateBlog(context, articles) {
   await writeOutput(context, "blog/index.html", renderBlogIndex(articles));
 
   for (const article of articles) {
@@ -93,6 +94,47 @@ async function readArticles(context) {
   return articles;
 }
 
+async function generateSitemap(context, articles) {
+  const pages = await readSitemapPages(context);
+  const entries = [
+    ...pages,
+    ...articles.map((article) => ({
+      path: `/blog/${article.slug}/`,
+      changefreq: "yearly",
+      priority: "0.7"
+    }))
+  ];
+
+  validateSitemapEntries(entries);
+  await writeOutput(context, "sitemap.xml", renderSitemap(entries));
+}
+
+async function readSitemapPages(context) {
+  const metadataPath = resolve(context.siteSource, "pages.json");
+  const raw = await readSiteSourceFile(
+    context,
+    "pages.json",
+    `Missing site page metadata file: ${formatSitePath(context, metadataPath)}`
+  );
+  let pages;
+
+  try {
+    pages = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Site page metadata is not valid JSON: ${error.message}`);
+  }
+
+  if (!Array.isArray(pages) || pages.length === 0) {
+    throw new Error("Site page metadata must be a non-empty array.");
+  }
+
+  for (const [index, page] of pages.entries()) {
+    validateSitemapPage(page, index);
+  }
+
+  return pages;
+}
+
 async function readBlogSourceFile(context, relativePath, missingMessage) {
   try {
     return await readFile(resolve(context.blogSource, relativePath), "utf8");
@@ -102,6 +144,18 @@ async function readBlogSourceFile(context, relativePath, missingMessage) {
     }
 
     throw new Error(`Unable to read blog source file: ${relativePath}`, { cause: error });
+  }
+}
+
+async function readSiteSourceFile(context, relativePath, missingMessage) {
+  try {
+    return await readFile(resolve(context.siteSource, relativePath), "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error(missingMessage, { cause: error });
+    }
+
+    throw new Error(`Unable to read site source file: ${relativePath}`, { cause: error });
   }
 }
 
@@ -142,6 +196,52 @@ function validateArticle(article, slugs) {
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(article.published)) {
     throw new Error(`Blog article published date must use YYYY-MM-DD: ${article.slug}`);
+  }
+}
+
+function validateSitemapPage(page, index) {
+  if (!isPlainObject(page)) {
+    throw new Error(`Site page metadata entry at index ${index} must be an object.`);
+  }
+
+  for (const field of ["path", "changefreq", "priority"]) {
+    if (typeof page[field] !== "string" || page[field].trim() === "") {
+      throw new Error(`Site page metadata entry at index ${index} is missing required string field: ${field}`);
+    }
+  }
+
+  validateSitemapEntry(page);
+}
+
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateSitemapEntries(entries) {
+  const paths = new Set();
+
+  for (const entry of entries) {
+    validateSitemapEntry(entry);
+
+    if (paths.has(entry.path)) {
+      throw new Error(`Sitemap path is duplicated: ${entry.path}`);
+    }
+
+    paths.add(entry.path);
+  }
+}
+
+function validateSitemapEntry(entry) {
+  if (!/^\/(?:[a-z0-9]+(?:-[a-z0-9]+)*\/)*$/.test(entry.path)) {
+    throw new Error(`Sitemap path is invalid: ${entry.path}`);
+  }
+
+  if (!/^(always|hourly|daily|weekly|monthly|yearly|never)$/.test(entry.changefreq)) {
+    throw new Error(`Sitemap changefreq is invalid for ${entry.path}: ${entry.changefreq}`);
+  }
+
+  if (!/^(?:0(?:\.[0-9])?|1(?:\.0)?)$/.test(entry.priority)) {
+    throw new Error(`Sitemap priority is invalid for ${entry.path}: ${entry.priority}`);
   }
 }
 
@@ -246,6 +346,23 @@ ${indent(body, 10)}
   });
 }
 
+function renderSitemap(entries) {
+  const urls = entries
+    .map(
+      (entry) => `  <url>
+    <loc>${escapeXml(`https://tracemap.tools${entry.path}`)}</loc>
+    <changefreq>${escapeXml(entry.changefreq)}</changefreq>
+    <priority>${escapeXml(entry.priority)}</priority>
+  </url>`
+    )
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`;
+}
+
 function renderPage({
   articlePublished,
   blogCurrent,
@@ -324,6 +441,13 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function escapeXml(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function indent(value, spaces) {
