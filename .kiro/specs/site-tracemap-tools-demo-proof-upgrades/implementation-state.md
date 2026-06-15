@@ -1,14 +1,14 @@
 # Implementation State
 
-Status: not-started
-Branch: codex/site-demo-proof-upgrades-spec
+Status: implemented
+Branch: codex/site-demo-proof-upgrades
 Public claim level: demo
 
 ## Summary
 
-This spec is ready for implementation, but the `/demo/proof-upgrades/` page has
-not been added yet. The unchecked boxes in `tasks.md` are the current ready
-implementation checklist for the next site PR.
+The `/demo/proof-upgrades/` page has been implemented with linked updates from
+`/demo/`, `/demo/result/`, `/roadmap/`, `/demo/start-here/`, and sitemap
+metadata. Site validation and browser sanity checks passed in this branch.
 
 ## Branch
 
@@ -22,7 +22,7 @@ This spec queues a public `/demo/proof-upgrades/` page. The page should explain 
 
 ## Evidence State
 
-Coordinator checked current `origin/main` and `origin/dev` after `main` was merged into `dev`. A fresh run of `./scripts/demo-public.sh <ignored-out>` passed and produced available sections for all six rows.
+Coordinator checked current `origin/main` and `origin/dev` after `main` was merged into `dev`. A fresh Codex run of `./scripts/demo-public.sh /tmp/tracemap-demo-proof-upgrades` passed on June 15, 2026 and produced available sections for all six rows.
 
 All six rows are safe to describe as `demo`:
 
@@ -35,12 +35,23 @@ All six rows are safe to describe as `demo`:
 
 The reports are demo evidence with `PartialAnalysis` coverage where applicable. They are not full proof, runtime proof, release approval, or production usage evidence.
 
+Current refreshed counts from `/tmp/tracemap-demo-proof-upgrades/demo-summary.json`:
+
+- combine-and-dependency-report: 6 sources, 14 endpoint findings, 62 dependency surfaces, 77 dependency edges, 2 gaps.
+- paths-and-reverse: 12 paths, 37 path gaps, 25 reverse paths, 6 reverse roots, 23 reverse gaps, 5 selected surfaces.
+- portfolio: 2 portfolio inputs, 6 sources, 9 dependency surfaces, 10 dependency edges, 4 endpoint findings, 4 gaps.
+- diff: 14 diff rows, 12 surface diffs, 0 endpoint diffs, 0 edge diffs, 0 gaps.
+- impact: 14 diff rows considered, 12 impact items, 12 surface impacts, 0 endpoint impacts, 0 edge impacts, 0 gaps.
+- release-review: 50 findings, 50 top changed surfaces, 0 contract findings, 3 gaps, 53 checklist items.
+
 ## Scope Decisions
 
 - Treat the overall page as demo-level because checked-in samples and generated public-safe summaries now exist for the six rows.
 - Keep the page focused on the demo evidence ledger, not a broad product roadmap.
 - Use `/roadmap/` for the general claim ledger and `/demo/proof-upgrades/` for demo-row evidence details and remaining boundaries.
 - Preserve promotion gates for stronger claims: static demo evidence is not runtime proof, production proof, release approval, or endpoint performance proof.
+- Implement the page using the existing `/demo/result/` long-form pattern: page hero, split sections, repeated evidence cards or detail rows, boundary section, and source-material link section.
+- Update `/demo/result/` and `/roadmap/` in the same implementation slice so they do not contradict the new demo-evidence page.
 
 ## Claim Boundaries
 
@@ -85,11 +96,14 @@ Avoid:
 
 When implemented:
 
-- `npm test` from `site/`
-- `npm run validate` from `site/`
-- `git diff --check`
-- Desktop browser sanity check for `/demo/proof-upgrades/`
-- Mobile browser sanity check for `/demo/proof-upgrades/`
+- Passed: `npm test` from `site/`
+- Passed: `npm run validate` from `site/`
+- Passed: `git diff --check`
+- Confirm `site/package.json` still defines `validate` before relying on `npm run validate`.
+- Confirmed `site/package.json` defines `validate` as `node scripts/validate.mjs`.
+- Confirmed `samples/public-demo/before/` and `samples/public-demo/after/` exist before publishing before/after fixture copy.
+- Passed: desktop browser sanity check for `/demo/proof-upgrades/` at 1440x1000, with six cards, no horizontal overflow, and no console errors.
+- Passed: mobile browser sanity check for `/demo/proof-upgrades/` at 390x844, with six stacked cards, no page-level horizontal overflow, and no console errors.
 
 ## Follow-Up Items
 
