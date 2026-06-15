@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap capability map: scanner outputs, combined reports, static paths, reverse queries, change reports, release packets, and language adapter maturity."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Capabilities | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/capabilities/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Capabilities">
+    <meta property="og:description" content="What TraceMap can inspect today, with maturity labels and claim boundaries.">
+    <meta property="og:url" content="https://tracemap.tools/capabilities/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Capabilities</p>
+        <h1>TraceMap maps static evidence across scans, indexes, and review packets.</h1>
+        <p class="hero-subhead">
+          This demo/evidence matrix maps what TraceMap can show from public
+          samples, repository docs, validation commands, and source-backed
+          workflows. It is not a product-completeness promise.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. Rows use main, demo, dev, or future status
+          language and should not be upgraded to shipped until the relevant
+          evidence is true on main.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="workflow-grid">
+          <article>
+            <h3>Scan</h3>
+            <p>Index repositories into manifests, facts, SQLite, reports, and analyzer logs.</p>
+            <p><code>tracemap scan</code></p>
+            <p><strong>Status:</strong> demo. <strong>Proof:</strong> <code>scripts/demo-public.sh</code>, <code>samples/</code>.</p>
+          </article>
+          <article>
+            <h3>Reduce</h3>
+            <p>Reduce contract deltas against indexed facts with evidence rows and coverage-aware outcomes.</p>
+            <p><code>tracemap reduce</code></p>
+            <p><strong>Status:</strong> main. <strong>Proof:</strong> <code>README.md</code>, <code>src/dotnet/TraceMap.Cli/Program.cs</code>.</p>
+          </article>
+          <article>
+            <h3>Combine</h3>
+            <p>Merge indexes while preserving source labels, commit metadata, coverage, and provenance.</p>
+            <p><code>tracemap combine</code></p>
+            <p><strong>Status:</strong> main. <strong>Proof:</strong> <code>docs/VALIDATION.md</code>, <code>scripts/smoke-combined-paths.sh</code>.</p>
+          </article>
+          <article>
+            <h3>Report</h3>
+            <p>Generate combined dependency reports for endpoints, surfaces, edges, gaps, and limitations.</p>
+            <p><code>tracemap report</code></p>
+            <p><strong>Status:</strong> main. <strong>Proof:</strong> <code>README.md</code>, <code>docs/VALIDATION.md</code>.</p>
+          </article>
+          <article>
+            <h3>Paths and reverse</h3>
+            <p>Walk bounded static evidence from roots to surfaces, or from surfaces back to roots.</p>
+            <p><code>tracemap paths</code> <code>reverse</code></p>
+            <p><strong>Status:</strong> main. <strong>Proof:</strong> <code>scripts/smoke-combined-paths.sh</code>.</p>
+          </article>
+          <article>
+            <h3>Diff and impact</h3>
+            <p>Compare static snapshots and turn changed evidence into coverage-relative review reports.</p>
+            <p><code>diff</code> <code>snapshot-diff</code> <code>impact</code></p>
+            <p><strong>Status:</strong> main. <strong>Proof:</strong> <code>README.md</code>, <code>docs/VALIDATION.md</code>.</p>
+          </article>
+          <article>
+            <h3>Release review</h3>
+            <p>Compose available diff, impact, contract, path, reverse, gap, and checklist evidence.</p>
+            <p><code>tracemap release-review</code></p>
+            <p><strong>Status:</strong> main. <strong>Proof:</strong> <code>README.md</code>, <code>docs/VALIDATION.md</code>.</p>
+          </article>
+          <article>
+            <h3>Portfolio and endpoints</h3>
+            <p>Summarize many indexes and align client-called endpoints with server-declared endpoint evidence.</p>
+            <p><code>portfolio</code> <code>endpoints</code></p>
+            <p><strong>Status:</strong> main. <strong>Proof:</strong> <code>README.md</code>, implementation-state notes.</p>
+          </article>
+          <article>
+            <h3>Inspect and export</h3>
+            <p>Inspect flows, relationships, and exportable index views without publishing raw private artifacts.</p>
+            <p><code>flow</code> <code>relate</code> <code>export</code></p>
+            <p><strong>Status:</strong> main. <strong>Proof:</strong> <code>README.md</code>, <code>src/dotnet/TraceMap.Cli/Program.cs</code>.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Adapter maturity</p>
+          <h2>Language support is real, but not identical across adapters.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>.NET/C#</strong><span>Status: main. Strongest adapter: Roslyn semantic extraction, syntax fallback, API/DTO, SQL, config, package, call, and value-origin evidence. Proof: <code>README.md</code>, <code>docs/VALIDATION.md</code>.</span></div>
+          <div><strong>TypeScript MVP</strong><span>Status: main/demo. Compiler-backed facts with syntax fallback, endpoint/client, package, config, SQL-adjacent integration facts, and reducer-compatible SQLite output. Proof: <code>README.md</code>, public demo samples.</span></div>
+          <div><strong>JVM MVP</strong><span>Status: main with maturity caveats. Java compiler-backed facts plus Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reduced-coverage labels. Kotlin is not full semantic parity. Proof: <code>.kiro/specs/jvm-indexer/implementation-state.md</code>.</span></div>
+          <div><strong>Python MVP</strong><span>Status: main with maturity caveats. AST/package/config/SQL/FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests evidence. The scanner does not import or execute user code. Proof: <code>.kiro/specs/python-indexer/implementation-state.md</code>.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Demo-safe surface</p>
+          <h2>Show summaries and reports, keep raw analysis artifacts local.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>demo-summary.md</code><span>Public-shareable summary from checked-in sample projects.</span></div>
+          <div><code>demo-summary.json</code><span>Machine-readable public summary with labels instead of private paths.</span></div>
+          <div><code>reports/**/*.md</code><span>Safe when generated from public samples and scrubbed of raw values.</span></div>
+          <div><code>index.sqlite</code><span>Keep private-repo SQLite indexes local-only.</span></div>
+          <div><code>facts.ndjson</code><span>Keep private-repo fact streams local-only.</span></div>
+          <div><code>logs/analyzer.log</code><span>Keep analyzer logs local-only because they may contain execution details.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>Capabilities stay bounded by static evidence.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, deployment state, or release safety.</li>
+          <li>TraceMap is not AI impact analysis and does not use LLM calls, embeddings, vector databases, or prompt-based classification in the scanner or reducer.</li>
+          <li>TraceMap does not perform vulnerability scanning, license compliance, package freshness scoring, or production telemetry analysis.</li>
+          <li>Reduced coverage is still useful, but it must remain labeled as reduced coverage.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Source material</p>
+          <h2>Every capability should point back to inspectable evidence.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="https://github.com/joefeser/tracemap#readme">Repository README</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">Validation guide</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">Acceptance plan</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/rules/rule-catalog.yml">Rule catalog</a>
+          <a href="/docs/">Docs map</a>
+          <a href="/demo/">Public demo</a>
+          <a href="/examples/">Examples</a>
+          <a href="/limitations/">Limitations</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Next, inspect the
+        <a href="/examples/">examples</a>,
+        run the
+        <a href="/demo/">public demo</a>,
+        or read the
+        <a href="/docs/">docs map</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
