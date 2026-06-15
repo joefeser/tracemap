@@ -52,6 +52,33 @@ test("buildSite reports missing article body with slug and expected path", async
   );
 });
 
+test("buildSite reports non-object article metadata with index context", async () => {
+  const root = await createSiteFixture({
+    articles: [null]
+  });
+
+  await assert.rejects(
+    buildSite({ log: () => {}, root }),
+    /Blog article at index 0 must be an object\./
+  );
+});
+
+test("buildSite reports invalid article body path with the invalid value", async () => {
+  const root = await createSiteFixture({
+    articles: [
+      {
+        ...article("bad-body"),
+        body: "articles/Bad Body.html"
+      }
+    ]
+  });
+
+  await assert.rejects(
+    buildSite({ log: () => {}, root }),
+    /Blog article body path is invalid for slug "bad-body": articles\/Bad Body\.html/
+  );
+});
+
 test("buildSite reports missing site page metadata with site-relative context", async () => {
   const root = await createSiteFixture({
     articles: [article("first-post")],
