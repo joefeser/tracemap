@@ -37,7 +37,8 @@ public sealed record CombinedReportSummary(
     int EndpointFindingCount,
     IReadOnlyDictionary<string, int> EndpointFindingsByClassification,
     IReadOnlyDictionary<string, int> SurfacesByKind,
-    IReadOnlyDictionary<string, int> EdgesByKind);
+    IReadOnlyDictionary<string, int> EdgesByKind,
+    IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts);
 
 public sealed record CombinedReportSource(
     string SourceIndexId,
@@ -146,7 +147,9 @@ public sealed record CombinedNeedsReviewRow(
     string? SourceLabel,
     string? CombinedFactId,
     string? FilePath,
-    int? StartLine);
+    int? StartLine,
+    string RuleId,
+    string EvidenceTier);
 
 public sealed record CombinedKnownGapRow(
     string SourceIndexId,
@@ -190,7 +193,8 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<CombinedKnownGapRow> KnownGaps,
     IReadOnlyList<string> CoverageWarnings,
     IReadOnlyList<CombinedFactRow> Facts,
-    IReadOnlyList<CombinedDependencyEdgeRow> Edges);
+    IReadOnlyList<CombinedDependencyEdgeRow> Edges,
+    IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts);
 
 internal sealed record CombinedSourceReadRow(
     CombinedReportSource Source,
@@ -272,7 +276,8 @@ public static class CombinedDependencyReporter
                 endpointFindings.Count,
                 CountBy(endpointFindings, finding => finding.Classification),
                 CountBy(surfaces, surface => surface.SurfaceKind),
-                CountBy(read.Edges, edge => edge.EdgeKind)),
+                CountBy(read.Edges, edge => edge.EdgeKind),
+                read.ValueOriginEvidenceCounts),
             endpointFindings,
             surfaces,
             read.Edges
@@ -324,7 +329,54 @@ public static class CombinedDependencyReporter
 
         var facts = await ReadFactsAsync(connection, cancellationToken);
         var edges = await ReadEdgesAsync(connection, cancellationToken);
-        return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges);
+        var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
+        return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges, valueOriginCounts);
+    }
+
+    private static async Task<IReadOnlyDictionary<string, long>> ReadValueOriginEvidenceCountsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        if (await TableExistsAsync(connection, "combined_argument_flows", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_argument_flows;";
+            counts["argument-flows"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_field_aliases", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_field_aliases;";
+            counts["field-aliases"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_local_aliases", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_local_aliases;";
+            counts["local-aliases"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_parameter_forward_edges", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_parameter_forward_edges;";
+            counts["parameter-forward-edges"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        counts["async-boundaries"] = await CountFactsAsync(connection, FactTypes.AsyncBoundary, cancellationToken);
+        counts["callback-boundaries"] = await CountFactsAsync(connection, FactTypes.CallbackBoundary, cancellationToken);
+        return counts
+            .Where(pair => pair.Value > 0)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+    }
+
+    private static async Task<long> CountFactsAsync(SqliteConnection connection, string factType, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from combined_facts where fact_type = $fact_type;";
+        command.Parameters.AddWithValue("$fact_type", factType);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
     private static async Task<IReadOnlyList<CombinedSourceReadRow>> ReadSourcesAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -853,7 +905,9 @@ public static class CombinedDependencyReporter
                 finding.ClientSourceLabel ?? finding.ServerSourceLabel,
                 finding.ClientCombinedFactId ?? finding.ServerCombinedFactId,
                 finding.ClientFilePath ?? finding.ServerFilePath,
-                finding.ClientStartLine ?? finding.ServerStartLine)));
+                finding.ClientStartLine ?? finding.ServerStartLine,
+                finding.ClientRuleId ?? finding.ServerRuleId ?? "endpoint.alignment.v1",
+                finding.ClientEvidenceTier ?? finding.ServerEvidenceTier ?? EvidenceTiers.Tier4Unknown)));
 
         rows.AddRange(facts
             .Where(fact => fact.FactType == FactTypes.AnalysisGap)
@@ -864,14 +918,37 @@ public static class CombinedDependencyReporter
                 fact.SourceLabel,
                 fact.CombinedFactId,
                 SafePath(fact.FilePath),
-                fact.StartLine)));
+                fact.StartLine,
+                fact.RuleId,
+                fact.EvidenceTier)));
+
+        rows.AddRange(facts
+            .Where(fact => fact.FactType is FactTypes.CallbackBoundary or FactTypes.AsyncBoundary)
+            .Select(fact => new CombinedNeedsReviewRow(
+                fact.FactType,
+                ValueOriginBoundaryMessage(fact),
+                fact.SourceIndexId,
+                fact.SourceLabel,
+                fact.CombinedFactId,
+                SafePath(fact.FilePath),
+                fact.StartLine,
+                fact.RuleId,
+                fact.EvidenceTier)));
 
         return rows
             .OrderBy(row => row.ReviewKind, StringComparer.Ordinal)
             .ThenBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(row => row.RuleId, StringComparer.Ordinal)
+            .ThenBy(row => row.EvidenceTier, StringComparer.Ordinal)
             .ThenBy(row => row.FilePath, StringComparer.Ordinal)
             .ThenBy(row => row.StartLine ?? 0)
             .ToArray();
+    }
+
+    private static string ValueOriginBoundaryMessage(CombinedFactRow fact)
+    {
+        var boundaryKind = FirstValue(fact.Properties, "boundaryKind") ?? fact.FactType;
+        return $"{boundaryKind} is value-origin review context only; it does not prove callback invocation, event firing, runtime scheduling, ordering, task completion, closure lifetime, or mutation safety.";
     }
 
     private static CombinedDependencyEdgeRow SanitizeEdge(CombinedDependencyEdgeRow edge)
@@ -923,6 +1000,7 @@ public static class CombinedDependencyReporter
         AppendDictionary(builder, "Endpoint findings by classification", report.Summary.EndpointFindingsByClassification);
         AppendDictionary(builder, "Dependency surfaces by kind", report.Summary.SurfacesByKind);
         AppendDictionary(builder, "Dependency edges by kind", report.Summary.EdgesByKind);
+        AppendDictionary(builder, "Value-origin evidence by kind", report.Summary.ValueOriginEvidenceCounts);
         AppendList(builder, "Coverage warnings", report.CoverageWarnings);
 
         builder.AppendLine("## Sources");
@@ -950,7 +1028,7 @@ public static class CombinedDependencyReporter
         builder.AppendLine("## Needs Review");
         builder.AppendLine();
         AppendRows(builder, report.NeedsReview, "| Kind | Source | Message | Evidence |", "| --- | --- | --- | --- |",
-            row => $"| {Cell(row.ReviewKind)} | {Cell(row.SourceLabel ?? "unknown")} | {Cell(row.Message)} | {Cell(EvidenceLabel(null, row.FilePath, row.StartLine))} |");
+            row => $"| {Cell(row.ReviewKind)} | {Cell(row.SourceLabel ?? "unknown")} | {Cell(row.Message)} | {Cell($"{row.RuleId} {row.EvidenceTier} {EvidenceLabel(null, row.FilePath, row.StartLine)}")} |");
 
         builder.AppendLine("## Known Gaps");
         builder.AppendLine();
@@ -993,6 +1071,16 @@ public static class CombinedDependencyReporter
     }
 
     private static void AppendDictionary(StringBuilder builder, string title, IReadOnlyDictionary<string, int> counts)
+    {
+        if (counts.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine($"- {title}: {string.Join(", ", counts.Select(pair => $"`{pair.Key}` {pair.Value}"))}");
+    }
+
+    private static void AppendDictionary(StringBuilder builder, string title, IReadOnlyDictionary<string, long> counts)
     {
         if (counts.Count == 0)
         {
