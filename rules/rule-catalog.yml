@@ -139,6 +139,91 @@ rules:
       - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
       - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
 
+  - id: legacy.data.metadata.inventory.v1
+    name: Legacy data metadata inventory
+    description: Inventories checked-in DBML, EDMX, typed DataSet XSD, TableAdapter, generated designer, config, and old ORM descriptor files with safe static metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataMetadataDeclared
+      - AnalysisGap
+    limitations:
+      - Metadata inventory is static repository evidence and does not prove runtime data access, database existence, provider compatibility, deployment, or production usage.
+      - Arbitrary XSD files are gated; unrelated schemas are not treated as typed DataSet metadata.
+      - Malformed, unsupported, too-large, or parser-rejected metadata is emitted as an analysis gap rather than clean absence.
+      - Raw SQL, connection strings, config values, URLs, remotes, local absolute paths, source snippets, and secrets are hashed or omitted.
+
+  - id: legacy.data.dbml.v1
+    name: Legacy LINQ to SQL DBML metadata
+    description: Extracts safe DBML entity, table, column, association, and routine descriptor evidence from checked-in metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - AnalysisGap
+    limitations:
+      - DBML metadata is static design-time evidence and does not prove database existence, LINQ runtime behavior, routine existence, lazy loading, query execution, or provider compatibility.
+      - Generated-code linkage is separate evidence and does not upgrade metadata descriptor tier.
+      - Unsafe names, provider metadata, database names, connection names, and routine identifiers are hashed or omitted when required.
+
+  - id: legacy.data.edmx.v1
+    name: Legacy Entity Framework EDMX metadata
+    description: Extracts safe CSDL, SSDL, and unambiguous MSL entity/storage/property mapping evidence from checked-in EDMX metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - AnalysisGap
+    limitations:
+      - EDMX metadata is static design-time evidence and does not prove EF runtime model loading, lazy loading, change tracking, query execution, provider compatibility, migrations, or schema existence.
+      - Complex, inherited, split, conditional, many-to-many, duplicate-container, and provider-extension mappings are gaps unless a future spec defines deterministic handling.
+      - Namespace URIs, provider details, unsafe identifiers, and raw metadata content are hashed or omitted.
+
+  - id: legacy.data.typed-dataset.v1
+    name: Legacy typed DataSet and TableAdapter metadata
+    description: Extracts safe typed DataSet table/column/relation, TableAdapter, command descriptor, and complete static command-text hash/shape evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - SqlTextUsed
+      - QueryPatternDetected
+      - AnalysisGap
+    limitations:
+      - Typed DataSet metadata is static design-time evidence and does not prove adapter execution, stored-procedure existence, command reachability, SQL execution, provider compatibility, or database schema existence.
+      - Raw SQL command text is never stored; complete static command text may produce only existing hash/length and safe shape evidence.
+      - Unrelated XSD files, dynamic commands, incomplete schemas, unsupported provider metadata, and stale or missing generated code remain gaps or unsupported evidence.
+
+  - id: legacy.data.config.v1
+    name: Legacy data provider and connection config metadata
+    description: Extracts safe provider, connection-name, provider factory, Entity Framework provider, and ORM config metadata from checked-in config files.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataProviderConfigDeclared
+      - ConfigKeyDeclared
+      - AnalysisGap
+    limitations:
+      - Config metadata is static checked-in evidence and does not prove runtime environment selection, transform application, secret availability, provider installation, database reachability, or production usage.
+      - Raw connection strings, usernames, passwords, server names, catalog names, file paths, URLs, secret-looking values, and config values are hashed or omitted.
+      - Encrypted sections, external config includes, transforms, and code-built connections are reduced-coverage gaps.
+
+  - id: legacy.data.generated-link.v1
+    name: Legacy data generated-code linkage
+    description: Links DBML, EDMX, and typed DataSet metadata descriptors to checked-in generated files or compiler-resolved generated symbols when deterministic evidence exists.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - LegacyDataGeneratedCodeLinked
+      - AnalysisGap
+    limitations:
+      - Generated-code linkage is static evidence and does not prove generated files are fresh, runtime code paths execute, query execution occurs, or database access happens.
+      - Global short-name matching is not allowed; ambiguous or missing generated-code candidates are gaps.
+      - Linkage tier is recorded separately and does not upgrade the descriptor tier of the metadata evidence.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, and safe page linkage metadata.
