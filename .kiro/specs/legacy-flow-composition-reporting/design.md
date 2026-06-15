@@ -65,13 +65,16 @@ tracemap paths --index <index.sqlite|combined.sqlite> --out <path> --include-leg
 Options:
 
 ```text
---format <markdown|json|both>
+--format <markdown|json>
 --include-legacy-roots
 --view <paths|legacy-flows>
 --from-webforms-event <page-or-event-selector>
 --from-endpoint "<METHOD> <PATH_KEY>"
 --from-symbol <symbol-selector>
+--from-source <label>
 --to-surface <sql-query|http-route|http-client|package-config|wcf-operation|legacy-data|dependency-surface>
+--surface-name <text>
+--source-pair <a>:<b>
 --classification <StrongStaticPath|ProbableStaticPath|NeedsReviewStaticPath|NoBackendEvidence|ReducedCoverage|AnalysisGap>
 --max-depth <n>
 --max-paths <n>
@@ -80,7 +83,9 @@ Options:
 
 Defaults:
 
-- `--format both` when `--out` is a directory.
+- Keep existing `tracemap paths` output semantics: file outputs honor
+  `--format <markdown|json>`, and directory outputs write both Markdown and JSON
+  artifacts regardless of `--format`.
 - `maxDepth = 8`, `maxPaths = 100`, `maxFrontier = 10000`.
 - If no selectors are provided and `--include-legacy-roots` is set, summarize
   all credible WebForms event roots and API/service roots, then show bounded
@@ -93,6 +98,11 @@ Defaults:
 `--view legacy-flows` controls report wording and grouping only. It must not
 create a second graph engine or divergent selector grammar. Existing `paths`
 selectors keep their meanings; new legacy selectors are additive.
+Existing selectors remain supported in legacy-flow view: `--from-source`
+narrows start evidence to a source label, `--surface-name` filters terminal
+surface identity using the current exact/wildcard behavior, and `--source-pair`
+constrains explicit endpoint or dependency crossings where such combined
+evidence exists.
 
 ## Proposed Package Layout
 

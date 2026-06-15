@@ -71,11 +71,11 @@ Acceptance Criteria:
    THEN the composer MAY treat them as service/API roots or intermediate
    surfaces, preserving their source evidence and limitations.
 4. WHEN a WebForms event binding has no resolved handler under full coverage
-   THEN the composer SHALL emit a `NoEvidence` or unresolved-root result, not a
-   backend path.
+   THEN the composer SHALL emit an `AnalysisGap` result with an
+   `UnresolvedRoot` gap note, not a backend path.
 5. WHEN handler resolution is ambiguous, name-only, syntax-only, or reduced by
    missing code-behind/designer/generated code THEN the root SHALL be capped at
-   `NeedsReview` or gap classification as appropriate.
+   `NeedsReviewStaticPath`, `ReducedCoverage`, or `AnalysisGap` as appropriate.
 6. The composer SHALL NOT create roots from arbitrary method names, global short
    names, raw markup text, or unsupported event-like strings without a rule-backed
    entry-point fact.

@@ -133,8 +133,9 @@
         separate command.
   - [ ] Add `--view legacy-flows` if a legacy-focused grouping/wording view is
         needed.
-  - [ ] Support `--format markdown|json|both` and default to both for directory
-        output.
+  - [ ] Keep current `paths` output semantics: file outputs honor
+        `--format markdown|json`, and directory outputs write both Markdown and
+        JSON artifacts regardless of `--format`.
   - [ ] Write deterministic path report artifacts using the shared paths output
         contract; any legacy-flow aliases must be documented and tested.
   - [ ] Add Markdown sections or grouped subsections for summary,
