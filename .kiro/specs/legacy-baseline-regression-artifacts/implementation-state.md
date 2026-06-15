@@ -82,6 +82,10 @@ addresses, secrets, or analyzer logs.
     label;
   - define `factTypeRenames` entries in the migration-map example.
 - Gemini findings were addressed in `design.md` and `tasks.md`.
+- PR review loop then found a Qodo bug around inconsistent baseline directory
+  naming. `design.md` now states that `baselineId` is the canonical on-disk
+  directory segment derived from label, purpose, and public-safe time metadata,
+  and examples use the full baseline ID consistently.
 - Spec is ready for implementation.
 
 ## Validation

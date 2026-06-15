@@ -6,6 +6,7 @@
   - [ ] Define `legacy-baseline-manifest.v1` with neutral sample labels, safe repo/commit identity, scanner/extractor versions, coverage labels, build status, safety classification, limitations, and deterministic count maps.
   - [ ] Define `legacy-baseline-comparison.v1` with movement labels, schema/extractor compatibility fields, review-needed markers, and human-readable summary metadata.
   - [ ] Use `.kiro/baselines/legacy/` as the tracked public-safe baseline path and `.tmp/legacy-baselines/` as the ignored local-only baseline path.
+  - [ ] Derive `baselineId` deterministically from neutral label, purpose, and public-safe year-month or fixture-pinned creation metadata, and use that `baselineId` as the on-disk baseline directory segment.
   - [ ] Keep `.tmp/legacy-baselines/` ignored in `.gitignore` and add a guard proving the local-only path is ignored.
   - [ ] Add `legacy.baseline.redacted-manifest.v1`, `legacy.baseline.coverage-snapshot.v1`, `legacy.baseline.regression-comparison.v1`, and `legacy.baseline.safety-validation.v1` to `rules/rule-catalog.yml` with limitations before emitting them.
   - [ ] Add schema fixtures for public-safe, local-only, and rejected manifests.
@@ -88,7 +89,7 @@
 - [ ] 8. Validate implementation. Requirements: 7.
   - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
   - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-  - [ ] Run dry-run baseline creation against checked-in synthetic fixtures, for example `tracemap baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .tmp/legacy-baselines/synthetic-alpha --dry-run`, and verify the reported safety classification without writing tracked files.
+  - [ ] Run dry-run baseline creation against checked-in synthetic fixtures, for example `tracemap baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 --dry-run`, and verify the reported safety classification without writing tracked files.
   - [ ] Run non-dry-run baseline creation to `.tmp/legacy-baselines/synthetic-alpha/` and verify `baseline-manifest.json` and `baseline-summary.md`.
   - [ ] Run baseline comparison between `.tmp/legacy-baselines/` manifests and verify `comparison.json` and `comparison.md`.
   - [ ] Run relevant pinned smoke checks from `docs/VALIDATION.md` if scan, report, or adapter behavior changes, or record an explicit deferral rationale.
