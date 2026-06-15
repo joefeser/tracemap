@@ -118,6 +118,7 @@ public sealed record ImpactEvidence(
 {
     public string? SourceLabel { get; init; }
     public string? SourceIndexId { get; init; }
+    public string? ScanId { get; init; }
     public string? SourceSymbol { get; init; }
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new SortedDictionary<string, string>(StringComparer.Ordinal);
 }
@@ -1076,7 +1077,10 @@ public static class ContractDeltaReducer
         ref int evidenceBudget,
         List<ContractDeltaImpactGap> gaps)
     {
-        var matchedItems = index.Facts
+        var factsForMatching = isCombined && input.IsSqlSchemaDelta
+            ? index.ProjectedCombinedSqlSurfaceFacts.Concat(index.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap))
+            : index.Facts;
+        var matchedItems = factsForMatching
             .Where(fact => string.IsNullOrWhiteSpace(options.Source) || string.Equals(fact.SourceLabel, options.Source, StringComparison.Ordinal))
             .Select(fact => (Fact: fact, Match: MatchFact(change, fact)))
             .Where(item => item.Match.Strength != MatchStrength.None)
@@ -1523,6 +1527,11 @@ public static class ContractDeltaReducer
             return EvidenceMatch.None;
         }
 
+        if (string.Equals(SurfaceKind(fact), "sql-persistence", StringComparison.OrdinalIgnoreCase))
+        {
+            return EvidenceMatch.None;
+        }
+
         var expectedHash = Value(change.Reference, "queryShapeHash", "textHash");
         if (!string.IsNullOrWhiteSpace(expectedHash)
             && PropertyValues(fact, "queryShapeHash", "textHash", "sqlTextHash")
@@ -1548,6 +1557,19 @@ public static class ContractDeltaReducer
                 .Any(value => NamesMatch(expectedResource, value)))
         {
             return new EvidenceMatch(MatchStrength.Member, true, "sql-resource");
+        }
+
+        var expectedSourceKind = Value(change.Reference, "sqlSourceKind", "sourceKind");
+        if (!string.IsNullOrWhiteSpace(expectedSourceKind)
+            && PropertyValues(fact, "sqlSourceKind", "sourceKind")
+                .Any(value => string.Equals(expectedSourceKind, value, StringComparison.OrdinalIgnoreCase)))
+        {
+            return new EvidenceMatch(MatchStrength.Member, true, SqlEvidenceKind(fact, "sql-query-shape"));
+        }
+
+        if (Has(change.Reference, "columnName", "columnNames"))
+        {
+            return MatchSqlColumn(change, fact);
         }
 
         return MatchSqlTable(change, fact);
@@ -1793,6 +1815,7 @@ public static class ContractDeltaReducer
         {
             SourceLabel = fact.SourceLabel,
             SourceIndexId = fact.SourceIndexId,
+            ScanId = fact.ScanId,
             SourceSymbol = SafeSymbol(fact.SourceSymbol),
             Metadata = SafeMetadata(fact.Properties, match.EvidenceKind)
         };
@@ -1833,6 +1856,7 @@ public static class ContractDeltaReducer
         {
             SourceLabel = options.Source ?? selectedSource?.Label,
             SourceIndexId = selectedSource?.SourceIndexId,
+            ScanId = selectedSource?.ScanId,
             Metadata = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["evidenceKind"] = "coverage-no-match",
@@ -1869,7 +1893,7 @@ public static class ContractDeltaReducer
                     manifest.BuildStatus,
                     HashOrNull(manifest.RemoteUrl ?? manifest.RepoName))
             ]);
-        return new IndexData(false, manifest, summary, facts);
+        return new IndexData(false, manifest, summary, facts, []);
     }
 
     private static async Task<IndexData> ReadCombinedIndexAsync(SqliteConnection connection, string? sourceFilter, CancellationToken cancellationToken)
@@ -1917,6 +1941,7 @@ public static class ContractDeltaReducer
         }
 
         var facts = await ReadFactsAsync(connection, sourceFilter, cancellationToken);
+        var projectedCombinedSqlSurfaceFacts = ProjectCombinedSqlSurfaceFacts(facts);
         var summary = new ContractDeltaIndexSummary(
             "combined",
             sources.Count,
@@ -1925,7 +1950,118 @@ public static class ContractDeltaReducer
             null,
             null,
             sources);
-        return new IndexData(true, sources.Count == 1 ? manifests.Values.FirstOrDefault() : null, summary, facts);
+        return new IndexData(true, sources.Count == 1 ? manifests.Values.FirstOrDefault() : null, summary, facts, projectedCombinedSqlSurfaceFacts);
+    }
+
+    private static IReadOnlyList<IndexedFact> ProjectCombinedSqlSurfaceFacts(IReadOnlyList<IndexedFact> facts)
+    {
+        var byCombinedFactId = facts.ToDictionary(fact => fact.FactId, StringComparer.Ordinal);
+        return CombinedSurfaceProjection.BuildSurfaces(facts.Select(ToSurfaceProjectionInput).ToArray())
+            .Where(surface => surface.SurfaceKind is "sql-query" or "sql-persistence")
+            .Select(surface => ToProjectedSurfaceFact(surface, byCombinedFactId))
+            .OrderBy(fact => fact.SourceLabel ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(fact => SurfaceKind(fact), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.TryGetValue("surfaceName", out var surfaceName) ? surfaceName : string.Empty, StringComparer.Ordinal)
+            .ThenBy(fact => fact.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static CombinedSurfaceFactInput ToSurfaceProjectionInput(IndexedFact fact)
+    {
+        return new CombinedSurfaceFactInput(
+            fact.FactId,
+            fact.SourceIndexId ?? string.Empty,
+            fact.SourceLabel ?? string.Empty,
+            fact.OriginalFactId,
+            fact.ScanId ?? string.Empty,
+            fact.CommitSha,
+            fact.FactType,
+            fact.RuleId,
+            fact.EvidenceTier,
+            fact.FilePath,
+            fact.StartLine,
+            fact.EndLine,
+            fact.Properties);
+    }
+
+    private static IndexedFact ToProjectedSurfaceFact(CombinedSurfaceProjectionRow surface, IReadOnlyDictionary<string, IndexedFact> factsById)
+    {
+        factsById.TryGetValue(surface.CombinedFactId, out var original);
+        return new IndexedFact(
+            surface.CombinedFactId,
+            surface.OriginalFactId,
+            surface.CommitSha,
+            surface.FactType,
+            surface.RuleId,
+            surface.EvidenceTier,
+            original?.SourceSymbol,
+            original?.TargetSymbol,
+            original?.ContractElement,
+            surface.FilePath,
+            surface.StartLine,
+            surface.EndLine,
+            BuildProjectedSurfaceProperties(surface, original?.Properties),
+            surface.SourceLabel,
+            surface.SourceIndexId,
+            original?.SourceAnalysisLevel,
+            original?.SourceBuildStatus,
+            surface.ScanId);
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildProjectedSurfaceProperties(CombinedSurfaceProjectionRow surface, IReadOnlyDictionary<string, string>? originalProperties)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["surfaceKind"] = surface.SurfaceKind,
+            ["surfaceName"] = surface.DisplayName,
+            ["sourceIndexId"] = surface.SourceIndexId,
+            ["sourceLabel"] = surface.SourceLabel,
+            ["scanId"] = surface.ScanId
+        };
+        AddIfPresent(properties, "operationName", surface.OperationName);
+        AddIfPresent(properties, "tableName", surface.TableName);
+        AddIfPresent(properties, "columnNames", surface.ColumnNames);
+        AddIfPresent(properties, "sourceKind", surface.SourceKind);
+        AddIfPresent(properties, "sqlSourceKind", surface.SourceKind);
+        AddIfPresent(properties, "queryShapeHash", surface.ShapeHash);
+        AddIfPresent(properties, "textHash", surface.TextHash);
+        AddIfPresent(properties, "textLength", surface.TextLength);
+        AddIfPresent(properties, "packageName", surface.PackageName);
+        AddIfPresent(properties, "configKey", surface.ConfigKey);
+        AddIfPresent(properties, "ecosystem", surface.Ecosystem);
+        AddIfPresent(properties, "manifestKind", surface.ManifestKind);
+        AddIfPresent(properties, "dependencyScope", surface.DependencyScope);
+        AddIfPresent(properties, "dependencyGroup", surface.DependencyGroup);
+        AddIfPresent(properties, "packageManager", surface.PackageManager);
+        AddIfPresent(properties, "versionHash", surface.VersionHash);
+        AddIfPresent(properties, "redactionReason", surface.RedactionReason);
+
+        if (originalProperties is not null)
+        {
+            foreach (var key in new[] { "mappedName", "propertyName", "mappingKind", "entityName", "schemaName", "stableKey", "name" })
+            {
+                if (originalProperties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+                {
+                    var sanitized = SanitizeReferenceValue(key, value);
+                    if (!sanitized.StartsWith("value-hash:", StringComparison.Ordinal))
+                    {
+                        properties[key] = sanitized;
+                    }
+                }
+            }
+        }
+
+        return properties;
+    }
+
+    private static void AddIfPresent(SortedDictionary<string, string> properties, string key, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            properties[key] = value;
+        }
     }
 
     private static async Task<ScanManifest> ReadManifestAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -1966,7 +2102,8 @@ public static class ContractDeltaReducer
                        s.label,
                        s.source_index_id,
                        s.analysis_level,
-                       s.build_status
+                       s.build_status,
+                       cf.scan_id
                 from combined_facts cf
                 join index_sources s on s.source_index_id = cf.source_index_id
                 where $source is null or s.label = $source
@@ -1990,6 +2127,7 @@ public static class ContractDeltaReducer
                        start_line,
                        end_line,
                        properties_json,
+                       null,
                        null,
                        null,
                        null,
@@ -2019,7 +2157,8 @@ public static class ContractDeltaReducer
                 reader.IsDBNull(13) ? null : reader.GetString(13),
                 reader.IsDBNull(14) ? null : reader.GetString(14),
                 reader.IsDBNull(15) ? null : reader.GetString(15),
-                reader.IsDBNull(16) ? null : reader.GetString(16)));
+                reader.IsDBNull(16) ? null : reader.GetString(16),
+                reader.IsDBNull(17) ? null : reader.GetString(17)));
         }
 
         return facts;
@@ -2604,7 +2743,8 @@ public static class ContractDeltaReducer
         bool IsCombined,
         ScanManifest? Manifest,
         ContractDeltaIndexSummary Summary,
-        IReadOnlyList<IndexedFact> Facts);
+        IReadOnlyList<IndexedFact> Facts,
+        IReadOnlyList<IndexedFact> ProjectedCombinedSqlSurfaceFacts);
 
     private sealed record EvidenceMatch(MatchStrength Strength, bool ReviewOnly, string EvidenceKind)
     {
@@ -2655,7 +2795,8 @@ public static class ContractDeltaReducer
         string? SourceLabel,
         string? SourceIndexId,
         string? SourceAnalysisLevel,
-        string? SourceBuildStatus)
+        string? SourceBuildStatus,
+        string? ScanId)
     {
         public IEnumerable<string> MemberCandidates
         {
