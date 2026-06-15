@@ -51,6 +51,8 @@
         <a href="/workflows/">Workflows</a>
         <a href="/examples/">Examples</a>
         <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
         <a href="/validation/">Validation</a>
         <a href="/limitations/">Limitations</a>
         <a href="/demo/">Demo</a>
@@ -123,13 +125,18 @@ classification: NeedsReview</code></pre>
             <strong>Start with the examples.</strong>
             <p>Show the manifest, facts, report excerpt, and contract-impact output before asking anyone to run a command.</p>
           </a>
-          <a href="/use-cases/">
+          <a href="/packets/">
             <span>2</span>
+            <strong>Read the evidence packet.</strong>
+            <p>Give managers, reviewers, architects, and engineers the same static proof trail without turning it into a runtime claim.</p>
+          </a>
+          <a href="/use-cases/">
+            <span>3</span>
             <strong>Map it to review work.</strong>
             <p>Connect the artifacts to contract-change review, release packets, partial analysis, and reviewer handoff.</p>
           </a>
           <a href="/demo/">
-            <span>3</span>
+            <span>4</span>
             <strong>Run the checked-in demo.</strong>
             <p>Generate the same kind of static evidence from public samples, with local-path and sensitive-value guards.</p>
           </a>
@@ -198,6 +205,15 @@ classification: NeedsReview</code></pre>
           <div><code>report.md</code><span>Human-readable summary with coverage and known gaps.</span></div>
           <div><code>logs/analyzer.log</code><span>Analyzer diagnostics for partial or failed project loading.</span></div>
         </div>
+      </section>
+
+      <section class="section callout-section" id="packets">
+        <h2>Need something you can hand to a reviewer?</h2>
+        <p>
+          The <a href="/packets/">evidence packet guide</a> shows how to read a
+          generated TraceMap packet without losing the rule IDs, evidence tiers,
+          coverage labels, commit SHA, and limitations behind the summary.
+        </p>
       </section>
 
       <section class="section" id="workflows">
@@ -274,7 +290,10 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan \
           <a href="/outputs/">Scan outputs</a>
           <a href="/workflows/">Workflows</a>
           <a href="/examples/">Examples</a>
+          <a href="/capabilities/">Capabilities</a>
+          <a href="/demo/start-here/">Demo walkthrough</a>
           <a href="/blog/">Blog</a>
+          <a href="/docs/">Docs</a>
           <a href="#first-look">First-look path</a>
           <a href="/use-cases/">Use cases</a>
           <a href="/limitations/">Limitations</a>
@@ -290,6 +309,8 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan \
       <p>
         TraceMap publishes deterministic static-analysis evidence for reviewers.
         Source docs live at
+        <a href="/docs/">tracemap.tools/docs</a>
+        and
         <a href="https://github.com/joefeser/tracemap">github.com/joefeser/tracemap</a>.
       </p>
       <p class="copyright">© 2026 Joe Feser.</p>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap documentation map for product requirements, validation, acceptance, decisions, and language adapter contracts."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Docs | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/docs/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Docs">
+    <meta property="og:description" content="A browsable map of TraceMap source-of-truth docs.">
+    <meta property="og:url" content="https://tracemap.tools/docs/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/" aria-current="page">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Docs</p>
+        <h1>Start from the documents that define the evidence boundary.</h1>
+        <p class="hero-subhead">
+          This page maps the public docs that explain what TraceMap is building,
+          how validation works, what counts as acceptance, and where language
+          adapters must preserve deterministic, rule-backed evidence.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="workflow-grid">
+          <article>
+            <h3>Product requirements</h3>
+            <p>Purpose, non-goals, workflows, evidence model, and the narrow contract-change review question.</p>
+            <p><a href="https://github.com/joefeser/tracemap/blob/main/docs/PRD.md">Product requirements (PRD.md)</a></p>
+          </article>
+          <article>
+            <h3>Validation guide</h3>
+            <p>Repeatable local checks, public demo expectations, pinned smoke guidance, and generated-output safety rules.</p>
+            <p><a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">Validation guide (VALIDATION.md)</a></p>
+          </article>
+          <article>
+            <h3>Evidence packet guide</h3>
+            <p>Site-facing reader path for managers, reviewers, architects, and engineers inspecting demo-safe static evidence packets.</p>
+            <p><a href="/packets/">Evidence packet guide</a></p>
+          </article>
+          <article>
+            <h3>Acceptance plan</h3>
+            <p>Artifact, reducer, export, evidence, and coverage criteria that define when behavior is acceptable.</p>
+            <p><a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">Acceptance plan (ACCEPTANCE.md)</a></p>
+          </article>
+          <article>
+            <h3>Language adapter contract</h3>
+            <p>Shared expectations for adapters that emit facts, relationships, reports, and reducer-compatible evidence.</p>
+            <p><a href="https://github.com/joefeser/tracemap/blob/main/docs/LANGUAGE_ADAPTER_CONTRACT.md">Language adapter contract</a></p>
+          </article>
+          <article>
+            <h3>Decisions</h3>
+            <p>Architecture and product decisions that explain why TraceMap favors deterministic extractors and explicit limits.</p>
+            <p><a href="https://github.com/joefeser/tracemap/blob/main/docs/DECISIONS.md">Architecture decisions (DECISIONS.md)</a></p>
+          </article>
+          <article>
+            <h3>Next execution report</h3>
+            <p>Current runway notes, coordination state, and near-term execution context for future agents and maintainers.</p>
+            <p><a href="https://github.com/joefeser/tracemap/blob/main/docs/NEXT_EXECUTION_REPORT.md">Next execution report</a></p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">How to read them</p>
+          <h2>The docs are guardrails, not marketing copy.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Start with scope</strong><span>Use the PRD to understand what TraceMap should and should not claim.</span></div>
+          <div><strong>Map capabilities</strong><span>Use the <a href="/capabilities/">capability map</a> to see status-labeled workflows, adapter maturity, and demo-safe surfaces.</span></div>
+          <div><strong>Share carefully</strong><span>Use the <a href="/packets/">evidence packet guide</a> to keep summaries attached to rule IDs, coverage labels, and limitations.</span></div>
+          <div><strong>Check proof</strong><span>Use validation and acceptance docs to see how behavior is verified.</span></div>
+          <div><strong>Respect limits</strong><span>Use decisions and adapter contracts to keep rule-backed evidence portable across languages.</span></div>
+          <div><strong>Track runway</strong><span>Use execution notes for current context, but treat implemented specs and code as stronger evidence.</span></div>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>The repository remains the source of truth.</h2>
+        <p>
+          The site gives humans and bots a stable entry point, but the canonical
+          documents live in the public repository. TraceMap documentation should
+          keep pointing back to code, rules, tests, specs, and generated evidence.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with
+        <a href="/validation/">validation</a>,
+        <a href="/examples/">examples</a>,
+        or the
+        <a href="https://github.com/joefeser/tracemap">GitHub repository</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
+    "validate": "node scripts/validate.mjs",
     "test": "node --test scripts/*.test.mjs"
   },
   "engines": {
