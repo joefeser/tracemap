@@ -407,6 +407,111 @@ h3 {
   min-height: 170px;
 }
 
+.proof-visual-grid article {
+  display: grid;
+  gap: 16px;
+}
+
+.proof-visual {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
+  padding: 16px;
+}
+
+.proof-visual p {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.proof-visual-row,
+.proof-change-row {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.34fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid rgba(16, 58, 50, 0.12);
+  padding-bottom: 9px;
+}
+
+.proof-visual-row span,
+.proof-change-row span,
+.path-visual span,
+.checklist-visual span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.proof-visual-row strong,
+.proof-change-row strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.93rem;
+  overflow-wrap: anywhere;
+}
+
+.proof-visual-meter {
+  overflow: hidden;
+  height: 12px;
+  border: 1px solid rgba(16, 58, 50, 0.18);
+  background: white;
+}
+
+.proof-visual-meter span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.path-visual div {
+  position: relative;
+  border-left: 4px solid var(--accent);
+  background: white;
+  padding: 12px 14px;
+}
+
+.path-visual div + div::before {
+  position: absolute;
+  top: -14px;
+  left: 18px;
+  width: 2px;
+  height: 14px;
+  background: var(--accent);
+  content: "";
+}
+
+.proof-change-row.changed {
+  border-left: 4px solid var(--gold);
+  background: white;
+  padding-left: 10px;
+}
+
+.checklist-visual {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.checklist-visual div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  background: white;
+  padding: 12px;
+}
+
+.checklist-visual strong {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.checklist-visual p {
+  grid-column: 1 / -1;
+}
+
 .path-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -713,7 +818,8 @@ h3 {
   .path-grid,
   .example-grid,
   .article-grid,
-  .link-grid {
+  .link-grid,
+  .checklist-visual {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -746,8 +852,11 @@ h3 {
   .example-grid,
   .article-grid,
   .link-grid,
+  .checklist-visual,
   .preview-stats,
-  .output-list div {
+  .output-list div,
+  .proof-visual-row,
+  .proof-change-row {
     grid-template-columns: 1fr;
   }
 
