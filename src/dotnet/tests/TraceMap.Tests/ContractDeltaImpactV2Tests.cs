@@ -717,7 +717,7 @@ public sealed class ContractDeltaImpactV2Tests
         ]));
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "impact-report.md"));
-        Assert.Contains("Scanner version: `tracemap-milestone15`", markdown);
+        Assert.Contains("Scanner version: `tracemap-milestone16`", markdown);
         Assert.Contains("Contract: `Customer\\`Profile`", markdown);
         Assert.Contains("Change id: `chg\\`property`", markdown);
     }

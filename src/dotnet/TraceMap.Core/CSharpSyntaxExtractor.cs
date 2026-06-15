@@ -11,7 +11,7 @@ public static class CSharpSyntaxExtractor
     {
         var facts = new List<CodeFact>();
         foreach (var file in inventory
-            .Where(item => item.Kind == "CSharp")
+            .Where(item => FileInventory.IsCSharpKind(item.Kind))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
             var fullPath = Path.Combine(repoPath, file.RelativePath);

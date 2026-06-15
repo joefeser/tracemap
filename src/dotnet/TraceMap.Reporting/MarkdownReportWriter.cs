@@ -195,6 +195,28 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "WebForms Events",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WebFormsPageDeclared
+                or FactTypes.WebFormsControlDeclared
+                or FactTypes.WebFormsEventBindingDeclared
+                or FactTypes.WebFormsDesignerControlDeclared
+                or FactTypes.WebFormsHandlerResolved),
+            FormatWebFormsEventFact);
+
+        AddFactSection(
+            lines,
+            "WebForms Event Flow",
+            result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected),
+            fact => $"- `{fact.Properties.GetValueOrDefault("flowClassification") ?? "UnknownAnalysisGap"}` `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` -> `{fact.Properties.GetValueOrDefault("terminalSurfaceKind") ?? "none"}` ({fact.EvidenceTier}, coverage `{fact.Properties.GetValueOrDefault("coverage") ?? "unknown"}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "WebForms Static Logic Signals",
+            result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsLogicSignalDetected),
+            fact => $"- `{fact.Properties.GetValueOrDefault("signalKind") ?? "unknown"}` for `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Boilerplate Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -205,6 +227,15 @@ public static class MarkdownReportWriter
             lines.Add("## Query Pattern Limitations");
             lines.Add("");
             lines.Add("- Query-pattern rows are static shape evidence. They do not prove runtime execution, database schema existence, SQL dialect validity, generated SQL equivalence, or branch feasibility.");
+        }
+
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## WebForms Limitations");
+            lines.Add("");
+            lines.Add("- WebForms event evidence is static markup, code-behind, designer, and direct backend evidence. It does not prove runtime event firing, page lifecycle execution, event bubbling, deployment, service reachability, SQL execution, branch feasibility, or production usage.");
+            lines.Add("- Static logic signals and UI-boilerplate signals are deterministic heuristics, not proof of business logic or code quality.");
         }
 
         lines.Add("");
@@ -259,6 +290,18 @@ public static class MarkdownReportWriter
         return IsSqlShapeQueryPattern(fact)
             ? FormatSqlShapeQueryPattern(fact)
             : FormatQueryBuilderPattern(fact);
+    }
+
+    private static string FormatWebFormsEventFact(CodeFact fact)
+    {
+        return fact.FactType switch
+        {
+            FactTypes.WebFormsEventBindingDeclared => $"- event `{fact.Properties.GetValueOrDefault("eventName") ?? "unknown"}` on `{fact.Properties.GetValueOrDefault("controlId") ?? "unknown"}` -> `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsHandlerResolved => $"- handler `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` resolved as `{fact.Properties.GetValueOrDefault("resolutionKind") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsDesignerControlDeclared => $"- designer field `{fact.Properties.GetValueOrDefault("fieldName") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsControlDeclared => $"- control `{fact.Properties.GetValueOrDefault("controlId") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            _ => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`"
+        };
     }
 
     private static bool IsSqlShapeQueryPattern(CodeFact fact)

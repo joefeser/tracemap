@@ -93,6 +93,22 @@ The .NET adapter emits two WCF-specific metadata fact types for checked-in servi
 
 These facts are static design-time evidence only. They do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or generated proxy freshness. Raw URLs, SOAP actions, schema locations, namespace URIs, local absolute paths, raw schemas, and snippets must be hashed or omitted.
 
+### Legacy WebForms Event Facts
+
+The .NET adapter emits WebForms-specific evidence for static event entry points:
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `WebFormsPageDeclared` | Inventories `.aspx`, `.ascx`, and `.master` directives and safe code-behind linkage. | `pageTypeName`, `linkedCodePath`, `directiveKind`, `autoEventWireup` |
+| `WebFormsControlDeclared` | Records static server controls from markup. | `pageTypeName`, `controlId`, `controlType`, `designerFactId` |
+| `WebFormsEventBindingDeclared` | Records supported static event attributes and handler identifiers. | `pageTypeName`, `controlId`, `eventName`, `handlerName` |
+| `WebFormsDesignerControlDeclared` | Records designer partial-class control fields as supporting evidence. | `pageTypeName`, `fieldName`, `controlType` |
+| `WebFormsHandlerResolved` | Links event bindings to scoped code-behind methods. | `handlerName`, `handlerSymbol`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
+| `WebFormsEventFlowProjected` | Projects resolved handlers to direct WCF, HTTP, SQL/query, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverage` |
+| `WebFormsLogicSignalDetected` | Emits bounded static logic or UI-boilerplate signals for handlers. | `handlerName`, `signalKind`, `staticLogicSignal`, `uiBoilerplateSignal` |
+
+These facts are static evidence only. They do not prove runtime page lifecycle execution, postbacks, event bubbling, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
+
 ## Symbol Identity
 
 Each adapter should emit stable symbol IDs for its own ecosystem and include a language discriminator in `symbols`.
