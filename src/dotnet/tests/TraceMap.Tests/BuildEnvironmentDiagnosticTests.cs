@@ -218,6 +218,55 @@ public sealed class BuildEnvironmentDiagnosticTests
     }
 
     [Fact]
+    public void Scan_treats_sdk_import_projects_as_sdk_style_without_unknown_import_noise()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "src", "ImportSdk"));
+        File.WriteAllText(Path.Combine(repo, "src", "ImportSdk", "ImportSdk.csproj"), """
+            <Project>
+              <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+            </Project>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var diagnostics = result.Facts.Where(fact => fact.FactType == FactTypes.BuildEnvironmentDiagnostic).ToArray();
+
+        AssertDiagnostic(diagnostics, "SdkStyleTargetFramework", RuleIds.BuildEnvironmentTargetFramework, EvidenceTiers.Tier2Structural);
+        Assert.DoesNotContain(diagnostics, fact => fact.Properties.GetValueOrDefault("diagnosticCode") == "NonSdkStyleProject");
+        Assert.DoesNotContain(diagnostics, fact => fact.Properties.GetValueOrDefault("diagnosticCode") == "UnknownImportedTargets");
+    }
+
+    [Fact]
+    public void Scan_links_generated_files_when_project_is_at_repo_root()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Pages"));
+        File.WriteAllText(Path.Combine(repo, "Root.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Pages", "Default.aspx"), "<%@ Page Language=\"C#\" %>");
+        File.WriteAllText(Path.Combine(repo, "Pages", "Default.aspx.cs"), "public partial class Default { }");
+        File.WriteAllText(Path.Combine(repo, "Pages", "Default.aspx.designer.cs"), "public partial class Default { }");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.Evidence.FilePath == "Pages/Default.aspx"
+            && fact.Properties.GetValueOrDefault("diagnosticCode") == "GeneratedFileUnlinked");
+    }
+
+    [Fact]
     public async Task Build_environment_diagnostics_are_queryable_in_sqlite()
     {
         using var temp = new TempDirectory();
