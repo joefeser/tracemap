@@ -1,11 +1,12 @@
 # Snapshot Diff By SHA Implementation State
 
-Status: mostly implemented; single-index gap-diff follow-up implemented locally and pending PR review.
+Status: implemented MVP with explicit follow-up backlog.
 
 Branch/PR:
 
 - Implemented across snapshot-diff work already merged into `dev`.
-- Current follow-up branch: `codex/snapshot-diff-gap-diffs`.
+- Follow-up branches have been merged into `dev`; do not treat older branch
+  names in this file as active work.
 
 Scope Implemented:
 
@@ -16,11 +17,11 @@ Scope Implemented:
 - Deterministic Markdown and JSON output.
 - Snapshot-specific rule catalog entries and limitations.
 - Redaction for raw URLs, repository names, local roots, private paths, unsafe values, and delegated combined metadata.
-- Current follow-up slice adds single-index endpoint diffs for `HttpRouteBinding` and `HttpCallDetected` facts using the required `endpoint:{sourceLabel}:{endpointKind}:{normalizedMethod}:{normalizedPathKey}:{handlerIdentityOrNone}` stable-key shape.
-- Current follow-up slice adds single-index surface diffs for safe dependency-surface facts already understood by `CombinedDependencyReporter.BuildSurfaces`, including SQL/query, package/config, HTTP route/client, config-binding, and related surface rows where those facts exist.
-- Current follow-up slice emits `MalformedMetadataGap` for malformed `scan_manifest.manifest_json`, combined `index_sources.manifest_json`, and single-index `facts.properties_json`, omitting unsafe malformed metadata while continuing with reduced coverage.
-- Current follow-up slice adds `SameCommitShaDivergentEvidence` row notes with `snapshot.diff.identity.v1` when single-index endpoint/surface evidence changes while paired snapshots report the same known commit SHA.
-- This branch adds single-index `AnalysisGap` fact comparison for `gapDiffs`, preserving `snapshot.diff.evidence.v1`, source fact rule IDs, evidence tiers, supporting fact IDs, safe file spans, and hashed raw messages.
+- Single-index endpoint diffs for `HttpRouteBinding` and `HttpCallDetected` facts using the required `endpoint:{sourceLabel}:{endpointKind}:{normalizedMethod}:{normalizedPathKey}:{handlerIdentityOrNone}` stable-key shape.
+- Single-index surface diffs for safe dependency-surface facts already understood by `CombinedDependencyReporter.BuildSurfaces`, including SQL/query, package/config, HTTP route/client, config-binding, and related surface rows where those facts exist.
+- `MalformedMetadataGap` for malformed `scan_manifest.manifest_json`, combined `index_sources.manifest_json`, and single-index `facts.properties_json`, omitting unsafe malformed metadata while continuing with reduced coverage.
+- `SameCommitShaDivergentEvidence` row notes with `snapshot.diff.identity.v1` when single-index endpoint/surface evidence changes while paired snapshots report the same known commit SHA.
+- Single-index `AnalysisGap` fact comparison for `gapDiffs`, preserving `snapshot.diff.evidence.v1`, source fact rule IDs, evidence tiers, supporting fact IDs, safe file spans, and hashed raw messages.
 
 Open Follow-Ups:
 
