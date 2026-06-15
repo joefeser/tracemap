@@ -83,7 +83,7 @@ Suggested row framing:
 
 | Demo area | Current public status | Proof path | Public-safe artifact |
 | --- | --- | --- | --- |
-| combine-and-dependency-report | demo | `scripts/demo-public.sh`, `scripts/demo-public-assert.mjs`, `samples/public-demo/`, `CombinedDependencyReportTests.cs` | dependency reports under `<out>/reports/dependency/...` |
+| combine-and-dependency-report | demo | `scripts/demo-public.sh`, `scripts/demo-public-assert.mjs`, `samples/modern-sample/`, `samples/endpoint-server-aspnet/`, `samples/typescript-modern-sample/`, `samples/endpoint-client-angular/`, `CombinedDependencyReportTests.cs` | dependency reports under `<out>/reports/dependency/...` |
 | paths-and-reverse | demo | `scripts/demo-public.sh`, combined path and reverse query specs, path/reverse tests | path and reverse reports under `<out>/reports/paths/...` and `<out>/reports/reverse/...` |
 | portfolio | demo | `scripts/demo-public.sh`, `samples/portfolio.example.json`, `PortfolioReportTests.cs` | `<out>/portfolio-manifest.json` and portfolio reports |
 | diff | demo | `scripts/demo-public.sh`, `samples/public-demo/before/`, `samples/public-demo/after/`, `CombinedDependencyDiffTests.cs` | diff reports under `<out>/reports/diff/public-demo/` |
