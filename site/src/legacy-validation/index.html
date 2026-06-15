@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap legacy codebase validation concept: how old .NET, partial builds, UI event wiring, large repositories, and redacted summaries will be evaluated safely."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Legacy Validation | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/legacy-validation/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Legacy Validation Concept">
+    <meta
+      property="og:description"
+      content="A concept-level view of how TraceMap will validate old and unusually large .NET codebases without publishing unsafe local details."
+    >
+    <meta property="og:url" content="https://tracemap.tools/legacy-validation/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Legacy validation</p>
+        <h1>Messy old repositories are where evidence discipline matters most.</h1>
+        <p class="hero-subhead">
+          TraceMap is preparing a validation pass for old and unusually large
+          .NET codebases: projects that may not restore, may not build, may use
+          legacy UI wiring, and still need honest static evidence instead of a
+          clean-room demo story.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. The underlying validation spec remains
+          hidden for public claims until a redacted validation summary exists.
+          This page describes the validation plan, not completed legacy support
+          results.
+        </p>
+        <nav class="hero-actions" aria-label="Legacy validation links">
+          <a class="button primary" href="https://github.com/joefeser/tracemap/blob/main/.kiro/specs/legacy-codebase-validation/requirements.md">Read the spec</a>
+          <a class="button secondary" href="/demo/result/">Current demo result</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Why this matters</p>
+          <h2>Legacy validation is not about making old code look clean.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Failed builds still have evidence</strong><span>Old target frameworks, unsupported toolsets, missing SDKs, and broken project files should reduce coverage instead of turning the scan into a clean result.</span></div>
+          <div><strong>Fallbacks must be labeled</strong><span>Syntax, config, package, SQL, and project evidence can still help reviewers, but it must carry the right evidence tier and limitation language.</span></div>
+          <div><strong>UI entry points are tricky</strong><span>WinForms and WebForms event wiring may appear as semantic, structural, syntax, text, or missing evidence depending on what the scanner can actually observe.</span></div>
+          <div><strong>Large repos test practicality</strong><span>Duration, artifact size, fact counts, analyzer gaps, and truncation limits matter when the repository stops being a toy sample.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Validation dimensions</p>
+          <h2>The planned pass measures behavior before claiming support.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Local-only inputs</h3>
+            <p>Operator-provided sample paths live under ignored local metadata. Public copy may use neutral labels only.</p>
+          </article>
+          <article>
+            <h3>Scan resilience</h3>
+            <p>When old projects cannot load, validation should record reduced coverage and any available fallback evidence.</p>
+          </article>
+          <article>
+            <h3>Environment clues</h3>
+            <p>Old target frameworks, project styles, package files, and build-tool hints can be summarized as evidence-backed guidance.</p>
+          </article>
+          <article>
+            <h3>UI event probes</h3>
+            <p>WinForms and WebForms handler wiring should be checked without claiming runtime reachability or user behavior.</p>
+          </article>
+          <article>
+            <h3>Large repository smoke</h3>
+            <p>Validation should capture duration, artifact size, fact counts, coverage labels, and truncation or deferred status.</p>
+          </article>
+          <article>
+            <h3>Redacted summaries</h3>
+            <p>Only labels, counts, rule IDs, coverage labels, evidence tiers, and limitations can move toward public copy.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What stays hidden</p>
+          <h2>The validation source can be real without making private details public.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>local paths</code><span>Operator-only inputs remain under ignored local metadata and must not appear in committed files.</span></div>
+          <div><code>raw scan artifacts</code><span>SQLite indexes, fact streams, manifests, reports, and logs from private/local samples stay local-only.</span></div>
+          <div><code>raw identity</code><span>Repository remotes and private project names are replaced by neutral labels before public discussion.</span></div>
+          <div><code>raw values</code><span>Source snippets, SQL text, config values, connection strings, and secrets do not belong in site copy.</span></div>
+          <div><code>uncleared summaries</code><span>Any redacted summary candidate remains hidden until it passes the pre-publish safety checklist.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Public-safe shape</p>
+          <h2>When results exist, the site should show the summary, not the raw repository.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Sample labels</strong><span>Use neutral labels such as legacy UI, large public client, or unknown legacy app instead of repository names.</span></div>
+          <div><strong>Counts</strong><span>Show fact counts, artifact presence, elapsed time, output-size status, and analyzer gap counts.</span></div>
+          <div><strong>Evidence vocabulary</strong><span>Use rule IDs, evidence tiers, coverage labels, source kinds, and limitations for every public conclusion.</span></div>
+          <div><strong>Follow-up gaps</strong><span>If event wiring is not captured, record a validation gap and propose a scanner or reporting follow-up instead of claiming absence.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>This concept page does not upgrade hidden validation into a public result.</h2>
+        </div>
+        <ul>
+          <li>It does not claim TraceMap already supports arbitrary legacy .NET codebases.</li>
+          <li>It does not claim old UI event wiring proves runtime execution, user reachability, or downstream behavior.</li>
+          <li>It does not publish local validation results, local paths, private repository names, raw remotes, source snippets, SQL, config values, or secrets.</li>
+          <li>It does not replace a redacted validation summary with marketing copy.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Source material</p>
+          <h2>Follow the concept back to the spec and current evidence model.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="https://github.com/joefeser/tracemap/blob/main/.kiro/specs/legacy-codebase-validation/requirements.md">Legacy validation requirements</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/.kiro/specs/legacy-codebase-validation/design.md">Legacy validation design</a>
+          <a href="/demo/result/">Current demo result</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/use-cases/">Use cases</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Legacy validation is a concept-level runway item until redacted
+        summaries exist. Continue with the
+        <a href="/validation/">validation map</a>
+        or the
+        <a href="/packets/">packet guide</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
