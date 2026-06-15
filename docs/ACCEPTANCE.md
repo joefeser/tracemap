@@ -224,12 +224,12 @@ For every successful `tracemap snapshot-diff --before <before.sqlite> --after <a
 - both inputs are the same TraceMap index kind: single-language indexes or combined indexes. Mixed single/combined inputs fail clearly without writing output.
 - inputs are opened read-only.
 - directory or extensionless output writes `snapshot-diff-report.md` and `snapshot-diff-report.json`.
-- JSON includes `reportType: snapshot-diff`, required empty arrays, stable query metadata, before/after snapshots, source diffs, coverage diffs, extractor-version diffs, gaps, and limitations.
+- JSON includes `reportType: snapshot-diff`, required empty arrays, stable query metadata, before/after snapshots, source diffs, coverage diffs, single-index gap diffs when `AnalysisGap` facts change, extractor-version diffs, gaps, and limitations.
 - single-language indexes use the synthetic source label `single`; reports do not render raw repository URLs, raw repository names, raw local roots, or local absolute paths.
 - conflicting source identity fails by default and can only continue with `--allow-identity-mismatch`, which emits rule-backed review/unknown gaps.
 - reduced coverage and unknown commit SHAs produce gaps instead of clean history-dependent conclusions.
 - combined-index endpoint, surface, graph, and opt-in path sections delegate to the combined diff engine and preserve combined rule IDs as supporting evidence.
-- single-index endpoint/surface/graph projectors, contract-shape comparison, and snapshot-specific gap-diff rows emit explicit availability gaps until their projector slices are implemented.
+- single-index endpoint, dependency-surface, and `AnalysisGap` fact changes are projected when present; single-index graph and contract-shape comparison emit explicit availability gaps until their projector slices are implemented.
 - `--include-paths` requires combined indexes; `--scope paths` requires `--include-paths`.
 - `--max-diff-rows` and `--max-gaps` cap output deterministically.
 - `--exit-code` returns a non-zero exit only when requested and diff rows are present.
