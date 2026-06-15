@@ -2,40 +2,51 @@
 
 ## Current Branch
 
-`codex/parameter-value-origin-flow`
+`codex/value-origin-adapter-alignment`
 
 ## Implemented Slice
 
-This branch implements the first recommended slice:
+This branch implements recommended PR 5:
 
-- current-state audit for .NET flow facts and combined flow tables,
-- shared value-origin contract documentation,
-- explicit .NET parameter-forward alias bound of 3 hops,
-- focused storage-level tests proving direct parameter forwarding,
-- same-method local alias forwarding within the 3-hop bound,
-- no forwarding beyond the bound,
-- unique constructor parameter-to-field-to-call forwarding,
-- ambiguous constructor/member origin omission.
+- TypeScript semantic `ArgumentPassed` facts now emit shared `argument` and `parameter` role metadata when compiler symbols are available.
+- TypeScript SQLite symbol indexing now prefers `{role}SymbolDisplayName` and preserves `{role}SymbolLanguage`.
+- Java semantic `ArgumentPassed` facts now emit shared `parameter` role metadata and `argument` role metadata when javac resolves the argument expression to a symbol.
+- JVM SQLite symbol indexing now preserves `argument`, `parameter`, `origin`, and `constructor` roles, not only `source` and `target`.
+- Python AST `ArgumentPassed`, `LocalAlias`, and `FieldAlias` facts now emit shared role metadata for syntax-visible names.
+- Python AST callee parameters remain explicit unresolved ordinal placeholders such as `arg0`; this is Tier3 syntax evidence and not semantic callable-signature resolution.
 
 ## Scope Decisions
 
-- No new public `tracemap flow` output contract changes in this slice.
-- No new `combined.flow.*` rule IDs were added because no new emitted fact or public report row was introduced.
-- Existing rules `csharp.semantic.valueflow.v1`, `csharp.semantic.localalias.v1`, `csharp.semantic.fieldalias.v1`, and `csharp.semantic.parameterforwarding.v1` remain authoritative.
-- Value-origin classifications remain future additive metadata/notes for combined report/path/reverse layers; they do not replace existing path classifications.
-- TypeScript, JVM, and Python alignment remain follow-up slices.
+- No new fact types or rule IDs were added. Existing TypeScript, JVM, and Python value-flow rules remain authoritative.
+- No new runtime callback, promise/task scheduling, event firing, closure lifetime, branch feasibility, mutation safety, object identity, collection-content, DI, reflection, or serializer expansion claims were added.
+- No TypeScript/JVM/Python interprocedural parameter-forwarding behavior was added beyond existing adapter/storage behavior.
+- TypeScript syntax fallback and Java syntax fallback remain ordinal-only lower-tier evidence.
+- Python remains reduced-coverage AST evidence and does not resolve callee signatures.
 
 ## Validation
 
-- `dotnet test src/dotnet/TraceMap.sln --filter SqliteIndexWriterTests` passed: 9 focused tests.
-- `dotnet build src/dotnet/TraceMap.sln` passed.
-- `dotnet test src/dotnet/TraceMap.sln --no-build` passed: 161 tests.
-- `./scripts/check-private-paths.sh` passed.
-- `git diff --check` passed.
-- TypeScript/JVM/Python tests were not run because this slice only changes .NET storage derivation, .NET tests, and docs.
+- `npm test -- --run` from `src/typescript`: passed, 28 tests.
+- `npm run build` from `src/typescript`: passed.
+- `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle test` from `src/jvm`: passed.
+- `/tmp/tracemap-python-venv/bin/python -m pytest src/python/tests`: passed, 27 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 226 tests.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke`: passed and emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 ## Review Fixes
 
-- Fixed constructor fallback after alias-depth truncation: exhausting the alias bound now omits the derived edge instead of falling back to the original field's constructor origin.
-- Preserved constructor assignment multiplicity by removing constructor-origin de-duplication before the exactly-one-assignment check.
-- Added regressions for reassigned constructor fields beyond the alias bound and repeated constructor assignments from the same parameter.
+- Qodo/Codex: TypeScript parameter role symbol IDs now use the callee parameter declaration source and include containing callable plus ordinal context, avoiding same-name call-site collisions.
+- Qodo: Python name-origin role IDs are now scoped by containing function/module for local and field alias facts, avoiding bare-name collisions while preserving legacy `originSymbol` display values.
+
+## Remaining Follow-Ups
+
+- Add deterministic field/member alias extraction for TypeScript and JVM only if compiler evidence supports direct assignments without property-setter or object-identity claims.
+- Add TypeScript/JVM/Python callback/lambda/async boundary facts where deterministic syntax/compiler evidence exists.
+- Add syntax/ordinal fallback tests for direct argument-to-parameter extraction beyond the current shared-role checks.
+- Add named/optional/rest/varargs/keyword/default parameter mapping tests where adapters can prove mapping deterministically.
+- Emit gaps for unresolved or ambiguous argument mapping where an adapter has enough context to identify the ambiguity.
+- Add mutation/collection/property/ref/out/destructuring boundary tests where relevant.
+- Expand endpoint/request-root value-origin traversal and tests beyond currently supported parameter-forward/surface notes.
+- Add diff/impact value-origin downgrade behavior for reduced coverage or unstable identity.

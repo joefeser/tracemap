@@ -343,6 +343,6 @@ tracemap paths --index combined.sqlite --from-endpoint "GET /api/admin/runner/ge
 - The default smoke requires endpoint-to-`sql-query` after extending the public fixture.
 - The linkage spike happens before the script; if it exposes a symbol mismatch, the engine fix is a prerequisite.
 - `package-config` reachability is deferred unless the fixture naturally proves it.
-- The new script stays independent from `scripts/smoke-typescript-endpoints.sh`; docs explain when to run each.
+- The new script stays independent from `scripts/demo-public.sh`; docs explain when to run each.
 - OSS remains delegated to `scripts/smoke-open-source-repos.sh`.
 - README should include commands, expected artifacts, and at most one clearly labeled illustrative snippet, not captured full reports.

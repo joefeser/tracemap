@@ -161,7 +161,9 @@ public static class MarkdownReportWriter
                 or FactTypes.DynamicInvocation
                 or FactTypes.CollectionMutation
                 or FactTypes.ObjectMutation
-                or FactTypes.BranchCondition),
+                or FactTypes.BranchCondition
+                or FactTypes.CallbackBoundary
+                or FactTypes.AsyncBoundary),
             fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
 
         AddFactSection(

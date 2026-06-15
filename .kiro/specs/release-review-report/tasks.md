@@ -3,79 +3,79 @@
 ## Implementation Tasks
 
 - [x] 1. Confirm existing report and diff surfaces. Requirements: 1, 2, 3.
-  - [ ] Inspect `tracemap diff`, `impact`, `reduce`, `paths`, `reverse`, and combined report outputs.
-  - [ ] Identify which workflows are implemented on `dev` and which must render as unavailable sections.
-  - [ ] Inventory existing safe rendering helpers for Markdown and JSON.
+  - [x] Inspect `tracemap diff`, `impact`, `reduce`, `paths`, `reverse`, and combined report outputs.
+  - [x] Identify which workflows are implemented on `dev` and which must render as unavailable sections.
+  - [x] Inventory existing safe rendering helpers for Markdown and JSON.
 
 - [x] 2. Add command and report model. Requirements: 1, 8, 9.
-  - [ ] Add `tracemap release-review --before --after --out`.
-  - [ ] Validate single-vs-combined mode and reject mixed inputs.
-  - [ ] Emit sanitized mixed-mode and invalid-index errors to stderr without raw paths.
-  - [ ] Open indexes read-only.
-  - [ ] Add deterministic JSON model with section statuses.
-  - [ ] Add Markdown writer with required section order.
-  - [ ] Implement the output path and `--format` matrix for directory, extensionless path, Markdown file, and JSON file.
-  - [ ] Keep `--exit-code` deferred in v1; return non-zero only for command/input failures.
+  - [x] Add `tracemap release-review --before --after --out`.
+  - [x] Validate single-vs-combined mode and reject mixed inputs.
+  - [x] Emit sanitized mixed-mode and invalid-index errors to stderr without raw paths.
+  - [x] Open indexes read-only.
+  - [x] Add deterministic JSON model with section statuses.
+  - [x] Add Markdown writer with required section order.
+  - [x] Implement the output path and `--format` matrix for directory, extensionless path, Markdown file, and JSON file.
+  - [x] Keep `--exit-code` deferred in v1; return non-zero only for command/input failures.
 
 - [x] 3. Implement source identity and coverage summary. Requirements: 2, 4, 5.
-  - [ ] Pair single or combined sources.
-  - [ ] Render before-only and after-only sources as source evidence with caveats.
-  - [ ] Emit source identity, commit SHA, coverage, and extractor metadata.
-  - [ ] Emit identity, unknown SHA, missing precision table, and reduced coverage gaps.
-  - [ ] Add checklist items derived from source/coverage gaps.
+  - [x] Pair single or combined sources.
+  - [x] Render before-only and after-only sources as source evidence with caveats.
+  - [x] Emit source identity, commit SHA, coverage, and extractor metadata.
+  - [x] Emit identity, unknown SHA, missing precision table, and reduced coverage gaps.
+  - [x] Add checklist items derived from source/coverage gaps.
 
 - [x] 4. Compose dependency diff evidence. Requirements: 3, 4, 5.
-  - [ ] Reuse combined dependency diff semantics where available.
-  - [ ] Reuse combined change impact conversion and downgrade semantics where available.
-  - [ ] Render top changed surfaces deterministically.
-  - [ ] Preserve underlying classifications, rule IDs, evidence tiers, supporting IDs, and limitations.
-  - [ ] Keep coverage-relative rows coverage-relative.
-  - [ ] Map `--scope coverage` to source/coverage summary and compatible diff source rows rather than passing an unsupported scope through unchanged.
+  - [x] Reuse combined dependency diff semantics where available.
+  - [x] Reuse combined change impact conversion and downgrade semantics where available.
+  - [x] Render top changed surfaces deterministically.
+  - [x] Preserve underlying classifications, rule IDs, evidence tiers, supporting IDs, and limitations.
+  - [x] Keep coverage-relative rows coverage-relative.
+  - [x] Map `--scope coverage` to source/coverage summary and compatible diff source rows rather than passing an unsupported scope through unchanged.
 
 - [x] 5. Compose contract/API/SQL/package sections. Requirements: 3, 4, 8.
-  - [ ] Include contract delta impact v2 when `--contract-delta` is provided and workflow is available.
-  - [ ] Include API/DTO contract diff when workflow is available.
-  - [ ] Include SQL/schema impact when `--sql-schema-delta` is provided and workflow is available.
-  - [ ] Include indexed package-surface diffs where available.
-  - [ ] Validate a provided `--package-delta` file is readable before rendering deferred/unavailable package-upgrade context.
-  - [ ] Render `--package-delta` package-upgrade impact as deferred/unavailable until a package-upgrade workflow exists.
-  - [ ] Render unavailable/deferred sections explicitly when workflows are not implemented.
+  - [x] Include contract delta impact v2 when `--contract-delta` is provided and workflow is available.
+  - [x] Include API/DTO contract diff when workflow is available.
+  - [x] Include SQL/schema impact when `--sql-schema-delta` is provided and workflow is available.
+  - [x] Include indexed package-surface diffs where available.
+  - [x] Validate a provided `--package-delta` file is readable before rendering deferred/unavailable package-upgrade context.
+  - [x] Render `--package-delta` package-upgrade impact as deferred/unavailable until a package-upgrade workflow exists.
+  - [x] Render unavailable/deferred sections explicitly when workflows are not implemented.
 
 - [x] 6. Add optional path and reverse context. Requirements: 3, 6.
-  - [ ] Keep path and reverse off by default.
-  - [ ] Reuse existing bounded path/reverse readers.
-  - [ ] Render single-index path/reverse requests as unavailable/deferred with gaps in v1.
-  - [ ] Emit `not_requested`, `unavailable`, or truncation statuses as appropriate.
-  - [ ] Preserve path IDs, edge IDs, fact IDs, classifications, and caveats.
+  - [x] Keep path and reverse off by default.
+  - [x] Reuse existing bounded path/reverse readers.
+  - [x] Render single-index path/reverse requests as unavailable/deferred with gaps in v1.
+  - [x] Emit `not_requested`, `unavailable`, or truncation statuses as appropriate.
+  - [x] Preserve path IDs, edge IDs, fact IDs, classifications, and caveats.
 
 - [x] 7. Implement reviewer checklist. Requirements: 4, 5, 8, 9.
-  - [ ] Generate checklist items only from findings and gaps.
-  - [ ] Use fixed severity mapping.
-  - [ ] Use fixed release rollup precedence and prove coverage-relative rows are not promoted to actionable evidence.
-  - [ ] Include triggering finding IDs or gap IDs.
-  - [ ] Avoid approval, readiness, or runtime risk language.
+  - [x] Generate checklist items only from findings and gaps.
+  - [x] Use fixed severity mapping.
+  - [x] Use fixed release rollup precedence and prove coverage-relative rows are not promoted to actionable evidence.
+  - [x] Include triggering finding IDs or gap IDs.
+  - [x] Avoid approval, readiness, or runtime risk language.
 
 - [x] 8. Add safety and determinism tests. Requirements: 7, 8, 10.
-  - [ ] Prove raw SQL, snippets, config values, connection strings, raw URLs, and local absolute paths do not render.
-  - [ ] Prove Markdown and JSON byte-stability.
-  - [ ] Prove deterministic sorting and stable IDs.
-  - [ ] Prove input indexes are not mutated.
-  - [ ] Prove section status rendering for `available`, `not_requested`, `unavailable`, `deferred`, and `truncated`.
-  - [ ] Prove truncation omitted counts and stable ordering.
+  - [x] Prove raw SQL, snippets, config values, connection strings, raw URLs, and local absolute paths do not render.
+  - [x] Prove Markdown and JSON byte-stability.
+  - [x] Prove deterministic sorting and stable IDs.
+  - [x] Prove input indexes are not mutated.
+  - [x] Prove section status rendering for `available`, `not_requested`, `unavailable`, `deferred`, and `truncated`.
+  - [x] Prove truncation omitted counts and stable ordering.
 
 - [x] 9. Add rules and docs. Requirements: 9, 10.
-  - [ ] Add release-review rule catalog entries in implementation PR 1 before emitting new rows/gaps.
-  - [ ] Add rule coverage for rollups, checklist items, unavailable workflow gaps, selector gaps, truncation gaps, source/coverage/schema gaps, and unsupported-mode gaps.
-  - [ ] Document limitations and static-analysis boundary.
-  - [ ] Update acceptance/validation docs if implementation changes public workflow.
+  - [x] Add release-review rule catalog entries in implementation PR 1 before emitting new rows/gaps.
+  - [x] Add rule coverage for rollups, checklist items, unavailable workflow gaps, selector gaps, truncation gaps, source/coverage/schema gaps, and unsupported-mode gaps.
+  - [x] Document limitations and static-analysis boundary.
+  - [x] Update acceptance/validation docs if implementation changes public workflow.
 
 - [x] 10. Validate. Requirements: 10.
-  - [ ] `dotnet build src/dotnet/TraceMap.sln`
-  - [ ] `dotnet test src/dotnet/TraceMap.sln`
-  - [ ] `./scripts/check-private-paths.sh`
-  - [ ] `git diff --check`
-  - [ ] Relevant smoke checks if combined/path/reverse behavior changes.
-  - [ ] Tests for mixed-mode rejection, invalid index schema errors, selector no-match/ignored selector metadata, and single-index path/reverse unavailable behavior.
+  - [x] `dotnet build src/dotnet/TraceMap.sln`
+  - [x] `dotnet test src/dotnet/TraceMap.sln`
+  - [x] `./scripts/check-private-paths.sh`
+  - [x] `git diff --check`
+  - [x] Relevant smoke checks if combined/path/reverse behavior changes.
+  - [x] Tests for mixed-mode rejection, invalid index schema errors, selector no-match/ignored selector metadata, and single-index path/reverse unavailable behavior.
 
 ## Suggested PR Slices
 

@@ -147,6 +147,35 @@ For every successful `tracemap report --index <combined.sqlite> --out <out>` run
 - SQL and dynamic URL rows do not display raw SQL text, raw URLs, source snippets, or local absolute paths.
 - `endpoint_matches` is not mutated by report generation.
 
+For every successful `tracemap portfolio --out <out>` run, verify:
+
+- inputs are single-language indexes, combined indexes, or a manifest that references them, and all input indexes are opened read-only.
+- directory or extensionless output writes `portfolio-report.md` and `portfolio-report.json`.
+- JSON includes `reportType: multi-index-portfolio-report`, required empty arrays, stable query metadata, source snapshots, source coverage, endpoint alignment, dependency surfaces, dependency edges, shared surfaces, optional context sections, portfolio diff/impact sections, gaps, and limitations.
+- source rows preserve source labels, combined container labels when applicable, commit SHA, scanner/extractor version, analysis level, build status, coverage status, and repository identity hashes without local absolute paths.
+- single-snapshot reports compute endpoint alignment and shared surfaces only from deterministic static evidence and never imply runtime topology, ownership, traffic, deployment, package compatibility, vulnerability, or release approval.
+- before/after manifest comparison pairs sources by manifest label plus source identity, emits source changes, and projects safe surface/edge changes into `PortfolioDiffRow` rows with `portfolio.diff.v1`.
+- projected surface/edge diff rows use stable safe identities, carry rule IDs, evidence tiers, supporting fact or edge IDs where available, and downgrade to review/partial classifications for Tier3, hash-only, ambiguous, duplicate, or reduced-coverage evidence.
+- optional impact, path, reverse, and release-review context is `not_requested`, `unavailable`, or `deferred` until the compatible composition workflows are implemented.
+- caps such as `--max-sources`, `--max-surface-rows`, `--max-endpoint-findings`, `--max-shared-surfaces`, `--max-edge-rows`, `--max-diff-rows`, and `--max-gaps` apply deterministically and emit truncation gaps when rows are omitted.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, secret-looking values, repository remotes, or local absolute paths.
+
+For every successful `tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <out>` run, verify:
+
+- the input index is opened read-only and may be either a single-language TraceMap index or a combined index.
+- directory or extensionless output writes `package-impact-report.md` and `package-impact-report.json`.
+- JSON includes version, report coverage, package delta summary, source snapshots, findings, gaps, and limitations without generated timestamps.
+- package-delta input uses `version: package-delta.v1`, optional source provenance, and a non-empty `changes` array with stable change IDs and package names.
+- package matching is exact case-insensitive package-name matching, with optional exact case-insensitive ecosystem matching.
+- findings carry `package.upgrade.impact.v1`, the original package extractor rule ID, evidence tier, source label, scan ID, commit SHA, file span, fact IDs, and safe package metadata.
+- source provenance and repository remotes are hashed or omitted in package-impact JSON; raw remotes are not serialized through reused report source DTOs.
+- unsafe version strings, raw URLs, local paths, source snippets, config values, connection strings, and secret-looking values are not rendered.
+- no-match package changes under reduced coverage emit `UnknownAnalysisGap`; they are not reported as clean absence.
+- no-match package changes under full coverage emit `NoStaticPackageEvidence`; the absence of package rows alone does not downgrade report coverage.
+- config-key surfaces must not be matched as package upgrade findings.
+- package impact reports do not claim compatibility, transitive dependency resolution, runtime loading, vulnerabilities, licenses, deployment, release approval, or production usage.
+- caps such as `--max-findings` and `--max-gaps` apply deterministically and mark truncated output.
+
 For every successful `tracemap paths --index <combined.sqlite> --out <out>` run, verify:
 
 - path reports reject single-language indexes with a clear combined-index error.
@@ -204,6 +233,20 @@ For every successful `tracemap snapshot-diff --before <before.sqlite> --after <a
 - `--include-paths` requires combined indexes; `--scope paths` requires `--include-paths`.
 - `--max-diff-rows` and `--max-gaps` cap output deterministically.
 - `--exit-code` returns a non-zero exit only when requested and diff rows are present.
+- Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
+
+For every successful `tracemap contract-diff --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
+
+- both inputs are the same TraceMap index kind: single-language indexes or combined indexes. Mixed single/combined inputs fail clearly without writing output.
+- inputs are opened read-only.
+- directory or extensionless output writes `contract-diff-report.md` and `contract-diff-report.json`.
+- JSON includes `reportType`, `version`, `reportCoverage`, `coverageWarnings`, `query`, before/after snapshots, source pairs, endpoint diffs, DTO type diffs, DTO property diffs, method diffs, request/response diffs, route-shape diffs, gaps, and limitations.
+- endpoint rows compare indexed static method/path/handler/route metadata and do not claim runtime traffic, auth, deployment, proxy, or reachability behavior.
+- DTO rows compare only indexed type/member metadata and do not infer runtime serializer aliases, generated OpenAPI completeness, or binary compatibility.
+- request/response rows are emitted only for explicit endpoint-to-DTO attachment evidence; otherwise `AttachmentEvidenceUnavailable` is a rule-backed gap.
+- reduced coverage, unknown commit SHA, source identity conflict, duplicate identity, syntax-only evidence, and generic property-only identity downgrade rows.
+- `--scope`, `--source`, `--endpoint`, `--type`, `--property`, `--change-kind`, `--max-diff-rows`, `--max-evidence-rows`, `--max-gaps`, and `--exit-code` behave deterministically.
+- `--exit-code` returns a non-zero exit only when requested and `Added`, `Removed`, or `ChangedEvidence` rows exist.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
 
 For every successful `tracemap impact --before <before.sqlite> --after <after.sqlite> --out <out>` run, verify:
@@ -591,7 +634,7 @@ Each fixture should document:
 | parameter flow report | `tracemap flow` chains direct forwarding, same-method aliases, and unique constructor field initialization while labeling limitations |
 | relationship report | `tracemap relate` chains direct symbol relationships while labeling limitations |
 | scoped scan | `tracemap scan --project`, `--solution`, `--include`, `--exclude`, `--target-framework`, and explicit `--restore` constrain scan/load behavior deterministically |
-| flow boundary | Tier1 semantic boundary fact for DI, deserialization, reflection, dynamic invocation, mutation, or branch condition without claiming runtime flow |
+| flow boundary | Tier1 semantic boundary fact for DI, deserialization, reflection, dynamic invocation, mutation, branch condition, callback/delegate/event/expression tree, await/await foreach/await using/task scheduling, or iterator yield without claiming runtime flow |
 | runtime evidence | Tier1 semantic fact for statically visible DI registration, serializer contract member, reflection target, dynamic dispatch candidate, collection element input, mutation semantics, or simple branch feasibility |
 | contract mapping | Tier1 semantic fact for attribute route binding, table/column mapping, or literal configuration section binding |
 | calculation expression | `CalculationExpression` with operator, line span, and expression hash |

@@ -47,7 +47,7 @@ Run the public demo when validating the open-source walkthrough or generated pub
 
 The default demo uses only checked-in samples. It does not clone public repositories, read private repositories, call external analysis services, query package registries, or run vulnerability/license/compatibility analysis. First-run build restore may still need network access for local toolchains such as NuGet or npm.
 
-Current first-slice behavior:
+Current default behavior:
 
 - checks `git`, `.NET`, `node`, and `npm`
 - builds the .NET solution and TypeScript adapter
@@ -55,20 +55,31 @@ Current first-slice behavior:
 - scans `samples/endpoint-server-aspnet`
 - scans `samples/typescript-modern-sample`
 - scans `samples/endpoint-client-angular`
+- scans `samples/public-demo/before`
+- scans `samples/public-demo/after`
+- combines the endpoint stack with labels `public-ts-client` and `public-dotnet-server`
+- combines a mixed stack with labels `public-dotnet-modern`, `public-dotnet-server`, `public-ts-modern`, and `public-ts-client`
+- combines before/after public-demo snapshots with label `public-demo-api`
+- runs the combined dependency report and asserts endpoint evidence from the combined report
+- runs targeted `tracemap paths` and `tracemap reverse` over the generated endpoint stack
+- generates `portfolio-manifest.json` from generated combined indexes and runs `tracemap portfolio`
+- runs `tracemap diff`, `tracemap impact`, and `tracemap release-review` over the generated public-demo before/after snapshots
 - writes `demo-summary.md` and `demo-summary.json`
 - runs a generated-output sentinel scan over public-shareable summaries and reports
 - marks Python as `not_requested` unless `--include-python` is passed; requested Python scanning is currently `deferred` to a follow-up slice
 - marks JVM as `unavailable` when Java 21 is absent
-- marks combine/report, paths/reverse, portfolio, diff, impact, and release-review as `deferred` until follow-up demo slices add their assertions
+
+The release-review section is available as a deterministic static evidence packet over the public-demo before/after snapshots. Contract-delta, SQL/schema, package compatibility, path context, and reverse context sections remain not requested, unavailable, or deferred inside the release-review report unless compatible inputs are explicitly supplied.
 
 Troubleshooting:
 
 - If the demo refuses an in-repo output directory, use `.tracemap-demo/` or add a generic ignored output path before running the script.
 - If .NET or TypeScript build restore fails, run the build/test commands above directly to restore local toolchain dependencies and inspect their native diagnostics.
-- Reduced sample scan coverage is expected in the first public-demo slice for samples that intentionally rely on syntax fallback or missing framework packages. The summary reports full and reduced scan counts so follow-up report assertions can stay coverage-aware.
+- Reduced sample scan and report coverage is expected for samples that intentionally rely on syntax fallback or missing framework packages. The summary labels those sections as partial while preserving rule-backed evidence counts.
+- If endpoint, path, reverse, or portfolio assertions fail, inspect the generated JSON reports under `reports/`; accepted evidence rows must include rule IDs, evidence tiers, source labels, commit SHAs, and supporting fact or edge IDs where the report exposes them.
 - If the generated public-report sentinel fails, inspect the relative file paths and category it prints. Keep scan manifests, SQLite files, facts, and logs local-only; public summaries and reports must use hashes, labels, or relative paths.
 
-Generated outputs under `scans/**`, SQLite files, facts, manifests, and logs are local-only artifacts and may contain temporary execution details. Public-shareable `demo-summary.*` and future `reports/**/*.md|json` artifacts must not contain raw scripts, SQL, snippets, config values, connection strings, raw URLs with credentials, private paths, or local absolute paths.
+Generated outputs under `scans/**`, SQLite files, facts, manifests, and logs are local-only artifacts and may contain temporary execution details. Public-shareable `demo-summary.*` and `reports/**/*.md|json` artifacts must not contain raw scripts, SQL, snippets, config values, connection strings, raw URLs with credentials, private paths, or local absolute paths.
 
 Use `.tracemap-demo/` for an in-repo output root; it is ignored by git. Other in-repo output directories are rejected unless `git check-ignore` proves they are ignored.
 
@@ -87,7 +98,7 @@ rg -n "fields none" <scan-output>/report.md
 
 `fields none` is acceptable for query-builder facts with no extracted field metadata. SQL-shape facts should render derived operation/table/column/source/hash metadata instead, and reports must not render raw SQL text, literal values, unsafe identifiers, or developer-local absolute paths.
 
-For combined dependency report, path-query, reverse-query, diff, or snapshot-diff changes, run a combine/report/paths/reverse/diff/snapshot-diff smoke over any two existing local scan outputs:
+For combined dependency report, path-query, reverse-query, diff, contract-diff, or snapshot-diff changes, run a combine/report/paths/reverse/diff/contract-diff/snapshot-diff smoke over any two existing local scan outputs:
 For combined change-impact changes, include the `impact` command in the same smoke.
 For release-review changes, include `release-review` in the same smoke and verify `release-review.md` plus `release-review.json` are produced.
 
@@ -100,6 +111,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sq
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
 dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index <tmp>/combined.sqlite --surface sql-query --to endpoints --out <tmp>/combined-reverse
 dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-diff
+dotnet run --project src/dotnet/TraceMap.Cli -- contract-diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/contract-diff
 dotnet run --project src/dotnet/TraceMap.Cli -- snapshot-diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/snapshot-diff
 dotnet run --project src/dotnet/TraceMap.Cli -- impact --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-impact
 dotnet run --project src/dotnet/TraceMap.Cli -- release-review --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/release-review
@@ -111,6 +123,8 @@ test -f <tmp>/combined-reverse/reverse-report.md
 test -f <tmp>/combined-reverse/reverse-report.json
 test -f <tmp>/combined-diff/diff-report.md
 test -f <tmp>/combined-diff/diff-report.json
+test -f <tmp>/contract-diff/contract-diff-report.md
+test -f <tmp>/contract-diff/contract-diff-report.json
 test -f <tmp>/snapshot-diff/snapshot-diff-report.md
 test -f <tmp>/snapshot-diff/snapshot-diff-report.json
 test -f <tmp>/combined-impact/impact-report.md
@@ -126,6 +140,14 @@ sqlite3 <out>/index.sqlite "select source_method_symbol, source_parameter_symbol
 ```
 
 Expected behavior: direct parameter forwarding is present, same-method aliases are bounded to 3 hops, and ambiguous constructor/member origins are omitted or represented as gaps by future reporting slices rather than being promoted to forwarding edges.
+
+For callback/lambda/async boundary changes, inspect semantic .NET fixtures for `CallbackBoundary` and `AsyncBoundary` facts under `csharp.semantic.flowboundary.v1`. Expected behavior: direct calls inside callback bodies may still emit normal `ArgumentPassed` rows, captured outer parameters/locals are labeled review-tier boundary evidence, expression-tree lambdas use expression-tree metadata instead of delegate-callback metadata, and event subscriptions, delegate arguments on invocations/object creation, `await`, `await foreach`, `await using`, task scheduling/continuation calls, thread-pool queueing calls, and iterator `yield` are boundaries rather than proof of runtime invocation, ordering, async disposal, async-stream enumeration, or task completion.
+
+For TypeScript/JVM/Python value-origin adapter alignment, inspect adapter fixtures for shared `ArgumentPassed` role properties:
+
+- TypeScript semantic facts should include `argumentSymbolId`, `argumentSymbolLanguage`, `argumentSymbolDisplayName`, `parameterSymbolId`, `parameterSymbolLanguage`, and `parameterSymbolDisplayName` when the compiler resolves both sides.
+- Java semantic facts should include parameter role properties for resolved calls and argument role properties only when javac resolves the argument expression to a symbol.
+- Python AST facts should mark unresolved callee parameters with `parameterIdentityStatus=unresolvedOrdinalPlaceholder` while still emitting shared role metadata for syntax-visible arguments, local aliases, and `self.field = parameter` aliases.
 
 For changes to `combine`, `report`, `paths`, `reverse`, endpoint extraction, call edges, SQL/query extraction, or dependency-surface projection, run the public combined-path smoke:
 
@@ -147,6 +169,8 @@ The smoke is sample-only and does not clone repositories or read external applic
 - generated Markdown does not render the synthetic SQL sentinel or developer-local absolute paths
 
 The smoke writes generated manifests, logs, SQLite files, and reports under a caller-provided directory or `mktemp -d`. Generated manifests/logs may contain absolute paths to the checked-in samples or temporary output roots; they must not be committed.
+
+For portfolio report changes, run the .NET solution build and test suite plus `./scripts/check-private-paths.sh` and `git diff --check`. The focused portfolio tests cover direct inputs, manifest inputs, combined-source expansion, before/after manifest source comparison, projected surface/edge comparison, deterministic output, read-only input handling, and public-output redaction. Run the public combined-path smoke only when the portfolio change also modifies language adapters, combine/report behavior, endpoint extraction, dependency-surface projection, paths, reverse, diff, impact, or release-review code shared outside `tracemap portfolio`.
 
 ## Public OSS Smoke
 

@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 
@@ -37,7 +36,8 @@ public sealed record CombinedReportSummary(
     int EndpointFindingCount,
     IReadOnlyDictionary<string, int> EndpointFindingsByClassification,
     IReadOnlyDictionary<string, int> SurfacesByKind,
-    IReadOnlyDictionary<string, int> EdgesByKind);
+    IReadOnlyDictionary<string, int> EdgesByKind,
+    IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts);
 
 public sealed record CombinedReportSource(
     string SourceIndexId,
@@ -146,7 +146,9 @@ public sealed record CombinedNeedsReviewRow(
     string? SourceLabel,
     string? CombinedFactId,
     string? FilePath,
-    int? StartLine);
+    int? StartLine,
+    string RuleId,
+    string EvidenceTier);
 
 public sealed record CombinedKnownGapRow(
     string SourceIndexId,
@@ -190,7 +192,8 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<CombinedKnownGapRow> KnownGaps,
     IReadOnlyList<string> CoverageWarnings,
     IReadOnlyList<CombinedFactRow> Facts,
-    IReadOnlyList<CombinedDependencyEdgeRow> Edges);
+    IReadOnlyList<CombinedDependencyEdgeRow> Edges,
+    IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts);
 
 internal sealed record CombinedSourceReadRow(
     CombinedReportSource Source,
@@ -272,7 +275,8 @@ public static class CombinedDependencyReporter
                 endpointFindings.Count,
                 CountBy(endpointFindings, finding => finding.Classification),
                 CountBy(surfaces, surface => surface.SurfaceKind),
-                CountBy(read.Edges, edge => edge.EdgeKind)),
+                CountBy(read.Edges, edge => edge.EdgeKind),
+                read.ValueOriginEvidenceCounts),
             endpointFindings,
             surfaces,
             read.Edges
@@ -324,7 +328,54 @@ public static class CombinedDependencyReporter
 
         var facts = await ReadFactsAsync(connection, cancellationToken);
         var edges = await ReadEdgesAsync(connection, cancellationToken);
-        return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges);
+        var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
+        return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges, valueOriginCounts);
+    }
+
+    private static async Task<IReadOnlyDictionary<string, long>> ReadValueOriginEvidenceCountsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        if (await TableExistsAsync(connection, "combined_argument_flows", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_argument_flows;";
+            counts["argument-flows"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_field_aliases", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_field_aliases;";
+            counts["field-aliases"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_local_aliases", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_local_aliases;";
+            counts["local-aliases"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (await TableExistsAsync(connection, "combined_parameter_forward_edges", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select count(*) from combined_parameter_forward_edges;";
+            counts["parameter-forward-edges"] = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        counts["async-boundaries"] = await CountFactsAsync(connection, FactTypes.AsyncBoundary, cancellationToken);
+        counts["callback-boundaries"] = await CountFactsAsync(connection, FactTypes.CallbackBoundary, cancellationToken);
+        return counts
+            .Where(pair => pair.Value > 0)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+    }
+
+    private static async Task<long> CountFactsAsync(SqliteConnection connection, string factType, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from combined_facts where fact_type = $fact_type;";
+        command.Parameters.AddWithValue("$fact_type", factType);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
     private static async Task<IReadOnlyList<CombinedSourceReadRow>> ReadSourcesAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -700,9 +751,8 @@ public static class CombinedDependencyReporter
 
     internal static IReadOnlyList<CombinedDependencySurfaceRow> BuildSurfaces(IReadOnlyList<CombinedFactRow> facts)
     {
-        return facts
-            .Select(ToSurface)
-            .OfType<CombinedDependencySurfaceRow>()
+        return CombinedSurfaceProjection.BuildSurfaces(facts.Select(ToSurfaceProjectionInput).ToArray())
+            .Select(ToSurfaceRow)
             .OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ThenBy(surface => surface.SourceLabel, StringComparer.Ordinal)
             .ThenBy(surface => surface.DisplayName, StringComparer.Ordinal)
@@ -711,134 +761,60 @@ public static class CombinedDependencyReporter
             .ToArray();
     }
 
-    private static CombinedDependencySurfaceRow? ToSurface(CombinedFactRow fact)
+    private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact)
     {
-        var surfaceKind = SurfaceKind(fact);
-        if (surfaceKind is null)
-        {
-            return null;
-        }
-
-        var httpMethod = FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName");
-        var normalizedPathKey = FirstValue(fact.Properties, "normalizedPathKey");
-        var operationName = FirstValue(fact.Properties, "operationName");
-        var mappingKind = FirstValue(fact.Properties, "mappingKind");
-        var mappedName = FirstValue(fact.Properties, "mappedName");
-        var tableName = SafeSqlIdentifierList(
-            FirstValue(fact.Properties, "tableName", "tableNames") ?? (IsTableMappingKind(mappingKind) ? mappedName : null),
-            100,
-            allowSpaces: true);
-        var columns = SafeSqlIdentifierList(
-            FirstValue(fact.Properties, "columnNames", "fieldNames", "columnName") ?? (IsColumnMappingKind(mappingKind) ? mappedName : null),
-            80,
-            allowSpaces: false);
-        var sourceKind = FirstValue(fact.Properties, "sqlSourceKind", "sourceKind");
-        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash");
-        var textHash = FirstValue(fact.Properties, "textHash");
-        var textLength = FirstValue(fact.Properties, "textLength");
-        var packageName = FirstValue(fact.Properties, "packageName", "package", "dependencyName", "moduleName", "name");
-        var rawVersion = FirstValue(fact.Properties, "version", "packageVersion");
-        var version = SafePackageVersion(rawVersion);
-        var unsafeVersion = !string.IsNullOrWhiteSpace(rawVersion) && version is null;
-        var versionHash = FirstValue(fact.Properties, "versionHash")
-            ?? (unsafeVersion ? CombinedReportHelpers.Hash(rawVersion!, 32) : null);
-        var redactionReason = FirstValue(fact.Properties, "redactionReason")
-            ?? (unsafeVersion ? "unsafe-package-version" : null);
-        var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "environmentVariableName");
-        var ecosystem = FirstValue(fact.Properties, "ecosystem", "packageEcosystem", "packageManager");
-        var manifestKind = FirstValue(fact.Properties, "manifestKind", "metadataSource", "sourceFormat", "type");
-        var dependencyScope = FirstValue(fact.Properties, "dependencyScope", "scope");
-        var dependencyGroup = FirstValue(fact.Properties, "dependencyGroup", "dependencySection", "buildTool");
-        var packageManager = FirstValue(fact.Properties, "packageManager", "buildTool");
-        var displayName = surfaceKind switch
-        {
-            "http-client" or "http-route" => normalizedPathKey ?? FirstValue(fact.Properties, "normalizedPathTemplate") ?? $"{httpMethod ?? "ANY"} unknown",
-            "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash),
-            "sql-persistence" => SqlPersistenceDisplayName(fact, tableName, columns, mappedName),
-            "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
-            _ => $"unknown-surface:{fact.CombinedFactId}"
-        };
-
-        return new CombinedDependencySurfaceRow(
-            surfaceKind,
-            displayName,
+        return new CombinedSurfaceFactInput(
+            fact.CombinedFactId,
             fact.SourceIndexId,
             fact.SourceLabel,
+            fact.OriginalFactId,
             fact.ScanId,
             fact.CommitSha,
-            fact.CombinedFactId,
-            fact.OriginalFactId,
             fact.FactType,
             fact.RuleId,
             fact.EvidenceTier,
-            SafePath(fact.FilePath),
+            fact.FilePath,
             fact.StartLine,
             fact.EndLine,
-            httpMethod,
-            normalizedPathKey,
-            operationName,
-            tableName,
-            columns ?? (surfaceKind == "sql-query" ? "n/a" : null),
-            sourceKind,
-            shapeHash,
-            textHash,
-            textLength,
-            packageName,
-            version,
-            configKey,
-            ecosystem,
-            manifestKind,
-            dependencyScope,
-            dependencyGroup,
-            packageManager,
-            versionHash,
-            redactionReason);
+            fact.Properties);
     }
 
-    private static string? SurfaceKind(CombinedFactRow fact)
+    private static CombinedDependencySurfaceRow ToSurfaceRow(CombinedSurfaceProjectionRow surface)
     {
-        if (fact.FactType == FactTypes.HttpCallDetected)
-        {
-            return "http-client";
-        }
-
-        if (fact.FactType == FactTypes.HttpRouteBinding)
-        {
-            return "http-route";
-        }
-
-        if (fact.FactType == FactTypes.DatabaseColumnMapping)
-        {
-            return "sql-persistence";
-        }
-
-        if (fact.FactType is FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.DapperCallDetected or FactTypes.SqlCommandDetected)
-        {
-            return "sql-query";
-        }
-
-        if (fact.Properties.TryGetValue("surfaceKind", out var declaredSurfaceKind)
-            && !string.IsNullOrWhiteSpace(declaredSurfaceKind))
-        {
-            var trimmed = declaredSurfaceKind.Trim();
-            return string.Equals(trimmed, "package", StringComparison.OrdinalIgnoreCase)
-                ? "package-config"
-                : trimmed;
-        }
-
-        if (fact.FactType == FactTypes.PackageReferenced)
-        {
-            return "package-config";
-        }
-
-        if (fact.FactType is FactTypes.ConfigBinding
-            or FactTypes.ConfigKeyDeclared
-            or FactTypes.ConnectionStringDeclared)
-        {
-            return "package-config";
-        }
-
-        return null;
+        return new CombinedDependencySurfaceRow(
+            surface.SurfaceKind,
+            surface.DisplayName,
+            surface.SourceIndexId,
+            surface.SourceLabel,
+            surface.ScanId,
+            surface.CommitSha,
+            surface.CombinedFactId,
+            surface.OriginalFactId,
+            surface.FactType,
+            surface.RuleId,
+            surface.EvidenceTier,
+            surface.FilePath,
+            surface.StartLine,
+            surface.EndLine,
+            surface.HttpMethod,
+            surface.NormalizedPathKey,
+            surface.OperationName,
+            surface.TableName,
+            surface.ColumnNames,
+            surface.SourceKind,
+            surface.ShapeHash,
+            surface.TextHash,
+            surface.TextLength,
+            surface.PackageName,
+            surface.Version,
+            surface.ConfigKey,
+            surface.Ecosystem,
+            surface.ManifestKind,
+            surface.DependencyScope,
+            surface.DependencyGroup,
+            surface.PackageManager,
+            surface.VersionHash,
+            surface.RedactionReason);
     }
 
     private static IReadOnlyList<CombinedNeedsReviewRow> BuildNeedsReview(IReadOnlyList<CombinedEndpointFinding> endpointFindings, IReadOnlyList<CombinedFactRow> facts)
@@ -853,7 +829,9 @@ public static class CombinedDependencyReporter
                 finding.ClientSourceLabel ?? finding.ServerSourceLabel,
                 finding.ClientCombinedFactId ?? finding.ServerCombinedFactId,
                 finding.ClientFilePath ?? finding.ServerFilePath,
-                finding.ClientStartLine ?? finding.ServerStartLine)));
+                finding.ClientStartLine ?? finding.ServerStartLine,
+                finding.ClientRuleId ?? finding.ServerRuleId ?? "endpoint.alignment.v1",
+                finding.ClientEvidenceTier ?? finding.ServerEvidenceTier ?? EvidenceTiers.Tier4Unknown)));
 
         rows.AddRange(facts
             .Where(fact => fact.FactType == FactTypes.AnalysisGap)
@@ -864,14 +842,37 @@ public static class CombinedDependencyReporter
                 fact.SourceLabel,
                 fact.CombinedFactId,
                 SafePath(fact.FilePath),
-                fact.StartLine)));
+                fact.StartLine,
+                fact.RuleId,
+                fact.EvidenceTier)));
+
+        rows.AddRange(facts
+            .Where(fact => fact.FactType is FactTypes.CallbackBoundary or FactTypes.AsyncBoundary)
+            .Select(fact => new CombinedNeedsReviewRow(
+                fact.FactType,
+                ValueOriginBoundaryMessage(fact),
+                fact.SourceIndexId,
+                fact.SourceLabel,
+                fact.CombinedFactId,
+                SafePath(fact.FilePath),
+                fact.StartLine,
+                fact.RuleId,
+                fact.EvidenceTier)));
 
         return rows
             .OrderBy(row => row.ReviewKind, StringComparer.Ordinal)
             .ThenBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(row => row.RuleId, StringComparer.Ordinal)
+            .ThenBy(row => row.EvidenceTier, StringComparer.Ordinal)
             .ThenBy(row => row.FilePath, StringComparer.Ordinal)
             .ThenBy(row => row.StartLine ?? 0)
             .ToArray();
+    }
+
+    private static string ValueOriginBoundaryMessage(CombinedFactRow fact)
+    {
+        var boundaryKind = FirstValue(fact.Properties, "boundaryKind") ?? fact.FactType;
+        return $"{boundaryKind} is value-origin review context only; it does not prove callback invocation, event firing, runtime scheduling, ordering, task completion, closure lifetime, or mutation safety.";
     }
 
     private static CombinedDependencyEdgeRow SanitizeEdge(CombinedDependencyEdgeRow edge)
@@ -923,6 +924,7 @@ public static class CombinedDependencyReporter
         AppendDictionary(builder, "Endpoint findings by classification", report.Summary.EndpointFindingsByClassification);
         AppendDictionary(builder, "Dependency surfaces by kind", report.Summary.SurfacesByKind);
         AppendDictionary(builder, "Dependency edges by kind", report.Summary.EdgesByKind);
+        AppendDictionary(builder, "Value-origin evidence by kind", report.Summary.ValueOriginEvidenceCounts);
         AppendList(builder, "Coverage warnings", report.CoverageWarnings);
 
         builder.AppendLine("## Sources");
@@ -950,7 +952,7 @@ public static class CombinedDependencyReporter
         builder.AppendLine("## Needs Review");
         builder.AppendLine();
         AppendRows(builder, report.NeedsReview, "| Kind | Source | Message | Evidence |", "| --- | --- | --- | --- |",
-            row => $"| {Cell(row.ReviewKind)} | {Cell(row.SourceLabel ?? "unknown")} | {Cell(row.Message)} | {Cell(EvidenceLabel(null, row.FilePath, row.StartLine))} |");
+            row => $"| {Cell(row.ReviewKind)} | {Cell(row.SourceLabel ?? "unknown")} | {Cell(row.Message)} | {Cell($"{row.RuleId} {row.EvidenceTier} {EvidenceLabel(null, row.FilePath, row.StartLine)}")} |");
 
         builder.AppendLine("## Known Gaps");
         builder.AppendLine();
@@ -1002,6 +1004,16 @@ public static class CombinedDependencyReporter
         builder.AppendLine($"- {title}: {string.Join(", ", counts.Select(pair => $"`{pair.Key}` {pair.Value}"))}");
     }
 
+    private static void AppendDictionary(StringBuilder builder, string title, IReadOnlyDictionary<string, long> counts)
+    {
+        if (counts.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine($"- {title}: {string.Join(", ", counts.Select(pair => $"`{pair.Key}` {pair.Value}"))}");
+    }
+
     private static void AppendList(StringBuilder builder, string title, IReadOnlyList<string> values)
     {
         if (values.Count == 0)
@@ -1026,142 +1038,6 @@ public static class CombinedDependencyReporter
             "package-config" => $"package {surface.PackageName ?? "n/a"} ecosystem {surface.Ecosystem ?? "unknown"} version {surface.Version ?? surface.VersionHash ?? "n/a"} scope {surface.DependencyScope ?? "unknown"} manifest {surface.ManifestKind ?? "unknown"} key {surface.ConfigKey ?? "n/a"}",
             _ => string.Empty
         };
-    }
-
-    private static string SqlSurfaceDisplayName(
-        CombinedFactRow fact,
-        string? operationName,
-        string? tableName,
-        string? columns,
-        string? sourceKind,
-        string? shapeHash,
-        string? textHash)
-    {
-        if (!string.IsNullOrWhiteSpace(shapeHash))
-        {
-            return $"shape:{shapeHash}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(operationName)
-            || !string.IsNullOrWhiteSpace(tableName)
-            || !string.IsNullOrWhiteSpace(columns))
-        {
-            return string.Join(
-                " ",
-                new[]
-                {
-                    operationName,
-                    tableName is null ? null : $"table:{tableName}",
-                    columns is null ? null : $"columns:{columns}",
-                    sourceKind is null ? null : $"source:{sourceKind}"
-                }.Where(value => !string.IsNullOrWhiteSpace(value)));
-        }
-
-        if (!string.IsNullOrWhiteSpace(textHash))
-        {
-            return $"text:{textHash}";
-        }
-
-        return $"unknown-sql:{Hash(fact.OriginalFactId ?? fact.CombinedFactId, 16)}";
-    }
-
-    private static string SqlPersistenceDisplayName(CombinedFactRow fact, string? tableName, string? columns, string? mappedName)
-    {
-        if (!string.IsNullOrWhiteSpace(tableName))
-        {
-            return $"table:{tableName}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(columns))
-        {
-            return $"columns:{columns}";
-        }
-
-        var safeMappedName = SafeSqlIdentifierList(mappedName, 80, allowSpaces: true);
-        if (!string.IsNullOrWhiteSpace(safeMappedName))
-        {
-            return $"mapping:{safeMappedName}";
-        }
-
-        return $"unknown-persistence:{Hash(fact.OriginalFactId ?? fact.CombinedFactId, 16)}";
-    }
-
-    private static string? SafePackageVersion(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var trimmed = value.Trim();
-        return IsUnsafePackageVersion(trimmed) ? null : trimmed;
-    }
-
-    private static bool IsUnsafePackageVersion(string value)
-    {
-        return value.Contains("://", StringComparison.Ordinal)
-            || value.Contains("\\", StringComparison.Ordinal)
-            || value.StartsWith("/", StringComparison.Ordinal)
-            || value.StartsWith("./", StringComparison.Ordinal)
-            || value.StartsWith("../", StringComparison.Ordinal)
-            || value.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
-            || value.StartsWith("git+", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("${", StringComparison.Ordinal)
-            || value.Contains("$(", StringComparison.Ordinal)
-            || value.Contains("%", StringComparison.Ordinal);
-    }
-
-    private static bool IsTableMappingKind(string? mappingKind)
-    {
-        return mappingKind is not null && mappingKind.Contains("Table", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsColumnMappingKind(string? mappingKind)
-    {
-        return mappingKind is not null && mappingKind.Contains("Column", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string? SafeSqlIdentifierList(string? value, int maxIdentifierLength, bool allowSpaces)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var identifiers = value
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(identifier => IsSafeSqlIdentifier(identifier, maxIdentifierLength, allowSpaces))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(identifier => identifier, StringComparer.Ordinal)
-            .ToArray();
-        return identifiers.Length == 0 ? null : string.Join(';', identifiers);
-    }
-
-    private static bool IsSafeSqlIdentifier(string value, int maxIdentifierLength, bool allowSpaces)
-    {
-        if (value.Length == 0 || value.Length > maxIdentifierLength)
-        {
-            return false;
-        }
-
-        if (value.Contains("://", StringComparison.Ordinal)
-            || value.Contains("--", StringComparison.Ordinal)
-            || value.Contains("/*", StringComparison.Ordinal)
-            || value.Contains("*/", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var pattern = allowSpaces
-            ? "^[A-Za-z0-9_. -]+$"
-            : "^[A-Za-z0-9_.-]+$";
-        if (!Regex.IsMatch(value, pattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
-        {
-            return false;
-        }
-
-        var token = value.Trim().ToUpperInvariant();
-        return token is not ("SELECT" or "INSERT" or "UPDATE" or "DELETE" or "CREATE" or "ALTER" or "DROP" or "TRUNCATE" or "MERGE" or "CALL" or "EXEC" or "EXECUTE" or "WHERE" or "FROM" or "JOIN");
     }
 
     private static string EvidenceLabel(string? sourceLabel, string? filePath, int? startLine)

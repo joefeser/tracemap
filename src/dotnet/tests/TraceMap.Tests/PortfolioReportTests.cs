@@ -313,6 +313,171 @@ public sealed class PortfolioReportTests
     }
 
     [Fact]
+    public async Task Portfolio_before_after_manifests_project_surface_and_edge_diff_rows()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        var beforeScan = Manifest("api", ScannerVersions.TraceMap, "git-api");
+        var afterScan = Manifest("api", ScannerVersions.TraceMap, "git-api");
+        SqliteIndexWriter.Write(beforeIndex, beforeScan, [
+            PackageFact(beforeScan, "Telemetry.Core", "nuget", "Api.csproj", "PackageReference", "1.0.0"),
+            PackageFact(beforeScan, "Removed.Package", "nuget", "Api.csproj", "PackageReference", "1.0.0"),
+            CallEdgeFact(beforeScan, line: 20)
+        ]);
+        SqliteIndexWriter.Write(afterIndex, afterScan, [
+            PackageFact(afterScan, "Telemetry.Core", "nuget", "Api.csproj", "PackageReference", "2.0.0"),
+            PackageFact(afterScan, "Added.Package", "nuget", "Api.csproj", "PackageReference", "1.0.0"),
+            CallEdgeFact(afterScan, line: 21)
+        ]);
+        await WriteManifestAsync(beforeManifest, [("api", beforeIndex)]);
+        await WriteManifestAsync(afterManifest, [("api", afterIndex)]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest));
+
+        Assert.Equal(PortfolioReportStatuses.Available, result.Report.PortfolioDiff.Status);
+        Assert.Equal(PortfolioReportClassifications.ActionableStaticEvidence, result.Report.PortfolioDiff.RollupClassification);
+        Assert.Contains(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "ChangedSurfaceEvidence" && HasMetadata(row, "displayName", "Telemetry.Core"));
+        Assert.Contains(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "AddedSurfaceEvidence" && HasMetadata(row, "displayName", "Added.Package"));
+        Assert.Contains(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "RemovedSurfaceEvidence" && HasMetadata(row, "displayName", "Removed.Package"));
+        var changedSurface = Assert.Single(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "ChangedSurfaceEvidence" && HasMetadata(row, "displayName", "Telemetry.Core"));
+        Assert.True(HasMetadata(changedSurface, "beforeFilePath", "Api.csproj"));
+        Assert.True(HasMetadata(changedSurface, "afterFilePath", "Api.csproj"));
+        Assert.True(HasMetadata(changedSurface, "beforeStartLine", "5"));
+        Assert.True(HasMetadata(changedSurface, "afterStartLine", "5"));
+        var changedEdge = Assert.Single(result.Report.PortfolioDiff.Rows, row => row.ChangeKind == "ChangedEdgeEvidence" && row.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.True(HasMetadata(changedEdge, "beforeFilePath", "Services/OrderService.cs"));
+        Assert.True(HasMetadata(changedEdge, "afterFilePath", "Services/OrderService.cs"));
+        Assert.True(HasMetadata(changedEdge, "beforeStartLine", "20"));
+        Assert.True(HasMetadata(changedEdge, "afterStartLine", "21"));
+        Assert.Equal(PortfolioReportClassifications.ActionableStaticEvidence, result.Report.Summary.RollupClassification);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.md"));
+        Assert.Contains("ChangedSurfaceEvidence", markdown);
+        Assert.Contains("ChangedEdgeEvidence", markdown);
+    }
+
+    [Fact]
+    public async Task Portfolio_comparison_projected_rows_downgrade_ambiguous_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        var beforeScan = Manifest("api", ScannerVersions.TraceMap, "git-api-before");
+        var afterScan = Manifest("api", ScannerVersions.TraceMap, "git-api-after");
+        SqliteIndexWriter.Write(beforeIndex, beforeScan, [
+            PackageFact(beforeScan, "Telemetry.Core", "nuget", "Api.csproj", "PackageReference", "1.0.0")
+        ]);
+        SqliteIndexWriter.Write(afterIndex, afterScan, [
+            PackageFact(afterScan, "Telemetry.Core", "nuget", "Api.csproj", "PackageReference", "2.0.0")
+        ]);
+        await WriteManifestAsync(beforeManifest, [("api", beforeIndex)]);
+        await WriteManifestAsync(afterManifest, [("api", afterIndex)]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "IdentityAmbiguous" && gap.Section == "portfolioDiff");
+        Assert.Contains(result.Report.PortfolioDiff.Rows, row =>
+            row.ChangeKind == "ChangedSurfaceEvidence"
+            && HasMetadata(row, "displayName", "Telemetry.Core")
+            && row.Classification == PortfolioReportClassifications.ReviewRecommended);
+    }
+
+    [Fact]
+    public async Task Portfolio_comparison_ignores_absolute_path_hashes_for_package_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        var beforeScan = Manifest("api", ScannerVersions.TraceMap, "git-api");
+        var afterScan = Manifest("api", ScannerVersions.TraceMap, "git-api");
+        SqliteIndexWriter.Write(beforeIndex, beforeScan, [
+            PackageFact(beforeScan, "Telemetry.Core", "nuget", Path.Combine(temp.Path, "before-root", "Api.csproj"), "PackageReference")
+        ]);
+        SqliteIndexWriter.Write(afterIndex, afterScan, [
+            PackageFact(afterScan, "Telemetry.Core", "nuget", Path.Combine(temp.Path, "after-root", "Api.csproj"), "PackageReference")
+        ]);
+        await WriteManifestAsync(beforeManifest, [("api", beforeIndex)]);
+        await WriteManifestAsync(afterManifest, [("api", afterIndex)]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest));
+
+        Assert.DoesNotContain(result.Report.PortfolioDiff.Rows, row => row.ChangeKind.EndsWith("SurfaceEvidence", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Portfolio_comparison_redacts_unsafe_surface_values_and_manifest_display_fields()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        var beforeScan = Manifest("api", ScannerVersions.TraceMap, "git-api");
+        var afterScan = Manifest("api", ScannerVersions.TraceMap, "git-api");
+        SqliteIndexWriter.Write(beforeIndex, beforeScan, [
+            UnsafeSqlFact(beforeScan),
+            UnsafeUrlFact(beforeScan),
+            ConfigFact(beforeScan, "appsettings.json", "ConnectionStrings:Default", "Server=db;Password=before-secret;")
+        ]);
+        SqliteIndexWriter.Write(afterIndex, afterScan, [
+            UnsafeSqlFact(afterScan),
+            UnsafeUrlFact(afterScan),
+            ConfigFact(afterScan, "appsettings.json", "ConnectionStrings:Default", "Server=db;Password=after-secret;"),
+            PackageFact(afterScan, "Added.Package", "nuget", "Api.csproj", "PackageReference")
+        ]);
+        await WriteManifestWithDisplayFieldsAsync(beforeManifest, "api|[label](bad)", beforeIndex);
+        await WriteManifestWithDisplayFieldsAsync(afterManifest, "api|[label](bad)", afterIndex);
+
+        await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.json"));
+        foreach (var output in new[] { markdown, json })
+        {
+            Assert.DoesNotContain(temp.Path, output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("RAW_SQL_SENTINEL", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("SNIPPET_SENTINEL", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("https://private.example.test", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("URL_SECRET", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("SUPER_SECRET_TOKEN", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("Password=before-secret", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Password=after-secret", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("[portfolio](bad)", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("[snapshot](bad)", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("[label](bad)", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("[group](bad)", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("[role](bad)", output, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task Portfolio_comparison_requested_deferred_context_gaps_are_in_top_level_rollup()
     {
         using var temp = new TempDirectory();
@@ -461,7 +626,7 @@ public sealed class PortfolioReportTests
             });
     }
 
-    private static CodeFact PackageFact(ScanManifest manifest, string name, string ecosystem, string file, string group)
+    private static CodeFact PackageFact(ScanManifest manifest, string name, string ecosystem, string file, string group, string version = "1.0.0")
     {
         return FactFactory.Create(
             manifest,
@@ -478,7 +643,7 @@ public sealed class PortfolioReportTests
                 ["manifestKind"] = file.EndsWith(".json", StringComparison.Ordinal) ? "package.json" : "csproj",
                 ["packageName"] = name,
                 ["surfaceKind"] = "package-config",
-                ["version"] = "1.0.0"
+                ["version"] = version
             });
     }
 
@@ -498,19 +663,58 @@ public sealed class PortfolioReportTests
             });
     }
 
-    private static CodeFact CallEdgeFact(ScanManifest manifest)
+    private static CodeFact CallEdgeFact(ScanManifest manifest, string targetSymbol = "Api.Services.OrderService.Load()", int line = 20)
     {
         return FactFactory.Create(
             manifest,
             FactTypes.CallEdge,
             RuleIds.CSharpSemanticMethodInvocation,
             EvidenceTiers.Tier1Semantic,
-            new EvidenceSpan("Services/OrderService.cs", 20, 20, null, "test", "test/1.0"),
+            new EvidenceSpan("Services/OrderService.cs", line, line, null, "test", "test/1.0"),
             sourceSymbol: "Api.Controllers.Orders.Get()",
-            targetSymbol: "Api.Services.OrderService.Load()",
+            targetSymbol: targetSymbol,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["callKind"] = "Invocation"
+            });
+    }
+
+    private static CodeFact UnsafeSqlFact(ScanManifest manifest)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SqlTextUsed,
+            RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan("Data/OrdersRepository.cs", 30, 30, null, "test", "test/1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["sqlText"] = "select * from Users where password = 'RAW_SQL_SENTINEL'",
+                ["sourceSnippet"] = "SNIPPET_SENTINEL",
+                ["secretCandidate"] = "SUPER_SECRET_TOKEN",
+                ["textHash"] = FactFactory.Hash("select * from Users where password = 'RAW_SQL_SENTINEL'", 32),
+                ["textLength"] = "56",
+                ["sqlSourceKind"] = "literal"
+            });
+    }
+
+    private static CodeFact UnsafeUrlFact(ScanManifest manifest)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpCallDetected,
+            RuleIds.HttpClientInvocation,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("Clients/OrdersClient.cs", 12, 12, null, "test", "test/1.0"),
+            targetSymbol: "GET /api/orders/{}",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethod"] = "GET",
+                ["methodName"] = "GET",
+                ["normalizedPathKey"] = "/api/orders/{}",
+                ["normalizedPathTemplate"] = "/api/orders/{}",
+                ["rawUrl"] = "https://private.example.test/api/orders/1?token=URL_SECRET",
+                ["urlKind"] = "template"
             });
     }
 
@@ -526,5 +730,33 @@ public sealed class PortfolioReportTests
             },
             new JsonSerializerOptions { WriteIndented = true });
         return File.WriteAllTextAsync(path, json);
+    }
+
+    private static Task WriteManifestWithDisplayFieldsAsync(string path, string label, string indexPath)
+    {
+        var json = JsonSerializer.Serialize(
+            new
+            {
+                version = "1.0",
+                portfolioId = "demo|[portfolio](bad)",
+                snapshotId = "snap`[snapshot](bad)",
+                inputs = new[]
+                {
+                    new
+                    {
+                        label,
+                        indexPath = Path.GetFileName(indexPath),
+                        group = "ops|[group](bad)",
+                        roleTags = new[] { "[role](bad)" }
+                    }
+                }
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+        return File.WriteAllTextAsync(path, json);
+    }
+
+    private static bool HasMetadata(PortfolioDiffRow row, string key, string value)
+    {
+        return row.Metadata.Any(pair => pair.Key == key && pair.Value == value);
     }
 }
