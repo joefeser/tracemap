@@ -129,8 +129,8 @@ Acceptance criteria:
   counts, report coverage, reasons, and generated report paths. Limitation text
   may remain page prose unless limitations are explicitly extracted from
   approved public-safe reports.
-- `/demo/proof-assets/` validates against the fixture for public-safe summary
-  and proof-asset references.
+- `/demo/proof-assets/` validates against the fixture for public-safe summary,
+  proof-asset references, and hard-coded counts shown in page copy.
 - `/packets/` validates against the fixture for evidence-packet artifact
   examples and local-only/public-safe boundaries.
 - `/manager-packet/` validates against the fixture for manager-facing summary

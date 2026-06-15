@@ -110,6 +110,10 @@ adds site spec files.
   `codex/spec-site-incident-review-use-case` while these spec files were still
   untracked. Switched back to `codex/spec-site-demo-summary-refresh` before any
   staging or commit work and rebased onto the current `origin/main`.
+- PR review loop found actionable Qodo and Gemini feedback after PR creation:
+  clarify the fixture example's nested source metadata and explicitly require
+  `/demo/proof-assets/` hard-coded count validation. Patched both in the
+  follow-up commit.
 
 ## Follow-Ups For Implementation
 

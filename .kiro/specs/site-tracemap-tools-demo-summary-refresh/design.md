@@ -45,12 +45,20 @@ Suggested top-level shape:
   "publicClaimLevel": "demo",
   "source": {
     "generator": "scripts/demo-public.sh",
-    "summaryVersion": "1.0",
-    "outputRootHash": "path-hash:000000000000000000000000"
+    "demoSummary": {
+      "version": "1.0",
+      "outputRootHash": "path-hash:000000000000000000000000"
+    }
   },
   "sections": []
 }
 ```
+
+The fixture `source.demoSummary.version` and
+`source.demoSummary.outputRootHash` values are copied from the real top-level
+`demo-summary.json` fields `version` and `outputRootHash`. They are nested in
+the fixture only to keep provenance metadata separate from the fixture's own
+schema `version`.
 
 Suggested section fields:
 
@@ -154,7 +162,7 @@ public-safe reports.
 | --- | --- | --- |
 | `/demo/result/` | `toolchains`, `python`, `jvm`, `build`, `sample-scans`, `combine-and-dependency-report`, `paths-and-reverse`, `portfolio`, `diff`, `impact`, `release-review` | `status`, `classification`, `evidenceTier`, `coverage`, `ruleIds`, `reason`, `artifacts`, and visible `counts` keys. |
 | `/demo/proof-upgrades/` | `combine-and-dependency-report`, `paths-and-reverse`, `portfolio`, `diff`, `impact`, `release-review` | `status`, `coverage`, `artifacts`; counts including `sources`, `endpointFindings`, `dependencySurfaces`, `dependencyEdges`, `gaps`, `paths`, `pathGaps`, `reversePaths`, `reverseRoots`, `reverseGaps`, `selectedSurfaces`, `portfolioInputs`, `portfolioSources`, `diffRows`, `surfaceDiffs`, `impactItems`, `surfaceImpacts`, `findings`, `topChangedSurfaces`, `contractFindings`, and `checklistItems` where those facts appear in copy. |
-| `/demo/proof-assets/` | `sample-scans`, `combine-and-dependency-report`, `paths-and-reverse`, `portfolio`, `diff`, `impact`, `release-review` | Public-safe summary names, approved report-family paths, `status`, `coverage`, and local-only/public-safe boundary references. |
+| `/demo/proof-assets/` | `sample-scans`, `combine-and-dependency-report`, `paths-and-reverse`, `portfolio`, `diff`, `impact`, `release-review` | Public-safe summary names, approved report-family paths, `status`, `coverage`, local-only/public-safe boundary references, and hard-coded count keys used by the page. |
 | `/packets/` | Any section used as an evidence-packet example | Public-safe summary names, approved report-family paths, `ruleIds`, `evidenceTier`, `coverage`, and local-only/public-safe boundary references. |
 | `/manager-packet/` | Any section used in manager-facing count examples | Only count keys present in the fixture, plus proof links and status/coverage labels. |
 | `/capabilities/` | Capability rows tied to demo evidence sections | `status`, `coverage`, `artifacts`, `ruleIds`, and proof paths tied to known section IDs. |
