@@ -1532,6 +1532,12 @@ public static class ContractDeltaReducer
             return EvidenceMatch.None;
         }
 
+        var expectedSourceKind = Value(change.Reference, "sqlSourceKind", "sourceKind");
+        if (!SqlSourceKindMatchesOrAbsent(expectedSourceKind, fact))
+        {
+            return EvidenceMatch.None;
+        }
+
         var expectedHash = Value(change.Reference, "queryShapeHash", "textHash");
         if (!string.IsNullOrWhiteSpace(expectedHash)
             && PropertyValues(fact, "queryShapeHash", "textHash", "sqlTextHash")
@@ -1559,20 +1565,23 @@ public static class ContractDeltaReducer
             return new EvidenceMatch(MatchStrength.Member, true, "sql-resource");
         }
 
-        var expectedSourceKind = Value(change.Reference, "sqlSourceKind", "sourceKind");
-        if (!string.IsNullOrWhiteSpace(expectedSourceKind)
-            && PropertyValues(fact, "sqlSourceKind", "sourceKind")
-                .Any(value => string.Equals(expectedSourceKind, value, StringComparison.OrdinalIgnoreCase)))
-        {
-            return new EvidenceMatch(MatchStrength.Member, true, SqlEvidenceKind(fact, "sql-query-shape"));
-        }
-
         if (Has(change.Reference, "columnName", "columnNames"))
         {
             return MatchSqlColumn(change, fact);
         }
 
         return MatchSqlTable(change, fact);
+    }
+
+    private static bool SqlSourceKindMatchesOrAbsent(string? expectedSourceKind, IndexedFact fact)
+    {
+        if (string.IsNullOrWhiteSpace(expectedSourceKind))
+        {
+            return true;
+        }
+
+        return PropertyValues(fact, "sqlSourceKind", "sourceKind")
+            .Any(value => string.Equals(expectedSourceKind, value, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string SqlEvidenceKind(IndexedFact fact, string fallback)
@@ -2040,7 +2049,7 @@ public static class ContractDeltaReducer
 
         if (originalProperties is not null)
         {
-            foreach (var key in new[] { "mappedName", "propertyName", "mappingKind", "entityName", "schemaName", "stableKey", "name" })
+            foreach (var key in new[] { "mappedName", "propertyName", "mappingKind", "entityName", "schemaName", "stableKey", "name", "sqlResourceName", "resourceName", "fileName" })
             {
                 if (originalProperties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
                 {

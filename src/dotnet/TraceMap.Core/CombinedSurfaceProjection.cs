@@ -107,6 +107,7 @@ public static class CombinedSurfaceProjection
         var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash");
         var textHash = FirstValue(fact.Properties, "textHash");
         var textLength = FirstValue(fact.Properties, "textLength");
+        var sqlResourceName = FirstValue(fact.Properties, "sqlResourceName", "resourceName", "fileName");
         var packageName = FirstValue(fact.Properties, "packageName", "package", "dependencyName", "moduleName", "name");
         var rawVersion = FirstValue(fact.Properties, "version", "packageVersion");
         var version = SafePackageVersion(rawVersion);
@@ -124,7 +125,7 @@ public static class CombinedSurfaceProjection
         var displayName = surfaceKind switch
         {
             "http-client" or "http-route" => normalizedPathKey ?? FirstValue(fact.Properties, "normalizedPathTemplate") ?? $"{httpMethod ?? "ANY"} unknown",
-            "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash),
+            "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash, sqlResourceName),
             "sql-persistence" => SqlPersistenceDisplayName(fact, tableName, columns, mappedName),
             "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
             _ => $"unknown-surface:{fact.CombinedFactId}"
@@ -183,7 +184,7 @@ public static class CombinedSurfaceProjection
             return "sql-persistence";
         }
 
-        if (fact.FactType is FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.DapperCallDetected or FactTypes.SqlCommandDetected)
+        if (fact.FactType is FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.DapperCallDetected or FactTypes.SqlCommandDetected or FactTypes.SqlFileDeclared)
         {
             return "sql-query";
         }
@@ -219,7 +220,8 @@ public static class CombinedSurfaceProjection
         string? columns,
         string? sourceKind,
         string? shapeHash,
-        string? textHash)
+        string? textHash,
+        string? sqlResourceName)
     {
         if (!string.IsNullOrWhiteSpace(shapeHash))
         {
@@ -244,6 +246,11 @@ public static class CombinedSurfaceProjection
         if (!string.IsNullOrWhiteSpace(textHash))
         {
             return $"text:{textHash}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(sqlResourceName))
+        {
+            return $"resource:{sqlResourceName}";
         }
 
         return $"unknown-sql:{Hash(fact.OriginalFactId ?? fact.CombinedFactId, 16)}";

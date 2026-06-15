@@ -283,6 +283,15 @@ public sealed class SqlSchemaChangeImpactTests
               }
             },
             {
+              "id": "chg-orders-sql-file",
+              "kind": "sql-file",
+              "changeType": "behavior_changed",
+              "reference": {
+                "sqlResourceName": "orders-report.sql",
+                "sqlSourceKind": "sql-file"
+              }
+            },
+            {
               "id": "chg-orders-status-column",
               "kind": "column",
               "changeType": "type_changed",
@@ -320,6 +329,17 @@ public sealed class SqlSchemaChangeImpactTests
                     ["sqlSourceKind"] = "inline",
                     ["tableName"] = "Orders",
                     ["textHash"] = "text-orders-status"
+                }),
+            FactFactory.Create(
+                apiManifest,
+                FactTypes.SqlFileDeclared,
+                RuleIds.FileInventory,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                new EvidenceSpan("sql/orders-report.sql", 1, 1, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["sqlResourceName"] = "orders-report.sql",
+                    ["sqlSourceKind"] = "sql-file"
                 })
         ]);
         SqliteIndexWriter.Write(workerIndex, workerManifest, [
@@ -350,14 +370,17 @@ public sealed class SqlSchemaChangeImpactTests
         var second = await File.ReadAllTextAsync(Path.Combine(outputTwo, "sql-impact-report.json"));
         Assert.Equal(first, second);
         Assert.Contains("\"reportType\": \"SqlSchemaChangeImpactCombinedV1\"", first);
+        Assert.Contains("\"changeId\": \"chg-orders-sql-file\"", first);
         Assert.Contains("\"changeId\": \"chg-query-shape\"", first);
         Assert.Contains("\"changeId\": \"chg-orders-status-column\"", first);
         Assert.Contains("\"changeId\": \"chg-orders-status-mapping\"", first);
         Assert.Contains("\"evidenceKind\": \"sql-query-shape\"", first);
+        Assert.Contains("\"evidenceKind\": \"sql-resource\"", first);
         Assert.Contains("\"evidenceKind\": \"sql-persistence-mapping\"", first);
         Assert.Contains("\"queryShapeHash\": \"shape-orders-status\"", first);
         Assert.Contains("\"textHash\": \"text-orders-status\"", first);
         Assert.Contains("\"sqlSourceKind\": \"inline\"", first);
+        Assert.Contains("\"sqlResourceName\": \"orders-report.sql\"", first);
         Assert.Contains("\"mappedName\": \"OrderStatus\"", first);
         Assert.Contains("\"sourceLabel\": \"api\"", first);
         Assert.Contains("\"sourceLabel\": \"worker\"", first);
@@ -381,6 +404,7 @@ public sealed class SqlSchemaChangeImpactTests
               "kind": "query-shape",
               "changeType": "shape_changed",
               "reference": {
+                "sqlSourceKind": "inline",
                 "tableName": "Orders"
               }
             }
@@ -409,6 +433,18 @@ public sealed class SqlSchemaChangeImpactTests
                     ["mappedName"] = "OrderStatus",
                     ["surfaceKind"] = "sql-persistence",
                     ["tableName"] = "Orders"
+                }),
+            FactFactory.Create(
+                manifest,
+                FactTypes.QueryPatternDetected,
+                RuleIds.DatabaseSqlShape,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/CustomerRepository.cs", 18, 18, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["queryShapeHash"] = "shape-customers",
+                    ["sqlSourceKind"] = "inline",
+                    ["tableName"] = "Customers"
                 })
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([apiIndex], combinedIndex, ["api"]));
@@ -424,6 +460,7 @@ public sealed class SqlSchemaChangeImpactTests
         var mappingJson = await File.ReadAllTextAsync(Path.Combine(mappingOutput, "sql-impact-report.json"));
         Assert.Contains("\"classification\": \"NoImpactEvidence\"", queryJson);
         Assert.DoesNotContain("\"evidenceKind\": \"sql-persistence-mapping\"", queryJson);
+        Assert.DoesNotContain("\"evidenceKind\": \"sql-query-shape\"", queryJson);
         Assert.Contains("\"classification\": \"NeedsReviewImpact\"", mappingJson);
         Assert.Contains("\"evidenceKind\": \"sql-persistence-mapping\"", mappingJson);
         Assert.DoesNotContain("\"evidenceKind\": \"sql-query-shape\"", mappingJson);
