@@ -9,7 +9,9 @@ public static class FileInventory
         ".config",
         ".json",
         ".cs",
-        ".sql"
+        ".sql",
+        ".svc",
+        ".asmx"
     };
 
     private static readonly HashSet<string> IncludedFileNames = new(StringComparer.OrdinalIgnoreCase)
@@ -118,6 +120,8 @@ public static class FileInventory
             ".json" => "Json",
             ".cs" => "CSharp",
             ".sql" => "Sql",
+            ".svc" => "ServiceHost",
+            ".asmx" => "ServiceHost",
             _ => "File"
         };
     }

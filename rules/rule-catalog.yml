@@ -10,6 +10,105 @@ rules:
       - Deferred, unavailable, and failed sections are explicit analysis gaps and remain Tier4Unknown.
       - Artifact paths are output-root-relative and public-shareable summaries must not render local absolute paths, raw SQL, source snippets, raw secrets, or credential-bearing URLs.
 
+  - id: legacy.validation.summary.v1
+    name: Legacy codebase validation summary
+    description: Records local-only validation summary rows for operator-provided old or large .NET codebases using neutral sample labels and deterministic counts.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy validation summary row
+      - redaction failure category
+    limitations:
+      - Validation samples are operator-provided local inputs and are not committed fixtures.
+      - Summary rows intentionally omit local absolute paths, raw remotes, private repository names, raw SQL, config values, connection strings, source snippets, and secrets.
+      - Public claim level remains hidden until a redacted summary is reviewed and intentionally promoted.
+
+  - id: legacy.validation.environment.v1
+    name: Legacy environment evidence probe
+    description: Summarizes static project/config indicators such as target frameworks, old-style project files, packages.config, binding redirects, and MSBuild ToolsVersion values.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy environment indicator count
+      - legacy environment limitation
+    limitations:
+      - Environment indicators are static clues, not guaranteed remediation instructions.
+      - Missing SDK/runtime/build-tool guidance is evidence-backed only when surfaced by scan artifacts or project/config indicators.
+      - Failed project load is reduced coverage and must not be treated as a clean scan.
+
+  - id: legacy.validation.ui-events.v1
+    name: Legacy UI event static evidence probe
+    description: Summarizes whether current facts expose WinForms/WebForms-style event wiring, handler-like symbols, call edges, or dependency surfaces without rendering source snippets.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - UI event evidence summary
+      - UI event evidence gap
+    limitations:
+      - Static wiring evidence does not prove that a control exists at runtime, that a handler executes, that a user can reach the event, or that backend behavior occurred.
+      - No event evidence is a scanner evidence gap, not proof that legacy UI events are absent.
+      - Syntax/text matches remain review-tier evidence when semantic call or dependency facts cannot establish a chain.
+
+  - id: legacy.validation.bounds.v1
+    name: Legacy validation bounds and truncation
+    description: Records local validation timeout, output-size, artifact-existence, and bounded-failure outcomes for old or large repositories.
+    evidenceTier: Tier4Unknown
+    emits:
+      - timeout/deferred limitation
+      - artifact-size limitation
+      - missing artifact limitation
+    limitations:
+      - Timeout and artifact-size truncation make the validation result partial.
+      - Output-size and duration limits are validation harness bounds, not repository complexity conclusions.
+      - Bounded failure preserves available evidence but must not be interpreted as complete scan coverage.
+
+  - id: legacy.wcf.config.v1
+    name: Legacy WCF serviceModel config evidence
+    description: Extracts WCF client and service endpoint declarations from local config files using safe endpoint metadata and hashed addresses.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WcfClientEndpointDeclared
+      - WcfServiceEndpointDeclared
+      - AnalysisGap
+    limitations:
+      - Endpoint config is static evidence and does not prove deployment, reachability, service activation, DNS, authentication, authorization, binding compatibility, or runtime endpoint selection.
+      - Endpoint addresses are hashed or omitted; raw addresses and config values are not rendered.
+      - Config transforms, environment-specific overrides, and dynamically selected endpoints are not evaluated.
+
+  - id: legacy.wcf.contract.v1
+    name: Legacy WCF service contract and generated client evidence
+    description: Extracts service contract, operation contract, and generated service-client declarations from C# syntax and generated-code patterns.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WcfServiceContractDeclared
+      - WcfOperationContractDeclared
+      - WcfGeneratedClientDeclared
+      - AnalysisGap
+    limitations:
+      - Syntax-only contract evidence does not prove WSDL compatibility, generated proxy freshness, service deployment, or runtime invocation.
+      - Generated-client detection requires WCF ClientBase-style inheritance and can miss custom proxies or nonstandard generated clients.
+      - Missing generated files or unsupported service-reference shapes are analysis gaps, not proof that no service dependency exists.
+
+  - id: legacy.wcf.host.v1
+    name: Legacy WCF and ASMX service host evidence
+    description: Extracts safe service host declarations from .svc and ASMX directive-style files.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WcfServiceHostDeclared
+      - AnalysisGap
+    limitations:
+      - Host declarations are static file evidence and do not prove IIS configuration, deployment, route reachability, service activation, or runtime factory behavior.
+      - Malformed or unsupported host declarations are emitted as gaps rather than absence of service evidence.
+
+  - id: legacy.wcf.mapping.v1
+    name: Legacy WCF service-reference mapping evidence
+    description: Emits probable static mappings from generated service-client methods to service operation contracts when method names and config/contract metadata align.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WcfServiceReferenceMapping
+      - AnalysisGap
+    limitations:
+      - Mappings are static evidence and do not prove runtime execution, endpoint reachability, generated proxy freshness, or backend implementation selection.
+      - Name-only matches remain review-tier evidence.
+      - Multiple matching endpoints, hosts, contracts, or operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
+
   - id: snapshot.diff.source.v1
     name: Snapshot diff source comparison
     description: Compares source inventory and source metadata between two TraceMap snapshots by exact source label and stable source identity metadata.
