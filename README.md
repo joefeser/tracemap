@@ -158,7 +158,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- snapshot-diff \
   --out .tracemap-snapshot-diff
 ```
 
-The snapshot diff command writes `snapshot-diff-report.md` and `snapshot-diff-report.json` when `--out` is a directory. It validates same-kind inputs, source identity, commit SHA availability, coverage, and extractor-version changes. Combined indexes delegate endpoint, surface, graph, and opt-in path comparison to the combined diff engine; single-index projector sections and contract-shape comparison remain explicit availability gaps until deeper evidence readers are implemented.
+The snapshot diff command writes `snapshot-diff-report.md` and `snapshot-diff-report.json` when `--out` is a directory. It validates same-kind inputs, source identity, commit SHA availability, coverage, and extractor-version changes. Combined indexes delegate endpoint, surface, graph, and opt-in path comparison to the combined diff engine; single-language indexes compare endpoint, dependency-surface, and `AnalysisGap` fact changes. Single-index graph and contract-shape comparison remain explicit availability gaps until deeper evidence readers are implemented.
 
 Compare API/DTO static contract evidence between two single-language or combined snapshots:
 

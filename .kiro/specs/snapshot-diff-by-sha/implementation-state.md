@@ -1,11 +1,11 @@
 # Snapshot Diff By SHA Implementation State
 
-Status: mostly implemented; single-index endpoint/surface follow-up slice implemented locally and pending PR review.
+Status: mostly implemented; single-index gap-diff follow-up implemented locally and pending PR review.
 
 Branch/PR:
 
 - Implemented across snapshot-diff work already merged into `dev`.
-- Current follow-up branch: `codex/snapshot-diff-single-index-followups`.
+- Current follow-up branch: `codex/snapshot-diff-gap-diffs`.
 
 Scope Implemented:
 
@@ -20,20 +20,34 @@ Scope Implemented:
 - Current follow-up slice adds single-index surface diffs for safe dependency-surface facts already understood by `CombinedDependencyReporter.BuildSurfaces`, including SQL/query, package/config, HTTP route/client, config-binding, and related surface rows where those facts exist.
 - Current follow-up slice emits `MalformedMetadataGap` for malformed `scan_manifest.manifest_json`, combined `index_sources.manifest_json`, and single-index `facts.properties_json`, omitting unsafe malformed metadata while continuing with reduced coverage.
 - Current follow-up slice adds `SameCommitShaDivergentEvidence` row notes with `snapshot.diff.identity.v1` when single-index endpoint/surface evidence changes while paired snapshots report the same known commit SHA.
+- This branch adds single-index `AnalysisGap` fact comparison for `gapDiffs`, preserving `snapshot.diff.evidence.v1`, source fact rule IDs, evidence tiers, supporting fact IDs, safe file spans, and hashed raw messages.
 
 Open Follow-Ups:
 
 - Single-index contract-shape projectors for type/property/method/DTO evidence.
 - Single-index graph projectors for call edges, object creations, symbol relationships, argument flows, and parameter forwarding.
-- Single-index analysis-gap diffs from `AnalysisGap` facts beyond coverage summaries and malformed metadata gaps.
 - Expanded surface projector support if future adapters add storage or event/message fact vocabularies outside the current combined surface reader.
 - Duplicate-identity edge-case tests for single-index endpoint and surface records.
 - Adapter-specific validation if future projector work changes language adapter outputs. This slice consumes existing facts and does not change adapter output behavior, so adapter tests are deferred.
 
+Scope Decisions:
+
+- Gap diff rows expose safe `gapKind`, file spans, source labels, rule IDs, evidence tiers, and deterministic hashes.
+- Raw `AnalysisGap.message` text is not rendered and is not used in cleartext stable keys because messages can contain exception text, SQL, local paths, or config values.
+- Gap diff classifications remain `UnknownAnalysisGap`; the row says indexed analysis coverage changed, not that product behavior changed.
+- Combined-index `gapDiffs` remain unavailable until a combined gap projector is specified.
+
 Validation:
 
-- Focused snapshot diff tests: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter SnapshotDiffTests` passes locally on this branch.
-- Solution build: `dotnet build src/dotnet/TraceMap.sln` passes locally.
-- Full solution tests: `dotnet test src/dotnet/TraceMap.sln` passes locally.
-- Private-path guard: `./scripts/check-private-paths.sh` passes locally.
-- Whitespace check: `git diff --check` passes locally.
+- Focused snapshot diff tests: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter SnapshotDiffTests` passed locally on this branch.
+- Solution build: `dotnet build src/dotnet/TraceMap.sln` passed locally.
+- Full solution tests: `dotnet test src/dotnet/TraceMap.sln` passed locally.
+- CLI sample smoke: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-snapshot-gap-smoke` passed and emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`.
+- Private-path guard: `./scripts/check-private-paths.sh` passed locally.
+- Whitespace check: `git diff --check` passed locally.
+
+Review:
+
+- Local `kiro` is installed but only exposed an editor/chat launcher path in this shell.
+- Local `claude --model sonnet` was installed but unavailable because the CLI is not logged in.
+- Completed a bounded self-review; fixed one finding where gap-diff-only reports could roll up `UnknownAnalysisGap` while `reportCoverage` stayed `Full`, and aligned snapshot confidence strings for unknown/review-tier classifications.
