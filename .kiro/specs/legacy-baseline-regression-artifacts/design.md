@@ -74,6 +74,12 @@ Local-only baselines must stay under the ignored directory:
 .tmp/legacy-baselines/<baseline-id>/
 ```
 
+`baselineId` is the canonical on-disk directory segment for both tracked
+public-safe baselines and ignored local-only baselines. It is derived
+deterministically from the neutral `--label`, `--purpose`, and public-safe
+year-month or fixture-pinned creation metadata. The raw label alone is not used
+as the final baseline directory when purpose/date are present.
+
 Suggested public-safe files:
 
 - `baseline-manifest.json`: machine-readable sanitized baseline.
@@ -92,7 +98,7 @@ Suggested top-level shape:
 ```json
 {
   "schemaVersion": "legacy-baseline-manifest.v1",
-  "baselineId": "legacy-sample-alpha__original-parser__2026-06",
+  "baselineId": "legacy-sample-alpha__original-parser-snapshot__2026-06",
   "baselinePurpose": "original-parser-snapshot",
   "sample": {
     "label": "legacy-sample-alpha",
@@ -351,7 +357,7 @@ Suggested comparison shape:
 ```json
 {
   "schemaVersion": "legacy-baseline-comparison.v1",
-  "baselineId": "legacy-sample-alpha__original-parser__2026-06",
+  "baselineId": "legacy-sample-alpha__original-parser-snapshot__2026-06",
   "candidateId": "legacy-sample-alpha__candidate__2026-07",
   "generatedAt": "2026-07",
   "overallStatus": "review-needed",
@@ -439,14 +445,14 @@ tracemap baseline create \
   --scan-output <ignored-local-scan-output> \
   --label legacy-sample-alpha \
   --purpose original-parser-snapshot \
-  --out .tmp/legacy-baselines/legacy-sample-alpha
+  --out .tmp/legacy-baselines/legacy-sample-alpha__original-parser-snapshot__2026-06
 
 tracemap baseline validate \
-  --manifest .tmp/legacy-baselines/legacy-sample-alpha/baseline-manifest.json
+  --manifest .tmp/legacy-baselines/legacy-sample-alpha__original-parser-snapshot__2026-06/baseline-manifest.json
 
 tracemap baseline compare \
-  --baseline .kiro/baselines/legacy/legacy-sample-alpha/baseline-manifest.json \
-  --candidate .tmp/legacy-baselines/legacy-sample-alpha-candidate/baseline-manifest.json \
+  --baseline .kiro/baselines/legacy/legacy-sample-alpha__original-parser-snapshot__2026-06/baseline-manifest.json \
+  --candidate .tmp/legacy-baselines/legacy-sample-alpha__candidate__2026-07/baseline-manifest.json \
   --out .tmp/legacy-baselines/comparisons/legacy-sample-alpha
 ```
 
@@ -474,18 +480,18 @@ tracemap baseline create \
   --scan-output samples/synthetic-legacy-scan \
   --label synthetic-alpha \
   --purpose original-parser-snapshot \
-  --out .tmp/legacy-baselines/synthetic-alpha \
+  --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 \
   --dry-run
 
 tracemap baseline create \
   --scan-output samples/synthetic-legacy-scan \
   --label synthetic-alpha \
   --purpose original-parser-snapshot \
-  --out .tmp/legacy-baselines/synthetic-alpha
+  --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06
 
 tracemap baseline compare \
-  --baseline .tmp/legacy-baselines/synthetic-alpha/baseline-manifest.json \
-  --candidate .tmp/legacy-baselines/synthetic-alpha-candidate/baseline-manifest.json \
+  --baseline .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json \
+  --candidate .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07/baseline-manifest.json \
   --out .tmp/legacy-baselines/comparisons/synthetic-alpha
 ```
 
