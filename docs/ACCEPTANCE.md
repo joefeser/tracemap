@@ -649,6 +649,11 @@ Each fixture should document:
 | TypeScript integration boundary | Tier1/Tier2/Tier3 according to compiler/package/shape evidence |
 | TypeScript direct SQL literal | `SqlTextUsed` plus SQL-shape `QueryPatternDetected` under `typescript.integration.sql.v1` when complete static SQL text is visible |
 | TypeScript Prisma/Base44 query pattern | `QueryPatternDetected` remains query-builder evidence and does not gain `sqlSourceKind` unless direct SQL text is present |
+| Legacy DBML descriptor | `LegacyDataEntityDeclared`, `LegacyDataStorageObjectDeclared`, `LegacyDataColumnDeclared`, and `LegacyDataMappingDeclared` under `legacy.data.dbml.v1` as static design-time metadata only |
+| Legacy EDMX simple mapping | `LegacyDataMappingDeclared` under `legacy.data.edmx.v1` when MSL maps one conceptual descriptor to one storage descriptor; unsupported shapes emit `AnalysisGap` |
+| Typed DataSet TableAdapter static SQL | `LegacyData*` descriptor facts plus `SqlTextUsed`/SQL-shape `QueryPatternDetected` hashes under `legacy.data.typed-dataset.v1`; raw SQL is not stored |
+| Legacy data config provider | `LegacyDataProviderConfigDeclared` under `legacy.data.config.v1` with safe names or hashes; raw connection strings and config values are omitted |
+| Legacy data generated code | `LegacyDataGeneratedCodeLinked` under `legacy.data.generated-link.v1`; descriptor tiers are not upgraded by the link |
 | Python Pydantic DTO member match | `ProbableImpact` through Tier2 `SerializerContractMember` |
 | Python Flask/FastAPI route | `HttpRouteBinding` with normalized route key when static decorator syntax is visible |
 | Python SQLAlchemy column | `DatabaseColumnMapping` with table/column/member evidence when declarative syntax is visible |

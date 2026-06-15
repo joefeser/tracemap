@@ -182,6 +182,13 @@ public static class FactTypes
     public const string WebFormsHandlerResolved = nameof(WebFormsHandlerResolved);
     public const string WebFormsEventFlowProjected = nameof(WebFormsEventFlowProjected);
     public const string WebFormsLogicSignalDetected = nameof(WebFormsLogicSignalDetected);
+    public const string LegacyDataMetadataDeclared = nameof(LegacyDataMetadataDeclared);
+    public const string LegacyDataEntityDeclared = nameof(LegacyDataEntityDeclared);
+    public const string LegacyDataStorageObjectDeclared = nameof(LegacyDataStorageObjectDeclared);
+    public const string LegacyDataColumnDeclared = nameof(LegacyDataColumnDeclared);
+    public const string LegacyDataMappingDeclared = nameof(LegacyDataMappingDeclared);
+    public const string LegacyDataProviderConfigDeclared = nameof(LegacyDataProviderConfigDeclared);
+    public const string LegacyDataGeneratedCodeLinked = nameof(LegacyDataGeneratedCodeLinked);
 }
 
 public static class RuleIds
@@ -237,6 +244,12 @@ public static class RuleIds
     public const string LegacyWebFormsDesignerControl = "legacy.webforms.designer-control.v1";
     public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
+    public const string LegacyDataMetadataInventory = "legacy.data.metadata.inventory.v1";
+    public const string LegacyDataDbml = "legacy.data.dbml.v1";
+    public const string LegacyDataEdmx = "legacy.data.edmx.v1";
+    public const string LegacyDataTypedDataSet = "legacy.data.typed-dataset.v1";
+    public const string LegacyDataConfig = "legacy.data.config.v1";
+    public const string LegacyDataGeneratedLink = "legacy.data.generated-link.v1";
     public const string ContractDeltaReduction = "contract.delta.reduce.v1";
     public const string ContractDeltaInput = "contract.delta.input.v2";
     public const string ContractDeltaImpact = "contract.delta.impact.v2";
@@ -260,5 +273,6 @@ public static class ScannerVersions
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.1.0";
+    public const string LegacyDataExtractor = "legacy-data/0.1.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
 }
