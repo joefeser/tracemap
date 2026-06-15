@@ -128,8 +128,8 @@ async function readSitemapPages(context) {
     throw new Error("Site page metadata must be a non-empty array.");
   }
 
-  for (const page of pages) {
-    validateSitemapPage(page);
+  for (const [index, page] of pages.entries()) {
+    validateSitemapPage(page, index);
   }
 
   return pages;
@@ -199,14 +199,22 @@ function validateArticle(article, slugs) {
   }
 }
 
-function validateSitemapPage(page) {
+function validateSitemapPage(page, index) {
+  if (!isPlainObject(page)) {
+    throw new Error(`Site page metadata entry at index ${index} must be an object.`);
+  }
+
   for (const field of ["path", "changefreq", "priority"]) {
     if (typeof page[field] !== "string" || page[field].trim() === "") {
-      throw new Error(`Site page metadata is missing required string field: ${field}`);
+      throw new Error(`Site page metadata entry at index ${index} is missing required string field: ${field}`);
     }
   }
 
   validateSitemapEntry(page);
+}
+
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function validateSitemapEntries(entries) {

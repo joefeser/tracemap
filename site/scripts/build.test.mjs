@@ -81,6 +81,19 @@ test("buildSite rejects duplicated sitemap paths", async () => {
   );
 });
 
+test("buildSite reports non-object sitemap page metadata with index context", async () => {
+  const root = await createSiteFixture({
+    articles: [article("first-post")],
+    bodies: { "first-post": "<p>Body content.</p>" },
+    sitePages: [null]
+  });
+
+  await assert.rejects(
+    buildSite({ log: () => {}, root }),
+    /Site page metadata entry at index 0 must be an object\./
+  );
+});
+
 async function createSiteFixture({
   articles = [],
   bodies = {},
