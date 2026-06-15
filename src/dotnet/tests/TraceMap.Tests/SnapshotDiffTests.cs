@@ -636,6 +636,50 @@ public sealed class SnapshotDiffTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_single_projects_analysis_gap_records_without_raw_messages()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            AnalysisGapFact(after, "dynamic-sql-boundary", "Infrastructure/OrderRepository.cs", 42, $"could not parse {temp.Path}/secret.sql select * from orders")
+        ]);
+
+        var result = await SnapshotDiffReporter.WriteAsync(new SnapshotDiffOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "report"),
+            Scope: "gaps"));
+
+        var gapDiff = Assert.Single(result.Report.GapDiffs);
+        Assert.Equal("gap", gapDiff.EvidenceKind);
+        Assert.Equal(1, result.Report.Summary.GapDiffCount);
+        Assert.Equal(0, result.Report.Summary.ContractShapeDiffCount);
+        Assert.Equal("added", gapDiff.ChangeType);
+        Assert.Equal(SnapshotDiffClassifications.UnknownAnalysisGap, gapDiff.Classification);
+        Assert.Equal("unknown", gapDiff.Confidence);
+        Assert.Equal("Partial", result.Report.ReportCoverage);
+        Assert.Contains(gapDiff.RuleIds, ruleId => ruleId == RuleIds.DatabaseSqlText);
+        Assert.Contains(gapDiff.SupportingFactIds, id => !string.IsNullOrWhiteSpace(id));
+        Assert.NotNull(gapDiff.After);
+        Assert.Contains(gapDiff.After!.Metadata, pair => pair.Key == "gapKind" && pair.Value == "dynamic-sql-boundary");
+        Assert.Contains(gapDiff.After.Metadata, pair => pair.Key == "messageHash");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "UnavailableEvidence" && gap.Section == "gapDiffs");
+
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "snapshot-diff-report.json"));
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "snapshot-diff-report.md"));
+        Assert.DoesNotContain("secret.sql", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("select * from orders", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret.sql", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("select * from orders", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Snapshot_diff_cli_exit_code_is_opt_in()
     {
         using var temp = new TempDirectory();
@@ -763,6 +807,21 @@ public sealed class SnapshotDiffTests
             {
                 ["callerSymbol"] = caller,
                 ["calleeSymbol"] = callee
+            });
+    }
+
+    private static CodeFact AnalysisGapFact(ScanManifest manifest, string gapKind, string file, int line, string message)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = gapKind,
+                ["message"] = message
             });
     }
 
