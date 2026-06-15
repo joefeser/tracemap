@@ -240,6 +240,13 @@ async function addArgumentFacts(
     const argumentSymbolId = argumentSymbol ? await provider.symbolId(argumentSymbol, project.checker, sourceFile, argument, argumentSymbol.getName()) : null;
     const parameterName = parameter?.getName() ?? `arg${index}`;
     const parameterType = parameter ? project.checker.typeToString(project.checker.getTypeOfSymbolAtLocation(parameter, argument)) : "";
+    const parameterSymbolId = parameter ? await provider.symbolId(parameter, project.checker, sourceFile, argument, parameterName) : null;
+    const argumentDisplayName = argumentSymbol ? project.checker.getFullyQualifiedName(argumentSymbol).replace(/^".*"\./, "") : "";
+    const parameterDisplayName = parameter ? project.checker.getFullyQualifiedName(parameter).replace(/^".*"\./, "") : "";
+    const roleProperties = {
+      ...(argumentSymbol && argumentSymbolId ? symbolProperties("argument", argumentSymbolId, argumentSymbol.getName(), "symbol", argumentDisplayName, packageIdentity) : {}),
+      ...(parameter && parameterSymbolId ? symbolProperties("parameter", parameterSymbolId, parameterName, "parameter", parameterDisplayName, packageIdentity) : {})
+    };
     facts.push(
       createFact(
         manifest,
@@ -253,6 +260,7 @@ async function addArgumentFacts(
           targetSymbol: callee,
           contractElement: parameterName,
           properties: {
+            ...roleProperties,
             parameterName,
             parameterType,
             parameterOrdinal: index,
@@ -492,7 +500,9 @@ function symbolProperties(
   return {
     [`${role}SymbolId`]: symbolId,
     [`${role}Symbol`]: symbolName,
+    [`${role}SymbolLanguage`]: "typescript",
     [`${role}SymbolKind`]: symbolKind,
+    [`${role}SymbolDisplayName`]: displayName,
     [`${role}DisplayName`]: displayName,
     [`${role}AssemblyName`]: packageIdentity.name,
     [`${role}AssemblyVersion`]: packageIdentity.version

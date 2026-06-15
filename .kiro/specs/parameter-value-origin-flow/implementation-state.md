@@ -2,57 +2,46 @@
 
 ## Current Branch
 
-`codex/value-origin-combined-notes`
+`codex/value-origin-adapter-alignment`
 
 ## Implemented Slice
 
-Earlier implementation already shipped recommended PRs 2 and 3:
+This branch implements recommended PR 5:
 
-- unique constructor parameter-to-field-to-call forwarding and ambiguous constructor/member origin omission,
-- `CallbackBoundary` and `AsyncBoundary` fact types under `csharp.semantic.flowboundary.v1`,
-- callback/lambda/async boundary limitations in rules and docs.
-
-This branch implements recommended PR 4:
-
-- combined report summaries now include deterministic value-origin evidence counts for `combined_argument_flows`, `combined_local_aliases`, `combined_field_aliases`, `combined_parameter_forward_edges`, `CallbackBoundary`, and `AsyncBoundary` evidence when present,
-- combined report needs-review rows now surface callback/async boundary facts as value-origin review context without runtime scheduling, callback invocation, event firing, closure lifetime, or task completion claims,
-- combined paths now add deterministic `ValueOriginClassification` notes for paths containing `parameter-forward` or `argument-passed` edges while preserving the canonical `Classification` field,
-- combined reverse paths now carry the same additive notes and continue to preserve supporting fact IDs and combined edge IDs,
-- Markdown renderers now show path/reverse notes, and JSON remains deterministic.
+- TypeScript semantic `ArgumentPassed` facts now emit shared `argument` and `parameter` role metadata when compiler symbols are available.
+- TypeScript SQLite symbol indexing now prefers `{role}SymbolDisplayName` and preserves `{role}SymbolLanguage`.
+- Java semantic `ArgumentPassed` facts now emit shared `parameter` role metadata and `argument` role metadata when javac resolves the argument expression to a symbol.
+- JVM SQLite symbol indexing now preserves `argument`, `parameter`, `origin`, and `constructor` roles, not only `source` and `target`.
+- Python AST `ArgumentPassed`, `LocalAlias`, and `FieldAlias` facts now emit shared role metadata for syntax-visible names.
+- Python AST callee parameters remain explicit unresolved ordinal placeholders such as `arg0`; this is Tier3 syntax evidence and not semantic callable-signature resolution.
 
 ## Scope Decisions
 
-- No `tracemap flow`, diff, or impact behavior changed in this slice.
-- No new `combined.flow.*` rule IDs were added because the slice adds report/path/reverse notes derived from existing rule-backed facts and edges rather than emitting new evidence rows.
-- Existing rules `csharp.semantic.valueflow.v1`, `csharp.semantic.localalias.v1`, `csharp.semantic.fieldalias.v1`, and `csharp.semantic.parameterforwarding.v1` remain authoritative for forwarding.
-- Existing `csharp.semantic.flowboundary.v1` remains authoritative for callback/async boundary facts.
-- Value-origin classifications are additive notes only; they do not replace existing path/reverse classifications.
-- This slice does not infer endpoint/request DTO roots, runtime DI state, callback invocation, event firing, runtime scheduling, task completion, closure lifetime, mutation safety, object identity, or collection contents.
-- TypeScript, JVM, and Python alignment remain follow-up slices.
-- TypeScript/JVM/Python tests are not required unless those adapters change.
+- No new fact types or rule IDs were added. Existing TypeScript, JVM, and Python value-flow rules remain authoritative.
+- No new runtime callback, promise/task scheduling, event firing, closure lifetime, branch feasibility, mutation safety, object identity, collection-content, DI, reflection, or serializer expansion claims were added.
+- No TypeScript/JVM/Python interprocedural parameter-forwarding behavior was added beyond existing adapter/storage behavior.
+- TypeScript syntax fallback and Java syntax fallback remain ordinal-only lower-tier evidence.
+- Python remains reduced-coverage AST evidence and does not resolve callee signatures.
 
 ## Validation
 
-- Focused combined output validation passed: `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~CombinedDependencyPathTests|FullyQualifiedName~CombinedReverseQueryTests|FullyQualifiedName~CombinedDependencyReportTests"` passed, 39 tests.
-- `dotnet build src/dotnet/TraceMap.sln` passed.
-- `dotnet test src/dotnet/TraceMap.sln` passed: 225 tests.
-- `./scripts/check-private-paths.sh` passed.
-- `git diff --check` passed.
+- `npm test -- --run` from `src/typescript`: passed, 27 tests.
+- `npm run build` from `src/typescript`: passed.
+- `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle test` from `src/jvm`: passed.
+- `/tmp/tracemap-python-venv/bin/python -m pytest src/python/tests`: passed, 26 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 226 tests.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke`: passed and emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 ## Remaining Follow-Ups
 
-- Add TypeScript/JVM/Python callback/lambda/async boundary alignment where deterministic evidence exists.
-- Add a dedicated `CapturedValueFlow` rule only if a future slice needs stronger captured-value evidence than review-tier boundary facts.
+- Add deterministic field/member alias extraction for TypeScript and JVM only if compiler evidence supports direct assignments without property-setter or object-identity claims.
+- Add TypeScript/JVM/Python callback/lambda/async boundary facts where deterministic syntax/compiler evidence exists.
+- Add syntax/ordinal fallback tests for direct argument-to-parameter extraction beyond the current shared-role checks.
+- Add named/optional/rest/varargs/keyword/default parameter mapping tests where adapters can prove mapping deterministically.
+- Emit gaps for unresolved or ambiguous argument mapping where an adapter has enough context to identify the ambiguity.
+- Add mutation/collection/property/ref/out/destructuring boundary tests where relevant.
 - Expand endpoint/request-root value-origin traversal and tests beyond currently supported parameter-forward/surface notes.
 - Add diff/impact value-origin downgrade behavior for reduced coverage or unstable identity.
-- Keep future callback/async reports from claiming runtime scheduling, ordering, callback invocation, event firing, closure lifetime, or task completion.
-
-## Review Fixes
-
-- Qodo: expression-tree lambdas now emit `ExpressionTreeBoundary` metadata with `convertedExpressionType` and `underlyingDelegateType`, not misleading `convertedDelegateType` callback metadata.
-- Qodo: captured-value scanning skips nested anonymous function bodies so outer callbacks do not inherit inner-only captures.
-- Qodo: markdown `Flow Boundaries` now includes `CallbackBoundary` and `AsyncBoundary`.
-- Qodo: iterator boundaries now include assembly metadata keys consistently with other async boundaries.
-- Qodo: task scheduling detection now uses symbol-based type checks for `Task`, `Task<TResult>`, `TaskFactory`, `TaskFactory<TResult>`, and `ThreadPool` instead of display-name substring checks.
-- Codex: delegate arguments passed to object creation, such as `new Thread(DoWork)`, now emit `DelegateArgumentBoundary`.
-- Codex: `await foreach` and `await using` statements now emit `AsyncBoundary` facts.

@@ -143,6 +143,12 @@ Expected behavior: direct parameter forwarding is present, same-method aliases a
 
 For callback/lambda/async boundary changes, inspect semantic .NET fixtures for `CallbackBoundary` and `AsyncBoundary` facts under `csharp.semantic.flowboundary.v1`. Expected behavior: direct calls inside callback bodies may still emit normal `ArgumentPassed` rows, captured outer parameters/locals are labeled review-tier boundary evidence, expression-tree lambdas use expression-tree metadata instead of delegate-callback metadata, and event subscriptions, delegate arguments on invocations/object creation, `await`, `await foreach`, `await using`, task scheduling/continuation calls, thread-pool queueing calls, and iterator `yield` are boundaries rather than proof of runtime invocation, ordering, async disposal, async-stream enumeration, or task completion.
 
+For TypeScript/JVM/Python value-origin adapter alignment, inspect adapter fixtures for shared `ArgumentPassed` role properties:
+
+- TypeScript semantic facts should include `argumentSymbolId`, `argumentSymbolLanguage`, `argumentSymbolDisplayName`, `parameterSymbolId`, `parameterSymbolLanguage`, and `parameterSymbolDisplayName` when the compiler resolves both sides.
+- Java semantic facts should include parameter role properties for resolved calls and argument role properties only when javac resolves the argument expression to a symbol.
+- Python AST facts should mark unresolved callee parameters with `parameterIdentityStatus=unresolvedOrdinalPlaceholder` while still emitting shared role metadata for syntax-visible arguments, local aliases, and `self.field = parameter` aliases.
+
 For changes to `combine`, `report`, `paths`, `reverse`, endpoint extraction, call edges, SQL/query extraction, or dependency-surface projection, run the public combined-path smoke:
 
 ```bash
