@@ -5,7 +5,7 @@ Status: implemented and ready for PR review
 Branch/PR:
 
 - Implementation branch: `codex/legacy-webforms-event-flow`
-- PR: pending
+- PR: https://github.com/joefeser/tracemap/pull/111
 
 Scope:
 
@@ -44,12 +44,14 @@ State Notes:
   present.
 - PR review loop follow-up fixed Windows-style relative markup path handling and
   pre-filtered WebForms code-file/fact scans so large non-WebForms repositories
-  do not pay avoidable extractor cost.
+  do not pay avoidable extractor cost. It also scoped unqualified syntax
+  evidence to the resolved handler file and suppressed designer facts without
+  matching WebForms markup.
 
 Validation:
 
 - `dotnet build src/dotnet/TraceMap.sln` passed with 0 warnings.
-- `dotnet test src/dotnet/TraceMap.sln` passed: 275 tests.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 278 tests.
 - `python3 -m unittest scripts.tests.test_legacy_codebase_validation` passed:
   11 tests.
 - `./scripts/check-private-paths.sh` passed.

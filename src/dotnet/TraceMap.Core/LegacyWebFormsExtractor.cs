@@ -121,10 +121,16 @@ public static partial class LegacyWebFormsExtractor
             .Where(file => file is not null)
             .Select(file => file!)
             .ToArray();
-        var designers = inventory
+        var allDesigners = inventory
             .Where(item => item.Kind == "WebFormsDesigner")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .SelectMany(item => ParseDesignerFile(repoPath, item.RelativePath))
+            .ToArray();
+        var designers = allDesigners
+            .Where(field => pages.Any(page => PageTypeMatches(page.PageTypeName, field.PageTypeName)))
+            .OrderBy(field => field.FilePath, StringComparer.Ordinal)
+            .ThenBy(field => field.Line)
+            .ThenBy(field => field.FieldName, StringComparer.Ordinal)
             .ToArray();
 
         return new WebFormsContext(pages, codeFiles, designers);
@@ -547,7 +553,7 @@ public static partial class LegacyWebFormsExtractor
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? resolution.TargetSymbol ?? handlerName;
         var directFacts = candidateDirectFacts
-            .Where(fact => IsDirectHandlerEvidence(fact, handlerName, handlerSymbol))
+            .Where(fact => IsDirectHandlerEvidence(fact, handlerName, handlerSymbol, resolution.Evidence.FilePath))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
         var terminals = directFacts
@@ -618,7 +624,9 @@ public static partial class LegacyWebFormsExtractor
             return null;
         }
 
-        var directFacts = candidateDirectFacts.Where(fact => IsDirectHandlerEvidence(fact, handlerName, resolution.TargetSymbol ?? handlerName)).ToArray();
+        var directFacts = candidateDirectFacts
+            .Where(fact => IsDirectHandlerEvidence(fact, handlerName, resolution.TargetSymbol ?? handlerName, resolution.Evidence.FilePath))
+            .ToArray();
         var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(wcfMappings, directFacts).Any();
         var hasLogic = hasBackend
             || method.Declaration.DescendantNodes().Any(node => node is IfStatementSyntax or SwitchStatementSyntax or ConditionalExpressionSyntax)
@@ -652,24 +660,38 @@ public static partial class LegacyWebFormsExtractor
             });
     }
 
-    private static bool IsDirectHandlerEvidence(CodeFact fact, string handlerName, string handlerSymbol)
+    private static bool IsDirectHandlerEvidence(CodeFact fact, string handlerName, string handlerSymbol, string handlerFilePath)
     {
         if (fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared)
         {
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(fact.SourceSymbol)
-            && (fact.SourceSymbol.Equals(handlerSymbol, StringComparison.Ordinal)
+        var sameFile = fact.Evidence.FilePath.Equals(handlerFilePath, StringComparison.Ordinal);
+        if (!string.IsNullOrWhiteSpace(fact.SourceSymbol))
+        {
+            if (fact.SourceSymbol.Equals(handlerSymbol, StringComparison.Ordinal)
                 || fact.SourceSymbol.EndsWith("." + handlerName, StringComparison.Ordinal)
-                || fact.SourceSymbol.Contains("." + handlerName + "(", StringComparison.Ordinal)))
+                || fact.SourceSymbol.Contains("." + handlerName + "(", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (sameFile && fact.SourceSymbol.Equals(handlerName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        if (fact.Properties.GetValueOrDefault("callerSymbol")?.Equals(handlerSymbol, StringComparison.Ordinal) ?? false)
         {
             return true;
         }
 
-        return (fact.Properties.GetValueOrDefault("callerName")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
-            || (fact.Properties.GetValueOrDefault("containingMember")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
-            || (fact.Properties.GetValueOrDefault("callerSymbol")?.Equals(handlerSymbol, StringComparison.Ordinal) ?? false);
+        return sameFile
+            && ((fact.Properties.GetValueOrDefault("callerName")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
+                || (fact.Properties.GetValueOrDefault("containingMember")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
+                || (fact.Properties.GetValueOrDefault("containingMethod")?.Equals(handlerName, StringComparison.Ordinal) ?? false));
     }
 
     private static bool IsTerminalSurfaceFact(CodeFact fact)

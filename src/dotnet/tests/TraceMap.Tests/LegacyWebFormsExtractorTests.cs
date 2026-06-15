@@ -276,6 +276,68 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_scopes_unqualified_handler_evidence_to_resolved_file()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "App.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        WritePage(repo, "Orders.aspx", "Orders.aspx.cs", "Sample.OrdersPage", "Save_Click");
+        WritePage(repo, "Profile.aspx", "Profile.aspx.cs", "Sample.ProfilePage", "Save_Click");
+        WritePageCodeBehind(repo, "Orders.aspx.cs", "OrdersPage", "Save_Click", "var sql = \"select Id from Orders\";");
+        WritePageCodeBehind(repo, "Profile.aspx.cs", "ProfilePage", "Save_Click", "");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var profileFlow = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventFlowProjected
+            && fact.Evidence.FilePath == "Profile.aspx.cs");
+        Assert.Equal("NoBackendEvidence", profileFlow.Properties.GetValueOrDefault("flowClassification"));
+    }
+
+    [Fact]
+    public void Scan_links_same_file_syntax_sql_terminal_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        WriteBasicPage(repo, "Save_Click", handlerBody: "var sql = \"select Id from Orders\";");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.QueryPatternDetected);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventFlowProjected
+            && fact.Properties.GetValueOrDefault("terminalSurfaceKind") == "sql-query"
+            && fact.Properties.GetValueOrDefault("flowClassification") == "ProbableStaticEventFlow");
+    }
+
+    [Fact]
+    public void Scan_does_not_emit_webforms_designer_facts_without_matching_markup()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Settings.designer.cs"), """
+            namespace Sample;
+            public partial class Settings
+            {
+                internal string Theme;
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsDesignerControlDeclared);
+    }
+
+    [Fact]
     public void Scan_suppresses_unsafe_markup_values_and_records_malformed_gap()
     {
         using var temp = new TempDirectory();
@@ -304,19 +366,29 @@ public sealed class LegacyWebFormsExtractorTests
 
     private static void WriteBasicPage(string repo, string handlerName, string handlerBody)
     {
-        File.WriteAllText(Path.Combine(repo, "Default.aspx"), $$"""
-            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+        WritePage(repo, "Default.aspx", "Default.aspx.cs", "Sample.Default", handlerName);
+        WriteCodeBehind(repo, handlerName, handlerBody);
+    }
+
+    private static void WritePage(string repo, string markupFileName, string codeBehindFileName, string inherits, string handlerName)
+    {
+        File.WriteAllText(Path.Combine(repo, markupFileName), $$"""
+            <%@ Page Language="C#" CodeBehind="{{codeBehindFileName}}" Inherits="{{inherits}}" %>
             <asp:Button runat="server" ID="SaveButton" OnClick="{{handlerName}}" />
             """);
-        WriteCodeBehind(repo, handlerName, handlerBody);
     }
 
     private static void WriteCodeBehind(string repo, string handlerName, string handlerBody)
     {
-        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), $$"""
+        WritePageCodeBehind(repo, "Default.aspx.cs", "Default", handlerName, handlerBody);
+    }
+
+    private static void WritePageCodeBehind(string repo, string fileName, string className, string handlerName, string handlerBody)
+    {
+        File.WriteAllText(Path.Combine(repo, fileName), $$"""
             using System;
             namespace Sample;
-            public partial class Default
+            public partial class {{className}}
             {
                 protected void {{handlerName}}(object sender, EventArgs e)
                 {
