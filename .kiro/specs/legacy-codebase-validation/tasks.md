@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] 1. Add local-only legacy validation manifest support.
+- [x] 1. Add local-only legacy validation manifest support.
   - Define `.tmp/legacy-codebase-validation/repos.local.json` as the only
     accepted path source.
   - Validate labels and reject unsafe/public output candidates.
@@ -8,7 +8,7 @@
     git-tracked.
   - Ensure local paths never appear in committed files.
 
-- [ ] 2. Add a legacy validation script.
+- [x] 2. Add a legacy validation script.
   - Add `scripts/validate-legacy-codebases.sh`.
   - Run `tracemap scan` per sample label.
   - Capture exit code, duration, artifact existence, fact counts, coverage
@@ -17,7 +17,7 @@
     directory unless `timeoutSeconds` or `maxArtifactBytes` are supplied in the
     ignored local manifest.
 
-- [ ] 3. Add legacy UI event evidence probes.
+- [x] 3. Add legacy UI event evidence probes.
   - Query method declaration facts for handler-like symbols or contract
     elements.
   - Query call-edge facts from handler-like methods to downstream methods or
@@ -30,18 +30,18 @@
     `legacy-ui-event-surfaces` follow-up.
   - State that static handler wiring does not prove runtime execution.
 
-- [ ] 4. Add large repository smoke reporting.
+- [x] 4. Add large repository smoke reporting.
   - Capture scan duration, output size, fact count, coverage, and truncation or
     failure reasons for the large sample label.
   - Mark timeout or artifact-size bound exceedance as truncated/deferred with a
     visible limitation.
 
-- [ ] 5. Add redacted summary generation.
+- [x] 5. Add redacted summary generation.
   - Write Markdown and JSON summaries under ignored `.tmp/`.
   - Include sample labels, counts, coverage labels, rule IDs, and limitations.
   - Exclude raw paths, remotes, snippets, SQL, config values, and secrets.
 
-- [ ] 6. Add safety tests.
+- [x] 6. Add safety tests.
   - Test manifest validation rejects non-`.tmp` paths for output.
   - Test redaction rejects local absolute paths, private path fragments, raw
     remotes, private repo names, raw SQL, connection strings, config values,
@@ -50,7 +50,7 @@
     accidentally git-tracked.
   - Test summary shape remains deterministic.
 
-- [ ] 7. Validate.
+- [x] 7. Validate.
   - Run `dotnet build src/dotnet/TraceMap.sln`.
   - Run `dotnet test src/dotnet/TraceMap.sln`.
   - Run `./scripts/check-private-paths.sh`.
