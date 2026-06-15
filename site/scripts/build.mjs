@@ -432,6 +432,8 @@ ${articleMeta}    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <a href="/workflows/">Workflows</a>
         <a href="/examples/">Examples</a>
         <a href="/blog/" aria-current="${escapeHtml(blogCurrent)}">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
         <a href="/validation/">Validation</a>
         <a href="/limitations/">Limitations</a>
         <a href="/demo/">Demo</a>
