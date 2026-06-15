@@ -1,0 +1,67 @@
+[
+  {
+    "path": "/",
+    "changefreq": "weekly",
+    "priority": "1.0"
+  },
+  {
+    "path": "/evidence/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/outputs/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/workflows/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/examples/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/examples/scan-packet/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/examples/contract-impact/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/use-cases/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/vault-export/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/blog/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/validation/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/limitations/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/demo/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  }
+]

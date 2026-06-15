@@ -25,5 +25,5 @@ database, auth, or runtime service was added.
 
 ## Follow-ups
 
-- Consider generating `sitemap.xml` from the same blog metadata if the article
-  list grows enough for manual sitemap edits to become noisy.
+- Sitemap generation is handled by
+  `.kiro/specs/site-tracemap-tools-sitemap-generation/`.
