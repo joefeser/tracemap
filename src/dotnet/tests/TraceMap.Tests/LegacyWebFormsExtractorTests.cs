@@ -82,6 +82,34 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_resolves_windows_style_relative_codebehind_paths()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "Controls"));
+        File.WriteAllText(Path.Combine(repo, "Nested.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Controls\Nested.aspx.cs" Inherits="Sample.Nested" %>
+            <asp:Button runat="server" ID="SaveButton" OnClick="Save_Click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Controls", "Nested.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Nested
+            {
+                protected void Save_Click(object sender, EventArgs e) { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.ContractElement == "Save_Click"
+            && fact.Properties.GetValueOrDefault("linkedCodePath") == "Controls/Nested.aspx.cs");
+    }
+
+    [Fact]
     public void Scan_emits_ambiguity_and_auto_wireup_gaps_conservatively()
     {
         using var temp = new TempDirectory();
