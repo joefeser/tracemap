@@ -32,7 +32,7 @@ publishing raw artifacts or implying incident-response capability.
 - Source file: `site/src/use-cases/incident-review/index.html`
 - Sitemap metadata: add `/use-cases/incident-review/` to
   `site/src/_site/pages.json` with `changefreq: "monthly"` and
-  `priority: "0.7"` unless implementation review chooses a different value.
+  `priority: "0.7"`.
 
 Use `/use-cases/incident-review/` instead of `/incident-review/` because the
 page is a bounded use-case story, not a standalone product claim or incident
