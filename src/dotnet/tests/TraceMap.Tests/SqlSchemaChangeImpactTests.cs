@@ -262,6 +262,211 @@ public sealed class SqlSchemaChangeImpactTests
     }
 
     [Fact]
+    public async Task Reduce_sql_schema_delta_combined_index_matches_projected_sql_query_and_persistence_surfaces()
+    {
+        using var temp = new TempDirectory();
+        var apiIndex = Path.Combine(temp.Path, "api.sqlite");
+        var workerIndex = Path.Combine(temp.Path, "worker.sqlite");
+        var combinedIndex = Path.Combine(temp.Path, "combined.sqlite");
+        var outputOne = Path.Combine(temp.Path, "out-one");
+        var outputTwo = Path.Combine(temp.Path, "out-two");
+        var deltaPath = WriteSqlSchemaDelta(temp.Path, """
+            {
+              "id": "chg-query-shape",
+              "kind": "query-shape",
+              "changeType": "shape_changed",
+              "reference": {
+                "queryShapeHash": "shape-orders-status",
+                "sqlSourceKind": "inline",
+                "tableName": "Orders",
+                "columnNames": "Status"
+              }
+            },
+            {
+              "id": "chg-orders-sql-file",
+              "kind": "sql-file",
+              "changeType": "behavior_changed",
+              "reference": {
+                "sqlResourceName": "orders-report.sql",
+                "sqlSourceKind": "sql-file"
+              }
+            },
+            {
+              "id": "chg-orders-status-column",
+              "kind": "column",
+              "changeType": "type_changed",
+              "reference": {
+                "tableName": "Orders",
+                "columnName": "Status"
+              }
+            },
+            {
+              "id": "chg-orders-status-mapping",
+              "kind": "mapping",
+              "changeType": "nullable_changed",
+              "reference": {
+                "tableName": "Orders",
+                "columnName": "Status",
+                "mappedName": "OrderStatus"
+              }
+            }
+            """);
+        var apiManifest = Manifest("api", ScannerVersions.TraceMap);
+        var workerManifest = Manifest("worker", "tracemap-python/0.1.0");
+        SqliteIndexWriter.Write(apiIndex, apiManifest, [
+            FactFactory.Create(
+                apiManifest,
+                FactTypes.QueryPatternDetected,
+                RuleIds.DatabaseSqlShape,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/OrdersRepository.cs", 21, 21, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["columnNames"] = "Status;Id",
+                    ["operationName"] = "select",
+                    ["queryShapeHash"] = "shape-orders-status",
+                    ["rawSql"] = "select Status from Orders where Password = 'secret'",
+                    ["sqlSourceKind"] = "inline",
+                    ["tableName"] = "Orders",
+                    ["textHash"] = "text-orders-status"
+                }),
+            FactFactory.Create(
+                apiManifest,
+                FactTypes.SqlFileDeclared,
+                RuleIds.FileInventory,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                new EvidenceSpan("sql/orders-report.sql", 1, 1, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["sqlResourceName"] = "orders-report.sql",
+                    ["sqlSourceKind"] = "sql-file"
+                })
+        ]);
+        SqliteIndexWriter.Write(workerIndex, workerManifest, [
+            FactFactory.Create(
+                workerManifest,
+                FactTypes.DatabaseColumnMapping,
+                RuleIds.DatabaseEntityFramework,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("app/models.py", 7, 7, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["columnName"] = "Status",
+                    ["mappedName"] = "OrderStatus",
+                    ["surfaceKind"] = "sql-persistence",
+                    ["tableName"] = "Orders"
+                })
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([apiIndex, workerIndex], combinedIndex, ["api", "worker"]));
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", combinedIndex, "--sql-schema-delta", deltaPath, "--out", outputOne
+        ]));
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", combinedIndex, "--sql-schema-delta", deltaPath, "--out", outputTwo
+        ]));
+
+        var first = await File.ReadAllTextAsync(Path.Combine(outputOne, "sql-impact-report.json"));
+        var second = await File.ReadAllTextAsync(Path.Combine(outputTwo, "sql-impact-report.json"));
+        Assert.Equal(first, second);
+        Assert.Contains("\"reportType\": \"SqlSchemaChangeImpactCombinedV1\"", first);
+        Assert.Contains("\"changeId\": \"chg-orders-sql-file\"", first);
+        Assert.Contains("\"changeId\": \"chg-query-shape\"", first);
+        Assert.Contains("\"changeId\": \"chg-orders-status-column\"", first);
+        Assert.Contains("\"changeId\": \"chg-orders-status-mapping\"", first);
+        Assert.Contains("\"evidenceKind\": \"sql-query-shape\"", first);
+        Assert.Contains("\"evidenceKind\": \"sql-resource\"", first);
+        Assert.Contains("\"evidenceKind\": \"sql-persistence-mapping\"", first);
+        Assert.Contains("\"queryShapeHash\": \"shape-orders-status\"", first);
+        Assert.Contains("\"textHash\": \"text-orders-status\"", first);
+        Assert.Contains("\"sqlSourceKind\": \"inline\"", first);
+        Assert.Contains("\"sqlResourceName\": \"orders-report.sql\"", first);
+        Assert.Contains("\"mappedName\": \"OrderStatus\"", first);
+        Assert.Contains("\"sourceLabel\": \"api\"", first);
+        Assert.Contains("\"sourceLabel\": \"worker\"", first);
+        Assert.Contains("\"scanId\": \"scan-api\"", first);
+        Assert.Contains("\"scanId\": \"scan-worker\"", first);
+        Assert.DoesNotContain("Password", first, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("select Status", first, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Reduce_sql_schema_delta_combined_query_selector_does_not_overclaim_mapping_only_evidence()
+    {
+        using var temp = new TempDirectory();
+        var apiIndex = Path.Combine(temp.Path, "api.sqlite");
+        var combinedIndex = Path.Combine(temp.Path, "combined.sqlite");
+        var queryOutput = Path.Combine(temp.Path, "query-out");
+        var mappingOutput = Path.Combine(temp.Path, "mapping-out");
+        var queryDeltaPath = WriteSqlSchemaDelta(temp.Path, """
+            {
+              "id": "chg-query-table-only",
+              "kind": "query-shape",
+              "changeType": "shape_changed",
+              "reference": {
+                "sqlSourceKind": "inline",
+                "tableName": "Orders"
+              }
+            }
+            """);
+        var mappingDeltaPath = WriteSqlSchemaDelta(temp.Path, """
+            {
+              "id": "chg-mapping-only",
+              "kind": "mapping",
+              "changeType": "nullable_changed",
+              "reference": {
+                "mappedName": "OrderStatus"
+              }
+            }
+            """);
+        var manifest = Manifest("api", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(apiIndex, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.DatabaseColumnMapping,
+                RuleIds.DatabaseEntityFramework,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/Order.cs", 8, 8, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["columnName"] = "Status",
+                    ["mappedName"] = "OrderStatus",
+                    ["surfaceKind"] = "sql-persistence",
+                    ["tableName"] = "Orders"
+                }),
+            FactFactory.Create(
+                manifest,
+                FactTypes.QueryPatternDetected,
+                RuleIds.DatabaseSqlShape,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("src/CustomerRepository.cs", 18, 18, null, "test", "test/1.0"),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["queryShapeHash"] = "shape-customers",
+                    ["sqlSourceKind"] = "inline",
+                    ["tableName"] = "Customers"
+                })
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([apiIndex], combinedIndex, ["api"]));
+
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", combinedIndex, "--sql-schema-delta", queryDeltaPath, "--out", queryOutput
+        ]));
+        Assert.Equal(0, await RunCliAsync([
+            "reduce", "--index", combinedIndex, "--sql-schema-delta", mappingDeltaPath, "--out", mappingOutput
+        ]));
+
+        var queryJson = await File.ReadAllTextAsync(Path.Combine(queryOutput, "sql-impact-report.json"));
+        var mappingJson = await File.ReadAllTextAsync(Path.Combine(mappingOutput, "sql-impact-report.json"));
+        Assert.Contains("\"classification\": \"NoImpactEvidence\"", queryJson);
+        Assert.DoesNotContain("\"evidenceKind\": \"sql-persistence-mapping\"", queryJson);
+        Assert.DoesNotContain("\"evidenceKind\": \"sql-query-shape\"", queryJson);
+        Assert.Contains("\"classification\": \"NeedsReviewImpact\"", mappingJson);
+        Assert.Contains("\"evidenceKind\": \"sql-persistence-mapping\"", mappingJson);
+        Assert.DoesNotContain("\"evidenceKind\": \"sql-query-shape\"", mappingJson);
+    }
+
+    [Fact]
     public async Task Reduce_sql_schema_delta_empty_changes_and_json_directory_output_are_deterministic()
     {
         using var temp = new TempDirectory();
