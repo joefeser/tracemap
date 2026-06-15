@@ -12,6 +12,29 @@ test("validateDist accepts generated public sitemap and internal links", async (
   await validateDist({ root });
 });
 
+test("validateDist reports missing dist directory through validation errors", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
+
+  await assert.rejects(
+    validateDist({ root }),
+    /Site validation failed:\n- Unable to read generated output directory .*dist/
+  );
+});
+
+test("validateDist normalizes trailing slash baseUrl values", async () => {
+  const root = await createDistFixture();
+
+  await validateDist({ baseUrl: "https://tracemap.tools/", root });
+});
+
+test("validateDist accepts directory links without trailing slashes", async () => {
+  const root = await createDistFixture({
+    indexHtml: '<a href="/docs">Docs</a>'
+  });
+
+  await validateDist({ root });
+});
+
 test("validateDist rejects sitemap URLs without generated files", async () => {
   const root = await createDistFixture({
     sitemapUrls: ["https://tracemap.tools/", "https://tracemap.tools/missing/"]
