@@ -19,11 +19,17 @@ test("buildSite publishes generated blog pages and keeps private blog folders ou
   await buildSite({ log: () => {}, root });
 
   const index = await readFile(join(root, "dist", "blog", "index.html"), "utf8");
+  const home = await readFile(join(root, "dist", "index.html"), "utf8");
   const post = await readFile(join(root, "dist", "blog", "first-post", "index.html"), "utf8");
   const headers = await readFile(join(root, "dist", "_headers"), "utf8");
   const sitemap = await readFile(join(root, "dist", "sitemap.xml"), "utf8");
 
   assert.match(index, /href="\/blog\/first-post\/"/);
+  assert.match(index, /href="\/capabilities\/">Capabilities<\/a>/);
+  assert.match(index, /href="\/docs\/">Docs<\/a>/);
+  assert.match(home, /href="\/capabilities\/">Capabilities<\/a>/);
+  assert.match(home, /href="\/docs\/">Docs<\/a>/);
+  assert.doesNotMatch(home, /Old Nav/);
   assert.match(post, /<title>First Post \| TraceMap<\/title>/);
   assert.match(headers, /cache-control: public/);
   assert.match(sitemap, /<loc>https:\/\/tracemap\.tools\/<\/loc>/);
@@ -136,7 +142,12 @@ async function createSiteFixture({
 
   await mkdir(articleDir, { recursive: true });
   await mkdir(siteData, { recursive: true });
-  await writeFile(join(src, "index.html"), "<!doctype html><title>Fixture</title>", "utf8");
+  await writeFile(
+    join(src, "index.html"),
+    `<!doctype html><title>Fixture</title>
+    <header class="site-header"><nav class="top-nav"><a href="/old/">Old Nav</a></nav></header>`,
+    "utf8"
+  );
 
   if (!skipMetadata) {
     await writeFile(join(blog, "articles.json"), JSON.stringify(articles, null, 2), "utf8");

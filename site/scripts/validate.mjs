@@ -2,24 +2,10 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { buildSite } from "./build.mjs";
+import { buildSite, topNavigationLinks } from "./build.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultBaseUrl = "https://tracemap.tools";
-const expectedTopNavLinks = [
-  { href: "/evidence/", text: "Evidence" },
-  { href: "/outputs/", text: "Outputs" },
-  { href: "/workflows/", text: "Workflows" },
-  { href: "/examples/", text: "Examples" },
-  { href: "/blog/", text: "Blog" },
-  { href: "/capabilities/", text: "Capabilities" },
-  { href: "/docs/", text: "Docs" },
-  { href: "/validation/", text: "Validation" },
-  { href: "/limitations/", text: "Limitations" },
-  { href: "/demo/", text: "Demo" },
-  { href: "https://github.com/joefeser/tracemap", text: "GitHub" }
-];
-
 export async function validateSite(options = {}) {
   const { log = console.log, root = defaultRoot } = options;
 
@@ -195,10 +181,10 @@ async function validateTopNavigation({ dist, errors, htmlFiles }) {
       continue;
     }
 
-    if (!sameNavLinks(links, expectedTopNavLinks)) {
+    if (!sameNavLinks(links, topNavigationLinks)) {
       errors.push(
         `${label} top navigation does not match the canonical links. Expected: ${formatNavLinks(
-          expectedTopNavLinks
+          topNavigationLinks
         )}. Found: ${formatNavLinks(links)}.`
       );
     }
