@@ -80,9 +80,9 @@ Acceptance criteria:
 - The page introduces no runtime service, client-side state, external tracker,
   private dataset, or generated local artifact dependency.
 - The page links back to `/use-cases/` as the parent surface.
-- The page's top navigation link set matches the canonical list enforced by
-  `site/scripts/build.mjs` `topNavigationLinks`; `aria-current` is set by the
-  build step and must not be hardcoded on the wrong source link.
+- The page includes a placeholder `<header class="site-header">` block so
+  `site/scripts/build.mjs` can replace it with the canonical navigation and set
+  `aria-current` dynamically.
 - The page does not add `/use-cases/incident-review/` to the primary navigation.
 
 ### Requirement 2: Explain role-specific questions
@@ -162,7 +162,8 @@ Acceptance criteria:
   capability, limitation, and roadmap pages.
 - Use one canonical back-link set on the new page: `/use-cases/`,
   `/manager-packet/`, `/packets/`, `/demo/proof-assets/`,
-  `/demo/proof-upgrades/`, `/capabilities/`, `/limitations/`, and `/roadmap/`.
+  `/demo/proof-upgrades/`, `/capabilities/`, `/limitations/`, `/roadmap/`,
+  `/evidence/`, and `/outputs/`.
 
 ### Requirement 6: Cross-link from existing public surfaces
 
@@ -191,7 +192,7 @@ Acceptance criteria:
   defers the roadmap link and records the reason in `implementation-state.md`.
 - The new page links back to `/use-cases/`, `/manager-packet/`, `/packets/`,
   `/demo/proof-assets/`, `/demo/proof-upgrades/`, `/capabilities/`,
-  `/limitations/`, and `/roadmap/`.
+  `/limitations/`, `/roadmap/`, `/evidence/`, and `/outputs/`.
 
 ### Requirement 7: Validate the future site implementation
 

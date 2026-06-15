@@ -9,11 +9,10 @@ Add a future static page at `/use-cases/incident-review/` with source in
 site chrome and layout classes such as `page-hero`, `hero-note`, `section`,
 `workflow-grid`, `detail-list`, `boundary-section`, and `link-section`.
 
-The source page's top navigation link set must match the canonical
-`topNavigationLinks` list enforced by `site/scripts/build.mjs`; the build step
-sets `aria-current` for the active section, so source HTML must not hardcode it
-on the wrong link. Do not add `/use-cases/incident-review/` to the primary top
-navigation. The page should be reached through `/use-cases/`,
+The source page must include a placeholder `<header class="site-header">` block
+so `site/scripts/build.mjs` can replace it with the canonical navigation and set
+`aria-current` dynamically. Do not add `/use-cases/incident-review/` to the
+primary top navigation. The page should be reached through `/use-cases/`,
 `/manager-packet/`, packet/proof pages, capabilities, limitations, and roadmap
 context.
 
@@ -31,7 +30,8 @@ context.
    concrete questions they can ask from the evidence packet.
 5. Proof path: link to `/use-cases/`, `/manager-packet/`, `/packets/`,
    `/demo/proof-assets/`, `/demo/proof-upgrades/`, `/capabilities/`,
-   `/limitations/`, and `/roadmap/`, and explain how each page should be used.
+   `/limitations/`, `/roadmap/`, `/evidence/`, and `/outputs/`, and explain
+   how each page should be used.
 6. Non-claims: prominent boundary copy for runtime behavior, production
    traffic, deployment state, endpoint performance, P1 root cause, release
    safety, and AI impact analysis.
@@ -61,7 +61,7 @@ Avoid phrases like:
 
 Canonical new-page back-link set: `/use-cases/`, `/manager-packet/`,
 `/packets/`, `/demo/proof-assets/`, `/demo/proof-upgrades/`, `/capabilities/`,
-`/limitations/`, and `/roadmap/`.
+`/limitations/`, `/roadmap/`, `/evidence/`, and `/outputs/`.
 
 - `/use-cases/`: add the primary link to the new use-case page.
 - `/use-cases/` placement: add the new entry near "Release review" or
