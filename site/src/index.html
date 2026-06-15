@@ -49,6 +49,8 @@
         <a href="/evidence/">Evidence</a>
         <a href="/outputs/">Outputs</a>
         <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
         <a href="/validation/">Validation</a>
         <a href="/limitations/">Limitations</a>
         <a href="/demo/">Demo</a>
@@ -71,8 +73,8 @@
             databases, or prompt-based classification in the scanner or reducer.
           </p>
           <div class="hero-actions" aria-label="Primary links">
-            <a class="button primary" href="/demo/">Run the demo</a>
-            <a class="button secondary" href="/evidence/">Explore the evidence model</a>
+            <a class="button primary" href="/examples/">Show me the outputs</a>
+            <a class="button secondary" href="/demo/">Run the demo</a>
           </div>
         </div>
         <div class="artifact-preview" aria-label="TraceMap evidence artifact preview">
@@ -107,6 +109,51 @@ classification: NeedsReview</code></pre>
               <span>AI calls in scanner</span>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="section" id="first-look">
+        <div class="section-header">
+          <p class="section-kicker">First look</p>
+          <h2>Use this path when you are showing TraceMap to someone new.</h2>
+        </div>
+        <div class="path-grid">
+          <a href="/examples/">
+            <span>1</span>
+            <strong>Start with the examples.</strong>
+            <p>Show the manifest, facts, report excerpt, and contract-impact output before asking anyone to run a command.</p>
+          </a>
+          <a href="/use-cases/">
+            <span>2</span>
+            <strong>Map it to review work.</strong>
+            <p>Connect the artifacts to contract-change review, release packets, partial analysis, and reviewer handoff.</p>
+          </a>
+          <a href="/demo/">
+            <span>3</span>
+            <strong>Run the checked-in demo.</strong>
+            <p>Generate the same kind of static evidence from public samples, with local-path and sensitive-value guards.</p>
+          </a>
+        </div>
+      </section>
+
+      <section class="section split-section" id="who-for">
+        <div>
+          <p class="section-kicker">Who it helps</p>
+          <h2>TraceMap turns review questions into evidence packets.</h2>
+        </div>
+        <div class="audience-grid">
+          <article>
+            <h3>Engineering managers</h3>
+            <p>See which files, contracts, routes, packages, gaps, and coverage labels shaped the review instead of accepting a prose-only answer.</p>
+          </article>
+          <article>
+            <h3>Reviewers</h3>
+            <p>Start from rule IDs, evidence tiers, commit SHAs, and line spans when deciding what needs human attention.</p>
+          </article>
+          <article>
+            <h3>Tool builders</h3>
+            <p>Consume stable JSON, NDJSON, SQLite, and Markdown outputs without depending on prompts or hidden model state.</p>
+          </article>
         </div>
       </section>
 
@@ -226,6 +273,10 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan \
           <a href="/evidence/">Evidence tiers</a>
           <a href="/outputs/">Scan outputs</a>
           <a href="/workflows/">Workflows</a>
+          <a href="/examples/">Examples</a>
+          <a href="/blog/">Blog</a>
+          <a href="#first-look">First-look path</a>
+          <a href="/use-cases/">Use cases</a>
           <a href="/limitations/">Limitations</a>
           <a href="https://github.com/joefeser/tracemap/blob/main/docs/PRD.md">Product requirements</a>
           <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">Validation guide</a>
@@ -241,6 +292,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan \
         Source docs live at
         <a href="https://github.com/joefeser/tracemap">github.com/joefeser/tracemap</a>.
       </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
     </footer>
   </body>
 </html>
