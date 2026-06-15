@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="TraceMap public demo result guide: current available scan sections, deferred sections, generated summaries, and static evidence claim boundaries."
+      content="TraceMap public demo result guide: current available scan sections, upgraded proof rows, generated summaries, and static evidence claim boundaries."
     >
     <meta name="robots" content="index,follow">
     <meta name="author" content="Joe Feser">
@@ -16,7 +16,7 @@
     <meta property="og:title" content="TraceMap Public Demo Result">
     <meta
       property="og:description"
-      content="What the current public demo produces, what is deferred, and how to read the generated static evidence summaries."
+      content="What the current public demo produces, what was upgraded, and how to read the generated static evidence summaries."
     >
     <meta property="og:url" content="https://tracemap.tools/demo/result/">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -50,7 +50,7 @@
         <p class="hero-subhead">
           The current public demo scans checked-in .NET and TypeScript samples,
           writes local scan artifacts, and produces public-safe summary files
-          that show available sections, deferred sections, evidence tiers, rule
+          that show available sections, upgraded proof rows, evidence tiers, rule
           IDs, coverage labels, counts, and reasons.
         </p>
         <p class="hero-note">
@@ -138,24 +138,24 @@ sed -n '1,160p' .tracemap-demo/demo-summary.md</code></pre>
             <p>Status: available. Four checked-in samples produce manifests, facts, SQLite indexes, reports, and analyzer logs.</p>
           </article>
           <article>
-            <h3>deferred sections</h3>
-            <p>Status: deferred. Follow-up slices will add combined report, paths/reverse, portfolio, diff, impact, and release-review assertions.</p>
+            <h3>proof upgrades</h3>
+            <p>Status: upgraded. Combined report, paths/reverse, portfolio, diff, impact, and release-review rows now have demo evidence in the proof-upgrades ledger.</p>
           </article>
         </div>
       </section>
 
       <section class="section split-section">
         <div>
-          <p class="section-kicker">Current deferred work</p>
-          <h2>Deferred rows are part of the result because silence would be misleading.</h2>
+          <p class="section-kicker">Proof upgrades</p>
+          <h2>The formerly deferred rows are now visible demo evidence.</h2>
         </div>
         <div class="detail-list">
-          <div><strong>combine-and-dependency-report</strong><span>Deferred: a follow-up slice will combine generated sample indexes and run dependency report assertions.</span></div>
-          <div><strong>paths-and-reverse</strong><span>Deferred: a follow-up slice will run path and reverse assertions after combined report wiring lands.</span></div>
-          <div><strong>portfolio</strong><span>Deferred: a follow-up slice will generate a portfolio manifest from generated indexes.</span></div>
-          <div><strong>diff</strong><span>Deferred: no concrete checked-in before/after fixture pair exists yet.</span></div>
-          <div><strong>impact</strong><span>Deferred: no concrete checked-in before/after fixture pair exists yet.</span></div>
-          <div><strong>release-review</strong><span>Deferred: compatible before/after inputs and delta fixtures are not part of the first public demo slice.</span></div>
+          <div><strong>combine-and-dependency-report</strong><span>Available as demo evidence with generated dependency reports for endpoint-stack and mixed-stack samples.</span></div>
+          <div><strong>paths-and-reverse</strong><span>Available as demo evidence with generated path and reverse lookup reports.</span></div>
+          <div><strong>portfolio</strong><span>Available as demo evidence with a generated portfolio manifest and portfolio report.</span></div>
+          <div><strong>diff</strong><span>Available as demo evidence from checked-in public before/after fixtures.</span></div>
+          <div><strong>impact</strong><span>Available as demo evidence derived from the public demo diff output.</span></div>
+          <div><strong>release-review</strong><span>Available as demo evidence with a generated static review checklist.</span></div>
         </div>
       </section>
 
@@ -191,19 +191,19 @@ sed -n '1,160p' .tracemap-demo/demo-summary.md</code></pre>
         </div>
         <ul>
           <li>Safe: the demo can generate scan packets and public-safe summary rows from checked-in .NET and TypeScript samples.</li>
-          <li>Safe: the current result makes deferred sections visible instead of hiding them.</li>
+          <li>Safe: the current result makes upgraded and bounded sections visible instead of hiding gaps.</li>
           <li>Safe: the summaries can orient a review conversation around static evidence, rule IDs, evidence tiers, coverage labels, and gaps.</li>
-          <li>Not safe: claiming the first demo slice proves combined paths, reverse queries, portfolio reports, diff, impact, release review, runtime behavior, production traffic, or release safety.</li>
+          <li>Not safe: claiming the demo proves full impact, runtime behavior, production traffic, production dependency understanding, endpoint performance, or release safety.</li>
         </ul>
       </section>
 
       <section class="section callout-section">
-        <h2>Deferred rows feed the roadmap.</h2>
+        <h2>See the upgraded demo rows.</h2>
         <p>
-          The <a href="/roadmap/">public roadmap</a> explains what proof is
-          needed before demo gaps such as combined reports, paths, reverse,
-          portfolio, diff, impact, and release-review examples can become
-          public demo claims.
+          The <a href="/demo/proof-upgrades/">demo proof upgrades</a> page
+          shows the combined reports, paths, reverse, portfolio, diff, impact,
+          and release-review rows that now have reproducible public-demo
+          evidence, plus the limits that still apply.
         </p>
       </section>
 
@@ -215,6 +215,7 @@ sed -n '1,160p' .tracemap-demo/demo-summary.md</code></pre>
         <div class="link-grid">
           <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">Demo script source</a>
           <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public-assert.mjs">Demo assertion helper</a>
+          <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
           <a href="/demo/start-here/">Demo walkthrough</a>
           <a href="/packets/">Evidence packet guide</a>
           <a href="/roadmap/">Public roadmap</a>
