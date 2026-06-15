@@ -1,6 +1,6 @@
 # Implementation State
 
-Status: ready-for-review
+Status: ready-for-implementation
 Branch: codex/legacy-codebase-validation-spec
 Public claim level: hidden
 
@@ -28,14 +28,23 @@ Actual local path mappings must live under ignored
   and rule IDs exist.
 - Keep raw validation outputs local-only.
 - Generate only redacted summary candidates.
+- Use 20 minutes per sample and 500 MB per sample output directory as default
+  validation bounds unless overridden in the ignored local manifest.
+- Treat the redaction step as the primary safety defense; private-path guard is
+  a machine-specific backstop.
 
 ## Validation
 
-Pending. This branch only adds the reviewed spec and ignore boundary.
+- Opus spec review found one blocking traceability issue: safety tests did not
+  cover the full redaction promise.
+- Patched Task 6 and related design/requirements language to cover raw remotes,
+  private repo names, raw SQL, connection strings, config values, secrets,
+  source snippets, tracked `.tmp` artifacts, concrete bounds, UI event query
+  probes, runtime caveats, and pre-publish checks.
+- Sonnet re-review reported no blockers before the Opus tightening edits.
 
 ## Follow-Ups
 
 - Implement the validation script and summary generator.
 - Decide whether missing SDK/runtime guidance belongs in core scan reports.
 - Decide whether legacy UI event extraction deserves a dedicated scanner spec.
-
