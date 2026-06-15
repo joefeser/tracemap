@@ -767,7 +767,7 @@ public static partial class LegacyWebFormsExtractor
         return FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
-            RuleIds.LegacyWebFormsHandlerResolution,
+            RuleIdForGapKind(gapKind),
             EvidenceTiers.Tier4Unknown,
             new EvidenceSpan(filePath, line, line, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -776,6 +776,16 @@ public static partial class LegacyWebFormsExtractor
                 ["message"] = message,
                 ["ruleLimitations"] = "WebForms gaps preserve reduced static evidence and are not proof of absence."
             });
+    }
+
+    private static string RuleIdForGapKind(string gapKind)
+    {
+        return gapKind switch
+        {
+            "MalformedWebFormsDirective" => RuleIds.LegacyWebFormsInventory,
+            "UnsupportedWebFormsEventAttribute" => RuleIds.LegacyWebFormsEventBinding,
+            _ => RuleIds.LegacyWebFormsHandlerResolution
+        };
     }
 
     private static SortedDictionary<string, string> ParseAttributes(string text)
