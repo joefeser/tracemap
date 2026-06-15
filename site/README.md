@@ -14,7 +14,7 @@ Use the existing `joefeser/tracemap` repository.
 Branch: main
 App root: site
 Prebuild: npm ci
-Build command: npm run build
+Build command: npm run validate
 Output directory: dist
 Node: 20+
 Domain: tracemap.tools
