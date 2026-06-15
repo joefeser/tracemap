@@ -98,6 +98,10 @@ Completed validation:
   horizontal overflow, six stacked reader cards at about 362px wide, hero note
   visible, command block contained its own horizontal scroll, and no console
   errors.
+- PR review loop follow-up: Qodo and Gemini flagged `/tmp/tracemap-demo` in the
+  public command example as a local absolute path. Patched the snippet to use
+  `.tracemap-demo`, added guidance to choose an ignored output directory, and
+  reran `git diff --check`, `npm test`, and `npm run validate` successfully.
 
 ## Oddities
 

@@ -133,15 +133,16 @@
             The checked-in public demo can generate public-safe summaries for
             combined reports, paths, reverse lookup, portfolio, diff, impact,
             and release review. Raw fact streams, SQLite files, scan folders,
-            and analyzer logs remain local-only.
+            and analyzer logs remain local-only. Choose an ignored output
+            directory when you run it.
           </p>
         </div>
         <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
 cd tracemap
-./scripts/demo-public.sh /tmp/tracemap-demo
+./scripts/demo-public.sh .tracemap-demo
 
 # Read the public-safe summary first.
-sed -n '1,220p' /tmp/tracemap-demo/demo-summary.md</code></pre>
+sed -n '1,220p' .tracemap-demo/demo-summary.md</code></pre>
       </section>
 
       <section class="section split-section">
