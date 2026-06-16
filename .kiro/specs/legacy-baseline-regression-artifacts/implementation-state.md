@@ -48,10 +48,10 @@ static evidence count movement without reducer or runtime claims.
 Completed:
 
 - `dotnet build src/dotnet/TraceMap.sln` passed with 0 warnings and 0 errors.
-- `dotnet test src/dotnet/TraceMap.sln` passed with 333 tests after PR
+- `dotnet test src/dotnet/TraceMap.sln` passed with 336 tests after PR
   review-loop fixes.
 - `dotnet test src/dotnet/TraceMap.sln --filter LegacyBaselineArtifactsTests`
-  passed with 20 tests during focused validation.
+  passed with 24 tests during focused validation.
 - Generated checked-in synthetic public-safe fixture with pinned `2026-06`
   metadata.
 - Baseline dry-run smoke against `samples/synthetic-legacy-scan` reported
@@ -68,6 +68,10 @@ Completed:
   in CLI diagnostics, rejecting comparison output outside ignored
   `.tmp/legacy-baselines/` before writing files, and matching rule catalog IDs
   with exact line-based lookup instead of substring search.
+- Follow-up PR review-loop fixes addressed Codex connector findings by treating
+  unsafe compare validation diagnostics as fatal before writes, adding review
+  entries for extractor version/category movement, and preserving missing
+  `facts.ndjson` as a partial scan known gap instead of clean zero facts.
 
 Pinned smoke rationale:
 

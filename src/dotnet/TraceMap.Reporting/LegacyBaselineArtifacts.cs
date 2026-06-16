@@ -258,12 +258,25 @@ public static class LegacyBaselineArtifacts
 
         var scanManifest = ReadObject(Path.Combine(scanOutput, "scan-manifest.json"));
         var factsPath = Path.Combine(scanOutput, "facts.ndjson");
+        var factsPresent = File.Exists(factsPath);
         var facts = await ReadFactsAsync(factsPath, cancellationToken);
-        var factsTruncated = File.Exists(factsPath) && new FileInfo(factsPath).Length > MaxFactsBytes;
+        var factsTruncated = factsPresent && new FileInfo(factsPath).Length > MaxFactsBytes;
 
         var aggregation = AggregateFacts(facts);
-        var knownGaps = ReadStringArray(scanManifest, "knownGaps").Order(StringComparer.Ordinal).ToArray();
-        var limitations = BuildLimitations(scanManifest, factsTruncated, knownGaps, aggregation);
+        var knownGaps = new SortedSet<string>(ReadStringArray(scanManifest, "knownGaps"), StringComparer.Ordinal);
+        if (!factsPresent)
+        {
+            knownGaps.Add("FactsArtifactMissing");
+        }
+
+        var knownGapCounts = aggregation.KnownGapCounts.ToSortedDictionary();
+        if (!factsPresent)
+        {
+            knownGapCounts["FactsArtifactMissing"] = Math.Max(knownGapCounts.GetValueOrDefault("FactsArtifactMissing"), 1);
+        }
+
+        var knownGapList = knownGaps.ToArray();
+        var limitations = BuildLimitations(scanManifest, factsTruncated, !factsPresent, knownGapList, aggregation);
         var safetyLimitations = new List<string>
         {
             "Baseline summaries are counts-only and omit raw facts, paths, snippets, SQL, config values, remotes, and analyzer output."
@@ -295,11 +308,11 @@ public static class LegacyBaselineArtifacts
                 NormalizeScanStartedAt(ReadString(scanManifest, "scannedAt", createdAt), classification),
                 ReadString(scanManifest, "analysisLevel", "unknown"),
                 ReadString(scanManifest, "buildStatus", "unknown"),
-                ScanStatus(scanManifest, facts.Count, factsTruncated),
-                IsPartial(scanManifest, factsTruncated),
-                factsTruncated || HasKnownGap(knownGaps, "truncated"),
-                HasKnownGap(knownGaps, "timeout"),
-                HasKnownGap(knownGaps, "deferred")),
+                ScanStatus(scanManifest, facts.Count, factsTruncated, !factsPresent),
+                IsPartial(scanManifest, factsTruncated, !factsPresent),
+                factsTruncated || HasKnownGap(knownGapList, "truncated"),
+                HasKnownGap(knownGapList, "timeout"),
+                HasKnownGap(knownGapList, "deferred")),
             aggregation.Extractors,
             new LegacyBaselineCounts(
                 facts.Count,
@@ -309,7 +322,7 @@ public static class LegacyBaselineArtifacts
                 aggregation.EvidenceTierCounts,
                 aggregation.ExtractorCounts,
                 aggregation.SurfaceCounts,
-                aggregation.KnownGapCounts),
+                knownGapCounts),
             new LegacyBaselineCoverageCounts(
                 aggregation.EvidenceTierCounts.GetValueOrDefault(EvidenceTiers.Tier1Semantic),
                 aggregation.EvidenceTierCounts.GetValueOrDefault(EvidenceTiers.Tier2Structural),
@@ -319,7 +332,7 @@ public static class LegacyBaselineArtifacts
             aggregation.FactCoverage,
             SurfaceStatuses(aggregation.SurfaceCounts, scanManifest, File.Exists(factsPath)),
             BuildArtifacts(scanOutput),
-            knownGaps,
+            knownGapList,
             limitations);
 
         var validation = ValidateManifest(manifest, options.OutputPath);
@@ -397,6 +410,7 @@ public static class LegacyBaselineArtifacts
         var candidate = await ReadJsonAsync<LegacyBaselineManifest>(candidatePath, cancellationToken);
         diagnostics.AddRange(ValidateManifest(baseline, options.BaselineManifestPath));
         diagnostics.AddRange(ValidateManifest(candidate, options.CandidateManifestPath));
+        ThrowIfFatalBaselineDiagnostics(diagnostics, "baseline compare inputs failed validation; no comparison files were written.");
 
         var migrationMap = migrationPath is null
             ? null
@@ -405,6 +419,7 @@ public static class LegacyBaselineArtifacts
         var generatedAt = NormalizeCreatedAt(options.GeneratedAt, LegacyBaselineClassifications.PublicSafe);
         var comparison = BuildComparison(baseline, candidate, migrationMap, options.MigrationMapPath, generatedAt, diagnostics);
         diagnostics.AddRange(ValidateComparison(comparison, options.OutputPath));
+        ThrowIfFatalBaselineDiagnostics(diagnostics, "baseline compare output failed validation; no comparison files were written.");
 
         Directory.CreateDirectory(outputPath);
         var jsonPath = Path.Combine(outputPath, ComparisonJsonFileName);
@@ -648,7 +663,7 @@ public static class LegacyBaselineArtifacts
         return new LegacyBaselineArtifact(true, SizeBucket(new FileInfo(path).Length), null);
     }
 
-    private static IReadOnlyList<string> BuildLimitations(JsonElement manifest, bool truncated, IReadOnlyList<string> knownGaps, LegacyBaselineAggregation aggregation)
+    private static IReadOnlyList<string> BuildLimitations(JsonElement manifest, bool truncated, bool factsMissing, IReadOnlyList<string> knownGaps, LegacyBaselineAggregation aggregation)
     {
         var limitations = new SortedSet<string>(StringComparer.Ordinal)
         {
@@ -671,6 +686,11 @@ public static class LegacyBaselineArtifacts
         if (truncated)
         {
             limitations.Add("facts.ndjson exceeded the baseline size bound; parsed counts may be partial.");
+        }
+
+        if (factsMissing)
+        {
+            limitations.Add("facts.ndjson is missing; baseline counts are partial and preserve the missing artifact as a known gap.");
         }
 
         foreach (var gap in knownGaps)
@@ -795,6 +815,11 @@ public static class LegacyBaselineArtifacts
         }
 
         var extractorCompatibility = ExtractorCompatibility(baseline, candidate);
+        foreach (var extractor in extractorCompatibility.Where(item => item.Movement != "unchanged"))
+        {
+            review.Add(new LegacyBaselineReviewNeeded($"extractor:{extractor.ExtractorId}", $"Extractor version movement `{extractor.Movement}` needs review.", ComparisonRuleId));
+        }
+
         var limitations = new SortedSet<string>(StringComparer.Ordinal)
         {
             "Comparison output reports static evidence count and coverage movement only.",
@@ -1240,8 +1265,13 @@ public static class LegacyBaselineArtifacts
         return NormalizeCreatedAt(value, classification);
     }
 
-    private static string ScanStatus(JsonElement manifest, int factCount, bool truncated)
+    private static string ScanStatus(JsonElement manifest, int factCount, bool truncated, bool factsMissing)
     {
+        if (factsMissing)
+        {
+            return "artifact-missing-partial";
+        }
+
         if (truncated)
         {
             return "truncated";
@@ -1256,11 +1286,12 @@ public static class LegacyBaselineArtifacts
         return "completed";
     }
 
-    private static bool IsPartial(JsonElement manifest, bool truncated)
+    private static bool IsPartial(JsonElement manifest, bool truncated, bool factsMissing)
     {
         var build = ReadString(manifest, "buildStatus", "unknown");
         var coverage = ReadString(manifest, "analysisLevel", "unknown");
-        return truncated
+        return factsMissing
+            || truncated
             || !build.Equals("Succeeded", StringComparison.Ordinal)
             || coverage.Contains("Reduced", StringComparison.OrdinalIgnoreCase)
             || coverage.Equals("unknown", StringComparison.Ordinal);
@@ -1435,6 +1466,14 @@ public static class LegacyBaselineArtifacts
     private static LegacyBaselineValidationDiagnostic Diagnostic(string category, string path, string message)
     {
         return new LegacyBaselineValidationDiagnostic(category, path, SafetyRuleId, message);
+    }
+
+    private static void ThrowIfFatalBaselineDiagnostics(IReadOnlyCollection<LegacyBaselineValidationDiagnostic> diagnostics, string message)
+    {
+        if (diagnostics.Any(diagnostic => diagnostic.Category is "absolute-path" or "raw-remote-or-url" or "secret-like-value" or "raw-sql" or "source-like-snippet"))
+        {
+            throw new InvalidOperationException(message);
+        }
     }
 
     private sealed record LegacyBaselineAggregation(
