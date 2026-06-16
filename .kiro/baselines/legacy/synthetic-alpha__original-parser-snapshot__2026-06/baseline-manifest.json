@@ -1,0 +1,320 @@
+{
+  "schemaVersion": "legacy-baseline-manifest.v1",
+  "baselineId": "synthetic-alpha__original-parser-snapshot__2026-06",
+  "baselinePurpose": "original-parser-snapshot",
+  "createdAt": "2026-06",
+  "sample": {
+    "label": "synthetic-alpha",
+    "identityKind": "neutral-label",
+    "repoIdentityHash": null,
+    "commitIdentity": {
+      "kind": "category-only",
+      "value": null
+    }
+  },
+  "safety": {
+    "classification": "public-safe",
+    "redactionProfile": "counts-only",
+    "rejectedReasons": [],
+    "limitations": [
+      "Public-safe classification is counts-only and still depends on reviewer judgment before promotion."
+    ]
+  },
+  "scan": {
+    "traceMapVersion": "tracemap-fixture",
+    "scanStartedAt": "2026-06",
+    "coverageLabel": "Level1SemanticAnalysisReduced",
+    "buildStatus": "FailedOrPartial",
+    "scanStatus": "completed",
+    "partial": true,
+    "truncated": true,
+    "timeout": false,
+    "deferred": false
+  },
+  "extractors": {
+    "CSharpSyntaxExtractor": {
+      "version": "csharp-syntax/0.3.0"
+    },
+    "ProjectFileExtractor": {
+      "version": "project-file/0.1.0"
+    },
+    "RepoManifestExtractor": {
+      "version": "repo-manifest/0.1.0"
+    }
+  },
+  "counts": {
+    "factsTotal": 5,
+    "gapsTotal": 1,
+    "byFactType": {
+      "AnalysisGap": 1,
+      "HttpRouteBinding": 1,
+      "MethodDeclared": 1,
+      "PackageReferenced": 1,
+      "RepoScanned": 1
+    },
+    "byRuleId": {
+      "csharp.syntax.aspnetroute.v1": 1,
+      "csharp.syntax.declarations.v1": 1,
+      "project.file.v1": 1,
+      "repo.manifest.v1": 2
+    },
+    "byEvidenceTier": {
+      "Tier2Structural": 2,
+      "Tier3SyntaxOrTextual": 2,
+      "Tier4Unknown": 1
+    },
+    "byExtractor": {
+      "CSharpSyntaxExtractor": 2,
+      "ProjectFileExtractor": 1,
+      "RepoManifestExtractor": 2
+    },
+    "bySurface": {
+      "build-environment": 2,
+      "csharp": 1,
+      "http": 1,
+      "packages": 1
+    },
+    "byKnownGap": {
+      "SemanticLoadFailed": 1,
+      "Truncated": 1
+    },
+    "byPathClass": {
+      "repo-root": 2,
+      "source-tree": 3
+    },
+    "byFileExtension": {
+      ".cs": 2,
+      ".csproj": 1,
+      "none": 2
+    },
+    "byLanguage": {
+      "csharp": 3,
+      "other": 2
+    }
+  },
+  "coverage": {
+    "semanticFacts": 0,
+    "structuralFacts": 2,
+    "syntaxOrTextualFacts": 2,
+    "unknownOrGapFacts": 1
+  },
+  "coverageSnapshot": {
+    "rules": [
+      {
+        "ruleId": "csharp.syntax.aspnetroute.v1",
+        "evidenceTiers": {
+          "Tier3SyntaxOrTextual": 1
+        },
+        "extractorVersions": [
+          "csharp-syntax/0.3.0"
+        ],
+        "limitations": [
+          "Counts-only snapshot; rule limitations are documented in rules/rule-catalog.yml."
+        ]
+      },
+      {
+        "ruleId": "csharp.syntax.declarations.v1",
+        "evidenceTiers": {
+          "Tier3SyntaxOrTextual": 1
+        },
+        "extractorVersions": [
+          "csharp-syntax/0.3.0"
+        ],
+        "limitations": [
+          "Counts-only snapshot; rule limitations are documented in rules/rule-catalog.yml."
+        ]
+      },
+      {
+        "ruleId": "project.file.v1",
+        "evidenceTiers": {
+          "Tier2Structural": 1
+        },
+        "extractorVersions": [
+          "project-file/0.1.0"
+        ],
+        "limitations": [
+          "Counts-only snapshot; rule limitations are documented in rules/rule-catalog.yml."
+        ]
+      },
+      {
+        "ruleId": "repo.manifest.v1",
+        "evidenceTiers": {
+          "Tier2Structural": 1,
+          "Tier4Unknown": 1
+        },
+        "extractorVersions": [
+          "repo-manifest/0.1.0"
+        ],
+        "limitations": [
+          "Counts-only snapshot; rule limitations are documented in rules/rule-catalog.yml."
+        ]
+      }
+    ],
+    "facts": [
+      {
+        "factType": "AnalysisGap",
+        "count": 1,
+        "evidenceTiers": {
+          "Tier4Unknown": 1
+        },
+        "ruleIds": [
+          "repo.manifest.v1"
+        ]
+      },
+      {
+        "factType": "HttpRouteBinding",
+        "count": 1,
+        "evidenceTiers": {
+          "Tier3SyntaxOrTextual": 1
+        },
+        "ruleIds": [
+          "csharp.syntax.aspnetroute.v1"
+        ]
+      },
+      {
+        "factType": "MethodDeclared",
+        "count": 1,
+        "evidenceTiers": {
+          "Tier3SyntaxOrTextual": 1
+        },
+        "ruleIds": [
+          "csharp.syntax.declarations.v1"
+        ]
+      },
+      {
+        "factType": "PackageReferenced",
+        "count": 1,
+        "evidenceTiers": {
+          "Tier2Structural": 1
+        },
+        "ruleIds": [
+          "project.file.v1"
+        ]
+      },
+      {
+        "factType": "RepoScanned",
+        "count": 1,
+        "evidenceTiers": {
+          "Tier2Structural": 1
+        },
+        "ruleIds": [
+          "repo.manifest.v1"
+        ]
+      }
+    ],
+    "surfaces": [
+      {
+        "surface": "csharp",
+        "status": "observed",
+        "count": 1,
+        "ruleIds": [
+          "csharp.syntax.declarations.v1"
+        ]
+      },
+      {
+        "surface": "ui-events",
+        "status": "not-in-scope",
+        "count": 0,
+        "ruleIds": []
+      },
+      {
+        "surface": "http",
+        "status": "observed",
+        "count": 1,
+        "ruleIds": [
+          "csharp.syntax.aspnetroute.v1"
+        ]
+      },
+      {
+        "surface": "wcf-service-reference",
+        "status": "not-in-scope",
+        "count": 0,
+        "ruleIds": []
+      },
+      {
+        "surface": "sql-data",
+        "status": "unknown",
+        "count": 0,
+        "ruleIds": []
+      },
+      {
+        "surface": "config",
+        "status": "unknown",
+        "count": 0,
+        "ruleIds": []
+      },
+      {
+        "surface": "packages",
+        "status": "observed",
+        "count": 1,
+        "ruleIds": [
+          "project.file.v1"
+        ]
+      },
+      {
+        "surface": "build-environment",
+        "status": "observed",
+        "count": 2,
+        "ruleIds": [
+          "repo.manifest.v1"
+        ]
+      },
+      {
+        "surface": "other",
+        "status": "not-observed",
+        "count": 0,
+        "ruleIds": []
+      }
+    ],
+    "fallbackCounts": {
+      "semanticFacts": 0,
+      "structuralFacts": 2,
+      "syntaxOrTextualFacts": 2,
+      "unknownOrGapFacts": 1
+    }
+  },
+  "artifacts": {
+    "analyzerLog": {
+      "present": true,
+      "sizeBucket": "small",
+      "hash": null
+    },
+    "baselineSummary": {
+      "present": true,
+      "sizeBucket": "small",
+      "hash": "sha256:702fc2a0f905a5ff7113129b8e3866d28a8dbc730c1ac5207c68c98306a7410b"
+    },
+    "factsNdjson": {
+      "present": true,
+      "sizeBucket": "small",
+      "hash": null
+    },
+    "indexSqlite": {
+      "present": false,
+      "sizeBucket": "missing",
+      "hash": null
+    },
+    "report": {
+      "present": true,
+      "sizeBucket": "small",
+      "hash": null
+    },
+    "scanManifest": {
+      "present": true,
+      "sizeBucket": "small",
+      "hash": null
+    }
+  },
+  "knownGaps": [
+    "SemanticLoadFailed",
+    "Truncated"
+  ],
+  "limitations": [
+    "Baseline comparison measures static evidence movement only.",
+    "Baseline manifest stores aggregate counts only and omits raw facts, source snippets, raw SQL, config values, remotes, analyzer logs, and local paths.",
+    "Build status is not succeeded; baseline is partial.",
+    "Known gap category preserved: SemanticLoadFailed.",
+    "Known gap category preserved: Truncated.",
+    "Semantic coverage is reduced or unavailable; syntax/config fallback counts are preserved separately."
+  ]
+}
