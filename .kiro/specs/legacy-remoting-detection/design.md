@@ -153,9 +153,14 @@ Detect classes inheriting from:
 - `System.MarshalByRefObject`
 - semantic symbol `System.MarshalByRefObject`
 
-Semantic detection should account for indirect inheritance when the compilation
-can resolve the base type chain. Syntax fallback should only claim direct visible
-base-list evidence.
+Semantic detection should always support direct inheritance from
+`System.MarshalByRefObject`. Indirect inheritance is gated because many
+non-Remoting framework types can inherit from `MarshalByRefObject`. Emit indirect
+inheritance facts only when the repository, file, or explicit registration/config
+context also contains Remoting-specific API, channel, registration, activation,
+or `<system.runtime.remoting>` evidence. Otherwise omit the Remoting object fact
+or emit a review gap explaining that indirect inheritance was not enough.
+Syntax fallback should only claim direct visible base-list evidence.
 
 Suggested safe properties:
 

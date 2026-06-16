@@ -56,16 +56,22 @@ visible as static service-boundary candidates.
 
 Acceptance Criteria:
 
-1. WHEN a class directly or indirectly derives from `MarshalByRefObject` and the
-   symbol resolves THEN TraceMap SHALL emit a Remoting object fact with
+1. WHEN a class directly derives from `MarshalByRefObject` and the symbol
+   resolves THEN TraceMap SHALL emit a Remoting object fact with
    `Tier1Semantic` evidence.
-2. WHEN syntax shows a base type named `MarshalByRefObject` or
+2. WHEN a class only indirectly derives from `MarshalByRefObject` through a
+   resolved framework or project base type THEN TraceMap SHALL emit a Remoting
+   object fact only when Remoting-specific evidence is present in the same
+   repository, file, or explicit registration/config context; otherwise it
+   SHALL omit the Remoting object fact or emit a review gap to avoid broad
+   desktop/framework false positives.
+3. WHEN syntax shows a base type named `MarshalByRefObject` or
    `System.MarshalByRefObject` but semantic analysis is unavailable THEN
    TraceMap SHALL emit syntax-level evidence with limitations.
-3. WHEN a derived type is abstract, generic, nested, partial, or generated THEN
+4. WHEN a derived type is abstract, generic, nested, partial, or generated THEN
    TraceMap SHALL preserve safe type identity metadata and SHALL NOT infer that
    the type is hosted or reachable.
-4. WHEN multiple partial declarations contribute evidence THEN TraceMap SHALL
+5. WHEN multiple partial declarations contribute evidence THEN TraceMap SHALL
    emit deterministic facts or supporting line spans without duplicate unstable
    identities.
 

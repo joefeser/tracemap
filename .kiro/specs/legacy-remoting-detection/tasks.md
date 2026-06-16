@@ -35,11 +35,12 @@
 
 - [ ] 5. Extract `MarshalByRefObject` boundary candidates. Requirements: 2, 6.
   - [ ] Detect direct syntax inheritance from `MarshalByRefObject`.
-  - [ ] Detect direct and indirect semantic inheritance from `System.MarshalByRefObject`.
+  - [ ] Detect direct semantic inheritance from `System.MarshalByRefObject`.
+  - [ ] Detect indirect semantic inheritance only when same-repository, same-file, or explicit registration/config Remoting context exists; otherwise omit or gap the broad indirect inheritance evidence.
   - [ ] Preserve safe type identity, partial/abstract/generated metadata where available, and supporting line spans.
   - [ ] If existing generated-code detection does not cover a code shape, omit `isGenerated` and do not fabricate a value; document the gap or limitation where appropriate.
   - [ ] Do not infer hosting, activation, reachability, or production usage from inheritance alone.
-  - [ ] Add tests for semantic inheritance, syntax fallback, partial classes, and ambiguous base names.
+  - [ ] Add tests for direct semantic inheritance, gated indirect semantic inheritance, WinForms/framework-style indirect inheritance without Remoting context, syntax fallback, partial classes, and ambiguous base names.
 
 - [ ] 6. Extract channel construction and registration. Requirements: 3, 6.
   - [ ] Detect `TcpChannel`, `HttpChannel`, `IpcChannel`, and server/client channel variants.
