@@ -1,0 +1,152 @@
+# Legacy Sample Smoke Catalog Tasks
+
+## Implementation Tasks
+
+- [ ] 1. Define catalog schema, vocabularies, and storage. Requirements: 1, 2, 3, 5, 6.
+  - [ ] Create `legacy-sample-smoke-catalog.v1` JSON schema with catalog metadata, safety, entries, source identity, commit identity, evidence families, validation templates, relationships, limitations, and claim levels.
+  - [ ] Create generated Markdown shape for `catalog.md` derived from `catalog.json`.
+  - [ ] Add tracked storage under `docs/validation/legacy-sample-smoke-catalog/` with a README that describes catalog boundaries without sample-specific raw details.
+  - [ ] Add ignored local scratch/input storage under `.tmp/legacy-sample-smoke-catalog/` if not already covered by ignore rules, and prove it with `git check-ignore`.
+  - [ ] Define closed vocabularies for claim level, source classification, source identity kind, commit identity kind, evidence family, expectation state, command mode, timeout bucket, artifact-size bucket, relationship artifact kind, and redaction profile.
+  - [ ] Define tracked `commitIdentity.kind` schema enum as exactly `public-sha`, `fixture-version`, and `category-only`; allow `redacted-sha256` and `local-only` only in ignored local-draft schema variants if implemented.
+  - [ ] Define closed vocabularies for relationship artifact kind, command input kind, timeout bucket, artifact-size bucket, and extractor gap code.
+  - [ ] Define deterministic ordering rules for entries, families, commands, relationships, limitations, arrays, and maps.
+  - [ ] Add catalog rule IDs to `rules/rule-catalog.yml` with documented limitations before generated rows cite them, including `legacy.sample-smoke-catalog.entry.v1`, `legacy.sample-smoke-catalog.source-identity.v1`, `legacy.sample-smoke-catalog.family-expectation.v1`, `legacy.sample-smoke-catalog.validation-command.v1`, `legacy.sample-smoke-catalog.relationship.v1`, and `legacy.sample-smoke-catalog.safety-validation.v1`.
+
+- [ ] 2. Implement sample identity and claim-level validation. Requirements: 2, 5.
+  - [ ] Validate neutral `sampleLabel` values and reject path separators, URI schemes, `.git`, `@` identities, Windows drive prefixes, home fragments, hostnames, organization/user patterns, private-looking tokens, secrets, and raw project names.
+  - [ ] Validate `sourceClassification` and cap private, local, operator-only, unknown, or unreviewed sources at `hidden`.
+  - [ ] Validate `displayName` with redaction and prohibited-claim scans while allowing display-safe spaces and punctuation.
+  - [ ] Allow raw checked-out commit SHAs only for reviewed public sources with source classification `public-repo` or `public-archive`.
+  - [ ] Preserve commit proof for non-public sources using `shaPresent: true` with `category-only` in tracked output or `local-only` in ignored `.tmp/` output.
+  - [ ] Reject public-safe entries without pinned public SHA, fixture version, or category-only `shaPresent: true` proof.
+  - [ ] Reject `redacted-sha256` commit identity in tracked output; reserve it for ignored local-only drafts until a future hashing policy defines safe inputs.
+  - [ ] Reject tracked output containing raw remotes, private repo names, organization names, usernames, hostnames, branch names, local paths, or local-only commit identity.
+  - [ ] Ensure top-level catalog classification is no higher than the least-safe included entry.
+  - [ ] Fail demo-safe or public-safe render/promote when hidden entries are present unless an explicit render filter has already omitted them from the candidate output.
+
+- [ ] 3. Implement evidence family expectation modeling. Requirements: 3, 6.
+  - [ ] Add the initial family IDs for WCF, Remoting, WebForms, DBML, EDMX, typed DataSet, SQL/query surface, build diagnostics, MSBuild load failure, packages.config, binding redirects, large repo stress, syntax fallback, and analysis gap reporting.
+  - [ ] Require each family expectation to include expected rule IDs or rule patterns, evidence tiers, coverage labels, extractor IDs or extractor gap codes, limitation codes, and required/optional/exploratory expectation level.
+  - [ ] Preserve Tier3 syntax/text fallback wording for syntax-only expectations.
+  - [ ] Represent missing, unsupported, deferred, reduced, truncated, rejected, and analysis-gap states without claiming feature absence.
+  - [ ] Add timeout and artifact-size buckets for huge repository stress entries without raw file lists or identifying counts.
+  - [ ] Add limitation text that static evidence does not prove runtime execution, service reachability, SQL execution, production usage, vulnerability status, release readiness, business impact, or reducer impact.
+
+- [ ] 4. Implement validation command templates and relationship references. Requirements: 4, 6.
+  - [ ] Store command templates with placeholders such as `<sample-root>`, `<scan-output>`, `<redacted-summary>`, `<pack-output>`, and `<catalog-output>` only.
+  - [ ] Reject command templates that contain absolute paths, raw remotes, environment values, usernames, hostnames, secrets, branch names, or unredacted labels.
+  - [ ] Reject literal string option values that can carry identity or operator-specific data, such as `--label my-internal-project`; allow literals only for booleans and fixed closed-vocabulary values.
+  - [ ] Record command names, required options, mode, timeout bucket, artifact-size bucket, expected artifact classes, and validation gate names.
+  - [ ] Validate command `input-kind` literals against the closed Command Input Kind vocabulary.
+  - [ ] Represent operator-only commands with `mode: operator-local` and cap related entries at `hidden` unless public/demo-safe proof exists.
+  - [ ] Reference `legacy-codebase-validation` outputs by redacted validation summary schema and neutral ID only.
+  - [ ] Reference `legacy-baseline-regression-artifacts` outputs by redacted baseline/comparison schema and neutral ID only.
+  - [ ] Reference `legacy-sample-evidence-pack` outputs by pack ID, schema, and claim level only, without copying pack sections or raw artifacts.
+  - [ ] Validate `safeArtifactId` with the same safe lowercase-kebab identity rules as `sampleLabel`.
+  - [ ] Validate `artifactKind` against the closed Relationship Artifact Kind vocabulary.
+  - [ ] Reject relationship references that point to raw scan files, local `.tmp` paths, raw baseline manifests, raw evidence packs, analyzer logs, SQLite indexes, or raw reports.
+
+- [ ] 5. Implement redaction validator and generated Markdown checks. Requirements: 1, 5, 7.
+  - [ ] Validate catalog JSON and generated Markdown for local absolute paths, home fragments, raw remotes, raw SQL, config values, connection strings, endpoint values, credentials, secrets, tokens, snippets, analyzer diagnostics, stack traces, raw private names, and unsafe Markdown.
+  - [ ] Scan every string-valued JSON leaf and generated Markdown text for prohibited claim wording around runtime behavior, production usage, service reachability, SQL execution, vulnerability/security posture, release approval, customer or business impact, and reducer impact.
+  - [ ] Scan rule IDs and rule ID patterns as ordinary JSON strings so private table names, source names, snippets, or unsafe suffixes cannot hide in identifier fields.
+  - [ ] Fail with sanitized categories, file paths, and JSON pointers or Markdown sections without echoing unsafe values.
+  - [ ] Escape Markdown table cells and inline display fields generated from labels, command templates, limitations, and relationship metadata.
+  - [ ] Embed a deterministic canonical JSON hash sentinel on the first line of generated `catalog.md` using `<!-- catalog-json-sha256: <64 lowercase hex chars> -->` and fail validation when the sentinel is missing or stale.
+  - [ ] Validate hash inputs are context-separated and deterministic when redacted hashes are used.
+  - [ ] Reject hashing for secret-like, credential-like, low-entropy, enumerable private, and source-derived values in tracked catalog output.
+  - [ ] Ensure tracked catalog files pass `./scripts/check-private-paths.sh` without adding machine-specific allowlists.
+
+- [ ] 6. Add catalog tooling or script fallback. Requirements: 1, 4, 5, 7.
+  - [ ] Prefer a first-class command shape such as `tracemap catalog legacy-smoke validate`, `tracemap catalog legacy-smoke render`, and `tracemap catalog legacy-smoke promote`.
+  - [ ] If CLI integration is blocked, add a temporary script fallback such as `scripts/legacy-sample-smoke-catalog.mjs` and document the blocker and migration plan in `implementation-state.md`.
+  - [ ] Require explicit `--date YYYY-MM` or fixture-pinned date for demo-safe and public-safe render/promote workflows.
+  - [ ] Require `--date YYYY-MM` on first tracked write and validate that `generatedAt` matches the supplied date without falling back to wall-clock time.
+  - [ ] Make render idempotent when the existing `generatedAt` already matches the supplied `--date`; when it differs, render updates `generatedAt`, regenerates Markdown, and leaves a normal reviewable diff.
+  - [ ] Support `--minimum-entry-claim-level <demo-safe|public-safe>` during render as the only explicit filter that may omit hidden entries from a new tracked output set.
+  - [ ] Ensure `--minimum-entry-claim-level` creates a new candidate output set, recomputes `safety.classification` from remaining entries, and does not mutate the original catalog in place.
+  - [ ] Support `--dry-run` so validation reports planned output files, claim-level changes, relationship references, and rejection categories without writing tracked files.
+  - [ ] Ensure render/promote `--dry-run` runs all validation gates that can be evaluated without writing tracked files and creates or replaces no catalog files.
+  - [ ] Reject tracked promotion when the destination is ignored or outside `docs/validation/legacy-sample-smoke-catalog/`.
+  - [ ] Refuse to overwrite tracked catalog files unless `--force` is supplied, and ensure `--force` does not bypass validation, redaction, generated-output, tracked-root, or private-path gates.
+  - [ ] Treat `--force` as only an overwrite permission for existing destination files; it must not change claim levels, drop entries, or bypass stale Markdown checks.
+  - [ ] Keep operator manifests and candidate catalog drafts local-only under ignored `.tmp/legacy-sample-smoke-catalog/`.
+
+- [ ] 7. Add fixtures and tests. Requirements: 1, 2, 3, 4, 5, 6, 7.
+  - [ ] Add a public-safe synthetic fixture catalog with at least WCF, Remoting, WebForms, DBML/EDMX/typed DataSet, build diagnostics, and large repo stress entries using safe labels only.
+  - [ ] Add a hidden/operator-local fixture entry proving local/private source categories cannot be promoted to public-safe output.
+  - [ ] Test deterministic JSON and Markdown byte stability with injected or fixture-pinned dates.
+  - [ ] Test Markdown is generated from JSON and fails when stale or hand-edited.
+  - [ ] Test canonical JSON hashing uses UTF-8 without BOM, LF line endings, two-space indentation, final newline, ordinal key sorting, schema-defined array ordering, and identical sentinel output across macOS/Linux and Windows line-ending inputs.
+  - [ ] Test first tracked write requires explicit `--date YYYY-MM`, validates `generatedAt` against the supplied date, and never falls back to wall-clock time.
+  - [ ] Test render is idempotent when `generatedAt` already matches `--date`, and updates `generatedAt` plus the Markdown sentinel when render is intentionally run with a new explicit date.
+  - [ ] Test label rejection classes separately: path separator, URI scheme, `.git`, `@` identity, Windows drive prefix, home fragment, hostname, organization/user pattern, private-looking token, and secret-like value.
+  - [ ] Test raw public SHA is allowed only for reviewed public sources and raw private SHA is rejected in tracked output.
+  - [ ] Test `public-sha` commit identity with `synthetic-fixture`, `private-local`, `operator-local`, or `unknown` source classification is rejected.
+  - [ ] Test public-safe entries fail without pinned public SHA, fixture version, or category-only `shaPresent: true` proof.
+  - [ ] Test `redacted-sha256` commit identity is rejected in tracked catalog output.
+  - [ ] Test `redacted-sha256` and `local-only` are absent from the tracked schema and accepted only by an ignored local-draft schema variant if that variant is implemented.
+  - [ ] Test tracked schema rejects any `commitIdentity.kind` outside `public-sha`, `fixture-version`, and `category-only`.
+  - [ ] Test evidence families require rule IDs or patterns, tiers, coverage labels, extractor IDs or gap codes, limitations, and expectation state.
+  - [ ] Test non-hidden entries fail when their `families` array is empty.
+  - [ ] Test entries fail when their `limitations` array is empty.
+  - [ ] Test Tier3 fallback expectations remain Tier3 and reduced coverage is not rendered as semantic proof.
+  - [ ] Test unsupported, deferred, truncated, rejected, and analysis-gap states do not render as feature absence.
+  - [ ] Test command templates reject raw paths, remotes, environment values, hostnames, branch names, usernames, secrets, and raw labels.
+  - [ ] Test command templates reject literal identity-bearing option values such as `--label my-internal-project`.
+  - [ ] Test command templates reject literal date values such as `--date 2026-06`; stored templates must use placeholders such as `--date <YYYY-MM>`.
+  - [ ] Test command templates accept boolean literals and fixed closed-vocabulary literals such as `--include-raw-snippets false`.
+  - [ ] Test command templates reject unknown `--input-kind` literal values.
+  - [ ] Test relationship references cannot point to raw artifacts or ignored `.tmp` paths.
+  - [ ] Test unknown relationship `artifactKind` values are rejected.
+  - [ ] Test `safeArtifactId` rejects path separators, URI schemes, `.git`, `@` identities, Windows drive prefixes, home fragments, hostnames, organization/user patterns, private-looking tokens, branch names, and secret-like values.
+  - [ ] Test unsafe planted values for raw SQL, config values, connection strings, endpoints, snippets, analyzer diagnostics, stack traces, tokens, and unsafe Markdown are rejected without echoing the planted value.
+  - [ ] Test sanitized diagnostics include rejection category plus JSON pointer or Markdown section and do not echo the planted unsafe value.
+  - [ ] Test Markdown diagnostics include section heading plus line number without echoing unsafe content.
+  - [ ] Test prohibited claim wording checks nested JSON strings and generated Markdown.
+  - [ ] Test prohibited claim wording in `displayName` fails with a sanitized diagnostic pointing to the `displayName` JSON pointer.
+  - [ ] Test `displayName` containing a raw remote, private name, path, or secret-like value is rejected by redaction scanning.
+  - [ ] Test top-level catalog classification fails validation when it is higher than the least-safe included entry.
+  - [ ] Test a catalog whose top-level classification is `demo-safe` but contains a hidden entry fails with a specific sanitized claim-level diagnostic.
+  - [ ] Test `--minimum-entry-claim-level demo-safe` renders a new output containing only demo-safe and public-safe entries, recomputes top-level classification from the remaining entries, and fails when no entries remain.
+  - [ ] Test `--minimum-entry-claim-level public-safe` renders only public-safe entries and fails when all entries are filtered out.
+  - [ ] Test duplicate `sampleLabel` values are rejected.
+  - [ ] Test empty tracked catalogs are rejected for demo-safe and public-safe output.
+  - [ ] Test generated Markdown fails validation when its canonical JSON hash sentinel is missing, stale, or hand-edited.
+  - [ ] Test `--force` does not bypass a stale Markdown hash sentinel failure.
+  - [ ] Test validation cannot override an existing catalog date with a new date argument.
+  - [ ] Test relationship references to not-yet-implemented sibling schemas validate only as deferred references and cannot serve as public-safe proof.
+  - [ ] Test extractor gap codes validate against the closed vocabulary.
+  - [ ] Test a `large-repo-stress` entry without `timeoutBucket` or `artifactSizeBucket` fails validation.
+  - [ ] Test render `--dry-run` runs validation gates and writes no files.
+  - [ ] Test `git check-ignore .tmp/legacy-sample-smoke-catalog/example` or the chosen ignored root.
+  - [ ] Test implementation setup fails clearly when the ignored local root is not actually ignored.
+  - [ ] Test promotion rejects ignored destinations and destinations outside the approved tracked root.
+  - [ ] Test `--force` can overwrite existing tracked catalog files only after all validation gates pass and still rejects unsafe input.
+
+- [ ] 8. Document maintainer workflow. Requirements: 1, 4, 5, 6.
+  - [ ] Document that the catalog is validation metadata, not raw scan output, not an evidence pack, not a baseline, not a site page, and not an impact-analysis result.
+  - [ ] Document how operators keep private sample paths in ignored `.tmp/legacy-sample-smoke-catalog/local-samples.json`.
+  - [ ] Document safe sample labels, source classifications, commit identity kinds, claim levels, evidence family IDs, expectation states, command placeholders, and redaction rules.
+  - [ ] Document how catalog entries relate to `legacy-codebase-validation`, `legacy-baseline-regression-artifacts`, and `legacy-sample-evidence-pack`.
+  - [ ] Document that public claims should be based on promoted public-safe proof such as evidence packs, not this catalog alone.
+  - [ ] Document validation commands with placeholders only.
+
+- [ ] 9. Validate implementation. Requirements: 7.
+  - [ ] Update `.kiro/specs/legacy-sample-smoke-catalog/implementation-state.md` with implementation branch, scope decisions, script fallback blockers if any, validation results, and follow-up items.
+  - [ ] Run focused catalog schema, render, validation, and promotion tests.
+  - [ ] Run `git check-ignore .tmp/legacy-sample-smoke-catalog/example`.
+  - [ ] Run `./scripts/check-private-paths.sh`.
+  - [ ] Run `git diff --check`.
+  - [ ] Run `dotnet test src/dotnet/TraceMap.sln` if catalog tooling is implemented in .NET.
+  - [ ] Run focused script tests if catalog tooling is implemented as a script fallback.
+  - [ ] Run or explicitly defer relevant pinned smoke checks from `docs/VALIDATION.md`; scanner and language-adapter smokes may be deferred if implementation only adds catalog metadata/tooling.
+
+## Deferred Follow-Ups
+
+- Public site pages or visualizations that consume promoted proof.
+- Automatic discovery of candidate samples from local manifests.
+- Portfolio-level dashboards across multiple catalog entries.
+- Local-only operator reports that include more private drilldown detail.
+- Promotion from catalog entries into evidence-pack generation queues.
