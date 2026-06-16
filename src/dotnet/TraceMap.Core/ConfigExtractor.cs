@@ -30,6 +30,24 @@ public static class ConfigExtractor
                     AddPackagesConfigFacts(manifest, facts, file.RelativePath, fullPath);
                 }
             }
+            catch (SafeXmlException ex)
+            {
+                facts.Add(FactFactory.Create(
+                    manifest,
+                    FactTypes.AnalysisGap,
+                    RuleIds.ConfigKey,
+                    EvidenceTiers.Tier4Unknown,
+                    new EvidenceSpan(file.RelativePath, 1, 1, null, "ConfigExtractor", ScannerVersions.ConfigExtractor),
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["classification"] = ex.FailureKind == SafeXmlFailureKind.SecurityRejected
+                            ? "LegacyDataParserSecurityRejected"
+                            : ex.FailureKind == SafeXmlFailureKind.TooLarge
+                                ? "LegacyDataMetadataTooLarge"
+                                : "MalformedLegacyDataMetadata",
+                        ["message"] = "Unable to parse config file with safe XML settings."
+                    }));
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or XmlException)
             {
                 facts.Add(FactFactory.Create(
@@ -201,7 +219,7 @@ public static class ConfigExtractor
 
     private static void AddXmlConfigFacts(ScanManifest manifest, List<CodeFact> facts, string relativePath, string fullPath)
     {
-        var document = XDocument.Load(fullPath, LoadOptions.SetLineInfo);
+        var document = SafeXml.LoadDocument(fullPath);
         foreach (var add in document.Descendants()
             .Where(element => element.Name.LocalName == "add")
             .OrderBy(GetLine)
@@ -261,7 +279,7 @@ public static class ConfigExtractor
 
     private static void AddPackagesConfigFacts(ScanManifest manifest, List<CodeFact> facts, string relativePath, string fullPath)
     {
-        var document = XDocument.Load(fullPath, LoadOptions.SetLineInfo);
+        var document = SafeXml.LoadDocument(fullPath);
         foreach (var package in document.Descendants()
             .Where(element => element.Name.LocalName == "package")
             .OrderBy(GetLine)

@@ -165,6 +165,13 @@ public static class FactTypes
     public const string SqlTextUsed = nameof(SqlTextUsed);
     public const string ConfigKeyDeclared = nameof(ConfigKeyDeclared);
     public const string ConnectionStringDeclared = nameof(ConnectionStringDeclared);
+    public const string LegacyDataMetadataDeclared = nameof(LegacyDataMetadataDeclared);
+    public const string LegacyDataEntityDeclared = nameof(LegacyDataEntityDeclared);
+    public const string LegacyDataStorageObjectDeclared = nameof(LegacyDataStorageObjectDeclared);
+    public const string LegacyDataColumnDeclared = nameof(LegacyDataColumnDeclared);
+    public const string LegacyDataMappingDeclared = nameof(LegacyDataMappingDeclared);
+    public const string LegacyDataProviderConfigDeclared = nameof(LegacyDataProviderConfigDeclared);
+    public const string LegacyDataGeneratedCodeLinked = nameof(LegacyDataGeneratedCodeLinked);
 }
 
 public static class RuleIds
@@ -202,6 +209,12 @@ public static class RuleIds
     public const string DatabaseSqlText = "database.sql.text.v1";
     public const string DatabaseSqlShape = "database.sql.shape.v1";
     public const string ConfigKey = "config.key.v1";
+    public const string LegacyDataMetadataInventory = "legacy.data.metadata.inventory.v1";
+    public const string LegacyDataDbml = "legacy.data.dbml.v1";
+    public const string LegacyDataEdmx = "legacy.data.edmx.v1";
+    public const string LegacyDataTypedDataSet = "legacy.data.typed-dataset.v1";
+    public const string LegacyDataConfig = "legacy.data.config.v1";
+    public const string LegacyDataGeneratedLink = "legacy.data.generated-link.v1";
     public const string ContractDeltaReduction = "contract.delta.reduce.v1";
     public const string ContractDeltaInput = "contract.delta.input.v2";
     public const string ContractDeltaImpact = "contract.delta.impact.v2";
@@ -220,6 +233,7 @@ public static class ScannerVersions
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.11.1";
     public const string ConfigExtractor = "config/0.1.0";
+    public const string LegacyDataExtractor = "legacy-data/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
