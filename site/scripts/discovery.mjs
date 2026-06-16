@@ -321,7 +321,7 @@ function validateSafeEntryText(entry, index) {
   }
 
   if (nonShippedClaimLevels.has(entry.publicClaimLevel)) {
-    const text = `${entry.title} ${entry.summary}`;
+    const text = [entry.title, entry.summary, ...entry.limitations].join(" ");
     if (/\b(?:available|shipped|released|deployed)\b/i.test(text)) {
       throw new Error(`Discovery entry at index ${index} uses shipped wording for ${entry.publicClaimLevel} content.`);
     }

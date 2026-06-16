@@ -138,6 +138,16 @@ test("createDiscoveryOutputs rejects shipped wording for non-shipped claim level
     ]),
     /uses shipped wording for dev-only content/
   );
+  await assert.rejects(
+    createDiscoveryOutputs([
+      {
+        ...siteEntry("/roadmap/"),
+        publicClaimLevel: "planned",
+        limitations: ["This planned route is not shipped yet."]
+      }
+    ]),
+    /uses shipped wording for planned content/
+  );
 });
 
 test("createDiscoveryOutputs requires stable public refs for repo docs", async () => {

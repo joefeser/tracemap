@@ -210,7 +210,7 @@
     "hintCategory": "roadmap",
     "preferredProofPath": "/limitations/",
     "limitations": [
-      "Roadmap entries are not shipped proof.",
+      "Roadmap entries are planning notes, not proof.",
       "Concept rows need checked-in samples, generated summaries, and visible limitations before promotion."
     ],
     "nonClaims": [
