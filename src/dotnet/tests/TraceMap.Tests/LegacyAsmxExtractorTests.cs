@@ -334,7 +334,10 @@ public sealed class LegacyAsmxExtractorTests
               <appSettings>
                 <add key="ApiBaseUrl" value="https://example.invalid/api" />
                 <add key="ServiceBusConnection" value="Endpoint=sb://example.invalid/;SharedAccessKey=secret" />
+                <add key="NotificationEndpointUrl" value="https://example.invalid/api/notify" />
                 <add key="RatingServiceUrl" value="https://example.invalid/Rating.asmx" />
+                <add key="RatingServiceEndpointUrl" value="https://example.invalid/Rating.asmx" />
+                <add key="RatingEndpointUrl" value="https://example.invalid/Rating.asmx" />
                 <add key="RatingSoapEndpoint" value="https://example.invalid/Rating.asmx" />
               </appSettings>
             </configuration>
@@ -348,9 +351,12 @@ public sealed class LegacyAsmxExtractorTests
             .ToArray();
 
         Assert.Contains("RatingServiceUrl", configKeys);
+        Assert.Contains("RatingServiceEndpointUrl", configKeys);
+        Assert.Contains("RatingEndpointUrl", configKeys);
         Assert.Contains("RatingSoapEndpoint", configKeys);
         Assert.DoesNotContain("ApiBaseUrl", configKeys);
         Assert.DoesNotContain("ServiceBusConnection", configKeys);
+        Assert.DoesNotContain("NotificationEndpointUrl", configKeys);
     }
 
     [Fact]
