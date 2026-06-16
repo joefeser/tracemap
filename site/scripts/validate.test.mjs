@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { createDiscoveryOutputs } from "./discovery.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -80,7 +81,7 @@ test("validateDist rejects stale top navigation", async () => {
 
 test("validateDist requires robots sitemap directive", async () => {
   const root = await createDistFixture({
-    robots: "User-agent: *\nAllow: /\n"
+    robots: "User-agent: *\nAllow: /\n# LLM discovery: https://tracemap.tools/llms.txt\n"
   });
 
   await assert.rejects(
@@ -92,7 +93,7 @@ test("validateDist requires robots sitemap directive", async () => {
 async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
-  robots = "User-agent: *\nAllow: /\n\nSitemap: https://tracemap.tools/sitemap.xml\n",
+  robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
   sitemapUrls = ["https://tracemap.tools/", "https://tracemap.tools/docs/"]
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
@@ -118,8 +119,42 @@ async function createDistFixture({
   await writeFile(join(dist, "docs", "index.html"), docsHtml, "utf8");
   await writeFile(join(dist, "robots.txt"), robots, "utf8");
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
+  await writeDiscoveryFiles(dist);
 
   return root;
+}
+
+async function writeDiscoveryFiles(dist) {
+  const outputs = await createDiscoveryOutputs(
+    [
+      {
+        path: "/",
+        title: "Fixture Home",
+        summary: "Fixture route for deterministic static evidence validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "start",
+        preferredProofPath: "/docs/",
+        limitations: ["Fixture limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        url: "https://github.com/joefeser/tracemap/blob/main/README.md",
+        title: "Fixture README",
+        summary: "Fixture source document for validation.",
+        publicClaimLevel: "main",
+        sourceType: "repo-doc",
+        hintCategory: "repo-doc",
+        limitations: ["Fixture docs require validation context."],
+        nonClaims: ["No release approval proof."]
+      }
+    ],
+    { dist, resolveInternalPaths: true }
+  );
+
+  await writeFile(join(dist, "llms.txt"), outputs.llmsText, "utf8");
+  await writeFile(join(dist, "docs-index.json"), outputs.docsIndexJson, "utf8");
+  await writeFile(join(dist, "routes-index.json"), outputs.routesIndexJson, "utf8");
 }
 
 function renderSitemap(urls) {

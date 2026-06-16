@@ -1,133 +1,106 @@
 # Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
-Branch: codex/site-llm-discovery-pack
+Status: completed
+Readiness: implemented
+Branch: codex/site-next-phase-20260616
 Public claim level: demo
 
 ## Summary
 
-This spec queues a future `tracemap.tools` discovery pack for bots, crawlers,
-documentation agents, and LLM-based assistants. The intended output is static
-discovery metadata: `llms.txt`, `/docs-index.json`, `/routes-index.json`, and
-public-safe route hints.
+Implemented the static TraceMap discovery pack for `tracemap.tools`.
 
-No site implementation, generated output, scanner code, reducer code, language
-adapter code, report generation code, LLM calls, embeddings, vector databases,
-or prompt-based classification are implemented in this spec-prep PR.
+The site build now publishes:
+
+- `/llms.txt`
+- `/docs-index.json`
+- `/routes-index.json`
+
+The authoritative discovery source is checked in at
+`site/src/_site/discovery.json`. It is a private build-time input and is not
+copied to `site/dist`.
 
 ## Scope
 
-- Spec files only under
-  `.kiro/specs/site-tracemap-tools-llm-discovery-pack/`.
-- Future site source may live under `site/src` when implementation begins.
-- Future generated outputs may be produced under `site/dist` by the normal site
-  build.
-- Public copy remains bounded to deterministic static evidence.
+Changed only site source/scripts/tests and the matching Kiro spec state/tasks:
+
+- `site/src/_site/discovery.json`
+- `site/src/robots.txt`
+- `site/scripts/build.mjs`
+- `site/scripts/discovery.mjs`
+- `site/scripts/*.test.mjs`
+- `site/scripts/validate.mjs`
+- `.kiro/specs/site-tracemap-tools-llm-discovery-pack/tasks.md`
+- `.kiro/specs/site-tracemap-tools-llm-discovery-pack/implementation-state.md`
+
+No scanner, reducer, language adapter, report generation, or core product code
+was edited.
 
 ## Scope Decisions
 
-- Treat the discovery pack as a demo-level site feature because it routes to
-  public demo/proof/docs surfaces; it does not promote production claims.
-- Keep the feature static and reviewable.
-- Use discovery metadata to route users and bots, not to infer conclusions.
-- Keep repository docs as source-of-truth references and site pages as
-  presentation or navigation surfaces.
-- Preserve the shared site principle: no public conclusion without evidence.
+- Kept discovery static and build-time only.
+- Kept repository documents distinct from site presentation routes through
+  `sourceType: "repo-doc"` and `sourceType: "site-page"`.
+- Used `hintCategory` to keep evidence and limitations ahead of roadmap and
+  use-case hints in generated `llms.txt`.
+- Sorted generated JSON entries deterministically by public path or URL using
+  ordinal comparison.
+- Pinned repository document URLs to stable `main` refs.
+- Put detailed entry-level limitations and non-claims in the JSON indexes.
+- Kept `llms.txt` concise with a short global non-claims section.
+- Exposed `/llms.txt` through a plain `robots.txt` comment.
+- Did not add `.txt` or `.json` discovery files to the sitemap.
 
 ## Main/Dev Wording Boundary
 
-- `main` evidence may be described as available only when public pages or
-  repository docs already support the statement.
-- `dev`-only or queued work should be labeled planned, in progress, or future
-  implementation.
-- Roadmap and concept pages must not be summarized as shipped proof.
-- Public-facing discovery text should prefer stable `https://tracemap.tools`
-  URLs and public repository links over branch-local implementation details.
+- `main` repository docs are labeled as source-of-truth docs only when linked to
+  stable `main` URLs.
+- Demo pages keep `Public claim level: demo`.
+- Concept and roadmap routes use concept/future-facing wording and do not use
+  shipped, released, deployed, or available positioning.
+- Discovery metadata remains bounded to deterministic static evidence, rule
+  IDs, evidence tiers, coverage labels, limitations, and generated artifacts.
 
-## Non-Claims
+## Validation
 
-- Discovery metadata only.
-- No AI impact-analysis claims.
-- No LLM, embedding, vector database, or prompt-based classification features
-  in TraceMap core.
-- No runtime traffic, production usage, deployment state, release approval,
-  endpoint performance, or absence-of-impact proof.
-- No publication of private paths, raw source snippets, raw SQL, config values,
-  secrets, raw fact streams, SQLite databases, analyzer logs, or local output
-  roots.
-
-## Validation Plan
-
-Spec-only delivery validation:
+Passed on this branch:
 
 ```bash
-node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-opus-4.8 --fresh
-node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-sonnet-4.6 --fresh
 git diff --check
+cd site && npm test
+cd site && npm run validate
+cd site && npm run build
 ./scripts/check-private-paths.sh
 ```
 
-If named Kiro review models are unavailable, run:
+Validation now checks:
 
-```bash
-node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model auto --fresh
-```
+- Required generated discovery files exist.
+- `site/dist/discovery.json` does not exist.
+- JSON index schema fields, `sourceType`, `hintCategory`, claim levels, stable
+  repo-doc refs, deterministic ordering, and proof-path resolution.
+- Empty discovery input still writes all public outputs.
+- `preferredProofPath` absent/present-empty/present-valid/present-missing
+  behavior.
+- `llms.txt` H2 ordering and Non-Claims parsing.
+- Denied-token exceptions only inside direct `nonClaims` strings or the
+  `## Non-Claims` section of `llms.txt`.
+- Evidence and limitation hints precede roadmap/use-case/demo hints.
+- Discovery files are not listed in `sitemap.xml`.
+- `robots.txt` includes the plain `/llms.txt` comment.
 
-## Spec-Prep Review Log
+## Review Findings
 
-Current spec-prep branch validation:
+- Manual generated-output inspection confirmed:
+  - `llms.txt` contains the shared site principle and the required H2 order.
+  - `docs-index.json` contains five stable `main` repository document refs.
+  - `routes-index.json` contains fourteen public site routes.
+  - `site/dist/discovery.json` is absent.
+  - `robots.txt` exposes `/llms.txt` as a comment.
+  - Sitemap output excludes the discovery `.txt` and `.json` files.
 
-- Passed:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-opus-4.8 --fresh`
-- The originally requested Sonnet 4.8 model was unavailable locally;
-  subsequent validation uses the available Sonnet model documented above.
-- Passed fallback:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model auto --fresh`
-- Review-loop remediation added `design.md` and normalized `Status:
-  not-started` plus `Readiness: ready-for-implementation`.
-- Opus spec review then found implementability gaps around discovery metadata
-  source authority, sitemap exposure for non-HTML outputs, and validation of
-  generated discovery files. The spec was patched to require an authoritative
-  discovery source file, robots/direct-link exposure by default, deterministic
-  JSON ordering, stable repo-doc refs, and explicit non-HTML output validation.
-- Fallback spec review reported no blocking issues. The Medium implementability
-  note was patched by documenting existing static-file copy behavior for public
-  non-HTML source files.
-- Sonnet review found additional implementation ambiguities. The spec was
-  patched to make `discovery.json` a private build-time input, keep discovery
-  files out of sitemap output for the initial implementation, define structural
-  non-claim exceptions, and add concrete validation tasks for hint ordering,
-  planned-status labels, deterministic sort order, and implementation-state
-  updates.
-- Follow-up Sonnet review requested explicit enforcement tasks for
-  `site/dist/discovery.json` absence, `preferredProofPath` three-state
-  validation, and `llms.txt` non-claim section parsing. The spec now defines
-  those validator contracts and fixtures.
-- Final Sonnet precision pass requested positive output-existence checks,
-  explicit empty-value semantics, direct-string-only non-claim exceptions, and
-  unresolved proof-path failure behavior. The spec now captures those details,
-  plus `hintCategory`, required output existence, empty-input behavior, and
-  robots-comment baseline exposure.
+## Follow-Ups
 
-Future implementation validation:
-
-```bash
-cd site
-npm test
-npm run validate
-npm run build
-```
-
-Then manually inspect `llms.txt` and the machine-readable indexes for expected
-routes, claim-level labels, non-claims, public-safe artifact boundaries, and the
-absence of AI impact-analysis claims.
-
-## Follow-Ups To Keep Out Of This Slice
-
-- Implementing `llms.txt`.
-- Editing `site/src`.
-- Editing generated `site/dist` or `site/output`.
-- Adding scanner, reducer, language adapter, report generation, or CLI changes.
-- Adding LLM calls, embeddings, vector databases, prompt-based classification,
-  or AI impact-analysis workflows.
+- Future sitemap inclusion for discovery `.txt` or `.json` files should be a
+  separate spec because current sitemap validation is intentionally route-only.
+- Future public pages may add visible links to `/llms.txt`; the current baseline
+  exposure is the robots comment required by this slice.
