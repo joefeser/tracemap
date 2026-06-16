@@ -97,7 +97,7 @@ Suggested top-level shape:
 
 ```json
 {
-  "schemaVersion": "legacy-baseline-manifest.v1",
+  "schemaVersion": "legacy-baseline-manifest.v2",
   "baselineId": "legacy-sample-alpha__original-parser-snapshot__2026-06",
   "baselinePurpose": "original-parser-snapshot",
   "sample": {
@@ -387,8 +387,8 @@ input:
 ```json
 {
   "schemaVersion": "legacy-baseline-migration-map.v1",
-  "fromBaselineSchema": "legacy-baseline-manifest.v1",
-  "toCandidateSchema": "legacy-baseline-manifest.v1",
+  "fromBaselineSchema": "legacy-baseline-manifest.v2",
+  "toCandidateSchema": "legacy-baseline-manifest.v2",
   "ruleIdRenames": [
     {
       "fromRuleId": "old.rule.v1",

@@ -191,6 +191,163 @@ The smoke writes generated manifests, logs, SQLite files, and reports under a ca
 
 For portfolio report changes, run the .NET solution build and test suite plus `./scripts/check-private-paths.sh` and `git diff --check`. The focused portfolio tests cover direct inputs, manifest inputs, combined-source expansion, before/after manifest source comparison, projected surface/edge comparison, deterministic output, read-only input handling, and public-output redaction. Run the public combined-path smoke only when the portfolio change also modifies language adapters, combine/report behavior, endpoint extraction, dependency-surface projection, paths, reverse, diff, impact, or release-review code shared outside `tracemap portfolio`.
 
+## Legacy Baseline Regression Artifacts
+
+When changing `tracemap baseline` creation, validation, or comparison behavior,
+run the .NET build/test suite plus the baseline smoke over the checked-in
+synthetic scan fixture:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline create \
+  --scan-output samples/synthetic-legacy-scan \
+  --label synthetic-alpha \
+  --purpose original-parser-snapshot \
+  --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 \
+  --created-at 2026-06 \
+  --dry-run
+
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline create \
+  --scan-output samples/synthetic-legacy-scan \
+  --label synthetic-alpha \
+  --purpose original-parser-snapshot \
+  --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 \
+  --created-at 2026-06
+
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline create \
+  --scan-output samples/synthetic-legacy-scan \
+  --label synthetic-alpha \
+  --purpose candidate \
+  --out .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07 \
+  --created-at 2026-07
+
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline compare \
+  --baseline .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json \
+  --candidate .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07/baseline-manifest.json \
+  --out .tmp/legacy-baselines/comparisons/synthetic-alpha \
+  --generated-at 2026-07
+
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline validate \
+  --manifest .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json
+
+git check-ignore .tmp/legacy-baselines/example
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Baseline manifests and comparisons are redacted summaries. Do not commit raw
+scan outputs, facts, SQLite files, analyzer logs, source snippets, SQL text,
+config values, remotes, endpoint addresses, connection strings, secrets, local
+absolute paths, or private sample identities. Local-only outputs must remain
+under ignored `.tmp/legacy-baselines/`. Public-safe promotion requires
+`tracemap baseline validate`, the redaction validator, and the private-path
+guard over the promoted files.
+
+## Legacy WCF/SVC Metadata Smoke
+
+When changing legacy WCF extraction, service-reference metadata parsing, or WCF operation normalization, run the .NET build/test suite plus the validation summary unit tests:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+python3 -m unittest scripts.tests.test_legacy_codebase_validation
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+If the ignored local WCF/SVC smoke manifest exists, also run:
+
+```bash
+python3 scripts/legacy_codebase_validation.py \
+  .tmp/legacy-codebase-validation/wcf-svc-smoke.local.json \
+  .tmp/legacy-codebase-validation/wcf-svc-smoke-out
+```
+
+The summary must stay label-only. Do not commit local sample paths, raw scan outputs, raw WSDL/DISCO/XSD contents, endpoint addresses, SOAP actions, namespace URIs, config values, secrets, or generated smoke outputs. WCF metadata facts are static checked-in design-time evidence; they do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
+
+## Legacy WebForms Event Flow Smoke
+
+When changing WebForms markup, code-behind, designer, handler-resolution, or event-flow extraction, run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+python3 -m unittest scripts.tests.test_legacy_codebase_validation
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Checked-in fixtures should cover explicit markup event bindings, missing or stale designer files, semantic or syntax-only code-behind resolution, ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
+
+Useful inspection queries:
+
+```bash
+sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts where fact_type like 'WebForms%' group by fact_type order by fact_type;"
+sqlite3 <out>/index.sqlite "select fact_type, rule_id, evidence_tier, file_path, start_line, properties_json from facts where fact_type like 'WebForms%' order by fact_type, file_path, start_line;"
+grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out>/report.md
+```
+
+WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
+
+## Legacy Remoting Smoke
+
+When changing .NET Remoting API, `MarshalByRefObject`, channel, registration, activation, config, or Remoting report extraction, run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/dotnet-remoting-sample --out <tmp>/dotnet-remoting-scan
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+The synthetic sample scan should produce the standard scan artifacts plus `Remoting*` facts in `facts.ndjson`, `index.sqlite`, and `report.md`. Inspect with:
+
+```bash
+sqlite3 <tmp>/dotnet-remoting-scan/index.sqlite "select fact_type, count(*) from facts where fact_type like 'Remoting%' group by fact_type order by fact_type;"
+grep -E "Legacy Remoting Static Evidence|Legacy Remoting Limitations" <tmp>/dotnet-remoting-scan/report.md
+```
+
+No pinned public Remoting smoke baseline exists yet. Public-repository Remoting baselines require a separate reviewed baseline task or spec. Remoting evidence is static only and must not claim host activation, runtime reachability, endpoint availability, deployment, exploitability, security posture, or production usage. Generated scan artifacts are local-only and must not be committed.
+
+## Legacy Static Flow Reporting Smoke
+
+When changing `tracemap paths --include-legacy-roots`, legacy flow classification, WCF operation terminal handling, legacy data metadata terminal handling, path output redaction, or related path selectors, run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln --filter LegacyFlowCompositionTests
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Focused fixtures should cover WebForms event roots, WebForms lifecycle roots, direct handler-to-service paths, WCF service-reference paths with `wcf-operation` terminals, SQL/query terminals, legacy data metadata terminals when available, reduced coverage, missing extractor availability, selector no-match and classification-filter gaps, truncation, deterministic JSON, and privacy suppression.
+
+Legacy static flow reports use `legacy-flow.v1` schema metadata and must phrase results as static evidence or possible static paths. They must not claim runtime execution, guaranteed backend reachability, SQL execution, database existence, production dependency, or impact. Generated Markdown and JSON must omit or hash local absolute paths, raw remotes, private labels, raw SQL, WSDL/SOAP/endpoint URLs, connection strings, config values, source snippets, and secret-looking values.
+
+## Legacy Data Metadata Smoke
+
+When changing DBML, EDMX, typed DataSet/TableAdapter, legacy data config, generated data-code linkage, XML parser safety, or safe identifier redaction, run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, config provider/connection metadata, generated-code links, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite.
+
+Useful inspection queries:
+
+```bash
+sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts where fact_type like 'LegacyData%' group by fact_type order by fact_type;"
+sqlite3 <out>/index.sqlite "select fact_type, rule_id, evidence_tier, file_path, start_line, properties_json from facts where fact_type like 'LegacyData%' or rule_id like 'legacy.data.%' order by fact_type, file_path, start_line;"
+grep -E "Legacy Data Metadata|Legacy Data Metadata Limitations" <out>/report.md
+```
+
+Legacy data metadata smoke summaries remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw DBML/EDMX/XSD/XML snippets, raw SQL, connection strings, config values, provider secrets, URLs, local absolute paths, or generated private outputs. Legacy data metadata evidence is static design-time evidence and does not prove runtime data access, SQL execution, database existence, provider compatibility, transform selection, generated-code freshness, branch feasibility, deployment, or production usage.
+
 ## Public OSS Smoke
 
 Use `scripts/smoke-open-source-repos.sh` to clone pinned public repositories into a cache directory and scan them into a separate output directory:

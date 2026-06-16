@@ -1,143 +1,105 @@
 # Legacy Baseline Regression Artifacts Implementation State
 
-Status: implemented
-Branch: codex/legacy-baseline-regression-artifacts
-Scope: CLI baseline create/validate/compare, redacted manifest/comparison model,
-synthetic fixtures, checked-in public-safe baseline, focused tests, and workflow
-documentation.
+Status: implemented-validated
+Branch: codex/legacy-baseline-regression-artifacts-2
+Scope: CLI baseline creation, validation, comparison, fixtures, docs, tests, and rule catalog
 Public claim level: hidden
-Readiness: ready-for-review
 
 ## Summary
 
-Implemented a deterministic redacted baseline workflow for legacy scan outputs.
-The implementation creates counts-only baseline manifests and summaries, validates
-their safety classification, compares redacted manifests by static evidence count
-movement, and keeps local-only outputs under ignored `.tmp/legacy-baselines/`.
-
-A synthetic fixture and a checked-in public-safe baseline now exist so the
-workflow can be validated without private legacy repositories.
+Implemented a deterministic `tracemap baseline` workflow for redacted legacy
+baseline manifests and regression comparisons. The implementation reads existing
+TraceMap scan outputs from checked-in synthetic fixtures or ignored local
+storage, emits counts-only manifests, validates safety categories, and compares
+static evidence count movement without reducer or runtime claims.
 
 ## Scope Decisions
 
-- Implemented the CLI-first workflow in `TraceMap.Cli` as
-  `tracemap baseline create`, `tracemap baseline validate`, and
-  `tracemap baseline compare`.
-- Added `TraceMap.Reporting.LegacyBaselineArtifacts` rather than changing
-  scanner extraction behavior. The scanner/reducer evidence model remains
-  deterministic and no AI/LLM/vector/prompt analysis was added.
-- Baseline manifests store aggregate counts, safe path classes, file extension
-  counts, language counts, rule/fact/evidence/extractor/surface summaries,
-  coverage snapshots, known gap categories, and limitations. They do not store
-  raw facts, raw SQLite rows, analyzer logs, report prose, source snippets, raw
-  SQL, config values, remotes, or local absolute paths.
-- Gap messages from scan artifacts are category-sanitized before being emitted.
-- Public-safe commit identity defaults to category-only unless `--public-source`
-  is explicitly supplied and the commit value is a safe SHA.
-- Local-only output is guarded so `--local-only` writes only under
-  `.tmp/legacy-baselines/`.
-- Comparison Markdown intentionally uses static evidence count wording and avoids
-  impact, runtime reachability, production-usage, safety-posture, or business
-  claims.
-- Optional SQLite aggregate verification was not implemented in this slice
-  because `facts.ndjson` contains the required count dimensions for the smallest
-  complete version.
-- Pinned smoke checks from `docs/VALIDATION.md` were deferred because this
-  change adds a reporting/CLI workflow around existing scan artifacts and does
-  not change language adapters, scanner extraction, or report rendering behavior.
+- Implemented the CLI shape directly in `TraceMap.Cli`: `baseline create`,
+  `baseline validate`, and `baseline compare`. No script fallback was needed.
+- Put the baseline model, validator, creation logic, Markdown rendering,
+  migration-map support, and comparison logic in `TraceMap.Reporting`.
+- Public-safe manifests stay counts-only. Raw facts, SQLite rows, paths,
+  snippets, SQL text, config values, remotes, analyzer logs, and private sample
+  identities are not copied into manifests or summaries.
+- Local-only manifests are supported only under ignored `.tmp/legacy-baselines/`.
+  Optional path-hash drilldowns remain deferred.
+- Public source identity hashing requires an explicit `--public-source` flag and
+  uses context-separated SHA-256 input. Secret-like identity material is omitted
+  category-only instead of hashed.
+- Comparison output stays local-only under `.tmp/legacy-baselines/` until a
+  manual promotion runs `baseline validate`, redaction validation, and
+  `scripts/check-private-paths.sh`.
+- No scanner extraction rules changed. No LLM, embedding, vector, prompt-based,
+  vulnerability, registry, or runtime analysis was added.
 
-## Review State
+## Implemented Artifacts
 
-- Initial spec draft created.
-- Kiro Opus first-pass review completed with reduced coverage because Kiro
-  reported denied shell access, but it returned complete findings. Blocking
-  issues were `.tmp/legacy-baselines/` not being git-ignored and timestamp
-  determinism.
-- Kiro Sonnet first-pass review completed with full coverage. Blocking issues
-  were ambiguous hash input construction, underspecified secret-like handling,
-  missing classifier-boundary tests, and overbroad optional SQLite reads.
-- Review fixes applied:
-  - `.tmp/legacy-baselines/` is ignored and implementation tasks require a
-    guard for the ignored path.
-  - time fields are injectable or fixture-pinned, with year-month precision for
-    public-safe manifests.
-  - tracked storage is fixed to `.kiro/baselines/legacy/` and local-only storage
-    is fixed to `.tmp/legacy-baselines/`.
-  - redaction hashing requires length-prefixed, escaped, encoded, or existing
-    structured TraceMap hash input.
-  - secret-like and low-entropy/enumerable private identity handling is defined.
-  - SQLite reads are restricted to aggregate count queries over safe columns.
-  - candidate manifests are produced by the same create workflow.
-  - migration-map schema is specified.
-  - proposed rule IDs use the `legacy.baseline.*` namespace and tasks require
-    catalog entries before emission.
-  - comparison promotion is separate from compare output and gated by validation.
-  - missing tests from both reviews were added to `tasks.md`.
-- Sonnet re-review completed with full coverage. It confirmed the previous
-  blockers were resolved and identified final readiness issues around clarifying
-  catalog-entry timing and defining the synthetic fixture required by the future
-  smoke command.
-- Final re-review fixes applied:
-  - design clarifies `legacy.baseline.*` rule IDs are to be added during
-    implementation before emission, not pre-committed by this spec branch.
-  - tasks define the minimum `samples/synthetic-legacy-scan/` fixture contents
-    for future implementation.
-  - manifest limitations are split between scanner/coverage and safety scopes.
-  - identity kind variants are documented.
-  - dry-run, non-dry-run, and comparison smoke commands are separated.
-  - validation tasks include an independent `baseline validate` fixture test.
-- Final Sonnet re-review completed with full coverage and no blocking issues.
-  It suggested non-blocking clarifications for local-only neutral-label identity
-  hashes, label rejection examples, comparison schema shape, tracked synthetic
-  fixtures, and migration-map wording; those were folded into requirements,
-  design, and tasks.
-- PR review loop found three Gemini medium comments:
-  - add artifact metadata to the baseline manifest shape;
-  - keep `review-needed` as an overall status/review flag rather than a movement
-    label;
-  - define `factTypeRenames` entries in the migration-map example.
-- Gemini findings were addressed in `design.md` and `tasks.md`.
-- PR review loop then found a Qodo bug around inconsistent baseline directory
-  naming. `design.md` now states that `baselineId` is the canonical on-disk
-  directory segment derived from label, purpose, and public-safe time metadata,
-  and examples use the full baseline ID consistently.
-- Spec is ready for implementation.
-- Implementation added rule catalog entries for:
-  - `legacy.baseline.redacted-manifest.v1`
-  - `legacy.baseline.coverage-snapshot.v1`
-  - `legacy.baseline.regression-comparison.v1`
-  - `legacy.baseline.safety-validation.v1`
-- Implementation added `samples/synthetic-legacy-scan/`, schema classification
-  fixtures under `samples/legacy-baseline-fixtures/`, and a checked-in redacted
-  public-safe baseline under `.kiro/baselines/legacy/`.
+- `src/dotnet/TraceMap.Reporting/LegacyBaselineArtifacts.cs`
+- `tracemap baseline create|validate|compare`
+- `samples/synthetic-legacy-scan/`
+- `.kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06/`
+- focused tests in `LegacyBaselineArtifactsTests`
+- baseline workflow docs in `docs/VALIDATION.md`
+- baseline rule IDs in `rules/rule-catalog.yml`
 
 ## Validation
 
 Completed:
 
-- Kiro Opus spec review.
-- Kiro Sonnet spec review.
-- `node scripts/kiro-review.mjs --self-test`.
-- Sonnet re-review after first fixes.
-- Sonnet final re-review after final readiness fixes.
-- Repo spec validation command discovery. No broader non-site spec validator was
-  found beyond `scripts/kiro-review.mjs --self-test`.
-- `git check-ignore .tmp/legacy-baselines/example`.
-- `./scripts/check-private-paths.sh`.
-- `git diff --check`.
-- `dotnet build src/dotnet/TraceMap.sln`.
-- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyBaselineArtifactsTests`.
-- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06 --created-at 2026-06 --public-source`.
-- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline validate --manifest .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json`.
-- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 --created-at 2026-06 --dry-run`.
-- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose candidate --out .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07 --created-at 2026-07 --local-only`.
-- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline compare --baseline .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json --candidate .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07/baseline-manifest.json --out .tmp/legacy-baselines/comparisons/synthetic-alpha --generated-at 2026-07`.
+- `dotnet build src/dotnet/TraceMap.sln` passed with 0 warnings and 0 errors.
+- `dotnet test src/dotnet/TraceMap.sln` passed with 336 tests after PR
+  review-loop fixes.
+- `dotnet test src/dotnet/TraceMap.sln --filter LegacyBaselineArtifactsTests`
+  passed with 24 tests during focused validation.
+- Generated checked-in synthetic public-safe fixture with pinned `2026-06`
+  metadata.
+- Baseline dry-run smoke against `samples/synthetic-legacy-scan` reported
+  `public-safe` and wrote no output directory.
+- Baseline local create smoke wrote `baseline-manifest.json` and
+  `baseline-summary.md` under ignored `.tmp/legacy-baselines/`.
+- Baseline candidate create plus compare smoke wrote `comparison.json` and
+  `comparison.md` under ignored `.tmp/legacy-baselines/comparisons/`.
+- `tracemap baseline validate` passed against the local smoke manifest.
+- `git check-ignore .tmp/legacy-baselines/example` passed.
+- `./scripts/check-private-paths.sh` passed.
+- `git diff --check` passed.
+- PR review-loop fixes addressed Qodo findings by including rule IDs and paths
+  in CLI diagnostics, rejecting comparison output outside ignored
+  `.tmp/legacy-baselines/` before writing files, and matching rule catalog IDs
+  with exact line-based lookup instead of substring search.
+- Follow-up PR review-loop fixes addressed Codex connector findings by treating
+  unsafe compare validation diagnostics as fatal before writes, adding review
+  entries for extractor version/category movement, and preserving missing
+  `facts.ndjson` as a partial scan known gap instead of clean zero facts.
+
+Pinned smoke rationale:
+
+- This change adds a new baseline CLI/reporting workflow and does not change
+  scanner extractors, language adapters, combine/report/path/reverse/diff,
+  reducer, or generated site behavior. The relevant pinned smoke is the new
+  baseline workflow documented in `docs/VALIDATION.md`.
+
+## Oddities
+
+- The preferred branch name was already checked out in a separate site worktree,
+  so this work uses
+  `codex/legacy-baseline-regression-artifacts-2` and leaves that worktree alone.
+- `origin/dev` already contained the legacy flow composition work, so this
+  branch includes it only as landed base code.
+- The initial relative path handling worked from repo root but not from
+  `dotnet test` output directories. Baseline create, validate, and compare now
+  resolve relative paths from the repository root when a `.git` root can be
+  found.
+- A validator pattern originally treated normal JSON braces as source-like; it
+  was narrowed to source-keyword patterns. A local-only limitation sentence was
+  also reworded to avoid tripping that same category.
 
 ## Follow-Ups
 
-- Add optional SQLite aggregate cross-checks later if facts-only summaries prove
-  insufficient for legacy samples.
-- Add portfolio-level baseline comparison after single-baseline comparison has
-  been used on reviewed public-safe manifests.
-- Consider a dedicated `baseline promote` command if manual validate plus
-  `check-private-paths` becomes error-prone.
+- Add portfolio-level comparisons across multiple baseline IDs after the
+  single-baseline workflow is reviewed.
+- Add optional local-only path-hash drilldowns only if count-only comparison is
+  insufficient for private validation.
+- Add a dedicated `baseline promote` command only if manual validation plus
+  private-path guard proves error-prone.

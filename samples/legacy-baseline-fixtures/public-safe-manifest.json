@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "legacy-baseline-manifest.v1",
+  "schemaVersion": "legacy-baseline-manifest.v2",
   "baselineId": "fixture-alpha__original-parser-snapshot__2026-06",
   "baselinePurpose": "original-parser-snapshot",
   "createdAt": "2026-06",

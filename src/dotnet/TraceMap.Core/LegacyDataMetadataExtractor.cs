@@ -34,6 +34,7 @@ public static class LegacyDataMetadataExtractor
                     ExtractEdmx(repoPath, manifest, item, facts);
                     break;
                 case "Xsd":
+                case "XsdSchema":
                     ExtractTypedDataSet(repoPath, manifest, item, facts);
                     break;
                 case "Config":

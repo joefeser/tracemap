@@ -59,6 +59,8 @@ public static class MarkdownReportWriter
             lines.AddRange(manifest.KnownGaps.Select(gap => $"- {gap}"));
         }
 
+        AddBuildEnvironmentDiagnostics(lines, result);
+
         lines.Add("");
         lines.Add("## Facts By Type");
         lines.Add("");
@@ -111,7 +113,24 @@ public static class MarkdownReportWriter
                 or FactTypes.LegacyDataMappingDeclared
                 or FactTypes.LegacyDataProviderConfigDeclared
                 or FactTypes.LegacyDataGeneratedCodeLinked),
-            FormatLegacyDataMetadata);
+            FormatLegacyDataMetadataFact);
+
+        AddFactSection(
+            lines,
+            "Legacy Remoting Static Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.RemotingApiUsageDeclared
+                or FactTypes.RemotingMarshalByRefObjectDeclared
+                or FactTypes.RemotingChannelDeclared
+                or FactTypes.RemotingChannelRegistered
+                or FactTypes.RemotingServiceTypeRegistered
+                or FactTypes.RemotingClientTypeRegistered
+                or FactTypes.RemotingClientActivationDeclared
+                or FactTypes.RemotingConfigSectionDeclared
+                or FactTypes.RemotingConfigChannelDeclared
+                or FactTypes.RemotingConfigServiceDeclared
+                or FactTypes.RemotingConfigClientDeclared
+                or FactTypes.RemotingConfigProviderDeclared),
+            FormatLegacyRemotingFact);
 
         AddFactSection(
             lines,
@@ -207,6 +226,28 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "WebForms Events",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WebFormsPageDeclared
+                or FactTypes.WebFormsControlDeclared
+                or FactTypes.WebFormsEventBindingDeclared
+                or FactTypes.WebFormsDesignerControlDeclared
+                or FactTypes.WebFormsHandlerResolved),
+            FormatWebFormsEventFact);
+
+        AddFactSection(
+            lines,
+            "WebForms Event Flow",
+            result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected),
+            fact => $"- `{fact.Properties.GetValueOrDefault("flowClassification") ?? "UnknownAnalysisGap"}` `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` -> `{fact.Properties.GetValueOrDefault("terminalSurfaceKind") ?? "none"}` ({fact.EvidenceTier}, coverage `{fact.Properties.GetValueOrDefault("coverage") ?? "unknown"}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "WebForms Static Logic Signals",
+            result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsLogicSignalDetected),
+            fact => $"- `{fact.Properties.GetValueOrDefault("signalKind") ?? "unknown"}` for `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Boilerplate Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -224,7 +265,28 @@ public static class MarkdownReportWriter
             lines.Add("");
             lines.Add("## Legacy Data Metadata Limitations");
             lines.Add("");
-            lines.Add("- Legacy data rows are static design-time metadata evidence. They do not prove runtime data access, SQL execution, database existence, provider compatibility, config transform selection, secret availability, generated-code freshness, or production usage.");
+            lines.Add("- Legacy data metadata rows are static design-time metadata evidence from checked-in DBML, EDMX, typed DataSet, TableAdapter, config, or generated-code descriptors.");
+            lines.Add("- They do not prove runtime data access, SQL execution, database existence, provider compatibility, config transform selection, generated-code freshness, deployment, or production usage.");
+            lines.Add("- Raw SQL, connection strings, config values, URLs, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.");
+        }
+
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("Remoting", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## Legacy Remoting Limitations");
+            lines.Add("");
+            lines.Add("- Remoting rows are deterministic static evidence from C# syntax, compiler-resolved symbols when available, and checked-in XML config.");
+            lines.Add("- They identify API usage and service-boundary candidates only; they do not prove host activation, runtime reachability, service availability, deployment, exploitability, security posture, or production usage.");
+            lines.Add("- URLs, object URIs, ports, channel/provider values, config values, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.");
+        }
+
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## WebForms Limitations");
+            lines.Add("");
+            lines.Add("- WebForms event evidence is static markup, code-behind, designer, and direct backend evidence. It does not prove runtime event firing, page lifecycle execution, event bubbling, deployment, service reachability, SQL execution, branch feasibility, or production usage.");
+            lines.Add("- Static logic signals and UI-boilerplate signals are deterministic heuristics, not proof of business logic or code quality.");
         }
 
         lines.Add("");
@@ -245,6 +307,42 @@ public static class MarkdownReportWriter
             .ToArray();
 
         lines.AddRange(selectedFacts.Length == 0 ? ["- None found."] : selectedFacts.Select(format));
+    }
+
+    private static void AddBuildEnvironmentDiagnostics(List<string> lines, ScanResult result)
+    {
+        var diagnostics = result.Facts
+            .Where(fact => fact.FactType == FactTypes.BuildEnvironmentDiagnostic)
+            .OrderBy(fact => fact.Properties.GetValueOrDefault("diagnosticKind"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("diagnosticCode"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (diagnostics.Length == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## Build Environment Diagnostics");
+        lines.Add("");
+        if (result.Manifest.BuildStatus == "FailedOrPartial")
+        {
+            lines.Add("Build or project load coverage is reduced; syntax/config fallback analysis continued where possible.");
+            lines.Add("");
+        }
+
+        lines.Add("| Code | Tier | Rule | Evidence | Guidance | Limitation |");
+        lines.Add("| --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in diagnostics.Take(100))
+        {
+            var code = DisplayCodeValue(fact.Properties.GetValueOrDefault("diagnosticCode") ?? fact.ContractElement ?? "unknown");
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}";
+            var guidance = DisplayTableValue(fact.Properties.GetValueOrDefault("guidance") ?? fact.Properties.GetValueOrDefault("guidanceCode") ?? "Review the diagnostic evidence.");
+            var limitation = DisplayTableValue(fact.Properties.GetValueOrDefault("limitation") ?? "Static diagnostic evidence only.");
+            lines.Add($"| `{code}` | `{fact.EvidenceTier}` | `{fact.RuleId}` | `{evidence}` | {guidance} | {limitation} |");
+        }
     }
 
     private static string DisplayFactName(CodeFact fact)
@@ -281,18 +379,102 @@ public static class MarkdownReportWriter
             : FormatQueryBuilderPattern(fact);
     }
 
-    private static string FormatLegacyDataMetadata(CodeFact fact)
+    private static string FormatWebFormsEventFact(CodeFact fact)
     {
-        var kind = DisplayCodeValue(fact.Properties.GetValueOrDefault("metadataKind") ?? "LegacyData");
-        var descriptor = DisplayCodeValue(fact.Properties.GetValueOrDefault("descriptorKind") ?? fact.FactType);
-        var name = DisplayCodeValue(DisplayFactName(fact));
+        return fact.FactType switch
+        {
+            FactTypes.WebFormsEventBindingDeclared => $"- event `{fact.Properties.GetValueOrDefault("eventName") ?? "unknown"}` on `{fact.Properties.GetValueOrDefault("controlId") ?? "unknown"}` -> `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsHandlerResolved => $"- handler `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` resolved as `{fact.Properties.GetValueOrDefault("resolutionKind") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsDesignerControlDeclared => $"- designer field `{fact.Properties.GetValueOrDefault("fieldName") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsControlDeclared => $"- control `{fact.Properties.GetValueOrDefault("controlId") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            _ => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`"
+        };
+    }
+
+    private static string FormatLegacyRemotingFact(CodeFact fact)
+    {
+        var name = fact.Properties.GetValueOrDefault("targetTypeName")
+            ?? fact.Properties.GetValueOrDefault("typeName")
+            ?? fact.Properties.GetValueOrDefault("channelTypeName")
+            ?? fact.Properties.GetValueOrDefault("apiName")
+            ?? DisplayFactName(fact);
+        var classification = fact.Properties.GetValueOrDefault("registrationKind")
+            ?? fact.Properties.GetValueOrDefault("configKind")
+            ?? fact.Properties.GetValueOrDefault("apiKind")
+            ?? fact.FactType;
+        return $"- `{fact.FactType}` `{name}` as static `{classification}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`";
+    }
+
+    private static string FormatLegacyDataMetadataFact(CodeFact fact)
+    {
+        var metadataKind = DisplayCodeValue(fact.Properties.GetValueOrDefault("metadataKind") ?? "unknown");
+        var label = FirstPresentValue(
+            fact.Properties.GetValueOrDefault("entityName"),
+            fact.Properties.GetValueOrDefault("storageObjectName"),
+            fact.Properties.GetValueOrDefault("columnName"),
+            fact.Properties.GetValueOrDefault("connectionName"),
+            fact.Properties.GetValueOrDefault("typeName"),
+            fact.Properties.GetValueOrDefault("targetName"),
+            HashLabel(fact, "entityNameHash", "entity"),
+            HashLabel(fact, "storageObjectHash", "storage"),
+            HashLabel(fact, "columnHash", "column"),
+            HashLabel(fact, "connectionNameHash", "connection"),
+            HashLabel(fact, "typeNameHash", "type"),
+            fact.ContractElement,
+            IsLegacyHashToken(fact.TargetSymbol) ? fact.TargetSymbol : null,
+            "hash-only");
+        var role = FirstPresentValue(
+            fact.Properties.GetValueOrDefault("entityKind"),
+            fact.Properties.GetValueOrDefault("storageObjectKind"),
+            fact.Properties.GetValueOrDefault("columnKind"),
+            fact.Properties.GetValueOrDefault("mappingKind"),
+            fact.Properties.GetValueOrDefault("configKind"),
+            fact.Properties.GetValueOrDefault("linkKind"),
+            fact.Properties.GetValueOrDefault("inventoryKind"),
+            fact.FactType);
         var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
-        return $"- `{fact.FactType}` `{kind}` `{descriptor}` `{name}` rule `{fact.RuleId}` ({fact.EvidenceTier}) at `{path}:{fact.Evidence.StartLine}`";
+        return $"- `{fact.FactType}` `{DisplayCodeValue(metadataKind)}` `{DisplayLegacyDataLabel(label)}` role `{DisplayCodeValue(role)}` rule `{fact.RuleId}` ({fact.EvidenceTier}) at `{path}:{fact.Evidence.StartLine}`";
     }
 
     private static bool IsSqlShapeQueryPattern(CodeFact fact)
     {
         return fact.Properties.TryGetValue("sqlSourceKind", out var value) && !string.IsNullOrWhiteSpace(value);
+    }
+
+    private static string FirstPresentValue(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+    }
+
+    private static string? HashLabel(CodeFact fact, string key, string prefix)
+    {
+        return fact.Properties.TryGetValue(key, out var value) && IsHexHash(value)
+            ? $"{prefix}-hash:{value}"
+            : null;
+    }
+
+    private static string DisplayLegacyDataLabel(string value)
+    {
+        return IsLegacyHashToken(value)
+            ? DisplayCodeValue(value)
+            : DisplayIdentifierValue(value, IdentifierKind.Column, "hash-only");
+    }
+
+    private static bool IsLegacyHashToken(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var index = value.IndexOf("-hash:", StringComparison.Ordinal);
+        return index > 0 && IsHexHash(value[(index + "-hash:".Length)..]);
+    }
+
+    private static bool IsHexHash(string value)
+    {
+        return value.Length is >= 8 and <= 64
+            && value.All(ch => ch is >= '0' and <= '9' or >= 'a' and <= 'f');
     }
 
     private static string FormatSqlShapeQueryPattern(CodeFact fact)
@@ -401,6 +583,11 @@ public static class MarkdownReportWriter
     private static string DisplayCodeValue(string value)
     {
         return value.Replace('`', '\'').ReplaceLineEndings(" ");
+    }
+
+    private static string DisplayTableValue(string value)
+    {
+        return DisplayCodeValue(value).Replace("|", "/");
     }
 
     private static string? FirstPresent(string? first, string? second)

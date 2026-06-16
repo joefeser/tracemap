@@ -244,7 +244,9 @@ public sealed class CSharpSemanticExtractorTests
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.CSharpSemanticWorkspace
             && fact.Properties.TryGetValue("diagnosticId", out var diagnosticId)
-            && diagnosticId == "CS0246");
+            && diagnosticId == "CS0246"
+            && fact.Properties.TryGetValue("diagnosticTokens", out var tokens)
+            && tokens.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("MissingContract"));
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.InvocationName
             && fact.RuleId == RuleIds.CSharpSyntaxInvocation

@@ -260,13 +260,17 @@ public static class ScanEngine
                 properties: packageProperties));
         }
 
+        facts.AddRange(BuildEnvironmentDiagnosticExtractor.Extract(repoPath, manifest, inventory, semanticResult));
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(LegacyWcfExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted));
         facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
         facts.AddRange(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts));
+        facts.AddRange(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts));
 
         return facts
             .GroupBy(fact => fact.FactId, StringComparer.Ordinal)

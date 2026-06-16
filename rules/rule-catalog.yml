@@ -12,64 +12,461 @@ rules:
 
   - id: legacy.validation.summary.v1
     name: Legacy codebase validation summary
-    description: Records redacted operator-local legacy validation results using neutral sample labels, scan metadata counts, coverage labels, UI event probe counts, and bounded-output status.
+    description: Records local-only validation summary rows for operator-provided old or large .NET codebases using neutral sample labels and deterministic counts.
     evidenceTier: Tier2Structural or Tier4Unknown
     emits:
       - legacy validation summary row
-      - LegacyUiEventEvidenceUnavailable gap
+      - redaction failure category
     limitations:
-      - Legacy validation summaries describe static scan artifacts and harness observations; they do not prove runtime execution, UI reachability, deployed behavior, remediation success, or compatibility.
-      - Operator-local sample paths, repository names, remotes, raw artifacts, raw SQL, config values, connection strings, secrets, and source snippets are intentionally excluded from public-safe summaries.
-      - Reduced coverage, timeouts, artifact-size truncation, missing outputs, and all-gaps UI event probes remain explicit limitations and must not be interpreted as absence of behavior.
+      - Validation samples are operator-provided local inputs and are not committed fixtures.
+      - Summary rows intentionally omit local absolute paths, raw remotes, private repository names, raw SQL, config values, connection strings, source snippets, and secrets.
+      - Public claim level remains hidden until a redacted summary is reviewed and intentionally promoted.
 
-  - id: legacy.baseline.redacted-manifest.v1
-    name: Legacy baseline redacted manifest
-    description: Records deterministic counts-only baseline manifests for legacy scan outputs using neutral labels, safety classification, coverage labels, extractor versions, and known gap categories.
+  - id: legacy.validation.environment.v1
+    name: Legacy environment evidence probe
+    description: Summarizes static project/config indicators such as target frameworks, old-style project files, packages.config, binding redirects, and MSBuild ToolsVersion values.
     evidenceTier: Tier2Structural or Tier4Unknown
     emits:
-      - redacted baseline manifest
-      - baseline summary row
+      - legacy environment indicator count
+      - legacy environment limitation
     limitations:
-      - Baseline manifests are aggregate measurement artifacts and do not preserve raw facts, raw SQLite rows, analyzer logs, report prose, source snippets, raw SQL, config values, remotes, or local paths.
-      - Public-safe classification is validator-backed but still requires reviewer judgment before promotion.
-      - Partial, failed, truncated, timeout, and deferred scans are explicitly labeled and must not be treated as complete evidence coverage.
+      - Environment indicators are static clues, not guaranteed remediation instructions.
+      - Missing SDK/runtime/build-tool guidance is evidence-backed only when surfaced by scan artifacts or project/config indicators.
+      - Failed project load is reduced coverage and must not be treated as a clean scan.
 
-  - id: legacy.baseline.coverage-snapshot.v1
-    name: Legacy baseline coverage snapshot
-    description: Summarizes observed rule IDs, fact types, evidence tier distributions, extractor versions, supported surfaces, and fallback counts from a redacted legacy baseline.
-    evidenceTier: Tier2Structural or Tier4Unknown
+  - id: legacy.validation.ui-events.v1
+    name: Legacy UI event static evidence probe
+    description: Summarizes whether current facts expose WinForms/WebForms-style event wiring, handler-like symbols, call edges, or dependency surfaces without rendering source snippets.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
-      - rule coverage snapshot
-      - fact coverage snapshot
-      - surface coverage snapshot
+      - UI event evidence summary
+      - UI event evidence gap
     limitations:
-      - Coverage snapshots describe static evidence produced by the scanner only; they do not prove runtime execution, production usage, reachability, compatibility, or business relevance.
-      - Not-observed, not-in-scope, and unknown surface states are coverage-relative and cannot be interpreted as absence of source behavior.
-      - Syntax/config fallback counts are preserved separately when semantic analysis is reduced.
+      - Static wiring evidence does not prove that a control exists at runtime, that a handler executes, that a user can reach the event, or that backend behavior occurred.
+      - No event evidence is a scanner evidence gap, not proof that legacy UI events are absent.
+      - Syntax/text matches remain review-tier evidence when semantic call or dependency facts cannot establish a chain.
 
-  - id: legacy.baseline.regression-comparison.v1
-    name: Legacy baseline regression comparison
-    description: Compares redacted baseline manifests by deterministic count and coverage dimensions, reporting movement in static evidence counts and review-needed flags.
-    evidenceTier: Tier2Structural or Tier4Unknown
-    emits:
-      - baseline comparison row
-      - review-needed comparison entry
-    limitations:
-      - Comparisons measure static evidence movement only and do not make reducer conclusions or claims about runtime reachability, safety, production use, security posture, or business impact.
-      - Decreases, removed categories, reduced coverage, rejected safety state, and unmapped schema or extractor changes require human review.
-      - Rule ID and fact type renames require an explicit migration map before affected counts are comparable.
-
-  - id: legacy.baseline.safety-validation.v1
-    name: Legacy baseline safety validation
-    description: Validates baseline and comparison artifacts for unsafe paths, remotes, raw SQL, config values, secrets, source-like snippets, and other publishability blockers without echoing unsafe values.
+  - id: legacy.validation.bounds.v1
+    name: Legacy validation bounds and truncation
+    description: Records local validation timeout, output-size, artifact-existence, and bounded-failure outcomes for old or large repositories.
     evidenceTier: Tier4Unknown
     emits:
-      - safety validation diagnostic
-      - baseline safety classification
+      - timeout/deferred limitation
+      - artifact-size limitation
+      - missing artifact limitation
     limitations:
-      - Safety validation reports sanitized diagnostic categories and intentionally omits matched values.
-      - Validator coverage reduces leak risk but cannot prove that every future unsafe string pattern is known.
-      - Local-only artifacts can be useful for operator-local comparison but are not publishable baseline evidence.
+      - Timeout and artifact-size truncation make the validation result partial.
+      - Output-size and duration limits are validation harness bounds, not repository complexity conclusions.
+      - Bounded failure preserves available evidence but must not be interpreted as complete scan coverage.
+
+  - id: legacy.wcf.config.v1
+    name: Legacy WCF serviceModel config evidence
+    description: Extracts WCF client and service endpoint declarations from local config files using safe endpoint metadata and hashed addresses.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WcfClientEndpointDeclared
+      - WcfServiceEndpointDeclared
+      - AnalysisGap
+    limitations:
+      - Endpoint config is static evidence and does not prove deployment, reachability, service activation, DNS, authentication, authorization, binding compatibility, or runtime endpoint selection.
+      - Endpoint addresses are hashed or omitted; raw addresses and config values are not rendered.
+      - Config transforms, environment-specific overrides, and dynamically selected endpoints are not evaluated.
+
+  - id: legacy.wcf.contract.v1
+    name: Legacy WCF service contract and generated client evidence
+    description: Extracts service contract, operation contract, and generated service-client declarations from C# syntax and generated-code patterns.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WcfServiceContractDeclared
+      - WcfOperationContractDeclared
+      - WcfGeneratedClientDeclared
+      - AnalysisGap
+    limitations:
+      - Syntax-only contract evidence does not prove WSDL compatibility, generated proxy freshness, service deployment, or runtime invocation.
+      - Generated-client detection requires WCF ClientBase-style inheritance and can miss custom proxies or nonstandard generated clients.
+      - Missing generated files or unsupported service-reference shapes are analysis gaps, not proof that no service dependency exists.
+
+  - id: legacy.wcf.host.v1
+    name: Legacy WCF and ASMX service host evidence
+    description: Extracts safe service host declarations from .svc and ASMX directive-style files.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WcfServiceHostDeclared
+      - AnalysisGap
+    limitations:
+      - Host declarations are static file evidence and do not prove IIS configuration, deployment, route reachability, service activation, or runtime factory behavior.
+      - Malformed or unsupported host declarations are emitted as gaps rather than absence of service evidence.
+
+  - id: legacy.wcf.metadata.v1
+    name: Legacy WCF checked-in metadata evidence
+    description: Extracts safe service-reference metadata and WSDL portType operation declarations from checked-in .svcmap, gated .wsdl, .disco, and .xsd files.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WcfServiceReferenceMetadataDeclared
+      - WcfMetadataOperationDeclared
+      - AnalysisGap
+    limitations:
+      - Checked-in service-reference metadata is static design-time evidence and does not prove runtime reachability, deployment, service activation, generated proxy freshness, service version compatibility, authorization, or binding compatibility.
+      - TraceMap does not fetch remote WSDL, DISCO, schema imports, service URLs, or endpoint addresses.
+      - Raw URLs, SOAP actions, schema locations, namespace URIs, local absolute paths, raw schemas, and source snippets are hashed or omitted.
+      - WSDL/DISCO/XSD inventory is gated to service-reference folders or files co-located with .svcmap metadata to avoid unrelated schemas and vendor specifications.
+      - Malformed or rejected XML is emitted as `MalformedWcfMetadata` rather than treated as clean absence of metadata.
+
+  - id: legacy.wcf.operation-normalization.v1
+    name: Legacy WCF operation name normalization
+    description: Applies conservative deterministic generated-client operation aliases such as FooAsync to Foo and BeginFoo/EndFoo to Foo when WCF evidence corroborates the alias.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WcfServiceReferenceMapping
+      - AnalysisGap
+    limitations:
+      - Normalization is case-sensitive deterministic name handling only; it does not use fuzzy matching, edit distance, stemming, prompts, embeddings, LLM calls, or runtime service behavior.
+      - Async suffix aliases require WCF-generated client evidence and corroboration from connected checked-in WSDL metadata, a same-contract sync sibling, or an aligned service operation.
+      - Begin/End aliases require both members on the same generated client or operation contract; lone Begin or End methods are not normalized.
+      - Lifecycle methods such as Open, Close, Abort, Dispose, OpenAsync, CloseAsync, and Begin/End lifecycle pairs are excluded unless an exact metadata operation is explicitly present.
+
+  - id: legacy.wcf.mapping.v1
+    name: Legacy WCF service-reference mapping evidence
+    description: Emits probable static mappings from generated service-client methods to service operation contracts when method names, checked-in metadata, normalization, and config/contract metadata align.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WcfServiceReferenceMapping
+      - AnalysisGap
+    limitations:
+      - Mappings are static evidence and do not prove runtime execution, endpoint reachability, generated proxy freshness, or backend implementation selection.
+      - Name-only and generated-code-only normalized matches remain review-tier evidence.
+      - Metadata-backed normalized mappings require generated client contract, normalized operation name, connected WSDL operation metadata, and service contract evidence; a random repository-level WSDL operation name is not sufficient.
+      - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
+      - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
+
+  - id: legacy.remoting.api.v1
+    name: Legacy .NET Remoting API evidence
+    description: Extracts System.Runtime.Remoting namespace imports, fully-qualified references, and known Remoting API type references from C# syntax and compiler-resolved symbols when available.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - RemotingApiUsageDeclared
+      - AnalysisGap
+    limitations:
+      - API usage is static reference evidence only and does not prove service hosting, activation, runtime reachability, deployment, network availability, exploitability, security posture, or production usage.
+      - Syntax-only evidence is capped at review-tier because aliases, using-static forms, and project-defined lookalike names may be ambiguous without compiler symbols.
+      - Comments, string literals, XML doc text, and inactive preprocessor regions are not Remoting evidence.
+      - Unsupported Remoting API shapes are emitted as gaps or omitted rather than guessed.
+
+  - id: legacy.remoting.marshal-by-ref.v1
+    name: Legacy .NET Remoting MarshalByRefObject evidence
+    description: Extracts classes that directly inherit from MarshalByRefObject and preserves safe object-shape metadata for Remoting-capable boundary candidates.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - RemotingMarshalByRefObjectDeclared
+      - AnalysisGap
+    limitations:
+      - MarshalByRefObject inheritance is object-shape evidence only; it does not prove hosting, registration, activation, object lifetime, runtime reachability, deployment, network availability, exploitability, security posture, or production usage.
+      - Indirect inheritance is not promoted without Remoting-specific repository, file, registration, or config context because broad framework and desktop types can inherit from MarshalByRefObject.
+      - Syntax-only base-list evidence may be ambiguous with aliases or project-defined lookalikes.
+      - Generated-code status is recorded only when existing safe file-name detection supports it; unsupported generated-code shapes remain unclaimed.
+
+  - id: legacy.remoting.channel.v1
+    name: Legacy .NET Remoting channel evidence
+    description: Extracts TcpChannel, HttpChannel, IpcChannel, server/client channel variants, and ChannelServices.RegisterChannel calls from C# syntax with narrow deterministic construction-to-registration linking.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - RemotingChannelDeclared
+      - RemotingChannelRegistered
+      - AnalysisGap
+    limitations:
+      - Channel construction and registration are static code evidence only and do not prove runtime channel opening, endpoint reachability, deployment, network availability, exploitability, security posture, or production usage.
+      - Constructor arguments, ports, URLs, names, provider values, config-backed values, and arbitrary channel properties are hashed or omitted.
+      - V1 links only inline construction and same-method single unreassigned local registrations; fields, properties, factories, dependency injection, reflection, branches, collections, and cross-method flows remain gaps or independent review-tier facts.
+
+  - id: legacy.remoting.registration.v1
+    name: Legacy .NET Remoting registration and activation evidence
+    description: Extracts RemotingConfiguration registration/configure calls and gated Activator.GetObject client activation evidence.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - RemotingServiceTypeRegistered
+      - RemotingClientTypeRegistered
+      - RemotingClientActivationDeclared
+      - RemotingApiUsageDeclared
+      - AnalysisGap
+    limitations:
+      - Registration and activation calls are static evidence only and do not prove service availability, endpoint reachability, deployment, network availability, exploitability, security posture, or production usage.
+      - URLs, object URIs, config file values, arbitrary strings, ports, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.
+      - Dynamic target types, dynamic modes, overload ambiguity, reflection, factory helpers, and unsupported activated-registration argument extraction reduce coverage.
+      - Activator.GetObject is promoted only with same-file Remoting context or compiler-resolved MarshalByRefObject evidence; otherwise it remains a review gap.
+
+  - id: legacy.remoting.config.v1
+    name: Legacy .NET Remoting config evidence
+    description: Extracts checked-in system.runtime.remoting XML sections, channels, service/client declarations, and providers using safe XML parsing and hashed config values.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - RemotingConfigSectionDeclared
+      - RemotingConfigChannelDeclared
+      - RemotingConfigServiceDeclared
+      - RemotingConfigClientDeclared
+      - RemotingConfigProviderDeclared
+      - AnalysisGap
+    limitations:
+      - Config evidence is checked-in XML only and does not prove config transform selection, machine.config contents, deployment, runtime mutation, service availability, network reachability, exploitability, security posture, or production usage.
+      - URLs, object URIs, application names, ports, provider properties, channel names, arbitrary config values, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.
+      - External includes, encrypted sections, malformed XML, unsupported custom sections, and unresolved transforms are reduced-coverage gaps rather than clean absence.
+
+  - id: legacy.data.metadata.inventory.v1
+    name: Legacy data metadata inventory
+    description: Inventories checked-in DBML, EDMX, typed DataSet XSD, TableAdapter, generated designer, config, and old ORM descriptor files with safe static metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataMetadataDeclared
+      - AnalysisGap
+    limitations:
+      - Metadata inventory is static repository evidence and does not prove runtime data access, database existence, provider compatibility, deployment, or production usage.
+      - Arbitrary XSD files are gated; unrelated schemas are not treated as typed DataSet metadata.
+      - Malformed, unsupported, too-large, or parser-rejected metadata is emitted as an analysis gap rather than clean absence.
+      - Safe properties include metadataKind, metadataHash, inventoryKind, repo-relative path, coverage, and limitation.
+      - Raw SQL, connection strings, config values, URLs, remotes, local absolute paths, source snippets, and secrets are hashed or omitted.
+
+  - id: legacy.data.dbml.v1
+    name: Legacy LINQ to SQL DBML metadata
+    description: Extracts safe DBML entity, table, column, association, and routine descriptor evidence from checked-in metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - AnalysisGap
+    limitations:
+      - DBML metadata is static design-time evidence and does not prove database existence, LINQ runtime behavior, routine existence, lazy loading, query execution, or provider compatibility.
+      - Generated-code linkage is separate evidence and does not upgrade metadata descriptor tier.
+      - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
+      - Unsafe names, provider metadata, database names, connection names, and routine identifiers are hashed or omitted when required.
+
+  - id: legacy.data.edmx.v1
+    name: Legacy Entity Framework EDMX metadata
+    description: Extracts safe CSDL, SSDL, and unambiguous MSL entity/storage/property mapping evidence from checked-in EDMX metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - AnalysisGap
+    limitations:
+      - EDMX metadata is static design-time evidence and does not prove EF runtime model loading, lazy loading, change tracking, query execution, provider compatibility, migrations, or schema existence.
+      - Complex, inherited, split, conditional, many-to-many, duplicate-container, and provider-extension mappings are gaps unless a future spec defines deterministic handling.
+      - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
+      - Namespace URIs, provider details, unsafe identifiers, and raw metadata content are hashed or omitted.
+
+  - id: legacy.data.typed-dataset.v1
+    name: Legacy typed DataSet and TableAdapter metadata
+    description: Extracts safe typed DataSet table/column/relation, TableAdapter, command descriptor, and complete static command-text hash/shape evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - SqlTextUsed
+      - QueryPatternDetected
+      - AnalysisGap
+    limitations:
+      - Typed DataSet metadata is static design-time evidence and does not prove adapter execution, stored-procedure existence, command reachability, SQL execution, provider compatibility, or database schema existence.
+      - Raw SQL command text is never stored; complete static command text may produce only existing hash/length and safe shape evidence.
+      - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, textHash, textLength, queryShapeHash, and hash variants for unsafe identifiers.
+      - Unrelated XSD files, dynamic commands, incomplete schemas, unsupported provider metadata, and stale or missing generated code remain gaps or unsupported evidence.
+
+  - id: legacy.data.config.v1
+    name: Legacy data provider and connection config metadata
+    description: Extracts safe provider, connection-name, provider factory, Entity Framework provider, and ORM config metadata from checked-in config files.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataProviderConfigDeclared
+      - AnalysisGap
+    limitations:
+      - Config metadata is static checked-in evidence and does not prove runtime environment selection, transform application, secret availability, provider installation, database reachability, or production usage.
+      - Raw connection strings, usernames, passwords, server names, catalog names, file paths, URLs, secret-looking values, and config values are hashed or omitted.
+      - Safe reducer-facing properties include configKind, connectionName, providerName, connectionNameHash, providerNameHash, valueHash, coverage, and limitation.
+      - Encrypted sections, external config includes, transforms, and code-built connections are reduced-coverage gaps.
+
+  - id: legacy.data.generated-link.v1
+    name: Legacy data generated-code linkage
+    description: Links DBML, EDMX, and typed DataSet metadata descriptors to checked-in generated files or compiler-resolved generated symbols when deterministic evidence exists.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - LegacyDataGeneratedCodeLinked
+      - AnalysisGap
+    limitations:
+      - Generated-code linkage is static evidence and does not prove generated files are fresh, runtime code paths execute, query execution occurs, or database access happens.
+      - Global short-name matching is not allowed; ambiguous or missing generated-code candidates are gaps.
+      - Safe reducer-facing properties include linkKind, symbolRole, typeName, generatedCodeFileName, supportingFactIds, metadataPath, and hash variants for unsafe identifiers.
+      - Linkage tier is recorded separately and does not upgrade the descriptor tier of the metadata evidence.
+
+  - id: legacy.webforms.inventory.v1
+    name: Legacy WebForms file and page inventory
+    description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, and safe page linkage metadata.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsPageDeclared
+      - WebFormsControlDeclared
+      - AnalysisGap
+    limitations:
+      - Markup and file inventory are static repository evidence and do not prove IIS configuration, page activation, runtime control tree construction, event firing, deployment, or production usage.
+      - Directive paths and linkage attributes are kept only as safe relative filenames or omitted; raw local paths, URLs, config values, snippets, and unsafe expressions are not stored.
+      - Malformed or unreadable markup is an analysis gap, not proof that no WebForms page, control, or handler exists.
+
+  - id: legacy.webforms.event-binding.v1
+    name: Legacy WebForms markup event binding evidence
+    description: Extracts supported static WebForms server-control event attributes such as OnClick, OnCommand, OnLoad, and OnInit with control IDs, handler names, and line spans.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsEventBindingDeclared
+      - AnalysisGap
+    limitations:
+      - Event bindings are static declarations and do not prove that a control exists at runtime, a user can reach the event, event bubbling occurs, or the handler executes.
+      - Unsupported event-like attributes, dynamic wiring, generated controls, data-bound command names, and unsafe handler values are needs-review or gap evidence rather than guessed handlers.
+      - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
+
+  - id: legacy.webforms.handler-resolution.v1
+    name: Legacy WebForms code-behind handler resolution
+    description: Resolves markup event handlers to linked code-behind partial methods by semantic source-symbol evidence when available, otherwise by scoped structural or syntax fallback.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsHandlerResolved
+      - AnalysisGap
+    limitations:
+      - Handler resolution is static evidence and does not prove runtime event execution, page lifecycle order, postback behavior, authorization, deployment, or production usage.
+      - Syntax and structural fallback depend on directive/linkage and partial class names; missing builds, generated code, stale files, partial classes, overloads, and event subscriptions can reduce confidence.
+      - Ambiguous methods or partial classes are emitted as gaps and TraceMap does not choose an arbitrary winner.
+      - Auto-event-wireup MVP evidence is limited to Page_Load and Page_Init and requires explicit enabled evidence; false, unknown, or contradictory evidence remains Tier4Unknown.
+
+  - id: legacy.webforms.designer-control.v1
+    name: Legacy WebForms designer control field evidence
+    description: Extracts designer-generated partial-class control fields and links them as supporting evidence for matching markup control IDs.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsDesignerControlDeclared
+      - AnalysisGap
+    limitations:
+      - Designer files can be generated, missing, stale, hand-edited, or mismatched with markup; designer evidence is supporting evidence only.
+      - Designer fields do not classify code as business logic and do not prove runtime control creation or page compilation.
+
+  - id: legacy.webforms.event-flow.v1
+    name: Legacy WebForms event-to-backend static flow projection
+    description: Projects resolved WebForms handlers to directly connected call, WCF/service-reference, HTTP, SQL/query, config, or dependency-surface evidence while preserving supporting fact IDs and coverage labels.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsEventFlowProjected
+      - AnalysisGap
+    limitations:
+      - Event-flow projection is static evidence and does not prove runtime event firing, branch feasibility, dynamic dispatch, delegate invocation, reflection targets, event bubbling, generated-code freshness, service reachability, SQL execution, database state, or production usage.
+      - MVP projection prefers direct handler-to-evidence facts and can miss multi-hop call chains, dependency injection, reflection, generated code, unsupported frameworks, or ORM metadata.
+      - Reduced semantic coverage, missing call edges, ambiguous generated clients, or unavailable terminal evidence produce partial or unknown classifications rather than clean absence claims.
+
+  - id: legacy.webforms.logic-signal.v1
+    name: Legacy WebForms static logic and UI-boilerplate signals
+    description: Emits bounded deterministic handler-level signals for visible calculations, branches, service/database calls, domain object construction, and UI-only assignments or data binding.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsLogicSignalDetected
+      - AnalysisGap
+    limitations:
+      - Logic signals are deterministic static heuristics, not proof of business logic, code quality, risk, runtime behavior, or production usage.
+      - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
+      - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
+
+  - id: legacy.flow.input-availability.v1
+    name: Legacy flow input availability
+    description: Records whether legacy flow composition could read expected WebForms, API, WCF, HTTP, SQL, legacy data, call graph, parameter-forwarding, coverage, and analysis-gap evidence from an index.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy flow availability gap
+      - SchemaMissing gap
+      - ExtractorUnavailable gap
+    limitations:
+      - Availability rows describe static index contents only; they do not prove that missing evidence is absent from the repository.
+      - Older indexes and disabled extractors produce explicit gaps that cap absence claims.
+      - Missing optional parameter-forwarding or legacy data metadata evidence must not be interpreted as clean absence of value or data paths.
+
+  - id: legacy.flow.root-selection.v1
+    name: Legacy flow static root selection
+    description: Selects static legacy roots from WebForms handler resolution, supported event binding, approved auto-wireup lifecycle evidence, HTTP/API route evidence, and service facts.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - legacy flow root node
+      - UnresolvedRoot gap
+      - NoRootsFound gap
+    limitations:
+      - WebForms event and lifecycle roots are static declarations and do not prove user action, page lifecycle execution, postback state, event bubbling, deployment, authorization, or production use.
+      - Name-only, syntax-only, ambiguous, missing code-behind, missing designer, and generated-code-limited roots remain review-tier or gap evidence.
+      - Arbitrary method names, raw markup strings, and unsupported event-like text are not roots without rule-backed entry-point facts.
+
+  - id: legacy.flow.static-traversal.v1
+    name: Legacy flow static traversal
+    description: Assembles bounded deterministic paths from selected roots through existing call, creation, symbol relationship, WCF/service-reference, HTTP, SQL/query, legacy data, dependency-surface, and optional parameter-forward evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - legacy static flow path
+      - traversal truncation gap
+    limitations:
+      - Composed paths are static evidence, not runtime execution proof, reachability proof, production traffic, service deployment, branch feasibility, user behavior, or permission proof.
+      - Call edges may miss reflection, dynamic dispatch, delegates, runtime DI, partial methods, generated code, serializer behavior, event bubbling, collection contents, and branch-dependent behavior.
+      - WCF operation nodes are terminals in v1; traversal does not continue through service-side implementation or downstream service-side evidence.
+      - Traversal is bounded by depth, path, and frontier limits; truncated output is partial.
+
+  - id: legacy.flow.parameter-forward-unavailable.v1
+    name: Legacy flow parameter-forwarding availability gap
+    description: Records that optional parameter-forwarding evidence is unavailable because the index schema predates it or the feature was not enabled.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ParameterForwardEvidenceUnavailable gap
+    limitations:
+      - Missing parameter-forwarding evidence caps value-flow conclusions and does not prove that values are not forwarded.
+      - Paths assembled without parameter-forwarding evidence use only available call, object, symbol, and fact evidence.
+
+  - id: legacy.flow.classification.v1
+    name: Legacy flow conservative classification
+    description: Assigns StrongStaticPath, ProbableStaticPath, NeedsReviewStaticPath, NoBackendEvidence, ReducedCoverage, or AnalysisGap based on the weakest required evidence tier, coverage, ambiguity, high fan-out, and terminal evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - legacy flow classification
+    limitations:
+      - Syntax-only, name-only, ambiguous, generated-code-uncertain, high fan-out, or partial-terminal evidence cannot produce StrongStaticPath.
+      - Reduced coverage and missing extractors produce ReducedCoverage or AnalysisGap rather than clean absence.
+      - The v1 high fan-out threshold is five or more inbound candidate paths from distinct roots to one terminal identity, or generic ambiguous terminal keys such as status, id, name, value, result, or response. This conservative placeholder requires calibration against redacted legacy validation data, including false-positive and false-negative metrics by terminal kind.
+
+  - id: legacy.flow.gap-propagation.v1
+    name: Legacy flow gap propagation
+    description: Propagates schema, extractor, coverage, cross-source stitching, unresolved-root, cycle, and terminal-evidence gaps into legacy flow results.
+    evidenceTier: Tier4Unknown
+    emits:
+      - legacy flow analysis gap
+      - CrossSourceStitchingUnavailable gap
+      - CycleDetected gap
+    limitations:
+      - A propagated gap means the static composition cannot prove or disprove a path under available evidence.
+      - Cross-source traversal is allowed only through explicit persisted endpoint or dependency alignment evidence.
+      - Cycle pruning and bounded traversal preserve termination but may omit possible static paths.
+
+  - id: legacy.flow.redaction.v1
+    name: Legacy flow report redaction
+    description: Hashes or omits unsafe display values in legacy flow Markdown and JSON outputs while preserving source fact IDs, rule IDs, tiers, and safe spans.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy flow redaction note
+    limitations:
+      - Raw local absolute paths, private repository names, raw remotes, URLs, WSDL or SOAP addresses, raw SQL, config values, connection strings, source snippets, and secret-looking values are omitted or replaced with stable hashes.
+      - Redaction can reduce readability and does not change the underlying evidence tier or classification.
+
+  - id: legacy.flow.report.v1
+    name: Legacy static flow report
+    description: Writes deterministic versioned legacy-flow Markdown and JSON reports from static composed evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy-flow.v1 JSON report
+      - legacy static flow Markdown report
+    limitations:
+      - Reports describe possible static paths and no-backend-evidence findings under available coverage only; absence is not proven.
+      - Reports do not prove runtime execution, guaranteed backend reachability, SQL execution, database existence, service deployment, production dependency, or impact.
+      - JSON schema version legacy-flow.v1 preserves stable property names; future breaking changes require a new schema version.
 
   - id: snapshot.diff.source.v1
     name: Snapshot diff source comparison
@@ -813,6 +1210,73 @@ rules:
     limitations:
       - Workspace diagnostics can be environment-specific because they depend on installed SDKs and available project references.
       - Compilation gaps do not prevent syntax fallback facts from being emitted.
+      - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
+
+  - id: build.environment.target-framework.v1
+    name: Build environment target framework diagnostics
+    description: Records static target framework declarations that may explain required reference assemblies or SDK families for semantic analysis.
+    evidenceTier: Tier2Structural
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Target framework diagnostics are static project-file evidence and do not prove runtime installation, support status, security posture, deployment compatibility, or sufficient tooling.
+      - Guidance is environment compatibility context, not an instruction to install obsolete or unsafe runtimes.
+      - Legacy target framework evidence is coverage-neutral unless a separate project-load, reference assembly, SDK, runtime, or toolset gap is observed.
+
+  - id: build.environment.toolset.v1
+    name: Build environment toolset diagnostics
+    description: Records static MSBuild, Visual Studio, and import indicators such as ToolsVersion, VisualStudioVersion, and safe target basenames.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Toolset indicators are static clues and do not prove that a build can run or that a particular installed tool version is sufficient.
+      - TraceMap does not evaluate arbitrary imported build logic or MSBuild conditions.
+      - Unsafe import values are hashed or omitted before fact IDs and artifacts are created.
+
+  - id: build.environment.project-format.v1
+    name: Build environment project format diagnostics
+    description: Records legacy or unsupported project-format clues such as non-SDK-style C# projects, Web Application targets, known unsupported project GUIDs, and unknown project formats.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Project-format diagnostics are static repository evidence and do not prove runtime IIS, desktop, database, setup, deployment, or service behavior.
+      - Unsupported and unknown formats are analysis gaps; they do not prove absence of code evidence.
+      - Missing compatible tooling means semantic coverage may be reduced, while syntax/config fallback evidence can still be useful.
+
+  - id: build.environment.restore.v1
+    name: Build environment restore diagnostics
+    description: Records safe NuGet and restore-shape diagnostics from packages.config, PackageReference, packages.lock.json, nuget.config, and sanitized explicit restore failures.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Restore diagnostics do not prove package absence, vulnerability, transitive dependency resolution, runtime loading, deployment, or API compatibility.
+      - Package source URLs, credentials, config values, command output, and local paths are omitted or categorized before shareable artifacts are written.
+      - When restore is not requested, TraceMap records scan-option context rather than claiming packages are missing.
+
+  - id: build.environment.generated-files.v1
+    name: Build environment generated and designer file diagnostics
+    description: Records deterministic generated/designer-file gaps for supported WebForms, WCF service-reference, resource, and settings patterns.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Generated-file diagnostics are analysis gaps and do not prove runtime generation, freshness, service reachability, page lifecycle behavior, or absence of code.
+      - Missing or malformed generated/design-time files can cap semantic confidence but must not suppress syntax/config facts already found.
+      - TraceMap does not rewrite, regenerate, or repair generated files.
+
+  - id: build.environment.workspace-diagnostic.v1
+    name: Build environment workspace diagnostics
+    description: Records sanitized MSBuildWorkspace, SDK resolution, reference assembly, restore, and compilation setup categories that explain reduced semantic coverage.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - BuildEnvironmentDiagnostic
+    limitations:
+      - Workspace diagnostics are sanitized categories and do not include raw native output, local paths, private repository names, remotes, package sources, config values, credentials, or source snippets.
+      - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
+      - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
 
   - id: http.client.invocation.v1
     name: HTTP client invocation
@@ -890,145 +1354,6 @@ rules:
       - JSON line spans are best-effort key locations.
       - Runtime configuration providers, environment overrides, secrets stores, and transformed config files are not evaluated.
       - Raw config values and connection strings are not stored by default; hashes are emitted for sensitive values.
-
-  - id: legacy.data.metadata.inventory.v1
-    name: Legacy data metadata inventory
-    description: Inventories checked-in DBML, EDMX, typed DataSet XSD, generated designer, config, and old data descriptor files with safe static metadata.
-    evidenceTier: Tier2Structural or Tier4Unknown
-    emits:
-      - LegacyDataMetadataDeclared
-      - AnalysisGap
-    safeProperties:
-      - metadataKind
-      - metadataHash
-      - descriptorKind
-      - generatedCodeFileName
-      - classification
-    limitations:
-      - Metadata inventory is static repository evidence and does not prove runtime data access, database existence, provider compatibility, deployment, config selection, or production usage.
-      - Arbitrary XSD files are gated; unrelated schemas are not treated as typed DataSet metadata.
-      - Malformed, unsupported, too-large, or parser-rejected metadata is emitted as an analysis gap rather than clean absence.
-      - Raw SQL, connection strings, config values, URLs, remotes, local absolute paths, source snippets, and secrets are hashed or omitted.
-
-  - id: legacy.data.dbml.v1
-    name: Legacy LINQ to SQL DBML metadata
-    description: Extracts safe DBML entity, table, column, association, and routine descriptor evidence from checked-in metadata.
-    evidenceTier: Tier2Structural or Tier4Unknown
-    emits:
-      - LegacyDataEntityDeclared
-      - LegacyDataStorageObjectDeclared
-      - LegacyDataColumnDeclared
-      - LegacyDataMappingDeclared
-      - AnalysisGap
-    safeProperties:
-      - metadataKind
-      - metadataHash
-      - entityName
-      - typeName
-      - tableName
-      - columnName
-      - propertyName
-      - mappingKind
-      - storageObjectHash
-      - columnHash
-    limitations:
-      - DBML metadata is static design-time evidence and does not prove database existence, LINQ runtime behavior, routine existence, lazy loading, query execution, or provider compatibility.
-      - Generated-code linkage is separate evidence and does not upgrade metadata descriptor tier.
-      - Unsafe names, provider metadata, database names, connection names, routine identifiers, and descriptor values are hashed or omitted when required.
-
-  - id: legacy.data.edmx.v1
-    name: Legacy Entity Framework EDMX metadata
-    description: Extracts safe CSDL, SSDL, and unambiguous MSL entity/storage/property mapping evidence from checked-in EDMX metadata.
-    evidenceTier: Tier2Structural or Tier4Unknown
-    emits:
-      - LegacyDataEntityDeclared
-      - LegacyDataStorageObjectDeclared
-      - LegacyDataColumnDeclared
-      - LegacyDataMappingDeclared
-      - AnalysisGap
-    safeProperties:
-      - metadataKind
-      - sourceSection
-      - entityName
-      - entityTypeName
-      - storageObjectName
-      - propertyName
-      - columnName
-      - mappingKind
-      - providerNameHash
-    limitations:
-      - EDMX metadata is static design-time evidence and does not prove EF runtime model loading, lazy loading, change tracking, query execution, provider compatibility, migrations, or schema existence.
-      - Complex, inherited, split, conditional, many-to-many, duplicate-container, and provider-extension mappings are gaps unless a future spec defines deterministic handling.
-      - Namespace URIs, provider details, unsafe identifiers, raw metadata content, and raw provider values are hashed or omitted.
-
-  - id: legacy.data.typed-dataset.v1
-    name: Legacy typed DataSet and TableAdapter metadata
-    description: Extracts safe typed DataSet table/column/relation, TableAdapter, command descriptor, and complete static command-text hash/shape evidence.
-    evidenceTier: Tier2Structural or Tier4Unknown
-    emits:
-      - LegacyDataEntityDeclared
-      - LegacyDataStorageObjectDeclared
-      - LegacyDataColumnDeclared
-      - LegacyDataMappingDeclared
-      - SqlTextUsed
-      - QueryPatternDetected
-      - AnalysisGap
-    safeProperties:
-      - metadataKind
-      - dataSetName
-      - tableName
-      - columnName
-      - propertyName
-      - commandName
-      - textHash
-      - textLength
-      - queryShapeHash
-    limitations:
-      - Typed DataSet metadata is static design-time evidence and does not prove adapter execution, stored-procedure existence, command reachability, SQL execution, provider compatibility, or database schema existence.
-      - Raw SQL command text is never stored; complete static command text may produce only existing hash/length and safe shape evidence.
-      - Unrelated XSD files, dynamic commands, incomplete schemas, unsupported provider metadata, and stale or missing generated code remain gaps or unsupported evidence.
-
-  - id: legacy.data.config.v1
-    name: Legacy data provider and connection config metadata
-    description: Extracts safe provider, connection-name, provider factory, Entity Framework provider, and ORM config metadata from checked-in config files.
-    evidenceTier: Tier2Structural or Tier4Unknown
-    emits:
-      - LegacyDataProviderConfigDeclared
-      - AnalysisGap
-    safeProperties:
-      - metadataKind
-      - connectionName
-      - connectionNameHash
-      - providerInvariantName
-      - providerInvariantHash
-      - connectionStringHash
-      - providerTypeHash
-      - configSection
-    limitations:
-      - Config metadata is static checked-in evidence and does not prove runtime environment selection, transform application, secret availability, provider installation, database reachability, or production usage.
-      - Raw connection strings, usernames, passwords, server names, catalog names, file paths, URLs, secret-looking values, and config values are hashed or omitted.
-      - Encrypted sections, external config includes, transforms, and code-built connections are reduced-coverage gaps.
-
-  - id: legacy.data.generated-link.v1
-    name: Legacy data generated-code linkage
-    description: Links DBML, EDMX, and typed DataSet metadata descriptors to checked-in generated files when deterministic structural or syntax evidence exists.
-    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
-    emits:
-      - LegacyDataGeneratedCodeLinked
-      - AnalysisGap
-    safeProperties:
-      - metadataKind
-      - supportingFactId
-      - linkKind
-      - generatedCodeFileName
-      - generatedCodeFilePath
-      - typeName
-      - typeHash
-    limitations:
-      - Generated-code linkage is static evidence and does not prove generated files are fresh, runtime code paths execute, query execution occurs, or database access happens.
-      - The current .NET scanner skips generated files in general syntax and semantic extraction; this rule emits descriptor-scoped generated-code links only.
-      - Global short-name matching is not allowed; ambiguous or missing generated-code candidates are gaps.
-      - Linkage tier is recorded separately and does not upgrade the descriptor tier of the metadata evidence.
 
   - id: contract.delta.reduce.v1
     name: Contract delta reduction
@@ -2144,3 +2469,119 @@ rules:
       - Missing package evidence under reduced coverage is an analysis gap, not proof that a package is absent.
       - Exact package-name matching can miss aliases, relocated packages, shaded dependencies, generated manifests, imported build files, and dynamically declared dependencies.
       - No vulnerability database, registry, changelog, license, LLM, embedding, vector, or prompt-based analysis is used.
+
+  - id: legacy.baseline.redacted-manifest.v1
+    name: Legacy baseline redacted manifest
+    description: Creates deterministic redacted legacy baseline manifests from TraceMap scan outputs using neutral labels and aggregate evidence counts.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyBaselineManifest
+    limitations:
+      - Baseline manifests are counts-only summaries and omit raw facts, source paths, snippets, SQL text, config values, remotes, analyzer logs, and private sample identities.
+      - Public-safe classification depends on validator coverage and reviewer judgment; it is not proof that every possible unsafe value was present or absent.
+      - Missing evidence under reduced coverage remains an analysis gap and must not be interpreted as absence.
+
+  - id: legacy.baseline.coverage-snapshot.v1
+    name: Legacy baseline coverage snapshot
+    description: Summarizes observed rule IDs, fact types, evidence tiers, extractors, surfaces, known gaps, and reduced-coverage states for a redacted baseline.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyBaselineRuleCoverage
+      - LegacyBaselineFactCoverage
+    limitations:
+      - Coverage snapshots preserve aggregate static evidence counts only and do not prove runtime behavior, deployment, or business relevance.
+      - Surface status values are scope-relative and can be unknown, not-in-scope, not-observed, or observed depending on available scan artifacts.
+      - Extractor and schema differences can make future count movement require a migration map or reviewer interpretation.
+
+  - id: legacy.baseline.regression-comparison.v1
+    name: Legacy baseline regression comparison
+    description: Compares two redacted legacy baseline manifests by static evidence counts, coverage labels, extractor versions, known gaps, and supported surfaces.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyBaselineComparison
+      - LegacyBaselineMovement
+    limitations:
+      - Comparisons describe static evidence count and coverage movement only; they do not prove runtime behavior, production use, safety posture, or business impact.
+      - Decreases, removed categories, rejected classifications, reduced coverage, and unmapped schema or rule changes require human review.
+      - Migration maps document schema, rule, or fact renames but do not prove semantic equivalence beyond the stated limitation.
+
+  - id: legacy.baseline.safety-validation.v1
+    name: Legacy baseline safety validation
+    description: Validates redacted baseline and comparison artifacts for storage boundaries, neutral labels, unsafe content categories, rule-catalog coverage, and promotion readiness.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyBaselineValidationDiagnostic
+    limitations:
+      - Safety diagnostics report categories without echoing unsafe values, so remediation requires inspecting local-only artifacts outside committed outputs.
+      - Secret-like, low-entropy, enumerable, or private identity values are omitted or represented category-only instead of hashed for public-safe artifacts.
+      - Validation is a guardrail for committed summaries, not authorization to publish private scan artifacts.
+
+  - id: legacy.evidence-pack.summary.v1
+    name: Legacy evidence-pack summary
+    description: Creates deterministic redacted evidence-pack summaries from TraceMap scan outputs, baseline manifests, or already redacted legacy validation summaries.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyEvidencePackSummary
+      - LegacyEvidencePackDocument
+    limitations:
+      - Evidence packs are curated summaries over existing static evidence and are not source-of-truth scan outputs.
+      - Aggregate counts do not prove runtime execution, deployment, reachability, production use, or business impact.
+      - Reduced coverage, missing inputs, and unsupported input schemas remain labeled gaps rather than absence evidence.
+
+  - id: legacy.evidence-pack.section.v1
+    name: Legacy evidence-pack section evidence
+    description: Emits safe per-section evidence rows with rule IDs, evidence tiers, source labels, coverage labels, provenance categories, and limitations.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyEvidencePackSection
+      - LegacyEvidencePackRow
+    limitations:
+      - Section rows summarize static evidence categories and counts only; raw source snippets, SQL, config values, remotes, and local paths are omitted.
+      - Section availability is scope-relative and must not be read as complete repository coverage unless the underlying scan coverage proves it.
+      - Syntax or textual fallback evidence remains review-tier even when summarized in a public-safe pack.
+
+  - id: legacy.evidence-pack.claim-boundary.v1
+    name: Legacy evidence-pack claim boundary
+    description: Records public/demo/local claim boundaries and prohibited-claim downgrades for evidence-pack output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyEvidencePackGap
+      - LegacyEvidencePackLimitation
+    limitations:
+      - Claim boundaries describe what the pack is allowed to say; they do not upgrade the underlying evidence tier.
+      - Public-safe and demo-safe packs can still require human judgment before site copy or release notes use them.
+      - The validator blocks obvious overclaims but is not proof that every possible unsafe interpretation has been removed.
+
+  - id: legacy.evidence-pack.safety-validation.v1
+    name: Legacy evidence-pack safety validation
+    description: Validates generated evidence-pack JSON and Markdown for storage boundaries, neutral labels, unsafe content categories, expected claim level, and promotion readiness.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyEvidencePackValidationResult
+      - LegacyEvidencePackValidationDiagnostic
+    limitations:
+      - Safety diagnostics report categories without echoing unsafe values, so remediation may require inspecting local-only inputs outside committed outputs.
+      - Validation is a guardrail for redacted artifacts, not authorization to publish raw scan output or private repository identity.
+      - Secret-like, low-entropy, enumerable, or private values are rejected or represented category-only rather than copied into public-safe output.
+
+  - id: legacy.evidence-pack.command-provenance.v1
+    name: Legacy evidence-pack command provenance
+    description: Records sanitized generator, input-kind, input-fingerprint, and validation-command provenance for evidence packs.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyEvidencePackCommandProvenance
+    limitations:
+      - Command provenance is normalized and omits raw local paths, environment variables, remotes, URLs, and private repository identity.
+      - Input fingerprints prove byte identity of the summarized input, not semantic equivalence or runtime behavior.
+      - A validation command listed in provenance is expected evidence, not proof that an external CI system ran successfully.
+
+  - id: legacy.evidence-pack.input-availability.v1
+    name: Legacy evidence-pack input availability
+    description: Emits gaps for missing, unsupported, incompatible, unsafe, or partial evidence-pack inputs.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyEvidencePackGap
+    limitations:
+      - Missing or unsupported inputs are analysis gaps and must not be interpreted as clean absence of legacy evidence.
+      - Raw scan-output inputs are summarized only when they are under approved sample or ignored local storage boundaries.
+      - Input availability does not prove source freshness, generated-code freshness, build completeness, or runtime reachability.

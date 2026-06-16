@@ -1,3 +1,4 @@
-# Synthetic TraceMap Report
+# Synthetic TraceMap Scan Report
 
-This checked-in fixture contains only neutral aggregate test data.
+This fixture is a public-safe synthetic scan output for baseline tests.
+It intentionally records reduced coverage and aggregate evidence only.

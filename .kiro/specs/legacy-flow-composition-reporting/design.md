@@ -103,6 +103,10 @@ narrows start evidence to a source label, `--surface-name` filters terminal
 surface identity using the current exact/wildcard behavior, and `--source-pair`
 constrains explicit endpoint or dependency crossings where such combined
 evidence exists.
+Safe generated display identities, including redacted hash display values such
+as `<kind>-<hash-prefix>`, are surface identities for this selector model; they
+do not introduce language-specific implicit prefix matching outside the existing
+exact/wildcard behavior.
 
 ## Proposed Package Layout
 
@@ -161,7 +165,7 @@ Primary fact families:
 | WCF/service reference | generated client, operation contract, service endpoint, metadata operation, service-reference mapping | Service/backend terminal or intermediate evidence |
 | HTTP/API | route/endpoint facts, HTTP client/dependency surfaces | API roots and downstream HTTP terminals |
 | SQL/query | `SqlTextUsed`, `QueryPatternDetected`, SQL dependency surfaces | Data terminal evidence |
-| Legacy data metadata | queued `LegacyData*` facts and generated-code links | Terminal evidence when a root reaches a generated data type, mapped storage object, table adapter, or query/data descriptor; intermediate context only when it corroborates an already connected SQL/query or generated-code path |
+| Legacy data metadata | optional `LegacyData*` facts and generated-code links | Terminal evidence when a root reaches a generated data type, mapped storage object, table adapter, or query/data descriptor; intermediate context only when it corroborates an already connected SQL/query or generated-code path |
 | Coverage/gaps | scan manifest, extractor versions, coverage labels, `AnalysisGap` facts | Coverage and classification caps |
 
 The implementation should not require legacy data metadata facts to exist. If
