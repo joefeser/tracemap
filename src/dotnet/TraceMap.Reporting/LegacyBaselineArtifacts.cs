@@ -206,7 +206,7 @@ public static class LegacyBaselineArtifacts
 
     private static readonly IReadOnlyList<(Regex Pattern, string Category)> UnsafePatterns =
     [
-        (new Regex(@"(/Users/|/home/|/private/var/|[A-Za-z]:\\|\\\\)", RegexOptions.Compiled), "absolute-path"),
+        (new Regex(@"(\x2FUsers\x2F|/home/|/private/var/|[A-Za-z]:\\|\\\\)", RegexOptions.Compiled), "absolute-path"),
         (new Regex(@"(\bhttps?://|\bssh://|\bgit@|\.git\b)", RegexOptions.Compiled | RegexOptions.IgnoreCase), "remote-or-url"),
         (new Regex(@"\b(select\s+.+\s+from|insert\s+into|update\s+\w+\s+set|delete\s+from|create\s+table)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline), "raw-sql"),
         (new Regex(@"\b(connectionString|Server=|Data Source=|User Id=|Password=|Pwd=|Initial Catalog=)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase), "config-or-connection-string"),

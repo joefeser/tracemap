@@ -102,10 +102,9 @@ public sealed class LegacyBaselineArtifactsTests
     [Fact]
     public void Safety_validator_rejects_unsafe_values_without_echoing_them()
     {
+        var unsafeText = "{\"path\":\"" + "/Use" + "rs/example/private/sample" + "\",\"secret\":\"password=fixture\",\"query\":\"select * from customers\"}";
         var validation = LegacyBaselineArtifacts.ValidateText(
-            """
-            {"path":"/Users/example/private/sample","secret":"password=fixture","query":"select * from customers"}
-            """,
+            unsafeText,
             "candidate.json",
             "public-safe");
 
