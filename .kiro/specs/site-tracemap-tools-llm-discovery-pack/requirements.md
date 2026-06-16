@@ -1,7 +1,8 @@
 # Site TraceMap Tools LLM Discovery Pack Requirements
 
 Public claim level: demo
-Status: ready-for-implementation / not started
+Status: not-started
+Readiness: ready-for-implementation
 
 ## Objective
 
@@ -84,12 +85,18 @@ Acceptance criteria:
   source-of-truth repository documents that are safe to expose publicly.
 - WHEN the site is built THEN it SHALL publish `/routes-index.json` for
   public-safe site route discovery.
+- Discovery-only metadata SHALL come from a checked-in source file such as
+  `site/src/_site/discovery.json` or an equivalent reviewed source, not from
+  HTML scraping.
 - Each index SHALL include stable paths or URLs, titles or labels, public claim
   levels where applicable, and short summaries.
 - The indexes SHALL identify source-of-truth repository docs separately from
   site presentation pages.
 - The indexes SHALL include limitations or non-claims metadata for entries that
   describe evidence, demo results, roadmap items, or proof packets.
+- Generated JSON entries SHALL be sorted deterministically by path or URL.
+- Repository document URLs SHALL use stable public refs such as `main` or a
+  release tag, not the implementation branch.
 - The indexes SHALL avoid private implementation details and raw generated
   artifacts that are not already public-safe.
 
@@ -144,8 +151,18 @@ Acceptance criteria:
   verify expected routes, claim-level labels, and non-claims.
 - WHEN the discovery text is reviewed THEN it SHALL not contain AI
   impact-analysis claims or imply LLM features in core TraceMap.
-- WHEN sitemap or robots metadata should expose the new entry points THEN the
-  implementation SHALL update the generated metadata through existing site
-  patterns.
+- WHEN discovery entry points are exposed THEN `/llms.txt` SHOULD be linked
+  from `robots.txt` or direct site links without requiring generated sitemap
+  entries for `.txt` or `.json` files.
+- IF the implementation adds `/llms.txt`, `/docs-index.json`, or
+  `/routes-index.json` to generated sitemap output THEN it SHALL also update
+  sitemap validation to explicitly allow those exact file paths.
+- Validation SHALL check JSON field schemas for the discovery indexes.
+- Validation SHALL check that every internal route or proof path referenced by
+  discovery outputs resolves to an artifact in `site/dist`.
+- External repository document URLs SHALL be validated for stable public ref
+  format, not for `site/dist` artifact presence.
+- Validation SHALL check denied public-unsafe tokens and forbidden positioning
+  phrases across `llms.txt` and the generated JSON indexes.
 - The implementation-state note SHALL record branch, scope decisions,
   validation commands, review findings, and follow-up items.
