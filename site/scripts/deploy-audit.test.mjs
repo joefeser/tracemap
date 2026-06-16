@@ -17,6 +17,17 @@ test("validateDeployAuditDist accepts the required static publish surface", asyn
   assert.equal(result.requiredRouteCount, deployAuditRequiredRoutes.length);
 });
 
+test("validateDeployAuditDist accepts normalized sitemap urls", async () => {
+  const root = await createDeployDistFixture({
+    sitemap: renderSitemap(deployAuditRequiredRoutes, { indentLocs: true })
+  });
+  const errors = [];
+
+  await validateDeployAuditDist({ baseUrl: "https://tracemap.tools/", dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateDeployAuditDist reports missing deployment-critical files and routes", async () => {
   const root = await createDeployDistFixture();
   await rm(join(root, "dist", "llms.txt"));
@@ -31,7 +42,7 @@ test("validateDeployAuditDist reports missing deployment-critical files and rout
 
 test("validateDeployAuditDist rejects deploy audit page private artifact text", async () => {
   const root = await createDeployDistFixture({
-    deployAuditHtml: deployAuditPage("<p>/Users/example/private</p>")
+    deployAuditHtml: deployAuditPage(`<p>${localHomePath("example/private")}</p>`)
   });
   const errors = [];
 
@@ -40,7 +51,28 @@ test("validateDeployAuditDist rejects deploy audit page private artifact text", 
   assert.match(errors.join("\n"), /contains forbidden public text: \/Users\//);
 });
 
-async function createDeployDistFixture({ deployAuditHtml = deployAuditPage() } = {}) {
+test("validateDeployAuditDist rejects encoded deploy audit page private artifact text", async () => {
+  const root = await createDeployDistFixture({
+    deployAuditHtml: deployAuditPage("<p>&#47;Users&#47;example&#47;private</p>")
+  });
+  const errors = [];
+
+  await validateDeployAuditDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /contains forbidden public text: \/Users\//);
+});
+
+test("validateDeployAuditDist rejects invalid routes index shape", async () => {
+  const root = await createDeployDistFixture();
+  await writeFile(join(root, "dist", "routes-index.json"), "null\n", "utf8");
+  const errors = [];
+
+  await validateDeployAuditDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /routes-index\.json is invalid: expected an object/);
+});
+
+async function createDeployDistFixture({ deployAuditHtml = deployAuditPage(), sitemap } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-deploy-audit-test-"));
   const dist = join(root, "dist");
 
@@ -51,7 +83,7 @@ async function createDeployDistFixture({ deployAuditHtml = deployAuditPage() } =
   }
 
   await writeFile(join(dist, "robots.txt"), "User-agent: *\nAllow: /\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n", "utf8");
-  await writeFile(join(dist, "sitemap.xml"), renderSitemap(deployAuditRequiredRoutes), "utf8");
+  await writeFile(join(dist, "sitemap.xml"), sitemap ?? renderSitemap(deployAuditRequiredRoutes), "utf8");
   await writeDiscoveryFiles(dist);
 
   return root;
@@ -75,10 +107,15 @@ async function writeDiscoveryFiles(dist) {
   await writeFile(join(dist, "routes-index.json"), outputs.routesIndexJson, "utf8");
 }
 
-function renderSitemap(routes) {
+function renderSitemap(routes, { indentLocs = false } = {}) {
+  const loc = (route) =>
+    indentLocs
+      ? `  <url>\n    <loc>\n      https://tracemap.tools${route}\n    </loc>\n  </url>`
+      : `  <url><loc>https://tracemap.tools${route}</loc></url>`;
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${routes.map((route) => `  <url><loc>https://tracemap.tools${route}</loc></url>`).join("\n")}
+${routes.map((route) => loc(route)).join("\n")}
 </urlset>`;
 }
 
@@ -94,4 +131,8 @@ function deployAuditPage(extra = "") {
     <p>Check sitemap.xml, robots.txt, llms.txt, docs-index.json, and routes-index.json.</p>
     ${extra}
   </main></body></html>`;
+}
+
+function localHomePath(path) {
+  return `${String.fromCharCode(47)}Users/${path}`;
 }
