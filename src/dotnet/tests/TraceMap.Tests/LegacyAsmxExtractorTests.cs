@@ -173,6 +173,40 @@ public sealed class LegacyAsmxExtractorTests
     }
 
     [Fact]
+    public void Scan_normalizes_generated_async_proxy_operations_to_base_operation_name()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        var webReference = Path.Combine(repo, "Web References", "Rating");
+        Directory.CreateDirectory(webReference);
+        File.WriteAllText(Path.Combine(webReference, "Reference.cs"), """
+            using System;
+            using System.CodeDom.Compiler;
+            using System.Web.Services.Protocols;
+
+            namespace Sample.WebReferences.Rating;
+
+            [GeneratedCode("wsdl", "1.0")]
+            public sealed class RatingSoapClient : SoapHttpClientProtocol
+            {
+                public IAsyncResult BeginRate(string value, AsyncCallback callback, object state) => BeginInvoke("Rate", new object[] { value }, callback, state);
+                public string EndRate(IAsyncResult asyncResult) => (string)EndInvoke(asyncResult)[0];
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var operations = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AsmxClientOperationDeclared)
+            .ToArray();
+
+        Assert.Equal(2, operations.Length);
+        Assert.All(operations, fact => Assert.Equal("Rate", fact.ContractElement));
+        Assert.All(operations, fact => Assert.Equal("Rate", fact.Properties.GetValueOrDefault("operationName")));
+        Assert.DoesNotContain(operations, fact => fact.ContractElement is "BeginRate" or "EndRate");
+    }
+
+    [Fact]
     public void Scan_emits_gap_for_wsdl_external_imports_without_fetching()
     {
         using var temp = new TempDirectory();
@@ -286,6 +320,45 @@ public sealed class LegacyAsmxExtractorTests
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.AsmxConfigDeclared
             && fact.Properties.ContainsKey("configKey"));
+    }
+
+    [Fact]
+    public void Scan_ignores_generic_url_and_servicebus_app_settings_as_asmx_config()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <appSettings>
+                <add key="ApiBaseUrl" value="https://example.invalid/api" />
+                <add key="ServiceBusConnection" value="Endpoint=sb://example.invalid/;SharedAccessKey=secret" />
+                <add key="NotificationEndpointUrl" value="https://example.invalid/api/notify" />
+                <add key="RatingUrl" value="https://example.invalid/Rating.asmx" />
+                <add key="RatingServiceUrl" value="https://example.invalid/Rating.asmx" />
+                <add key="RatingServiceEndpointUrl" value="https://example.invalid/Rating.asmx" />
+                <add key="RatingEndpointUrl" value="https://example.invalid/Rating.asmx" />
+                <add key="RatingSoapEndpoint" value="https://example.invalid/Rating.asmx" />
+              </appSettings>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var configKeys = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AsmxConfigDeclared)
+            .Select(fact => fact.Properties.GetValueOrDefault("configKey"))
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .ToArray();
+
+        Assert.Contains("RatingUrl", configKeys);
+        Assert.Contains("RatingServiceUrl", configKeys);
+        Assert.Contains("RatingServiceEndpointUrl", configKeys);
+        Assert.Contains("RatingEndpointUrl", configKeys);
+        Assert.Contains("RatingSoapEndpoint", configKeys);
+        Assert.DoesNotContain("ApiBaseUrl", configKeys);
+        Assert.DoesNotContain("ServiceBusConnection", configKeys);
+        Assert.DoesNotContain("NotificationEndpointUrl", configKeys);
     }
 
     [Fact]
