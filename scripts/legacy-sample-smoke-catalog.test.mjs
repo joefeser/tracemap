@@ -278,6 +278,16 @@ test("render requires explicit date and dry-run writes no files", async () => {
   await assert.rejects(stat(dryRunOut), /ENOENT/u);
 });
 
+test("CLI entrypoint runs when invoked through node", () => {
+  const result = spawnSync(process.execPath, ["scripts/legacy-sample-smoke-catalog.mjs", "--help"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /legacy-sample-smoke-catalog\.mjs validate/u);
+});
+
 test("Markdown validation fails when sentinel is missing, stale, or hand edited", async () => {
   const catalog = await readCatalog();
   const tempRoot = await mkdtemp(join(tmpdir(), "legacy-smoke-catalog-"));
