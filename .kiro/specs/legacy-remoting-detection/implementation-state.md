@@ -39,6 +39,9 @@ reports may group both under generic legacy service-boundary summaries.
 - Sonnet re-review: completed with reduced coverage because Kiro attempted a
   denied shell command, then reviewed from prompt content; no blockers found and
   clarification findings patched in spec text.
+- PR review loop: Qodo optional delimiter finding patched by clarifying
+  `supportingFactIds` canonical Remoting output versus legacy consumer
+  compatibility.
 
 ## Validation
 
