@@ -59,6 +59,80 @@ rules:
       - Output-size and duration limits are validation harness bounds, not repository complexity conclusions.
       - Bounded failure preserves available evidence but must not be interpreted as complete scan coverage.
 
+  - id: legacy.sample-smoke-catalog.entry.v1
+    name: Legacy sample smoke catalog entry
+    description: Validates neutral legacy sample catalog rows with safe sample labels, claim levels, source classification, pinned identity category, and documented limitations.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - catalog entry validation row
+      - duplicate label rejection
+    limitations:
+      - Catalog entries describe expected static evidence families and do not replace scan evidence, evidence packs, baselines, or reducer findings.
+      - Hidden, private, local, or unreviewed samples cannot support public claims through catalog metadata alone.
+      - Validation failures are sanitized categories and pointers; unsafe planted values are not echoed.
+
+  - id: legacy.sample-smoke-catalog.source-identity.v1
+    name: Legacy sample smoke catalog source identity
+    description: Validates source classification, safe aliases, tracked commit identity kind, reviewed public SHA rules, fixture versions, and category-only SHA presence flags.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - source identity validation row
+      - claim-level cap rejection
+      - tracked commit identity rejection
+    limitations:
+      - Private, local, unknown, or category-only identities stay redacted and are not hashed into tracked output.
+      - Public SHA values are allowed only for reviewed public repository or archive sources.
+      - Fixture versions are deterministic catalog pins, not source-control remotes.
+
+  - id: legacy.sample-smoke-catalog.family-expectation.v1
+    name: Legacy sample smoke catalog family expectation
+    description: Validates closed evidence family IDs, expected exact rule IDs, evidence tiers, coverage labels, extractor IDs or gap codes, allowed states, and family limitations.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - family expectation validation row
+      - unknown family or rule rejection
+    limitations:
+      - Family expectations are smoke coverage targets and do not prove feature absence when unsupported, deferred, reduced, truncated, or blocked by an analysis gap.
+      - Syntax fallback expectations remain review-tier unless a separate semantic extractor emits compiler-resolved evidence.
+      - Large-repository expectations use timeout and artifact-size buckets rather than raw file lists or identifying counts.
+
+  - id: legacy.sample-smoke-catalog.validation-command.v1
+    name: Legacy sample smoke catalog validation command
+    description: Validates sanitized validation command templates, placeholders, command modes, closed command input kinds, expected artifact classes, gates, timeout buckets, and artifact-size buckets.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - validation command template row
+      - unsafe command template rejection
+    limitations:
+      - Command templates show reproducible shape only; operator-specific paths, labels, branches, remotes, dates, and artifact identifiers must use placeholders.
+      - Literal option values are limited to fixed booleans and documented closed vocabularies.
+      - Operator-local commands remain hidden unless reviewed public or demo-safe substitutes exist.
+
+  - id: legacy.sample-smoke-catalog.relationship.v1
+    name: Legacy sample smoke catalog relationship
+    description: Validates safe references to related legacy validation, baseline, comparison, and evidence-pack summaries using schema names, neutral artifact IDs, claim levels, and validation status.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - relationship validation row
+      - raw artifact reference rejection
+    limitations:
+      - Relationship rows do not copy raw artifacts, raw summaries, raw baselines, raw evidence packs, analyzer logs, SQLite indexes, reports, or file lists.
+      - Deferred references coordinate future workflows and cannot serve as public-safe proof by themselves.
+      - Relationship validation does not require sibling schemas or artifacts to exist in the current checkout.
+
+  - id: legacy.sample-smoke-catalog.safety-validation.v1
+    name: Legacy sample smoke catalog safety validation
+    description: Validates catalog redaction, prohibited claim wording, deterministic canonical JSON, generated Markdown hash sentinels, top-level claim floor, tracked-root promotion, and ignored local scratch boundaries.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - redaction validation row
+      - generated Markdown sentinel rejection
+      - tracked-root rejection
+    limitations:
+      - Safety validation is a catalog metadata gate and does not inspect raw sample repositories or raw scan outputs.
+      - Redaction scanning is conservative and may require operators to recast identity-bearing values as categories or placeholders.
+      - Deterministic hashes are used only for catalog JSON generation and stale Markdown detection, not for private or source-derived secret-like values.
+
   - id: legacy.wcf.config.v1
     name: Legacy WCF serviceModel config evidence
     description: Extracts WCF client and service endpoint declarations from local config files using safe endpoint metadata and hashed addresses.
