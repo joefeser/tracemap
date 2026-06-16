@@ -59,12 +59,13 @@ public static class LegacyRemotingExtractor
             .Where(fact => fact.FactType == FactTypes.RemotingMarshalByRefObjectDeclared && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
             .Select(fact => MarshalKey(fact.Evidence.FilePath, fact.Evidence.StartLine, fact.Properties.GetValueOrDefault("typeName") ?? fact.SourceSymbol ?? string.Empty))
             .ToHashSet(StringComparer.Ordinal);
+        var semanticMarshalTypeNames = BuildSemanticMarshalTypeNames(facts);
 
         var repositoryHasRemotingContext = false;
         foreach (var file in files.Where(item => FileInventory.IsCSharpKind(item.Kind)))
         {
             var before = facts.Count;
-            ExtractCSharp(repoPath, manifest, file, semanticAttempted, semanticMarshalKeys, facts);
+            ExtractCSharp(repoPath, manifest, file, semanticAttempted, semanticMarshalKeys, semanticMarshalTypeNames, facts);
             repositoryHasRemotingContext |= facts.Skip(before).Any(IsRemotingContextFact);
         }
 
@@ -147,6 +148,7 @@ public static class LegacyRemotingExtractor
         FileInventoryItem file,
         bool semanticAttempted,
         IReadOnlySet<string> semanticMarshalKeys,
+        IReadOnlySet<string> semanticMarshalTypeNames,
         List<CodeFact> facts)
     {
         var fullPath = Path.Combine(repoPath, file.RelativePath);
@@ -160,7 +162,7 @@ public static class LegacyRemotingExtractor
             ExtractApiUsage(manifest, file.RelativePath, tree, root, semanticAttempted, facts);
             ExtractMarshalByRef(manifest, file.RelativePath, tree, root, semanticMarshalKeys, facts);
             ExtractChannels(manifest, file.RelativePath, tree, root, facts);
-            ExtractRegistrations(manifest, file.RelativePath, tree, root, fileHadContext, facts);
+            ExtractRegistrations(manifest, file.RelativePath, tree, root, fileHadContext, semanticMarshalTypeNames, facts);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -288,7 +290,6 @@ public static class LegacyRemotingExtractor
 
     private static void ExtractChannels(ScanManifest manifest, string relativePath, SyntaxTree tree, CompilationUnitSyntax root, List<CodeFact> facts)
     {
-        var channelLocals = CollectSingleAssignmentChannelLocals(root);
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().OrderBy(item => GetLine(tree, item)).ThenBy(item => item.SpanStart))
         {
             if (!TryChannelType(creation.Type.ToString(), out var channelName, out var channelKind, out var direction))
@@ -333,7 +334,9 @@ public static class LegacyRemotingExtractor
                 properties["linkKind"] = "inline-construction";
                 AddArgumentHash(properties, inlineCreation.ArgumentList?.Arguments.Select(argument => argument.Expression));
             }
-            else if (firstArg is IdentifierNameSyntax identifier && channelLocals.TryGetValue(identifier.Identifier.ValueText, out var localChannel))
+            else if (firstArg is IdentifierNameSyntax identifier
+                && invocation.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault() is { } method
+                && CollectSingleAssignmentChannelLocals(method).TryGetValue(identifier.Identifier.ValueText, out var localChannel))
             {
                 properties["channelKind"] = localChannel.Kind;
                 properties["channelDirection"] = localChannel.Direction;
@@ -369,7 +372,14 @@ public static class LegacyRemotingExtractor
         }
     }
 
-    private static void ExtractRegistrations(ScanManifest manifest, string relativePath, SyntaxTree tree, CompilationUnitSyntax root, bool fileHasContext, List<CodeFact> facts)
+    private static void ExtractRegistrations(
+        ScanManifest manifest,
+        string relativePath,
+        SyntaxTree tree,
+        CompilationUnitSyntax root,
+        bool fileHasContext,
+        IReadOnlySet<string> semanticMarshalTypeNames,
+        List<CodeFact> facts)
     {
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>().OrderBy(item => GetLine(tree, item)).ThenBy(item => item.SpanStart))
         {
@@ -381,7 +391,7 @@ public static class LegacyRemotingExtractor
 
             if (IsMemberCall(invocation, "Activator", "GetObject"))
             {
-                ExtractActivatorGetObject(manifest, relativePath, tree, invocation, fileHasContext, facts);
+                ExtractActivatorGetObject(manifest, relativePath, tree, invocation, fileHasContext, semanticMarshalTypeNames, facts);
             }
         }
     }
@@ -471,9 +481,20 @@ public static class LegacyRemotingExtractor
             properties: properties));
     }
 
-    private static void ExtractActivatorGetObject(ScanManifest manifest, string relativePath, SyntaxTree tree, InvocationExpressionSyntax invocation, bool fileHasContext, List<CodeFact> facts)
+    private static void ExtractActivatorGetObject(
+        ScanManifest manifest,
+        string relativePath,
+        SyntaxTree tree,
+        InvocationExpressionSyntax invocation,
+        bool fileHasContext,
+        IReadOnlySet<string> semanticMarshalTypeNames,
+        List<CodeFact> facts)
     {
-        if (!fileHasContext)
+        var args = invocation.ArgumentList.Arguments.Select(argument => argument.Expression).ToArray();
+        var targetType = args.Length > 0 ? SafeTypeArgument(args[0]) : null;
+        var hasSemanticMarshalTarget = !string.IsNullOrWhiteSpace(targetType)
+            && semanticMarshalTypeNames.Contains(targetType!);
+        if (!fileHasContext && !hasSemanticMarshalTarget)
         {
             facts.Add(Gap(
                 manifest,
@@ -485,15 +506,13 @@ public static class LegacyRemotingExtractor
             return;
         }
 
-        var args = invocation.ArgumentList.Arguments.Select(argument => argument.Expression).ToArray();
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
-            ["coverage"] = "syntax-fallback-remoting-context",
-            ["limitation"] = "Static client activation evidence gated by same-file Remoting context; URL/object URI values are hashed and runtime reachability is not proven.",
+            ["coverage"] = hasSemanticMarshalTarget && !fileHasContext ? "syntax-fallback-semantic-marshal-target" : "syntax-fallback-remoting-context",
+            ["limitation"] = "Static client activation evidence gated by same-file Remoting context or semantic MarshalByRefObject target evidence; URL/object URI values are hashed and runtime reachability is not proven.",
             ["registrationKind"] = "client-activation",
             ["sourceKind"] = "syntax"
         };
-        var targetType = args.Length > 0 ? SafeTypeArgument(args[0]) : null;
         if (!string.IsNullOrWhiteSpace(targetType))
         {
             properties["targetTypeName"] = targetType!;
@@ -670,38 +689,60 @@ public static class LegacyRemotingExtractor
         }
     }
 
-    private static Dictionary<string, (string TypeName, string Kind, string Direction)> CollectSingleAssignmentChannelLocals(CompilationUnitSyntax root)
+    private static HashSet<string> BuildSemanticMarshalTypeNames(IEnumerable<CodeFact> facts)
+    {
+        var fullNames = new HashSet<string>(StringComparer.Ordinal);
+        var shortNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var fact in facts.Where(fact => fact.FactType == FactTypes.RemotingMarshalByRefObjectDeclared && fact.EvidenceTier == EvidenceTiers.Tier1Semantic))
+        {
+            var typeName = SafeTypeName(fact.Properties.GetValueOrDefault("typeName") ?? fact.SourceSymbol);
+            if (string.IsNullOrWhiteSpace(typeName))
+            {
+                continue;
+            }
+
+            fullNames.Add(typeName!);
+            var shortName = ShortName(typeName!);
+            shortNameCounts[shortName] = shortNameCounts.TryGetValue(shortName, out var count) ? count + 1 : 1;
+        }
+
+        foreach (var pair in shortNameCounts.Where(pair => pair.Value == 1))
+        {
+            fullNames.Add(pair.Key);
+        }
+
+        return fullNames;
+    }
+
+    private static Dictionary<string, (string TypeName, string Kind, string Direction)> CollectSingleAssignmentChannelLocals(BaseMethodDeclarationSyntax method)
     {
         var result = new Dictionary<string, (string TypeName, string Kind, string Direction)>(StringComparer.Ordinal);
-        foreach (var method in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
+        var candidates = new Dictionary<string, (string TypeName, string Kind, string Direction)>(StringComparer.Ordinal);
+        var blocked = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var declarator in method.DescendantNodes().OfType<VariableDeclaratorSyntax>())
         {
-            var candidates = new Dictionary<string, (string TypeName, string Kind, string Direction)>(StringComparer.Ordinal);
-            var blocked = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var declarator in method.DescendantNodes().OfType<VariableDeclaratorSyntax>())
+            if (declarator.Initializer?.Value is ObjectCreationExpressionSyntax creation
+                && TryChannelType(creation.Type.ToString(), out var typeName, out var kind, out var direction))
             {
-                if (declarator.Initializer?.Value is ObjectCreationExpressionSyntax creation
-                    && TryChannelType(creation.Type.ToString(), out var typeName, out var kind, out var direction))
+                if (candidates.ContainsKey(declarator.Identifier.ValueText))
                 {
-                    if (candidates.ContainsKey(declarator.Identifier.ValueText))
-                    {
-                        blocked.Add(declarator.Identifier.ValueText);
-                    }
-                    candidates[declarator.Identifier.ValueText] = (typeName, kind, direction);
+                    blocked.Add(declarator.Identifier.ValueText);
                 }
+                candidates[declarator.Identifier.ValueText] = (typeName, kind, direction);
             }
+        }
 
-            foreach (var assignment in method.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        foreach (var assignment in method.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            if (assignment.Left is IdentifierNameSyntax identifier)
             {
-                if (assignment.Left is IdentifierNameSyntax identifier)
-                {
-                    blocked.Add(identifier.Identifier.ValueText);
-                }
+                blocked.Add(identifier.Identifier.ValueText);
             }
+        }
 
-            foreach (var pair in candidates.Where(pair => !blocked.Contains(pair.Key)))
-            {
-                result[pair.Key] = pair.Value;
-            }
+        foreach (var pair in candidates.Where(pair => !blocked.Contains(pair.Key)))
+        {
+            result[pair.Key] = pair.Value;
         }
 
         return result;
@@ -754,8 +795,7 @@ public static class LegacyRemotingExtractor
 
     private static bool IsMarshalByRefSymbol(string? value)
     {
-        return value is "System.MarshalByRefObject" or "global::System.MarshalByRefObject"
-            || value?.EndsWith(".MarshalByRefObject", StringComparison.Ordinal) == true;
+        return value is "System.MarshalByRefObject" or "global::System.MarshalByRefObject";
     }
 
     private static bool TryChannelType(string value, out string typeName, out string kind, out string direction)

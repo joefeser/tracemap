@@ -283,6 +283,132 @@ public sealed class LegacyRemotingExtractorTests
         Assert.Contains(result.Facts, item => item.FactType == FactTypes.RemotingConfigSectionDeclared);
     }
 
+    [Fact]
+    public void Scan_does_not_link_channel_locals_across_methods()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Host.cs"), """
+            using System.Runtime.Remoting.Channels;
+            using System.Runtime.Remoting.Channels.Tcp;
+
+            namespace Synthetic.Legacy;
+
+            public static class Host
+            {
+                public static void Create()
+                {
+                    var channel = new TcpChannel();
+                }
+
+                public static void Register(IChannel channel)
+                {
+                    ChannelServices.RegisterChannel(channel, false);
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.RemotingChannelRegistered
+            && fact.Properties.GetValueOrDefault("linkKind") == "same-method-single-local");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RemotingChannelRegistered
+            && fact.Properties.GetValueOrDefault("linkKind") == "unsupported-dynamic-or-nonlocal");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedRemotingChannelRegistrationLink");
+    }
+
+    [Fact]
+    public void Scan_does_not_promote_project_defined_marshalbyrefobject_to_semantic_remoting()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Synthetic.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Lookalike.cs"), """
+            namespace Synthetic;
+
+            public class MarshalByRefObject
+            {
+            }
+
+            public sealed class LooksRemote : MarshalByRefObject
+            {
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.RemotingMarshalByRefObjectDeclared
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RemotingMarshalByRefObjectDeclared
+            && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+    }
+
+    [Fact]
+    public void Scan_promotes_activator_getobject_when_type_has_semantic_marshalbyref_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Synthetic.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <ImplicitUsings>enable</ImplicitUsings>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "RemoteService.cs"), """
+            namespace Synthetic.Legacy;
+
+            public sealed class RemoteService : System.MarshalByRefObject
+            {
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Client.cs"), """
+            using System;
+
+            namespace Synthetic.Legacy;
+
+            public static class Client
+            {
+                public static object Connect()
+                {
+                    return Activator.GetObject(typeof(RemoteService), "tcp" + "://" + "synthetic.invalid" + "/" + "RemoteService");
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RemotingMarshalByRefObjectDeclared
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RemotingClientActivationDeclared
+            && fact.Properties.GetValueOrDefault("targetTypeName") == "RemoteService"
+            && fact.Properties.GetValueOrDefault("coverage") == "syntax-fallback-semantic-marshal-target");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "ActivatorGetObjectNeedsRemotingContext");
+    }
+
     private static string UnsafePort()
     {
         return "90" + "50";
