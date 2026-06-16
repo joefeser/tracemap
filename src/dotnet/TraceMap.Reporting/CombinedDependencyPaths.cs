@@ -866,9 +866,22 @@ public static class CombinedDependencyPathReporter
         if (await TableExistsAsync(connection, "symbol_relationships", cancellationToken))
         {
             await ReadSingleEdgeQueryAsync(connection, source, edges, """
-                select relationship_kind, relationship_id, relationship_id, source_symbol_id, target_symbol_id, null, null, rule_id, evidence_tier, file_path, start_line, end_line
-                from symbol_relationships
-                order by file_path, start_line, relationship_id;
+                select relationships.relationship_kind,
+                       relationships.relationship_id,
+                       relationships.relationship_id,
+                       coalesce(source_symbols.display_name, relationships.source_symbol_id),
+                       coalesce(target_symbols.display_name, relationships.target_symbol_id),
+                       source_symbols.assembly_name,
+                       source_symbols.assembly_version,
+                       relationships.rule_id,
+                       relationships.evidence_tier,
+                       relationships.file_path,
+                       relationships.start_line,
+                       relationships.end_line
+                from symbol_relationships relationships
+                left join symbols source_symbols on source_symbols.scan_id = relationships.scan_id and source_symbols.symbol_id = relationships.source_symbol_id
+                left join symbols target_symbols on target_symbols.scan_id = relationships.scan_id and target_symbols.symbol_id = relationships.target_symbol_id
+                order by relationships.file_path, relationships.start_line, relationships.relationship_id;
                 """, cancellationToken);
         }
 

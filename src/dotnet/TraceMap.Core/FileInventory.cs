@@ -61,15 +61,12 @@ public static class FileInventory
             IgnoreInaccessible = true
         };
 
-        var candidates = Directory.EnumerateFiles(root, "*", options)
-            .Where(path => !ShouldExclude(root, path, outputFullPath))
-            .ToArray();
-        var serviceReferenceFolders = candidates
+        var serviceReferenceFolders = EnumerateCandidateFiles(root, options, outputFullPath)
             .Where(path => Path.GetExtension(path).Equals(".svcmap", StringComparison.OrdinalIgnoreCase))
             .Select(path => NormalizeRelativePath(Path.GetDirectoryName(Path.GetRelativePath(root, path)) ?? "."))
             .ToHashSet(StringComparer.Ordinal);
 
-        var items = candidates
+        var items = EnumerateCandidateFiles(root, options, outputFullPath)
             .Where(path => ShouldInclude(root, path, serviceReferenceFolders))
             .Select(path => TryCreateItem(root, path, serviceReferenceFolders))
             .Where(item => item is not null)
@@ -78,6 +75,12 @@ public static class FileInventory
             .ToArray();
 
         return items;
+    }
+
+    private static IEnumerable<string> EnumerateCandidateFiles(string root, EnumerationOptions options, string? outputFullPath)
+    {
+        return Directory.EnumerateFiles(root, "*", options)
+            .Where(path => !ShouldExclude(root, path, outputFullPath));
     }
 
     private static FileInventoryItem? TryCreateItem(string root, string path, ISet<string> serviceReferenceFolders)
