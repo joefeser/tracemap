@@ -1,70 +1,71 @@
 # Legacy Remoting Detection Implementation State
 
-Status: ready-for-implementation
-Branch: codex/legacy-remoting-detection-spec
+Status: implemented-awaiting-pr-review
+Branch: codex/legacy-remoting-detection
+Base: dev at abb174db91112ea0d7a9817cd05a9ccc4f4803ba
 Public claim level: hidden
 
 ## Scope
 
-This spec defines an implementation-ready plan for deterministic .NET Remoting
-evidence extraction in legacy .NET codebases. It is intentionally a spec-only
-branch with no scanner, reducer, report, or rule catalog implementation changes.
-
-The detector is scoped as a sibling to WCF/SVC legacy boundary detection. It
-does not merge Remoting evidence into WCF fact types or rules, though future
-reports may group both under generic legacy service-boundary summaries.
+Implemented deterministic static .NET Remoting evidence extraction as a sibling
+detector to WCF/SVC. The implementation adds Remoting-specific fact types, rule
+IDs, extractor versioning, C# syntax fallback, conservative semantic correlation
+from existing Roslyn symbol facts, safe XML config extraction, report summaries,
+focused tests, and a checked-in synthetic sample.
 
 ## Scope Decisions
 
-- Initial Remoting evidence may be `Tier2Structural` and
-  `Tier3SyntaxOrTextual` heavy.
-- Roslyn semantic success improves evidence quality but is not required for
-  syntax/config extraction.
-- `MarshalByRefObject` inheritance is Remoting-capable object-shape evidence,
-  not proof of hosting, reachability, deployment, or production use.
-- Channel setup and registration APIs are static configuration evidence only.
-- `<system.runtime.remoting>` config values such as URLs, object URIs, ports,
-  application names, provider properties, and arbitrary attributes must be
-  hashed or omitted.
-- Future public smoke candidates are named only as neutral repositories for
-  possible local/manual validation. This spec commits no raw clone paths, raw
-  remotes, generated outputs, or snippets from those repositories.
-
-## Review State
-
-- Opus spec review: completed first pass; important findings patched in spec
-  text.
-- Sonnet spec review: completed first pass; blocking XML parser safety finding
-  and important findings patched in spec text.
-- Sonnet re-review: completed with reduced coverage because Kiro attempted a
-  denied shell command, then reviewed from prompt content; no blockers found and
-  clarification findings patched in spec text.
-- PR review loop: Qodo optional delimiter finding patched by clarifying
-  `supportingFactIds` canonical Remoting output versus legacy consumer
-  compatibility.
-- PR review loop: Codex P2 indirect `MarshalByRefObject` finding patched by
-  requiring Remoting-specific context before emitting indirect-inheritance
-  Remoting object facts.
+- Remoting facts remain distinct from WCF/SVC fact families and rules.
+- Syntax-only namespace, API, channel, registration, activation, and direct
+  `MarshalByRefObject` matches emit `Tier3SyntaxOrTextual` with limitations.
+- Compiler-resolved direct `System.MarshalByRefObject` inheritance is promoted
+  to `Tier1Semantic`; duplicate syntax rows for the same declaration are
+  suppressed.
+- `<system.runtime.remoting>` config evidence emits `Tier2Structural` facts
+  with line spans where XML line info is available.
+- Unsafe endpoint/config values such as URLs, object URIs, ports, application
+  names, channel/provider properties, and arbitrary arguments are hashed or
+  omitted.
+- `Activator.GetObject` is emitted only when same-file Remoting context exists;
+  otherwise it becomes a review gap.
+- Activated service/client registration calls are visible as
+  `AnalysisGap` facts with `activated-type-registration-v1-deferred`.
+- No runtime host activation, endpoint probing, exploitability classification,
+  production-usage inference, LLM calls, embeddings, vectors, or prompt-based
+  classification were added.
 
 ## Validation
 
+- `dotnet build src/dotnet/TraceMap.sln`: passed.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyRemotingExtractorTests`: passed.
+- `dotnet test src/dotnet/TraceMap.sln`: passed.
+- Synthetic sample scan:
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/dotnet-remoting-sample --out /tmp/tracemap-remoting-scan.10Ce2w`
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, `logs/analyzer.log`, and Remoting facts.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
-- Repo spec validation commands: `node scripts/kiro-review.mjs --self-test`
-  passed; `node scripts/kiro-review.mjs --phase legacy-remoting-detection
-  --kind spec --model auto --dry-run` passed and generated review prompt
-  metadata without invoking a model.
-- Implementation validation such as `dotnet build`, `dotnet test`, and
-  `tracemap scan` is deferred to the future implementation branch because this
-  branch only creates spec files.
+- Public/pinned Remoting smoke: not run; no pinned public Remoting baseline
+  exists yet. `docs/VALIDATION.md` now documents this explicit deferral and
+  requires a separate reviewed baseline task/spec before committing public
+  repository baselines.
 
-## Follow-Ups For Implementation
+## Oddities
 
-- Choose exact fact property names to match existing `FactRecord` and report
-  conventions.
-- Keep report output citing source Remoting extraction rules unless a future
-  implementation emits independent report summary facts and adds a documented
-  report rule.
-- Keep syntax-only channel/registration evidence at `Tier3SyntaxOrTextual` in
-  v1; use `Tier2Structural` primarily for parseable config and other explicitly
-  structured non-name-only evidence.
+- The synthetic sample targets `net10.0`; framework Remoting APIs do not
+  compile there, so useful output relies on syntax/config fallback while
+  existing semantic inheritance facts can still resolve `MarshalByRefObject`.
+- Config `type="Namespace.Type, Assembly"` is split into safe `typeName` and
+  `assemblyName` properties when possible; unsafe forms are hashed.
+- The scanner may produce reduced coverage when MSBuild cannot load legacy
+  Remoting projects, but Remoting syntax/config extraction continues.
+
+## Follow-Ups
+
+- Add a separately reviewed public Remoting smoke baseline after redaction and
+  claim-level review.
+- Consider richer semantic Remoting API symbol extraction if future target
+  frameworks or references make `System.Runtime.Remoting` symbols available.
+- Consider deterministic support for more activated-registration overload
+  details, machine.config, transforms, encrypted sections, and external config
+  includes in later specs.
