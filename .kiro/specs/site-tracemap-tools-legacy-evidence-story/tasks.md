@@ -1,7 +1,7 @@
 # Tasks
 
-Status: ready for implementation. Not started.
-
+Status: not-started
+Readiness: ready-for-implementation
 Public claim level: concept
 
 Tasks 1-6 are deferred to the future implementation PR. This spec-prep PR only
@@ -50,8 +50,8 @@ creates the spec files and leaves all tasks unchecked.
     `requirements.md`, including runtime behavior or UI reachability.
   - Avoid all content forbidden by the canonical content-safety rules from
     `requirements.md`.
-  - Treat public spec source as a published docs page or public URL, never an
-    internal `.kiro/specs/...` path.
+  - Treat public spec source as a published docs page or allowlisted public URL,
+    never a bare/internal `.kiro/specs/...` path.
   - Label reduced coverage and analysis gaps clearly.
 
 - [ ] 5. Implement site discovery only after claim review.
@@ -77,7 +77,7 @@ creates the spec files and leaves all tasks unchecked.
     isolated temp-output test that builds before scanning; do not scan stale or
     shared `site/dist` from `npm test`.
   - Include content-safety fixtures proving a hard leak token fails, a
-    `.kiro/specs/...` or local path leak fails, connection-string,
+    bare/internal `.kiro/specs/...` or local path leak fails, connection-string,
     credential-assignment, private/local URL, and raw-remote examples fail, an
     affirmative overclaim fails, a negation false-positive fails if the
     proximity heuristic is used, a sanctioned negated disclaimer passes,
