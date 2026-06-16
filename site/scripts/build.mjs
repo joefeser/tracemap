@@ -2,6 +2,8 @@ import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { readDiscoveryEntries, writeDiscoveryOutputs } from "./discovery.mjs";
+
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export async function buildSite(options = {}) {
@@ -13,6 +15,8 @@ export async function buildSite(options = {}) {
   const articles = await readArticles(context);
   await generateBlog(context, articles);
   await generateSitemap(context, articles);
+  const discoveryEntries = await readDiscoveryEntries(context);
+  await writeDiscoveryOutputs(context, discoveryEntries);
 
   context.log("Built static site to dist/");
 }
