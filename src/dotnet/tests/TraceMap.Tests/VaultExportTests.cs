@@ -1,0 +1,366 @@
+using System.Security.Cryptography;
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
+using TraceMap.Cli;
+using TraceMap.Combine;
+using TraceMap.Core;
+using TraceMap.Reporting;
+using TraceMap.Storage;
+
+namespace TraceMap.Tests;
+
+public sealed class VaultExportTests
+{
+    [Fact]
+    public async Task Vault_export_writes_deterministic_json_and_markdown_without_private_paths()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var sourceIds = await ReadSourceIdsAsync(combinedPath);
+        var catalogPath = WriteClaimCatalog(temp.Path, sourceIds.Values, "public-safe");
+        var firstOut = Path.Combine(temp.Path, "vault-a");
+        var secondOut = Path.Combine(temp.Path, "vault-b");
+
+        var first = await VaultExporter.ExportAsync(new VaultExportOptions(
+            combinedPath,
+            firstOut,
+            SourceClaimCatalogPath: catalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+        var second = await VaultExporter.ExportAsync(new VaultExportOptions(
+            combinedPath,
+            secondOut,
+            SourceClaimCatalogPath: catalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+
+        Assert.Equal("public-safe", first.Graph.Classification);
+        Assert.Contains(first.Graph.Nodes, node => node.Kind == "source");
+        Assert.Contains(first.Graph.Nodes, node => node.Kind == "endpoint");
+        Assert.Contains(first.Graph.Nodes, node => node.Kind == "surface" && node.SurfaceKind == "sql-query");
+        Assert.Contains(first.Graph.Edges, edge => edge.Kind == "surface-evidence");
+        Assert.True(VaultExporter.IsSelfConsistentGraphJson(await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json"))));
+        Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "index.md"))));
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json")),
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "graph.json")));
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstOut, "index.md")),
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "index.md")));
+
+        var allText = string.Join('\n', Directory.EnumerateFiles(firstOut, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.DoesNotContain(temp.Path, allText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/Users/", allText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("git@", allText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("select *", allText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Vault_export_cli_supports_format_dry_run_and_no_writes()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var outDir = Path.Combine(temp.Path, "dry-run-vault");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(
+            [
+                "vault", "export",
+                "--combined-index", combinedPath,
+                "--out", outDir,
+                "--format", "markdown,json",
+                "--dry-run"
+            ],
+            output,
+            error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, error.ToString());
+        Assert.Contains("TraceMap vault export dry run:", output.ToString());
+        Assert.False(Directory.Exists(outDir));
+    }
+
+    [Fact]
+    public async Task Vault_export_rejects_stale_generated_output_unless_forced()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var outDir = Path.Combine(temp.Path, "vault");
+
+        await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir));
+        var indexPath = Path.Combine(outDir, "index.md");
+        await File.AppendAllTextAsync(indexPath, "\nmanual edit\n");
+
+        var stale = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir)));
+        Assert.Contains("GeneratedFileStale", stale.Message);
+
+        await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Force: true));
+        Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(indexPath)));
+    }
+
+    [Fact]
+    public async Task Vault_export_refuses_non_generated_user_note_collision()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var outDir = Path.Combine(temp.Path, "vault");
+        Directory.CreateDirectory(outDir);
+        await File.WriteAllTextAsync(Path.Combine(outDir, "README.md"), "# user note\n");
+
+        var collision = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Force: true)));
+        Assert.Contains("UserFileCollision", collision.Message);
+    }
+
+    [Fact]
+    public async Task Vault_export_filters_hidden_evidence_and_marks_output_partial()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var sourceIds = await ReadSourceIdsAsync(combinedPath);
+        var catalogPath = WriteClaimCatalog(temp.Path, [sourceIds["server"]], "public-safe");
+        var outDir = Path.Combine(temp.Path, "vault");
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            combinedPath,
+            outDir,
+            SourceClaimCatalogPath: catalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+
+        Assert.True(result.Graph.Settings.Partial);
+        Assert.True(result.Graph.Settings.OmittedHiddenNodeCount > 0);
+        Assert.Contains(result.Graph.Gaps, gap => gap.RuleId == "vault-export.gap.hidden-evidence-omitted.v1");
+        Assert.DoesNotContain(result.Graph.Nodes, node => node.Kind != "rule" && node.DisplayName.Contains("client", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Graph.Nodes, node => node.Kind != "rule" && node.DisplayName.Contains("server", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Vault_export_public_filter_fails_when_no_visible_evidence_remains()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            VaultExporter.ExportAsync(new VaultExportOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "vault"),
+                MinimumClaimLevel: "public-safe",
+                Date: "2026-06")));
+
+        Assert.Contains("NoVisibleEvidenceAfterFiltering", failure.Message);
+    }
+
+    [Fact]
+    public async Task Vault_export_rejects_unsafe_public_values_without_echoing_them()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path, unsafeEndpoint: true);
+        var sourceIds = await ReadSourceIdsAsync(combinedPath);
+        var catalogPath = WriteClaimCatalog(temp.Path, sourceIds.Values, "public-safe");
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            VaultExporter.ExportAsync(new VaultExportOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "vault"),
+                SourceClaimCatalogPath: catalogPath,
+                MinimumClaimLevel: "public-safe",
+                Date: "2026-06")));
+
+        Assert.Contains("UnsafeValueRejected", failure.Message);
+        Assert.DoesNotContain("private.example", failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Vault_export_graph_hash_detects_stale_manifest()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var outDir = Path.Combine(temp.Path, "vault");
+
+        await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Format: "json"));
+        var graphPath = Path.Combine(outDir, "graph.json");
+        var graphJson = await File.ReadAllTextAsync(graphPath);
+        Assert.True(VaultExporter.IsSelfConsistentGraphJson(graphJson));
+
+        var staleJson = graphJson.Replace("\"classification\": \"hidden\"", "\"classification\": \"public-safe\"", StringComparison.Ordinal);
+        Assert.False(VaultExporter.IsSelfConsistentGraphJson(staleJson));
+        await File.WriteAllTextAsync(graphPath, staleJson);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Format: "json")));
+        Assert.Contains("GeneratedFileStale", failure.Message);
+    }
+
+    private static async Task<string> CreateCombinedIndexAsync(string root, bool unsafeEndpoint = false)
+    {
+        var clientIndex = Path.Combine(root, unsafeEndpoint ? "unsafe-client.sqlite" : "client.sqlite");
+        var serverIndex = Path.Combine(root, unsafeEndpoint ? "unsafe-server.sqlite" : "server.sqlite");
+        var combinedPath = Path.Combine(root, unsafeEndpoint ? "unsafe-combined.sqlite" : "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var routeKey = unsafeEndpoint ? "http://private.example/api/orders/{}" : "/api/orders/{}";
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", routeKey, "src/orders.ts", 5)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", routeKey, controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        IReadOnlyList<string> labels = unsafeEndpoint ? ["private.example", "server"] : ["client", "server"];
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, labels));
+        return combinedPath;
+    }
+
+    private static string WriteClaimCatalog(string root, IEnumerable<string> sourceIndexIds, string claimLevel)
+    {
+        var path = Path.Combine(root, $"source-claims-{Guid.NewGuid():N}.json");
+        var entries = sourceIndexIds
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Select(value => new Dictionary<string, string>
+            {
+                ["sourceIndexId"] = value,
+                ["claimLevel"] = claimLevel,
+                ["proofId"] = $"proof-{Hash(value, 8)}"
+            })
+            .ToArray();
+        var json = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["schemaVersion"] = "source-claim-catalog.v1",
+            ["sources"] = entries
+        }, new JsonSerializerOptions { WriteIndented = true }) + "\n";
+        File.WriteAllText(path, json);
+        return path;
+    }
+
+    private static async Task<Dictionary<string, string>> ReadSourceIdsAsync(string combinedPath)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        await using var connection = new SqliteConnection($"Data Source={combinedPath};Mode=ReadOnly");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select label, source_index_id from index_sources order by label;";
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            result[reader.GetString(0)] = reader.GetString(1);
+        }
+
+        return result;
+    }
+
+    private static ScanManifest Manifest(
+        string repo,
+        string scannerVersion,
+        string analysisLevel = "Level1SemanticAnalysis",
+        string buildStatus = "Succeeded")
+    {
+        return new ScanManifest(
+            $"scan-{repo}",
+            repo,
+            null,
+            "main",
+            "abc123",
+            scannerVersion,
+            DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+            analysisLevel,
+            buildStatus,
+            [],
+            [],
+            [],
+            [],
+            ".",
+            FactFactory.Hash(repo, 32),
+            FactFactory.Hash("git-root", 32));
+    }
+
+    private static CodeFact HttpClientFact(ScanManifest manifest, string method, string template, string key, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpCallDetected,
+            RuleIds.HttpClientInvocation,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: $"{method} {template}",
+            contractElement: method,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethod"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["urlKind"] = "template",
+                ["clientFramework"] = "test"
+            });
+    }
+
+    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string methodSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: methodSymbol,
+            targetSymbol: methodSymbol,
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["routeTemplates"] = template
+            });
+    }
+
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callKind"] = "method"
+            });
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.QueryPatternDetected,
+            RuleIds.CSharpSyntaxQueryPattern,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "orders",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["operationName"] = "READ",
+                ["tableName"] = "orders",
+                ["columnNames"] = "id;status",
+                ["sqlSourceKind"] = "literal-string",
+                ["queryShapeHash"] = "shape123"
+            });
+    }
+
+    private static string Hash(string value, int length)
+    {
+        var bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
+        var text = Convert.ToHexString(bytes).ToLowerInvariant();
+        return text[..length];
+    }
+}
