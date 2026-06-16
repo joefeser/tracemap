@@ -1205,12 +1205,17 @@ public static class CombinedDependencyPathReporter
         var remotingBySourceOriginalId = remotingFacts
             .GroupBy(fact => SourceFactKey(fact.SourceIndexId, fact.OriginalFactId), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).First(), StringComparer.Ordinal);
+        var callFacts = facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge)
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var configureCallersByConfig = RemotingConfigureCallersByConfig(remotingFacts, callFacts);
 
         foreach (var fact in remotingFacts)
         {
             var node = ToRemotingNode(fact);
             graph.AddNode(node);
-            foreach (var symbol in RemotingAttachmentSymbols(fact))
+            foreach (var symbol in RemotingAttachmentSymbols(fact, callFacts, configureCallersByConfig))
             {
                 var symbolNode = graph.GetOrAddSymbolNode(fact.SourceIndexId, fact.SourceLabel, symbol, fact.FilePath, fact.StartLine, fact.EndLine, fact.RuleId, fact.EvidenceTier);
                 graph.AddEdge(new GraphEdge(
@@ -2646,8 +2651,8 @@ public static class CombinedDependencyPathReporter
         return fact.FactType switch
         {
             FactTypes.RemotingServiceTypeRegistered
-                or FactTypes.RemotingClientTypeRegistered
-                or FactTypes.RemotingClientActivationDeclared
+                or FactTypes.RemotingClientTypeRegistered => "remoting-registration",
+            FactTypes.RemotingClientActivationDeclared
                 or FactTypes.RemotingConfigServiceDeclared
                 or FactTypes.RemotingConfigClientDeclared => "remoting-endpoint",
             FactTypes.RemotingChannelDeclared
@@ -2660,9 +2665,12 @@ public static class CombinedDependencyPathReporter
         };
     }
 
-    private static IEnumerable<string> RemotingAttachmentSymbols(CombinedFactRow fact)
+    private static IEnumerable<string> RemotingAttachmentSymbols(
+        CombinedFactRow fact,
+        IReadOnlyList<CombinedFactRow> callFacts,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> configureCallersByConfig)
     {
-        return new[]
+        var symbols = new List<string?>
             {
                 fact.SourceSymbol,
                 fact.TargetSymbol,
@@ -2674,11 +2682,186 @@ public static class CombinedDependencyPathReporter
                     "targetTypeName",
                     "typeName",
                     "channelTypeName")
+            };
+        symbols.AddRange(RemotingCallSiteAttachmentSymbols(fact, callFacts));
+        if (IsRemotingConfigFact(fact))
+        {
+            var configFile = Path.GetFileName(fact.FilePath);
+            if (!string.IsNullOrWhiteSpace(configFile)
+                && configureCallersByConfig.TryGetValue(SourceFactKey(fact.SourceIndexId, configFile), out var configureCallers))
+            {
+                symbols.AddRange(configureCallers);
             }
+        }
+
+        return symbols
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!.Trim())
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> RemotingConfigureCallersByConfig(
+        IReadOnlyList<CombinedFactRow> remotingFacts,
+        IReadOnlyList<CombinedFactRow> callFacts)
+    {
+        var result = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var fact in remotingFacts.Where(fact => fact.FactType == FactTypes.RemotingApiUsageDeclared))
+        {
+            if (!IsConfigureRemotingApiFact(fact))
+            {
+                continue;
+            }
+
+            var configFileName = CombinedDependencyReporter.FirstValue(fact.Properties, "configFileName");
+            if (string.IsNullOrWhiteSpace(configFileName))
+            {
+                continue;
+            }
+
+            var key = SourceFactKey(fact.SourceIndexId, configFileName);
+            if (!result.TryGetValue(key, out var callers))
+            {
+                callers = [];
+                result[key] = callers;
+            }
+
+            foreach (var symbol in RemotingCallSiteAttachmentSymbols(fact, callFacts))
+            {
+                callers.Add(symbol);
+            }
+        }
+
+        return result.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<string>)pair.Value
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<string> RemotingCallSiteAttachmentSymbols(CombinedFactRow fact, IReadOnlyList<CombinedFactRow> callFacts)
+    {
+        foreach (var call in callFacts)
+        {
+            if (!RemotingCallSiteMatches(fact, call))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(call.SourceSymbol))
+            {
+                yield return call.SourceSymbol!;
+            }
+
+            if (!string.IsNullOrWhiteSpace(call.TargetSymbol))
+            {
+                yield return call.TargetSymbol!;
+            }
+        }
+    }
+
+    private static bool RemotingCallSiteMatches(CombinedFactRow remotingFact, CombinedFactRow callFact)
+    {
+        return string.Equals(remotingFact.SourceIndexId, callFact.SourceIndexId, StringComparison.Ordinal)
+            && string.Equals(SafePath(remotingFact.FilePath), SafePath(callFact.FilePath), StringComparison.Ordinal)
+            && callFact.StartLine >= remotingFact.StartLine
+            && callFact.StartLine <= remotingFact.EndLine
+            && RemotingCallTargetMatches(remotingFact, callFact.TargetSymbol ?? CombinedDependencyReporter.FirstValue(callFact.Properties, "calleeName"));
+    }
+
+    private static bool RemotingCallTargetMatches(CombinedFactRow fact, string? targetSymbol)
+    {
+        if (string.IsNullOrWhiteSpace(targetSymbol))
+        {
+            return false;
+        }
+
+        return ExpectedRemotingCallNames(fact).Any(expected => SymbolNameMatches(targetSymbol, expected));
+    }
+
+    private static IEnumerable<string> ExpectedRemotingCallNames(CombinedFactRow fact)
+    {
+        if (fact.FactType == FactTypes.RemotingChannelRegistered)
+        {
+            yield return "RegisterChannel";
+            yield break;
+        }
+
+        if (fact.FactType == FactTypes.RemotingClientActivationDeclared)
+        {
+            yield return "GetObject";
+            yield break;
+        }
+
+        if (fact.FactType == FactTypes.RemotingApiUsageDeclared)
+        {
+            foreach (var candidate in new[] { fact.TargetSymbol, fact.ContractElement, CombinedDependencyReporter.FirstValue(fact.Properties, "apiName") })
+            {
+                var name = LastSymbolPart(candidate);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    yield return name!;
+                }
+            }
+
+            yield break;
+        }
+
+        var registrationKind = CombinedDependencyReporter.FirstValue(fact.Properties, "registrationKind") ?? fact.ContractElement;
+        switch (registrationKind)
+        {
+            case "well-known-service":
+                yield return "RegisterWellKnownServiceType";
+                break;
+            case "well-known-client":
+                yield return "RegisterWellKnownClientType";
+                break;
+            case "activated-service":
+                yield return "RegisterActivatedServiceType";
+                break;
+            case "activated-client":
+                yield return "RegisterActivatedClientType";
+                break;
+            case "configure":
+                yield return "Configure";
+                break;
+        }
+    }
+
+    private static bool SymbolNameMatches(string candidate, string expected)
+    {
+        return string.Equals(candidate, expected, StringComparison.Ordinal)
+            || candidate.EndsWith("." + expected, StringComparison.Ordinal)
+            || candidate.Contains("." + expected + "(", StringComparison.Ordinal);
+    }
+
+    private static string? LastSymbolPart(string? symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return null;
+        }
+
+        var paren = symbol.IndexOf('(', StringComparison.Ordinal);
+        var end = paren >= 0 ? paren : symbol.Length;
+        var dot = symbol.LastIndexOf('.', end - 1, end);
+        return dot >= 0 ? symbol[(dot + 1)..end] : symbol[..end];
+    }
+
+    private static bool IsConfigureRemotingApiFact(CombinedFactRow fact)
+    {
+        return fact.FactType == FactTypes.RemotingApiUsageDeclared
+            && ExpectedRemotingCallNames(fact).Any(name => string.Equals(name, "Configure", StringComparison.Ordinal));
+    }
+
+    private static bool IsRemotingConfigFact(CombinedFactRow fact)
+    {
+        return fact.FactType is FactTypes.RemotingConfigServiceDeclared
+            or FactTypes.RemotingConfigClientDeclared
+            or FactTypes.RemotingConfigChannelDeclared
+            or FactTypes.RemotingConfigProviderDeclared;
     }
 
     private static string? RemotingDisplayHash(CombinedFactRow fact)

@@ -531,6 +531,74 @@ public sealed class LegacyFlowCompositionTests
     }
 
     [Fact]
+    public async Task Legacy_paths_remoting_registration_uses_callsite_evidence_without_source_symbol()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Submit_Click";
+        var configure = "Configure";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, configure, "Pages/Orders.aspx.cs", 30, EvidenceTiers.Tier3SyntaxOrTextual),
+            CallFact(manifest, configure, "RegisterWellKnownServiceType", "RemotingHost.cs", 15, EvidenceTiers.Tier3SyntaxOrTextual),
+            RemotingRegistrationFactWithoutSource(manifest, "RemotingHost.cs", 15, "Legacy.Remoting.RemoteService", objectUriHash: "abcdef1234567890")
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-registration"));
+
+        Assert.Contains(result.Report.Paths, candidate => candidate.Nodes.Last().NodeKind == "remoting-registration");
+        var path = result.Report.Paths
+            .Where(candidate => candidate.Nodes.Last().NodeKind == "remoting-registration")
+            .OrderBy(candidate => candidate.Length)
+            .First();
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewStaticPath, path.Classification);
+        Assert.Equal("remoting-registration", path.Nodes.Last().SurfaceKind);
+        Assert.Equal("remoting-registration", path.Nodes.Last().NodeKind);
+        Assert.True(result.Report.Inventory.NodesByKind.ContainsKey("remoting-registration"));
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "remoting-evidence" && edge.RuleId == RuleIds.LegacyFlowStaticTraversal);
+        AssertNoStrongStaticPath(result.Report.Paths);
+    }
+
+    [Fact]
+    public async Task Legacy_paths_remoting_config_endpoint_uses_configure_callsite_when_config_matches()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Submit_Click";
+        var configure = "Configure";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, configure, "Pages/Orders.aspx.cs", 30, EvidenceTiers.Tier3SyntaxOrTextual),
+            CallFact(manifest, configure, "Configure", "RemotingHost.cs", 15, EvidenceTiers.Tier3SyntaxOrTextual),
+            RemotingConfigureApiFactWithoutSource(manifest, "RemotingHost.cs", 15, "App.config"),
+            RemotingConfigServiceFactWithoutSource(manifest, "App.config", 16, "Legacy.Remoting.RemoteService", objectUriHash: "abcdef1234567890")
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-endpoint"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewStaticPath, path.Classification);
+        Assert.Equal("remoting-endpoint", path.Nodes.Last().SurfaceKind);
+        Assert.Equal("objectUri-abcdef12", path.Nodes.Last().SurfaceName);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "remoting-evidence" && edge.RuleId == RuleIds.LegacyFlowStaticTraversal);
+        AssertNoStrongStaticPath(result.Report.Paths);
+    }
+
+    [Fact]
     public async Task Legacy_paths_remoting_client_and_service_matching_hashes_stay_separate()
     {
         using var temp = new TempDirectory();
@@ -962,6 +1030,69 @@ public sealed class LegacyFlowCompositionTests
                 ["registrationKind"] = "well-known-service",
                 ["sourceKind"] = "config",
                 ["typeName"] = typeName
+            });
+    }
+
+    private static CodeFact RemotingConfigServiceFactWithoutSource(ScanManifest manifest, string file, int line, string typeName, string objectUriHash)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingConfigServiceDeclared,
+            RuleIds.LegacyRemotingConfig,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            targetSymbol: typeName,
+            contractElement: "well-known-service",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["configKind"] = "service",
+                ["coverage"] = "static-xml-config",
+                ["limitation"] = "Checked-in XML config evidence only; values are hashed or omitted and runtime config selection, reachability, deployment, and production usage are not proven.",
+                ["objectUriHash"] = objectUriHash,
+                ["registrationKind"] = "well-known-service",
+                ["sourceFormat"] = "xml-config",
+                ["typeName"] = typeName
+            });
+    }
+
+    private static CodeFact RemotingRegistrationFactWithoutSource(ScanManifest manifest, string file, int line, string targetTypeName, string objectUriHash)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingServiceTypeRegistered,
+            RuleIds.LegacyRemotingRegistration,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            targetSymbol: targetTypeName,
+            contractElement: "well-known-service",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverage"] = "syntax-fallback",
+                ["limitation"] = "Static registration call evidence only; dynamic arguments, runtime configuration, deployment, reachability, and production usage are not proven.",
+                ["objectUriHash"] = objectUriHash,
+                ["registrationKind"] = "well-known-service",
+                ["sourceKind"] = "syntax",
+                ["targetTypeName"] = targetTypeName
+            });
+    }
+
+    private static CodeFact RemotingConfigureApiFactWithoutSource(ScanManifest manifest, string file, int line, string configFileName)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingApiUsageDeclared,
+            RuleIds.LegacyRemotingRegistration,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            targetSymbol: "RemotingConfiguration.Configure",
+            contractElement: "Configure",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["configFileName"] = configFileName,
+                ["coverage"] = "syntax-fallback",
+                ["limitation"] = "Static registration call evidence only; dynamic arguments, runtime configuration, deployment, reachability, and production usage are not proven.",
+                ["registrationKind"] = "configure",
+                ["sourceKind"] = "syntax"
             });
     }
 
