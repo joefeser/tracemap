@@ -48,7 +48,8 @@ static evidence count movement without reducer or runtime claims.
 Completed:
 
 - `dotnet build src/dotnet/TraceMap.sln` passed with 0 warnings and 0 errors.
-- `dotnet test src/dotnet/TraceMap.sln` passed with 332 tests.
+- `dotnet test src/dotnet/TraceMap.sln` passed with 333 tests after PR
+  review-loop fixes.
 - `dotnet test src/dotnet/TraceMap.sln --filter LegacyBaselineArtifactsTests`
   passed with 20 tests during focused validation.
 - Generated checked-in synthetic public-safe fixture with pinned `2026-06`
@@ -63,6 +64,10 @@ Completed:
 - `git check-ignore .tmp/legacy-baselines/example` passed.
 - `./scripts/check-private-paths.sh` passed.
 - `git diff --check` passed.
+- PR review-loop fixes addressed Qodo findings by including rule IDs and paths
+  in CLI diagnostics, rejecting comparison output outside ignored
+  `.tmp/legacy-baselines/` before writing files, and matching rule catalog IDs
+  with exact line-based lookup instead of substring search.
 
 Pinned smoke rationale:
 

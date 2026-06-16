@@ -140,6 +140,8 @@ public sealed class LegacyBaselineArtifactsTests
 
         Assert.Equal(1, exitCode);
         Assert.Contains("absolute-path", error.ToString());
+        Assert.Contains("ruleId=legacy.baseline.safety-validation.v1", error.ToString());
+        Assert.Contains("path=", error.ToString());
         Assert.DoesNotContain("/home/example/private-sample", error.ToString());
     }
 
@@ -151,7 +153,7 @@ public sealed class LegacyBaselineArtifactsTests
         Directory.CreateDirectory(scanPath);
         File.Copy(Path.Combine(RepoRoot(), "samples", "synthetic-legacy-scan", "scan-manifest.json"), Path.Combine(scanPath, "scan-manifest.json"));
         await File.WriteAllTextAsync(Path.Combine(scanPath, "facts.ndjson"), """
-            {"factId":"fact-unknown","scanId":"synthetic-legacy-scan-001","repo":"synthetic-legacy-fixture","commitSha":"1111111111111111111111111111111111111111","projectPath":null,"factType":"MethodDeclared","ruleId":"legacy.unknown.rule.v1","evidenceTier":"Tier3SyntaxOrTextual","sourceSymbol":null,"targetSymbol":null,"contractElement":null,"evidence":{"filePath":"src/Synthetic/Unknown.cs","startLine":1,"endLine":1,"snippetHash":null,"extractorId":"synthetic","extractorVersion":"1.0.0"},"properties":{}}
+            {"factId":"fact-unknown","scanId":"synthetic-legacy-scan-001","repo":"synthetic-legacy-fixture","commitSha":"1111111111111111111111111111111111111111","projectPath":null,"factType":"MethodDeclared","ruleId":"project.file.v","evidenceTier":"Tier3SyntaxOrTextual","sourceSymbol":null,"targetSymbol":null,"contractElement":null,"evidence":{"filePath":"src/Synthetic/Unknown.cs","startLine":1,"endLine":1,"snippetHash":null,"extractorId":"synthetic","extractorVersion":"1.0.0"},"properties":{}}
             """);
 
         var result = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
@@ -299,6 +301,50 @@ public sealed class LegacyBaselineArtifactsTests
         {
             Assert.DoesNotContain(phrase, markdown, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    public async Task Compare_rejects_tracked_output_without_writing_files()
+    {
+        var baselineOut = TestBaselinePath("tracked-boundary-baseline");
+        var candidateOut = TestBaselinePath("tracked-boundary-candidate");
+        var unsafeOut = Path.Combine(RepoRoot(), ".kiro", "baselines", "legacy", "tracked-comparison-output");
+        DeleteIfExists(baselineOut);
+        DeleteIfExists(candidateOut);
+        DeleteIfExists(unsafeOut);
+
+        var baseline = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            "samples/synthetic-legacy-scan",
+            "synthetic-alpha",
+            "original-parser-snapshot",
+            baselineOut,
+            CreatedAt: "2026-06"));
+        var candidate = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            "samples/synthetic-legacy-scan",
+            "synthetic-alpha",
+            "candidate",
+            candidateOut,
+            CreatedAt: "2026-07"));
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync([
+            "baseline",
+            "compare",
+            "--baseline",
+            baseline.ManifestPath!,
+            "--candidate",
+            candidate.ManifestPath!,
+            "--out",
+            unsafeOut,
+            "--generated-at",
+            "2026-07"
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains(".tmp/legacy-baselines", error.ToString());
+        Assert.False(File.Exists(Path.Combine(unsafeOut, "comparison.json")));
+        Assert.False(File.Exists(Path.Combine(unsafeOut, "comparison.md")));
     }
 
     [Fact]
