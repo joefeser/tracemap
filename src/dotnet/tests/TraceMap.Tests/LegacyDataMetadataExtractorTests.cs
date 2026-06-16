@@ -36,6 +36,9 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared && fact.Properties.GetValueOrDefault("mappingKind") == "association");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataStorageObjectDeclared && fact.Properties.GetValueOrDefault("mappingKind") == "routine");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked && fact.TargetSymbol == "Customer");
+        Assert.All(
+            result.Facts.Where(fact => fact.RuleId.StartsWith("legacy.data.", StringComparison.Ordinal)),
+            fact => Assert.False(string.IsNullOrWhiteSpace(fact.Evidence.SnippetHash)));
         Assert.DoesNotContain(result.Facts, fact => fact.Evidence.FilePath.Contains(temp.Path, StringComparison.Ordinal));
     }
 
@@ -77,6 +80,43 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.Evidence.FilePath == "Broken.edmx"
             && fact.Properties.GetValueOrDefault("classification") == "MalformedLegacyDataMetadata");
+    }
+
+    [Fact]
+    public void Scan_rejects_oversized_legacy_metadata_before_hashing_document()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Huge.dbml"), $"<Database>{new string('x', 2 * 1024 * 1024 + 1)}</Database>");
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var gap = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataMetadataInventory
+            && fact.Evidence.FilePath == "Huge.dbml");
+        Assert.Equal("LegacyDataMetadataTooLarge", gap.Properties.GetValueOrDefault("classification"));
+        Assert.False(string.IsNullOrWhiteSpace(gap.Evidence.SnippetHash));
+    }
+
+    [Fact]
+    public void Scan_skips_oversized_generated_designer_candidates_with_gap()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Northwind.dbml"), """
+            <Database Name="Northwind" Class="NorthwindDataContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="dbo.Customers" Member="Customers"><Type Name="Customer" /></Table>
+            </Database>
+            """);
+        File.WriteAllText(
+            Path.Combine(temp.Path, "Northwind.designer.cs"),
+            "namespace Samples;\npublic partial class Customer { }\n" + new string(' ', 2 * 1024 * 1024 + 1));
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataGeneratedLink
+            && fact.Evidence.FilePath == "Northwind.designer.cs"
+            && fact.Properties.GetValueOrDefault("classification") == "GeneratedDesignerTooLarge");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked);
     }
 
     [Fact]

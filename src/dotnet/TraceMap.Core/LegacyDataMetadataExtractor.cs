@@ -10,6 +10,7 @@ namespace TraceMap.Core;
 public static class LegacyDataMetadataExtractor
 {
     private const string ExtractorId = "LegacyDataExtractor";
+    private const long MaxGeneratedDesignerBytes = SafeXml.MaxXmlBytes;
     private static readonly XNamespace MsData = "urn:schemas-microsoft-com:xml-msdata";
     private static readonly XNamespace MsProp = "urn:schemas-microsoft-com:xml-msprop";
 
@@ -20,7 +21,7 @@ public static class LegacyDataMetadataExtractor
         IReadOnlyList<CodeFact> existingFacts)
     {
         var facts = new List<CodeFact>();
-        var generatedCandidates = LoadGeneratedCandidates(repoPath, inventory);
+        var generatedCandidates = LoadGeneratedCandidates(repoPath, manifest, inventory, facts);
 
         foreach (var item in inventory.OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
@@ -501,7 +502,7 @@ public static class LegacyDataMetadataExtractor
             FactTypes.LegacyDataMetadataDeclared,
             RuleIds.LegacyDataMetadataInventory,
             EvidenceTiers.Tier2Structural,
-            new EvidenceSpan(item.RelativePath, 1, 1, null, ExtractorId, ScannerVersions.LegacyDataExtractor),
+            Evidence(item.RelativePath, 1, $"{item.RelativePath}:{item.SizeBytes}:generated-designer"),
             targetSymbol: Path.GetFileName(item.RelativePath),
             properties: properties));
     }
@@ -547,7 +548,7 @@ public static class LegacyDataMetadataExtractor
                     FactTypes.LegacyDataGeneratedCodeLinked,
                     RuleIds.LegacyDataGeneratedLink,
                     string.IsNullOrWhiteSpace(explicitGeneratedName) ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
-                    new EvidenceSpan(candidate.FilePath, candidate.LineFor(expectedType), candidate.LineFor(expectedType), null, ExtractorId, ScannerVersions.LegacyDataExtractor),
+                    Evidence(candidate.FilePath, candidate.LineFor(expectedType), $"{candidate.FilePath}:{expectedType}:{fact.FactId}"),
                     targetSymbol: expectedType,
                     properties: properties));
             }
@@ -564,11 +565,21 @@ public static class LegacyDataMetadataExtractor
         _ = existingFacts;
     }
 
-    private static IReadOnlyList<GeneratedCandidate> LoadGeneratedCandidates(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
+    private static IReadOnlyList<GeneratedCandidate> LoadGeneratedCandidates(
+        string repoPath,
+        ScanManifest manifest,
+        IReadOnlyList<FileInventoryItem> inventory,
+        List<CodeFact> facts)
     {
         var candidates = new List<GeneratedCandidate>();
         foreach (var item in inventory.Where(item => item.Kind == "CSharp" && IsDesigner(item.RelativePath)).OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
+            if (item.SizeBytes > MaxGeneratedDesignerBytes)
+            {
+                AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataGeneratedLink, "GeneratedDesignerTooLarge", "Generated designer file exceeded the safe parsing size bound.", null);
+                continue;
+            }
+
             var fullPath = Path.Combine(repoPath, item.RelativePath);
             try
             {
@@ -606,7 +617,7 @@ public static class LegacyDataMetadataExtractor
         metadataHash = string.Empty;
         try
         {
-            metadataHash = FactFactory.Hash(File.ReadAllText(fullPath), 32);
+            metadataHash = HashMetadataDocument(fullPath);
             document = SafeXml.LoadDocument(fullPath);
             return true;
         }
@@ -639,7 +650,7 @@ public static class LegacyDataMetadataExtractor
             FactTypes.LegacyDataMetadataDeclared,
             ruleId,
             EvidenceTiers.Tier2Structural,
-            element is null ? new EvidenceSpan(relativePath, 1, 1, null, ExtractorId, ScannerVersions.LegacyDataExtractor) : Evidence(relativePath, element),
+            element is null ? Evidence(relativePath, 1, $"{relativePath}:{metadataKind}:{metadataHash}") : Evidence(relativePath, element),
             targetSymbol: metadataKind,
             properties: MetadataProperties(metadataKind, metadataHash, "document")));
     }
@@ -652,7 +663,7 @@ public static class LegacyDataMetadataExtractor
             FactTypes.AnalysisGap,
             ruleId,
             EvidenceTiers.Tier4Unknown,
-            new EvidenceSpan(relativePath, line, line, null, ExtractorId, ScannerVersions.LegacyDataExtractor),
+            Evidence(relativePath, line, $"{relativePath}:{line}:{classification}:{message}"),
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["classification"] = classification,
@@ -686,7 +697,23 @@ public static class LegacyDataMetadataExtractor
     private static EvidenceSpan Evidence(string relativePath, XElement element)
     {
         var line = GetLine(element);
-        return new EvidenceSpan(relativePath, line, line, null, ExtractorId, ScannerVersions.LegacyDataExtractor);
+        return Evidence(relativePath, line, element.ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static EvidenceSpan Evidence(string relativePath, int line, string hashSeed)
+    {
+        return new EvidenceSpan(relativePath, line, line, FactFactory.Hash(hashSeed, 32), ExtractorId, ScannerVersions.LegacyDataExtractor);
+    }
+
+    private static string HashMetadataDocument(string fullPath)
+    {
+        var info = new FileInfo(fullPath);
+        if (info.Exists && info.Length > SafeXml.MaxXmlBytes)
+        {
+            throw new SafeXmlException(SafeXmlFailureKind.TooLarge, "XML metadata exceeds configured size bounds.");
+        }
+
+        return FactFactory.Hash(File.ReadAllText(fullPath), 32);
     }
 
     private static SortedDictionary<string, string> MetadataProperties(string metadataKind, string metadataHash, string descriptorKind)
