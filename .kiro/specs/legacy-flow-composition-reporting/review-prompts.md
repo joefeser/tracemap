@@ -45,7 +45,8 @@ Review goals:
 6. Identify schema assumptions that may not hold for single or combined indexes.
 7. Identify whether the tasks are implementable in reviewable PR slices.
 8. Identify tests needed for older indexes, missing extractors, WCF normalized
-   metadata, WebForms roots, SQL/query surfaces, and queued legacy data metadata.
+   metadata, WebForms roots, SQL/query surfaces, and optional legacy data
+   metadata.
 
 Please return:
 
