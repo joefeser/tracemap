@@ -48,12 +48,13 @@ public static class TraceMapCommand
                 "release-review" => ReleaseReviewHelp(),
                 "portfolio" => PortfolioHelp(),
                 "package-impact" => PackageImpactHelp(),
+                "vault" => VaultHelp(),
                 "contract-diff" => ContractDiffHelp(),
                 "baseline" => BaselineHelp(),
                 "evidence-pack" => EvidencePackHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
         }
 
         try
@@ -76,6 +77,7 @@ public static class TraceMapCommand
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
                 "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
+                "vault" => await RunVaultAsync(rest, output, error, cancellationToken),
                 "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
                 "baseline" => await RunBaselineAsync(rest, output, error, cancellationToken),
                 "evidence-pack" => await RunEvidencePackAsync(rest, output, error, cancellationToken),
@@ -793,6 +795,56 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasFindings ? 1 : 0;
     }
 
+    private static async Task<int> RunVaultAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0 || IsHelp(args[0]))
+        {
+            await output.WriteLineAsync(VaultHelp());
+            return 0;
+        }
+
+        var subcommand = args[0].ToLowerInvariant();
+        if (subcommand != "export")
+        {
+            await error.WriteLineAsync("error: vault supports only the export subcommand.");
+            return 1;
+        }
+
+        var values = ParseOptions(args.Skip(1).ToArray(), "--dry-run", "--force");
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: vault export requires --out <vault-output>.");
+            return 1;
+        }
+
+        var format = values.GetMany("--format").Count == 0
+            ? "markdown,json"
+            : string.Join(',', values.GetMany("--format"));
+        var result = await VaultExporter.ExportAsync(
+            new VaultExportOptions(
+                values.GetValueOrDefault("--combined-index"),
+                outputPath,
+                values.GetMany("--paths-report"),
+                values.GetMany("--reverse-report"),
+                values.GetValueOrDefault("--source-claim-catalog"),
+                values.GetValueOrDefault("--minimum-claim-level"),
+                values.GetValueOrDefault("--date"),
+                format,
+                values.HasFlag("--dry-run"),
+                values.HasFlag("--force")),
+            cancellationToken);
+
+        await output.WriteLineAsync(values.HasFlag("--dry-run")
+            ? $"TraceMap vault export dry run: {Path.GetFullPath(outputPath)}"
+            : $"TraceMap vault export completed: {Path.GetFullPath(outputPath)}");
+        await output.WriteLineAsync($"Classification: {result.Graph.Classification}");
+        await output.WriteLineAsync($"Nodes: {result.Graph.Nodes.Count}");
+        await output.WriteLineAsync($"Edges: {result.Graph.Edges.Count}");
+        await output.WriteLineAsync($"Gaps: {result.Graph.Gaps.Count}");
+        await output.WriteLineAsync($"Files: {result.PlannedFiles.Count}");
+        return 0;
+    }
+
     private static async Task<int> RunBaselineAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         if (args.Length == 0 || IsHelp(args[0]))
@@ -1420,6 +1472,7 @@ public static class TraceMapCommand
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
               tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
+              tracemap vault export --combined-index <combined.sqlite> --out <vault-output>
               tracemap baseline create --scan-output <path> --label <neutral-slug> --purpose <neutral-slug> --out <path>
               tracemap evidence-pack create --input <path> --input-kind <kind> --label <neutral-slug> --purpose <neutral-slug> --claim-level <level> --date <yyyy-MM> --out <path>
 
@@ -1441,6 +1494,7 @@ public static class TraceMapCommand
               release-review Assemble a deterministic before/after release evidence packet.
               portfolio Summarize dependency evidence across many TraceMap indexes.
               package-impact Report static package upgrade evidence from indexed package declarations.
+              vault    Export deterministic Markdown evidence notes and graph.json from existing TraceMap evidence.
               baseline Create, validate, and compare redacted legacy baseline summaries.
               evidence-pack Create, validate, and promote redacted legacy evidence packs.
             """;
@@ -1788,6 +1842,36 @@ public static class TraceMapCommand
 
             Outputs:
               package-impact-report.md and/or package-impact-report.json
+            """;
+    }
+
+    private static string VaultHelp()
+    {
+        return """
+            Usage:
+              tracemap vault export --combined-index <combined.sqlite> --out <vault-output> [--format <markdown|json|markdown,json>]
+              tracemap vault export --paths-report <paths-report.json> --out <vault-output>
+              tracemap vault export --reverse-report <reverse-report.json> --out <vault-output>
+
+            Inputs:
+              --combined-index <path>          Existing combined TraceMap SQLite index. Read-only.
+              --paths-report <path>            Existing paths-report.json. Repeatable.
+              --reverse-report <path>          Existing reverse-report.json. Repeatable.
+              --source-claim-catalog <path>    source-claim-catalog.v1 JSON for demo/public promotion.
+
+            Options:
+              --out <path>                     Output vault directory.
+              --minimum-claim-level <value>    hidden, demo-safe, or public-safe. Default: hidden.
+              --date <yyyy-MM>                 Required for demo-safe and public-safe deterministic output.
+              --format <value>                 markdown, json, or markdown,json. Default: markdown,json.
+              --dry-run                        Validate and list planned files without writing.
+              --force                          Replace stale generated files after validation.
+
+            Outputs:
+              graph.json, README.md, index.md, and deterministic Markdown notes.
+
+            Notes:
+              The vault is a local navigation aid over static evidence. It does not prove runtime behavior, deployment, release safety, vulnerabilities, production traffic, or impact.
             """;
     }
 
