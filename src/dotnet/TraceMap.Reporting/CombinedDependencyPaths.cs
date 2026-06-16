@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 
@@ -31,8 +32,10 @@ public sealed record CombinedDependencyPathResult(
 
 public sealed record CombinedDependencyPathReport(
     string Version,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? SchemaVersion,
-    string View,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? View,
     string ReportCoverage,
     IReadOnlyList<string> CoverageWarnings,
     CombinedPathQuery Query,
@@ -47,11 +50,14 @@ public sealed record CombinedPathQuery(
     string? FromEndpoint,
     string? FromSymbol,
     string? FromSource,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? FromWebFormsEvent,
     string? ToSurface,
     string? SurfaceName,
     string? SourcePair,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? Classification,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     bool IncludeLegacyRoots,
     int MaxDepth,
     int MaxPaths,
@@ -426,7 +432,14 @@ public static class CombinedDependencyPathReporter
                 var gap = CreateNoPathGap(read, graph, startNodes, options.MaxDepth, options.MaxFrontier, legacyMode);
                 if (legacyMode && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence)
                 {
-                    paths.AddRange(startNodes.Select((node, index) => ToNoBackendEvidencePath($"path:no-backend:{index + 1:0000}", node)));
+                    paths.AddRange(startNodes
+                        .Take(options.MaxPaths)
+                        .Select((node, index) => ToNoBackendEvidencePath($"path:no-backend:{index + 1:0000}", node)));
+                    if (startNodes.Count > options.MaxPaths)
+                    {
+                        truncated = true;
+                        gaps.Add(TruncatedGap("path", startNodes[options.MaxPaths].NodeId, graph));
+                    }
                 }
                 else
                 {
@@ -435,12 +448,16 @@ public static class CombinedDependencyPathReporter
             }
         }
 
+        var reportPaths = legacyMode
+            ? paths.Select(path => ToLegacyPath(path, graph)).ToList()
+            : paths;
+
         if (!string.IsNullOrWhiteSpace(options.Classification))
         {
             var requested = NormalizeClassification(options.Classification.Trim(), legacyMode);
-            var beforeFilterCount = paths.Count;
-            paths = paths.Where(path => string.Equals(NormalizeClassification(path.Classification, legacyMode), requested, StringComparison.Ordinal)).ToList();
-            if (beforeFilterCount > 0 && paths.Count == 0)
+            var beforeFilterCount = reportPaths.Count;
+            reportPaths = reportPaths.Where(path => string.Equals(NormalizeClassification(path.Classification, legacyMode), requested, StringComparison.Ordinal)).ToList();
+            if (beforeFilterCount > 0 && reportPaths.Count == 0)
             {
                 gaps.Add(new CombinedPathGap(
                     $"gap:selector:classification:{Hash(requested, 16)}",
@@ -459,8 +476,7 @@ public static class CombinedDependencyPathReporter
             }
         }
 
-        var sortedPaths = paths
-            .Select(path => legacyMode ? ToLegacyPath(path, graph) : path)
+        var sortedPaths = reportPaths
             .OrderBy(path => ClassificationRank(path.Classification))
             .ThenBy(path => path.Length)
             .ThenBy(path => path.Nodes.FirstOrDefault()?.SourceLabel, StringComparer.Ordinal)
@@ -481,6 +497,7 @@ public static class CombinedDependencyPathReporter
             .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
             .ToArray();
         var warnings = read.CoverageWarnings
+            .Select(value => legacyMode ? SafeDisplay(value) ?? "redacted" : value)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var participatingNodes = sortedPaths.SelectMany(path => path.Nodes)
@@ -505,7 +522,7 @@ public static class CombinedDependencyPathReporter
         return new CombinedDependencyPathReport(
             Version,
             legacyMode ? LegacyFlowReportConstants.SchemaVersion : null,
-            legacyMode ? LegacyFlowReportConstants.View : "paths",
+            legacyMode ? LegacyFlowReportConstants.View : null,
             warnings.Length == 0 && !sortedGaps.Any(gap => gap.Classification is CombinedDependencyPathClassifications.AnalysisGap or CombinedDependencyPathClassifications.ReducedCoverage) ? "FullEvidenceAvailable" : "ReducedCoverage",
             warnings,
             new CombinedPathQuery(
@@ -766,6 +783,7 @@ public static class CombinedDependencyPathReporter
             throw new InvalidDataException("TraceMap index does not contain a scan manifest.");
         }
 
+        var scannerVersion = reader.GetString(3);
         var source = new CombinedReportSource(
             "single",
             "single",
@@ -775,8 +793,8 @@ public static class CombinedDependencyPathReporter
             null,
             null,
             reader.GetString(2),
-            reader.GetString(3),
-            reader.GetString(3).Contains("tracemap", StringComparison.OrdinalIgnoreCase) ? "csharp" : null,
+            scannerVersion,
+            InferLanguage(scannerVersion),
             null,
             false,
             ".",
@@ -961,8 +979,8 @@ public static class CombinedDependencyPathReporter
 
     private static void AddLegacyFlowNodesAndEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts, IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
     {
-        var factsByOriginalId = facts
-            .GroupBy(fact => fact.OriginalFactId, StringComparer.Ordinal)
+        var factsBySourceOriginalId = facts
+            .GroupBy(fact => SourceFactKey(fact.SourceIndexId, fact.OriginalFactId), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).First(), StringComparer.Ordinal);
         var surfacesByKind = surfaces
             .GroupBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
@@ -984,7 +1002,7 @@ public static class CombinedDependencyPathReporter
                     "EvidenceEdge",
                     RuleIds.LegacyFlowRootSelection,
                     handler.EvidenceTier,
-                    SupportingFacts(handler, factsByOriginalId),
+                    SupportingFacts(handler, factsBySourceOriginalId),
                     [],
                     SafePath(handler.FilePath),
                     handler.StartLine,
@@ -992,7 +1010,7 @@ public static class CombinedDependencyPathReporter
             }
         }
 
-        AddUnresolvedRootGaps(graph, facts, factsByOriginalId);
+        AddUnresolvedRootGaps(graph, facts);
 
         foreach (var mapping in facts.Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
@@ -1010,7 +1028,7 @@ public static class CombinedDependencyPathReporter
                     "EvidenceEdge",
                     RuleIds.LegacyFlowStaticTraversal,
                     mapping.EvidenceTier,
-                    SupportingFacts(mapping, factsByOriginalId),
+                    SupportingFacts(mapping, factsBySourceOriginalId),
                     [],
                     SafePath(mapping.FilePath),
                     mapping.StartLine,
@@ -1033,7 +1051,7 @@ public static class CombinedDependencyPathReporter
                     "EvidenceEdge",
                     RuleIds.LegacyFlowStaticTraversal,
                     legacyData.EvidenceTier,
-                    SupportingFacts(legacyData, factsByOriginalId),
+                    SupportingFacts(legacyData, factsBySourceOriginalId),
                     [],
                     SafePath(legacyData.FilePath),
                     legacyData.StartLine,
@@ -1043,15 +1061,16 @@ public static class CombinedDependencyPathReporter
 
         foreach (var projection in facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
-            AddProjectionEdge(graph, projection, factsByOriginalId, surfacesByKind);
+            AddProjectionEdge(graph, projection, factsBySourceOriginalId, surfacesByKind);
         }
     }
 
-    private static void AddUnresolvedRootGaps(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts, IReadOnlyDictionary<string, CombinedFactRow> factsByOriginalId)
+    private static void AddUnresolvedRootGaps(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
         var resolvedBindingIds = facts
             .Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
-            .SelectMany(fact => SplitList(CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds")))
+            .SelectMany(fact => SplitList(CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds"))
+                .Select(id => SourceFactKey(fact.SourceIndexId, id)))
             .ToHashSet(StringComparer.Ordinal);
         var resolvedHandlerKeys = facts
             .Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
@@ -1063,7 +1082,7 @@ public static class CombinedDependencyPathReporter
         foreach (var binding in facts.Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             var bindingKey = WebFormsBindingKey(binding);
-            if (resolvedBindingIds.Contains(binding.OriginalFactId)
+            if (resolvedBindingIds.Contains(SourceFactKey(binding.SourceIndexId, binding.OriginalFactId))
                 || (bindingKey is not null && resolvedHandlerKeys.Contains(bindingKey)))
             {
                 continue;
@@ -1147,7 +1166,7 @@ public static class CombinedDependencyPathReporter
     private static void AddProjectionEdge(
         EvidenceGraph graph,
         CombinedFactRow projection,
-        IReadOnlyDictionary<string, CombinedFactRow> factsByOriginalId,
+        IReadOnlyDictionary<string, CombinedFactRow> factsBySourceOriginalId,
         IReadOnlyDictionary<string, CombinedDependencySurfaceRow[]> surfacesByKind)
     {
         var handlerSymbol = projection.SourceSymbol ?? CombinedDependencyReporter.FirstValue(projection.Properties, "handlerSymbolId", "handlerName");
@@ -1171,6 +1190,11 @@ public static class CombinedDependencyPathReporter
         }
 
         graph.AddNode(terminal);
+        if (HasExistingNonProjectionPath(graph, source.NodeId, terminal.NodeId, maxDepth: 12))
+        {
+            return;
+        }
+
         graph.AddEdge(new GraphEdge(
             $"legacy-projection:{projection.CombinedFactId}:{terminal.NodeId}",
             "webforms-event-flow-projection",
@@ -1179,7 +1203,7 @@ public static class CombinedDependencyPathReporter
             "EvidenceEdge",
             RuleIds.LegacyFlowStaticTraversal,
             projection.EvidenceTier,
-            SupportingFacts(projection, factsByOriginalId),
+            SupportingFacts(projection, factsBySourceOriginalId),
             [],
             SafePath(projection.FilePath),
             projection.StartLine,
@@ -1380,10 +1404,10 @@ public static class CombinedDependencyPathReporter
             null);
     }
 
-    private static IReadOnlyList<string> SupportingFacts(CombinedFactRow fact, IReadOnlyDictionary<string, CombinedFactRow> factsByOriginalId)
+    private static IReadOnlyList<string> SupportingFacts(CombinedFactRow fact, IReadOnlyDictionary<string, CombinedFactRow> factsBySourceOriginalId)
     {
         return SplitList(CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds"))
-            .Select(id => factsByOriginalId.TryGetValue(id, out var supporting) ? supporting.CombinedFactId : id)
+            .Select(id => factsBySourceOriginalId.TryGetValue(SourceFactKey(fact.SourceIndexId, id), out var supporting) ? supporting.CombinedFactId : id)
             .Append(fact.CombinedFactId)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
@@ -1421,7 +1445,48 @@ public static class CombinedDependencyPathReporter
             return null;
         }
 
-        return $"{controlId}\0{eventName}\0{handlerName}";
+        return $"{fact.SourceIndexId}\0{controlId}\0{eventName}\0{handlerName}";
+    }
+
+    private static string SourceFactKey(string sourceIndexId, string originalFactId)
+    {
+        return $"{sourceIndexId}\0{originalFactId}";
+    }
+
+    private static bool HasExistingNonProjectionPath(EvidenceGraph graph, string startNodeId, string terminalNodeId, int maxDepth)
+    {
+        var queue = new Queue<(string NodeId, int Depth)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal) { startNodeId };
+        queue.Enqueue((startNodeId, 0));
+
+        while (queue.Count > 0)
+        {
+            var (nodeId, depth) = queue.Dequeue();
+            if (nodeId == terminalNodeId && depth > 0)
+            {
+                return true;
+            }
+
+            if (depth >= maxDepth || !graph.Outgoing.TryGetValue(nodeId, out var outgoing))
+            {
+                continue;
+            }
+
+            foreach (var edge in outgoing)
+            {
+                if (edge.EdgeKind == "webforms-event-flow-projection")
+                {
+                    continue;
+                }
+
+                if (seen.Add(edge.ToNodeId))
+                {
+                    queue.Enqueue((edge.ToNodeId, depth + 1));
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool IsWebFormsLifecycle(string value)
@@ -2715,6 +2780,36 @@ public static class CombinedDependencyPathReporter
     private static bool IsLegacyView(string? view)
     {
         return string.Equals(view, LegacyFlowReportConstants.View, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? InferLanguage(string? scannerVersion)
+    {
+        if (string.IsNullOrWhiteSpace(scannerVersion))
+        {
+            return null;
+        }
+
+        if (scannerVersion.Contains("typescript", StringComparison.OrdinalIgnoreCase))
+        {
+            return "typescript";
+        }
+
+        if (scannerVersion.Contains("jvm", StringComparison.OrdinalIgnoreCase))
+        {
+            return "jvm";
+        }
+
+        if (scannerVersion.Contains("python", StringComparison.OrdinalIgnoreCase))
+        {
+            return "python";
+        }
+
+        if (scannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase))
+        {
+            return "csharp";
+        }
+
+        return null;
     }
 
     private static int EdgeRank(string edgeKind)

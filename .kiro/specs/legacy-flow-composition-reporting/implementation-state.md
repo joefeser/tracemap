@@ -136,11 +136,28 @@ The pinned combined-path smoke is relevant because this slice extends
 smoke is required beyond the .NET suite because scanner extraction behavior was
 not changed.
 
+PR review loop follow-up validation repeated the required commands after
+addressing Qodo/Codex findings:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter LegacyFlowCompositionTests
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/smoke-combined-paths.sh
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Follow-up fixes covered source-scoped supporting fact resolution, projection
+edge fallback behavior, post-legacy classification filtering, redacted coverage
+warnings, no-backend `MaxPaths` enforcement, non-legacy JSON schema
+compatibility, and single-index scanner-language inference.
+
 ## Oddities
 
 - Existing `CombinedDependencyPathReport` is reused and extended with optional
-  legacy schema/view/query fields. This avoids a split output model but means
-  non-legacy JSON now contains additional null/default fields.
+  legacy schema/view/query fields. These fields are omitted from non-legacy JSON
+  output to preserve the existing `tracemap paths` schema surface.
 - Availability gaps are emitted conservatively when optional parameter-forward
   or legacy data metadata evidence is unavailable or empty; this prevents clean
   absence claims from old indexes.
