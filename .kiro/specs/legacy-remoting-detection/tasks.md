@@ -16,7 +16,7 @@
   - [ ] Add fact type constants for Remoting API usage, `MarshalByRefObject`, channels, channel registration, service registration, client registration, client activation, config section, config channels, config services, and config clients.
   - [ ] Preserve stable JSON and SQLite property encoding using existing fact serialization conventions.
   - [ ] Include rule ID, evidence tier, repository-relative path, line span, commit SHA, extractor version, and safe properties on every emitted fact.
-  - [ ] Store linked supporting fact IDs in the existing `supportingFactIds` semicolon-delimited property convention.
+  - [ ] Store linked supporting fact IDs in `supportingFactIds`, using semicolon-delimited values for new Remoting output while preserving consumer compatibility with existing comma-delimited legacy output.
   - [ ] Ensure JSON/index export paths round-trip new Remoting fact types and `supportingFactIds` values.
   - [ ] Add `AnalysisGap` coverage for malformed config, missing semantic model, ambiguous aliases, dynamic registration, external includes, encrypted sections, and unsupported remoting shapes.
 

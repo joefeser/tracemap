@@ -338,9 +338,11 @@ Fact rows must include:
 - safe fact properties;
 - supporting fact IDs where a fact links channel construction to registration.
 
-Store supporting fact IDs as a semicolon-delimited string in a fact property
-named `supportingFactIds`, consistent with existing extractor conventions. Omit
-the property when no supporting facts are linked; do not store an empty string.
+Store supporting fact IDs in a fact property named `supportingFactIds`. New
+Remoting extractors should write semicolon-delimited values as the canonical v1
+format, while consumers must remain backward-compatible with existing
+semicolon- and comma-delimited extractor output. Omit the property when no
+supporting facts are linked; do not store an empty string.
 
 Register the new extractor in the scanner orchestration path, for example by
 adding a `LegacyRemotingExtractor.Extract` call from `ScanEngine.cs` alongside
