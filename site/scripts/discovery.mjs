@@ -342,7 +342,11 @@ async function validateInternalPath(pathname, { dist, field, index, resolveInter
 
 async function validatePreferredProofPath(pathname, { dist, index, resolveInternalPaths }) {
   if (/^https?:\/\//.test(pathname)) {
-    validateStablePublicUrl(pathname, index, "preferredProofPath");
+    const parsed = validateStablePublicUrl(pathname, index, "preferredProofPath");
+    if (parsed.hostname === "tracemap.tools" && resolveInternalPaths && !(await publicPathExists(dist, parsed.pathname))) {
+      throw new Error(`Discovery entry at index ${index} references missing preferredProofPath: ${parsed.pathname}`);
+    }
+
     return;
   }
 
@@ -381,7 +385,7 @@ function validateStablePublicUrl(url, index, field) {
   }
 
   if (parsed.hostname === "tracemap.tools") {
-    return;
+    return parsed;
   }
 
   if (parsed.hostname !== "github.com") {
@@ -389,6 +393,7 @@ function validateStablePublicUrl(url, index, field) {
   }
 
   validatePinnedRepositoryDocPath(parsed.pathname, url, index);
+  return parsed;
 }
 
 function validatePinnedRepositoryDocPath(pathname, url, index) {

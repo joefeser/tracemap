@@ -47,6 +47,10 @@ test("createDiscoveryOutputs validates preferredProofPath states", async () => {
     dist,
     resolveInternalPaths: true
   });
+  await createDiscoveryOutputs([{ ...siteEntry("/"), preferredProofPath: "https://tracemap.tools/proof/" }], {
+    dist,
+    resolveInternalPaths: true
+  });
   await createDiscoveryOutputs([siteEntry("/")], { dist, resolveInternalPaths: true });
 
   await assert.rejects(
@@ -58,6 +62,13 @@ test("createDiscoveryOutputs validates preferredProofPath states", async () => {
   );
   await assert.rejects(
     createDiscoveryOutputs([{ ...siteEntry("/"), preferredProofPath: "/missing/" }], {
+      dist,
+      resolveInternalPaths: true
+    }),
+    /references missing preferredProofPath: \/missing\//
+  );
+  await assert.rejects(
+    createDiscoveryOutputs([{ ...siteEntry("/"), preferredProofPath: "https://tracemap.tools/missing/" }], {
       dist,
       resolveInternalPaths: true
     }),
