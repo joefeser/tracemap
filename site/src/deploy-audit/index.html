@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap deploy audit: deterministic checks for public static site entrypoints, discovery files, sitemap metadata, and claim boundaries."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Deploy Audit | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/deploy-audit/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Deploy Audit">
+    <meta
+      property="og:description"
+      content="A static deploy audit surface for tracemap.tools routes, discovery files, and public claim boundaries."
+    >
+    <meta property="og:url" content="https://tracemap.tools/deploy-audit/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Deploy audit</p>
+        <h1>Before the site goes live, prove the static publish surface exists.</h1>
+        <p class="hero-subhead">
+          This page documents the deploy audit for tracemap.tools: the generated
+          routes, sitemap, robots file, LLM discovery file, JSON indexes, and
+          public claim boundaries that must survive a static-site build.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. Shared site principle: No public conclusion
+          without evidence. This audit is not live AWS state, not runtime
+          behavior proof, and not deployment success proof.
+        </p>
+        <nav class="hero-actions" aria-label="Deploy audit links">
+          <a class="button primary" href="/validation/">Open validation</a>
+          <a class="button secondary" href="/proof-paths/">Trace proof paths</a>
+          <a class="button secondary" href="/limitations/">Read limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What the audit checks</p>
+          <h2>The publish contract is static and reviewable.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Routes</strong><span>Required public pages such as home, docs, validation, limitations, demo result, proof paths, legacy evidence, and this deploy audit route must build to HTML.</span></div>
+          <div><strong>Discovery</strong><span><code>llms.txt</code>, <code>docs-index.json</code>, and <code>routes-index.json</code> must exist and continue pointing to public-safe evidence, docs, and limitations.</span></div>
+          <div><strong>Crawlers</strong><span><code>robots.txt</code> must keep the sitemap directive and the LLM discovery comment, while <code>sitemap.xml</code> must include expected HTML routes.</span></div>
+          <div><strong>Boundaries</strong><span>The audit page must keep non-claims visible and avoid private paths, local URLs, raw fact streams, SQLite files, analyzer logs, credentials, and raw generated artifacts.</span></div>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Command</p>
+          <h2>The deploy audit runs as part of site validation.</h2>
+          <p>
+            Amplify still publishes only <code>site/dist</code>. This check
+            verifies the static build output before that directory is uploaded.
+          </p>
+        </div>
+        <pre class="command-block"><code>cd site
+npm run validate</code></pre>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Entry points</p>
+          <h2>These files and routes are the public discovery spine.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Human entry points</h3>
+            <p><strong>Routes:</strong> <a href="/">home</a>, <a href="/docs/">docs</a>, <a href="/validation/">validation</a>, <a href="/limitations/">limitations</a>, <a href="/proof-paths/">proof paths</a>, and <a href="/legacy-evidence/">legacy evidence</a>.</p>
+            <p><strong>Limitation:</strong> Route presence is not product completeness, deployment state, or release approval.</p>
+          </article>
+          <article>
+            <h3>Bot entry points</h3>
+            <p><strong>Files:</strong> <code>llms.txt</code>, <code>docs-index.json</code>, <code>routes-index.json</code>, <code>sitemap.xml</code>, and <code>robots.txt</code>.</p>
+            <p><strong>Limitation:</strong> Discovery metadata routes readers to evidence; it does not infer conclusions or prove runtime behavior.</p>
+          </article>
+          <article>
+            <h3>Proof entry points</h3>
+            <p><strong>Routes:</strong> <a href="/demo/result/">demo result</a>, <a href="/demo/proof-upgrades/">proof upgrades</a>, <a href="/demo/proof-assets/">proof assets</a>, and <a href="/proof-paths/">proof path index</a>.</p>
+            <p><strong>Limitation:</strong> Public demo proof remains scoped to checked-in samples and public-safe summaries.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The deploy audit is not an uptime monitor.</h2>
+        </div>
+        <ul>
+          <li>No runtime behavior proof, production traffic proof, endpoint performance proof, deployment success proof, release safety proof, or release approval proof.</li>
+          <li>No claim that AWS Amplify, DNS, TLS, CDN cache, or external crawlers currently serve the newest commit.</li>
+          <li>No AI impact analysis, LLM calls, embeddings, vector databases, or prompt-based classification in TraceMap scanner or reducer claims.</li>
+          <li>No raw facts, SQLite files, analyzer logs, source snippets, SQL text, config values, secrets, local absolute paths, raw remotes, or generated scan directories.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with
+        <a href="/validation/">validation</a>,
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/docs/">docs</a>,
+        and
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
