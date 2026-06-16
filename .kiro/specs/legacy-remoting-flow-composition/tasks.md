@@ -19,7 +19,8 @@
         indexes where available.
   - [ ] Read Remoting-related `AnalysisGap` facts and preserve source rule IDs.
   - [ ] Detect missing Remoting fact availability in older indexes and emit
-        `RemotingExtractorUnavailable` or `RemotingSchemaMissing` gaps.
+        `ExtractorUnavailable: legacy-remoting` or
+        `SchemaMissing: legacy-remoting` gaps.
   - [ ] Preserve fact IDs, supporting fact IDs, rule IDs, evidence tiers, file
         spans, commit SHA, extractor versions, source labels, and coverage.
   - [ ] Parse `supportingFactIds` deterministically for semicolon-delimited,
@@ -33,9 +34,11 @@
   - [ ] Add `--to-surface` support for `remoting-endpoint`,
         `remoting-registration`, and `remoting-channel`.
   - [ ] Support safe fact ID, safe type-name, and display-hash matching through
-        existing selector behavior.
-  - [ ] Support `--surface-name <kind>-<hash-prefix>` matching, including
-        collision cases that return all matches with ambiguity notes.
+        existing exact/wildcard selector behavior.
+  - [ ] Support `--surface-name <kind>-<hash-prefix>` as an exact generated
+        display identity, and support wildcard display-hash matching only through
+        the existing wildcard selector behavior, including collision cases that
+        return all matches with ambiguity notes.
   - [ ] Keep source-local candidates separate and reject short-name stitching
         across sources.
   - [ ] Add selector tests for match, no-match, ambiguity, and combined-source
