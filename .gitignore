@@ -57,6 +57,7 @@ site/dist/
 site/output/
 
 # Others
+.DS_Store
 ~$*
 *~
 CodeCoverage/

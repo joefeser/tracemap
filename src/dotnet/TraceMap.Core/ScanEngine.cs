@@ -264,6 +264,7 @@ public static class ScanEngine
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyWcfExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted));
         facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
