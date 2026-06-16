@@ -65,6 +65,7 @@ Spec-only delivery validation:
 node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-opus-4.8 --fresh
 node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-sonnet-4.6 --fresh
 git diff --check
+./scripts/check-private-paths.sh
 ```
 
 If named Kiro review models are unavailable, run:
@@ -79,8 +80,8 @@ Current spec-prep branch validation:
 
 - Passed:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-opus-4.8 --fresh`
-- `claude-sonnet-4.8` was unavailable locally; subsequent validation uses the
-  available Sonnet model documented above.
+- The originally requested Sonnet 4.8 model was unavailable locally;
+  subsequent validation uses the available Sonnet model documented above.
 - Passed fallback:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model auto --fresh`
 - Review-loop remediation added `design.md` and normalized `Status:
