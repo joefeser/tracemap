@@ -1,6 +1,7 @@
 # Implementation State
 
-Status: ready-for-implementation / not started
+Status: not-started
+Readiness: ready-for-implementation
 Branch: codex/site-llm-discovery-pack
 Public claim level: demo
 
@@ -82,14 +83,18 @@ Current spec-prep branch validation:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-sonnet-4.8 --fresh`
 - Attempted fallback:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model auto --fresh`
-- Result: the repo wrapper stopped before model invocation because `--kind spec`
-  currently requires `design.md`; this spec-prep slice intentionally contains
-  only the requested `requirements.md`, `tasks.md`, and
-  `implementation-state.md` files.
-- Fallback review performed: checked owned-file scope, not-started task status,
-  public claim level, non-claims, main/dev wording boundary, shared site
-  principle, concrete discovery output paths, and public-safe artifact
-  exclusions.
+- Initial result: the repo wrapper stopped before model invocation because
+  `--kind spec` requires `design.md`.
+- Review-loop remediation added `design.md` and normalized `Status:
+  not-started` plus `Readiness: ready-for-implementation`.
+- Opus spec review then found implementability gaps around discovery metadata
+  source authority, sitemap exposure for non-HTML outputs, and validation of
+  generated discovery files. The spec was patched to require an authoritative
+  discovery source file, robots/direct-link exposure by default, deterministic
+  JSON ordering, stable repo-doc refs, and explicit non-HTML output validation.
+- Fallback spec review reported no blocking issues. The Medium implementability
+  note was patched by documenting existing static-file copy behavior for public
+  non-HTML source files.
 
 Future implementation validation:
 
