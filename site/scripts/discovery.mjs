@@ -356,7 +356,19 @@ async function validatePreferredProofPath(pathname, { dist, index, resolveIntern
 }
 
 function validateRepoDocUrl(url, index) {
-  validateStablePublicUrl(url, index, "url");
+  let parsed;
+
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Discovery entry at index ${index} has invalid url: ${url}`);
+  }
+
+  if (parsed.hostname !== "github.com") {
+    throw new Error(`Discovery entry at index ${index} has non-public url: ${url}`);
+  }
+
+  validatePinnedRepositoryDocPath(parsed.pathname, url, index);
 }
 
 function validateStablePublicUrl(url, index, field) {
@@ -376,7 +388,11 @@ function validateStablePublicUrl(url, index, field) {
     throw new Error(`Discovery entry at index ${index} has non-public ${field}: ${url}`);
   }
 
-  if (!/^\/joefeser\/tracemap\/blob\/(?:main|v\d+\.\d+\.\d+)\/.+/.test(parsed.pathname)) {
+  validatePinnedRepositoryDocPath(parsed.pathname, url, index);
+}
+
+function validatePinnedRepositoryDocPath(pathname, url, index) {
+  if (!/^\/joefeser\/tracemap\/blob\/(?:main|v\d+\.\d+\.\d+)\/.+/.test(pathname)) {
     throw new Error(`Discovery entry at index ${index} must pin repository docs to main or a release tag: ${url}`);
   }
 }

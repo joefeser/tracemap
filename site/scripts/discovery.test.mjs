@@ -139,6 +139,16 @@ test("createDiscoveryOutputs requires stable public refs for repo docs", async (
     ]),
     /must pin repository docs to main or a release tag/
   );
+
+  await assert.rejects(
+    createDiscoveryOutputs([
+      {
+        ...repoEntry("README.md"),
+        url: "https://tracemap.tools/docs/"
+      }
+    ]),
+    /has non-public url: https:\/\/tracemap\.tools\/docs\//
+  );
 });
 
 async function createDistWithRoutes(routes) {
