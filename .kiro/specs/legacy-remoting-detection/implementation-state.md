@@ -42,6 +42,9 @@ reports may group both under generic legacy service-boundary summaries.
 - PR review loop: Qodo optional delimiter finding patched by clarifying
   `supportingFactIds` canonical Remoting output versus legacy consumer
   compatibility.
+- PR review loop: Codex P2 indirect `MarshalByRefObject` finding patched by
+  requiring Remoting-specific context before emitting indirect-inheritance
+  Remoting object facts.
 
 ## Validation
 
