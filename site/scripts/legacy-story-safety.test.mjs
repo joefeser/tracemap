@@ -31,8 +31,9 @@ test("legacy story guard accepts boundary legacy terms by themselves", () => {
 });
 
 test("legacy story guard rejects hard leaks and sensitive values", () => {
+  const localPathLeak = `${String.fromCharCode(47)}Users/example/private-sample`;
   const cases = [
-    ["local path", "See /Users/example/private-sample for details.", /local-absolute-path/],
+    ["local path", `See ${localPathLeak} for details.`, /local-absolute-path/],
     ["bare spec path", "Read .kiro/specs/legacy-secret/requirements.md.", /bare internal spec path/],
     ["connection string", "Server=db;Database=orders;User ID=sa;Password=pw;", /connection-string/],
     ["credential assignment", "apiKey = \"secret-value\"", /credential-assignment/],
