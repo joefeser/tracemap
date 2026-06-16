@@ -2515,3 +2515,73 @@ rules:
       - Safety diagnostics report categories without echoing unsafe values, so remediation requires inspecting local-only artifacts outside committed outputs.
       - Secret-like, low-entropy, enumerable, or private identity values are omitted or represented category-only instead of hashed for public-safe artifacts.
       - Validation is a guardrail for committed summaries, not authorization to publish private scan artifacts.
+
+  - id: legacy.evidence-pack.summary.v1
+    name: Legacy evidence-pack summary
+    description: Creates deterministic redacted evidence-pack summaries from TraceMap scan outputs, baseline manifests, or already redacted legacy validation summaries.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyEvidencePackSummary
+      - LegacyEvidencePackDocument
+    limitations:
+      - Evidence packs are curated summaries over existing static evidence and are not source-of-truth scan outputs.
+      - Aggregate counts do not prove runtime execution, deployment, reachability, production use, or business impact.
+      - Reduced coverage, missing inputs, and unsupported input schemas remain labeled gaps rather than absence evidence.
+
+  - id: legacy.evidence-pack.section.v1
+    name: Legacy evidence-pack section evidence
+    description: Emits safe per-section evidence rows with rule IDs, evidence tiers, source labels, coverage labels, provenance categories, and limitations.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyEvidencePackSection
+      - LegacyEvidencePackRow
+    limitations:
+      - Section rows summarize static evidence categories and counts only; raw source snippets, SQL, config values, remotes, and local paths are omitted.
+      - Section availability is scope-relative and must not be read as complete repository coverage unless the underlying scan coverage proves it.
+      - Syntax or textual fallback evidence remains review-tier even when summarized in a public-safe pack.
+
+  - id: legacy.evidence-pack.claim-boundary.v1
+    name: Legacy evidence-pack claim boundary
+    description: Records public/demo/local claim boundaries and prohibited-claim downgrades for evidence-pack output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyEvidencePackGap
+      - LegacyEvidencePackLimitation
+    limitations:
+      - Claim boundaries describe what the pack is allowed to say; they do not upgrade the underlying evidence tier.
+      - Public-safe and demo-safe packs can still require human judgment before site copy or release notes use them.
+      - The validator blocks obvious overclaims but is not proof that every possible unsafe interpretation has been removed.
+
+  - id: legacy.evidence-pack.safety-validation.v1
+    name: Legacy evidence-pack safety validation
+    description: Validates generated evidence-pack JSON and Markdown for storage boundaries, neutral labels, unsafe content categories, expected claim level, and promotion readiness.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyEvidencePackValidationResult
+      - LegacyEvidencePackValidationDiagnostic
+    limitations:
+      - Safety diagnostics report categories without echoing unsafe values, so remediation may require inspecting local-only inputs outside committed outputs.
+      - Validation is a guardrail for redacted artifacts, not authorization to publish raw scan output or private repository identity.
+      - Secret-like, low-entropy, enumerable, or private values are rejected or represented category-only rather than copied into public-safe output.
+
+  - id: legacy.evidence-pack.command-provenance.v1
+    name: Legacy evidence-pack command provenance
+    description: Records sanitized generator, input-kind, input-fingerprint, and validation-command provenance for evidence packs.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyEvidencePackCommandProvenance
+    limitations:
+      - Command provenance is normalized and omits raw local paths, environment variables, remotes, URLs, and private repository identity.
+      - Input fingerprints prove byte identity of the summarized input, not semantic equivalence or runtime behavior.
+      - A validation command listed in provenance is expected evidence, not proof that an external CI system ran successfully.
+
+  - id: legacy.evidence-pack.input-availability.v1
+    name: Legacy evidence-pack input availability
+    description: Emits gaps for missing, unsupported, incompatible, unsafe, or partial evidence-pack inputs.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyEvidencePackGap
+    limitations:
+      - Missing or unsupported inputs are analysis gaps and must not be interpreted as clean absence of legacy evidence.
+      - Raw scan-output inputs are summarized only when they are under approved sample or ignored local storage boundaries.
+      - Input availability does not prove source freshness, generated-code freshness, build completeness, or runtime reachability.

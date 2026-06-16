@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "legacy-validation-summary.v1",
+  "source": {
+    "label": "synthetic-legacy-alpha",
+    "sourceClassification": "public-safe-synthetic",
+    "coverageLabel": "Level1SemanticAnalysisReduced",
+    "commitSha": "1111111111111111111111111111111111111111",
+    "repoIdentity": "synthetic-legacy-alpha",
+    "extractorVersions": {
+      "tracemap": "tracemap-test"
+    }
+  },
+  "factCount": 8,
+  "gapCount": 1,
+  "byRuleId": {
+    "legacy.webforms.event-binding.v1": 3,
+    "legacy.wcf.mapping.v1": 2
+  },
+  "byEvidenceTier": {
+    "Tier2Structural": 5,
+    "Tier3SyntaxOrTextual": 3
+  },
+  "byFactCategory": {
+    "WebFormsEventBinding": 3,
+    "WcfServiceReferenceMapping": 2
+  },
+  "evidenceRows": [
+    {
+      "ruleId": "legacy.webforms.event-binding.v1",
+      "evidenceTier": "Tier2Structural",
+      "sourceLabel": "synthetic-legacy-alpha",
+      "coverageLabel": "Level1SemanticAnalysisReduced",
+      "category": "webforms-event-bindings",
+      "count": 3,
+      "safeProvenance": "summary:webforms-event-bindings",
+      "limitations": [
+        "Markup event binding evidence does not prove runtime event execution."
+      ]
+    },
+    {
+      "ruleId": "legacy.wcf.mapping.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "sourceLabel": "synthetic-legacy-alpha",
+      "coverageLabel": "Level1SemanticAnalysisReduced",
+      "category": "wcf-service-reference-mappings",
+      "count": 2,
+      "safeProvenance": "summary:wcf-service-reference-mappings",
+      "limitations": [
+        "Service-reference mapping evidence does not prove runtime endpoint reachability."
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "ruleId": "legacy.evidence-pack.input-availability.v1",
+      "evidenceTier": "Tier4Unknown",
+      "sourceLabel": "synthetic-legacy-alpha",
+      "coverageLabel": "Level1SemanticAnalysisReduced",
+      "category": "reduced-semantic-coverage",
+      "message": "Semantic coverage is reduced; absence of additional evidence is not proven."
+    }
+  ],
+  "limitations": [
+    "Synthetic summary input is public-safe and contains only counts, labels, rule IDs, tiers, gaps, and limitations.",
+    "Reduced coverage is preserved as a limitation."
+  ]
+}
