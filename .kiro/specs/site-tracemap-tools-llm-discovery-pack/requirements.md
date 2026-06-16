@@ -90,6 +90,10 @@ Acceptance criteria:
   HTML scraping.
 - Each index SHALL include stable paths or URLs, titles or labels, public claim
   levels where applicable, and short summaries.
+- Each index entry SHALL include `sourceType` with value `site-page` or
+  `repo-doc`.
+- Each discovery source entry SHALL include `hintCategory` so validation can
+  enforce evidence and limitation ordering before roadmap or use-case hints.
 - The indexes SHALL identify source-of-truth repository docs separately from
   site presentation pages.
 - The indexes SHALL include limitations or non-claims metadata for entries that
@@ -152,11 +156,12 @@ Acceptance criteria:
 - WHEN the discovery text is reviewed THEN it SHALL not contain AI
   impact-analysis claims or imply LLM features in core TraceMap.
 - WHEN discovery entry points are exposed THEN `/llms.txt` SHOULD be linked
-  from `robots.txt` or direct site links without requiring generated sitemap
-  entries for `.txt` or `.json` files.
-- IF the implementation adds `/llms.txt`, `/docs-index.json`, or
-  `/routes-index.json` to generated sitemap output THEN it SHALL also update
-  sitemap validation to explicitly allow those exact file paths.
+  from direct site links and MAY be mentioned in `robots.txt` as a plain
+  comment.
+- The initial implementation SHALL NOT add `/llms.txt`, `/docs-index.json`, or
+  `/routes-index.json` to generated sitemap output.
+- Sitemap inclusion for `.txt` or `.json` discovery files is a future
+  enhancement and would require an explicit sitemap-validation change.
 - Validation SHALL check JSON field schemas for the discovery indexes.
 - Validation SHALL check that every internal route or proof path referenced by
   discovery outputs resolves to an artifact in `site/dist`.
@@ -164,5 +169,7 @@ Acceptance criteria:
   format, not for `site/dist` artifact presence.
 - Validation SHALL check denied public-unsafe tokens and forbidden positioning
   phrases across `llms.txt` and the generated JSON indexes.
+- Denied-token exceptions SHALL be structural: allowed only in `nonClaims` array
+  values or inside the `## Non-Claims` section of `llms.txt`.
 - The implementation-state note SHALL record branch, scope decisions,
   validation commands, review findings, and follow-up items.

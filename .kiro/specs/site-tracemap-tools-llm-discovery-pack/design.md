@@ -45,6 +45,7 @@ Suggested `discovery.json` entry shape:
   "summary": "Public-safe static evidence summary for the checked-in demo.",
   "publicClaimLevel": "demo",
   "sourceType": "site-page",
+  "hintCategory": "evidence",
   "preferredProofPath": "/demo/proof-upgrades/",
   "limitations": ["Static evidence only", "No runtime proof"],
   "nonClaims": ["No release approval", "No production traffic proof"]
@@ -61,6 +62,13 @@ what TraceMap does not do or does not assert.
 Generated outputs remain build artifacts under `site/dist` and are not edited
 by hand.
 
+`site/src/_site/discovery.json` is a private build-time input only. It must not
+be copied directly to `site/dist`. The build should read that source and write
+the public outputs `/llms.txt`, `/docs-index.json`, and `/routes-index.json`.
+An empty discovery source should still produce all three public outputs with
+valid empty JSON arrays where applicable and a valid `llms.txt` containing the
+required non-claims section.
+
 ## Output Shape
 
 The pack should publish three static outputs:
@@ -75,6 +83,18 @@ Each generated entry should keep fields small, deterministic, and bounded.
 Suggested fields include `path`, `title`, `summary`, `publicClaimLevel`,
 `sourceType`, `preferredProofPath`, `limitations`, and `nonClaims`.
 
+Required discovery source fields: `path` or `url`, `title`, `summary`,
+`sourceType`, `publicClaimLevel`, `limitations`, and `nonClaims`.
+`sourceType` must be one of `site-page` or `repo-doc`.
+`hintCategory` must be one of `start`, `evidence`, `limitations`, `demo`,
+`repo-doc`, `roadmap`, or `use-case`.
+`preferredProofPath` is optional, but if present and internal it must resolve to
+a built site artifact.
+Empty `preferredProofPath` means `null`, an empty string, or a whitespace-only
+string. Empty values are invalid when the field is present. Unresolved internal
+`preferredProofPath` values must fail the build with an explicit message naming
+only the unresolved public path, not local filesystem paths.
+
 `llms.txt` should use a pinned Markdown-like shape:
 
 - H1 title.
@@ -82,6 +102,9 @@ Suggested fields include `path`, `title`, `summary`, `publicClaimLevel`,
 - H2 sections for "Start Here", "Evidence And Proof", "Limitations", "Demo",
   "Repository Docs", and "Non-Claims".
 - Bullet links with stable public URLs and one short bounded summary each.
+
+The H2 sections should appear in the listed order. Sections with no entries
+should be omitted, not emitted as empty sections.
 
 ## Claim And Safety Rules
 
@@ -123,17 +146,18 @@ Expected approach:
 4. Add focused tests for generation, route references, and forbidden wording or
    artifacts.
 
-Discovery files should be exposed from stable direct URLs. The spec should not
-require adding `/llms.txt`, `/docs-index.json`, or `/routes-index.json` to the
-generated sitemap unless the implementation also explicitly changes sitemap
-validation to allow those exact file paths. The safer default is to expose
-`/llms.txt` through `robots.txt` and direct links, while keeping HTML route
-sitemap behavior unchanged.
+Discovery files should be exposed from stable direct URLs. Initial
+implementation must not add `/llms.txt`, `/docs-index.json`, or
+`/routes-index.json` to generated sitemap output because the current sitemap
+validator accepts trailing-slash HTML routes only. Sitemap inclusion can be a
+future enhancement only if sitemap validation is explicitly changed for those
+exact file paths.
 
-The existing build already copies non-HTML public source files from `site/src`
-to `site/dist`, excluding underscore-prefixed private source folders. Static
-discovery files placed at public source paths can therefore be delivered at
-stable URLs without adding them to sitemap metadata.
+`robots.txt` is currently static source under `site/src`. If the implementation
+mentions `/llms.txt` there, it should use a plain comment such as
+`# LLM discovery: https://tracemap.tools/llms.txt`, not a non-standard
+`Sitemap:` directive for a text file. The robots comment is the preferred
+minimum exposure path; direct site links are additive.
 
 ## Validation
 
@@ -141,7 +165,7 @@ Spec review should use the repository Kiro review wrapper:
 
 ```bash
 node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-opus-4.8 --fresh
-node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-sonnet-4.8 --fresh
+node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-sonnet-4.6 --fresh
 ```
 
 If a named model is unavailable, use the wrapper's model fallback:
@@ -164,3 +188,30 @@ runs them. Test coverage should include generation of all three outputs,
 required JSON field schemas, route/proof-path resolution against `site/dist`,
 claim-level preservation, denied-token rejection, non-claims presence, main/dev
 labeling, and deterministic ordering.
+
+Denied-token exceptions are structural: a normally denied phrase is allowed only
+when it appears as a value in a `nonClaims` array in discovery source/generated
+JSON or inside the `## Non-Claims` section of `llms.txt`. The same phrase in a
+title, summary, limitation, or route hint must fail validation.
+For JSON, the exception applies only to direct string values in the `nonClaims`
+array, not nested objects, nested arrays, or other fields.
+
+The `llms.txt` validator should split content on H2 headings that start with
+`## `. A line is inside the `## Non-Claims` section only after that heading and
+before the next H2 heading or end of file.
+
+`preferredProofPath` validation has three states: an absent field is allowed and
+skips proof-path resolution; a present empty field is invalid; a present
+non-empty internal path must resolve to a built `site/dist` artifact.
+
+Schema validation failures, including missing required fields or invalid
+`sourceType` or `hintCategory`, must fail validation and halt the build.
+
+For non-shipped claim levels (`planned`, `concept`, `hidden`, `dev-only`),
+generated copy may use "planned", "future", "in progress", "concept",
+"hidden", or "dev-only" as appropriate, and must not describe the entry as
+"available", "shipped", "released", or "deployed".
+
+Sort order should use a stable ordinal comparison over normalized `path` or
+`url` strings. Tests should include a fixture that proves repeated builds emit
+the same JSON order.

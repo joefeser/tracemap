@@ -63,11 +63,11 @@ Spec-only delivery validation:
 
 ```bash
 node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-opus-4.8 --fresh
-node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-sonnet-4.8 --fresh
+node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-sonnet-4.6 --fresh
 git diff --check
 ```
 
-If the named Kiro review models are unavailable, run:
+If named Kiro review models are unavailable, run:
 
 ```bash
 node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model auto --fresh
@@ -77,14 +77,12 @@ node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --ki
 
 Current spec-prep branch validation:
 
-- Attempted:
+- Passed:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-opus-4.8 --fresh`
-- Attempted:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model claude-sonnet-4.8 --fresh`
-- Attempted fallback:
+- `claude-sonnet-4.8` was unavailable locally; subsequent validation uses the
+  available Sonnet model documented above.
+- Passed fallback:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-llm-discovery-pack --kind spec --model auto --fresh`
-- Initial result: the repo wrapper stopped before model invocation because
-  `--kind spec` requires `design.md`.
 - Review-loop remediation added `design.md` and normalized `Status:
   not-started` plus `Readiness: ready-for-implementation`.
 - Opus spec review then found implementability gaps around discovery metadata
@@ -95,6 +93,21 @@ Current spec-prep branch validation:
 - Fallback spec review reported no blocking issues. The Medium implementability
   note was patched by documenting existing static-file copy behavior for public
   non-HTML source files.
+- Sonnet review found additional implementation ambiguities. The spec was
+  patched to make `discovery.json` a private build-time input, keep discovery
+  files out of sitemap output for the initial implementation, define structural
+  non-claim exceptions, and add concrete validation tasks for hint ordering,
+  planned-status labels, deterministic sort order, and implementation-state
+  updates.
+- Follow-up Sonnet review requested explicit enforcement tasks for
+  `site/dist/discovery.json` absence, `preferredProofPath` three-state
+  validation, and `llms.txt` non-claim section parsing. The spec now defines
+  those validator contracts and fixtures.
+- Final Sonnet precision pass requested positive output-existence checks,
+  explicit empty-value semantics, direct-string-only non-claim exceptions, and
+  unresolved proof-path failure behavior. The spec now captures those details,
+  plus `hintCategory`, required output existence, empty-input behavior, and
+  robots-comment baseline exposure.
 
 Future implementation validation:
 
