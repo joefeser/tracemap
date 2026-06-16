@@ -171,6 +171,121 @@ public sealed class VaultExportTests
     }
 
     [Fact]
+    public async Task Vault_export_uses_stable_input_identity_across_roots()
+    {
+        using var temp = new TempDirectory();
+        var firstRoot = Path.Combine(temp.Path, "first-root");
+        var secondRoot = Path.Combine(temp.Path, "second-root");
+        Directory.CreateDirectory(firstRoot);
+        Directory.CreateDirectory(secondRoot);
+        var firstCombinedPath = await CreateCombinedIndexAsync(firstRoot);
+        var secondCombinedPath = await CreateCombinedIndexAsync(secondRoot);
+        var firstSourceIds = await ReadSourceIdsAsync(firstCombinedPath);
+        var secondSourceIds = await ReadSourceIdsAsync(secondCombinedPath);
+        var firstCatalogPath = WriteClaimCatalog(firstRoot, firstSourceIds.Values, "public-safe");
+        var secondCatalogPath = WriteClaimCatalog(secondRoot, secondSourceIds.Values, "public-safe");
+        var firstOut = Path.Combine(temp.Path, "first-vault");
+        var secondOut = Path.Combine(temp.Path, "second-vault");
+
+        await VaultExporter.ExportAsync(new VaultExportOptions(
+            firstCombinedPath,
+            firstOut,
+            SourceClaimCatalogPath: firstCatalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+        await VaultExporter.ExportAsync(new VaultExportOptions(
+            secondCombinedPath,
+            secondOut,
+            SourceClaimCatalogPath: secondCatalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json")),
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "graph.json")));
+    }
+
+    [Fact]
+    public async Task Vault_export_uses_stable_report_identity_across_roots()
+    {
+        using var temp = new TempDirectory();
+        var firstRoot = Path.Combine(temp.Path, "first-root");
+        var secondRoot = Path.Combine(temp.Path, "second-root");
+        Directory.CreateDirectory(firstRoot);
+        Directory.CreateDirectory(secondRoot);
+        var firstCombinedPath = await CreateCombinedIndexAsync(firstRoot);
+        var secondCombinedPath = await CreateCombinedIndexAsync(secondRoot);
+        var firstSourceIds = await ReadSourceIdsAsync(firstCombinedPath);
+        var secondSourceIds = await ReadSourceIdsAsync(secondCombinedPath);
+        var firstPathsDir = Path.Combine(firstRoot, "paths");
+        var secondPathsDir = Path.Combine(secondRoot, "paths");
+        await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            firstCombinedPath,
+            firstPathsDir,
+            FromEndpoint: "GET /api/orders/{}",
+            FromSource: "client",
+            ToSurface: "sql-query"));
+        await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            secondCombinedPath,
+            secondPathsDir,
+            FromEndpoint: "GET /api/orders/{}",
+            FromSource: "client",
+            ToSurface: "sql-query"));
+        var firstCatalogPath = WriteClaimCatalog(firstRoot, firstSourceIds.Values, "public-safe");
+        var secondCatalogPath = WriteClaimCatalog(secondRoot, secondSourceIds.Values, "public-safe");
+        var firstOut = Path.Combine(temp.Path, "first-report-vault");
+        var secondOut = Path.Combine(temp.Path, "second-report-vault");
+
+        await VaultExporter.ExportAsync(new VaultExportOptions(
+            null,
+            firstOut,
+            PathsReportPaths: [Path.Combine(firstPathsDir, "paths-report.json")],
+            SourceClaimCatalogPath: firstCatalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+        await VaultExporter.ExportAsync(new VaultExportOptions(
+            null,
+            secondOut,
+            PathsReportPaths: [Path.Combine(secondPathsDir, "paths-report.json")],
+            SourceClaimCatalogPath: secondCatalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json")),
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "graph.json")));
+    }
+
+    [Fact]
+    public async Task Vault_export_applies_claim_catalog_to_report_only_reverse_export()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var sourceIds = await ReadSourceIdsAsync(combinedPath);
+        var reverseDir = Path.Combine(temp.Path, "reverse");
+        await CombinedReverseReporter.WriteAsync(new CombinedReverseOptions(
+            combinedPath,
+            reverseDir,
+            Format: "json",
+            Surface: "sql-query",
+            SurfaceName: "orders",
+            To: "sources"));
+        var catalogPath = WriteClaimCatalog(temp.Path, sourceIds.Values, "public-safe");
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            null,
+            Path.Combine(temp.Path, "vault"),
+            ReverseReportPaths: [Path.Combine(reverseDir, "reverse-report.json")],
+            SourceClaimCatalogPath: catalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+
+        Assert.Equal("public-safe", result.Graph.Classification);
+        Assert.Contains(result.Graph.Nodes, node => node.Kind == "report" && node.ClaimLevel == "public-safe");
+        Assert.Contains(result.Graph.Inputs, input => input.Kind == "reverse-report" && input.SourceProvenance is { Count: 2 });
+    }
+
+    [Fact]
     public async Task Vault_export_filters_hidden_evidence_and_marks_output_partial()
     {
         using var temp = new TempDirectory();

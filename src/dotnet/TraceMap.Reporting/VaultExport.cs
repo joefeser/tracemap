@@ -289,7 +289,7 @@ public static class VaultExporter
             compatibleInputCount++;
             inputs.Add(new VaultExportInputSummary(
                 "combined-index",
-                SafeInputIdentity("input/combined-index/v1", options.CombinedIndexPath),
+                CombinedIndexInputIdentity(inventory),
                 "hidden",
                 "compatible",
                 [],
@@ -516,9 +516,13 @@ public static class VaultExporter
         var compatibleCount = 0;
         foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
         {
+            byte[]? bytes = null;
+            var inputIdentity = SafeUnavailableInputIdentity("input/paths-report/v1", path);
             try
             {
-                await using var stream = File.OpenRead(path);
+                bytes = await File.ReadAllBytesAsync(path, cancellationToken);
+                inputIdentity = JsonReportInputIdentity("input/paths-report/v1", bytes);
+                await using var stream = new MemoryStream(bytes);
                 var report = await JsonSerializer.DeserializeAsync<CombinedDependencyPathReport>(stream, JsonOptions, cancellationToken)
                     ?? throw new InvalidDataException("empty paths report");
                 if (report.Paths is null || report.Gaps is null || report.Summary is null)
@@ -530,7 +534,7 @@ public static class VaultExporter
                 ApplySourceClaims(report.Sources, catalog, sourceClaims);
                 inputs.Add(new VaultExportInputSummary(
                     "paths-report",
-                    SafeInputIdentity("input/paths-report/v1", path),
+                    inputIdentity,
                     InputClaimLevel(report.Sources, sourceClaims),
                     "compatible",
                     report.Limitations ?? [],
@@ -577,8 +581,13 @@ public static class VaultExporter
             }
             catch
             {
-                inputs.Add(new VaultExportInputSummary("paths-report", SafeInputIdentity("input/paths-report/v1", path), "hidden", "schema-gap", []));
-                gaps.Add(CreateGap($"paths-schema-{Hash(path, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A paths report could not be read with the documented schema.", null));
+                if (bytes is not null)
+                {
+                    inputIdentity = JsonReportInputIdentity("input/paths-report/v1", bytes);
+                }
+
+                inputs.Add(new VaultExportInputSummary("paths-report", inputIdentity, "hidden", "schema-gap", []));
+                gaps.Add(CreateGap($"paths-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A paths report could not be read with the documented schema.", null));
             }
         }
 
@@ -598,9 +607,13 @@ public static class VaultExporter
         var compatibleCount = 0;
         foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
         {
+            byte[]? bytes = null;
+            var inputIdentity = SafeUnavailableInputIdentity("input/reverse-report/v1", path);
             try
             {
-                await using var stream = File.OpenRead(path);
+                bytes = await File.ReadAllBytesAsync(path, cancellationToken);
+                inputIdentity = JsonReportInputIdentity("input/reverse-report/v1", bytes);
+                await using var stream = new MemoryStream(bytes);
                 var report = await JsonSerializer.DeserializeAsync<CombinedReverseReport>(stream, JsonOptions, cancellationToken)
                     ?? throw new InvalidDataException("empty reverse report");
                 if (report.ReverseRoots is null || report.Gaps is null || report.Summary is null)
@@ -612,7 +625,7 @@ public static class VaultExporter
                 ApplySourceClaims(report.Snapshot.Sources, catalog, sourceClaims);
                 inputs.Add(new VaultExportInputSummary(
                     "reverse-report",
-                    SafeInputIdentity("input/reverse-report/v1", path),
+                    inputIdentity,
                     InputClaimLevel(report.Snapshot.Sources, sourceClaims),
                     "compatible",
                     report.Limitations ?? [],
@@ -623,7 +636,7 @@ public static class VaultExporter
                     nodes.Add(new VaultGraphNode(
                         reportNodeId,
                         "report",
-                        "hidden",
+                        ClaimForReverseRoot(root, report.Paths, sourceClaims),
                         $"reverse root {Hash(root.RootId, 12)}",
                         null,
                         null,
@@ -656,8 +669,13 @@ public static class VaultExporter
             }
             catch
             {
-                inputs.Add(new VaultExportInputSummary("reverse-report", SafeInputIdentity("input/reverse-report/v1", path), "hidden", "schema-gap", []));
-                gaps.Add(CreateGap($"reverse-schema-{Hash(path, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A reverse report could not be read with the documented schema.", null));
+                if (bytes is not null)
+                {
+                    inputIdentity = JsonReportInputIdentity("input/reverse-report/v1", bytes);
+                }
+
+                inputs.Add(new VaultExportInputSummary("reverse-report", inputIdentity, "hidden", "schema-gap", []));
+                gaps.Add(CreateGap($"reverse-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A reverse report could not be read with the documented schema.", null));
             }
         }
 
@@ -1454,9 +1472,119 @@ public static class VaultExporter
             .First();
     }
 
-    private static string SafeInputIdentity(string context, string? path)
+    private static string ClaimForReverseRoot(
+        CombinedReverseRoot root,
+        IReadOnlyList<CombinedReversePath> paths,
+        IReadOnlyDictionary<string, string> sourceClaims)
     {
-        return $"{context}:{Hash(Path.GetFullPath(path ?? "unknown"), 24)}";
+        var rootPathIds = root.PathIds.ToHashSet(StringComparer.Ordinal);
+        return paths
+            .Where(path => rootPathIds.Contains(path.PathId))
+            .SelectMany(path => path.Nodes)
+            .Select(node => string.IsNullOrWhiteSpace(node.SourceIndexId) ? "hidden" : sourceClaims.GetValueOrDefault(node.SourceIndexId, "hidden"))
+            .DefaultIfEmpty("hidden")
+            .OrderBy(ClaimRank)
+            .First();
+    }
+
+    private static string CombinedIndexInputIdentity(CombinedPathGraphInventory inventory)
+    {
+        var identity = new
+        {
+            sources = inventory.Sources
+                .OrderBy(source => source.SourceIndexId, StringComparer.Ordinal)
+                .Select(source => new
+                {
+                    source.SourceIndexId,
+                    source.Label,
+                    source.ScanId,
+                    source.RepoName,
+                    source.RemoteUrl,
+                    source.Branch,
+                    source.CommitSha,
+                    source.ScannerVersion,
+                    source.Language,
+                    source.StoredLanguage,
+                    source.LanguageCorrected,
+                    source.ScanRootRelativePath,
+                    source.ScanRootPathHash,
+                    source.GitRootHash,
+                    source.AnalysisLevel,
+                    source.BuildStatus
+                }),
+            coverageWarnings = inventory.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal),
+            nodes = inventory.Nodes.OrderBy(node => node.NodeId, StringComparer.Ordinal),
+            edges = inventory.Edges.OrderBy(edge => edge.EdgeId, StringComparer.Ordinal),
+            gaps = inventory.Gaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal)
+        };
+        return StableObjectInputIdentity("input/combined-index/v1", identity);
+    }
+
+    private static string JsonReportInputIdentity(string context, byte[] bytes)
+    {
+        try
+        {
+            var node = JsonNode.Parse(bytes);
+            if (node is null)
+            {
+                return $"{context}:json:{Hash(Convert.ToHexString(bytes), 24)}";
+            }
+
+            RemovePathDerivedIdentityFields(node);
+            return $"{context}:json:{Hash(SerializeCanonicalJson(SortJson(node)), 24)}";
+        }
+        catch
+        {
+            return $"{context}:bytes:{Hash(Convert.ToHexString(bytes), 24)}";
+        }
+    }
+
+    private static string StableObjectInputIdentity(string context, object value)
+    {
+        var node = JsonSerializer.SerializeToNode(value, JsonOptions)
+            ?? throw new InvalidOperationException("Unable to serialize input identity.");
+        return $"{context}:{Hash(SerializeCanonicalJson(SortJson(node)), 24)}";
+    }
+
+    private static string SafeUnavailableInputIdentity(string context, string? path)
+    {
+        var fileName = string.IsNullOrWhiteSpace(path) ? "unknown" : Path.GetFileName(path);
+        return $"{context}:unavailable:{Hash(fileName, 24)}";
+    }
+
+    private static void RemovePathDerivedIdentityFields(JsonNode node)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var property in obj.Select(property => property.Key).ToArray())
+            {
+                if (property.Equals("indexPath", StringComparison.OrdinalIgnoreCase)
+                    || property.Equals("outputPath", StringComparison.OrdinalIgnoreCase)
+                    || property.Equals("indexPathHash", StringComparison.OrdinalIgnoreCase))
+                {
+                    obj.Remove(property);
+                    continue;
+                }
+
+                if (obj[property] is { } child)
+                {
+                    RemovePathDerivedIdentityFields(child);
+                }
+            }
+
+            return;
+        }
+
+        if (node is JsonArray array)
+        {
+            foreach (var item in array)
+            {
+                if (item is not null)
+                {
+                    RemovePathDerivedIdentityFields(item);
+                }
+            }
+        }
     }
 
     private static string StableNodeId(string kind, string identity)
