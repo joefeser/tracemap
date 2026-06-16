@@ -1,4 +1,94 @@
 rules:
+  - id: vault-export.gap.schema-incompatible.v1
+    name: Vault export schema compatibility gap
+    description: Records when a vault export input cannot be read through a documented combined-index, paths-report, reverse-report, or claim-catalog schema.
+    evidenceTier: Tier4Unknown
+    emits:
+      - vault export schema gap
+    limitations:
+      - Schema gaps describe export compatibility only; they do not prove that source evidence is absent.
+      - Diagnostics are category-based and must not echo local paths, raw report internals, SQL/config values, snippets, remotes, or secrets.
+
+  - id: vault-export.gap.claim-level-hidden.v1
+    name: Vault export hidden claim-level gap
+    description: Records when requested demo/public filtering cannot be satisfied by stable source identity proof.
+    evidenceTier: Tier4Unknown
+    emits:
+      - hidden claim-level gap
+    limitations:
+      - Hidden claim-level gaps are safety gates, not conclusions about repository behavior or business impact.
+      - Display names alone cannot promote source evidence; stable source identity proof is required.
+
+  - id: vault-export.gap.claim-level-unmatched.v1
+    name: Vault export unmatched claim catalog entry
+    description: Records reviewed claim catalog entries that do not match a stable source identity in the supplied evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unmatched claim catalog gap
+    limitations:
+      - Unmatched catalog entries do not promote evidence and do not prove the referenced source is absent from other artifacts.
+      - The emitted diagnostic is sanitized and does not render the unmatched raw catalog value.
+
+  - id: vault-export.gap.hidden-evidence-omitted.v1
+    name: Vault export hidden evidence omission gap
+    description: Records when explicit claim-level filtering omits hidden nodes or edges from a generated vault.
+    evidenceTier: Tier4Unknown
+    emits:
+      - hidden evidence omission gap
+    limitations:
+      - Omission gaps make filtered graph interpretation partial; summary counts are not evidence substitutes.
+      - The gap does not identify hidden source labels, file paths, endpoints, symbols, SQL, config values, snippets, or remotes.
+
+  - id: vault-export.gap.duplicate-stable-identity.v1
+    name: Vault export duplicate stable identity gap
+    description: Reserved rule for duplicate or ambiguous vault export node or edge identities.
+    evidenceTier: Tier4Unknown
+    emits:
+      - duplicate stable identity gap
+    limitations:
+      - Duplicate identity gaps prevent arbitrary merging and do not choose a winner.
+      - The exporter may omit unsafe duplicate details and retain only category-level diagnostics.
+
+  - id: vault-export.gap.unsafe-symbol-omitted.v1
+    name: Vault export unsafe symbol gap
+    description: Records when symbol evidence is category-labeled or omitted because source identity is hidden or symbol display is not safe to expose.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe symbol gap
+    limitations:
+      - Symbol safety gaps are redaction decisions and do not prove the symbol is unreachable, unused, or impacted.
+      - Private namespaces and source-derived identifiers are not rendered without explicit demo/public proof.
+
+  - id: vault-export.validation.generated-file-stale.v1
+    name: Vault export generated file stale validation
+    description: Validates generated Markdown and graph manifests using TraceMap sentinels and deterministic content hashes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - stale generated file rejection
+    limitations:
+      - Stale-file validation protects generated output integrity; it does not validate source repository completeness.
+      - The `--force` option may replace stale generated files only after all other safety validations pass.
+
+  - id: vault-export.validation.user-file-collision.v1
+    name: Vault export user file collision validation
+    description: Rejects overwriting non-generated user-authored files in a vault export directory.
+    evidenceTier: Tier4Unknown
+    emits:
+      - user file collision rejection
+    limitations:
+      - Collision diagnostics are path-category based and must not leak local absolute output paths.
+      - User-authored notes are never overwritten by this validation rule.
+
+  - id: vault-export.validation.unsafe-value-rejected.v1
+    name: Vault export unsafe value validation
+    description: Rejects generated Markdown or graph JSON string leaves that contain unsafe local paths, remotes, SQL/config values, endpoint URLs, credentials, snippets, diagnostics, or secret-like values.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe value rejection
+    limitations:
+      - Redaction validation is conservative and may require category labels or reviewed claim metadata.
+      - Rejection diagnostics include category and location only; they must not echo the unsafe value.
+
   - id: public.demo.summary.v1
     name: Public demo summary section
     description: Records public demo workflow section status, coverage labels, artifact references, and deterministic counts produced by checked-in validation scripts.
