@@ -1,35 +1,50 @@
 # Legacy Baseline Regression Artifacts Implementation State
 
-Status: not-started
-Branch: codex/legacy-baseline-regression-artifacts-spec
-Scope: spec-only
+Status: implemented
+Branch: codex/legacy-baseline-regression-artifacts
+Scope: CLI baseline create/validate/compare, redacted manifest/comparison model,
+synthetic fixtures, checked-in public-safe baseline, focused tests, and workflow
+documentation.
 Public claim level: hidden
-Readiness: ready-for-implementation
+Readiness: ready-for-review
 
 ## Summary
 
-This spec defines redacted baseline manifests and regression comparison outputs
-for legacy sample scans. It preserves an original parser snapshot as safe
-aggregate evidence so future TraceMap improvements can be compared against it
-without committing raw scan artifacts, private sample identities, local paths,
-remotes, source snippets, raw SQL, config values, connection strings, endpoint
-addresses, secrets, or analyzer logs.
+Implemented a deterministic redacted baseline workflow for legacy scan outputs.
+The implementation creates counts-only baseline manifests and summaries, validates
+their safety classification, compares redacted manifests by static evidence count
+movement, and keeps local-only outputs under ignored `.tmp/legacy-baselines/`.
+
+A synthetic fixture and a checked-in public-safe baseline now exist so the
+workflow can be validated without private legacy repositories.
 
 ## Scope Decisions
 
-- Spec-only branch; no scanner, reducer, CLI, or script implementation in this
-  worktree.
-- Baselines are redacted summaries, not raw scan outputs.
-- Comparisons report changed static evidence counts and coverage labels; they do
-  not prove business impact, runtime reachability, safety, production usage, or
-  reducer conclusions.
-- Public-safe artifacts use neutral sample labels and aggregate counts only.
-- Local-only artifacts stay under ignored `.tmp/` storage.
-- Private legacy sample names, absolute paths, raw remotes, raw SQL, config
-  values, secrets, endpoint addresses, source snippets, and raw analyzer output
-  must not be committed.
-- No LLM, embedding, vector database, or prompt-based classification belongs in
-  TraceMap core.
+- Implemented the CLI-first workflow in `TraceMap.Cli` as
+  `tracemap baseline create`, `tracemap baseline validate`, and
+  `tracemap baseline compare`.
+- Added `TraceMap.Reporting.LegacyBaselineArtifacts` rather than changing
+  scanner extraction behavior. The scanner/reducer evidence model remains
+  deterministic and no AI/LLM/vector/prompt analysis was added.
+- Baseline manifests store aggregate counts, safe path classes, file extension
+  counts, language counts, rule/fact/evidence/extractor/surface summaries,
+  coverage snapshots, known gap categories, and limitations. They do not store
+  raw facts, raw SQLite rows, analyzer logs, report prose, source snippets, raw
+  SQL, config values, remotes, or local absolute paths.
+- Gap messages from scan artifacts are category-sanitized before being emitted.
+- Public-safe commit identity defaults to category-only unless `--public-source`
+  is explicitly supplied and the commit value is a safe SHA.
+- Local-only output is guarded so `--local-only` writes only under
+  `.tmp/legacy-baselines/`.
+- Comparison Markdown intentionally uses static evidence count wording and avoids
+  impact, runtime reachability, production-usage, safety-posture, or business
+  claims.
+- Optional SQLite aggregate verification was not implemented in this slice
+  because `facts.ndjson` contains the required count dimensions for the smallest
+  complete version.
+- Pinned smoke checks from `docs/VALIDATION.md` were deferred because this
+  change adds a reporting/CLI workflow around existing scan artifacts and does
+  not change language adapters, scanner extraction, or report rendering behavior.
 
 ## Review State
 
@@ -87,6 +102,14 @@ addresses, secrets, or analyzer logs.
   directory segment derived from label, purpose, and public-safe time metadata,
   and examples use the full baseline ID consistently.
 - Spec is ready for implementation.
+- Implementation added rule catalog entries for:
+  - `legacy.baseline.redacted-manifest.v1`
+  - `legacy.baseline.coverage-snapshot.v1`
+  - `legacy.baseline.regression-comparison.v1`
+  - `legacy.baseline.safety-validation.v1`
+- Implementation added `samples/synthetic-legacy-scan/`, schema classification
+  fixtures under `samples/legacy-baseline-fixtures/`, and a checked-in redacted
+  public-safe baseline under `.kiro/baselines/legacy/`.
 
 ## Validation
 
@@ -102,12 +125,19 @@ Completed:
 - `git check-ignore .tmp/legacy-baselines/example`.
 - `./scripts/check-private-paths.sh`.
 - `git diff --check`.
+- `dotnet build src/dotnet/TraceMap.sln`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyBaselineArtifactsTests`.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06 --created-at 2026-06 --public-source`.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline validate --manifest .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json`.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 --created-at 2026-06 --dry-run`.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose candidate --out .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07 --created-at 2026-07 --local-only`.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline compare --baseline .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json --candidate .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07/baseline-manifest.json --out .tmp/legacy-baselines/comparisons/synthetic-alpha --generated-at 2026-07`.
 
-## Follow-Ups For Implementation
+## Follow-Ups
 
-- Keep implementation tasks unchecked until code lands.
-- Record any implementation-time deviation from the CLI-first workflow in this
-  file before coding around it.
-- Update this file and check off tasks only in the implementation PR.
-- Run or explicitly defer relevant pinned smoke checks from `docs/VALIDATION.md`
-  when implementation changes scan, report, adapter, or CLI behavior.
+- Add optional SQLite aggregate cross-checks later if facts-only summaries prove
+  insufficient for legacy samples.
+- Add portfolio-level baseline comparison after single-baseline comparison has
+  been used on reviewed public-safe manifests.
+- Consider a dedicated `baseline promote` command if manual validate plus
+  `check-private-paths` becomes error-prone.
