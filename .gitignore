@@ -44,6 +44,7 @@ ScaffoldingReadMe.txt
 .tmp/kiro-reviews/
 .tmp/legacy-baselines/
 .tmp/legacy-codebase-validation/
+.tmp/legacy-sample-smoke-catalog/
 .tmp/legacy-baselines/
 .tmp/legacy-evidence-packs/
 c-sharp-sample-repos/
