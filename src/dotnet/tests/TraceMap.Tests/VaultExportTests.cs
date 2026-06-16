@@ -39,6 +39,10 @@ public sealed class VaultExportTests
         Assert.Contains(first.Graph.Nodes, node => node.Kind == "endpoint");
         Assert.Contains(first.Graph.Nodes, node => node.Kind == "surface" && node.SurfaceKind == "sql-query");
         Assert.Contains(first.Graph.Edges, edge => edge.Kind == "surface-evidence");
+        Assert.Contains(first.Graph.Inputs, input => input.SourceProvenance is { Count: > 0 });
+        Assert.Contains(first.Graph.Nodes, node => node.Kind == "source" && !string.IsNullOrWhiteSpace(node.ScannerVersion) && !string.IsNullOrWhiteSpace(node.RepositoryIdentityHash));
+        Assert.Contains(first.Graph.Nodes, node => node.Kind is "endpoint" or "surface" && node.EvidenceLocations is { Count: > 0 });
+        Assert.Contains(first.Graph.Edges, edge => edge.EvidenceLocations is { Count: > 0 });
         Assert.True(VaultExporter.IsSelfConsistentGraphJson(await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json"))));
         Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "index.md"))));
         Assert.Equal(
@@ -49,6 +53,8 @@ public sealed class VaultExportTests
             await File.ReadAllTextAsync(Path.Combine(secondOut, "index.md")));
 
         var allText = string.Join('\n', Directory.EnumerateFiles(firstOut, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.Contains("sourceProvenance", allText);
+        Assert.Contains("evidenceLocations", allText);
         Assert.DoesNotContain(temp.Path, allText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("/Users/", allText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("git@", allText, StringComparison.OrdinalIgnoreCase);
@@ -107,11 +113,61 @@ public sealed class VaultExportTests
         var combinedPath = await CreateCombinedIndexAsync(temp.Path);
         var outDir = Path.Combine(temp.Path, "vault");
         Directory.CreateDirectory(outDir);
-        await File.WriteAllTextAsync(Path.Combine(outDir, "README.md"), "# user note\n");
+        await File.WriteAllTextAsync(Path.Combine(outDir, "README.md"), """
+            # user note
+
+            This note mentions tracemap_export_schema: "evidence-graph-vault-export.v1"
+            while remaining user-authored content.
+            """);
 
         var collision = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Force: true)));
         Assert.Contains("UserFileCollision", collision.Message);
+    }
+
+    [Fact]
+    public async Task Vault_export_fails_when_every_report_input_is_incompatible()
+    {
+        using var temp = new TempDirectory();
+        var badReport = Path.Combine(temp.Path, "bad-paths-report.json");
+        await File.WriteAllTextAsync(badReport, "{\"schemaVersion\":\"not-paths-report\"}\n");
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            VaultExporter.ExportAsync(new VaultExportOptions(
+                null,
+                Path.Combine(temp.Path, "vault"),
+                PathsReportPaths: [badReport])));
+
+        Assert.Contains("InputSchemaUnsupported", failure.Message);
+        Assert.DoesNotContain(badReport, failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Vault_export_applies_claim_catalog_to_report_only_paths_export()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var sourceIds = await ReadSourceIdsAsync(combinedPath);
+        var pathsDir = Path.Combine(temp.Path, "paths");
+        await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            combinedPath,
+            pathsDir,
+            FromEndpoint: "GET /api/orders/{}",
+            FromSource: "client",
+            ToSurface: "sql-query"));
+        var catalogPath = WriteClaimCatalog(temp.Path, sourceIds.Values, "public-safe");
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            null,
+            Path.Combine(temp.Path, "vault"),
+            PathsReportPaths: [Path.Combine(pathsDir, "paths-report.json")],
+            SourceClaimCatalogPath: catalogPath,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+
+        Assert.Equal("public-safe", result.Graph.Classification);
+        Assert.Contains(result.Graph.Nodes, node => node.Kind == "report" && node.ClaimLevel == "public-safe");
+        Assert.Contains(result.Graph.Inputs, input => input.Kind == "paths-report" && input.SourceProvenance is { Count: 2 });
     }
 
     [Fact]

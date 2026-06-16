@@ -30,6 +30,21 @@ public sealed record VaultExportDiagnostic(
     string Location,
     string Category);
 
+public sealed record VaultSourceProvenance(
+    string SourceIndexId,
+    string SourceIdentityHash,
+    string? ScannerVersion,
+    string? CommitSha,
+    string? Language,
+    string? AnalysisLevel,
+    string? BuildStatus);
+
+public sealed record VaultEvidenceLocation(
+    string FilePath,
+    int? StartLine,
+    int? EndLine,
+    string? SnippetHash);
+
 public sealed record EvidenceGraphVault(
     string SchemaVersion,
     string ContentHash,
@@ -52,7 +67,8 @@ public sealed record VaultExportInputSummary(
     string Identity,
     string ClaimLevel,
     string Compatibility,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    IReadOnlyList<VaultSourceProvenance>? SourceProvenance = null);
 
 public sealed record VaultGraphNode(
     string Id,
@@ -73,7 +89,10 @@ public sealed record VaultGraphNode(
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
     IReadOnlyList<string> Limitations,
-    string FilePath);
+    string FilePath,
+    string? ScannerVersion = null,
+    string? RepositoryIdentityHash = null,
+    IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null);
 
 public sealed record VaultGraphEdge(
     string Id,
@@ -87,7 +106,8 @@ public sealed record VaultGraphEdge(
     string? SourceScope,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null);
 
 public sealed record VaultGraphGap(
     string Id,
@@ -261,16 +281,19 @@ public static class VaultExporter
         var nodeIdByPathNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
         var sourceNodeIdBySourceIndexId = new Dictionary<string, string>(StringComparer.Ordinal);
         var sourceClaimBySourceIndexId = new Dictionary<string, string>(StringComparer.Ordinal);
+        var compatibleInputCount = 0;
 
         if (!string.IsNullOrWhiteSpace(options.CombinedIndexPath))
         {
             var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.CombinedIndexPath, cancellationToken: cancellationToken);
+            compatibleInputCount++;
             inputs.Add(new VaultExportInputSummary(
                 "combined-index",
                 SafeInputIdentity("input/combined-index/v1", options.CombinedIndexPath),
                 "hidden",
                 "compatible",
-                []));
+                [],
+                SourceProvenance(inventory.Sources)));
 
             foreach (var source in inventory.Sources)
             {
@@ -303,7 +326,10 @@ public static class VaultExporter
                     [],
                     [],
                     SourceLimitations(source),
-                    $"sources/{Slug(sourceNodeId)}.md"));
+                    $"sources/{Slug(sourceNodeId)}.md",
+                    source.ScannerVersion,
+                    SourceIdentityHash(source),
+                    []));
                 originalNodeClaims[sourceNodeId] = claim;
             }
 
@@ -342,7 +368,10 @@ public static class VaultExporter
                     DistinctSorted([pathNode.CombinedFactId]),
                     [],
                     NodeLimitations(pathNode, sourceClaim),
-                    $"{DirectoryForNodeKind(nodeKind)}/{Slug(nodeId)}.md"));
+                    $"{DirectoryForNodeKind(nodeKind)}/{Slug(nodeId)}.md",
+                    null,
+                    null,
+                    EvidenceLocations(pathNode)));
                 originalNodeClaims[nodeId] = sourceClaim;
 
                 if (pathNode.NodeKind == "symbol" && sourceClaim == "hidden")
@@ -379,7 +408,8 @@ public static class VaultExporter
                     null,
                     DistinctSorted(pathEdge.SupportingFactIds),
                     DistinctSorted(pathEdge.SupportingCombinedEdgeIds),
-                    EdgeLimitations(pathEdge)));
+                    EdgeLimitations(pathEdge),
+                    EvidenceLocations(pathEdge)));
             }
 
             foreach (var warning in inventory.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal))
@@ -400,8 +430,13 @@ public static class VaultExporter
             }
         }
 
-        await AddPathReportsAsync(options.PathsReportPaths ?? [], nodes, edges, gaps, inputs, sourceClaimBySourceIndexId, cancellationToken);
-        await AddReverseReportsAsync(options.ReverseReportPaths ?? [], nodes, edges, gaps, inputs, sourceClaimBySourceIndexId, cancellationToken);
+        compatibleInputCount += await AddPathReportsAsync(options.PathsReportPaths ?? [], nodes, edges, gaps, inputs, sourceClaimBySourceIndexId, catalog, cancellationToken);
+        compatibleInputCount += await AddReverseReportsAsync(options.ReverseReportPaths ?? [], nodes, edges, gaps, inputs, sourceClaimBySourceIndexId, catalog, cancellationToken);
+
+        if (compatibleInputCount == 0)
+        {
+            throw new InvalidOperationException("InputSchemaUnsupported: no compatible vault export input was supplied.");
+        }
 
         foreach (var unmatched in catalog.UnmatchedSourceIds(sourceClaimBySourceIndexId.Keys))
         {
@@ -468,15 +503,17 @@ public static class VaultExporter
                 omittedEdges));
     }
 
-    private static async Task AddPathReportsAsync(
+    private static async Task<int> AddPathReportsAsync(
         IReadOnlyList<string> paths,
         List<VaultGraphNode> nodes,
         List<VaultGraphEdge> edges,
         List<VaultGraphGap> gaps,
         List<VaultExportInputSummary> inputs,
-        IReadOnlyDictionary<string, string> sourceClaims,
+        Dictionary<string, string> sourceClaims,
+        SourceClaimCatalog catalog,
         CancellationToken cancellationToken)
     {
+        var compatibleCount = 0;
         foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
         {
             try
@@ -489,7 +526,15 @@ public static class VaultExporter
                     throw new InvalidDataException("missing paths report fields");
                 }
 
-                inputs.Add(new VaultExportInputSummary("paths-report", SafeInputIdentity("input/paths-report/v1", path), "hidden", "compatible", report.Limitations ?? []));
+                compatibleCount++;
+                ApplySourceClaims(report.Sources, catalog, sourceClaims);
+                inputs.Add(new VaultExportInputSummary(
+                    "paths-report",
+                    SafeInputIdentity("input/paths-report/v1", path),
+                    InputClaimLevel(report.Sources, sourceClaims),
+                    "compatible",
+                    report.Limitations ?? [],
+                    SourceProvenance(report.Sources)));
                 foreach (var pathRow in report.Paths)
                 {
                     var reportNodeId = StableNodeId("report", $"node/report/path/v1\u001f{pathRow.PathId}");
@@ -512,7 +557,10 @@ public static class VaultExporter
                         DistinctSorted(pathRow.SupportingFactIds),
                         DistinctSorted(pathRow.SupportingEdgeIds),
                         pathRow.Notes.Select(note => SafeDiagnosticMessage($"{note.Code}: {note.Message}")).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                        $"reports/{Slug(reportNodeId)}.md"));
+                        $"reports/{Slug(reportNodeId)}.md",
+                        null,
+                        null,
+                        EvidenceLocations(pathRow.Nodes).Concat(EvidenceLocations(pathRow.Edges)).ToArray()));
                 }
 
                 foreach (var gap in report.Gaps)
@@ -533,17 +581,21 @@ public static class VaultExporter
                 gaps.Add(CreateGap($"paths-schema-{Hash(path, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A paths report could not be read with the documented schema.", null));
             }
         }
+
+        return compatibleCount;
     }
 
-    private static async Task AddReverseReportsAsync(
+    private static async Task<int> AddReverseReportsAsync(
         IReadOnlyList<string> paths,
         List<VaultGraphNode> nodes,
         List<VaultGraphEdge> edges,
         List<VaultGraphGap> gaps,
         List<VaultExportInputSummary> inputs,
-        IReadOnlyDictionary<string, string> sourceClaims,
+        Dictionary<string, string> sourceClaims,
+        SourceClaimCatalog catalog,
         CancellationToken cancellationToken)
     {
+        var compatibleCount = 0;
         foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
         {
             try
@@ -556,7 +608,15 @@ public static class VaultExporter
                     throw new InvalidDataException("missing reverse report fields");
                 }
 
-                inputs.Add(new VaultExportInputSummary("reverse-report", SafeInputIdentity("input/reverse-report/v1", path), "hidden", "compatible", report.Limitations ?? []));
+                compatibleCount++;
+                ApplySourceClaims(report.Snapshot.Sources, catalog, sourceClaims);
+                inputs.Add(new VaultExportInputSummary(
+                    "reverse-report",
+                    SafeInputIdentity("input/reverse-report/v1", path),
+                    InputClaimLevel(report.Snapshot.Sources, sourceClaims),
+                    "compatible",
+                    report.Limitations ?? [],
+                    SourceProvenance(report.Snapshot.Sources)));
                 foreach (var root in report.ReverseRoots)
                 {
                     var reportNodeId = StableNodeId("report", $"node/report/reverse/v1\u001f{root.RootId}");
@@ -600,6 +660,118 @@ public static class VaultExporter
                 gaps.Add(CreateGap($"reverse-schema-{Hash(path, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A reverse report could not be read with the documented schema.", null));
             }
         }
+
+        return compatibleCount;
+    }
+
+    private static void ApplySourceClaims(IEnumerable<CombinedReportSource> sources, SourceClaimCatalog catalog, Dictionary<string, string> sourceClaims)
+    {
+        foreach (var source in sources.OrderBy(source => source.SourceIndexId, StringComparer.Ordinal))
+        {
+            sourceClaims[source.SourceIndexId] = catalog.ClaimForSource(source.SourceIndexId) ?? sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden");
+        }
+    }
+
+    private static void ApplySourceClaims(IEnumerable<CombinedReverseSourceInfo> sources, SourceClaimCatalog catalog, Dictionary<string, string> sourceClaims)
+    {
+        foreach (var source in sources.OrderBy(source => source.SourceIndexId, StringComparer.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(source.SourceIndexId))
+            {
+                continue;
+            }
+
+            sourceClaims[source.SourceIndexId] = catalog.ClaimForSource(source.SourceIndexId) ?? sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden");
+        }
+    }
+
+    private static string InputClaimLevel(IEnumerable<CombinedReportSource> sources, IReadOnlyDictionary<string, string> sourceClaims)
+    {
+        return sources.Select(source => sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden"))
+            .DefaultIfEmpty("hidden")
+            .OrderBy(ClaimRank)
+            .First();
+    }
+
+    private static string InputClaimLevel(IEnumerable<CombinedReverseSourceInfo> sources, IReadOnlyDictionary<string, string> sourceClaims)
+    {
+        return sources.Select(source => string.IsNullOrWhiteSpace(source.SourceIndexId) ? "hidden" : sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden"))
+            .DefaultIfEmpty("hidden")
+            .OrderBy(ClaimRank)
+            .First();
+    }
+
+    private static IReadOnlyList<VaultSourceProvenance> SourceProvenance(IEnumerable<CombinedReportSource> sources)
+    {
+        return sources
+            .OrderBy(source => source.SourceIndexId, StringComparer.Ordinal)
+            .Select(source => new VaultSourceProvenance(
+                source.SourceIndexId,
+                SourceIdentityHash(source),
+                source.ScannerVersion,
+                source.CommitSha,
+                source.Language ?? source.StoredLanguage,
+                source.AnalysisLevel,
+                source.BuildStatus))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<VaultSourceProvenance> SourceProvenance(IEnumerable<CombinedReverseSourceInfo> sources)
+    {
+        return sources
+            .Where(source => !string.IsNullOrWhiteSpace(source.SourceIndexId))
+            .OrderBy(source => source.SourceIndexId, StringComparer.Ordinal)
+            .Select(source => new VaultSourceProvenance(
+                source.SourceIndexId!,
+                source.RepositoryIdentityHash,
+                null,
+                source.CommitSha,
+                source.Language,
+                source.AnalysisLevel,
+                source.BuildStatus))
+            .ToArray();
+    }
+
+    private static string SourceIdentityHash(CombinedReportSource source)
+    {
+        return source.GitRootHash
+            ?? source.ScanRootPathHash
+            ?? source.IndexPathHash
+            ?? Hash(source.SourceIndexId, 32);
+    }
+
+    private static IReadOnlyList<VaultEvidenceLocation> EvidenceLocations(CombinedPathNode node)
+    {
+        return string.IsNullOrWhiteSpace(node.FilePath)
+            ? []
+            : [new VaultEvidenceLocation(node.FilePath, node.StartLine, node.EndLine, null)];
+    }
+
+    private static IReadOnlyList<VaultEvidenceLocation> EvidenceLocations(CombinedPathEdge edge)
+    {
+        return string.IsNullOrWhiteSpace(edge.FilePath)
+            ? []
+            : [new VaultEvidenceLocation(edge.FilePath, edge.StartLine, edge.EndLine, null)];
+    }
+
+    private static IReadOnlyList<VaultEvidenceLocation> EvidenceLocations(IEnumerable<CombinedPathNode> nodes)
+    {
+        return nodes.SelectMany(EvidenceLocations)
+            .Distinct()
+            .OrderBy(location => location.FilePath, StringComparer.Ordinal)
+            .ThenBy(location => location.StartLine ?? 0)
+            .ThenBy(location => location.EndLine ?? 0)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<VaultEvidenceLocation> EvidenceLocations(IEnumerable<CombinedPathEdge> edges)
+    {
+        return edges.SelectMany(EvidenceLocations)
+            .Distinct()
+            .OrderBy(location => location.FilePath, StringComparer.Ordinal)
+            .ThenBy(location => location.StartLine ?? 0)
+            .ThenBy(location => location.EndLine ?? 0)
+            .ToArray();
     }
 
     private static void ApplyClaimFilter(string minimumClaimLevel, List<VaultGraphNode> nodes, List<VaultGraphEdge> edges, List<VaultGraphGap> gaps)
@@ -985,7 +1157,7 @@ public static class VaultExporter
                 continue;
             }
 
-            if (LooksGenerated(existing))
+            if (HasGeneratedProvenance(existing, fileName))
             {
                 if (force)
                 {
@@ -999,10 +1171,39 @@ public static class VaultExporter
         }
     }
 
-    private static bool LooksGenerated(string content)
+    private static bool HasGeneratedProvenance(string content, string fileName)
     {
-        return content.Contains($"tracemap_export_schema: \"{SchemaVersion}\"", StringComparison.Ordinal)
-            || content.Contains($"\"schemaVersion\": \"{SchemaVersion}\"", StringComparison.Ordinal);
+        return fileName.Equals("graph.json", StringComparison.Ordinal)
+            ? HasGeneratedGraphProvenance(content)
+            : HasGeneratedMarkdownProvenance(content);
+    }
+
+    private static bool HasGeneratedGraphProvenance(string content)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            return document.RootElement.TryGetProperty("schemaVersion", out var schema)
+                && schema.GetString() == SchemaVersion
+                && document.RootElement.TryGetProperty("generator", out var generator)
+                && generator.TryGetProperty("name", out var name)
+                && name.GetString() == GeneratorName;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool HasGeneratedMarkdownProvenance(string content)
+    {
+        return TryReadFrontmatter(content, out var metadata, out _)
+            && metadata.TryGetValue("tracemap_generated", out var generated)
+            && generated.Equals("true", StringComparison.OrdinalIgnoreCase)
+            && metadata.TryGetValue("tracemap_export_schema", out var schema)
+            && schema == SchemaVersion
+            && metadata.TryGetValue("tracemap_generator", out var generator)
+            && generator == GeneratorName;
     }
 
     private static void ValidateGeneratedStrings(EvidenceGraphVault graph, IReadOnlyDictionary<string, string> files)
