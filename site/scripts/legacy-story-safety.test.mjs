@@ -67,6 +67,14 @@ test("legacy story guard decodes common whitespace and numeric HTML entities bef
   assert.match(errors.join("\n"), /credential-assignment/);
 });
 
+test("legacy story guard catches sensitive tokens split across tags", () => {
+  const errors = validateRenderedLegacyStoryHtml(
+    html("<main><p>Pa<span>ss</span>word: hidden-value</p></main>")
+  );
+
+  assert.match(errors.join("\n"), /credential-assignment/);
+});
+
 test("legacy story guard redacts sensitive evidence from error messages", () => {
   const errors = validateRenderedLegacyStoryHtml(
     html("<main><p>Server=db;Database=orders;User ID=sa;Password=secret;</p></main>")

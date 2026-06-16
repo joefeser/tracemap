@@ -134,13 +134,14 @@ export async function buildAndValidateLegacyStorySafety({ log = () => {}, root =
 export function validateRenderedLegacyStoryHtml(html, { label = legacyStoryTargetPath } = {}) {
   const errors = [];
   const normalized = normalizeRenderedContent(decodeHtmlEntities(stripTags(html)));
+  const normalizedTight = normalizeRenderedContent(decodeHtmlEntities(stripTagsTight(html)));
   const normalizedRaw = normalizeRenderedContent(decodeHtmlEntities(html));
   const normalizedForClaims = removeAllowedDisclaimers(normalized);
 
   for (const check of hardLeakChecks) {
-    const match = normalizedRaw.match(check.pattern);
+    const match = [normalizedRaw, normalized, normalizedTight].flatMap((value) => value.match(check.pattern) ?? [])[0];
     if (match) {
-      errors.push(`${label} contains forbidden ${check.id}: ${trimEvidence(match[0])}`);
+      errors.push(`${label} contains forbidden ${check.id}: ${trimEvidence(match)}`);
     }
   }
 
@@ -245,6 +246,14 @@ function normalizeRenderedContent(value) {
 }
 
 function stripTags(html) {
+  return stripTagsWithSeparator(html, " ");
+}
+
+function stripTagsTight(html) {
+  return stripTagsWithSeparator(html, "");
+}
+
+function stripTagsWithSeparator(html, separator) {
   let text = "";
   let insideTag = false;
   let quote = "";
@@ -259,7 +268,7 @@ function stripTags(html) {
         skippingRawText = "";
         insideTag = true;
         quote = "";
-        text += " ";
+        text += separator;
         index += closingTag.length - 1;
       }
       continue;
@@ -280,7 +289,7 @@ function stripTags(html) {
 
       if (char === ">") {
         insideTag = false;
-        text += " ";
+        text += separator;
       }
       continue;
     }
