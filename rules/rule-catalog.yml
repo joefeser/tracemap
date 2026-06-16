@@ -139,6 +139,77 @@ rules:
       - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
       - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
 
+  - id: legacy.remoting.api.v1
+    name: Legacy .NET Remoting API evidence
+    description: Extracts System.Runtime.Remoting namespace imports, fully-qualified references, and known Remoting API type references from C# syntax and compiler-resolved symbols when available.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - RemotingApiUsageDeclared
+      - AnalysisGap
+    limitations:
+      - API usage is static reference evidence only and does not prove service hosting, activation, runtime reachability, deployment, network availability, exploitability, security posture, or production usage.
+      - Syntax-only evidence is capped at review-tier because aliases, using-static forms, and project-defined lookalike names may be ambiguous without compiler symbols.
+      - Comments, string literals, XML doc text, and inactive preprocessor regions are not Remoting evidence.
+      - Unsupported Remoting API shapes are emitted as gaps or omitted rather than guessed.
+
+  - id: legacy.remoting.marshal-by-ref.v1
+    name: Legacy .NET Remoting MarshalByRefObject evidence
+    description: Extracts classes that directly inherit from MarshalByRefObject and preserves safe object-shape metadata for Remoting-capable boundary candidates.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - RemotingMarshalByRefObjectDeclared
+      - AnalysisGap
+    limitations:
+      - MarshalByRefObject inheritance is object-shape evidence only; it does not prove hosting, registration, activation, object lifetime, runtime reachability, deployment, network availability, exploitability, security posture, or production usage.
+      - Indirect inheritance is not promoted without Remoting-specific repository, file, registration, or config context because broad framework and desktop types can inherit from MarshalByRefObject.
+      - Syntax-only base-list evidence may be ambiguous with aliases or project-defined lookalikes.
+      - Generated-code status is recorded only when existing safe file-name detection supports it; unsupported generated-code shapes remain unclaimed.
+
+  - id: legacy.remoting.channel.v1
+    name: Legacy .NET Remoting channel evidence
+    description: Extracts TcpChannel, HttpChannel, IpcChannel, server/client channel variants, and ChannelServices.RegisterChannel calls from C# syntax with narrow deterministic construction-to-registration linking.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - RemotingChannelDeclared
+      - RemotingChannelRegistered
+      - AnalysisGap
+    limitations:
+      - Channel construction and registration are static code evidence only and do not prove runtime channel opening, endpoint reachability, deployment, network availability, exploitability, security posture, or production usage.
+      - Constructor arguments, ports, URLs, names, provider values, config-backed values, and arbitrary channel properties are hashed or omitted.
+      - V1 links only inline construction and same-method single unreassigned local registrations; fields, properties, factories, dependency injection, reflection, branches, collections, and cross-method flows remain gaps or independent review-tier facts.
+
+  - id: legacy.remoting.registration.v1
+    name: Legacy .NET Remoting registration and activation evidence
+    description: Extracts RemotingConfiguration registration/configure calls and gated Activator.GetObject client activation evidence.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - RemotingServiceTypeRegistered
+      - RemotingClientTypeRegistered
+      - RemotingClientActivationDeclared
+      - RemotingApiUsageDeclared
+      - AnalysisGap
+    limitations:
+      - Registration and activation calls are static evidence only and do not prove service availability, endpoint reachability, deployment, network availability, exploitability, security posture, or production usage.
+      - URLs, object URIs, config file values, arbitrary strings, ports, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.
+      - Dynamic target types, dynamic modes, overload ambiguity, reflection, factory helpers, and unsupported activated-registration argument extraction reduce coverage.
+      - Activator.GetObject is promoted only with same-file Remoting context or compiler-resolved MarshalByRefObject evidence; otherwise it remains a review gap.
+
+  - id: legacy.remoting.config.v1
+    name: Legacy .NET Remoting config evidence
+    description: Extracts checked-in system.runtime.remoting XML sections, channels, service/client declarations, and providers using safe XML parsing and hashed config values.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - RemotingConfigSectionDeclared
+      - RemotingConfigChannelDeclared
+      - RemotingConfigServiceDeclared
+      - RemotingConfigClientDeclared
+      - RemotingConfigProviderDeclared
+      - AnalysisGap
+    limitations:
+      - Config evidence is checked-in XML only and does not prove config transform selection, machine.config contents, deployment, runtime mutation, service availability, network reachability, exploitability, security posture, or production usage.
+      - URLs, object URIs, application names, ports, provider properties, channel names, arbitrary config values, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.
+      - External includes, encrypted sections, malformed XML, unsupported custom sections, and unresolved transforms are reduced-coverage gaps rather than clean absence.
+
   - id: legacy.data.metadata.inventory.v1
     name: Legacy data metadata inventory
     description: Inventories checked-in DBML, EDMX, typed DataSet XSD, TableAdapter, generated designer, config, and old ORM descriptor files with safe static metadata.

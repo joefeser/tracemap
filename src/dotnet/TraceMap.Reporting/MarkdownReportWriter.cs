@@ -117,6 +117,23 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Legacy Remoting Static Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.RemotingApiUsageDeclared
+                or FactTypes.RemotingMarshalByRefObjectDeclared
+                or FactTypes.RemotingChannelDeclared
+                or FactTypes.RemotingChannelRegistered
+                or FactTypes.RemotingServiceTypeRegistered
+                or FactTypes.RemotingClientTypeRegistered
+                or FactTypes.RemotingClientActivationDeclared
+                or FactTypes.RemotingConfigSectionDeclared
+                or FactTypes.RemotingConfigChannelDeclared
+                or FactTypes.RemotingConfigServiceDeclared
+                or FactTypes.RemotingConfigClientDeclared
+                or FactTypes.RemotingConfigProviderDeclared),
+            FormatLegacyRemotingFact);
+
+        AddFactSection(
+            lines,
             "Call Flow",
             result.Facts.Where(fact => fact.FactType == FactTypes.CallEdge),
             fact => $"- `{DisplaySource(fact)}` -> `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -253,6 +270,16 @@ public static class MarkdownReportWriter
             lines.Add("- Raw SQL, connection strings, config values, URLs, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.");
         }
 
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("Remoting", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## Legacy Remoting Limitations");
+            lines.Add("");
+            lines.Add("- Remoting rows are deterministic static evidence from C# syntax, compiler-resolved symbols when available, and checked-in XML config.");
+            lines.Add("- They identify API usage and service-boundary candidates only; they do not prove host activation, runtime reachability, service availability, deployment, exploitability, security posture, or production usage.");
+            lines.Add("- URLs, object URIs, ports, channel/provider values, config values, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.");
+        }
+
         if (result.Facts.Any(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal)))
         {
             lines.Add("");
@@ -362,6 +389,20 @@ public static class MarkdownReportWriter
             FactTypes.WebFormsControlDeclared => $"- control `{fact.Properties.GetValueOrDefault("controlId") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             _ => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`"
         };
+    }
+
+    private static string FormatLegacyRemotingFact(CodeFact fact)
+    {
+        var name = fact.Properties.GetValueOrDefault("targetTypeName")
+            ?? fact.Properties.GetValueOrDefault("typeName")
+            ?? fact.Properties.GetValueOrDefault("channelTypeName")
+            ?? fact.Properties.GetValueOrDefault("apiName")
+            ?? DisplayFactName(fact);
+        var classification = fact.Properties.GetValueOrDefault("registrationKind")
+            ?? fact.Properties.GetValueOrDefault("configKind")
+            ?? fact.Properties.GetValueOrDefault("apiKind")
+            ?? fact.FactType;
+        return $"- `{fact.FactType}` `{name}` as static `{classification}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`";
     }
 
     private static string FormatLegacyDataMetadataFact(CodeFact fact)
