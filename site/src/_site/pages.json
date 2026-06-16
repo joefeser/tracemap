@@ -55,6 +55,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/deploy-audit/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/roadmap/",
     "changefreq": "monthly",
     "priority": "0.7"
