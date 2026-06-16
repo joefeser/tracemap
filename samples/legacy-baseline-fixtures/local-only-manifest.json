@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "legacy-baseline-manifest.v1",
+  "baselineId": "fixture-alpha__local-check__2026-06",
+  "baselinePurpose": "local-check",
+  "createdAt": "2026-06",
+  "sample": {
+    "label": "fixture-alpha",
+    "identityKind": "local-only-hash",
+    "repoIdentityHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "commitIdentity": {
+      "kind": "category-only",
+      "value": null
+    }
+  },
+  "safety": {
+    "classification": "local-only",
+    "redactionProfile": "counts-only",
+    "rejectedReasons": [],
+    "limitations": [
+      "Fixture represents ignored local-only storage behavior."
+    ]
+  },
+  "scan": {
+    "traceMapVersion": "tracemap-fixture",
+    "scanStartedAt": "2026-06",
+    "coverageLabel": "Level1SemanticAnalysisReduced",
+    "buildStatus": "FailedOrPartial",
+    "scanStatus": "completed",
+    "partial": true,
+    "truncated": false,
+    "timeout": false,
+    "deferred": false
+  },
+  "extractors": {},
+  "counts": {
+    "factsTotal": 0,
+    "gapsTotal": 0,
+    "byFactType": {},
+    "byRuleId": {},
+    "byEvidenceTier": {},
+    "byExtractor": {},
+    "bySurface": {},
+    "byKnownGap": {},
+    "byPathClass": {},
+    "byFileExtension": {},
+    "byLanguage": {}
+  },
+  "coverage": {
+    "semanticFacts": 0,
+    "structuralFacts": 0,
+    "syntaxOrTextualFacts": 0,
+    "unknownOrGapFacts": 0
+  },
+  "coverageSnapshot": {
+    "rules": [],
+    "facts": [],
+    "surfaces": [],
+    "fallbackCounts": {
+      "semanticFacts": 0,
+      "structuralFacts": 0,
+      "syntaxOrTextualFacts": 0,
+      "unknownOrGapFacts": 0
+    }
+  },
+  "artifacts": {},
+  "knownGaps": [],
+  "limitations": [
+    "Fixture manifest is local-only and not a promoted public baseline."
+  ]
+}

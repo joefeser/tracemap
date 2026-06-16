@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "legacy-baseline-manifest.v1",
+  "baselineId": "fixture-alpha__rejected-check__2026-06",
+  "baselinePurpose": "rejected-check",
+  "createdAt": "2026-06",
+  "sample": {
+    "label": "fixture-alpha",
+    "identityKind": "neutral-label",
+    "repoIdentityHash": null,
+    "commitIdentity": {
+      "kind": "category-only",
+      "value": null
+    }
+  },
+  "safety": {
+    "classification": "rejected",
+    "redactionProfile": "counts-only",
+    "rejectedReasons": [
+      "absolute-path",
+      "remote-or-url"
+    ],
+    "limitations": [
+      "Fixture records sanitized rejection categories only."
+    ]
+  },
+  "scan": {
+    "traceMapVersion": "tracemap-fixture",
+    "scanStartedAt": "2026-06",
+    "coverageLabel": "Level1SemanticAnalysisReduced",
+    "buildStatus": "FailedOrPartial",
+    "scanStatus": "completed",
+    "partial": true,
+    "truncated": false,
+    "timeout": false,
+    "deferred": false
+  },
+  "extractors": {},
+  "counts": {
+    "factsTotal": 0,
+    "gapsTotal": 0,
+    "byFactType": {},
+    "byRuleId": {},
+    "byEvidenceTier": {},
+    "byExtractor": {},
+    "bySurface": {},
+    "byKnownGap": {},
+    "byPathClass": {},
+    "byFileExtension": {},
+    "byLanguage": {}
+  },
+  "coverage": {
+    "semanticFacts": 0,
+    "structuralFacts": 0,
+    "syntaxOrTextualFacts": 0,
+    "unknownOrGapFacts": 0
+  },
+  "coverageSnapshot": {
+    "rules": [],
+    "facts": [],
+    "surfaces": [],
+    "fallbackCounts": {
+      "semanticFacts": 0,
+      "structuralFacts": 0,
+      "syntaxOrTextualFacts": 0,
+      "unknownOrGapFacts": 0
+    }
+  },
+  "artifacts": {},
+  "knownGaps": [],
+  "limitations": [
+    "Fixture intentionally contains only sanitized rejection metadata."
+  ]
+}

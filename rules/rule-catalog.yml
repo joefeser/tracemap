@@ -22,6 +22,55 @@ rules:
       - Operator-local sample paths, repository names, remotes, raw artifacts, raw SQL, config values, connection strings, secrets, and source snippets are intentionally excluded from public-safe summaries.
       - Reduced coverage, timeouts, artifact-size truncation, missing outputs, and all-gaps UI event probes remain explicit limitations and must not be interpreted as absence of behavior.
 
+  - id: legacy.baseline.redacted-manifest.v1
+    name: Legacy baseline redacted manifest
+    description: Records deterministic counts-only baseline manifests for legacy scan outputs using neutral labels, safety classification, coverage labels, extractor versions, and known gap categories.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - redacted baseline manifest
+      - baseline summary row
+    limitations:
+      - Baseline manifests are aggregate measurement artifacts and do not preserve raw facts, raw SQLite rows, analyzer logs, report prose, source snippets, raw SQL, config values, remotes, or local paths.
+      - Public-safe classification is validator-backed but still requires reviewer judgment before promotion.
+      - Partial, failed, truncated, timeout, and deferred scans are explicitly labeled and must not be treated as complete evidence coverage.
+
+  - id: legacy.baseline.coverage-snapshot.v1
+    name: Legacy baseline coverage snapshot
+    description: Summarizes observed rule IDs, fact types, evidence tier distributions, extractor versions, supported surfaces, and fallback counts from a redacted legacy baseline.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - rule coverage snapshot
+      - fact coverage snapshot
+      - surface coverage snapshot
+    limitations:
+      - Coverage snapshots describe static evidence produced by the scanner only; they do not prove runtime execution, production usage, reachability, compatibility, or business relevance.
+      - Not-observed, not-in-scope, and unknown surface states are coverage-relative and cannot be interpreted as absence of source behavior.
+      - Syntax/config fallback counts are preserved separately when semantic analysis is reduced.
+
+  - id: legacy.baseline.regression-comparison.v1
+    name: Legacy baseline regression comparison
+    description: Compares redacted baseline manifests by deterministic count and coverage dimensions, reporting movement in static evidence counts and review-needed flags.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - baseline comparison row
+      - review-needed comparison entry
+    limitations:
+      - Comparisons measure static evidence movement only and do not make reducer conclusions or claims about runtime reachability, safety, production use, security posture, or business impact.
+      - Decreases, removed categories, reduced coverage, rejected safety state, and unmapped schema or extractor changes require human review.
+      - Rule ID and fact type renames require an explicit migration map before affected counts are comparable.
+
+  - id: legacy.baseline.safety-validation.v1
+    name: Legacy baseline safety validation
+    description: Validates baseline and comparison artifacts for unsafe paths, remotes, raw SQL, config values, secrets, source-like snippets, and other publishability blockers without echoing unsafe values.
+    evidenceTier: Tier4Unknown
+    emits:
+      - safety validation diagnostic
+      - baseline safety classification
+    limitations:
+      - Safety validation reports sanitized diagnostic categories and intentionally omits matched values.
+      - Validator coverage reduces leak risk but cannot prove that every future unsafe string pattern is known.
+      - Local-only artifacts can be useful for operator-local comparison but are not publishable baseline evidence.
+
   - id: snapshot.diff.source.v1
     name: Snapshot diff source comparison
     description: Compares source inventory and source metadata between two TraceMap snapshots by exact source label and stable source identity metadata.
