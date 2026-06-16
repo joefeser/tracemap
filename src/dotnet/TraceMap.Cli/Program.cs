@@ -50,9 +50,10 @@ public static class TraceMapCommand
                 "package-impact" => PackageImpactHelp(),
                 "contract-diff" => ContractDiffHelp(),
                 "baseline" => BaselineHelp(),
+                "evidence-pack" => EvidencePackHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "contract-diff" or "baseline" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
         }
 
         try
@@ -77,6 +78,7 @@ public static class TraceMapCommand
                 "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
                 "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
                 "baseline" => await RunBaselineAsync(rest, output, error, cancellationToken),
+                "evidence-pack" => await RunEvidencePackAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -930,6 +932,160 @@ public static class TraceMapCommand
         await error.WriteLineAsync($"warning: {diagnostic.Category}: ruleId={diagnostic.RuleId}; path={diagnostic.Path}; {diagnostic.Message}");
     }
 
+    private static async Task<int> RunEvidencePackAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0 || IsHelp(args[0]))
+        {
+            await output.WriteLineAsync(EvidencePackHelp());
+            return 0;
+        }
+
+        var subcommand = args[0].ToLowerInvariant();
+        var values = ParseOptions(args.Skip(1).ToArray(), "--dry-run", "--force");
+        switch (subcommand)
+        {
+            case "create":
+            {
+                if (!values.TryGetValue("--input", out var input) || string.IsNullOrWhiteSpace(input))
+                {
+                    await error.WriteLineAsync("error: evidence-pack create requires --input <path>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--input-kind", out var inputKind) || string.IsNullOrWhiteSpace(inputKind))
+                {
+                    await error.WriteLineAsync("error: evidence-pack create requires --input-kind <kind>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--label", out var label) || string.IsNullOrWhiteSpace(label))
+                {
+                    await error.WriteLineAsync("error: evidence-pack create requires --label <neutral-slug>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--purpose", out var purpose) || string.IsNullOrWhiteSpace(purpose))
+                {
+                    await error.WriteLineAsync("error: evidence-pack create requires --purpose <neutral-slug>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--claim-level", out var claimLevel) || string.IsNullOrWhiteSpace(claimLevel))
+                {
+                    await error.WriteLineAsync("error: evidence-pack create requires --claim-level <local-only|demo-safe|public-safe>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+                {
+                    await error.WriteLineAsync("error: evidence-pack create requires --out <path>.");
+                    return 1;
+                }
+
+                var result = await LegacyEvidencePacks.CreateAsync(
+                    new LegacyEvidencePackCreateOptions(
+                        input,
+                        inputKind,
+                        label,
+                        purpose,
+                        claimLevel,
+                        outputPath,
+                        values.GetValueOrDefault("--date"),
+                        values.HasFlag("--dry-run")),
+                    cancellationToken);
+
+                await output.WriteLineAsync($"TraceMap evidence-pack create {(values.HasFlag("--dry-run") ? "dry-run " : string.Empty)}completed: {result.Pack.PackId}");
+                await output.WriteLineAsync($"Claim level: {result.Pack.ClaimLevel}");
+                await output.WriteLineAsync($"Safety classification: {result.Validation.Classification}");
+                await output.WriteLineAsync($"Facts: {result.Pack.Summary.FactCount}");
+                await output.WriteLineAsync($"Gaps: {result.Pack.Summary.GapCount + result.Pack.Gaps.Count}");
+                foreach (var diagnostic in result.Validation.Diagnostics)
+                {
+                    await WriteEvidencePackDiagnosticAsync(error, diagnostic);
+                }
+
+                if (result.JsonPath is not null)
+                {
+                    await output.WriteLineAsync($"Pack: {result.JsonPath}");
+                    await output.WriteLineAsync($"Markdown: {result.MarkdownPath}");
+                    await output.WriteLineAsync($"Validation: {result.ValidationPath}");
+                }
+
+                return result.Validation.IsValid ? 0 : 1;
+            }
+
+            case "validate":
+            {
+                if (!values.TryGetValue("--pack", out var packPath) || string.IsNullOrWhiteSpace(packPath))
+                {
+                    await error.WriteLineAsync("error: evidence-pack validate requires --pack <evidence-pack.json>.");
+                    return 1;
+                }
+
+                var result = await LegacyEvidencePacks.ValidateAsync(
+                    new LegacyEvidencePackValidateOptions(packPath, values.GetValueOrDefault("--expected-claim-level")),
+                    cancellationToken);
+                await output.WriteLineAsync($"TraceMap evidence-pack validate completed: {packPath}");
+                await output.WriteLineAsync($"Safety classification: {result.Classification}");
+                await output.WriteLineAsync($"Valid: {result.IsValid.ToString().ToLowerInvariant()}");
+                foreach (var diagnostic in result.Diagnostics)
+                {
+                    await WriteEvidencePackDiagnosticAsync(error, diagnostic);
+                }
+
+                return result.IsValid ? 0 : 1;
+            }
+
+            case "promote":
+            {
+                if (!values.TryGetValue("--pack", out var packPath) || string.IsNullOrWhiteSpace(packPath))
+                {
+                    await error.WriteLineAsync("error: evidence-pack promote requires --pack <evidence-pack.json>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--markdown", out var markdownPath) || string.IsNullOrWhiteSpace(markdownPath))
+                {
+                    await error.WriteLineAsync("error: evidence-pack promote requires --markdown <evidence-pack.md>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+                {
+                    await error.WriteLineAsync("error: evidence-pack promote requires --out <path>.");
+                    return 1;
+                }
+
+                var result = await LegacyEvidencePacks.PromoteAsync(
+                    new LegacyEvidencePackPromoteOptions(
+                        packPath,
+                        markdownPath,
+                        outputPath,
+                        values.HasFlag("--force"),
+                        values.HasFlag("--dry-run")),
+                    cancellationToken);
+                await output.WriteLineAsync($"TraceMap evidence-pack promote {(values.HasFlag("--dry-run") ? "dry-run " : string.Empty)}completed: {outputPath}");
+                await output.WriteLineAsync($"Safety classification: {result.Validation.Classification}");
+                await output.WriteLineAsync($"Valid: {result.Validation.IsValid.ToString().ToLowerInvariant()}");
+                foreach (var diagnostic in result.Validation.Diagnostics)
+                {
+                    await WriteEvidencePackDiagnosticAsync(error, diagnostic);
+                }
+
+                return result.Validation.IsValid ? 0 : 1;
+            }
+
+            default:
+                await error.WriteLineAsync($"error: unknown evidence-pack subcommand '{subcommand}'.");
+                return 1;
+        }
+    }
+
+    private static async Task WriteEvidencePackDiagnosticAsync(TextWriter error, LegacyEvidencePackValidationDiagnostic diagnostic)
+    {
+        await error.WriteLineAsync($"warning: {diagnostic.Category}: ruleId={diagnostic.RuleId}; path={diagnostic.Path}; {diagnostic.Message}");
+    }
+
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
@@ -1265,6 +1421,7 @@ public static class TraceMapCommand
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
               tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
               tracemap baseline create --scan-output <path> --label <neutral-slug> --purpose <neutral-slug> --out <path>
+              tracemap evidence-pack create --input <path> --input-kind <kind> --label <neutral-slug> --purpose <neutral-slug> --claim-level <level> --date <yyyy-MM> --out <path>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -1285,6 +1442,7 @@ public static class TraceMapCommand
               portfolio Summarize dependency evidence across many TraceMap indexes.
               package-impact Report static package upgrade evidence from indexed package declarations.
               baseline Create, validate, and compare redacted legacy baseline summaries.
+              evidence-pack Create, validate, and promote redacted legacy evidence packs.
             """;
     }
 
@@ -1659,6 +1817,38 @@ public static class TraceMapCommand
 
             Outputs:
               baseline-manifest.json, baseline-summary.md, comparison.json, comparison.md
+            """;
+    }
+
+    private static string EvidencePackHelp()
+    {
+        return """
+            Usage:
+              tracemap evidence-pack create --input <path> --input-kind <kind> --label <neutral-slug> --purpose <neutral-slug> --claim-level <local-only|demo-safe|public-safe> --date <yyyy-MM> --out <path> [--dry-run]
+              tracemap evidence-pack validate --pack <evidence-pack.json> [--expected-claim-level <local-only|demo-safe|public-safe>]
+              tracemap evidence-pack promote --pack <evidence-pack.json> --markdown <evidence-pack.md> --out docs/evidence-packs/legacy/<pack-id> [--force] [--dry-run]
+
+            Create required:
+              --input <path>             Existing redacted summary, baseline manifest, or scan output.
+              --input-kind <kind>        legacy-validation-summary, public-demo-summary, legacy-baseline, or scan-output.
+              --label <neutral-slug>     Neutral sample label. Paths, remotes, hostnames, and identity-looking labels are rejected.
+              --purpose <neutral-slug>   Neutral evidence-pack purpose such as legacy-validation-proof.
+              --claim-level <value>      local-only, demo-safe, or public-safe.
+              --out <path>               Usually .tmp/legacy-evidence-packs/<pack-id>.
+
+            Create optional:
+              --date <yyyy-MM>           Required for demo-safe and public-safe deterministic output.
+              --dry-run                  Build and validate the pack without writing files.
+
+            Validate optional:
+              --expected-claim-level <value>  Fail when the pack claim level differs.
+
+            Promote optional:
+              --force                    Replace an existing approved promotion destination.
+              --dry-run                  Validate promotion inputs without copying files.
+
+            Outputs:
+              evidence-pack.json, evidence-pack.md, validation-result.json
             """;
     }
 

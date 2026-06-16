@@ -1,14 +1,14 @@
 # Legacy Sample Evidence Pack Implementation State
 
-Status: spec-review
-Branch: codex/legacy-sample-evidence-pack-spec
-Scope: spec-only
-Public claim level: hidden
-Readiness: ready-for-implementation
+Status: implemented
+Branch: codex/legacy-sample-evidence-pack
+Scope: CLI/reporting implementation
+Public claim level: hidden until promoted packs are reviewed for site/docs use
+Readiness: implementation complete, pending PR review
 
 ## Summary
 
-This spec defines deterministic redacted evidence packs for legacy sample scan
+This implementation defines deterministic redacted evidence packs for legacy sample scan
 review. Packs summarize TraceMap evidence from old or large codebases using
 safe labels, counts, rule IDs, evidence tiers, coverage labels, limitations,
 extractor versions, and sanitized command provenance.
@@ -17,10 +17,23 @@ Evidence packs are not raw scan outputs and are not impact analysis. They are a
 public-safe handoff format for docs, site, demo, and review work after
 validation and promotion gates pass.
 
-## Scope Decisions
+## Implementation Scope
 
-- Spec-only branch; no scanner, reducer, CLI, script, docs page, or site
-  implementation is included.
+- Added `tracemap evidence-pack create`, `validate`, and `promote`.
+- Added `legacy-evidence-pack.v1` JSON and Markdown output.
+- Added redacted input readers for:
+  - `legacy-validation-summary`
+  - `public-demo-summary`
+  - `legacy-baseline`
+  - `scan-output`
+- Added synthetic public-safe summary fixture under
+  `samples/synthetic-legacy-evidence-pack/`.
+- Added tracked promotion-root placeholder at
+  `docs/evidence-packs/legacy/README.md`.
+- Added six `legacy.evidence-pack.*` rule catalog entries.
+- Added focused unit tests for deterministic creation, mandatory public-safe
+  date handling, unsafe content diagnostics, row metadata, and promotion
+  boundaries.
 - TraceMap core remains deterministic. No LLM calls, embeddings, vector
   databases, prompt-based classification, or model-generated summaries are in
   scope.
@@ -111,6 +124,23 @@ validation and promotion gates pass.
     and safe provenance on per-section counts.
 - Tasks are intentionally unchecked because this branch delivers a spec only.
 
+## Implementation Notes
+
+- The evidence-pack validator is the generated-output sentinel for pack JSON and
+  Markdown. It scans generated files directly before promotion, because
+  `scripts/check-private-paths.sh` only protects tracked files.
+- `--force` only replaces an existing promotion destination. It does not bypass
+  validation, claim-level, tracked-root, ignored-destination, or unsafe-content
+  gates.
+- `public-safe` and `demo-safe` creation require `--date <yyyy-MM>`. `local-only`
+  can omit the date and is intentionally excluded from byte-stability promises
+  when it does.
+- Public-safe commit identity is represented as hash proof plus
+  `commitShaPresent`; raw remotes and local paths are never copied into packs.
+- The implementation is intentionally aggregate-first. It packages the evidence
+  TraceMap already emitted; it does not infer runtime execution, production use,
+  vulnerability status, release approval, or business impact.
+
 ## Validation
 
 Completed:
@@ -125,27 +155,32 @@ node scripts/kiro-review.mjs --phase legacy-sample-evidence-pack --kind re-revie
 git check-ignore .tmp/legacy-evidence-packs/example
 ./scripts/check-private-paths.sh
 git diff --check
+dotnet test src/dotnet/TraceMap.sln --filter LegacyEvidencePackTests
+dotnet run --project src/dotnet/TraceMap.Cli -- evidence-pack create --input samples/synthetic-legacy-evidence-pack --input-kind legacy-validation-summary --label synthetic-legacy-alpha --purpose legacy-validation-proof --claim-level public-safe --date 2026-06 --out .tmp/legacy-evidence-packs/synthetic-legacy-alpha --dry-run
+dotnet run --project src/dotnet/TraceMap.Cli -- evidence-pack create --input samples/synthetic-legacy-evidence-pack --input-kind legacy-validation-summary --label synthetic-legacy-alpha --purpose legacy-validation-proof --claim-level public-safe --date 2026-06 --out .tmp/legacy-evidence-packs/synthetic-legacy-alpha
+dotnet run --project src/dotnet/TraceMap.Cli -- evidence-pack validate --pack .tmp/legacy-evidence-packs/synthetic-legacy-alpha/evidence-pack.json --expected-claim-level public-safe
+dotnet run --project src/dotnet/TraceMap.Cli -- evidence-pack promote --pack .tmp/legacy-evidence-packs/synthetic-legacy-alpha/evidence-pack.json --markdown .tmp/legacy-evidence-packs/synthetic-legacy-alpha/evidence-pack.md --out docs/evidence-packs/legacy/synthetic-legacy-alpha-dry-run --dry-run
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
 ```
 
 Notes:
 
 - Opus first-pass review and one Sonnet re-review reported reduced coverage due
   denied Kiro shell access, but both returned complete findings.
-- No .NET implementation validation is required for this spec-only branch
-  because it changes only specs and `.gitignore`.
+- Full implementation validation is run in the implementation PR after code
+  changes are complete. The implementation branch currently passes full build
+  and test validation with 358 .NET tests.
+- Pinned language-adapter smoke checks from `docs/VALIDATION.md` were deferred:
+  this change adds evidence-pack reporting/CLI behavior and does not change
+  scanner extraction, language adapters, public demo generation, release review,
+  or shared language smoke scripts.
 
-## Follow-Ups For Implementation
+## Follow-Ups
 
-- Keep `tasks.md` unchecked until implementation work lands.
-- Rule catalog currently contains zero `legacy.evidence-pack.*` entries. Adding
-  all six entries before implementation tests emit them is a day-one
-  prerequisite.
-- The synthetic fixture at `samples/synthetic-legacy-evidence-pack/` and
-  tracked promotion-root placeholder at `docs/evidence-packs/legacy/README.md`
-  are intentionally absent from this spec branch and must be created in the
-  implementation PR.
-- Update this file and check task boxes only in the implementation PR.
-- Record any CLI fallback decision in this file before coding around it.
-- Run or explicitly defer relevant pinned smokes from `docs/VALIDATION.md` when
-  implementation changes scanner, report, public demo, release review, or
-  language-adapter behavior.
+- Site pages that consume promoted packs remain out of scope and should use a
+  future `site-*` spec.
+- Portfolio-level evidence packs across multiple public-safe sample labels are
+  still deferred.
+- If future reviewers want deeper drilldown, add optional local-only drilldown
+  packs without weakening public-safe defaults.
