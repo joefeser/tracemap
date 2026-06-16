@@ -98,6 +98,25 @@ rg -n "fields none" <scan-output>/report.md
 
 `fields none` is acceptable for query-builder facts with no extracted field metadata. SQL-shape facts should render derived operation/table/column/source/hash metadata instead, and reports must not render raw SQL text, literal values, unsafe identifiers, or developer-local absolute paths.
 
+For legacy data metadata changes in the .NET adapter, run the focused extractor
+tests plus the normal .NET scanner checks:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Focused validation should cover DBML, EDMX, typed DataSet/TableAdapter, config
+provider metadata, generated-code linkage, unrelated XSD gating, malformed XML,
+DTD/entity rejection, deterministic fact IDs, report redaction, and SQLite
+property redaction. Any local legacy smoke must stay ignored/local-only and use
+neutral labels/counts only; do not commit raw facts, SQLite indexes, analyzer
+logs, raw SQL, connection strings, config values, raw remotes, private sample
+names, local absolute paths, or source snippets.
+
 For combined dependency report, path-query, reverse-query, diff, contract-diff, or snapshot-diff changes, run a combine/report/paths/reverse/diff/contract-diff/snapshot-diff smoke over any two existing local scan outputs:
 For combined change-impact changes, include the `impact` command in the same smoke.
 For release-review changes, include `release-review` in the same smoke and verify `release-review.md` plus `release-review.json` are produced.

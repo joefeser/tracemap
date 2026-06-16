@@ -82,6 +82,43 @@ Facts intended to participate in existing contract reduction should reuse existi
 
 Language-specific fact types can be added, but they need rule catalog entries and documented reducer/report behavior.
 
+### Legacy Data Metadata Facts
+
+The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX,
+typed DataSet XSD/TableAdapter metadata, generated `.designer.cs` linkage
+candidates, and data-provider config declarations. These facts are descriptor
+evidence only: they describe static design-time metadata and do not prove
+runtime data access, SQL execution, database existence, provider compatibility,
+config transform selection, secret availability, generated-code freshness, or
+production usage.
+
+Legacy data fact types are:
+
+| Fact type | Meaning |
+| --- | --- |
+| `LegacyDataMetadataDeclared` | Metadata document or generated-designer inventory. |
+| `LegacyDataEntityDeclared` | Conceptual/generated entity, DataSet, table row, context, or adapter descriptor. |
+| `LegacyDataStorageObjectDeclared` | Table, view, routine, entity set, or storage object descriptor. |
+| `LegacyDataColumnDeclared` | Column/property/field descriptor, with unsafe names hashed. |
+| `LegacyDataMappingDeclared` | Unambiguous descriptor-to-descriptor mapping such as entity-table or property-column. |
+| `LegacyDataProviderConfigDeclared` | Provider, connection-name, provider-factory, and config-section metadata without raw values. |
+| `LegacyDataGeneratedCodeLinked` | Deterministic descriptor-scoped link to checked-in generated code. |
+
+Reducer-facing properties reuse shared names where safe, including `typeName`,
+`propertyName`, `fieldName`, `tableName`, `columnName`, `targetSymbol`, and
+hash fields such as `metadataHash`, `columnHash`, `tableHash`, and
+`connectionStringHash`. Metadata descriptors alone must not emit
+`DatabaseColumnMapping`; code-level access or a rule that owns code-to-column
+evidence is required for that fact type. Typed DataSet command text may emit
+`SqlTextUsed` and SQL-shape `QueryPatternDetected` only as hash/shape evidence;
+raw SQL text is not stored.
+
+Legacy data XML and config parsing must use safe XML settings: DTD processing is
+prohibited, `XmlResolver` is null, external entity resolution is not allowed,
+line information is preserved where practical, and malformed, oversized,
+security-rejected, ambiguous, stale, or unsupported metadata becomes explicit
+`AnalysisGap` evidence.
+
 ## Symbol Identity
 
 Each adapter should emit stable symbol IDs for its own ecosystem and include a language discriminator in `symbols`.
