@@ -1,134 +1,144 @@
 # Legacy Remoting Flow Composition Implementation State
 
-Status: spec-reviewed
-Branch: codex/spec-legacy-remoting-flow-composition
+Status: implementation-complete
+Branch: codex/implement-legacy-remoting-flow-composition
 Public claim level: hidden
 
 ## Scope
 
-This is a spec-only branch for a conservative next phase that integrates
-existing .NET Remoting evidence into the implemented legacy static flow/path
-composition model.
+This implementation integrates existing .NET Remoting facts into
+`tracemap paths --view legacy-flows` and `--include-legacy-roots` as static,
+evidence-backed flow composition. It does not add new scanner extraction,
+runtime Remoting calls, endpoint probing, deployment inspection, LLM calls,
+embeddings, vector databases, or prompt-based classification.
 
-Owned files:
+Implemented files:
 
-- `.kiro/specs/legacy-remoting-flow-composition/requirements.md`
-- `.kiro/specs/legacy-remoting-flow-composition/design.md`
+- `src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.cs`
+- `src/dotnet/tests/TraceMap.Tests/LegacyFlowCompositionTests.cs`
 - `.kiro/specs/legacy-remoting-flow-composition/tasks.md`
 - `.kiro/specs/legacy-remoting-flow-composition/implementation-state.md`
-- `.kiro/specs/legacy-remoting-flow-composition/review-prompts.md`
-
-No source code, docs outside this spec, existing specs, generated outputs, or
-site files are in scope for spec delivery.
 
 ## Scope Decisions
 
-- Remoting is treated as sibling evidence to WCF, not as a subtype of WCF.
-- Existing Remoting facts are inputs; no new scanner extraction is proposed.
-- `tracemap paths --view legacy-flows` should display Remoting registrations,
-  activations, config service/client declarations, channels, API usage, and
-  `MarshalByRefObject` evidence as static nodes.
-- Remoting registrations and activations are highest-precedence terminals;
-  channel/API/object evidence is intermediate unless deterministic terminal
-  precedence rules make it selected lower-precedence terminal evidence.
-- Remoting terminals cap at `ProbableStaticPath` at strongest and cannot produce
-  `StrongStaticPath`.
-- `MarshalByRefObject` evidence remains object-shape evidence only.
-- Client activation and service registration must not be stitched together by
-  URL hash, object URI hash, short type name, or config value alone.
-- No runtime channel proof, remote object lifetime proof, process boundary
-  proof, deployment proof, endpoint reachability proof, exploitability claim, or
-  production-usage claim is in scope.
-- Public claim level remains hidden.
+- Remoting remains a sibling evidence family to WCF. WCF operation terminals and
+  Remoting terminals use distinct node kinds, surface kinds, fact types, rule
+  IDs, and limitations.
+- Existing `Remoting*` facts are consumed from single or combined indexes; no
+  scanner facts or extractor behavior were added.
+- Remoting endpoint/registration/channel/object/API nodes are projected only
+  through existing deterministic symbol, call, object-creation, projection, or
+  supporting-fact evidence. URL hashes, object URI hashes, config values, and
+  short names are not used to stitch client and service facts together.
+- `remoting-endpoint`, `remoting-registration`, and `remoting-channel` are the
+  primary selector surfaces. `remoting-object` and `remoting-api` are explicit
+  review-tier selector surfaces for object-shape/API evidence.
+- Remoting terminal paths are capped at `ProbableStaticPath` at strongest.
+  Syntax-only, channel-only, API-only, and `MarshalByRefObject` object-shape
+  paths are capped at `NeedsReviewStaticPath` or lower.
+- Remoting channel `supportingFactIds` parsing accepts semicolon or comma
+  delimiter formats, de-duplicates and sorts IDs, and emits
+  `MalformedSupportingFactIds` when mixed delimiters appear.
+- Current C# indexes with no Remoting facts emit an explicit
+  `NoRemotingEvidenceFound` availability note/gap. Older indexes whose Remoting
+  support cannot be proven emit `SchemaMissing` under
+  `legacy.flow.input-availability.v1`.
+- No public site copy or public claim promotion is included. Public claim level
+  remains hidden.
 
-## Required Redaction
+## Redaction
 
-Generated flow artifacts, logs, and display fields must not include raw:
+Remoting flow output displays safe type names, fact IDs, rule IDs, evidence
+tiers, repository-relative paths, line spans, and stable hash prefixes such as
+`url-0123abcd` or `objectUri-abcdef12`.
 
-- Remoting URLs;
-- object URIs;
-- channel ports;
-- channel names or provider properties when treated as config values;
-- config values;
-- local absolute paths;
-- private repo names;
-- raw remotes;
-- source snippets;
-- connection strings;
-- secrets or secret-looking tokens.
+Generated Markdown, JSON, logs, and display fields must not include raw:
 
-Safe output should use fact IDs, rule IDs, evidence tiers, safe type names,
-repo-relative paths, line spans, extractor versions, commit SHA, neutral source
-labels, and existing value hashes.
+- Remoting URLs or object URIs;
+- channel ports, raw channel names, or provider/config values;
+- local absolute paths, private source labels, raw remotes, or private repo
+  names;
+- source snippets, connection strings, secrets, or secret-looking tokens.
 
-## Validation Commands For Spec Delivery
+The implementation reuses legacy flow safe-display, safe-path, source-label
+neutralization, and redaction limitation behavior.
 
-```bash
-node scripts/kiro-review.mjs --phase legacy-remoting-flow-composition --kind spec --model claude-sonnet-4.5 --fresh --timeout-ms 600000
-./scripts/check-private-paths.sh
-git diff --check
-```
+## Tests Added
 
-No .NET implementation validation is required for this spec-only branch unless
-review patches touch source code, docs outside the spec, validation scripts, or
-existing specs.
+Focused tests cover:
+
+- WebForms root to Remoting config endpoint composition and static cap.
+- Client activation selector matching through safe URL hash display.
+- Remoting channel `supportingFactIds` parsing, source scoping, and malformed
+  mixed delimiter gaps.
+- `MarshalByRefObject` object-shape selected paths capped at review tier.
+- WCF and Remoting terminal separation in the same legacy flow report.
+- Hash-only client activation/service declaration non-stitching.
+- Older-index Remoting availability gaps, current-index zero Remoting evidence
+  notes, and Remoting `AnalysisGap` propagation.
+- Markdown/JSON redaction and forbidden runtime-overclaim wording.
 
 ## Review State
 
-Drafted locally. Sonnet spec review is required if the local Kiro wrapper and
-auth are available. Blocking or Medium+ findings should be patched before final
-commit. If the wrapper or auth is unavailable, record the gap here before
-delivery.
+Sonnet implementation review was run with:
 
-Review results:
+```bash
+node scripts/kiro-review.mjs --phase legacy-remoting-flow-composition --kind implementation --model claude-sonnet-4.5 --fresh --timeout-ms 600000
+```
 
-- Sonnet spec review completed with full coverage using:
-  `node scripts/kiro-review.mjs --phase legacy-remoting-flow-composition --kind spec --model claude-sonnet-4.5 --fresh --timeout-ms 600000`.
-- The review output reported stale branch metadata from the wrapper
-  (`codex/legacy-sample-evidence-pack`), but `git branch --show-current`
-  confirmed the working branch for delivery is
-  `codex/spec-legacy-remoting-flow-composition`.
-- Blocking findings patched: deterministic `supportingFactIds` parsing,
-  terminal precedence, unavailable-vs-absent Remoting gap placement, hash
-  selector format, and branch-state clarification.
-- Important findings patched: WCF/Remoting output separation, permanent
-  Remoting classification cap rationale, row-order byte-stability test, source
-  label neutralization rules, and deferred service-side continuation rationale.
-- No known blocking or Medium+ spec-review findings remain after these patches.
+Review coverage was reduced because the wrapper reported denied tool access for
+one attempted command, but the review completed and returned actionable
+findings.
 
-## Implementation Validation
+Findings addressed:
 
-Spec delivery validation completed:
+- Blocking: stale implementation-state metadata replaced with this
+  implementation record.
+- Blocking: `tasks.md` checkboxes updated to reflect completed implementation.
+- Important: added client/server same-hash non-stitching test.
+- Important: added `MarshalByRefObject` object-shape cap test and report note.
+- Important: added current-index zero Remoting evidence availability test.
+- Important: added forbidden Remoting runtime-overclaim wording assertions.
+- Medium: recorded single-PR delivery scope and validation results here.
 
-- Sonnet spec review completed with full coverage and review findings patched.
-- `./scripts/check-private-paths.sh` passed.
-- `git diff --cached --check` passed for the staged spec files.
-- .NET build/test not run because this branch adds only Kiro spec files and no
-  source code, docs outside the spec, validation scripts, or existing specs.
+No new rule IDs were required. Existing `legacy.flow.*` rules cover input
+availability, traversal, classification, gap propagation, redaction, and report
+output. Source Remoting rule IDs remain `legacy.remoting.*`.
 
-Future implementation should run:
+## Validation
+
+Completed validation:
 
 ```bash
 dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln --filter LegacyFlowCompositionTests
 dotnet test src/dotnet/TraceMap.sln --filter LegacyRemotingExtractorTests
 dotnet test src/dotnet/TraceMap.sln
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/dotnet-remoting-sample --out <tmp>/dotnet-remoting-scan
+./scripts/smoke-combined-paths.sh
+```
+
+Initial `./scripts/smoke-combined-paths.sh` run found missing TypeScript npm
+dependencies (`tsc` unavailable). Homebrew discovery confirmed TypeScript was
+not installed as a formula, so `npm install --prefix src/typescript` restored
+the local adapter dependencies and the smoke then passed.
+
+Final pre-PR validation also runs:
+
+```bash
 ./scripts/check-private-paths.sh
 git diff --check
 ```
 
-Relevant smoke guidance from `docs/VALIDATION.md`:
+No pinned public Remoting smoke baseline exists yet. Public Remoting baselines
+and public claim promotion remain deferred to a separately reviewed task.
 
-- Legacy Static Flow Reporting Smoke.
-- Legacy Remoting Smoke.
+## Follow-Ups
 
-No pinned public Remoting smoke baseline exists at spec drafting time. Public
-Remoting baselines require a separate reviewed baseline task or spec.
-
-## Follow-Ups To Keep Out Of This Slice
-
-- Source-code implementation.
-- Public site copy or claim promotion.
-- Public Remoting smoke baseline.
-- Runtime Remoting probing or deployment inspection.
-- Reducer-specific contract-change conclusions.
+- Public Remoting smoke baseline and claim promotion.
+- Service-side continuation from Remoting registration into implementation
+  methods, only after explicit scanner facts and traversal rules exist.
+- Reducer-specific contract-change integration beyond static path context.
+- Machine.config, config transforms, encrypted sections, and external config
+  include resolution.
+- Richer activated-registration overload modeling.
