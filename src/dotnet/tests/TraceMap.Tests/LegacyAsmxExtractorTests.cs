@@ -13,6 +13,8 @@ public sealed class LegacyAsmxExtractorTests
         var output = Path.Combine(temp.Path, "out");
         Directory.CreateDirectory(repo);
         File.WriteAllText(Path.Combine(repo, "Legacy.asmx"), """
+
+
             <%@ WebService Language="C#" CodeBehind="Services/Legacy.asmx.cs" Class="Sample.Services.LegacyService" Unknown="https://example.invalid/service?credential=placeholder" %>
             """);
 
@@ -22,11 +24,32 @@ public sealed class LegacyAsmxExtractorTests
         var host = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AsmxHostDeclared);
         Assert.Equal(RuleIds.LegacyAsmxHost, host.RuleId);
         Assert.Equal(EvidenceTiers.Tier2Structural, host.EvidenceTier);
+        Assert.Equal(3, host.Evidence.StartLine);
         Assert.Equal("Sample.Services.LegacyService", host.Properties.GetValueOrDefault("serviceClassName"));
         Assert.Equal("Legacy.asmx.cs", host.Properties.GetValueOrDefault("codeBehindFile"));
         Assert.Equal("1", host.Properties.GetValueOrDefault("unsupportedAttributeCount"));
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WcfServiceHostDeclared);
         AssertNoUnsafeValues(result.Facts);
+    }
+
+    [Fact]
+    public void Scan_emits_gap_for_duplicate_asmx_directive_attributes()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Duplicate.asmx"), """
+            <%@ WebService Language="C#" Class="Sample.Services.LegacyService" class="Other.Services.LegacyService" %>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAsmxHost
+            && fact.Properties.GetValueOrDefault("classification") == "DuplicateAsmxDirectiveAttribute");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AsmxHostDeclared);
     }
 
     [Fact]
@@ -150,6 +173,33 @@ public sealed class LegacyAsmxExtractorTests
     }
 
     [Fact]
+    public void Scan_emits_gap_for_wsdl_external_imports_without_fetching()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        var webReference = Path.Combine(repo, "Web References", "Rating");
+        Directory.CreateDirectory(webReference);
+        File.WriteAllText(Path.Combine(webReference, "Rating.wsdl"), """
+            <definitions xmlns="http://schemas.xmlsoap.org/wsdl/">
+              <import namespace="urn:rating" location="https://example.invalid/rating.wsdl" />
+              <portType name="RatingSoap">
+                <operation name="Rate" />
+              </portType>
+            </definitions>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAsmxMetadata
+            && fact.Properties.GetValueOrDefault("classification") == "ExternalAsmxMetadataImport"
+            && fact.Properties.GetValueOrDefault("externalImportCount") == "1");
+        AssertNoUnsafeValues(result.Facts);
+    }
+
+    [Fact]
     public void Scan_leaves_svcmap_metadata_wcf_owned_when_asmx_evidence_is_nearby()
     {
         using var temp = new TempDirectory();
@@ -176,6 +226,66 @@ public sealed class LegacyAsmxExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMetadataDeclared);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WcfMetadataOperationDeclared);
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AsmxProxyMetadataDeclared);
+    }
+
+    [Fact]
+    public void Scan_does_not_map_client_to_multiple_metadata_operations_by_name_only()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        var webReference = Path.Combine(repo, "Web References", "Rating");
+        Directory.CreateDirectory(webReference);
+        File.WriteAllText(Path.Combine(webReference, "Reference.cs"), """
+            using System.Web.Services.Protocols;
+
+            namespace Sample.WebReferences.Rating;
+
+            public sealed class RatingSoapClient : SoapHttpClientProtocol
+            {
+                public string GetStatus() => (string)Invoke("GetStatus", System.Array.Empty<object>())[0];
+            }
+            """);
+        File.WriteAllText(Path.Combine(webReference, "First.wsdl"), """
+            <definitions xmlns="http://schemas.xmlsoap.org/wsdl/">
+              <portType name="FirstSoap"><operation name="GetStatus" /></portType>
+            </definitions>
+            """);
+        File.WriteAllText(Path.Combine(webReference, "Second.wsdl"), """
+            <definitions xmlns="http://schemas.xmlsoap.org/wsdl/">
+              <portType name="SecondSoap"><operation name="GetStatus" /></portType>
+            </definitions>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAsmxMapping
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousAsmxMetadataOperationMapping");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AsmxServiceReferenceMapping);
+    }
+
+    [Fact]
+    public void Scan_does_not_store_url_shaped_config_keys()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <appSettings>
+                <add key="https://example.invalid/RatingServiceUrl" value="placeholder" />
+              </appSettings>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AsmxConfigDeclared
+            && fact.Properties.ContainsKey("configKey"));
     }
 
     [Fact]

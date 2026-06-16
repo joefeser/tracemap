@@ -67,7 +67,21 @@ public static partial class LegacyAsmxExtractor
                 return;
             }
 
-            var attributes = DirectiveAttribute().Matches(directive.Value)
+            var directiveLine = LineNumberForOffset(text, directive.Index);
+            var attributeMatches = DirectiveAttribute().Matches(directive.Value).ToArray();
+            var duplicateAttribute = attributeMatches
+                .GroupBy(match => match.Groups["name"].Value, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(duplicateAttribute))
+            {
+                facts.Add(Gap(manifest, RuleIds.LegacyAsmxHost, file.RelativePath, directiveLine, "DuplicateAsmxDirectiveAttribute", "ASMX WebService directive contains duplicate attributes; TraceMap did not choose an arbitrary value."));
+                return;
+            }
+
+            var attributes = attributeMatches
                 .ToDictionary(match => match.Groups["name"].Value, match => match.Groups["value"].Value, StringComparer.OrdinalIgnoreCase);
             var serviceClass = SafeCodeName(attributes.GetValueOrDefault("Class", string.Empty));
             var language = SafeIdentifier(attributes.GetValueOrDefault("Language", string.Empty));
@@ -97,7 +111,7 @@ public static partial class LegacyAsmxExtractor
                 FactTypes.AsmxHostDeclared,
                 RuleIds.LegacyAsmxHost,
                 EvidenceTiers.Tier2Structural,
-                new EvidenceSpan(file.RelativePath, 1, 1, null, "LegacyAsmxExtractor", ScannerVersions.LegacyAsmxExtractor),
+                new EvidenceSpan(file.RelativePath, directiveLine, directiveLine, null, "LegacyAsmxExtractor", ScannerVersions.LegacyAsmxExtractor),
                 targetSymbol: string.IsNullOrWhiteSpace(serviceClass) ? null : serviceClass,
                 contractElement: string.IsNullOrWhiteSpace(serviceClass) ? null : serviceClass,
                 properties: properties));
@@ -280,6 +294,7 @@ public static partial class LegacyAsmxExtractor
                 ["surfaceKind"] = "asmx-metadata"
             };
             AddTargetNamespaceHash(properties, document);
+            AddExternalImportGap(manifest, file, document, facts);
 
             facts.Add(FactFactory.Create(
                 manifest,
@@ -312,6 +327,32 @@ public static partial class LegacyAsmxExtractor
                     ["sourceFormat"] = extension.TrimStart('.')
                 }));
         }
+    }
+
+    private static void AddExternalImportGap(ScanManifest manifest, FileInventoryItem file, XDocument document, List<CodeFact> facts)
+    {
+        var externalImportCount = document.Descendants()
+            .Where(element => element.Name.LocalName is "import" or "include")
+            .Select(element => AttributeValue(element, "location") ?? AttributeValue(element, "schemaLocation") ?? string.Empty)
+            .Count(value => !string.IsNullOrWhiteSpace(value));
+        if (externalImportCount == 0)
+        {
+            return;
+        }
+
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyAsmxMetadata,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(file.RelativePath, 1, 1, null, "LegacyAsmxExtractor", ScannerVersions.LegacyAsmxExtractor),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = "ExternalAsmxMetadataImport",
+                ["externalImportCount"] = externalImportCount.ToString(),
+                ["message"] = "Checked-in ASMX/SOAP metadata references external imports or includes; TraceMap did not fetch or resolve them.",
+                ["metadataFileName"] = Path.GetFileName(file.RelativePath)
+            }));
     }
 
     private static void ExtractWsdlMetadataOperations(ScanManifest manifest, FileInventoryItem file, XDocument document, string metadataHash, List<CodeFact> facts)
@@ -507,10 +548,31 @@ public static partial class LegacyAsmxExtractor
 
             var metadataMatches = metadataOperations
                 .Where(fact => fact.Properties.GetValueOrDefault("operationName", string.Empty).Equals(operationName, StringComparison.Ordinal))
+                .Where(fact => SameReferenceFolder(client, fact))
                 .OrderBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
                 .ToArray();
             if (operationMatches.Length == 0 && metadataMatches.Length == 0)
             {
+                continue;
+            }
+
+            if (operationMatches.Length == 0 && metadataMatches.Length > 1)
+            {
+                facts.Add(FactFactory.Create(
+                    manifest,
+                    FactTypes.AnalysisGap,
+                    RuleIds.LegacyAsmxMapping,
+                    EvidenceTiers.Tier4Unknown,
+                    client.Evidence,
+                    sourceSymbol: client.TargetSymbol,
+                    contractElement: operationName,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["classification"] = "AmbiguousAsmxMetadataOperationMapping",
+                        ["message"] = "Multiple ASMX metadata operation candidates matched a generated SOAP client operation; TraceMap did not choose an arbitrary metadata file.",
+                        ["metadataOperationCandidateCount"] = metadataMatches.Length.ToString(),
+                        ["operationName"] = operationName
+                    }));
                 continue;
             }
 
@@ -541,6 +603,18 @@ public static partial class LegacyAsmxExtractor
                     ["supportingFactIds"] = string.Join(";", supportingFactIds)
                 }));
         }
+    }
+
+    private static bool SameReferenceFolder(CodeFact client, CodeFact metadata)
+    {
+        var clientFolder = FolderLabel(client.Evidence.FilePath);
+        var metadataFolder = metadata.Properties.GetValueOrDefault("serviceReferenceFolder", string.Empty);
+        if (string.IsNullOrWhiteSpace(clientFolder) || string.IsNullOrWhiteSpace(metadataFolder))
+        {
+            return false;
+        }
+
+        return clientFolder.Equals(metadataFolder, StringComparison.Ordinal);
     }
 
     private static bool IsGeneratedClientOperation(MethodDeclarationSyntax method, bool hasSoapAttribute)
@@ -753,7 +827,12 @@ public static partial class LegacyAsmxExtractor
 
     private static string SafeConfigKey(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value) || LooksSecretLike(value))
+        if (string.IsNullOrWhiteSpace(value)
+            || LooksSecretLike(value)
+            || value.Contains("://", StringComparison.Ordinal)
+            || value.Contains('/', StringComparison.Ordinal)
+            || value.Contains('\\', StringComparison.Ordinal)
+            || value.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
         {
             return string.Empty;
         }
@@ -864,6 +943,20 @@ public static partial class LegacyAsmxExtractor
             : 1;
     }
 
+    private static int LineNumberForOffset(string text, int offset)
+    {
+        var line = 1;
+        for (var index = 0; index < Math.Min(offset, text.Length); index++)
+        {
+            if (text[index] == '\n')
+            {
+                line++;
+            }
+        }
+
+        return line;
+    }
+
     private static string FolderLabel(string relativePath)
     {
         var directory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(relativePath) ?? string.Empty);
@@ -917,7 +1010,7 @@ public static partial class LegacyAsmxExtractor
     [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_.-]*$")]
     private static partial Regex SafeIdentifierRegex();
 
-    [GeneratedRegex(@"^[A-Za-z0-9_.:/-]{1,160}$")]
+    [GeneratedRegex(@"^[A-Za-z0-9_.-]{1,160}$")]
     private static partial Regex SafeConfigKeyRegex();
 
     [GeneratedRegex(@"^[A-Za-z0-9_. -]{1,160}$")]
