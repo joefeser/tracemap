@@ -210,7 +210,7 @@ public static class TraceMapCommand
         }
 
         var subcommand = args[0].ToLowerInvariant();
-        var values = ParseOptions(args.Skip(1).ToArray());
+        var values = ParseOptions(args.Skip(1).ToArray(), "--dry-run", "--local-only", "--public-source");
         switch (subcommand)
         {
             case "create":
@@ -277,7 +277,7 @@ public static class TraceMapCommand
                 await output.WriteLineAsync($"Diagnostics: {result.Validation.Diagnostics.Count}");
                 foreach (var diagnostic in result.Validation.Diagnostics)
                 {
-                    await output.WriteLineAsync($"- {diagnostic.Category}: {diagnostic.FilePath}");
+                    await output.WriteLineAsync($"- {diagnostic.Category}");
                 }
 
                 return result.Validation.Classification == "rejected" ? 1 : 0;
@@ -1105,7 +1105,7 @@ public static class TraceMapCommand
         await File.WriteAllLinesAsync(path, lines, cancellationToken);
     }
 
-    private static ParsedOptions ParseOptions(string[] args)
+    private static ParsedOptions ParseOptions(string[] args, params string[] additionalFlags)
     {
         var values = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var flags = new HashSet<string>(StringComparer.Ordinal);
@@ -1117,7 +1117,8 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--dry-run" or "--local-only" or "--public-source")
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review"
+                || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
                 continue;

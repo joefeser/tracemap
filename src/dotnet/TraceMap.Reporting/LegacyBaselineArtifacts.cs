@@ -359,7 +359,7 @@ public static class LegacyBaselineArtifacts
         var text = await File.ReadAllTextAsync(options.ManifestPath, cancellationToken);
         var manifest = JsonSerializer.Deserialize<LegacyBaselineManifest>(text, ReadOptions)
             ?? throw new InvalidOperationException("Could not parse baseline manifest.");
-        var validation = ValidateText(text, options.ManifestPath, manifest.Safety.Classification);
+        var validation = ValidateText(text, Path.GetFileName(options.ManifestPath), manifest.Safety.Classification);
         return new LegacyBaselineValidateResult(manifest, validation);
     }
 
@@ -368,22 +368,31 @@ public static class LegacyBaselineArtifacts
         var baseline = await ReadBaselineManifestAsync(options.BaselineManifestPath, cancellationToken);
         var candidate = await ReadBaselineManifestAsync(options.CandidateManifestPath, cancellationToken);
         var migrationMap = await ReadMigrationMapAsync(options.MigrationMapPath, cancellationToken);
+        var migrationMapApplies = migrationMap is not null
+            && string.Equals(migrationMap.FromBaselineSchema, baseline.SchemaVersion, StringComparison.Ordinal)
+            && string.Equals(migrationMap.ToCandidateSchema, candidate.SchemaVersion, StringComparison.Ordinal);
         var generatedAt = ToYearMonth(options.GeneratedAt ?? DateTimeOffset.UtcNow);
         var rows = new List<LegacyComparisonRow>();
         var review = new List<LegacyReviewNeeded>();
 
-        var schemaCompatible = string.Equals(baseline.SchemaVersion, candidate.SchemaVersion, StringComparison.Ordinal)
-            || migrationMap is not null;
+        var schemaCompatible = migrationMap is null
+            ? string.Equals(baseline.SchemaVersion, candidate.SchemaVersion, StringComparison.Ordinal)
+            : migrationMapApplies;
         if (!schemaCompatible)
         {
-            rows.Add(Row("schema", "schemaVersion", null, null, "not-comparable"));
-            review.Add(new LegacyReviewNeeded("schema", "Schema versions differ without a migration map.", RegressionComparisonRuleId));
+            rows.Add(Row("schema", migrationMap is null ? "schemaVersion" : "migrationMap", null, null, "not-comparable"));
+            review.Add(new LegacyReviewNeeded(
+                "schema",
+                migrationMap is null
+                    ? "Schema versions differ without a migration map."
+                    : "Migration map schema pair does not match compared manifests.",
+                RegressionComparisonRuleId));
         }
 
         rows.Add(Row("totals", "factsTotal", baseline.Counts.FactsTotal, candidate.Counts.FactsTotal));
         rows.Add(Row("totals", "gapsTotal", baseline.Counts.GapsTotal, candidate.Counts.GapsTotal));
-        rows.AddRange(CompareMap("byRuleId", ApplyRenames(baseline.Counts.ByRuleId, migrationMap?.RuleIdRenames, r => r.FromRuleId, r => r.ToRuleId), candidate.Counts.ByRuleId));
-        rows.AddRange(CompareMap("byFactType", ApplyRenames(baseline.Counts.ByFactType, migrationMap?.FactTypeRenames, r => r.FromFactType, r => r.ToFactType), candidate.Counts.ByFactType));
+        rows.AddRange(CompareMap("byRuleId", ApplyRenames(baseline.Counts.ByRuleId, migrationMapApplies ? migrationMap?.RuleIdRenames : null, r => r.FromRuleId, r => r.ToRuleId), candidate.Counts.ByRuleId));
+        rows.AddRange(CompareMap("byFactType", ApplyRenames(baseline.Counts.ByFactType, migrationMapApplies ? migrationMap?.FactTypeRenames : null, r => r.FromFactType, r => r.ToFactType), candidate.Counts.ByFactType));
         rows.AddRange(CompareMap("byEvidenceTier", baseline.Counts.ByEvidenceTier, candidate.Counts.ByEvidenceTier));
         rows.AddRange(CompareMap("byExtractor", baseline.Counts.ByExtractor, candidate.Counts.ByExtractor));
         rows.AddRange(CompareMap("bySurface", baseline.Counts.BySurface, candidate.Counts.BySurface));
@@ -411,7 +420,7 @@ public static class LegacyBaselineArtifacts
             candidate.BaselineId,
             generatedAt,
             review.Count == 0 ? "ok" : "review-needed",
-            new LegacySchemaCompatibility(schemaCompatible ? "comparable" : "not-comparable", options.MigrationMapPath is null ? null : "provided"),
+            new LegacySchemaCompatibility(schemaCompatible ? "comparable" : "not-comparable", migrationMapApplies ? "provided" : options.MigrationMapPath is null ? null : "not-applicable"),
             new LegacyComparisonDimensions(
                 rows.Where(row => row.Dimension == "totals").OrderRows(),
                 rows.Where(row => row.Dimension == "byRuleId").OrderRows(),
@@ -540,7 +549,9 @@ public static class LegacyBaselineArtifacts
     private static async Task<IReadOnlyList<CodeFact>> ReadFactsAsync(string path, CancellationToken cancellationToken)
     {
         var facts = new List<CodeFact>();
-        foreach (var line in await File.ReadAllLinesAsync(path, cancellationToken))
+        await using var stream = File.OpenRead(path);
+        using var reader = new StreamReader(stream);
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
             if (string.IsNullOrWhiteSpace(line))
             {

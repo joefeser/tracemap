@@ -5,11 +5,11 @@
   "createdAt": "2026-06",
   "sample": {
     "label": "synthetic-alpha",
-    "identityKind": "neutral-label",
+    "identityKind": "public-repo-sha",
     "repoIdentityHash": null,
     "commitIdentity": {
-      "kind": "category-only",
-      "value": null
+      "kind": "public-sha",
+      "value": "3687102e563487be2acca2eaccd804d1947350fc"
     }
   },
   "safety": {

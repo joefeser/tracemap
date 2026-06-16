@@ -208,6 +208,48 @@ public sealed class LegacyBaselineArtifactsTests
     }
 
     [Fact]
+    public async Task Compare_requires_migration_map_to_match_manifest_schema_pair()
+    {
+        using var temp = new TempDirectory();
+        var baselineOut = Path.Combine(temp.Path, "baseline");
+        var candidateOut = Path.Combine(temp.Path, "candidate");
+        var comparisonOut = Path.Combine(temp.Path, ".tmp", "legacy-baselines", "comparisons", "schema-map");
+        var baseline = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            SyntheticScanPath(),
+            "synthetic-alpha",
+            "original-parser-snapshot",
+            baselineOut,
+            CreatedAt: new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero)));
+        Directory.CreateDirectory(candidateOut);
+        var candidate = baseline.Manifest with { BaselineId = "synthetic-alpha__candidate__2026-07" };
+        var candidatePath = Path.Combine(candidateOut, "baseline-manifest.json");
+        await File.WriteAllTextAsync(candidatePath, JsonSerializer.Serialize(candidate, JsonOptions) + "\n");
+        var migrationMapPath = Path.Combine(temp.Path, "migration-map.json");
+        await File.WriteAllTextAsync(migrationMapPath, """
+            {
+              "schemaVersion": "legacy-baseline-migration-map.v1",
+              "fromBaselineSchema": "legacy-baseline-manifest.v0",
+              "toCandidateSchema": "legacy-baseline-manifest.v1",
+              "ruleIdRenames": [],
+              "factTypeRenames": [],
+              "limitations": []
+            }
+            """);
+
+        var result = await LegacyBaselineArtifacts.CompareAsync(new LegacyBaselineCompareOptions(
+            Path.Combine(baselineOut, "baseline-manifest.json"),
+            candidatePath,
+            comparisonOut,
+            new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
+            migrationMapPath,
+            DryRun: true));
+
+        Assert.Equal("not-comparable", result.Comparison.SchemaCompatibility.Status);
+        Assert.Contains(result.Comparison.Dimensions.Coverage, row => row.Name == "schemaVersion" && row.Movement == "not-comparable");
+        Assert.Contains(result.Comparison.ReviewNeeded, item => item.Reason.Contains("Migration map schema pair", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Cli_baseline_create_dry_run_uses_normal_command_surface()
     {
         using var output = new StringWriter();
@@ -233,6 +275,18 @@ public sealed class LegacyBaselineArtifactsTests
         Assert.Equal(0, exitCode);
         Assert.Contains("Safety classification: public-safe", output.ToString());
         Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
+    public async Task Cli_rejects_baseline_only_flags_on_other_commands()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--dry-run"], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("Missing value for --dry-run.", error.ToString());
     }
 
     [Fact]
