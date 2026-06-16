@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap proof path index: public-demo routes organized by artifact type, rule ID, evidence tier, coverage label, proof path, limitation, and public status."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Proof Path Index | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/proof-paths/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Proof Path Index">
+    <meta
+      property="og:description"
+      content="A public-demo index of TraceMap proof surfaces and their static evidence boundaries."
+    >
+    <meta property="og:url" content="https://tracemap.tools/proof-paths/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Proof path index</p>
+        <h1>Find the public evidence trail before repeating the claim.</h1>
+        <p class="hero-subhead">
+          This index maps TraceMap public pages and demo sections to the static
+          evidence surfaces that support them: artifact type, rule ID or rule
+          family, evidence tier, coverage label, proof path, limitation, and
+          public status.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. Shared site principle: No public conclusion
+          without evidence. Page-level demo status and per-entry public status
+          are separate axes.
+        </p>
+        <nav class="hero-actions" aria-label="Proof path index links">
+          <a class="button primary" href="/demo/proof-upgrades/">Open proof ledger</a>
+          <a class="button secondary" href="/packets/">Read packet guide</a>
+          <a class="button secondary" href="/limitations/">Read limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">How to use it</p>
+          <h2>The same evidence row should answer four readers without changing the claim.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Managers</strong><span>Start with public status, coverage label, limitation, and the public-safe route that can be reviewed without raw scan internals.</span></div>
+          <div><strong>Reviewers</strong><span>Check the rule ID or rule family, evidence tier, coverage label, and proof path before approving wording.</span></div>
+          <div><strong>Engineers</strong><span>Follow the scripts, samples, generated summary fixture, and public reports that reproduce or support the row.</span></div>
+          <div><strong>Bots</strong><span>Use stable labels such as <code>demo</code>, <code>future</code>, <code>Tier2Structural</code>, <code>PartialAnalysis</code>, and route paths for link and claim checks.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Demo summary rows</p>
+          <h2>Rows transcribed from the checked-in public-safe demo summary fixture.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>toolchains</h3>
+            <p><strong>Supports:</strong> <a href="/demo/result/">Public Demo Result</a>, <a href="/demo/start-here/">Demo Walkthrough</a>.</p>
+            <p><strong>Artifact type:</strong> generated public-safe summary row from <code>demo-summary.json</code>.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>FullEvidenceAvailable</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="https://github.com/joefeser/tracemap/blob/main/site/src/_data/demo-public-summary.json">site/src/_data/demo-public-summary.json</a>.</p>
+            <p><strong>Limitation:</strong> Tool presence is prerequisite evidence only; it is not scan success, runtime proof, or deployment proof.</p>
+          </article>
+          <article>
+            <h3>build</h3>
+            <p><strong>Supports:</strong> <a href="/demo/result/">Public Demo Result</a>, <a href="/validation/">Validation</a>.</p>
+            <p><strong>Artifact type:</strong> generated public-safe summary row from <code>demo-summary.json</code>.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>FullEvidenceAvailable</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="https://github.com/joefeser/tracemap/blob/main/site/src/_data/demo-public-summary.json">site/src/_data/demo-public-summary.json</a> and <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">scripts/demo-public.sh</a>.</p>
+            <p><strong>Limitation:</strong> Demo build success does not prove release approval, production traffic, endpoint performance, or deployment state.</p>
+          </article>
+          <article>
+            <h3>sample-scans</h3>
+            <p><strong>Supports:</strong> <a href="/demo/result/">Public Demo Result</a>, <a href="/packets/">Evidence Packets</a>, <a href="/capabilities/">Capabilities</a>.</p>
+            <p><strong>Artifact type:</strong> generated scan summaries over checked-in public samples.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>PartialAnalysis</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="https://github.com/joefeser/tracemap/blob/main/site/src/_data/demo-public-summary.json">site/src/_data/demo-public-summary.json</a> and <a href="https://github.com/joefeser/tracemap/tree/main/samples">samples/</a>.</p>
+            <p><strong>Limitation:</strong> Raw <code>scan-manifest.json</code>, <code>facts.ndjson</code>, <code>index.sqlite</code>, <code>report.md</code>, and <code>logs/analyzer.log</code> stay local unless a future sanitized public sample explicitly checks them in.</p>
+          </article>
+          <article>
+            <h3>combine-and-dependency-report</h3>
+            <p><strong>Supports:</strong> <a href="/demo/proof-upgrades/">Demo Proof Upgrades</a>, <a href="/demo/proof-assets/">Demo Proof Assets</a>.</p>
+            <p><strong>Artifact type:</strong> combined dependency reports and public-safe summary row.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>PartialAnalysis</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="/demo/proof-upgrades/">/demo/proof-upgrades/</a> and <code>reports/dependency/**</code> names in the summary fixture.</p>
+            <p><strong>Limitation:</strong> Dependency reports are static evidence over public samples, not production dependency understanding or runtime reachability proof.</p>
+          </article>
+          <article>
+            <h3>paths-and-reverse</h3>
+            <p><strong>Supports:</strong> <a href="/demo/proof-upgrades/">Demo Proof Upgrades</a>, <a href="/use-cases/incident-review/">Incident Review Orientation</a>.</p>
+            <p><strong>Artifact type:</strong> path reports, reverse reports, and public-safe summary row.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>PartialAnalysis</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="/demo/proof-upgrades/">/demo/proof-upgrades/</a>, <code>reports/paths/**</code>, and <code>reports/reverse/**</code> names in the summary fixture.</p>
+            <p><strong>Limitation:</strong> Static paths are not runtime traces, runtime execution proof, production traffic proof, or incident-cause proof.</p>
+          </article>
+          <article>
+            <h3>portfolio</h3>
+            <p><strong>Supports:</strong> <a href="/demo/proof-upgrades/">Demo Proof Upgrades</a>, <a href="/capabilities/">Capabilities</a>.</p>
+            <p><strong>Artifact type:</strong> generated portfolio manifest and portfolio report family.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>PartialAnalysis</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="/demo/proof-upgrades/">/demo/proof-upgrades/</a>, <code>portfolio-manifest.json</code>, and <code>reports/portfolio/**</code> names in the summary fixture.</p>
+            <p><strong>Limitation:</strong> Portfolio rows summarize public demo inputs only; they do not imply parity across adapters, repositories, or production systems.</p>
+          </article>
+          <article>
+            <h3>diff</h3>
+            <p><strong>Supports:</strong> <a href="/demo/proof-upgrades/">Demo Proof Upgrades</a>, <a href="/examples/contract-impact/">Contract Impact Example</a>.</p>
+            <p><strong>Artifact type:</strong> before/after diff reports from public fixtures.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>PartialAnalysis</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="https://github.com/joefeser/tracemap/tree/main/samples/public-demo">samples/public-demo</a> and <code>reports/diff/**</code> names in the summary fixture.</p>
+            <p><strong>Limitation:</strong> Static diff rows are not OpenAPI completeness, runtime serializer mapping proof, traffic analysis, or deployment proof.</p>
+          </article>
+          <article>
+            <h3>impact</h3>
+            <p><strong>Supports:</strong> <a href="/demo/proof-upgrades/">Demo Proof Upgrades</a>, <a href="/examples/contract-impact/">Contract Impact Example</a>.</p>
+            <p><strong>Artifact type:</strong> static impact report derived from public demo diff output.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>PartialAnalysis</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="/demo/proof-upgrades/">/demo/proof-upgrades/</a> and <code>reports/impact/**</code> names in the summary fixture.</p>
+            <p><strong>Limitation:</strong> Impact rows route review under demo coverage; they do not prove full impact, release safety, or production behavior.</p>
+          </article>
+          <article>
+            <h3>release-review</h3>
+            <p><strong>Supports:</strong> <a href="/demo/proof-upgrades/">Demo Proof Upgrades</a>, <a href="/manager-packet/">Manager Packet</a>.</p>
+            <p><strong>Artifact type:</strong> release-review Markdown and JSON report family.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage:</strong> <code>PartialAnalysis</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="/demo/proof-upgrades/">/demo/proof-upgrades/</a> and <code>reports/release-review/**</code> names in the summary fixture.</p>
+            <p><strong>Limitation:</strong> The checklist is review orientation, not release approval, CI policy enforcement, runtime risk prediction, or operational safety proof.</p>
+          </article>
+          <article>
+            <h3>python and jvm optional rows</h3>
+            <p><strong>Supports:</strong> <a href="/demo/result/">Public Demo Result</a>, <a href="/capabilities/">Capabilities</a>.</p>
+            <p><strong>Artifact type:</strong> generated public-safe summary rows for optional adapter lanes.</p>
+            <p><strong>Rule:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier2Structural</code> or <code>Tier4Unknown</code>.</p>
+            <p><strong>Coverage:</strong> <code>not_requested</code> for Python, <code>unavailable</code> for JVM in the cited snapshot. <strong>Public status:</strong> <code>demo</code> with explicit gap labels.</p>
+            <p><strong>Proof path:</strong> <a href="https://github.com/joefeser/tracemap/blob/main/site/src/_data/demo-public-summary.json">site/src/_data/demo-public-summary.json</a>.</p>
+            <p><strong>Limitation:</strong> Optional or unavailable rows must not be restated as parity, absence, adapter success, or clean coverage.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Artifact vocabulary</p>
+          <h2>Public pages can name raw artifacts without publishing raw internals.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>scan-manifest.json</code><span>Local scan identity, repo and commit metadata, scanner versions, and coverage context. Public only when a sanitized sample explicitly checks it in.</span></div>
+          <div><code>facts.ndjson</code><span>Local fact stream with rule-backed evidence rows. Public pages may summarize counts and labels, not publish private raw facts.</span></div>
+          <div><code>index.sqlite</code><span>Local queryable index for symbols, endpoints, relationships, surfaces, paths, and gaps. Private SQLite files stay local-only.</span></div>
+          <div><code>report.md</code><span>Human-readable scan report. Public-safe only when generated from public samples and reviewed for raw values.</span></div>
+          <div><code>logs/analyzer.log</code><span>Local diagnostic log for extraction and coverage troubleshooting. It is not public discovery content.</span></div>
+          <div><code>demo-summary.md</code><span>Public-safe generated summary with statuses, rule IDs, evidence tiers, coverage labels, counts, and reasons.</span></div>
+          <div><code>demo-summary.json</code><span>Machine-readable public-safe summary fixture used by demo pages and validation checks.</span></div>
+          <div><code>reports/**/*.md</code><span>Public-safe report families only when produced from public samples and scrubbed by generated-output checks.</span></div>
+          <div><code>sitemap metadata</code><span>This standalone route is included in <code>site/src/_site/pages.json</code>; discovery metadata remains a route index, not proof by itself.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Public route surfaces</p>
+          <h2>Orientation pages can help readers find proof without becoming proof.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Evidence model</h3>
+            <p><strong>Supports:</strong> tier and rule vocabulary across the site.</p>
+            <p><strong>Artifact type:</strong> public route and repository rule catalog.</p>
+            <p><strong>Rule family:</strong> evidence tier and rule catalog documentation. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage label:</strong> no generated scan coverage label; cited route metadata uses <code>publicClaimLevel: demo</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="/evidence/">/evidence/</a> and <a href="https://github.com/joefeser/tracemap/blob/main/rules/rule-catalog.yml">rules/rule-catalog.yml</a>.</p>
+            <p><strong>Limitation:</strong> Vocabulary pages explain how evidence is labeled; they do not assert a particular repository finding.</p>
+          </article>
+          <article>
+            <h3>Outputs</h3>
+            <p><strong>Supports:</strong> artifact boundary for scanner outputs and public-safe summaries.</p>
+            <p><strong>Artifact type:</strong> public route over output families.</p>
+            <p><strong>Rule family:</strong> artifact safety and scan-output contract. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage label:</strong> no generated scan coverage label; cited route metadata uses <code>publicClaimLevel: demo</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="/outputs/">/outputs/</a>, <a href="/demo/result/">/demo/result/</a>, and <a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">docs/ACCEPTANCE.md</a>.</p>
+            <p><strong>Limitation:</strong> Artifact names are not evidence rows; inspect generated summaries, reports, rules, coverage, and limitations.</p>
+          </article>
+          <article>
+            <h3>Packets and manager packet</h3>
+            <p><strong>Supports:</strong> human handoff over public-safe summaries and limitations.</p>
+            <p><strong>Artifact type:</strong> public route pair and generated demo summary references.</p>
+            <p><strong>Rule family:</strong> packet framing and public-safe summary rules. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage label:</strong> no generated scan coverage label; cited route metadata uses <code>publicClaimLevel: demo</code>. <strong>Public status:</strong> <code>demo</code>.</p>
+            <p><strong>Proof path:</strong> <a href="/packets/">/packets/</a>, <a href="/manager-packet/">/manager-packet/</a>, and <a href="/demo/proof-upgrades/">/demo/proof-upgrades/</a>.</p>
+            <p><strong>Limitation:</strong> Packet copy is an orientation layer and cannot approve releases or hide reduced coverage.</p>
+          </article>
+          <article>
+            <h3>Capabilities and roadmap</h3>
+            <p><strong>Supports:</strong> status labels such as main, demo, concept, future, and hidden.</p>
+            <p><strong>Artifact type:</strong> public status routes and source docs.</p>
+            <p><strong>Rule family:</strong> public claim gate and capability status. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage label:</strong> no generated scan coverage label for the route map; cited route metadata uses <code>publicClaimLevel: demo</code> and future rows remain <code>future</code>. <strong>Public status:</strong> <code>demo</code> or <code>future</code> per row.</p>
+            <p><strong>Proof path:</strong> <a href="/capabilities/">/capabilities/</a>, <a href="/roadmap/">/roadmap/</a>, and <a href="/limitations/">/limitations/</a>.</p>
+            <p><strong>Limitation:</strong> Future or concept wording must not be promoted into available capability until public-safe evidence exists on main.</p>
+          </article>
+          <article>
+            <h3>Docs and validation</h3>
+            <p><strong>Supports:</strong> validation, acceptance, and adapter-contract references.</p>
+            <p><strong>Artifact type:</strong> public route plus repository docs.</p>
+            <p><strong>Rule family:</strong> validation and acceptance documentation. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage label:</strong> no generated scan coverage label; cited route metadata uses <code>publicClaimLevel: demo</code> and repository docs are <code>main</code> source material. <strong>Public status:</strong> <code>demo</code> for this public route.</p>
+            <p><strong>Proof path:</strong> <a href="/docs/">/docs/</a>, <a href="/validation/">/validation/</a>, and <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">docs/VALIDATION.md</a>.</p>
+            <p><strong>Limitation:</strong> Validation routes list checks and expectations; they do not prove external CI success or deployment state.</p>
+          </article>
+          <article>
+            <h3>Incident review orientation</h3>
+            <p><strong>Supports:</strong> bounded use-case discovery for incident-adjacent code review.</p>
+            <p><strong>Artifact type:</strong> public concept route linked to demo proof rows.</p>
+            <p><strong>Rule family:</strong> static path and packet orientation. <strong>Tier:</strong> <code>Tier2Structural</code>.</p>
+            <p><strong>Coverage label:</strong> no generated scan coverage label; cited route metadata uses <code>publicClaimLevel: concept</code>. <strong>Public status:</strong> <code>future</code> until stronger public-safe proof exists.</p>
+            <p><strong>Proof path:</strong> <a href="/use-cases/incident-review/">/use-cases/incident-review/</a>, <a href="/demo/proof-assets/">/demo/proof-assets/</a>, and <a href="/limitations/">/limitations/</a>.</p>
+            <p><strong>Limitation:</strong> This route does not claim P1 root cause, runtime behavior, production traffic, endpoint performance, or release safety.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The index keeps the no-claims visible.</h2>
+        </div>
+        <ul>
+          <li>No runtime proof, production traffic proof, endpoint performance proof, deployment state proof, release safety proof, or release approval proof.</li>
+          <li>No AI impact analysis, LLM calls, embeddings, vector databases, or prompt-based classification in TraceMap core scanner or reducer claims.</li>
+          <li>No raw facts, SQLite files, analyzer logs, source snippets, raw SQL, config values, secrets, local absolute paths, raw repository remotes, generated scan directories, or private sample identities.</li>
+          <li>No parity claim across language adapters, workflows, samples, or report types unless the cited public-demo evidence supports that specific row.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Source material</p>
+          <h2>Follow the index into existing public-safe surfaces.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/demo/">Public demo</a>
+          <a href="/demo/result/">Current demo result</a>
+          <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+          <a href="/demo/proof-assets/">Demo proof assets</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/roadmap/">Public roadmap</a>
+          <a href="/docs/">Docs map</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/evidence/">Evidence model</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        The proof path index connects the
+        <a href="/demo/proof-upgrades/">demo proof ledger</a>,
+        <a href="/packets/">packet guide</a>,
+        <a href="/capabilities/">capability matrix</a>,
+        and
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
