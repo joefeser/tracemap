@@ -302,6 +302,101 @@ rules:
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
 
+  - id: legacy.flow.input-availability.v1
+    name: Legacy flow input availability
+    description: Records whether legacy flow composition could read expected WebForms, API, WCF, HTTP, SQL, legacy data, call graph, parameter-forwarding, coverage, and analysis-gap evidence from an index.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy flow availability gap
+      - SchemaMissing gap
+      - ExtractorUnavailable gap
+    limitations:
+      - Availability rows describe static index contents only; they do not prove that missing evidence is absent from the repository.
+      - Older indexes and disabled extractors produce explicit gaps that cap absence claims.
+      - Missing optional parameter-forwarding or legacy data metadata evidence must not be interpreted as clean absence of value or data paths.
+
+  - id: legacy.flow.root-selection.v1
+    name: Legacy flow static root selection
+    description: Selects static legacy roots from WebForms handler resolution, supported event binding, approved auto-wireup lifecycle evidence, HTTP/API route evidence, and service facts.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - legacy flow root node
+      - UnresolvedRoot gap
+      - NoRootsFound gap
+    limitations:
+      - WebForms event and lifecycle roots are static declarations and do not prove user action, page lifecycle execution, postback state, event bubbling, deployment, authorization, or production use.
+      - Name-only, syntax-only, ambiguous, missing code-behind, missing designer, and generated-code-limited roots remain review-tier or gap evidence.
+      - Arbitrary method names, raw markup strings, and unsupported event-like text are not roots without rule-backed entry-point facts.
+
+  - id: legacy.flow.static-traversal.v1
+    name: Legacy flow static traversal
+    description: Assembles bounded deterministic paths from selected roots through existing call, creation, symbol relationship, WCF/service-reference, HTTP, SQL/query, legacy data, dependency-surface, and optional parameter-forward evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - legacy static flow path
+      - traversal truncation gap
+    limitations:
+      - Composed paths are static evidence, not runtime execution proof, reachability proof, production traffic, service deployment, branch feasibility, user behavior, or permission proof.
+      - Call edges may miss reflection, dynamic dispatch, delegates, runtime DI, partial methods, generated code, serializer behavior, event bubbling, collection contents, and branch-dependent behavior.
+      - WCF operation nodes are terminals in v1; traversal does not continue through service-side implementation or downstream service-side evidence.
+      - Traversal is bounded by depth, path, and frontier limits; truncated output is partial.
+
+  - id: legacy.flow.parameter-forward-unavailable.v1
+    name: Legacy flow parameter-forwarding availability gap
+    description: Records that optional parameter-forwarding evidence is unavailable because the index schema predates it or the feature was not enabled.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ParameterForwardEvidenceUnavailable gap
+    limitations:
+      - Missing parameter-forwarding evidence caps value-flow conclusions and does not prove that values are not forwarded.
+      - Paths assembled without parameter-forwarding evidence use only available call, object, symbol, and fact evidence.
+
+  - id: legacy.flow.classification.v1
+    name: Legacy flow conservative classification
+    description: Assigns StrongStaticPath, ProbableStaticPath, NeedsReviewStaticPath, NoBackendEvidence, ReducedCoverage, or AnalysisGap based on the weakest required evidence tier, coverage, ambiguity, high fan-out, and terminal evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - legacy flow classification
+    limitations:
+      - Syntax-only, name-only, ambiguous, generated-code-uncertain, high fan-out, or partial-terminal evidence cannot produce StrongStaticPath.
+      - Reduced coverage and missing extractors produce ReducedCoverage or AnalysisGap rather than clean absence.
+      - The v1 high fan-out threshold is five or more inbound candidate paths from distinct roots to one terminal identity, or generic ambiguous terminal keys such as status, id, name, value, result, or response. This conservative placeholder requires calibration against redacted legacy validation data, including false-positive and false-negative metrics by terminal kind.
+
+  - id: legacy.flow.gap-propagation.v1
+    name: Legacy flow gap propagation
+    description: Propagates schema, extractor, coverage, cross-source stitching, unresolved-root, cycle, and terminal-evidence gaps into legacy flow results.
+    evidenceTier: Tier4Unknown
+    emits:
+      - legacy flow analysis gap
+      - CrossSourceStitchingUnavailable gap
+      - CycleDetected gap
+    limitations:
+      - A propagated gap means the static composition cannot prove or disprove a path under available evidence.
+      - Cross-source traversal is allowed only through explicit persisted endpoint or dependency alignment evidence.
+      - Cycle pruning and bounded traversal preserve termination but may omit possible static paths.
+
+  - id: legacy.flow.redaction.v1
+    name: Legacy flow report redaction
+    description: Hashes or omits unsafe display values in legacy flow Markdown and JSON outputs while preserving source fact IDs, rule IDs, tiers, and safe spans.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy flow redaction note
+    limitations:
+      - Raw local absolute paths, private repository names, raw remotes, URLs, WSDL or SOAP addresses, raw SQL, config values, connection strings, source snippets, and secret-looking values are omitted or replaced with stable hashes.
+      - Redaction can reduce readability and does not change the underlying evidence tier or classification.
+
+  - id: legacy.flow.report.v1
+    name: Legacy static flow report
+    description: Writes deterministic versioned legacy-flow Markdown and JSON reports from static composed evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - legacy-flow.v1 JSON report
+      - legacy static flow Markdown report
+    limitations:
+      - Reports describe possible static paths and no-backend-evidence findings under available coverage only; absence is not proven.
+      - Reports do not prove runtime execution, guaranteed backend reachability, SQL execution, database existence, service deployment, production dependency, or impact.
+      - JSON schema version legacy-flow.v1 preserves stable property names; future breaking changes require a new schema version.
+
   - id: snapshot.diff.source.v1
     name: Snapshot diff source comparison
     description: Compares source inventory and source metadata between two TraceMap snapshots by exact source label and stable source identity metadata.

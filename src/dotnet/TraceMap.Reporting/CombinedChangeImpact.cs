@@ -572,18 +572,17 @@ public static class CombinedChangeImpactReporter
         {
             var report = await CombinedDependencyPathReporter.BuildReportAsync(
                 new CombinedDependencyPathOptions(
-                    indexPath,
-                    options.OutputPath,
-                    "json",
-                    selector.FromEndpoint,
-                    selector.FromSymbol,
-                    selector.FromSource,
-                    selector.ToSurface,
-                    selector.SurfaceName,
-                    null,
-                    options.MaxDepth,
-                    options.MaxPathsPerItem,
-                    options.MaxFrontier),
+                    IndexPath: indexPath,
+                    OutputPath: options.OutputPath,
+                    Format: "json",
+                    FromEndpoint: selector.FromEndpoint,
+                    FromSymbol: selector.FromSymbol,
+                    FromSource: selector.FromSource,
+                    ToSurface: selector.ToSurface,
+                    SurfaceName: selector.SurfaceName,
+                    MaxDepth: options.MaxDepth,
+                    MaxPaths: options.MaxPathsPerItem,
+                    MaxFrontier: options.MaxFrontier),
                 cancellationToken);
             return new PathContextQueryResult(report.Paths, report.Gaps, report.ReportCoverage);
         }

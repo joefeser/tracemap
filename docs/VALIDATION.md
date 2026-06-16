@@ -218,6 +218,22 @@ grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out
 
 WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 
+## Legacy Static Flow Reporting Smoke
+
+When changing `tracemap paths --include-legacy-roots`, legacy flow classification, WCF operation terminal handling, legacy data metadata terminal handling, path output redaction, or related path selectors, run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln --filter LegacyFlowCompositionTests
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Focused fixtures should cover WebForms event roots, WebForms lifecycle roots, direct handler-to-service paths, WCF service-reference paths with `wcf-operation` terminals, SQL/query terminals, legacy data metadata terminals when available, reduced coverage, missing extractor availability, selector no-match and classification-filter gaps, truncation, deterministic JSON, and privacy suppression.
+
+Legacy static flow reports use `legacy-flow.v1` schema metadata and must phrase results as static evidence or possible static paths. They must not claim runtime execution, guaranteed backend reachability, SQL execution, database existence, production dependency, or impact. Generated Markdown and JSON must omit or hash local absolute paths, raw remotes, private labels, raw SQL, WSDL/SOAP/endpoint URLs, connection strings, config values, source snippets, and secret-looking values.
+
 ## Legacy Data Metadata Smoke
 
 When changing DBML, EDMX, typed DataSet/TableAdapter, legacy data config, generated data-code linkage, XML parser safety, or safe identifier redaction, run:
