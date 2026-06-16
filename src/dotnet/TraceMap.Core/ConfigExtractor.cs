@@ -40,11 +40,8 @@ public static class ConfigExtractor
                     new EvidenceSpan(file.RelativePath, 1, 1, null, "ConfigExtractor", ScannerVersions.ConfigExtractor),
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["classification"] = ex.FailureKind == SafeXmlFailureKind.SecurityRejected
-                            ? "LegacyDataParserSecurityRejected"
-                            : ex.FailureKind == SafeXmlFailureKind.TooLarge
-                                ? "LegacyDataMetadataTooLarge"
-                                : "MalformedLegacyDataMetadata",
+                        ["classification"] = ConfigClassification(ex),
+                        ["coverage"] = "reduced",
                         ["message"] = "Unable to parse config file with safe XML settings."
                     }));
             }
@@ -64,6 +61,16 @@ public static class ConfigExtractor
         }
 
         return facts;
+    }
+
+    private static string ConfigClassification(SafeXmlException ex)
+    {
+        return ex.FailureKind switch
+        {
+            SafeXmlFailureKind.SecurityRejected => "ConfigParserSecurityRejected",
+            SafeXmlFailureKind.TooLarge => "ConfigFileTooLarge",
+            _ => "MalformedConfigFile"
+        };
     }
 
     private static void AddJsonConfigFacts(ScanManifest manifest, List<CodeFact> facts, string relativePath, string text)
