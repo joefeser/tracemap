@@ -1,0 +1,227 @@
+{
+  "schemaVersion": "legacy-baseline-manifest.v1",
+  "baselineId": "synthetic-alpha__original-parser-snapshot__2026-06",
+  "baselinePurpose": "original-parser-snapshot",
+  "createdAt": "2026-06",
+  "sample": {
+    "label": "synthetic-alpha",
+    "identityKind": "private-category-only",
+    "commitIdentity": {
+      "kind": "omitted-private"
+    }
+  },
+  "safety": {
+    "classification": "public-safe",
+    "redactionProfile": "counts-only",
+    "rejectedReasons": [],
+    "limitations": [
+      "Baseline summaries are counts-only and omit raw facts, paths, snippets, SQL, config values, remotes, and analyzer output."
+    ]
+  },
+  "scan": {
+    "traceMapVersion": "test-fixture",
+    "scanStartedAt": "2026-06",
+    "coverageLabel": "Level1SemanticAnalysisReduced",
+    "buildStatus": "FailedOrPartial",
+    "scanStatus": "completed-partial",
+    "partial": true,
+    "truncated": false,
+    "timeout": false,
+    "deferred": false
+  },
+  "extractors": {
+    "csharp.semantic": {
+      "version": "1.0.0"
+    },
+    "legacy.webforms": {
+      "version": "1.1.0"
+    },
+    "project.file": {
+      "version": "1.0.0"
+    }
+  },
+  "counts": {
+    "factsTotal": 4,
+    "gapsTotal": 1,
+    "byFactType": {
+      "AnalysisGap": 1,
+      "MethodDeclared": 1,
+      "PackageReferenced": 1,
+      "WebFormsEventBindingDeclared": 1
+    },
+    "byRuleId": {
+      "csharp.semantic.declarations.v1": 1,
+      "csharp.semantic.workspace.v1": 1,
+      "legacy.webforms.event-binding.v1": 1,
+      "project.file.v1": 1
+    },
+    "byEvidenceTier": {
+      "Tier1Semantic": 1,
+      "Tier2Structural": 2,
+      "Tier4Unknown": 1
+    },
+    "byExtractor": {
+      "csharp.semantic": 2,
+      "legacy.webforms": 1,
+      "project.file": 1
+    },
+    "bySurface": {
+      "csharp": 2,
+      "packages": 1,
+      "ui-events": 1
+    },
+    "byKnownGap": {
+      "LegacyProjectLoadFailed": 1
+    }
+  },
+  "coverage": {
+    "semanticFacts": 1,
+    "structuralFacts": 2,
+    "syntaxOrTextualFacts": 0,
+    "unknownOrGapFacts": 1
+  },
+  "ruleCoverage": [
+    {
+      "ruleId": "csharp.semantic.declarations.v1",
+      "count": 1,
+      "evidenceTiers": {
+        "Tier1Semantic": 1
+      },
+      "extractors": {
+        "csharp.semantic": "1.0.0"
+      },
+      "limitations": [
+        "Semantic evidence depends on successful compiler/project loading."
+      ]
+    },
+    {
+      "ruleId": "csharp.semantic.workspace.v1",
+      "count": 1,
+      "evidenceTiers": {
+        "Tier4Unknown": 1
+      },
+      "extractors": {
+        "csharp.semantic": "1.0.0"
+      },
+      "limitations": [
+        "Semantic evidence depends on successful compiler/project loading."
+      ]
+    },
+    {
+      "ruleId": "legacy.webforms.event-binding.v1",
+      "count": 1,
+      "evidenceTiers": {
+        "Tier2Structural": 1
+      },
+      "extractors": {
+        "legacy.webforms": "1.1.0"
+      },
+      "limitations": [
+        "Legacy static evidence does not prove runtime execution or deployment."
+      ]
+    },
+    {
+      "ruleId": "project.file.v1",
+      "count": 1,
+      "evidenceTiers": {
+        "Tier2Structural": 1
+      },
+      "extractors": {
+        "project.file": "1.0.0"
+      },
+      "limitations": []
+    }
+  ],
+  "factCoverage": [
+    {
+      "factType": "AnalysisGap",
+      "count": 1,
+      "evidenceTiers": {
+        "Tier4Unknown": 1
+      },
+      "ruleIds": [
+        "csharp.semantic.workspace.v1"
+      ]
+    },
+    {
+      "factType": "MethodDeclared",
+      "count": 1,
+      "evidenceTiers": {
+        "Tier1Semantic": 1
+      },
+      "ruleIds": [
+        "csharp.semantic.declarations.v1"
+      ]
+    },
+    {
+      "factType": "PackageReferenced",
+      "count": 1,
+      "evidenceTiers": {
+        "Tier2Structural": 1
+      },
+      "ruleIds": [
+        "project.file.v1"
+      ]
+    },
+    {
+      "factType": "WebFormsEventBindingDeclared",
+      "count": 1,
+      "evidenceTiers": {
+        "Tier2Structural": 1
+      },
+      "ruleIds": [
+        "legacy.webforms.event-binding.v1"
+      ]
+    }
+  ],
+  "surfaces": {
+    "build-environment": "not-observed",
+    "config": "not-in-scope",
+    "csharp": "observed",
+    "http": "not-in-scope",
+    "other": "not-in-scope",
+    "packages": "observed",
+    "sql-data": "not-in-scope",
+    "ui-events": "observed",
+    "wcf-service-reference": "not-in-scope"
+  },
+  "artifacts": {
+    "analyzerLog": {
+      "present": true,
+      "sizeBucket": "small"
+    },
+    "baselineSummary": {
+      "present": true,
+      "sizeBucket": "small",
+      "hash": "sha256:11d171b0302d493293b3d0a33ce2a312f8f4cab8258ea498666df7965c441a87"
+    },
+    "facts": {
+      "present": true,
+      "sizeBucket": "small"
+    },
+    "index": {
+      "present": false,
+      "sizeBucket": "missing"
+    },
+    "report": {
+      "present": true,
+      "sizeBucket": "small"
+    },
+    "scanManifest": {
+      "present": true,
+      "sizeBucket": "small"
+    }
+  },
+  "knownGaps": [
+    "LegacyProjectLoadFailed",
+    "SyntaxFallbackUsed"
+  ],
+  "limitations": [
+    "Baseline manifests preserve aggregate static evidence counts only and do not store raw scan artifacts.",
+    "Build or project load did not fully succeed; baseline coverage is partial.",
+    "Comparisons describe count and coverage movement only; they do not prove runtime behavior.",
+    "Known gap preserved as category \u0060LegacyProjectLoadFailed\u0060.",
+    "Known gap preserved as category \u0060SyntaxFallbackUsed\u0060.",
+    "Reduced or unknown evidence tiers are preserved separately from semantic evidence."
+  ]
+}
