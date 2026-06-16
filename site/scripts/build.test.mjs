@@ -25,6 +25,9 @@ test("buildSite publishes generated blog pages and keeps private blog folders ou
   const post = await readFile(join(root, "dist", "blog", "first-post", "index.html"), "utf8");
   const headers = await readFile(join(root, "dist", "_headers"), "utf8");
   const sitemap = await readFile(join(root, "dist", "sitemap.xml"), "utf8");
+  const llms = await readFile(join(root, "dist", "llms.txt"), "utf8");
+  const docsIndex = await readFile(join(root, "dist", "docs-index.json"), "utf8");
+  const routesIndex = await readFile(join(root, "dist", "routes-index.json"), "utf8");
 
   assert.match(index, /href="\/blog\/first-post\/"/);
   assert.match(index, /href="\/capabilities\/">Capabilities<\/a>/);
@@ -36,9 +39,14 @@ test("buildSite publishes generated blog pages and keeps private blog folders ou
   assert.match(headers, /cache-control: public/);
   assert.match(sitemap, /<loc>https:\/\/tracemap\.tools\/<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/tracemap\.tools\/blog\/first-post\/<\/loc>/);
+  assert.doesNotMatch(sitemap, /llms\.txt|docs-index\.json|routes-index\.json/);
+  assert.match(llms, /## Non-Claims/);
+  assert.deepEqual(JSON.parse(docsIndex).entries, []);
+  assert.equal(JSON.parse(routesIndex).entries[0].path, "/");
   await assert.rejects(stat(join(root, "dist", "_blog")), /ENOENT/);
   await assert.rejects(stat(join(root, "dist", "_site")), /ENOENT/);
   await assert.rejects(stat(join(root, "dist", "_data", "demo-public-summary.json")), /ENOENT/);
+  await assert.rejects(stat(join(root, "dist", "discovery.json")), /ENOENT/);
 });
 
 test("buildSite replaces source headers with additional attributes and class order changes", async () => {
@@ -196,6 +204,7 @@ async function createSiteFixture({
 
   if (!skipSiteMetadata) {
     await writeFile(join(siteData, "pages.json"), JSON.stringify(sitePages, null, 2), "utf8");
+    await writeFile(join(siteData, "discovery.json"), JSON.stringify([discoveryPage("/")], null, 2), "utf8");
   }
 
   for (const [slug, body] of Object.entries(bodies)) {
@@ -203,6 +212,19 @@ async function createSiteFixture({
   }
 
   return root;
+}
+
+function discoveryPage(path) {
+  return {
+    path,
+    title: "Fixture Page",
+    summary: "Fixture route for deterministic static evidence validation.",
+    publicClaimLevel: "demo",
+    sourceType: "site-page",
+    hintCategory: "start",
+    limitations: ["Fixture limitations remain bounded."],
+    nonClaims: ["No runtime behavior or production usage proof."]
+  };
 }
 
 function article(slug) {

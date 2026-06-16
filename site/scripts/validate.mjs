@@ -3,6 +3,11 @@ import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
+import {
+  validateDiscoveryDist,
+  validateDiscoveryNotInSitemap,
+  validateRobotsDiscoveryComment
+} from "./discovery.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -34,6 +39,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
   await validateRequiredFile(robotsPath, "robots.txt", errors);
 
   const sitemapUrls = await readSitemapUrls(sitemapPath, errors);
+  validateDiscoveryNotInSitemap({ errors, sitemapUrls });
   if (normalizedBaseUrl) {
     await validateSitemapUrls({ baseUrl: normalizedBaseUrl, dist, errors, sitemapUrls });
   }
@@ -49,6 +55,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
 
   if (normalizedBaseUrl) {
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
+    await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
   await validateTopNavigation({ dist, errors, htmlFiles });
@@ -170,6 +177,8 @@ async function validateRobotsSitemap({ baseUrl, errors, robotsPath }) {
   if (!robots.split(/\r?\n/).some((line) => line.trim() === expected)) {
     errors.push(`robots.txt must include "${expected}".`);
   }
+
+  validateRobotsDiscoveryComment({ baseUrl, errors, robots });
 }
 
 async function validateTopNavigation({ dist, errors, htmlFiles }) {
