@@ -240,7 +240,7 @@ public static class TraceMapCommand
 
     private static async Task<int> RunPathsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        var values = ParseOptions(args);
+        var values = ParseOptions(args, "--include-legacy-roots");
         if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
         {
             await error.WriteLineAsync("error: paths requires --index <combined.sqlite>.");
@@ -800,7 +800,7 @@ public static class TraceMapCommand
         }
 
         var subcommand = args[0].ToLowerInvariant();
-        var values = ParseOptions(args.Skip(1).ToArray());
+        var values = ParseOptions(args.Skip(1).ToArray(), "--dry-run", "--public-source");
         switch (subcommand)
         {
             case "create":
@@ -1120,7 +1120,7 @@ public static class TraceMapCommand
         await File.WriteAllLinesAsync(path, lines, cancellationToken);
     }
 
-    private static ParsedOptions ParseOptions(string[] args)
+    private static ParsedOptions ParseOptions(string[] args, params string[] additionalFlags)
     {
         var values = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var flags = new HashSet<string>(StringComparer.Ordinal);
@@ -1132,7 +1132,8 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-legacy-roots" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--dry-run" or "--public-source")
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review"
+                || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
                 continue;
@@ -1169,6 +1170,26 @@ public static class TraceMapCommand
         }
 
         throw new ArgumentException($"{key} must be a positive integer.");
+    }
+
+    private static DateTimeOffset? ParseOptionalDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (DateTimeOffset.TryParse(value, out var parsed))
+        {
+            return parsed;
+        }
+
+        if (DateTime.TryParse($"{value}-01", out var date))
+        {
+            return new DateTimeOffset(DateTime.SpecifyKind(date, DateTimeKind.Utc));
+        }
+
+        throw new ArgumentException("Date values must be full dates or year-month values.");
     }
 
     private static bool IsHelp(string arg)

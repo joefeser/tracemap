@@ -30,7 +30,7 @@ public static class ConfigExtractor
                     AddPackagesConfigFacts(manifest, facts, file.RelativePath, fullPath);
                 }
             }
-            catch (LegacyDataXmlException ex)
+            catch (SafeXmlException ex)
             {
                 facts.Add(FactFactory.Create(
                     manifest,
@@ -40,8 +40,9 @@ public static class ConfigExtractor
                     new EvidenceSpan(file.RelativePath, 1, 1, null, "ConfigExtractor", ScannerVersions.ConfigExtractor),
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["classification"] = ex.Classification,
-                        ["message"] = "Unable to parse config file safely."
+                        ["classification"] = ConfigClassification(ex),
+                        ["coverage"] = "reduced",
+                        ["message"] = "Unable to parse config file with safe XML settings."
                     }));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or XmlException)
@@ -60,6 +61,16 @@ public static class ConfigExtractor
         }
 
         return facts;
+    }
+
+    private static string ConfigClassification(SafeXmlException ex)
+    {
+        return ex.FailureKind switch
+        {
+            SafeXmlFailureKind.SecurityRejected => "ConfigParserSecurityRejected",
+            SafeXmlFailureKind.TooLarge => "ConfigFileTooLarge",
+            _ => "MalformedConfigFile"
+        };
     }
 
     private static void AddJsonConfigFacts(ScanManifest manifest, List<CodeFact> facts, string relativePath, string text)
@@ -215,7 +226,7 @@ public static class ConfigExtractor
 
     private static void AddXmlConfigFacts(ScanManifest manifest, List<CodeFact> facts, string relativePath, string fullPath)
     {
-        var document = LegacyDataXml.Load(fullPath).Document;
+        var document = SafeXml.LoadDocument(fullPath);
         foreach (var add in document.Descendants()
             .Where(element => element.Name.LocalName == "add")
             .OrderBy(GetLine)
@@ -275,7 +286,7 @@ public static class ConfigExtractor
 
     private static void AddPackagesConfigFacts(ScanManifest manifest, List<CodeFact> facts, string relativePath, string fullPath)
     {
-        var document = LegacyDataXml.Load(fullPath).Document;
+        var document = SafeXml.LoadDocument(fullPath);
         foreach (var package in document.Descendants()
             .Where(element => element.Name.LocalName == "package")
             .OrderBy(GetLine)

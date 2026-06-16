@@ -1,65 +1,78 @@
-# Implementation State
+# Legacy WCF Service Reference Mapping Implementation State
 
-Status: implemented
-Branch: codex/legacy-codebase-validation-impl
+Status: ready-for-implementation
+Branch: codex/legacy-wcf-service-reference-mapping
 Public claim level: hidden
 
-## Summary
+## Why This Spec Exists
 
-TraceMap can currently scan very old .NET codebases with reduced coverage and
-extract useful click-handler, call-edge, SQL/config/database, and HTTP evidence.
-The missing layer is old WCF/service-reference mapping: generated service
-clients, `system.serviceModel` endpoint config, `[ServiceContract]`,
-`[OperationContract]`, `.svc` hosts, and probable operation-to-implementation
-links.
+TraceMap can already preserve useful legacy evidence for UI entry points,
+call/object edges, SQL/config/database surfaces, legacy data metadata planning,
+and flow composition planning. The next missing static layer is old WCF and
+service-reference metadata: generated service clients, `system.serviceModel`
+endpoint config, `[ServiceContract]`, `[OperationContract]`, `.svc` hosts,
+ASMX host declarations, and probable operation-to-implementation links.
+
+This spec is intended as the next implementation runway after
+`legacy-data-metadata-extraction` and `legacy-flow-composition-reporting`. It is
+spec-only and does not implement scanner, reducer, reporting, rule catalog, or
+CLI code.
 
 ## Scope Decisions
 
-- Keep this deterministic and static only.
-- Do not fetch WSDL or call endpoints.
-- Store hashes for addresses and config values.
-- Prefer explicit ambiguity gaps over arbitrary backend selection.
-- Keep the current baseline hidden and label-only.
+- Keep the feature deterministic and static only.
+- Do not fetch WSDL, call endpoints, activate services, probe networks, connect
+  to databases, or evaluate config transforms.
+- Store hashes for endpoint addresses and unsafe config values; do not render
+  raw values in committed artifacts.
+- Prefer explicit ambiguity and analysis gaps over arbitrary backend selection.
+- Preserve syntax fallback when semantic/MSBuild project load fails.
+- Treat WCF/service-reference mappings as probable static evidence, not runtime
+  reachability or deployment proof.
+- Keep public claim level hidden until redacted validation artifacts or checked-in
+  public fixtures justify promotion.
 
-## Validation Baseline
+## Imported Baseline
 
-Use `baseline-current-parser.md` as the safe pre-implementation snapshot.
+`baseline-current-parser.md` was imported with this packet as a safe
+pre-implementation snapshot. It is label-only and intentionally omits local
+absolute paths, private repository names, raw remotes, raw endpoint addresses,
+raw config values, raw SQL, source snippets, and secrets.
 
-## Implementation Notes
+Future implementation should compare against this baseline using counts, rule
+IDs, evidence tiers, coverage labels, and limitations rather than raw artifacts.
 
-- Added `LegacyWcfExtractor` in `TraceMap.Core`.
-- Added inventory support for `.svc` and `.asmx` service host files.
-- Added WCF config endpoint, service contract, operation contract, generated
-  client, service host, and probable mapping fact types.
-- Added explicit ambiguity gaps for multiple static mapping candidates.
-- Added WCF rule IDs and limitations to `rules/rule-catalog.yml`.
-- Added focused tests for extraction, address redaction, mapping, and malformed
-  host gaps.
-- Updated the legacy validation summary to include WCF fact counts.
-- After Opus/Sonnet review, tightened generated-client detection to require
-  WCF `ClientBase`-style inheritance, removed short-name-only contract matching,
-  suppressed normal mapping facts when endpoint/host/operation ambiguity exists,
-  and added ASMX `Class` attribute support.
+## Validation Expectations
 
-## Post-Implementation Local Validation
+Spec-only delivery validation:
 
-Against the label-only `legacy-winforms-app` sample, the implementation produced:
+```bash
+git diff --check
+./scripts/check-private-paths.sh
+```
 
-| Fact type | Count |
-| --- | ---: |
-| `WcfClientEndpointDeclared` | 7 |
-| `WcfGeneratedClientDeclared` | 24 |
-| `WcfOperationContractDeclared` | 18 |
-| `WcfServiceContractDeclared` | 8 |
-| `WcfServiceHostDeclared` | 9 |
-| `WcfServiceReferenceMapping` | 9 |
+Implementation validation, once product code is changed:
 
-The `large-public-dotnet-client` and `legacy-unknown-dotnet-app` labels produced
-zero WCF facts in this validation run.
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+python3 -m unittest scripts.tests.test_legacy_codebase_validation
+./scripts/check-private-paths.sh
+git diff --check
+```
 
-## Follow-Ups
+The implementation should also run a CLI scan against at least one checked-in or
+temporary fixture and verify the required artifacts still appear:
+`scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+`logs/analyzer.log`.
 
-- Decide whether richer click-to-service-to-SQL paths belong in the legacy
-  validation harness, combined path query, or a new legacy report command.
-- Decide whether old EF/EDMX entity/table mapping deserves its own follow-up
-  spec after service-reference mapping lands.
+## Follow-Ups To Keep Out Of This Slice
+
+- Product implementation in this spec PR.
+- WCF metadata normalization from checked-in `.svcmap` / `.wsdl` files beyond
+  the initial service-reference mapping.
+- WebForms click-handler path rendering into WCF mappings.
+- DBML/EDMX/typed DataSet data metadata extraction.
+- Runtime service reachability, binding compatibility, authorization, or
+  deployment conclusions.
+- Site copy or public AI/impact-analysis claims.

@@ -36,7 +36,7 @@
   - [x] Add inventory tests for `.dbml` malformed XML and `.edmx` valid XML with
         missing CSDL/SSDL/MSL sections.
 
-- [x] 3. Add XXE-safe XML/config parsing helpers. Requirements: 1, 2, 3, 4, 5.
+- [ ] 3. Add XXE-safe XML/config parsing helpers. Requirements: 1, 2, 3, 4, 5.
   - [x] Centralize XML reader settings that prohibit or ignore DTDs, set
         `XmlResolver = null`, preserve line info when practical, and avoid
         external entity resolution.
@@ -46,7 +46,7 @@
   - [x] Add tests for unclosed tags, invalid UTF-8, namespace errors, DTD
         rejection, entity expansion rejection, and no network/filesystem fetch
         during parse.
-  - [x] Add oversized/deeply-nested document tests if scanner infrastructure
+  - [ ] Add oversized/deeply-nested document tests if scanner infrastructure
         supports parser bounds.
 
 - [x] 4. Implement safe identifier and redaction policy. Requirements: 1, 2, 3, 4, 5, 6, 7, 8.
@@ -62,21 +62,21 @@
   - [x] Add test for non-ASCII identifiers longer than 128 characters hashing
         rather than rendering cleartext.
 
-- [x] 5. Extract DBML metadata facts. Requirements: 2, 6, 7.
+- [ ] 5. Extract DBML metadata facts. Requirements: 2, 6, 7.
   - [x] Parse DBML database, table, type, column, association, and routine metadata.
   - [x] Emit entity, storage object, column, and mapping facts with safe keys.
   - [x] Hash or omit provider, connection, database, routine, table, or column
         values when unsafe.
-  - [x] Emit gaps for malformed DBML, unsupported provider extensions, and
+  - [ ] Emit gaps for malformed DBML, unsupported provider extensions, and
         ambiguous descriptors.
   - [x] Add tests for simple mappings, associations, routines, unsafe names,
         generated-code hints, and reduced coverage.
-  - [x] Add tests for multiple DBML database descriptors, multiple DBML
+  - [ ] Add tests for multiple DBML database descriptors, multiple DBML
         `<Database>` elements with ambiguity gaps, non-ASCII identifiers,
         descriptor tier ceilings, exact gap classification strings, and stable
         fact IDs across repeated scans.
 
-- [x] 6. Extract EDMX metadata facts. Requirements: 3, 6, 7.
+- [ ] 6. Extract EDMX metadata facts. Requirements: 3, 6, 7.
   - [x] Parse CSDL, SSDL, and MSL sections from checked-in EDMX.
   - [x] Emit conceptual entity/property and storage table/column/routine facts.
   - [x] Emit unambiguous entity-to-table and property-to-column mapping facts.
@@ -85,12 +85,12 @@
         EDMX.
   - [x] Add tests for simple EDMX mapping, ambiguous mapping, unsafe namespaces,
         provider metadata redaction, and deterministic output.
-  - [x] Add tests for EDMX with no MSL, multiple containers, table-per-hierarchy
+  - [ ] Add tests for EDMX with no MSL, multiple containers, table-per-hierarchy
         or condition-based mapping, unsupported split/complex mapping, descriptor
         tier ceilings, and exact gap classification strings.
-  - [x] Add test for EDMX with valid outer XML but malformed CSDL schema.
+  - [ ] Add test for EDMX with valid outer XML but malformed CSDL schema.
 
-- [x] 7. Extract typed DataSet and TableAdapter metadata. Requirements: 4, 6, 7.
+- [ ] 7. Extract typed DataSet and TableAdapter metadata. Requirements: 4, 6, 7.
   - [x] Detect typed DataSet `.xsd` files using deterministic indicators.
   - [x] Emit DataSet, DataTable, DataColumn, relation, constraint, TableAdapter,
         command, and generated-type descriptor facts.
@@ -101,23 +101,23 @@
         schemas, unsupported provider metadata, and malformed XML.
   - [x] Add tests for typed DataSet detection, unrelated `.xsd` suppression,
         TableAdapter command hashing, routine metadata, and generated-code hints.
-  - [x] Add tests for stale or missing `.designer.cs`, dynamic stored-procedure
+  - [ ] Add tests for stale or missing `.designer.cs`, dynamic stored-procedure
         command metadata with no command text, descriptor tier ceilings, and
         exact gap classification strings.
-  - [x] Add test for `.xsd` with `msdata:` prefix but no actual DataSet or
+  - [ ] Add test for `.xsd` with `msdata:` prefix but no actual DataSet or
         TableAdapter content producing a gate or unsupported-shape gap rather
         than descriptor facts.
 
-- [x] 8. Extract config provider and connection metadata. Requirements: 5, 6, 7.
+- [ ] 8. Extract config provider and connection metadata. Requirements: 5, 6, 7.
   - [x] Parse checked-in config files with safe XML settings.
   - [x] Emit provider, connection-name, provider factory, EF provider, and ORM
         config metadata facts.
-  - [x] Link metadata descriptors to named connection evidence when deterministic.
-  - [x] Emit gaps for config transforms, encrypted sections, external config,
+  - [ ] Link metadata descriptors to named connection evidence when deterministic.
+  - [ ] Emit gaps for config transforms, encrypted sections, external config,
         dynamic connection construction, and unsupported ORM sections.
-  - [x] Add tests for redacted connection strings, provider names, named
+  - [ ] Add tests for redacted connection strings, provider names, named
         connection linkage, transforms, encrypted sections, and unsafe values.
-  - [x] Add tests for config files with no `connectionStrings` or provider
+  - [ ] Add tests for config files with no `connectionStrings` or provider
         sections producing no provider facts and no gaps.
   - [x] Add tests for `configSource` / external config includes and exact gap
         classification strings.
@@ -125,8 +125,8 @@
         `<connectionStrings configSource="external.config" />` producing an
         external include gap without loading the external file.
 
-- [x] 9. Link metadata to generated code and existing surfaces. Requirements: 6, 7.
-  - [x] Resolve metadata-to-generated-code links semantically when builds succeed.
+- [ ] 9. Link metadata to generated code and existing surfaces. Requirements: 6, 7.
+  - [ ] Resolve metadata-to-generated-code links semantically when builds succeed.
   - [x] Add structural and syntax fallback for generated filenames, namespaces,
         partial classes, DataSet/table/row/adapter types, contexts, and entities.
   - [x] Preserve supporting fact IDs, metadata hashes, symbol role properties, and
@@ -134,12 +134,12 @@
   - [x] Emit ambiguity gaps instead of global short-name matching.
   - [x] Integrate metadata surfaces with existing report/reducer keys without
         changing existing reducer semantics.
-  - [x] Add tests for semantic linkage, syntax fallback, missing/stale generated
+  - [ ] Add tests for semantic linkage, syntax fallback, missing/stale generated
         files, duplicate generated types, and downstream surface context.
-  - [x] Add tests proving metadata descriptor tiers are not upgraded by
+  - [ ] Add tests proving metadata descriptor tiers are not upgraded by
         `Tier1Semantic` generated-code links.
 
-- [x] 10. Update scan report, SQLite, docs, and validation harness. Requirements: 7, 8.
+- [ ] 10. Update scan report, SQLite, docs, and validation harness. Requirements: 7, 8.
   - [x] Add scan report counts and known-gap summaries for legacy data metadata.
   - [x] Ensure `facts.ndjson` and `index.sqlite` include new facts deterministically.
   - [x] Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` for new fact types and safe keys.
@@ -150,16 +150,16 @@
         implementation adds legacy data metadata to existing legacy summary
         output; document in implementation state if deferred.
   - [x] Keep public claim level hidden until redacted evidence is reviewed.
-  - [x] Add compatibility tests that combine, report, paths, reverse, impact,
+  - [ ] Add compatibility tests that combine, report, paths, reverse, impact,
         release-review, and portfolio either ignore new `LegacyData*` facts safely
         or emit explicit availability gaps without failing.
 
-- [x] 11. Validate implementation. Requirements: 8.
+- [ ] 11. Validate implementation. Requirements: 8.
   - [x] `dotnet build src/dotnet/TraceMap.sln`
   - [x] `dotnet test src/dotnet/TraceMap.sln`
   - [x] `python3 -m unittest scripts.tests.test_legacy_codebase_validation` if
         Task 10 extended the validation harness; otherwise skip.
-  - [x] Relevant pinned smoke checks from `docs/VALIDATION.md`, or explicitly
+  - [ ] Relevant pinned smoke checks from `docs/VALIDATION.md`, or explicitly
         defer with rationale in implementation state.
   - [x] `./scripts/check-private-paths.sh`
   - [x] `git diff --check`

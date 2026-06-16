@@ -46,6 +46,10 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `index.sqlite` includes a `parameter_forward_edges` table derived from parameter-to-parameter argument-flow facts.
 - `parameter_forward_edges` includes direct parameter forwarding, same-method local alias forwarding up to 3 alias hops, and unique constructor field-origin forwarding when evidence exists.
 - `parameter_forward_edges` omits ambiguous constructor field origins and alias chains beyond the documented bound instead of inventing a flow path.
+- .NET scans that encounter DBML, EDMX, typed DataSet XSD/TableAdapter, data-provider config, or generated legacy data designers emit `LegacyData*` facts or explicit `AnalysisGap` facts with rule IDs and evidence tiers.
+- Legacy data metadata rows appear in `facts.ndjson`, `index.sqlite`, and the scan report as static design-time metadata evidence, not runtime data access, SQL execution, provider compatibility, database existence, or production usage.
+- Legacy data metadata facts and reports do not include raw SQL, connection strings, config values, server/catalog names, URLs, local absolute paths, raw remotes, secrets, source snippets, or private sample identities.
+- Unrelated `.xsd` files without typed DataSet/TableAdapter indicators do not become legacy data descriptor facts.
 
 For every successful `tracemap-ts scan --repo <repo> --out <out>` run, verify:
 

@@ -2,7 +2,7 @@
 
 ## Merge-Readiness Review
 
-Review branch `codex/legacy-codebase-validation-impl` for the
+Review branch `codex/spec-next-legacy-runway` for the
 `legacy-wcf-service-reference-mapping` spec.
 
 Focus on spec merge readiness and implementation readiness:
@@ -18,6 +18,8 @@ Focus on spec merge readiness and implementation readiness:
 - Are ambiguity and partial coverage handled as gaps rather than arbitrary
   conclusions?
 - Are tests and validation commands sufficient?
+- Are all implementation tasks intentionally unchecked and bounded to future
+  product-code work?
 
 Return blocking issues, important non-blocking issues, suggested fixes, and
 whether the spec is ready to implement.

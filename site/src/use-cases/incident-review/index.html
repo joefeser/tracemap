@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap use case for orienting incident-adjacent code review questions with deterministic static evidence, proof paths, and explicit non-claims."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Incident Review Orientation | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/use-cases/incident-review/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Incident Review Orientation">
+    <meta
+      property="og:description"
+      content="How static evidence can orient incident follow-up questions without claiming runtime proof, root cause, or release approval."
+    >
+    <meta property="og:url" content="https://tracemap.tools/use-cases/incident-review/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Incident review orientation</p>
+        <h1>Use static evidence to orient incident-adjacent code questions.</h1>
+        <p class="hero-subhead">
+          TraceMap can help teams inspect rule-backed repository evidence when
+          review or incident follow-up needs a map of source surfaces,
+          endpoints, packages, SQL/config surfaces, static paths, coverage
+          labels, and limitations.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. This page describes a bounded workflow
+          idea for using static evidence during review or incident follow-up. It
+          does not claim runtime behavior, production traffic, deployment state,
+          endpoint performance, production dependency understanding, P1 root
+          cause, release safety, release approval, or AI impact analysis.
+        </p>
+        <nav class="hero-actions" aria-label="Incident review links">
+          <a class="button primary" href="/packets/">Read packet guide</a>
+          <a class="button secondary" href="/manager-packet/">Manager packet</a>
+          <a class="button secondary" href="/limitations/">Review limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Use case</p>
+          <h2>The useful question is where to inspect next, not what happened in production.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>During review</strong><span>TraceMap can point to changed contracts, static endpoint routes, service/code paths, package surfaces, SQL/config surfaces, rule IDs, evidence tiers, and gaps.</span></div>
+          <div><strong>During follow-up</strong><span>Teams can use the same packet to ask better code questions after an event, while telemetry, logs, traces, tests, and humans handle runtime proof.</span></div>
+          <div><strong>Under uncertainty</strong><span>Coverage labels and limitations stay visible so partial analysis remains useful without becoming a clean bill of health.</span></div>
+          <div><strong>Across handoff</strong><span>Managers, reviewers, architects, and engineers can inspect the same source paths and status framing without rebuilding the story from chat or memory.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Reader questions</p>
+          <h2>Different roles can start from the same evidence packet.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Engineers</h3>
+            <p>Which endpoint, static path, changed surface, package, SQL/config surface, or gap should I inspect before making the next code change?</p>
+          </article>
+          <article>
+            <h3>Reviewers</h3>
+            <p>Which rule ID, evidence tier, file span, supporting ID, coverage label, and limitation explains why this finding needs human attention?</p>
+          </article>
+          <article>
+            <h3>Managers</h3>
+            <p>What is known, what is partial, what must stay local, and which conclusion still needs logs, telemetry, tests, ownership, or release review?</p>
+          </article>
+          <article>
+            <h3>Architects</h3>
+            <p>Which static dependencies, repeated surfaces, adapter gaps, and cross-service paths suggest coupling that deserves a deeper design conversation?</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What it can orient</p>
+          <h2>Keep the trail concrete, named, and inspectable.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>contracts</code><span>Changed DTOs, fields, methods, schemas, and public surfaces that appear in the scanned commit.</span></div>
+          <div><code>endpoints</code><span>Server-declared routes or client-called endpoints when the adapter can extract them, with coverage and limitations attached.</span></div>
+          <div><code>paths</code><span>Bounded static source-to-surface paths and reverse paths, not runtime traces or reachability proof.</span></div>
+          <div><code>surfaces</code><span>Packages, SQL surfaces, config surfaces, project metadata, and integration facts that help reviewers narrow inspection.</span></div>
+          <div><code>gaps</code><span>Analysis gaps, fallback behavior, reduced coverage, and unavailable evidence that prevent overclaiming.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>This concept deliberately stops before runtime conclusions.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, deployment state, endpoint performance, or production dependency understanding.</li>
+          <li>TraceMap does not find or prove P1 root cause, replace incident response, or replace logs, traces, telemetry, tests, or human ownership.</li>
+          <li>TraceMap does not validate a release, approve a deployment, or turn partial static evidence into a release-safety decision.</li>
+          <li>TraceMap site copy should not describe the scanner or reducer as AI impact analysis.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Artifact safety</p>
+          <h2>Share public-safe summaries, not raw local internals.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe to discuss</strong><span>Rule IDs, evidence tiers, coverage labels, relative public-demo paths, generated report families, counts, limitations, and high-level status framing.</span></div>
+          <div><strong>Keep local</strong><span>Raw source snippets, raw SQL, config values, secrets, local absolute paths, raw repo remotes, raw facts, SQLite files, combined SQLite files, generated scan directories, analyzer logs, and private sample identities.</span></div>
+          <div><strong>Keep adjacent</strong><span>Every conclusion should stay next to its rule/status frame, coverage label, proof path, and limitation so future readers can audit it.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof path</p>
+          <h2>Follow the concept back through the public evidence surface.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/use-cases/">Use cases</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/demo/proof-assets/">Demo proof assets</a>
+          <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/roadmap/">Public roadmap</a>
+          <a href="/evidence/">Evidence tiers</a>
+          <a href="/outputs/">Output artifacts</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Incident review orientation connects the
+        <a href="/use-cases/">use-case index</a>,
+        <a href="/packets/">packet guide</a>,
+        <a href="/manager-packet/">manager packet</a>,
+        and
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

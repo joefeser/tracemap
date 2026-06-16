@@ -1,7 +1,7 @@
 # Implementation State
 
 Status: implemented
-Branch: codex/legacy-codebase-validation-impl
+Branch: codex/legacy-codebase-validation
 Public claim level: hidden
 
 ## Summary
@@ -32,6 +32,29 @@ Actual local path mappings must live under ignored
   validation bounds unless overridden in the ignored local manifest.
 - Treat the redaction step as the primary safety defense; private-path guard is
   a machine-specific backstop.
+- Implemented the operator workflow as `scripts/validate-legacy-codebases.sh`
+  backed by deterministic Node helpers instead of changing scanner behavior.
+- The harness reads only `.tmp/legacy-codebase-validation/repos.local.json`,
+  writes raw scan outputs under ignored `.tmp/legacy-codebase-validation/out/`,
+  and writes redacted candidate summaries under ignored
+  `.tmp/legacy-codebase-validation/summary/`.
+- UI event validation currently probes existing fact fields for handler-like
+  methods, call edges, event wiring tokens, and handler-linked dependency
+  surfaces; when facts do not expose wiring, it records a
+  `legacy-ui-event-surfaces` follow-up gap rather than claiming absence.
+- Large sample handling is bounded by per-sample timeout and artifact-size
+  limits and reports timeout or size excess as truncated output.
+- Review-loop patch tightened process execution so child output streams to disk,
+  spawn/log-write failures settle deterministically, failed or truncated samples
+  produce a non-zero harness exit, and reduced-coverage scans are labeled
+  `partial` rather than clean.
+- Redacted summaries include commit SHA and a safe repository identity hash, and
+  UI evidence examples retain line spans, snippet hashes, and safe relative path
+  metadata or path hashes.
+- Raw scan artifacts, including `scan-manifest.json` and `report.md`, are
+  listed as local-only and not public-safe; only redacted summary candidates are
+  intended for pre-publish review.
+- Added `legacy.validation.summary.v1` to the rule catalog with limitations.
 
 ## Validation
 
@@ -42,29 +65,18 @@ Actual local path mappings must live under ignored
   source snippets, tracked `.tmp` artifacts, concrete bounds, UI event query
   probes, runtime caveats, and pre-publish checks.
 - Sonnet re-review reported no blockers before the Opus tightening edits.
+- `node --test scripts/legacy-codebase-validation.test.mjs` passed: 7 tests.
+- Local harness smoke passed using ignored
+  `.tmp/legacy-codebase-validation/repos.local.json` against a checked-in sample:
+  `./scripts/validate-legacy-codebases.sh .tmp/legacy-codebase-validation/repos.local.json .tmp/legacy-codebase-validation/out`.
+- `dotnet build src/dotnet/TraceMap.sln` passed.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 244 tests.
+- `./scripts/check-private-paths.sh` passed.
+- `git diff --check` passed.
 
 ## Follow-Ups
 
 - Decide whether missing SDK/runtime guidance belongs in core scan reports.
 - Decide whether legacy UI event extraction deserves a dedicated scanner spec.
-
-## Implementation Notes
-
-- Added `scripts/validate-legacy-codebases.sh` as the public entry point.
-- Added `scripts/legacy_codebase_validation.py` for manifest validation,
-  bounded scan execution, legacy environment probes, UI event probes, redacted
-  summary generation, and category-only redaction failure reporting.
-- Added `scripts/tests/test_legacy_codebase_validation.py` for local-only
-  manifest boundaries, output boundaries, redaction categories, tracked `.tmp`
-  rejection, and deterministic summary shape.
-- Added validation rule IDs and limitations to `rules/rule-catalog.yml`:
-  `legacy.validation.summary.v1`, `legacy.validation.environment.v1`,
-  `legacy.validation.ui-events.v1`, and `legacy.validation.bounds.v1`.
-- Real legacy sample paths remain local-only in
-  `.tmp/legacy-codebase-validation/repos.local.json`.
-
-## Implemented Validation
-
-- `python3 -m unittest scripts.tests.test_legacy_codebase_validation`
-- `python3 -m py_compile scripts/legacy_codebase_validation.py scripts/tests/test_legacy_codebase_validation.py`
-- `./scripts/validate-legacy-codebases.sh .tmp/legacy-codebase-validation/repos.local.json .tmp/legacy-codebase-validation/out --dry-run`
+- Run the harness against real operator-local legacy and large public samples
+  before promoting any public legacy-support claim.
