@@ -100,6 +100,26 @@ public sealed class LegacyBaselineArtifactsTests
     }
 
     [Fact]
+    public async Task Rejected_local_only_create_cannot_write_to_tracked_output()
+    {
+        using var temp = new TempDirectory();
+        var scanOutput = Path.Combine(temp.Path, ".tmp", "legacy-baselines", "unsafe-input");
+        Directory.CreateDirectory(scanOutput);
+        File.Copy(Path.Combine(SyntheticScanPath(), "facts.ndjson"), Path.Combine(scanOutput, "facts.ndjson"));
+        var manifestText = await File.ReadAllTextAsync(Path.Combine(SyntheticScanPath(), "scan-manifest.json"));
+        manifestText = manifestText.Replace("tracemap-fixture", "/Use" + "rs/example/tool", StringComparison.Ordinal);
+        await File.WriteAllTextAsync(Path.Combine(scanOutput, "scan-manifest.json"), manifestText);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            scanOutput,
+            "synthetic-alpha",
+            "original-parser-snapshot",
+            Path.Combine(temp.Path, "tracked-output"),
+            CreatedAt: new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero),
+            LocalOnly: true)));
+    }
+
+    [Fact]
     public void Safety_validator_rejects_unsafe_values_without_echoing_them()
     {
         var unsafeText = "{\"path\":\"" + "/Use" + "rs/example/private/sample" + "\",\"secret\":\"password=fixture\",\"query\":\"select * from customers\"}";
@@ -180,12 +200,17 @@ public sealed class LegacyBaselineArtifactsTests
             FactsTotal = baseline.Manifest.Counts.FactsTotal + 1,
             ByRuleId = candidateRuleCounts
         };
+        var candidateExtractors = new SortedDictionary<string, LegacyBaselineExtractor>(baseline.Manifest.Extractors, StringComparer.Ordinal)
+        {
+            ["CSharpSyntaxExtractor"] = new("csharp-syntax/9.9.9")
+        };
         var candidate = baseline.Manifest with
         {
             BaselineId = "synthetic-alpha__candidate__2026-07",
             BaselinePurpose = "candidate",
             CreatedAt = "2026-07",
             Counts = candidateCounts,
+            Extractors = candidateExtractors,
             Scan = baseline.Manifest.Scan with { CoverageLabel = "Level1SemanticAnalysis" }
         };
         var candidatePath = Path.Combine(candidateOut, "baseline-manifest.json");
@@ -199,6 +224,7 @@ public sealed class LegacyBaselineArtifactsTests
 
         Assert.Equal("review-needed", result.Comparison.OverallStatus);
         Assert.Contains(result.Comparison.Dimensions.ByRuleId, row => row.Name == "config.key.v1" && row.Movement == "new-category");
+        Assert.Contains(result.Comparison.Dimensions.ByExtractor, row => row.Name == "CSharpSyntaxExtractor.version" && row.Movement == "coverage-changed");
         Assert.Contains(result.Comparison.Dimensions.Coverage, row => row.Name == "coverageLabel" && row.Movement == "coverage-changed");
         var markdown = await File.ReadAllTextAsync(Path.Combine(comparisonOut, "comparison.md"));
         foreach (var phrase in new[] { "impacted", "safe", "unsafe", "reachable", "production", "business" })
