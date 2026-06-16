@@ -130,12 +130,21 @@ test("legacy story guard accepts hidden theme enumeration with adjacent labels",
       <article><h3>.NET Remoting detection</h3><p>Label: hidden pending validation.</p></article>
       <article><h3>WebForms event flow</h3><p>Label: hidden pending validation.</p></article>
       <article><h3>Legacy data metadata</h3><p>Label: hidden pending validation.</p></article>
+      <article><h3>Build environment diagnostics</h3><p>Label: hidden pending validation.</p></article>
       <article><h3>Build diagnostics</h3><p>Label: hidden pending validation.</p></article>
       <article><h3>Flow composition</h3><p>Label: hidden pending validation.</p></article>
     </main>`)
   );
 
   assert.deepEqual(errors, []);
+});
+
+test("legacy story guard rejects canonical build environment diagnostics without adjacent label", () => {
+  const errors = validateRenderedLegacyStoryHtml(
+    html("<main><p>Build environment diagnostics appear in public results.</p></main>")
+  );
+
+  assert.match(errors.join("\n"), /without adjacent hidden or omission label/);
 });
 
 test("legacy story guard boundary terms do not mask adjacent leaks or overclaims", () => {
