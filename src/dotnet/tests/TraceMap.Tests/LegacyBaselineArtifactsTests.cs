@@ -182,6 +182,8 @@ public sealed class LegacyBaselineArtifactsTests
         Assert.Equal(LegacyBaselineClassifications.LocalOnly, localOnly.Manifest.Safety.Classification);
         Assert.Equal("neutral-label", localOnly.Manifest.Sample.IdentityKind);
         Assert.Null(localOnly.Manifest.Sample.RepoIdentityHash);
+        Assert.Equal("2026-06", localOnly.Manifest.CreatedAt);
+        Assert.Equal("synthetic-alpha__original-parser-snapshot__2026-06", localOnly.Manifest.BaselineId);
 
         var publicSource = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
             "samples/synthetic-legacy-scan",
@@ -294,6 +296,22 @@ public sealed class LegacyBaselineArtifactsTests
         Assert.Contains("FactsArtifactMissing", result.Manifest.KnownGaps);
         Assert.Equal(1, result.Manifest.Counts.ByKnownGap["FactsArtifactMissing"]);
         Assert.Contains(result.Manifest.Limitations, item => item.Contains("facts.ndjson is missing", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Missing_scan_manifest_is_rejected()
+    {
+        var scanPath = TestBaselinePath("missing-manifest-scan");
+        DeleteIfExists(scanPath);
+        Directory.CreateDirectory(scanPath);
+        await File.WriteAllTextAsync(Path.Combine(scanPath, "facts.ndjson"), "");
+
+        await Assert.ThrowsAsync<FileNotFoundException>(() => LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            scanPath,
+            "synthetic-alpha",
+            "original-parser-snapshot",
+            TestBaselinePath("missing-manifest-out"),
+            CreatedAt: "2026-06")));
     }
 
     [Fact]
@@ -496,7 +514,7 @@ public sealed class LegacyBaselineArtifactsTests
             candidateOut,
             CreatedAt: "2026-07"));
 
-        var candidateManifest = candidate.Manifest with { SchemaVersion = "legacy-baseline-manifest.v2" };
+        var candidateManifest = candidate.Manifest with { SchemaVersion = "legacy-baseline-manifest.v3" };
         await WriteJsonAsync(candidate.ManifestPath!, candidateManifest);
 
         var comparison = await LegacyBaselineArtifacts.CompareAsync(new LegacyBaselineCompareOptions(
@@ -512,7 +530,7 @@ public sealed class LegacyBaselineArtifactsTests
         await WriteJsonAsync(migrationMapPath, new LegacyBaselineMigrationMap(
             LegacyBaselineSchemas.MigrationMap,
             LegacyBaselineSchemas.Manifest,
-            "legacy-baseline-manifest.v2",
+            "legacy-baseline-manifest.v3",
             [new LegacyBaselineRuleRename("csharp.semantic.declarations.v1", "csharp.semantic.declarations.v1", "schema test")],
             [new LegacyBaselineFactTypeRename("MethodDeclared", "MethodDeclared", "schema test")],
             ["Fixture migration map for schema compatibility tests."]));

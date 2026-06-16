@@ -399,6 +399,31 @@ public sealed class LegacyFlowCompositionTests
         Assert.Equal("typescript", Assert.Single(result.Report.Sources).Language);
     }
 
+    [Fact]
+    public async Task Paths_preserve_symbol_display_names_for_single_index_relationships()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var interfaceDisplay = "Legacy.Contracts.IOrderService";
+        var implementationDisplay = "Legacy.Services.OrderService";
+        SqliteIndexWriter.Write(index, manifest, [
+            SymbolRelationshipFact(manifest, "symbol:contract", interfaceDisplay, "symbol:service", implementationDisplay),
+            PackageConfigFact(manifest, implementationDisplay, "App.config", 8, "Legacy.Remoting")
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "paths"),
+            FromSymbol: interfaceDisplay,
+            ToSurface: "package-config"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(interfaceDisplay, path.Nodes.First().DisplayName);
+        Assert.Contains(path.Nodes, node => node.DisplayName == implementationDisplay);
+        Assert.DoesNotContain(path.Nodes, node => node.DisplayName is "symbol:contract" or "symbol:service");
+    }
+
     private static ScanManifest Manifest(string repo, string analysisLevel = "Level1SemanticAnalysis", string buildStatus = "Succeeded", string scannerVersion = ScannerVersions.TraceMap)
     {
         return new ScanManifest(
@@ -519,6 +544,33 @@ public sealed class LegacyFlowCompositionTests
                 ["packageManager"] = "nuget",
                 ["surfaceKind"] = "package-config",
                 ["version"] = "1.0.0"
+            });
+    }
+
+    private static CodeFact SymbolRelationshipFact(
+        ScanManifest manifest,
+        string sourceSymbolId,
+        string sourceDisplayName,
+        string targetSymbolId,
+        string targetDisplayName)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("Contracts/IOrderService.cs", 3, 3, null, "test", "test/1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["relationshipKind"] = "ImplementedBy",
+                ["sourceSymbolDisplayName"] = sourceDisplayName,
+                ["sourceSymbolId"] = sourceSymbolId,
+                ["sourceSymbolKind"] = "Interface",
+                ["sourceSymbolLanguage"] = "csharp",
+                ["targetSymbolDisplayName"] = targetDisplayName,
+                ["targetSymbolId"] = targetSymbolId,
+                ["targetSymbolKind"] = "Class",
+                ["targetSymbolLanguage"] = "csharp"
             });
     }
 

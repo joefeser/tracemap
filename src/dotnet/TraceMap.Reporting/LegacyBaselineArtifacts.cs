@@ -54,7 +54,7 @@ public static class LegacyBaselineClassifications
 
 public static class LegacyBaselineSchemas
 {
-    public const string Manifest = "legacy-baseline-manifest.v1";
+    public const string Manifest = "legacy-baseline-manifest.v2";
     public const string Comparison = "legacy-baseline-comparison.v1";
     public const string MigrationMap = "legacy-baseline-migration-map.v1";
 }
@@ -1184,8 +1184,7 @@ public static class LegacyBaselineArtifacts
     {
         if (!File.Exists(path))
         {
-            using var empty = JsonDocument.Parse("{}");
-            return empty.RootElement.Clone();
+            throw new FileNotFoundException("Required JSON object is missing.", path);
         }
 
         using var document = JsonDocument.Parse(File.ReadAllText(path));
@@ -1245,16 +1244,16 @@ public static class LegacyBaselineArtifacts
             return DateTimeOffset.UtcNow.ToString("yyyy-MM", CultureInfo.InvariantCulture);
         }
 
-        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var timestamp))
+        if (Regex.IsMatch(value, "^\\d{4}-\\d{2}$", RegexOptions.CultureInvariant))
+        {
+            return value;
+        }
+
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var timestamp))
         {
             return classification == LegacyBaselineClassifications.PublicSafe
                 ? timestamp.ToString("yyyy-MM", CultureInfo.InvariantCulture)
                 : timestamp.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
-        }
-
-        if (Regex.IsMatch(value, "^\\d{4}-\\d{2}$", RegexOptions.CultureInvariant))
-        {
-            return value;
         }
 
         throw new ArgumentException("baseline time must be ISO timestamp or yyyy-MM.");
@@ -1354,12 +1353,22 @@ public static class LegacyBaselineArtifacts
             using var process = Process.Start(new ProcessStartInfo
             {
                 FileName = "git",
-                ArgumentList = { "check-ignore", path },
+                ArgumentList = { "check-ignore", "--", path },
                 WorkingDirectory = repoRoot,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             });
-            process?.WaitForExit(5000);
+            if (process is null)
+            {
+                return false;
+            }
+
+            if (!process.WaitForExit(5000))
+            {
+                process.Kill(entireProcessTree: true);
+                return false;
+            }
+
             return process?.ExitCode == 0;
         }
         catch

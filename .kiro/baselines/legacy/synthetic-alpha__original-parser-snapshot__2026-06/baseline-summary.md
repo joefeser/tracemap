@@ -1,7 +1,7 @@
 # Legacy Baseline Summary
 
 Baseline ID: `synthetic-alpha__original-parser-snapshot__2026-06`
-Schema: `legacy-baseline-manifest.v1`
+Schema: `legacy-baseline-manifest.v2`
 Classification: `public-safe`
 Coverage: `Level1SemanticAnalysisReduced`
 Build status: `FailedOrPartial`

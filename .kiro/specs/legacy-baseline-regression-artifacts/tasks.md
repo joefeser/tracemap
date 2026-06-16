@@ -3,7 +3,7 @@
 ## Implementation Tasks
 
 - [x] 1. Define baseline schemas and storage boundaries. Requirements: 1, 5.
-  - [x] Define `legacy-baseline-manifest.v1` with neutral sample labels, safe repo/commit identity, scanner/extractor versions, coverage labels, build status, safety classification, limitations, and deterministic count maps.
+  - [x] Define `legacy-baseline-manifest.v2` with neutral sample labels, safe repo/commit identity, scanner/extractor versions, coverage labels, build status, safety classification, limitations, and deterministic count maps.
   - [x] Define `legacy-baseline-comparison.v1` with movement labels, schema/extractor compatibility fields, review-needed markers, and human-readable summary metadata.
   - [x] Use `.kiro/baselines/legacy/` as the tracked public-safe baseline path and `.tmp/legacy-baselines/` as the ignored local-only baseline path.
   - [x] Derive `baselineId` deterministically from neutral label, purpose, and public-safe year-month or fixture-pinned creation metadata, and use that `baselineId` as the on-disk baseline directory segment.
