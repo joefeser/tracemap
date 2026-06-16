@@ -134,7 +134,7 @@ test("command template validation accepts closed-vocabulary literals and rejects
   assert.deepEqual(validateCatalogObject(catalog, { catalogPath, ruleIds }), []);
 
   const cases = [
-    ["tracemap scan --repo /Users/example/private --out <scan-output>", "local-absolute-path"],
+    [`tracemap scan --repo ${macHomePath("example/private")} --out <scan-output>`, "local-absolute-path"],
     ["tracemap scan --repo https://github.com/example/private.git --out <scan-output>", "raw-remote"],
     ["tracemap evidence-pack create --input <redacted-summary> --input-kind unknown-kind --label <sample-label> --claim-level <claim-level> --date <YYYY-MM> --out <pack-output>", "command-input-kind"],
     ["tracemap evidence-pack create --input <redacted-summary> --input-kind legacy-validation-summary --label my-internal-project --claim-level <claim-level> --date <YYYY-MM> --out <pack-output>", "identity-option-placeholder"],
@@ -359,4 +359,8 @@ function ruleIdsFor(catalog) {
 function assertHasDiagnostic(catalog, ruleIds, category) {
   const diagnostics = validateCatalogObject(catalog, { catalogPath, ruleIds });
   assert.ok(diagnostics.some((diagnostic) => diagnostic.category === category), `${category}\n${JSON.stringify(diagnostics, null, 2)}`);
+}
+
+function macHomePath(path) {
+  return ["", "Users", path].join("/");
 }
