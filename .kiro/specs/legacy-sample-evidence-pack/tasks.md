@@ -34,7 +34,8 @@
   - [ ] Omit raw input paths, raw arguments, remotes, environment values, usernames, machine names, secrets, and local output roots from public-safe provenance.
   - [ ] Record enum option values only when they are from closed vocabularies, and record free-text or path-bearing options name-only or category-only.
   - [ ] Preserve public commit SHAs only when source classification explicitly allows them.
-  - [ ] Represent private commit or repository identity as omitted, category-only, or local-only according to claim level.
+  - [ ] Preserve private commit identity as redacted deterministic proof with `shaPresent: true`; public-safe packs must not silently omit commit identity.
+  - [ ] Represent private repository identity as omitted, category-only, redacted deterministic proof, or local-only according to claim level.
   - [ ] Use existing stable hash helpers or context-separated length-prefixed SHA-256 input for safe-to-hash values.
   - [ ] Omit or category-only represent secret-like, credential-like, low-entropy private, enumerable private, or source-derived values instead of hashing them in public-safe packs.
 
@@ -59,6 +60,7 @@
   - [ ] Refuse local-only output inside the repository unless `git check-ignore` proves the destination is ignored, and treat any `git check-ignore` error or non-zero exit as refusal.
   - [ ] Promote only validated public-safe JSON and Markdown files to approved tracked roots such as `docs/evidence-packs/legacy/<pack-id>/`.
   - [ ] Rerun `tracemap evidence-pack validate`, the pack safety validator or generated-output sentinel, and `./scripts/check-private-paths.sh` during promotion before copying files.
+  - [ ] Ensure the promotion safety validator or sentinel inspects candidate JSON and Markdown files directly before copy or after staging, because `check-private-paths.sh` only inspects tracked files.
   - [ ] Ensure `--force` overrides only the destination-exists check and never bypasses validation, sentinel, tracked-root, ignored-destination, or private-path gates.
   - [ ] Maintain the approved tracked-root allowlist as an implementation constant, initially only `docs/evidence-packs/legacy/`.
   - [ ] Reject promotion to ignored destinations or destinations outside the approved tracked root allowlist.
@@ -91,6 +93,7 @@
   - [ ] Test a rejected included section forces top-level pack classification to `rejected`.
   - [ ] Test reduced coverage, failed build, timeout, truncation, missing schema, missing extractor version, and unsupported section behavior.
   - [ ] Test command provenance redaction and allowed public-safe fields.
+  - [ ] Test public-safe packs preserve commit identity proof without raw private repository identity.
   - [ ] Test public-safe command provenance omits or fixed-placeholder represents `--label`.
   - [ ] Test hostile `--label` values cannot flow into command provenance or Markdown.
   - [ ] Test safe-to-hash, omit-only, category-only, and local-only identity boundary cases.
@@ -100,6 +103,7 @@
   - [ ] Test each rejected label class separately: path separator, URI scheme, `.git`, `@` identity, hostname, organization/user pattern, home fragment, Windows drive prefix, and private-looking token.
   - [ ] Test standalone `validate` against an externally supplied pack JSON with no original inputs present.
   - [ ] Test `promote` reruns validation and refuses non-public-safe packs.
+  - [ ] Test promotion fails when the candidate files contain private-path sentinel content before they are tracked.
   - [ ] Test promotion fails cleanly when the approved tracked root placeholder is missing.
   - [ ] Test `git check-ignore .tmp/legacy-evidence-packs/example` or the chosen local output root.
 

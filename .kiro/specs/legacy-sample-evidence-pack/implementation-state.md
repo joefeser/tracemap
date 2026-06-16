@@ -99,6 +99,13 @@ validation and promotion gates pass.
   - rejected included sections force top-level rejected classification;
   - public-safe provenance omits or fixed-placeholder represents `--label`;
   - tests cover those boundaries.
+- PR review loop fixes applied:
+  - Codex requested a file-targeted safety check for promoted files because
+    `check-private-paths.sh` only scans tracked files;
+  - Codex requested adding `--date` to the public-safe dry-run validation
+    command;
+  - Qodo requested preserving commit identity proof instead of allowing
+    public-safe packs to omit commit identity.
 - Tasks are intentionally unchecked because this branch delivers a spec only.
 
 ## Validation
