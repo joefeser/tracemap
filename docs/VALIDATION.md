@@ -269,6 +269,27 @@ grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out
 
 WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 
+## Legacy Remoting Smoke
+
+When changing .NET Remoting API, `MarshalByRefObject`, channel, registration, activation, config, or Remoting report extraction, run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/dotnet-remoting-sample --out <tmp>/dotnet-remoting-scan
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+The synthetic sample scan should produce the standard scan artifacts plus `Remoting*` facts in `facts.ndjson`, `index.sqlite`, and `report.md`. Inspect with:
+
+```bash
+sqlite3 <tmp>/dotnet-remoting-scan/index.sqlite "select fact_type, count(*) from facts where fact_type like 'Remoting%' group by fact_type order by fact_type;"
+grep -E "Legacy Remoting Static Evidence|Legacy Remoting Limitations" <tmp>/dotnet-remoting-scan/report.md
+```
+
+No pinned public Remoting smoke baseline exists yet. Public-repository Remoting baselines require a separate reviewed baseline task or spec. Remoting evidence is static only and must not claim host activation, runtime reachability, endpoint availability, deployment, exploitability, security posture, or production usage. Generated scan artifacts are local-only and must not be committed.
+
 ## Legacy Static Flow Reporting Smoke
 
 When changing `tracemap paths --include-legacy-roots`, legacy flow classification, WCF operation terminal handling, legacy data metadata terminal handling, path output redaction, or related path selectors, run:
