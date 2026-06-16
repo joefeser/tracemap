@@ -298,6 +298,10 @@ Minimum checks:
 - rule catalog entries document every new rule and limitation.
 - reduced coverage is labeled whenever compiler/project/dependency gaps exist.
 - no raw snippets or raw sensitive values are stored by default.
+- legacy WCF metadata facts expose only safe basenames, hashes, service-reference folder labels, and operation identifiers; raw URLs, SOAP actions, schema locations, namespace URIs, local absolute paths, raw schemas, and snippets are hashed or omitted.
+- WCF metadata-backed mappings and operation-name normalization remain static evidence and do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
+- legacy WebForms facts expose static page/control/event/handler/flow evidence with rule IDs, evidence tiers, supporting fact IDs, coverage labels, and limitations; they do not prove runtime page lifecycle execution, postbacks, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
+- WebForms generated reports and validation summaries must not include raw source snippets, raw SQL, config values, raw URLs, local absolute paths, raw remotes, private sample identifiers, or secrets.
 
 ## Endpoint Alignment Acceptance
 
@@ -649,6 +653,11 @@ Each fixture should document:
 | TypeScript integration boundary | Tier1/Tier2/Tier3 according to compiler/package/shape evidence |
 | TypeScript direct SQL literal | `SqlTextUsed` plus SQL-shape `QueryPatternDetected` under `typescript.integration.sql.v1` when complete static SQL text is visible |
 | TypeScript Prisma/Base44 query pattern | `QueryPatternDetected` remains query-builder evidence and does not gain `sqlSourceKind` unless direct SQL text is present |
+| Legacy DBML descriptor | `LegacyDataEntityDeclared`, `LegacyDataStorageObjectDeclared`, `LegacyDataColumnDeclared`, and `LegacyDataMappingDeclared` under `legacy.data.dbml.v1` as static design-time metadata only |
+| Legacy EDMX simple mapping | `LegacyDataMappingDeclared` under `legacy.data.edmx.v1` when MSL maps one conceptual descriptor to one storage descriptor; unsupported shapes emit `AnalysisGap` |
+| Typed DataSet TableAdapter static SQL | `LegacyData*` descriptor facts plus `SqlTextUsed`/SQL-shape `QueryPatternDetected` hashes under `legacy.data.typed-dataset.v1`; raw SQL is not stored |
+| Legacy data config provider | `LegacyDataProviderConfigDeclared` under `legacy.data.config.v1` with safe names or hashes; raw connection strings and config values are omitted |
+| Legacy data generated code | `LegacyDataGeneratedCodeLinked` under `legacy.data.generated-link.v1`; descriptor tiers are not upgraded by the link |
 | Python Pydantic DTO member match | `ProbableImpact` through Tier2 `SerializerContractMember` |
 | Python Flask/FastAPI route | `HttpRouteBinding` with normalized route key when static decorator syntax is visible |
 | Python SQLAlchemy column | `DatabaseColumnMapping` with table/column/member evidence when declarative syntax is visible |

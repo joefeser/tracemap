@@ -1,27 +1,27 @@
 {
-  "scanId": "scan-synthetic-legacy",
-  "repoName": "synthetic-alpha",
+  "scanId": "synthetic-legacy-scan-001",
+  "repoName": "synthetic-legacy-fixture",
   "remoteUrl": null,
   "branch": null,
-  "commitSha": "3687102e563487be2acca2eaccd804d1947350fc",
-  "scannerVersion": "tracemap-fixture",
-  "scannedAt": "2026-06-01T00:00:00+00:00",
+  "commitSha": "1111111111111111111111111111111111111111",
+  "scannerVersion": "test-fixture",
+  "scannedAt": "2026-06-01T00:00:00Z",
   "analysisLevel": "Level1SemanticAnalysisReduced",
   "buildStatus": "FailedOrPartial",
   "solutions": [
     "Synthetic.sln"
   ],
   "projects": [
-    "src/Synthetic.csproj"
+    "src/Synthetic/Synthetic.csproj"
   ],
   "targetFrameworks": [
-    "net10.0"
+    "net48"
   ],
   "knownGaps": [
-    "SemanticLoadFailed: fixture compiler package unavailable",
-    "Truncated: fixture output cap"
+    "LegacyProjectLoadFailed",
+    "SyntaxFallbackUsed"
   ],
   "scanRootRelativePath": ".",
-  "scanRootPathHash": "fixture-root-hash",
-  "gitRootHash": null
+  "scanRootPathHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "gitRootHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 }

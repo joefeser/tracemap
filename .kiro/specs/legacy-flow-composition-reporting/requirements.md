@@ -4,8 +4,8 @@
 
 TraceMap now has static evidence for several legacy .NET slices: WebForms event
 entry points, WCF and service-reference metadata, service and HTTP surfaces,
-call/object creation edges, SQL/query facts, and a queued legacy data metadata
-extractor. These facts are useful individually, but older application demos need
+call/object creation edges, SQL/query facts, and a legacy data metadata MVP.
+These facts are useful individually, but older application demos need
 one conservative view that explains possible user-action-to-backend/data paths
 without implying runtime proof.
 
@@ -198,7 +198,7 @@ Acceptance Criteria:
    with explicit availability gaps where relevant.
 3. The implementation SHALL NOT change scanner fact schemas incompatibly unless
    a migration or backward-compatible reader behavior is defined.
-4. The implementation SHALL NOT require the queued legacy data metadata
+4. The implementation SHALL NOT require legacy data metadata
    extraction to be complete; when those facts are missing it SHALL label the
    corresponding terminal evidence as unavailable.
 5. The implementation SHALL keep the core scanner/reducer free of LLM calls,

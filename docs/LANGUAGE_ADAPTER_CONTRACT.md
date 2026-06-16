@@ -82,42 +82,48 @@ Facts intended to participate in existing contract reduction should reuse existi
 
 Language-specific fact types can be added, but they need rule catalog entries and documented reducer/report behavior.
 
+### Legacy WCF Metadata Facts
+
+The .NET adapter emits two WCF-specific metadata fact types for checked-in service-reference evidence:
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `WcfServiceReferenceMetadataDeclared` | Inventories parseable `.svcmap`, gated `.wsdl`, `.disco`, and service-reference `.xsd` metadata. | `metadataKind`, `metadataHash`, `metadataFileName`, `serviceReferenceFolder`, `sourceFormat` |
+| `WcfMetadataOperationDeclared` | Records safe WSDL `portType/operation` declarations from checked-in metadata. | `operationName`, `portTypeName`, `contractName`, `metadataHash`, `metadataFileName`, `serviceReferenceFolder` |
+
+These facts are static design-time evidence only. They do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or generated proxy freshness. Raw URLs, SOAP actions, schema locations, namespace URIs, local absolute paths, raw schemas, and snippets must be hashed or omitted.
+
+### Legacy WebForms Event Facts
+
+The .NET adapter emits WebForms-specific evidence for static event entry points:
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `WebFormsPageDeclared` | Inventories `.aspx`, `.ascx`, and `.master` directives and safe code-behind linkage. | `pageTypeName`, `linkedCodePath`, `directiveKind`, `autoEventWireup` |
+| `WebFormsControlDeclared` | Records static server controls from markup. | `pageTypeName`, `controlId`, `controlType`, `designerFactId` |
+| `WebFormsEventBindingDeclared` | Records supported static event attributes and handler identifiers. | `pageTypeName`, `controlId`, `eventName`, `handlerName` |
+| `WebFormsDesignerControlDeclared` | Records designer partial-class control fields as supporting evidence. | `pageTypeName`, `fieldName`, `controlType` |
+| `WebFormsHandlerResolved` | Links event bindings to scoped code-behind methods. | `handlerName`, `handlerSymbol`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
+| `WebFormsEventFlowProjected` | Projects resolved handlers to direct WCF, HTTP, SQL/query, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverage` |
+| `WebFormsLogicSignalDetected` | Emits bounded static logic or UI-boilerplate signals for handlers. | `handlerName`, `signalKind`, `staticLogicSignal`, `uiBoilerplateSignal` |
+
+These facts are static evidence only. They do not prove runtime page lifecycle execution, postbacks, event bubbling, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
+
 ### Legacy Data Metadata Facts
 
-The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX,
-typed DataSet XSD/TableAdapter metadata, generated `.designer.cs` linkage
-candidates, and data-provider config declarations. These facts are descriptor
-evidence only: they describe static design-time metadata and do not prove
-runtime data access, SQL execution, database existence, provider compatibility,
-config transform selection, secret availability, generated-code freshness, or
-production usage.
+The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX, typed DataSet XSD/TableAdapter, data-provider config, and deterministic generated-code linkage.
 
-Legacy data fact types are:
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `LegacyDataMetadataDeclared` | Inventories parseable legacy data metadata documents and generated-designer candidates. | `metadataKind`, `metadataHash`, `inventoryKind`, `path` |
+| `LegacyDataEntityDeclared` | Records static conceptual/generated entity, context, DataSet, row, or TableAdapter descriptors. | `metadataKind`, `entityKind`, `entityName`, `typeName`, `entityNameHash`, `typeNameHash` |
+| `LegacyDataStorageObjectDeclared` | Records static table, view, routine, DataTable, or storage entity-set descriptors. | `metadataKind`, `storageObjectKind`, `storageObjectName`, `tableName`, `storageObjectHash`, `tableNameHash` |
+| `LegacyDataColumnDeclared` | Records static property/field/column descriptors from metadata. | `metadataKind`, `columnKind`, `ownerName`, `propertyName`, `fieldName`, `columnName`, hash variants |
+| `LegacyDataMappingDeclared` | Records unambiguous descriptor-to-descriptor mappings such as entity-table or property-column. | `metadataKind`, `mappingKind`, `entityName`, `tableName`, `propertyName`, `columnName`, hash variants |
+| `LegacyDataProviderConfigDeclared` | Records safe provider, connection-name, provider factory, and EF provider metadata without raw values. | `configKind`, `connectionName`, `providerName`, `connectionNameHash`, `providerNameHash`, `valueHash` |
+| `LegacyDataGeneratedCodeLinked` | Links metadata descriptors to generated files or compiler-resolved symbols when deterministic. | `linkKind`, `symbolRole`, `typeName`, `generatedCodeFileName`, `supportingFactIds` |
 
-| Fact type | Meaning |
-| --- | --- |
-| `LegacyDataMetadataDeclared` | Metadata document or generated-designer inventory. |
-| `LegacyDataEntityDeclared` | Conceptual/generated entity, DataSet, table row, context, or adapter descriptor. |
-| `LegacyDataStorageObjectDeclared` | Table, view, routine, entity set, or storage object descriptor. |
-| `LegacyDataColumnDeclared` | Column/property/field descriptor, with unsafe names hashed. |
-| `LegacyDataMappingDeclared` | Unambiguous descriptor-to-descriptor mapping such as entity-table or property-column. |
-| `LegacyDataProviderConfigDeclared` | Provider, connection-name, provider-factory, and config-section metadata without raw values. |
-| `LegacyDataGeneratedCodeLinked` | Deterministic descriptor-scoped link to checked-in generated code. |
-
-Reducer-facing properties reuse shared names where safe, including `typeName`,
-`propertyName`, `fieldName`, `tableName`, `columnName`, `targetSymbol`, and
-hash fields such as `metadataHash`, `columnHash`, `tableHash`, and
-`connectionStringHash`. Metadata descriptors alone must not emit
-`DatabaseColumnMapping`; code-level access or a rule that owns code-to-column
-evidence is required for that fact type. Typed DataSet command text may emit
-`SqlTextUsed` and SQL-shape `QueryPatternDetected` only as hash/shape evidence;
-raw SQL text is not stored.
-
-Legacy data XML and config parsing must use safe XML settings: DTD processing is
-prohibited, `XmlResolver` is null, external entity resolution is not allowed,
-line information is preserved where practical, and malformed, oversized,
-security-rejected, ambiguous, stale, or unsupported metadata becomes explicit
-`AnalysisGap` evidence.
+These facts are static design-time metadata evidence. DBML, EDMX, typed DataSet, TableAdapter, and config descriptor facts are capped at `Tier2Structural`; generated-code links may be `Tier1Semantic` only when compiler-resolved symbol evidence is available, and that link does not upgrade descriptor facts. Raw SQL, connection strings, config values, namespace URIs, provider secrets, URLs, local paths, remotes, source snippets, and secret-looking values must be hashed or omitted. Metadata facts must not emit `DatabaseColumnMapping` without code-level mapping evidence owned by another rule.
 
 ## Symbol Identity
 

@@ -132,7 +132,7 @@ public sealed class LegacyDataMetadataExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
 
         Assert.DoesNotContain(result.Facts, fact => fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal));
-        Assert.Contains(result.Inventory, item => item.Kind == "Xsd" && item.RelativePath == "vendor.xsd");
+        Assert.Contains(result.Inventory, item => item.Kind == "XsdSchema" && item.RelativePath == "vendor.xsd");
     }
 
     [Fact]
