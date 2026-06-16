@@ -1,6 +1,6 @@
 # Legacy Data Metadata Extraction Implementation State
 
-Status: implementation-mvp-ready-for-review
+Status: implemented-mvp
 Branch: codex/legacy-data-metadata-extraction
 Public claim level: hidden
 
@@ -19,7 +19,7 @@ metadata and clearly label reduced coverage when it cannot prove a link.
 
 ## Scope Decisions
 
-- This branch is spec-only. It does not implement scanner code.
+- This branch implemented the conservative MVP scanner/reporting slice.
 - Static checked-in metadata only; no runtime database connections, SQL
   execution, service calls, EF model loading, or config transform execution.
 - DBML and EDMX are included anywhere in the repository because their extensions
@@ -40,8 +40,8 @@ metadata and clearly label reduced coverage when it cannot prove a link.
 
 ## Review State
 
-Initial spec drafted for Kiro Opus and Sonnet review. This should not be marked
-ready-for-implementation until Medium+ and blocking review findings are resolved.
+Initial spec drafted for Kiro Opus and Sonnet review. Medium+ and blocking
+review findings were resolved before implementation.
 
 Review outcomes:
 
@@ -60,8 +60,8 @@ Review outcomes:
 - Final Sonnet re-review completed with reduced coverage because Kiro reported
   denied shell access after reading files. No blocking or important issues
   remain. Spec is ready for implementation.
-- The six `legacy.data.*` rule catalog entries remain an implementation task;
-  this spec-only import does not change `rules/rule-catalog.yml`.
+- The six `legacy.data.*` rule catalog entries are implemented in
+  `rules/rule-catalog.yml`.
 - PR review loop addressed Gemini's actionable note about config fact ownership:
   `legacy.data.config.v1` no longer lists `ConfigKeyDeclared` as an emitted fact;
   generic config-key evidence remains under existing config rules.
@@ -69,7 +69,7 @@ Review outcomes:
   gating: requirements now require XSD-intrinsic indicators first and treat
   `.designer.cs` or generated-code linkage as corroborating evidence only.
 
-## Suggested PR Boundaries
+## Historical Suggested PR Boundaries
 
 - PR 1: Tasks 1-4, covering rule catalog, fact model, extractor version,
   inventory, parser safety, and safe identifier policy.
@@ -81,7 +81,7 @@ Review outcomes:
 - PR 6: Tasks 10 and 11, covering docs, validation, compatibility, and final
   implementation validation.
 
-## Validation Commands For Spec Delivery
+## Historical Validation Commands For Spec Delivery
 
 ```bash
 node scripts/kiro-review.mjs --phase legacy-data-metadata-extraction --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000
@@ -91,8 +91,7 @@ node scripts/kiro-review.mjs --phase legacy-data-metadata-extraction --kind re-r
 git diff --check
 ```
 
-No .NET implementation validation is required for this spec-only branch unless
-review patches touch source code, docs outside the spec, or validation scripts.
+These commands were used while preparing the spec packet before implementation.
 
 ## Implementation Validation
 

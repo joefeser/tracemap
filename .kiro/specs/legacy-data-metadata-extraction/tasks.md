@@ -2,6 +2,10 @@
 
 ## Implementation Tasks
 
+Current state: the conservative legacy data metadata MVP is implemented. Any
+remaining unchecked boxes below are deferred breadth/compatibility follow-ups,
+not stale task-state noise for the landed MVP.
+
 - [x] 1. Add rule catalog and model constants. Requirements: 1, 2, 3, 4, 5, 6, 7, 8.
   - [x] Add `legacy.data.metadata.inventory.v1`.
   - [x] Add `legacy.data.dbml.v1`.
