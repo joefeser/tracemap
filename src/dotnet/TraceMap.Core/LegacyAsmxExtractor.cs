@@ -454,7 +454,8 @@ public static partial class LegacyAsmxExtractor
                 .ThenBy(element => AttributeValue(element, "key") ?? string.Empty, StringComparer.Ordinal))
             {
                 var key = AttributeValue(add, "key") ?? string.Empty;
-                if (!LooksLikeAsmxConfigKey(key))
+                var value = AttributeValue(add, "value") ?? string.Empty;
+                if (!LooksLikeAsmxConfigKey(key, value))
                 {
                     continue;
                 }
@@ -465,7 +466,6 @@ public static partial class LegacyAsmxExtractor
                     continue;
                 }
 
-                var value = AttributeValue(add, "value") ?? string.Empty;
                 var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["configKind"] = "appSettings",
@@ -628,11 +628,7 @@ public static partial class LegacyAsmxExtractor
         return hasSoapAttribute
             || method.DescendantNodes()
                 .OfType<InvocationExpressionSyntax>()
-                .Select(invocation => invocation.Expression.ToString())
-                .Any(value => value is "Invoke" or "BeginInvoke" or "EndInvoke"
-                    || value.EndsWith(".Invoke", StringComparison.Ordinal)
-                    || value.EndsWith(".BeginInvoke", StringComparison.Ordinal)
-                    || value.EndsWith(".EndInvoke", StringComparison.Ordinal));
+                .Any(IsSoapHttpClientProtocolInvocation);
     }
 
     private static string GeneratedClientOperationName(MethodDeclarationSyntax method)
@@ -648,11 +644,28 @@ public static partial class LegacyAsmxExtractor
 
         var usesAsyncInvokeWrapper = method.DescendantNodes()
             .OfType<InvocationExpressionSyntax>()
-            .Select(invocation => invocation.Expression.ToString())
-            .Any(value => value is "BeginInvoke" or "EndInvoke"
-                || value.EndsWith(".BeginInvoke", StringComparison.Ordinal)
-                || value.EndsWith(".EndInvoke", StringComparison.Ordinal));
+            .Any(IsAsyncSoapHttpClientProtocolInvocation);
         return usesAsyncInvokeWrapper ? methodName[prefixLength..] : methodName;
+    }
+
+    private static bool IsSoapHttpClientProtocolInvocation(InvocationExpressionSyntax invocation)
+    {
+        return InvocationName(invocation) is "Invoke" or "BeginInvoke" or "EndInvoke";
+    }
+
+    private static bool IsAsyncSoapHttpClientProtocolInvocation(InvocationExpressionSyntax invocation)
+    {
+        return InvocationName(invocation) is "BeginInvoke" or "EndInvoke";
+    }
+
+    private static string InvocationName(InvocationExpressionSyntax invocation)
+    {
+        return invocation.Expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+            _ => string.Empty
+        };
     }
 
     private static bool IsSoapHttpClientProtocolType(TypeDeclarationSyntax type)
@@ -812,7 +825,7 @@ public static partial class LegacyAsmxExtractor
         return element.Parent?.Name.LocalName == "appSettings";
     }
 
-    private static bool LooksLikeAsmxConfigKey(string key)
+    private static bool LooksLikeAsmxConfigKey(string key, string value)
     {
         var normalized = ConfigKeySeparator().Replace(key, string.Empty);
         return normalized.Contains("Asmx", StringComparison.OrdinalIgnoreCase)
@@ -821,7 +834,15 @@ public static partial class LegacyAsmxExtractor
             || normalized.EndsWith("ServiceUrl", StringComparison.OrdinalIgnoreCase)
             || normalized.EndsWith("ServiceUri", StringComparison.OrdinalIgnoreCase)
             || normalized.EndsWith("ServiceEndpoint", StringComparison.OrdinalIgnoreCase)
+            || (normalized.EndsWith("EndpointUrl", StringComparison.OrdinalIgnoreCase) && LooksLikeAsmxEndpointValue(value))
             || normalized.EndsWith("WsdlUrl", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeAsmxEndpointValue(string value)
+    {
+        return value.Contains(".asmx", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("?wsdl", StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith(".wsdl", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SafeCodeName(string? value)
