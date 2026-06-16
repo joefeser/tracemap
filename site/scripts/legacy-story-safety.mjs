@@ -35,6 +35,7 @@ const hiddenThemePatterns = [
   /\.NET Remoting detection/gi,
   /WebForms event flow/gi,
   /Legacy data metadata/gi,
+  /Build environment diagnostics/gi,
   /Build diagnostics/gi,
   /Flow composition/gi
 ];
