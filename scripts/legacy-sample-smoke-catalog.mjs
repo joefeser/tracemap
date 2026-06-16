@@ -333,6 +333,12 @@ export async function promoteCatalogCommand({ options, root = defaultRoot }) {
 export function renderCatalogObject(source, { date, minimumEntryClaimLevel } = {}) {
   validateYearMonth(date);
   let entries = Array.isArray(source.entries) ? [...source.entries] : [];
+  if (entries.length === 0) {
+    throw new Error("Catalog render requires at least one entry.");
+  }
+  if (entries.some((entry) => !entry || !claimRank.has(entry.claimLevel))) {
+    throw new Error("Catalog render requires entries with valid claimLevel values.");
+  }
   if (minimumEntryClaimLevel) {
     const minimumRank = claimRank.get(minimumEntryClaimLevel);
     entries = entries.filter((entry) => claimRank.get(entry.claimLevel) >= minimumRank);
@@ -522,16 +528,13 @@ export function validateSafeIdentity(value, { field = "identity" } = {}) {
   if (typeof value !== "string" || value.trim() === "") {
     return `${field}-empty`;
   }
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) {
-    return `${field}-syntax`;
-  }
   const checks = [
-    ["path-separator", /[\\/]/u],
+    ["windows-drive", /^[A-Za-z]:/u],
     ["uri-scheme", /^[a-z][a-z0-9+.-]*:/iu],
+    ["home-fragment", /(^|-)~(?:$|-|[\\/])/u],
+    ["path-separator", /[\\/]/u],
     ["git-suffix", /\.git\b/iu],
     ["at-identity", /@/u],
-    ["windows-drive", /^[A-Za-z]:/u],
-    ["home-fragment", /(^|-)~($|-)/u],
     ["hostname", /\b[a-z0-9-]+\.(?:com|net|org|io|local|internal)\b/iu],
     ["private-token", /\b(?:private|internal|secret|token|client-name|customer|corp)\b/iu],
     ["branch-name", /\b(?:main|master|dev|feature|release|hotfix)-/iu]
@@ -540,6 +543,9 @@ export function validateSafeIdentity(value, { field = "identity" } = {}) {
     if (pattern.test(value)) {
       return `${field}-${category}`;
     }
+  }
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) {
+    return `${field}-syntax`;
   }
   return null;
 }
@@ -755,6 +761,10 @@ function validateRelationships(relationships, pointer, diagnostics, catalogPath)
   for (let index = 0; index < relationships.length; index += 1) {
     const relationship = relationships[index];
     const relationshipPointer = `${pointer}/relationships/${index}`;
+    if (!relationship || typeof relationship !== "object" || Array.isArray(relationship)) {
+      diagnostics.push(diagnostic("schema", catalogPath, relationshipPointer, "Relationship must be an object."));
+      continue;
+    }
     validateEnum(relationship?.artifactKind, [...relationshipArtifactKinds], catalogPath, `${relationshipPointer}/artifactKind`, diagnostics, "relationship-artifact-kind");
     validateEnum(relationship?.claimLevel, claimLevels, catalogPath, `${relationshipPointer}/claimLevel`, diagnostics, "claim-level");
     validateEnum(relationship?.validationStatus, [...expectationStates], catalogPath, `${relationshipPointer}/validationStatus`, diagnostics, "relationship-state");

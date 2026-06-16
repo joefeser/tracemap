@@ -48,14 +48,14 @@ test("canonical JSON is byte-stable and schema excludes local-only commit kinds"
 
 test("safe identity validation rejects label classes separately", () => {
   const cases = [
-    ["foo/bar", "syntax"],
-    ["https://example", "syntax"],
-    ["repo.git", "syntax"],
-    ["owner@repo", "syntax"],
-    ["C:\\repo", "syntax"],
-    ["~/repo", "syntax"],
-    ["example.com", "syntax"],
-    ["owner/repo", "syntax"],
+    ["foo/bar", "path-separator"],
+    ["https://example", "uri-scheme"],
+    ["repo.git", "git-suffix"],
+    ["owner@repo", "at-identity"],
+    ["C:\\repo", "windows-drive"],
+    ["~/repo", "home-fragment"],
+    ["example.com", "hostname"],
+    ["owner/repo", "path-separator"],
     ["private-client", "private-token"],
     ["token-secret", "private-token"]
   ];
@@ -166,6 +166,10 @@ test("relationships reject raw artifacts, ignored tmp paths, unknown artifact ki
   const unsafeId = clone(catalog);
   unsafeId.entries[0].relationships[0].safeArtifactId = "private-client";
   assertHasDiagnostic(unsafeId, ruleIds, "safeArtifactId-private-token");
+
+  const primitiveRelationship = clone(catalog);
+  primitiveRelationship.entries[0].relationships[0] = null;
+  assertHasDiagnostic(primitiveRelationship, ruleIds, "schema");
 });
 
 test("redaction and claim wording diagnostics are sanitized and point to JSON locations", async () => {
@@ -238,6 +242,14 @@ test("render filtering recomputes top-level classification and fails when no ent
   const hiddenOnly = clone(catalog);
   hiddenOnly.entries = [mixed.entries[1]];
   assert.throws(() => renderCatalogObject(hiddenOnly, { date: "2026-07", minimumEntryClaimLevel: "demo-safe" }), /removed every catalog entry/);
+
+  const empty = clone(catalog);
+  empty.entries = [];
+  assert.throws(() => renderCatalogObject(empty, { date: "2026-07" }), /at least one entry/);
+
+  const invalidClaim = clone(catalog);
+  delete invalidClaim.entries[0].claimLevel;
+  assert.throws(() => renderCatalogObject(invalidClaim, { date: "2026-07" }), /valid claimLevel/);
 });
 
 test("render requires explicit date and dry-run writes no files", async () => {
