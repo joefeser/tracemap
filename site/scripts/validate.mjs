@@ -8,6 +8,7 @@ import {
   validateDiscoveryNotInSitemap,
   validateRobotsDiscoveryComment
 } from "./discovery.mjs";
+import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,10 +18,11 @@ export async function validateSite(options = {}) {
 
   await buildSite({ log, root });
   await validateDemoSummary({ root });
+  const legacyStoryResult = await validateLegacyStorySafety({ root });
   const result = await validateDist({ root });
 
   log(
-    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, and ${result.sitemapUrlCount} sitemap URLs.`
+    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, and ${legacyStoryResult.scannedFileCount} legacy story safety targets.`
   );
 
   return result;

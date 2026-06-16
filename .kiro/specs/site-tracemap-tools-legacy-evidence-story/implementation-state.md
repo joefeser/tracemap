@@ -1,155 +1,168 @@
 # site-tracemap-tools-legacy-evidence-story implementation state
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: ready-for-review
 Public claim level: concept
 
 ## Branch
 
-Spec preparation branch: `codex/site-legacy-evidence-story`
+Implementation branch: `codex/site-legacy-evidence-story`
 
-Future implementation branch: not started
+Base: `origin/main`
 
 ## Scope
 
-This spec queues a bounded public legacy evidence story for `tracemap.tools`.
-The story should explain how TraceMap can talk about legacy-adjacent static
-evidence without implying runtime proof or shipped support that is not verified
-on `main`.
+This implementation adds a bounded public legacy evidence story to
+`tracemap.tools` without changing scanner, reducer, adapter, or core extractor
+code.
 
-This PR creates spec files only. It does not edit site source, add routes,
-change scanner or reducer behavior, add public artifacts, or implement the
-future page.
+Owned files changed:
 
-## Current Claim Position
+- `site/src/legacy-evidence/index.html`
+- `site/src/_site/pages.json`
+- `site/src/_site/discovery.json`
+- `site/src/legacy-validation/index.html`
+- `site/src/roadmap/index.html`
+- `site/src/docs/index.html`
+- `site/src/proof-paths/index.html`
+- `site/scripts/legacy-story-safety.mjs`
+- `site/scripts/legacy-story-safety.test.mjs`
+- `site/scripts/validate.mjs`
 
-Keep the public claim level at `concept`.
+Generated `site/dist/` and `site/output/` were not edited by hand.
 
-The referenced legacy themes include capabilities with mixed maturity: some
-implemented or ready on `dev`, some hidden pending redacted validation, and some
-not yet verified through checked-in public-safe artifacts on `main`. Until
-promotion and proof are rechecked during implementation, public copy must label
-these as `concept`, `dev-only`, or `hidden`, or omit them.
+## Route Decision
 
-Current theme labels for the implementation starting point:
+First implementation surface: standalone concept route `/legacy-evidence/`.
 
-| Theme | Current public label |
-| --- | --- |
-| WCF/service-reference mapping | hidden |
-| WCF metadata normalization | hidden |
-| .NET Remoting detection | hidden |
-| WebForms event flow | hidden |
-| Legacy data metadata | hidden |
-| Build environment diagnostics | hidden |
-| Flow composition reporting | hidden |
+Rendered safety target: `site/dist/legacy-evidence/index.html`.
 
-`Concept` applies to the page/story shape. It does not upgrade hidden core
-capability into public support wording.
+Top navigation was not changed. Discovery uses sitemap metadata plus bounded
+backlinks from existing concept/proof surfaces:
 
-The future implementation must update this note with the per-theme promotion
-check outcome, including negative results such as "confirmed not on `main`" or
-"public proof not available."
+- `/legacy-validation/`
+- `/roadmap/`
+- `/docs/`
+- `/proof-paths/`
 
-## Main/Dev Boundary
+This keeps the page discoverable without mutating every top-nav expectation.
 
-- `main` wording may describe only behavior promoted to `main` and backed by
-  checked-in public-safe demos, generated summaries, or documentation.
-- `dev` wording must be explicit: use `dev-only` or `concept` labels and avoid
-  implying shipped behavior.
-- Hidden core capability should remain hidden in public copy until redacted
-  validation summaries or checked-in public fixtures exist.
-- Any upgrade to `demo` requires a future implementation-state update with the
-  exact artifacts and validation commands used.
+## Promotion Check
 
-## Claim Boundaries
+Checked current `origin/main` state before writing public copy. Some legacy
+specs, samples, and validation-adjacent artifacts exist, but this site phase did
+not find public-safe checked-in proof sufficient to upgrade the public claim
+level for any referenced legacy theme.
 
-- Shared site principle: No public conclusion without evidence.
-- Safe public vocabulary: rule IDs, evidence tiers, coverage labels,
-  limitations, safe descriptors, hashes, generated public summaries, supporting
-  IDs, commit/source provenance, and extractor versions.
-- Do not claim runtime behavior, UI reachability, production traffic,
-  deployment state, endpoint performance, exploitability, database existence,
-  package compatibility, incident cause, release approval, or release safety.
-- Do not publish content forbidden by the canonical content-safety rules in
-  `requirements.md`.
-- Do not describe TraceMap as AI, LLM, embedding, vector-database, or
-  prompt-based impact analysis.
+Per-theme result:
+
+| Theme | Public label used | Promotion result |
+| --- | --- | --- |
+| WCF/service-reference mapping | hidden pending validation | No public-safe proof recorded for demo wording in this phase. |
+| WCF metadata normalization | hidden pending validation | No public-safe proof recorded for demo wording in this phase. |
+| .NET Remoting detection | hidden pending validation | Existing public sample/spec material does not by itself upgrade the public site claim. |
+| WebForms event flow | hidden pending validation | No public-safe proof recorded for demo wording in this phase. |
+| Legacy data metadata | hidden pending validation | No public-safe proof recorded for demo wording in this phase. |
+| Build diagnostics | hidden pending validation | No public-safe proof recorded for demo wording in this phase. |
+| Flow composition reporting | hidden pending validation | No public-safe proof recorded for demo wording in this phase. |
+
+`Concept` applies only to the page/story shape. It does not upgrade hidden
+capability support.
+
+## Public Copy Boundary
+
+The rendered route focuses on:
+
+- evidence model vocabulary;
+- current hidden claim ledger;
+- promotion gate;
+- public-safe artifact boundary;
+- non-claims and publication safety.
+
+The page avoids claims about shipped legacy support, runtime behavior, UI
+reachability, production traffic, deployment state, endpoint performance,
+exploitability, database existence, package compatibility, incident cause,
+release approval, release safety, AI impact analysis, LLM calls, embeddings,
+vector databases, and prompt-based classification.
 
 ## Content-Safety Guard
 
-The future implementation must add a new deterministic rendered-content safety
-check for the canonical content-safety rules in `requirements.md` and wire it
-into `npm test` or `npm run validate`. Current `npm run validate` is structural
-site validation and does not perform this content-safety scan.
+Implemented `site/scripts/legacy-story-safety.mjs`.
 
-The guard must run after build against the rendered legacy story page or
-containing page only, and exclude `.kiro/**`, spec source, fixture definitions,
-and other non-rendered source files. Existing rendered pages are out of scope
-unless the future implementation modifies them for this story.
+Wiring:
 
-Before writing the guard, the future implementation must record the concrete
-target path or section-anchor extraction strategy. If the story lands as a new
-standalone page, it must satisfy the existing top-navigation validation; adding
-a top-nav entry should be treated as a broader all-pages site change.
+- `npm run validate` calls `buildSite()` first.
+- The legacy story guard then scans the freshly built
+  `legacy-evidence/index.html` target.
+- Structural validation runs afterward through the existing `validateDist()`.
 
-The guard must fail on zero rendered HTML files, assert that the rendered legacy
-story page or section is included in the scanned set, and scan freshly built
-output. Prefer `npm run validate` after `buildSite()` or an isolated temp-output
-test that builds before scanning. If wired into `npm test`, the test must not
-scan stale or shared `site/dist`.
+The guard is deterministic string/regular-expression validation over rendered
+HTML/text. It normalizes case-insensitive patterns, ordinary whitespace, and
+Unicode format characters for hard leak detection.
 
-## Source Themes
+Fixture coverage in `site/scripts/legacy-story-safety.test.mjs` includes:
 
-- WCF/service references and WCF metadata normalization.
-- .NET Remoting detection.
-- WebForms event flow.
-- Legacy data metadata.
-- Legacy build environment diagnostics.
-- Legacy flow composition and reporting.
+- hard leak examples;
+- local paths;
+- bare/internal `.kiro/specs/...` paths;
+- connection strings;
+- credential assignment;
+- private/local URLs;
+- raw repository remotes;
+- affirmative overclaims;
+- sanctioned negated disclaimers;
+- empty output;
+- missing target output;
+- hidden-theme enumeration without adjacent hidden/omission labels;
+- legitimate artifact-name documentation;
+- clean concept copy;
+- boundary legacy terms;
+- boundary legacy terms adjacent to forbidden content;
+- source/spec/fixture files excluded from scan scope;
+- build ordering proving stale clean `dist` is replaced by fresh built output.
 
-Each theme must remain bounded to static evidence unless public-safe demo proof
-exists on `main`.
+Documented limitation: this guard prevents deterministic rendered-content leaks
+and obvious overclaims. It is not semantic proof that every public claim is safe.
+Manual review is still required for sensitive values that do not match the
+known patterns.
 
-## Existing Surfaces
+## Validation
 
-The site already has `/legacy-validation/`, which covers adjacent themes such as
-failed builds, UI event evidence, redacted summaries, public-safe shape, and
-non-claims. The future implementation must decide whether this legacy evidence
-story extends that page, becomes a sibling page, or remains a smaller linked
-section/card set.
+Commands run:
 
-## Validation Plan
+```text
+git diff --check
+cd site && npm test
+cd site && npm run validate
+cd site && npm run build
+./scripts/check-private-paths.sh
+```
 
-Spec-prep validation:
+Results:
 
-- Run Kiro spec review with Opus and Sonnet models if configured.
-- Patch Medium+ findings.
-- Run `git diff --check`.
+- `git diff --check`: passed.
+- `npm test`: passed, 50 tests.
+- `npm run validate`: passed; built the site and validated 30 HTML files, 769
+  internal references, 29 sitemap URLs, and 1 legacy story safety target.
+- `npm run build`: passed.
+- `./scripts/check-private-paths.sh`: passed.
 
-Review-loop update:
+Browser sanity:
 
-- Qodo flagged a link-policy conflict because public site pages already link to
-  GitHub URLs containing `.kiro/specs/...`.
-- The spec now forbids bare/internal `.kiro/specs/...` paths while allowing
-  intentional allowlisted public URLs, such as stable GitHub links, when they do
-  not expose private paths, local remotes, generated outputs, or raw sensitive
-  values.
-
-Future implementation validation:
-
-- Recheck `main` versus `dev` promotion state.
-- Run `npm test` from `site/`.
-- Run `npm run validate` from `site/` for structural site validation.
-- Add and run the new rendered-content safety check for the canonical
-  content-safety rules from `requirements.md`.
-- Run `git diff --check`.
-- Run desktop and mobile browser sanity checks for any layout or interaction
-  changes.
+- Started local preview on `http://localhost:4174` because port `4173` was in
+  use.
+- Desktop check at 1280px: title, H1, nav, concept label, hidden labels, and
+  backlinks were present; no horizontal overflow.
+- Mobile check at 390px: H1 visible, 11 nav links present, 7 theme cards
+  present, no horizontal overflow.
+- Temporary preview server was stopped after the check.
 
 ## Follow-Ups
 
-- During implementation, decide whether this lands as a new concept page or a
-  smaller section on an existing legacy/concept surface.
-- Upgrade individual themes to `demo` only after checked-in public-safe proof is
-  available and documented.
-- Link future public-safe sample summaries if a legacy evidence pack lands.
+- Upgrade a specific theme from `hidden` only after checked-in public-safe proof
+  exists on `main`, with artifact paths, supporting rule IDs, and validation
+  commands recorded here.
+- Keep the guard's approved disclaimer list small; prefer changing page copy
+  over widening exceptions when the guard catches a phrase.
+- Consider adding public-safe sample summaries later if a legacy evidence pack
+  lands and passes redaction review.

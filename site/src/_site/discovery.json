@@ -236,6 +236,23 @@
     ]
   },
   {
+    "path": "/legacy-evidence/",
+    "title": "Legacy Evidence Story",
+    "summary": "Concept claim ledger for hidden legacy-adjacent static evidence themes, promotion gates, and public-safe boundaries.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "roadmap",
+    "preferredProofPath": "/legacy-validation/",
+    "limitations": [
+      "Theme rows remain hidden pending redacted validation or checked-in public-safe proof.",
+      "Concept copy describes the evidence story shape, not completed legacy theme results."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, deployment state, endpoint performance, exploitability, database existence, package compatibility, incident cause, release approval, or release safety proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, or local output roots are published."
+    ]
+  },
+  {
     "path": "/use-cases/incident-review/",
     "title": "Incident Review Orientation",
     "summary": "Describes how static evidence can orient incident-adjacent code questions while operational proof stays outside TraceMap.",
