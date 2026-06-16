@@ -424,6 +424,316 @@ public sealed class LegacyFlowCompositionTests
         Assert.DoesNotContain(path.Nodes, node => node.DisplayName is "symbol:contract" or "symbol:service");
     }
 
+    [Fact]
+    public async Task Legacy_paths_compose_webforms_root_to_remoting_config_endpoint_with_static_cap()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
+        var configure = "Legacy.Remoting.RemotingHost.Configure()";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, configure, "Pages/Orders.aspx.cs", 30, EvidenceTiers.Tier1Semantic),
+            RemotingConfigServiceFact(manifest, configure, "App.config", 16, "Legacy.Remoting.RemoteService", objectUriHash: "abcdef1234567890")
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-endpoint"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.ProbableStaticPath, path.Classification);
+        Assert.Equal("remoting-endpoint", path.Nodes.Last().SurfaceKind);
+        Assert.Equal("objectUri-abcdef12", path.Nodes.Last().SurfaceName);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "remoting-evidence" && edge.RuleId == RuleIds.LegacyFlowStaticTraversal);
+        AssertNoStrongStaticPath(result.Report.Paths);
+        Assert.Contains(path.Notes, note => note.Code == "StaticRemotingEvidence");
+    }
+
+    [Fact]
+    public async Task Legacy_paths_remoting_activation_selector_uses_display_hash_and_redacts_raw_values()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var outDir = Path.Combine(temp.Path, "flows");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
+        var activate = "Legacy.Remoting.ClientFactory.Create()";
+        const string rawUrl = "tcp://customer-prod.example.test:9000/RemoteService.rem";
+        const string urlHash = "0123abcd99999999";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, activate, "Pages/Orders.aspx.cs", 31, EvidenceTiers.Tier1Semantic),
+            RemotingActivationFact(manifest, activate, "RemotingClient.cs", 9, "Legacy.Remoting.IRemoteService", urlHash)
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: outDir,
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-endpoint",
+            SurfaceName: "url-0123abcd"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewStaticPath, path.Classification);
+        Assert.Equal("url-0123abcd", path.Nodes.Last().SurfaceName);
+        AssertNoStrongStaticPath(result.Report.Paths);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.json"));
+        Assert.DoesNotContain(rawUrl, markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(rawUrl, json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(":9000", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("channel opened", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("remote object activated", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("cross-process", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("deployed endpoint", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("proves reachability", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("impacted remote service", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("runtime endpoint", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("url-0123abcd", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Legacy_paths_remoting_object_shape_is_selected_review_tier_only()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
+        var inspect = "Legacy.Remoting.RemoteServiceFactory.Inspect()";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, inspect, "Pages/Orders.aspx.cs", 31, EvidenceTiers.Tier1Semantic),
+            RemotingMarshalByRefFact(manifest, inspect, "RemoteService.cs", 7, "Legacy.Remoting.RemoteService")
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-object"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewStaticPath, path.Classification);
+        Assert.Equal("remoting-object", path.Nodes.Last().SurfaceKind);
+        Assert.Contains(path.Notes, note => note.Code == "RemotingObjectShapeOnly");
+        AssertNoStrongStaticPath(result.Report.Paths);
+    }
+
+    [Fact]
+    public async Task Legacy_paths_remoting_client_and_service_matching_hashes_stay_separate()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
+        var host = "Legacy.Remoting.RemotingHost.Configure()";
+        var activate = "Legacy.Remoting.ClientFactory.Create()";
+        const string sharedHash = "abcdef1234567890";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, host, "Pages/Orders.aspx.cs", 30, EvidenceTiers.Tier1Semantic),
+            CallFact(manifest, handler, activate, "Pages/Orders.aspx.cs", 31, EvidenceTiers.Tier1Semantic),
+            RemotingConfigServiceFact(manifest, host, "App.config", 16, "Legacy.Remoting.RemoteService", sharedHash),
+            RemotingActivationFact(manifest, activate, "RemotingClient.cs", 9, "Legacy.Remoting.IRemoteService", sharedHash)
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-endpoint"));
+
+        Assert.Equal(2, result.Report.Paths.Count);
+        Assert.All(result.Report.Paths, path => Assert.Single(path.Nodes, node => node.SurfaceKind == "remoting-endpoint"));
+        Assert.DoesNotContain(result.Report.Paths, path => path.Nodes.Count(node => node.SurfaceKind == "remoting-endpoint") > 1);
+        AssertNoStrongStaticPath(result.Report.Paths);
+    }
+
+    [Fact]
+    public async Task Legacy_paths_remoting_channel_supporting_ids_are_source_scoped_and_deterministic()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Admin.Start_Click(System.Object,System.EventArgs)";
+        var configure = "Legacy.Remoting.RemotingHost.Configure()";
+        var channel = RemotingChannelDeclaredFact(manifest, configure, "RemotingHost.cs", 14, "TcpChannel");
+        var registration = RemotingChannelRegisteredFact(manifest, configure, "RemotingHost.cs", 15, " ch-unused ; " + channel.FactId + " ; " + channel.FactId + " ");
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Admin.aspx", "Start", "OnClick", "Start_Click", 12),
+            WebFormsHandler(manifest, "Pages/Admin.aspx.cs", handler, "Start_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, configure, "Pages/Admin.aspx.cs", 34, EvidenceTiers.Tier1Semantic),
+            channel,
+            registration
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-channel",
+            SurfaceName: channel.FactId));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewStaticPath, path.Classification);
+        Assert.Equal("remoting-channel", path.Nodes.Last().SurfaceKind);
+        Assert.Contains(path.SupportingFactIds, id => id.EndsWith(":" + channel.FactId, StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MalformedSupportingFactIds");
+        AssertNoStrongStaticPath(result.Report.Paths);
+    }
+
+    [Fact]
+    public async Task Legacy_paths_remoting_mixed_supporting_id_delimiters_emit_gap()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Admin.Start_Click(System.Object,System.EventArgs)";
+        var configure = "Legacy.Remoting.RemotingHost.Configure()";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Admin.aspx", "Start", "OnClick", "Start_Click", 12),
+            WebFormsHandler(manifest, "Pages/Admin.aspx.cs", handler, "Start_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, configure, "Pages/Admin.aspx.cs", 34, EvidenceTiers.Tier1Semantic),
+            RemotingChannelRegisteredFact(manifest, configure, "RemotingHost.cs", 15, "alpha,beta;gamma")
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-channel"));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MalformedSupportingFactIds" && gap.RuleId == RuleIds.LegacyFlowGapPropagation);
+        AssertNoStrongStaticPath(result.Report.Paths);
+    }
+
+    [Fact]
+    public async Task Legacy_paths_remoting_neutralizes_private_combined_source_labels()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
+        var configure = "Legacy.Remoting.RemotingHost.Configure()";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, configure, "Pages/Orders.aspx.cs", 30, EvidenceTiers.Tier1Semantic),
+            RemotingConfigServiceFact(manifest, configure, "App.config", 16, "Legacy.Remoting.RemoteService", objectUriHash: "abcdef1234567890")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["internal-remoting-prod"]));
+
+        await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: combined,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            ToSurface: "remoting-endpoint"));
+
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "flows", "paths-report.json"));
+        Assert.DoesNotContain("internal-remoting-prod", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"sourceLabel\": \"source:", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Legacy_paths_keep_wcf_and_remoting_terminals_separate()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
+        var clientCall = "Legacy.ServiceReference.OrderClient.SubmitOrder(System.Int32)";
+        var remotingConfigure = "Legacy.Remoting.RemotingHost.Configure()";
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            CallFact(manifest, handler, clientCall, "Pages/Orders.aspx.cs", 30, EvidenceTiers.Tier1Semantic),
+            CallFact(manifest, handler, remotingConfigure, "Pages/Orders.aspx.cs", 31, EvidenceTiers.Tier1Semantic),
+            WcfMappingFact(manifest, clientCall, "SubmitOrder", "Service References/Order/Reference.cs", 5),
+            RemotingConfigServiceFact(manifest, remotingConfigure, "App.config", 16, "Legacy.Remoting.RemoteService", objectUriHash: "abcdef1234567890")
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View));
+
+        Assert.Contains(result.Report.Paths, path => path.Nodes.Last().SurfaceKind == "wcf-operation");
+        Assert.Contains(result.Report.Paths, path => path.Nodes.Last().SurfaceKind == "remoting-endpoint");
+        Assert.All(result.Report.Paths.Where(path => path.Nodes.Last().SurfaceKind is "wcf-operation" or "remoting-endpoint"),
+            path => Assert.StartsWith(path.Nodes.Last().SurfaceKind == "wcf-operation" ? "legacy.wcf." : "legacy.remoting.", path.Nodes.Last().RuleId, StringComparison.Ordinal));
+        AssertNoStrongStaticPath(result.Report.Paths.Where(path => path.Nodes.Last().SurfaceKind == "remoting-endpoint"));
+    }
+
+    [Fact]
+    public async Task Legacy_paths_remoting_availability_and_gap_propagation_are_explicit()
+    {
+        using var temp = new TempDirectory();
+        var oldIndex = Path.Combine(temp.Path, "old.sqlite");
+        var gapIndex = Path.Combine(temp.Path, "gap.sqlite");
+        var currentIndex = Path.Combine(temp.Path, "current.sqlite");
+        var oldManifest = Manifest("legacy-app", scannerVersion: "tracemap-milestone15");
+        var gapManifest = Manifest("legacy-app");
+        var currentManifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
+        SqliteIndexWriter.Write(currentIndex, currentManifest, [
+            WebFormsBinding(currentManifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(currentManifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding")
+        ]);
+        SqliteIndexWriter.Write(oldIndex, oldManifest, [
+            WebFormsBinding(oldManifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(oldManifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding")
+        ]);
+        SqliteIndexWriter.Write(gapIndex, gapManifest, [
+            WebFormsBinding(gapManifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(gapManifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
+            AnalysisGapFact(gapManifest, RuleIds.LegacyRemotingConfig, "ExternalConfigInclude", "App.config", 8)
+        ]);
+
+        var oldResult = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: oldIndex,
+            OutputPath: Path.Combine(temp.Path, "old-flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View));
+        var currentResult = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: currentIndex,
+            OutputPath: Path.Combine(temp.Path, "current-flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View));
+        var gapResult = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: gapIndex,
+            OutputPath: Path.Combine(temp.Path, "gap-flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View));
+
+        Assert.Contains(oldResult.Report.Gaps, gap => gap.GapKind == "SchemaMissing" && gap.Reason == "legacy-remoting");
+        Assert.Contains(currentResult.Report.Gaps, gap => gap.GapKind == "NoRemotingEvidenceFound" && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence);
+        Assert.Contains("No Remoting evidence found under available Remoting extractor coverage", await File.ReadAllTextAsync(Path.Combine(temp.Path, "current-flows", "paths-report.md")), StringComparison.Ordinal);
+        Assert.Contains(gapResult.Report.Gaps, gap => gap.GapKind == "ExternalConfigInclude" && gap.RuleId == RuleIds.LegacyFlowGapPropagation);
+    }
+
+    private static void AssertNoStrongStaticPath(IEnumerable<CombinedPath> paths)
+    {
+        Assert.DoesNotContain(paths, candidate => candidate.Classification == CombinedDependencyPathClassifications.StrongStaticPath);
+    }
+
     private static ScanManifest Manifest(string repo, string analysisLevel = "Level1SemanticAnalysis", string buildStatus = "Succeeded", string scannerVersion = ScannerVersions.TraceMap)
     {
         return new ScanManifest(
@@ -619,6 +929,129 @@ public sealed class LegacyFlowCompositionTests
                 ["normalizedOperationName"] = operation,
                 ["mappingKind"] = "GeneratedClientToMetadataOperation",
                 ["supportingFactIds"] = "wcf-client,wcf-operation"
+            });
+    }
+
+    private static CodeFact RemotingConfigServiceFact(ScanManifest manifest, string sourceSymbol, string file, int line, string typeName, string objectUriHash)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingConfigServiceDeclared,
+            RuleIds.LegacyRemotingConfig,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: typeName,
+            contractElement: "well-known-service",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverage"] = "config-structural",
+                ["limitation"] = "Static Remoting config service evidence only; runtime hosting, activation, reachability, deployment, and production usage are not proven.",
+                ["objectUriHash"] = objectUriHash,
+                ["registrationKind"] = "well-known-service",
+                ["sourceKind"] = "config",
+                ["typeName"] = typeName
+            });
+    }
+
+    private static CodeFact RemotingActivationFact(ScanManifest manifest, string sourceSymbol, string file, int line, string targetTypeName, string urlHash)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingClientActivationDeclared,
+            RuleIds.LegacyRemotingRegistration,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: targetTypeName,
+            contractElement: "Activator.GetObject",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverage"] = "syntax-fallback-remoting-context",
+                ["limitation"] = "Static client activation evidence only; URL values are hashed and runtime reachability is not proven.",
+                ["registrationKind"] = "client-activation",
+                ["sourceKind"] = "syntax",
+                ["targetTypeName"] = targetTypeName,
+                ["urlHash"] = urlHash
+            });
+    }
+
+    private static CodeFact RemotingChannelDeclaredFact(ScanManifest manifest, string sourceSymbol, string file, int line, string channelTypeName)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingChannelDeclared,
+            RuleIds.LegacyRemotingChannel,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: channelTypeName,
+            contractElement: channelTypeName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["channelDirection"] = "server",
+                ["channelKind"] = "tcp",
+                ["channelTypeName"] = channelTypeName,
+                ["coverage"] = "syntax-fallback",
+                ["limitation"] = "Static channel construction evidence only; runtime channel setup is not proven.",
+                ["sourceKind"] = "syntax"
+            });
+    }
+
+    private static CodeFact RemotingChannelRegisteredFact(ScanManifest manifest, string sourceSymbol, string file, int line, string supportingFactIds)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingChannelRegistered,
+            RuleIds.LegacyRemotingChannel,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "ChannelServices.RegisterChannel",
+            contractElement: "RegisterChannel",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverage"] = "syntax-fallback",
+                ["limitation"] = "Static channel registration evidence only; runtime registration is not proven.",
+                ["linkKind"] = "same-method-single-local",
+                ["registrationCall"] = "True",
+                ["sourceKind"] = "syntax",
+                ["supportingFactIds"] = supportingFactIds
+            });
+    }
+
+    private static CodeFact RemotingMarshalByRefFact(ScanManifest manifest, string sourceSymbol, string file, int line, string typeName)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingMarshalByRefObjectDeclared,
+            RuleIds.LegacyRemotingMarshalByRef,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: typeName,
+            contractElement: typeName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverage"] = "semantic",
+                ["limitation"] = "Inheritance is Remoting-capable object shape only; it does not prove hosting, activation, reachability, deployment, or production usage.",
+                ["sourceKind"] = "semantic",
+                ["typeName"] = typeName
+            });
+    }
+
+    private static CodeFact AnalysisGapFact(ScanManifest manifest, string ruleId, string classification, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            ruleId,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = classification,
+                ["messageHash"] = FactFactory.Hash(classification, 32)
             });
     }
 
