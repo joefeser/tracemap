@@ -22,7 +22,7 @@ export async function validateSite(options = {}) {
   const result = await validateDist({ root });
 
   log(
-    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, and ${legacyStoryResult.scannedFileCount} legacy story safety target.`
+    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, and ${legacyStoryResult.scannedFileCount} legacy story safety targets.`
   );
 
   return result;

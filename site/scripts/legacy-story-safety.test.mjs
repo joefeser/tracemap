@@ -51,6 +51,32 @@ test("legacy story guard rejects hard leaks and sensitive values", () => {
   }
 });
 
+test("legacy story guard strips tags with greater-than signs inside attributes", () => {
+  const errors = validateRenderedLegacyStoryHtml(
+    html('<main><input value="a > b"><p>Clean public concept copy.</p></main>')
+  );
+
+  assert.deepEqual(errors, []);
+});
+
+test("legacy story guard decodes common whitespace and numeric HTML entities before checking words", () => {
+  const errors = validateRenderedLegacyStoryHtml(
+    html("<main><p>api&nbsp;key &#61; secret-value and password&#58; hidden-value</p></main>")
+  );
+
+  assert.match(errors.join("\n"), /credential-assignment/);
+});
+
+test("legacy story guard redacts sensitive evidence from error messages", () => {
+  const errors = validateRenderedLegacyStoryHtml(
+    html("<main><p>Server=db;Database=orders;User ID=sa;Password=secret;</p></main>")
+  );
+  const message = errors.join("\n");
+
+  assert.match(message, /redacted connection string/);
+  assert.doesNotMatch(message, /Password=secret/);
+});
+
 test("legacy story guard rejects affirmative overclaims while allowing exact negated disclaimers", () => {
   assert.match(
     validateRenderedLegacyStoryHtml(html("<main><p>This page proves runtime proof and release safety.</p></main>")).join(
