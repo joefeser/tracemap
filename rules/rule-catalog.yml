@@ -2398,3 +2398,49 @@ rules:
       - Missing package evidence under reduced coverage is an analysis gap, not proof that a package is absent.
       - Exact package-name matching can miss aliases, relocated packages, shaded dependencies, generated manifests, imported build files, and dynamically declared dependencies.
       - No vulnerability database, registry, changelog, license, LLM, embedding, vector, or prompt-based analysis is used.
+
+  - id: legacy.baseline.redacted-manifest.v1
+    name: Legacy baseline redacted manifest
+    description: Creates deterministic redacted legacy baseline manifests from TraceMap scan outputs using neutral labels and aggregate evidence counts.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyBaselineManifest
+    limitations:
+      - Baseline manifests are counts-only summaries and omit raw facts, source paths, snippets, SQL text, config values, remotes, analyzer logs, and private sample identities.
+      - Public-safe classification depends on validator coverage and reviewer judgment; it is not proof that every possible unsafe value was present or absent.
+      - Missing evidence under reduced coverage remains an analysis gap and must not be interpreted as absence.
+
+  - id: legacy.baseline.coverage-snapshot.v1
+    name: Legacy baseline coverage snapshot
+    description: Summarizes observed rule IDs, fact types, evidence tiers, extractors, surfaces, known gaps, and reduced-coverage states for a redacted baseline.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyBaselineRuleCoverage
+      - LegacyBaselineFactCoverage
+    limitations:
+      - Coverage snapshots preserve aggregate static evidence counts only and do not prove runtime behavior, deployment, or business relevance.
+      - Surface status values are scope-relative and can be unknown, not-in-scope, not-observed, or observed depending on available scan artifacts.
+      - Extractor and schema differences can make future count movement require a migration map or reviewer interpretation.
+
+  - id: legacy.baseline.regression-comparison.v1
+    name: Legacy baseline regression comparison
+    description: Compares two redacted legacy baseline manifests by static evidence counts, coverage labels, extractor versions, known gaps, and supported surfaces.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyBaselineComparison
+      - LegacyBaselineMovement
+    limitations:
+      - Comparisons describe static evidence count and coverage movement only; they do not prove runtime behavior, production use, safety posture, or business impact.
+      - Decreases, removed categories, rejected classifications, reduced coverage, and unmapped schema or rule changes require human review.
+      - Migration maps document schema, rule, or fact renames but do not prove semantic equivalence beyond the stated limitation.
+
+  - id: legacy.baseline.safety-validation.v1
+    name: Legacy baseline safety validation
+    description: Validates redacted baseline and comparison artifacts for storage boundaries, neutral labels, unsafe content categories, rule-catalog coverage, and promotion readiness.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LegacyBaselineValidationDiagnostic
+    limitations:
+      - Safety diagnostics report categories without echoing unsafe values, so remediation requires inspecting local-only artifacts outside committed outputs.
+      - Secret-like, low-entropy, enumerable, or private identity values are omitted or represented category-only instead of hashed for public-safe artifacts.
+      - Validation is a guardrail for committed summaries, not authorization to publish private scan artifacts.

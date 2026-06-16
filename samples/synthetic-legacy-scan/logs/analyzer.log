@@ -1,0 +1,5 @@
+scanId=synthetic-legacy-scan-001
+analysisLevel=Level1SemanticAnalysisReduced
+buildStatus=FailedOrPartial
+knownGap=LegacyProjectLoadFailed
+knownGap=SyntaxFallbackUsed
