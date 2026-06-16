@@ -1,7 +1,7 @@
 # Legacy WCF Service Reference Mapping Implementation State
 
 Status: ready-for-implementation
-Branch suggestion: codex/legacy-wcf-service-reference-mapping
+Branch: codex/legacy-wcf-service-reference-mapping
 Public claim level: hidden
 
 ## Why This Spec Exists
@@ -48,7 +48,7 @@ Spec-only delivery validation:
 
 ```bash
 git diff --check
-./scripts/check-private-paths.sh .kiro/specs/legacy-wcf-service-reference-mapping
+./scripts/check-private-paths.sh
 ```
 
 Implementation validation, once product code is changed:
