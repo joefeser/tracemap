@@ -834,7 +834,7 @@ public static partial class LegacyAsmxExtractor
             || normalized.EndsWith("ServiceUrl", StringComparison.OrdinalIgnoreCase)
             || normalized.EndsWith("ServiceUri", StringComparison.OrdinalIgnoreCase)
             || normalized.EndsWith("ServiceEndpoint", StringComparison.OrdinalIgnoreCase)
-            || (normalized.EndsWith("EndpointUrl", StringComparison.OrdinalIgnoreCase) && LooksLikeAsmxEndpointValue(value))
+            || (normalized.EndsWith("Url", StringComparison.OrdinalIgnoreCase) && LooksLikeAsmxEndpointValue(value))
             || normalized.EndsWith("WsdlUrl", StringComparison.OrdinalIgnoreCase);
     }
 
