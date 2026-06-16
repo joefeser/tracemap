@@ -53,7 +53,7 @@
   - [ ] Parse ASMX/SOAP-relevant `web.config` and `app.config` structures.
   - [ ] Emit ASMX-specific config facts as a supplement to generic `ConfigKeyDeclared`, not as a replacement.
   - [ ] Detect `system.web/webServices`, SOAP extensions, safe generated proxy URL key names, and old service protocol settings.
-  - [ ] Hash or omit endpoint values, hostnames, credentials, connection strings, local paths, and config values.
+  - [ ] Omit credentials, tokens, connection strings, and secret-like values rather than hashing them; hash or omit only allowed non-secret endpoint, hostname, local path, and config values.
   - [ ] Emit gaps for encrypted sections, transforms, external includes, machine.config dependencies, or unsupported custom sections.
   - [ ] Do not stitch client and service evidence based on endpoint/config hash equality alone.
 
