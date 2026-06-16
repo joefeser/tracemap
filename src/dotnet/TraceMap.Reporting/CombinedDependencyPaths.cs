@@ -145,7 +145,10 @@ public sealed record CombinedPathGap(
     string? EvidenceTier,
     string? FilePath,
     int? StartLine,
-    string? Reason);
+    string? Reason,
+    string? CommitSha = null,
+    string? ExtractorVersion = null,
+    string? EvidenceScope = null);
 
 public sealed record CombinedPathInventory(
     IReadOnlyDictionary<string, int> NodesByKind,
@@ -216,6 +219,11 @@ public static class CombinedDependencyPathReporter
         "http-client",
         "package-config",
         "wcf-operation",
+        "remoting-endpoint",
+        "remoting-registration",
+        "remoting-channel",
+        "remoting-object",
+        "remoting-api",
         "legacy-data",
         "dependency-surface"
     };
@@ -240,6 +248,11 @@ public static class CombinedDependencyPathReporter
         "sql-persistence",
         "http-client",
         "wcf-operation",
+        "remoting-endpoint",
+        "remoting-registration",
+        "remoting-channel",
+        "remoting-object",
+        "remoting-api",
         "legacy-data",
         "dependency-surface",
         "package-config"
@@ -353,7 +366,7 @@ public static class CombinedDependencyPathReporter
 
             if (!TerminalSurfaceKinds.Contains(surfaceKind))
             {
-                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, legacy-data, or dependency-surface.");
+                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, or dependency-surface.");
             }
         }
 
@@ -526,12 +539,12 @@ public static class CombinedDependencyPathReporter
             warnings.Length == 0 && !sortedGaps.Any(gap => gap.Classification is CombinedDependencyPathClassifications.AnalysisGap or CombinedDependencyPathClassifications.ReducedCoverage) ? "FullEvidenceAvailable" : "ReducedCoverage",
             warnings,
             new CombinedPathQuery(
-                options.FromEndpoint,
-                options.FromSymbol,
-                sourceFilter,
-                options.FromWebFormsEvent,
+                legacyMode ? SafeDisplay(options.FromEndpoint) : options.FromEndpoint,
+                legacyMode ? SafeDisplay(options.FromSymbol) : options.FromSymbol,
+                legacyMode && sourceFilter is not null ? SafeSourceLabel(sourceFilter) : sourceFilter,
+                legacyMode ? SafeDisplay(options.FromWebFormsEvent) : options.FromWebFormsEvent,
                 options.ToSurface,
-                options.SurfaceName,
+                legacyMode ? SafeDisplay(options.SurfaceName) : options.SurfaceName,
                 sourcePair is null ? null : $"{EscapeSourcePairLabel(sourcePair.Value.Client)}:{EscapeSourcePairLabel(sourcePair.Value.Server)}",
                 options.Classification,
                 legacyMode,
@@ -559,7 +572,7 @@ public static class CombinedDependencyPathReporter
                 CountBy(sortedGaps, gap => gap.GapKind),
                 participatingNodes,
                 participatingEdges),
-            CombinedDependencyReporter.Limitations);
+            ReportLimitations(legacyMode, participatingNodes, sortedGaps));
     }
 
     private static EvidenceGraph BuildGraph(
@@ -1076,6 +1089,8 @@ public static class CombinedDependencyPathReporter
         {
             AddProjectionEdge(graph, projection, factsBySourceOriginalId, surfacesByKind);
         }
+
+        AddRemotingNodesAndEdges(graph, facts, factsBySourceOriginalId);
     }
 
     private static void AddUnresolvedRootGaps(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
@@ -1173,6 +1188,172 @@ public static class CombinedDependencyPathReporter
                 null,
                 null,
                 "legacy-data-metadata"));
+        }
+
+        AddRemotingAvailabilityGaps(graph, read);
+    }
+
+    private static void AddRemotingNodesAndEdges(
+        EvidenceGraph graph,
+        IReadOnlyList<CombinedFactRow> facts,
+        IReadOnlyDictionary<string, CombinedFactRow> factsBySourceOriginalId)
+    {
+        var remotingFacts = facts
+            .Where(IsRemotingFact)
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var remotingBySourceOriginalId = remotingFacts
+            .GroupBy(fact => SourceFactKey(fact.SourceIndexId, fact.OriginalFactId), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).First(), StringComparer.Ordinal);
+        var callFacts = facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge)
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var configureCallersByConfig = RemotingConfigureCallersByConfig(remotingFacts, callFacts);
+
+        foreach (var fact in remotingFacts)
+        {
+            var node = ToRemotingNode(fact);
+            graph.AddNode(node);
+            foreach (var symbol in RemotingAttachmentSymbols(fact, callFacts, configureCallersByConfig))
+            {
+                var symbolNode = graph.GetOrAddSymbolNode(fact.SourceIndexId, fact.SourceLabel, symbol, fact.FilePath, fact.StartLine, fact.EndLine, fact.RuleId, fact.EvidenceTier);
+                graph.AddEdge(new GraphEdge(
+                    $"remoting-evidence:{fact.CombinedFactId}:{symbolNode.NodeId}",
+                    "remoting-evidence",
+                    symbolNode.NodeId,
+                    node.NodeId,
+                    "EvidenceEdge",
+                    RuleIds.LegacyFlowStaticTraversal,
+                    fact.EvidenceTier,
+                    RemotingSupportingFacts(fact, factsBySourceOriginalId),
+                    [],
+                    SafePath(fact.FilePath),
+                    fact.StartLine,
+                    fact.EndLine));
+            }
+        }
+
+        foreach (var registration in remotingFacts.Where(fact => fact.FactType == FactTypes.RemotingChannelRegistered))
+        {
+            var supportingIds = ParseRemotingSupportingFactIds(registration, out var malformed);
+            if (malformed)
+            {
+                graph.Gaps.Add(RemotingGap(
+                    registration,
+                    "MalformedSupportingFactIds",
+                    "Remoting supportingFactIds used mixed delimiters; the field was ignored for static edge construction.",
+                    RuleIds.LegacyFlowGapPropagation,
+                    CombinedDependencyPathClassifications.AnalysisGap));
+                continue;
+            }
+
+            var linked = false;
+            foreach (var supportingId in supportingIds)
+            {
+                if (!remotingBySourceOriginalId.TryGetValue(SourceFactKey(registration.SourceIndexId, supportingId), out var declaration)
+                    || declaration.FactType != FactTypes.RemotingChannelDeclared)
+                {
+                    continue;
+                }
+
+                graph.AddEdge(new GraphEdge(
+                    $"remoting-channel-link:{declaration.CombinedFactId}:{registration.CombinedFactId}",
+                    "remoting-channel-link",
+                    ToRemotingNode(declaration).NodeId,
+                    ToRemotingNode(registration).NodeId,
+                    "EvidenceEdge",
+                    RuleIds.LegacyFlowStaticTraversal,
+                    MaxEvidenceTier(declaration.EvidenceTier, registration.EvidenceTier),
+                    [declaration.CombinedFactId, registration.CombinedFactId],
+                    [],
+                    SafePath(registration.FilePath),
+                    registration.StartLine,
+                    registration.EndLine));
+                linked = true;
+            }
+
+            var linkKind = CombinedDependencyReporter.FirstValue(registration.Properties, "linkKind");
+            if (!linked && (string.IsNullOrWhiteSpace(linkKind) || string.Equals(linkKind, "unsupported-dynamic-or-nonlocal", StringComparison.Ordinal)))
+            {
+                graph.Gaps.Add(RemotingGap(
+                    registration,
+                    "UnsupportedRemotingChannelLink",
+                    "Remoting channel registration could not be linked to a channel declaration using deterministic same-source evidence.",
+                    registration.RuleId,
+                    CombinedDependencyPathClassifications.NeedsReviewStaticPath));
+            }
+        }
+
+        foreach (var gapFact in facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId.StartsWith("legacy.remoting.", StringComparison.Ordinal))
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            var code = CombinedDependencyReporter.FirstValue(gapFact.Properties, "classification", "gapKind", "reason") ?? "RemotingAnalysisGap";
+            graph.Gaps.Add(RemotingGap(
+                gapFact,
+                code,
+                $"Remoting analysis gap preserved from `{gapFact.RuleId}`.",
+                RuleIds.LegacyFlowGapPropagation,
+                CombinedDependencyPathClassifications.AnalysisGap));
+        }
+    }
+
+    private static void AddRemotingAvailabilityGaps(EvidenceGraph graph, CombinedReadResult read)
+    {
+        foreach (var source in read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal))
+        {
+            if (!IsCSharpSource(source))
+            {
+                continue;
+            }
+
+            var sourceFacts = read.Facts.Where(fact => fact.SourceIndexId == source.SourceIndexId).ToArray();
+            if (sourceFacts.Any(IsRemotingFact) || sourceFacts.Any(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId.StartsWith("legacy.remoting.", StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            if (SourceSupportsRemotingExtraction(source))
+            {
+                graph.Gaps.Add(new CombinedPathGap(
+                    $"gap:legacy-remoting:none:{source.SourceIndexId}",
+                    "NoRemotingEvidenceFound",
+                    CombinedDependencyPathClassifications.NoBackendEvidence,
+                    "No Remoting evidence found under available Remoting extractor coverage; this does not prove Remoting is unused at runtime.",
+                    source.SourceIndexId,
+                    source.Label,
+                    null,
+                    null,
+                    RuleIds.LegacyFlowInputAvailability,
+                    EvidenceTiers.Tier4Unknown,
+                    null,
+                    null,
+                    "legacy-remoting",
+                    source.CommitSha,
+                    source.ScannerVersion,
+                    "source-manifest"));
+            }
+            else
+            {
+                graph.Gaps.Add(new CombinedPathGap(
+                    $"gap:legacy-remoting:schema:{source.SourceIndexId}",
+                    "SchemaMissing",
+                    CombinedDependencyPathClassifications.AnalysisGap,
+                    "Remoting extractor availability could not be proven from this index; absence is an availability gap, not clean absence.",
+                    source.SourceIndexId,
+                    source.Label,
+                    null,
+                    null,
+                    RuleIds.LegacyFlowInputAvailability,
+                    EvidenceTiers.Tier4Unknown,
+                    null,
+                    null,
+                    "legacy-remoting",
+                    source.CommitSha,
+                    source.ScannerVersion,
+                    "source-manifest"));
+            }
         }
     }
 
@@ -1385,6 +1566,11 @@ public static class CombinedDependencyPathReporter
             safeKind switch
             {
                 "wcf-operation" => "wcf-operation",
+                "remoting-endpoint" => "remoting-endpoint",
+                "remoting-registration" => "remoting-registration",
+                "remoting-channel" => "remoting-channel",
+                "remoting-object" => "remoting-object",
+                "remoting-api" => "remoting-api",
                 "legacy-data" => "legacy-data",
                 "sql-query" => "SqlSurface",
                 "http-client" => "HttpClientSurface",
@@ -1422,6 +1608,19 @@ public static class CombinedDependencyPathReporter
         return SplitList(CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds"))
             .Select(id => factsBySourceOriginalId.TryGetValue(SourceFactKey(fact.SourceIndexId, id), out var supporting) ? supporting.CombinedFactId : id)
             .Append(fact.CombinedFactId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> RemotingSupportingFacts(CombinedFactRow fact, IReadOnlyDictionary<string, CombinedFactRow> factsBySourceOriginalId)
+    {
+        return ParseRemotingSupportingFactIds(fact, out var malformed)
+            .Select(id => factsBySourceOriginalId.TryGetValue(SourceFactKey(fact.SourceIndexId, id), out var supporting) ? supporting.CombinedFactId : id)
+            .Append(fact.CombinedFactId)
+            .Append(malformed ? $"malformed-supportingFactIds:{Hash(fact.CombinedFactId, 12)}" : null)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
@@ -1511,6 +1710,45 @@ public static class CombinedDependencyPathReporter
     {
         return fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)
             || fact.RuleId.StartsWith("legacy.data.", StringComparison.Ordinal);
+    }
+
+    private static bool IsRemotingFact(CombinedFactRow fact)
+    {
+        return fact.FactType.StartsWith("Remoting", StringComparison.Ordinal)
+            || fact.RuleId.StartsWith("legacy.remoting.", StringComparison.Ordinal) && fact.FactType != FactTypes.AnalysisGap;
+    }
+
+    private static bool IsCSharpSource(CombinedReportSource source)
+    {
+        return string.Equals(source.Language, "csharp", StringComparison.OrdinalIgnoreCase)
+            || source.ScannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool SourceSupportsRemotingExtraction(CombinedReportSource source)
+    {
+        return string.Equals(source.ScannerVersion, ScannerVersions.TraceMap, StringComparison.Ordinal)
+            || source.ScannerVersion.Contains("legacy-remoting", StringComparison.OrdinalIgnoreCase)
+            || TryGetTraceMapMilestone(source.ScannerVersion, out var milestone) && milestone >= 16;
+    }
+
+    private static bool TryGetTraceMapMilestone(string value, out int milestone)
+    {
+        milestone = 0;
+        const string token = "milestone";
+        var index = value.IndexOf(token, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var start = index + token.Length;
+        var end = start;
+        while (end < value.Length && char.IsDigit(value[end]))
+        {
+            end++;
+        }
+
+        return end > start && int.TryParse(value[start..end], out milestone);
     }
 
     private static IReadOnlyList<string> SplitList(string? value)
@@ -1843,6 +2081,9 @@ public static class CombinedDependencyPathReporter
         var classification = NormalizeClassification(ClassifyLegacy(path, graph), legacyMode: true);
         var notes = path.Notes
             .Append(new CombinedPathNote("StaticEvidenceOnly", "Possible static path evidence only; this does not prove runtime execution, branch feasibility, service reachability, SQL execution, or production use."))
+            .Concat(path.Nodes.Any(node => node.NodeKind == "remoting-object")
+                ? [new CombinedPathNote("RemotingObjectShapeOnly", "MarshalByRefObject evidence is object-shape evidence only; it does not prove hosting, activation, reachability, deployment, process boundary, lifetime, or production use.")]
+                : [])
             .Append(new CombinedPathNote("LegacyFlowRules", string.Join(",", LegacyFlowRuleIdsFor(path).OrderBy(value => value, StringComparer.Ordinal))))
             .DistinctBy(note => $"{note.Code}\0{note.Message}")
             .OrderBy(note => note.Code, StringComparer.Ordinal)
@@ -1877,6 +2118,19 @@ public static class CombinedDependencyPathReporter
         }
 
         var terminal = path.Nodes.LastOrDefault();
+        if (terminal is not null && IsRemotingSurface(terminal.SurfaceKind))
+        {
+            if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+                || path.Edges.Any(edge => edge.EdgeKind is "symbol-reconciliation" or "webforms-event-flow-projection")
+                || path.Nodes.Any(node => node.NodeKind == "remoting-object")
+                || terminal.SurfaceKind is "remoting-channel" or "remoting-object" or "remoting-api")
+            {
+                return CombinedDependencyPathClassifications.NeedsReviewStaticPath;
+            }
+
+            return CombinedDependencyPathClassifications.ProbableStaticPath;
+        }
+
         var genericTerminal = terminal is not null && IsGenericTerminalKey(terminal.SurfaceName ?? terminal.DisplayName);
         var highFanOut = terminal is not null
             && graph.Edges.Count(edge => edge.ToNodeId == terminal.NodeId) >= 5;
@@ -1897,6 +2151,11 @@ public static class CombinedDependencyPathReporter
         }
 
         return CombinedDependencyPathClassifications.StrongStaticPath;
+    }
+
+    private static bool IsRemotingSurface(string? surfaceKind)
+    {
+        return surfaceKind is "remoting-endpoint" or "remoting-registration" or "remoting-channel" or "remoting-object" or "remoting-api";
     }
 
     private static IReadOnlyList<string> LegacyFlowRuleIdsFor(CombinedPath path)
@@ -2004,6 +2263,11 @@ public static class CombinedDependencyPathReporter
         if (edges.Any(edge => edge.EdgeKind == "symbol-reconciliation"))
         {
             notes.Add(new CombinedPathNote("SymbolReconciliationBoundary", "Symbol reconciliation hops connect source-local symbol names when deterministic aliases match; they are review-tier evidence, not compiler-resolved call evidence."));
+        }
+
+        if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))
+        {
+            notes.Add(new CombinedPathNote("StaticRemotingEvidence", "Static Remoting evidence marks a boundary candidate only; it does not prove runtime channel setup, object activation, process boundary, deployment, reachability, lifetime, or production use."));
         }
 
         return notes
@@ -2156,6 +2420,11 @@ public static class CombinedDependencyPathReporter
             return false;
         }
 
+        if (node.SurfaceKind is "remoting-channel" or "remoting-object" or "remoting-api")
+        {
+            return false;
+        }
+
         return node.SurfaceKind != "http-client"
             || node.CombinedFactId is null
             || !startFactIds.Contains(node.CombinedFactId);
@@ -2166,6 +2435,8 @@ public static class CombinedDependencyPathReporter
         var values = new[]
         {
             node.SurfaceName ?? node.DisplayName,
+            node.CombinedFactId,
+            OriginalFactIdFromCombined(node.CombinedFactId),
             node.TableName,
             node.ShapeHash,
             node.TextHash
@@ -2326,6 +2597,404 @@ public static class CombinedDependencyPathReporter
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static GraphNode ToRemotingNode(CombinedFactRow fact)
+    {
+        var surfaceKind = RemotingSurfaceKind(fact);
+        var nodeKind = RemotingNodeKind(fact);
+        var displayHash = RemotingDisplayHash(fact);
+        var safeName = SafeDisplay(CombinedDependencyReporter.FirstValue(
+                fact.Properties,
+                "targetTypeName",
+                "typeName",
+                "channelTypeName",
+                "channelKind",
+                "providerKind",
+                "apiName",
+                "registrationKind")
+            ?? fact.TargetSymbol
+            ?? fact.ContractElement
+            ?? displayHash
+            ?? fact.OriginalFactId)
+            ?? displayHash
+            ?? fact.OriginalFactId;
+        var display = displayHash is null || string.Equals(safeName, displayHash, StringComparison.Ordinal)
+            ? $"{nodeKind}:{safeName}"
+            : $"{nodeKind}:{safeName}:{displayHash}";
+        var surfaceName = displayHash ?? safeName;
+        return new GraphNode(
+            SurfaceNodeId(fact.CombinedFactId),
+            nodeKind,
+            display,
+            fact.SourceIndexId,
+            SafeSourceLabel(fact.SourceLabel),
+            fact.ScanId,
+            fact.CommitSha,
+            fact.TargetSymbol ?? fact.SourceSymbol,
+            fact.CombinedFactId,
+            fact.RuleId,
+            fact.EvidenceTier,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            surfaceKind,
+            surfaceName,
+            null,
+            null,
+            SafeDisplay(CombinedDependencyReporter.FirstValue(fact.Properties, "registrationKind", "apiKind")),
+            null,
+            null,
+            "remoting-static-evidence",
+            displayHash,
+            null,
+            null,
+            null,
+            null);
+    }
+
+    private static string? RemotingSurfaceKind(CombinedFactRow fact)
+    {
+        return fact.FactType switch
+        {
+            FactTypes.RemotingServiceTypeRegistered or FactTypes.RemotingClientTypeRegistered => "remoting-registration",
+            FactTypes.RemotingClientActivationDeclared or FactTypes.RemotingConfigServiceDeclared or FactTypes.RemotingConfigClientDeclared => "remoting-endpoint",
+            FactTypes.RemotingChannelDeclared or FactTypes.RemotingChannelRegistered or FactTypes.RemotingConfigChannelDeclared or FactTypes.RemotingConfigProviderDeclared => "remoting-channel",
+            FactTypes.RemotingMarshalByRefObjectDeclared => "remoting-object",
+            FactTypes.RemotingApiUsageDeclared or FactTypes.RemotingConfigSectionDeclared => "remoting-api",
+            _ => null
+        };
+    }
+
+    private static string RemotingNodeKind(CombinedFactRow fact)
+    {
+        return fact.FactType switch
+        {
+            FactTypes.RemotingServiceTypeRegistered
+                or FactTypes.RemotingClientTypeRegistered => "remoting-registration",
+            FactTypes.RemotingClientActivationDeclared
+                or FactTypes.RemotingConfigServiceDeclared
+                or FactTypes.RemotingConfigClientDeclared => "remoting-endpoint",
+            FactTypes.RemotingChannelDeclared
+                or FactTypes.RemotingChannelRegistered
+                or FactTypes.RemotingConfigChannelDeclared
+                or FactTypes.RemotingConfigProviderDeclared => "remoting-channel",
+            FactTypes.RemotingMarshalByRefObjectDeclared => "remoting-object",
+            FactTypes.RemotingApiUsageDeclared or FactTypes.RemotingConfigSectionDeclared => "remoting-api",
+            _ => "remoting-api"
+        };
+    }
+
+    private static IEnumerable<string> RemotingAttachmentSymbols(
+        CombinedFactRow fact,
+        IReadOnlyList<CombinedFactRow> callFacts,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> configureCallersByConfig)
+    {
+        var symbols = new List<string?>
+            {
+                fact.SourceSymbol,
+                fact.TargetSymbol,
+                CombinedDependencyReporter.FirstValue(
+                    fact.Properties,
+                    "methodSymbol",
+                    "containingMethod",
+                    "containingSymbol",
+                    "targetTypeName",
+                    "typeName",
+                    "channelTypeName")
+            };
+        symbols.AddRange(RemotingCallSiteAttachmentSymbols(fact, callFacts));
+        if (IsRemotingConfigFact(fact))
+        {
+            var configFile = Path.GetFileName(fact.FilePath);
+            if (!string.IsNullOrWhiteSpace(configFile)
+                && configureCallersByConfig.TryGetValue(SourceFactKey(fact.SourceIndexId, configFile), out var configureCallers))
+            {
+                symbols.AddRange(configureCallers);
+            }
+        }
+
+        return symbols
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> RemotingConfigureCallersByConfig(
+        IReadOnlyList<CombinedFactRow> remotingFacts,
+        IReadOnlyList<CombinedFactRow> callFacts)
+    {
+        var result = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var fact in remotingFacts.Where(fact => fact.FactType == FactTypes.RemotingApiUsageDeclared))
+        {
+            if (!IsConfigureRemotingApiFact(fact))
+            {
+                continue;
+            }
+
+            var configFileName = CombinedDependencyReporter.FirstValue(fact.Properties, "configFileName");
+            if (string.IsNullOrWhiteSpace(configFileName))
+            {
+                continue;
+            }
+
+            var key = SourceFactKey(fact.SourceIndexId, configFileName);
+            if (!result.TryGetValue(key, out var callers))
+            {
+                callers = [];
+                result[key] = callers;
+            }
+
+            foreach (var symbol in RemotingCallSiteAttachmentSymbols(fact, callFacts))
+            {
+                callers.Add(symbol);
+            }
+        }
+
+        return result.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<string>)pair.Value
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<string> RemotingCallSiteAttachmentSymbols(CombinedFactRow fact, IReadOnlyList<CombinedFactRow> callFacts)
+    {
+        foreach (var call in callFacts)
+        {
+            if (!RemotingCallSiteMatches(fact, call))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(call.SourceSymbol))
+            {
+                yield return call.SourceSymbol!;
+            }
+
+            if (!string.IsNullOrWhiteSpace(call.TargetSymbol))
+            {
+                yield return call.TargetSymbol!;
+            }
+        }
+    }
+
+    private static bool RemotingCallSiteMatches(CombinedFactRow remotingFact, CombinedFactRow callFact)
+    {
+        return string.Equals(remotingFact.SourceIndexId, callFact.SourceIndexId, StringComparison.Ordinal)
+            && string.Equals(SafePath(remotingFact.FilePath), SafePath(callFact.FilePath), StringComparison.Ordinal)
+            && callFact.StartLine >= remotingFact.StartLine
+            && callFact.StartLine <= remotingFact.EndLine
+            && RemotingCallTargetMatches(remotingFact, callFact.TargetSymbol ?? CombinedDependencyReporter.FirstValue(callFact.Properties, "calleeName"));
+    }
+
+    private static bool RemotingCallTargetMatches(CombinedFactRow fact, string? targetSymbol)
+    {
+        if (string.IsNullOrWhiteSpace(targetSymbol))
+        {
+            return false;
+        }
+
+        return ExpectedRemotingCallNames(fact).Any(expected => SymbolNameMatches(targetSymbol, expected));
+    }
+
+    private static IEnumerable<string> ExpectedRemotingCallNames(CombinedFactRow fact)
+    {
+        if (fact.FactType == FactTypes.RemotingChannelRegistered)
+        {
+            yield return "RegisterChannel";
+            yield break;
+        }
+
+        if (fact.FactType == FactTypes.RemotingClientActivationDeclared)
+        {
+            yield return "GetObject";
+            yield break;
+        }
+
+        if (fact.FactType == FactTypes.RemotingApiUsageDeclared)
+        {
+            foreach (var candidate in new[] { fact.TargetSymbol, fact.ContractElement, CombinedDependencyReporter.FirstValue(fact.Properties, "apiName") })
+            {
+                var name = LastSymbolPart(candidate);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    yield return name!;
+                }
+            }
+
+            yield break;
+        }
+
+        var registrationKind = CombinedDependencyReporter.FirstValue(fact.Properties, "registrationKind") ?? fact.ContractElement;
+        switch (registrationKind)
+        {
+            case "well-known-service":
+                yield return "RegisterWellKnownServiceType";
+                break;
+            case "well-known-client":
+                yield return "RegisterWellKnownClientType";
+                break;
+            case "activated-service":
+                yield return "RegisterActivatedServiceType";
+                break;
+            case "activated-client":
+                yield return "RegisterActivatedClientType";
+                break;
+            case "configure":
+                yield return "Configure";
+                break;
+        }
+    }
+
+    private static bool SymbolNameMatches(string candidate, string expected)
+    {
+        return string.Equals(candidate, expected, StringComparison.Ordinal)
+            || candidate.EndsWith("." + expected, StringComparison.Ordinal)
+            || candidate.Contains("." + expected + "(", StringComparison.Ordinal);
+    }
+
+    private static string? LastSymbolPart(string? symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return null;
+        }
+
+        var paren = symbol.IndexOf('(', StringComparison.Ordinal);
+        var end = paren >= 0 ? paren : symbol.Length;
+        var dot = symbol.LastIndexOf('.', end - 1, end);
+        return dot >= 0 ? symbol[(dot + 1)..end] : symbol[..end];
+    }
+
+    private static bool IsConfigureRemotingApiFact(CombinedFactRow fact)
+    {
+        return fact.FactType == FactTypes.RemotingApiUsageDeclared
+            && ExpectedRemotingCallNames(fact).Any(name => string.Equals(name, "Configure", StringComparison.Ordinal));
+    }
+
+    private static bool IsRemotingConfigFact(CombinedFactRow fact)
+    {
+        return fact.FactType is FactTypes.RemotingConfigServiceDeclared
+            or FactTypes.RemotingConfigClientDeclared
+            or FactTypes.RemotingConfigChannelDeclared
+            or FactTypes.RemotingConfigProviderDeclared;
+    }
+
+    private static string? RemotingDisplayHash(CombinedFactRow fact)
+    {
+        foreach (var (property, prefix) in new[]
+        {
+            ("urlHash", "url"),
+            ("objectUriHash", "objectUri"),
+            ("valueHash", "value"),
+            ("applicationNameHash", "application"),
+            ("configValueHash", "value")
+        })
+        {
+            var value = CombinedDependencyReporter.FirstValue(fact.Properties, property);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            var hash = new string(value.Trim().Where(UriHashCharacter).Take(8).ToArray()).ToLowerInvariant();
+            if (hash.Length > 0)
+            {
+                return $"{prefix}-{hash}";
+            }
+        }
+
+        return null;
+    }
+
+    private static bool UriHashCharacter(char value)
+    {
+        return value is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F';
+    }
+
+    private static IReadOnlyList<string> ParseRemotingSupportingFactIds(CombinedFactRow fact, out bool malformed)
+    {
+        malformed = false;
+        var value = CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds");
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        var hasSemicolon = value.Contains(';', StringComparison.Ordinal);
+        var hasComma = value.Contains(',', StringComparison.Ordinal);
+        if (hasSemicolon && hasComma)
+        {
+            malformed = true;
+            return [];
+        }
+
+        var tokens = hasSemicolon
+            ? value.Split(';')
+            : hasComma
+                ? value.Split(',')
+                : [value];
+        return tokens
+            .Select(token => token.Trim())
+            .Where(token => token.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(token => token, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static CombinedPathGap RemotingGap(
+        CombinedFactRow fact,
+        string code,
+        string message,
+        string ruleId,
+        string classification)
+    {
+        return new CombinedPathGap(
+            $"gap:legacy-remoting:{code}:{fact.CombinedFactId}",
+            code,
+            classification,
+            message,
+            fact.SourceIndexId,
+            fact.SourceLabel,
+            IsRemotingFact(fact) ? ToRemotingNode(fact).NodeId : null,
+            fact.CombinedFactId,
+            ruleId,
+            fact.EvidenceTier,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            "legacy-remoting");
+    }
+
+    private static string MaxEvidenceTier(string left, string right)
+    {
+        return EvidenceTierRank(left) >= EvidenceTierRank(right) ? left : right;
+    }
+
+    private static int EvidenceTierRank(string tier)
+    {
+        return tier switch
+        {
+            EvidenceTiers.Tier1Semantic => 1,
+            EvidenceTiers.Tier2Structural => 2,
+            EvidenceTiers.Tier3SyntaxOrTextual => 3,
+            EvidenceTiers.Tier4Unknown => 4,
+            _ => 4
+        };
+    }
+
+    private static string? OriginalFactIdFromCombined(string? combinedFactId)
+    {
+        if (string.IsNullOrWhiteSpace(combinedFactId))
+        {
+            return null;
+        }
+
+        var index = combinedFactId.IndexOf(':', StringComparison.Ordinal);
+        return index >= 0 && index < combinedFactId.Length - 1 ? combinedFactId[(index + 1)..] : combinedFactId;
     }
 
     private static bool IsDependencySurfaceFact(CombinedFactRow fact)
@@ -2633,7 +3302,7 @@ public static class CombinedDependencyPathReporter
         builder.AppendLine(legacyMode ? "## Analysis Gaps" : "## Path Gaps");
         builder.AppendLine();
         AppendRows(builder, report.Gaps, "| Kind | Classification | Source | Message | Evidence |", "| --- | --- | --- | --- | --- |",
-            gap => $"| {Cell(gap.GapKind)} | {Cell(gap.Classification)} | {Cell(gap.SourceLabel ?? "n/a")} | {Cell(gap.Message)} | {Cell(Evidence(gap.RuleId, gap.EvidenceTier, gap.FilePath, gap.StartLine))} |");
+            gap => $"| {Cell(gap.GapKind)} | {Cell(gap.Classification)} | {Cell(gap.SourceLabel ?? "n/a")} | {Cell(gap.Message)} | {Cell(Evidence(gap))} |");
 
         builder.AppendLine("## Evidence Inventory");
         builder.AppendLine();
@@ -2721,6 +3390,17 @@ public static class CombinedDependencyPathReporter
     private static string Evidence(string? ruleId, string? evidenceTier, string? filePath, int? startLine)
     {
         return $"{ruleId ?? "n/a"} {evidenceTier ?? "n/a"} {filePath ?? "n/a"}:{startLine ?? 0}";
+    }
+
+    private static string Evidence(CombinedPathGap gap)
+    {
+        var evidence = Evidence(gap.RuleId, gap.EvidenceTier, gap.FilePath, gap.StartLine);
+        if (string.IsNullOrWhiteSpace(gap.CommitSha) && string.IsNullOrWhiteSpace(gap.ExtractorVersion) && string.IsNullOrWhiteSpace(gap.EvidenceScope))
+        {
+            return evidence;
+        }
+
+        return $"{evidence} commit:{gap.CommitSha ?? "n/a"} extractor:{gap.ExtractorVersion ?? "n/a"} scope:{gap.EvidenceScope ?? "n/a"}";
     }
 
     private static string Cell(string value)
@@ -2835,6 +3515,8 @@ public static class CombinedDependencyPathReporter
             "parameter-forward" => 3,
             "argument-passed" => 4,
             "surface-evidence" => 5,
+            "remoting-evidence" => 5,
+            "remoting-channel-link" => 5,
             "fact-attached-to-symbol" => 6,
             "symbol-reconciliation" => 7,
             "inherits" => 8,
@@ -2919,7 +3601,7 @@ public static class CombinedDependencyPathReporter
             return string.IsNullOrWhiteSpace(value) ? "source" : value;
         }
 
-        return LooksUnsafe(value) || value.Contains('/', StringComparison.Ordinal) || value.Contains('\\', StringComparison.Ordinal) || value.Contains(':', StringComparison.Ordinal)
+        return LooksUnsafeSourceLabel(value) || value.Contains('/', StringComparison.Ordinal) || value.Contains('\\', StringComparison.Ordinal) || value.Contains(':', StringComparison.Ordinal)
             ? $"source:{Hash(value, 16)}"
             : value;
     }
@@ -2948,7 +3630,31 @@ public static class CombinedDependencyPathReporter
             || value.StartsWith("git@", StringComparison.OrdinalIgnoreCase)
             || value.Contains(".git", StringComparison.OrdinalIgnoreCase)
             || value.Contains("secret", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("token", StringComparison.OrdinalIgnoreCase);
+            || value.Contains("token", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("private", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("internal", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksUnsafeSourceLabel(string value)
+    {
+        return LooksUnsafe(value)
+            || value.Contains("corp", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("customer", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("prod", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("client", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<string> ReportLimitations(bool legacyMode, IReadOnlyList<CombinedPathNode> participatingNodes, IReadOnlyList<CombinedPathGap> gaps)
+    {
+        var limitations = new SortedSet<string>(CombinedDependencyReporter.Limitations, StringComparer.Ordinal);
+        if (legacyMode && (participatingNodes.Any(node => node.NodeKind.StartsWith("remoting-", StringComparison.Ordinal))
+            || gaps.Any(gap => string.Equals(gap.Reason, "legacy-remoting", StringComparison.Ordinal))))
+        {
+            limitations.Add("Static Remoting evidence is a boundary candidate only; it does not prove runtime channel setup, remote object activation, process boundary, object lifetime, deployment, endpoint reachability, exploitability, impact, or production usage.");
+            limitations.Add("Remoting activation, registration, URL, object URI, channel, provider, and config values are displayed only through safe names or stable hashes.");
+        }
+
+        return limitations.ToArray();
     }
 
     private static bool IsGenericTerminalKey(string value)
