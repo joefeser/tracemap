@@ -60,6 +60,9 @@ impact.
   dual WebMethod/SOAP attribute facts, generated SOAP clients, WSDL metadata,
   config redaction, mapping, WCF `.svcmap` ownership, generic source-map
   rejection, report wording, and `.DS_Store` ignore coverage.
+- Addressed PR-loop review findings for duplicate directive attributes,
+  directive line spans, ambiguous metadata-only mappings, external WSDL import
+  gaps, and URL-shaped config keys.
 
 ## Validation
 
@@ -77,9 +80,9 @@ git diff --check
 
 Result:
 
-- Focused ASMX/WCF tests: 29 passed, 0 failed.
+- Focused ASMX/WCF tests: 33 passed, 0 failed.
 - Solution build: succeeded with 0 warnings and 0 errors.
-- Full .NET tests: 379 passed, 0 failed.
+- Full .NET tests: 383 passed, 0 failed.
 - WCF-adjacent validation-summary unit tests: 11 passed, 0 failed.
 - CLI scan smoke over a checked-in sample completed and emitted required scan artifacts.
 - Private-path guard passed.
