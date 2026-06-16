@@ -504,10 +504,6 @@ export function detectUnsafeText(value) {
 
 export function detectProhibitedClaim(value) {
   const text = value.toLowerCase();
-  const disclaimer = /\b(?:does not|do not|not|no|without|cannot|never)\s+(?:prove|claim|show|establish|validate|certify|approve|confirm|imply|mean)\b/u;
-  if (disclaimer.test(text)) {
-    return null;
-  }
   const patterns = [
     ["runtime-claim", /\b(?:proves?|confirms?|guarantees?|validates?|shows?)\s+(?:runtime|execution|handler executes|service reachability|reachable service)\b/u],
     ["production-claim", /\b(?:production usage|production traffic|used in production|customer impact|business impact)\b/u],
@@ -517,11 +513,26 @@ export function detectProhibitedClaim(value) {
     ["impact-claim", /\b(?:definite impact|impacted|impact result|reducer conclusion)\b/u]
   ];
   for (const [category, pattern] of patterns) {
-    if (pattern.test(text)) {
-      return category;
+    const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+    for (const match of text.matchAll(globalPattern)) {
+      if (!isDisclaimedClaim(text, match.index)) {
+        return category;
+      }
     }
   }
   return null;
+}
+
+function isDisclaimedClaim(text, matchIndex) {
+  const sentenceStart = Math.max(
+    text.lastIndexOf(".", matchIndex),
+    text.lastIndexOf("!", matchIndex),
+    text.lastIndexOf("?", matchIndex),
+    text.lastIndexOf(";", matchIndex)
+  ) + 1;
+  const prefix = text.slice(sentenceStart, matchIndex);
+  return /\b(?:does not|do not|not|no|without|cannot|never)\s+(?:prove|claim|show|establish|validate|certify|approve|confirm|imply|mean)\b/u.test(prefix)
+    || /\b(?:does not|do not|not|no|without|cannot|never)\s+$/u.test(prefix);
 }
 
 export function validateSafeIdentity(value, { field = "identity" } = {}) {
@@ -642,7 +653,7 @@ function validateSource(entry, pointer, diagnostics, catalogPath) {
   }
   validateLimitations(commit.limitations ?? [], `${pointer}/source/commitIdentity/limitations`, diagnostics, catalogPath, { allowEmpty: true });
 
-  if (["private-local", "operator-local", "unknown"].includes(source.classification) && entry.claimLevel !== "hidden") {
+  if ((["private-local", "operator-local", "unknown"].includes(source.classification) || source.reviewed !== true) && entry.claimLevel !== "hidden") {
     diagnostics.push(diagnostic("source-claim-cap", catalogPath, `${pointer}/claimLevel`, "Private, operator-local, unknown, or unreviewed sources must remain hidden."));
   }
   if (commit.kind === "category-only" && commit.shaPresent === true && claimRank.get(entry.claimLevel) > claimRank.get("demo-safe")) {

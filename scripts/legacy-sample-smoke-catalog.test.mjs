@@ -75,6 +75,10 @@ test("source classification and commit identity enforce public-safe caps", async
   localSource.entries[0].claimLevel = "demo-safe";
   assertHasDiagnostic(localSource, ruleIds, "source-claim-cap");
 
+  const unreviewedSource = clone(catalog);
+  unreviewedSource.entries[0].source.reviewed = false;
+  assertHasDiagnostic(unreviewedSource, ruleIds, "source-claim-cap");
+
   const publicShaOnFixture = clone(catalog);
   publicShaOnFixture.entries[0].source.commitIdentity = {
     kind: "public-sha",
@@ -192,6 +196,7 @@ test("redaction and claim wording diagnostics are sanitized and point to JSON lo
   assert.equal(detectUnsafeText("select * from unsafe_table"), "raw-sql");
   assert.equal(detectUnsafeText("Server=db;Password=abc12345;"), "connection-string");
   assert.equal(detectUnsafeText("TraceMap does not prove execution."), null);
+  assert.equal(detectUnsafeText("TraceMap does not prove execution. This proves runtime."), "runtime-claim");
 });
 
 test("classification floor, hidden entries, duplicates, empty entries, and empty families fail", async () => {
