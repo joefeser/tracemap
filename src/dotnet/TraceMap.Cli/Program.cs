@@ -847,7 +847,7 @@ public static class TraceMapCommand
                 await output.WriteLineAsync($"Gaps: {result.Manifest.Counts.GapsTotal}");
                 foreach (var diagnostic in result.Diagnostics)
                 {
-                    await error.WriteLineAsync($"warning: {diagnostic.Category}: {diagnostic.Message}");
+                    await WriteBaselineDiagnosticAsync(error, diagnostic);
                 }
 
                 if (result.ManifestPath is not null)
@@ -873,7 +873,7 @@ public static class TraceMapCommand
                 await output.WriteLineAsync($"Valid: {result.IsValid.ToString().ToLowerInvariant()}");
                 foreach (var diagnostic in result.Diagnostics)
                 {
-                    await error.WriteLineAsync($"warning: {diagnostic.Category}: {diagnostic.Message}");
+                    await WriteBaselineDiagnosticAsync(error, diagnostic);
                 }
 
                 return result.IsValid ? 0 : 1;
@@ -913,7 +913,7 @@ public static class TraceMapCommand
                 await output.WriteLineAsync($"Review entries: {result.Comparison.ReviewNeeded.Count}");
                 foreach (var diagnostic in result.Diagnostics)
                 {
-                    await error.WriteLineAsync($"warning: {diagnostic.Category}: {diagnostic.Message}");
+                    await WriteBaselineDiagnosticAsync(error, diagnostic);
                 }
 
                 return 0;
@@ -923,6 +923,11 @@ public static class TraceMapCommand
                 await error.WriteLineAsync($"error: unknown baseline subcommand '{subcommand}'.");
                 return 1;
         }
+    }
+
+    private static async Task WriteBaselineDiagnosticAsync(TextWriter error, LegacyBaselineValidationDiagnostic diagnostic)
+    {
+        await error.WriteLineAsync($"warning: {diagnostic.Category}: ruleId={diagnostic.RuleId}; path={diagnostic.Path}; {diagnostic.Message}");
     }
 
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)

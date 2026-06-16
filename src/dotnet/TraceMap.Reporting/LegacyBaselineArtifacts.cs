@@ -390,7 +390,7 @@ public static class LegacyBaselineArtifacts
         var diagnostics = new List<LegacyBaselineValidationDiagnostic>();
         if (!IsUnderRepoRelative(outputPath, repoRoot, ".tmp/legacy-baselines"))
         {
-            diagnostics.Add(Diagnostic("comparison-storage", options.OutputPath, "comparison output must stay under ignored .tmp/legacy-baselines storage"));
+            throw new ArgumentException("baseline compare --out must stay under ignored .tmp/legacy-baselines storage.");
         }
 
         var baseline = await ReadJsonAsync<LegacyBaselineManifest>(baselinePath, cancellationToken);
@@ -1006,11 +1006,17 @@ public static class LegacyBaselineArtifacts
 
         var text = File.ReadAllText(catalogPath);
         return ruleIds
-            .Where(ruleId => ruleId != "unknown" && !text.Contains($"id: {ruleId}", StringComparison.Ordinal))
+            .Where(ruleId => ruleId != "unknown" && !RuleCatalogContains(text, ruleId))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .Select(ruleId => Diagnostic("rule-catalog-entry-missing", catalogPath, $"observed rule ID lacks catalog entry: {ruleId}"))
             .ToArray();
+    }
+
+    private static bool RuleCatalogContains(string catalogText, string ruleId)
+    {
+        var pattern = @"^\s*-\s*id:\s*" + Regex.Escape(ruleId) + @"\s*$";
+        return Regex.IsMatch(catalogText, pattern, RegexOptions.Multiline | RegexOptions.CultureInvariant);
     }
 
     private static string RenderBaselineSummary(LegacyBaselineManifest manifest)
