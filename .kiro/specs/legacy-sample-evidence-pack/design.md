@@ -160,10 +160,12 @@ state must record the blocker and the migration plan.
 errors when the destination already exists unless `--force` is passed, and it
 rejects ignored destinations even when the pack itself validates.
 Before copying files, `promote` reruns `tracemap evidence-pack validate`, the
-pack safety validator or generated-output sentinel, and
-`./scripts/check-private-paths.sh`; any failure aborts the copy. `--force`
-overrides only the destination-exists check, not validation, sentinel, tracked
-root, or private-path gates.
+pack safety validator or generated-output sentinel against the candidate JSON
+and Markdown files, and `./scripts/check-private-paths.sh`; any failure aborts
+the copy. Because `check-private-paths.sh` uses tracked-file search, promotion
+must not rely on it alone for ignored source files or untracked destination
+files. `--force` overrides only the destination-exists check, not validation,
+sentinel, tracked root, or private-path gates.
 The approved tracked-root allowlist is maintained as a hardcoded constant in the
 evidence-pack implementation, initially only `docs/evidence-packs/legacy/`.
 Adding a new root requires a code change and tests.
@@ -203,8 +205,9 @@ Suggested JSON shape:
       "classification": "public-safe",
       "identityKind": "neutral-label",
       "commitIdentity": {
-        "kind": "omitted-private-or-not-needed",
-        "value": null
+        "kind": "redacted-sha256",
+        "value": "sha256:c9d4a1b2...",
+        "shaPresent": true
       }
     }
   ],
@@ -529,7 +532,7 @@ Implementation validation:
 ```bash
 dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
-tracemap evidence-pack create --input samples/synthetic-legacy-evidence-pack --input-kind legacy-validation-summary --label synthetic-legacy-alpha --purpose legacy-validation-proof --claim-level public-safe --out .tmp/legacy-evidence-packs/synthetic-legacy-alpha --dry-run
+tracemap evidence-pack create --input samples/synthetic-legacy-evidence-pack --input-kind legacy-validation-summary --label synthetic-legacy-alpha --purpose legacy-validation-proof --claim-level public-safe --date 2026-06 --out .tmp/legacy-evidence-packs/synthetic-legacy-alpha --dry-run
 tracemap evidence-pack create --input samples/synthetic-legacy-evidence-pack --input-kind legacy-validation-summary --label synthetic-legacy-alpha --purpose legacy-validation-proof --claim-level public-safe --date 2026-06 --out .tmp/legacy-evidence-packs/synthetic-legacy-alpha
 tracemap evidence-pack validate --pack .tmp/legacy-evidence-packs/synthetic-legacy-alpha/evidence-pack.json --expected-claim-level public-safe
 git check-ignore .tmp/legacy-evidence-packs/synthetic-legacy-alpha/evidence-pack.json

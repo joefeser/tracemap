@@ -78,9 +78,11 @@ operator-local details.
    classified below the requested output level THEN the generator SHALL emit a
    rule-backed pack gap or fail validation; it SHALL NOT treat missing evidence
    as zero.
-5. WHEN input scan identity is used THEN the pack SHALL preserve commit SHA only
-   when it is safe to disclose; private commit identity SHALL be omitted,
-   category-only, or local-only.
+5. WHEN input scan identity is used THEN every source SHALL preserve commit
+   identity proof. Public sources MAY include raw commit SHA when safe to
+   disclose; private sources SHALL include a redacted deterministic commit
+   identity such as a context-separated SHA-256 hash plus `shaPresent: true`.
+   Public-safe packs SHALL NOT allow commit identity to be silently omitted.
 6. WHEN the input scan has reduced coverage, failed build, fallback extraction,
    timeout, or analysis gaps THEN the pack SHALL carry those labels and
    limitations into every affected section.
@@ -150,6 +152,9 @@ demo-safe, or public-safe before it is shared.
    SHALL rerun the pack validator, the generated-output sentinel, and
    `./scripts/check-private-paths.sh`, and SHALL verify that the destination is
    under an approved tracked root such as `docs/evidence-packs/legacy/`.
+   The generated-output sentinel SHALL inspect the candidate JSON and Markdown
+   files directly before copy or after staging, because `check-private-paths.sh`
+   only inspects tracked files.
 5. WHEN a pack is not public-safe THEN tracked docs SHALL be allowed to describe
    how to regenerate it using neutral placeholders, but SHALL NOT include its
    local labels, raw identifiers, paths, or outputs.
