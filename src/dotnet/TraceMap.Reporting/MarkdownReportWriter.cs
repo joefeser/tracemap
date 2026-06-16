@@ -103,6 +103,18 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Legacy Data Metadata",
+            result.Facts.Where(fact => fact.FactType is FactTypes.LegacyDataMetadataDeclared
+                or FactTypes.LegacyDataEntityDeclared
+                or FactTypes.LegacyDataStorageObjectDeclared
+                or FactTypes.LegacyDataColumnDeclared
+                or FactTypes.LegacyDataMappingDeclared
+                or FactTypes.LegacyDataProviderConfigDeclared
+                or FactTypes.LegacyDataGeneratedCodeLinked),
+            FormatLegacyDataMetadata);
+
+        AddFactSection(
+            lines,
             "Call Flow",
             result.Facts.Where(fact => fact.FactType == FactTypes.CallEdge),
             fact => $"- `{DisplaySource(fact)}` -> `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -207,6 +219,14 @@ public static class MarkdownReportWriter
             lines.Add("- Query-pattern rows are static shape evidence. They do not prove runtime execution, database schema existence, SQL dialect validity, generated SQL equivalence, or branch feasibility.");
         }
 
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## Legacy Data Metadata Limitations");
+            lines.Add("");
+            lines.Add("- Legacy data rows are static design-time metadata evidence. They do not prove runtime data access, SQL execution, database existence, provider compatibility, config transform selection, secret availability, generated-code freshness, or production usage.");
+        }
+
         lines.Add("");
         return string.Join(Environment.NewLine, lines);
     }
@@ -259,6 +279,15 @@ public static class MarkdownReportWriter
         return IsSqlShapeQueryPattern(fact)
             ? FormatSqlShapeQueryPattern(fact)
             : FormatQueryBuilderPattern(fact);
+    }
+
+    private static string FormatLegacyDataMetadata(CodeFact fact)
+    {
+        var kind = DisplayCodeValue(fact.Properties.GetValueOrDefault("metadataKind") ?? "LegacyData");
+        var descriptor = DisplayCodeValue(fact.Properties.GetValueOrDefault("descriptorKind") ?? fact.FactType);
+        var name = DisplayCodeValue(DisplayFactName(fact));
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return $"- `{fact.FactType}` `{kind}` `{descriptor}` `{name}` rule `{fact.RuleId}` ({fact.EvidenceTier}) at `{path}:{fact.Evidence.StartLine}`";
     }
 
     private static bool IsSqlShapeQueryPattern(CodeFact fact)

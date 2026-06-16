@@ -101,6 +101,27 @@ public sealed class IntegrationExtractorTests
     }
 
     [Fact]
+    public void Scan_uses_config_specific_classifications_for_safe_xml_gaps()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Web.config"), """
+            <!DOCTYPE configuration [
+              <!ENTITY ext SYSTEM "file:///tmp/secret.txt">
+            ]>
+            <configuration><appSettings><add key="ApiBaseUrl" value="&ext;" /></appSettings></configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.ConfigKey
+            && fact.Properties.GetValueOrDefault("classification") == "ConfigParserSecurityRejected"
+            && fact.Properties.GetValueOrDefault("coverage") == "reduced");
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.ConfigKey
+            && fact.Properties.GetValueOrDefault("classification") == "LegacyDataParserSecurityRejected");
+    }
+
+    [Fact]
     public void Scan_records_repeated_json_property_lines_by_full_path()
     {
         using var temp = new TempDirectory();
