@@ -1,6 +1,7 @@
 # Site TraceMap Tools Proof Path Index Tasks
 
-Status: ready-for-implementation / not started
+Status: not-started
+Readiness: ready-for-implementation
 Public claim level: demo
 
 Tasks 1-2 establish route and layout decisions before entry authoring and

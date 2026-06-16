@@ -1,6 +1,7 @@
 # Site TraceMap Tools Proof Path Index Requirements
 
-Status: ready-for-implementation / not started
+Status: not-started
+Readiness: ready-for-implementation
 Public claim level: demo
 
 ## Summary
