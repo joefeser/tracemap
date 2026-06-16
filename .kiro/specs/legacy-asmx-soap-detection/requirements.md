@@ -48,7 +48,7 @@ service host declarations without needing the old project to build.
    ASMX-specific rules and facts, while preserving older-index compatibility
    through availability or migration notes.
 7. WHEN older indexes still contain ASMX directive evidence under
-   `WcfServiceHostDeclared` and `legacy.wcf.host.v1` THEN consumers SHALL not
+   `WcfServiceHostDeclared` and `legacy.wcf.host.v1` THEN consumers SHALL NOT
    report clean ASMX absence; they SHALL either interpret the legacy WCF-host
    row as legacy ASMX-compatible host evidence with a migration limitation or
    emit an older-index availability gap.
@@ -148,7 +148,7 @@ ASMX mapping confidence without downloading anything at scan time.
    metadata remains owned by `legacy.wcf.metadata.v1`; ASMX metadata SHALL claim
    only files corroborated by ASMX host/proxy evidence such as `.asmx`,
    `SoapHttpClientProtocol`, ASMX proxy metadata, or SOAP attributes.
-7. WHEN a metadata file is claimed by one family THEN the other family SHALL not
+7. WHEN a metadata file is claimed by one family THEN the other family SHALL NOT
    emit duplicate facts for the same file unless it emits an explicit
    availability/gap row explaining why ownership was not clear.
 
@@ -237,7 +237,7 @@ documented rule and explicit limitations.
      capability.
 4. Mapping evidence SHALL be capped by the weakest required leg. In particular,
    metadata-backed generated-client mappings without aligned config or semantic
-   evidence SHALL remain `Tier3SyntaxOrTextual` or NeedsReview even when the
+   evidence SHALL remain `Tier3SyntaxOrTextual` or `NeedsReview` even when the
    metadata file itself is `Tier2Structural`.
 5. ASMX/SOAP evidence SHALL NOT upgrade WebForms, WCF, Remoting, SQL, or
    release-review conclusions beyond the weakest required evidence tier.

@@ -323,7 +323,7 @@ Classification:
 Mapping classification is capped by the weakest required leg. A parseable WSDL
 or DISCO file may be `Tier2Structural`, but a generated-client mapping that
 lacks aligned config or semantic evidence remains `Tier3SyntaxOrTextual` or
-NeedsReview. The mapper must not upgrade a name-only operation match merely
+`NeedsReview`. The mapper must not upgrade a name-only operation match merely
 because an adjacent metadata file parsed successfully.
 
 Do not select an arbitrary backend implementation when multiple candidates
