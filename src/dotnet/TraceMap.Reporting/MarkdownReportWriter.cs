@@ -134,6 +134,20 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Legacy ASMX/SOAP Static Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.AsmxHostDeclared
+                or FactTypes.AsmxServiceClassDeclared
+                or FactTypes.AsmxOperationDeclared
+                or FactTypes.AsmxSoapOperationDeclared
+                or FactTypes.AsmxGeneratedClientDeclared
+                or FactTypes.AsmxClientOperationDeclared
+                or FactTypes.AsmxProxyMetadataDeclared
+                or FactTypes.AsmxConfigDeclared
+                or FactTypes.AsmxServiceReferenceMapping),
+            FormatLegacyAsmxFact);
+
+        AddFactSection(
+            lines,
             "Call Flow",
             result.Facts.Where(fact => fact.FactType == FactTypes.CallEdge),
             fact => $"- `{DisplaySource(fact)}` -> `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -280,6 +294,16 @@ public static class MarkdownReportWriter
             lines.Add("- URLs, object URIs, ports, channel/provider values, config values, local paths, remotes, source snippets, and secret-looking values are hashed or omitted.");
         }
 
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("Asmx", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## Legacy ASMX/SOAP Limitations");
+            lines.Add("");
+            lines.Add("- ASMX/SOAP rows are deterministic static evidence from checked-in directives, C# attributes, generated proxy shapes, local metadata, and config.");
+            lines.Add("- They identify service-boundary and SOAP proxy candidates only; they do not prove runtime service activation, SOAP request execution, endpoint reachability, deployment, authentication, authorization, generated-proxy freshness, or impact.");
+            lines.Add("- Raw endpoint values, SOAP actions, config values, namespaces, local paths, remotes, source snippets, and secret-looking values are hashed or omitted; credential-like values are omitted.");
+        }
+
         if (result.Facts.Any(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal)))
         {
             lines.Add("");
@@ -403,6 +427,22 @@ public static class MarkdownReportWriter
             ?? fact.Properties.GetValueOrDefault("apiKind")
             ?? fact.FactType;
         return $"- `{fact.FactType}` `{name}` as static `{classification}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`";
+    }
+
+    private static string FormatLegacyAsmxFact(CodeFact fact)
+    {
+        var name = fact.Properties.GetValueOrDefault("serviceClassName")
+            ?? fact.Properties.GetValueOrDefault("operationName")
+            ?? fact.Properties.GetValueOrDefault("clientName")
+            ?? fact.Properties.GetValueOrDefault("metadataFileName")
+            ?? fact.Properties.GetValueOrDefault("configKey")
+            ?? DisplayFactName(fact);
+        var classification = fact.Properties.GetValueOrDefault("mappingKind")
+            ?? fact.Properties.GetValueOrDefault("metadataKind")
+            ?? fact.Properties.GetValueOrDefault("configKind")
+            ?? fact.Properties.GetValueOrDefault("sourceKind")
+            ?? fact.FactType;
+        return $"- `{fact.FactType}` `{name}` as static ASMX/SOAP `{classification}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`";
     }
 
     private static string FormatLegacyDataMetadataFact(CodeFact fact)
