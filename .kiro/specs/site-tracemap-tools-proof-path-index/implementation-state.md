@@ -1,6 +1,7 @@
 # Site TraceMap Tools Proof Path Index Implementation State
 
-Status: ready-for-implementation / not started
+Status: not-started
+Readiness: ready-for-implementation
 Public claim level: demo
 
 ## Branch
@@ -47,7 +48,7 @@ private sample identities.
 
 ## Current Decisions
 
-- Status is ready-for-implementation / not started.
+- Status is `not-started`; readiness is `ready-for-implementation`.
 - Public claim level is `demo`.
 - The final route is not yet chosen; a standalone route should be included in
   sitemap metadata if selected.
