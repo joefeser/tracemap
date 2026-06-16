@@ -321,6 +321,10 @@ function trimEvidence(value) {
     redacted = redacted.replace(rule.pattern, rule.replacement);
   }
 
+  if (redacted === value.trim()) {
+    return "[redacted evidence]";
+  }
+
   return redacted.slice(0, 120);
 }
 
