@@ -145,7 +145,10 @@ public sealed record CombinedPathGap(
     string? EvidenceTier,
     string? FilePath,
     int? StartLine,
-    string? Reason);
+    string? Reason,
+    string? CommitSha = null,
+    string? ExtractorVersion = null,
+    string? EvidenceScope = null);
 
 public sealed record CombinedPathInventory(
     IReadOnlyDictionary<string, int> NodesByKind,
@@ -1321,7 +1324,10 @@ public static class CombinedDependencyPathReporter
                     EvidenceTiers.Tier4Unknown,
                     null,
                     null,
-                    "legacy-remoting"));
+                    "legacy-remoting",
+                    source.CommitSha,
+                    source.ScannerVersion,
+                    "source-manifest"));
             }
             else
             {
@@ -1338,7 +1344,10 @@ public static class CombinedDependencyPathReporter
                     EvidenceTiers.Tier4Unknown,
                     null,
                     null,
-                    "legacy-remoting"));
+                    "legacy-remoting",
+                    source.CommitSha,
+                    source.ScannerVersion,
+                    "source-manifest"));
             }
         }
     }
@@ -3090,7 +3099,7 @@ public static class CombinedDependencyPathReporter
         builder.AppendLine(legacyMode ? "## Analysis Gaps" : "## Path Gaps");
         builder.AppendLine();
         AppendRows(builder, report.Gaps, "| Kind | Classification | Source | Message | Evidence |", "| --- | --- | --- | --- | --- |",
-            gap => $"| {Cell(gap.GapKind)} | {Cell(gap.Classification)} | {Cell(gap.SourceLabel ?? "n/a")} | {Cell(gap.Message)} | {Cell(Evidence(gap.RuleId, gap.EvidenceTier, gap.FilePath, gap.StartLine))} |");
+            gap => $"| {Cell(gap.GapKind)} | {Cell(gap.Classification)} | {Cell(gap.SourceLabel ?? "n/a")} | {Cell(gap.Message)} | {Cell(Evidence(gap))} |");
 
         builder.AppendLine("## Evidence Inventory");
         builder.AppendLine();
@@ -3178,6 +3187,17 @@ public static class CombinedDependencyPathReporter
     private static string Evidence(string? ruleId, string? evidenceTier, string? filePath, int? startLine)
     {
         return $"{ruleId ?? "n/a"} {evidenceTier ?? "n/a"} {filePath ?? "n/a"}:{startLine ?? 0}";
+    }
+
+    private static string Evidence(CombinedPathGap gap)
+    {
+        var evidence = Evidence(gap.RuleId, gap.EvidenceTier, gap.FilePath, gap.StartLine);
+        if (string.IsNullOrWhiteSpace(gap.CommitSha) && string.IsNullOrWhiteSpace(gap.ExtractorVersion) && string.IsNullOrWhiteSpace(gap.EvidenceScope))
+        {
+            return evidence;
+        }
+
+        return $"{evidence} commit:{gap.CommitSha ?? "n/a"} extractor:{gap.ExtractorVersion ?? "n/a"} scope:{gap.EvidenceScope ?? "n/a"}";
     }
 
     private static string Cell(string value)
