@@ -136,6 +136,13 @@ serialization order. The frontmatter must remain parseable by a standard YAML
 frontmatter reader and must be the first content in the file so Obsidian-style
 tools can read it.
 
+Canonical frontmatter serialization is deliberately narrow: one YAML document,
+plain scalar strings, booleans, and block arrays only; no anchors, aliases,
+folded scalars, comments, timestamps, or implicit type coercion. Keys use the
+documented order below, arrays use schema-defined ordinal ordering, strings are
+escaped consistently, and the closing `---` is followed by exactly one blank
+line before the Markdown body.
+
 `graph.json` should include:
 
 ```json
@@ -193,7 +200,7 @@ future changes require a schema version bump.
 | Endpoint node | `node/endpoint/v1` plus source stable ID, normalized method, normalized path key, and rule ID; only public/demo-safe endpoint keys may be displayed. |
 | Surface node | `node/surface/v1` plus source stable ID, surface kind, normalized safe metadata key, and rule ID. Supporting fact IDs stay on the node as evidence, not in the stable ID input. |
 | Package node | `node/package/v1` plus source stable ID, package manager, normalized package name, version when safe, and rule ID. |
-| Symbol node | `node/symbol/v1` plus source stable ID, safe symbol identity, rule ID, and supporting fact IDs; symbols are omitted when identity is unsafe. |
+| Symbol node | `node/symbol/v1` plus source stable ID, safe symbol identity, and rule ID; supporting fact IDs stay on the node as evidence, not in the stable ID input. Symbols are omitted when identity is unsafe. |
 | Rule/gap/limitation/report node | `node/<kind>/v1` plus rule ID, limitation code, gap classification, or report stable identity. |
 
 Edge IDs use `edge/<kind>/v1` plus source node ID, target node ID, rule ID,
@@ -232,6 +239,11 @@ Node kinds are closed for v1 but additive:
 - `gap`
 - `limitation`
 - `report`
+
+`gap` and `limitation` nodes are graph navigation nodes. The top-level
+`graph.json` `gaps` and `limitations` arrays are the canonical record
+collections. Gap/limitation nodes reference those canonical records by stable ID
+and do not define a second schema for the same content.
 
 SQL/query, WCF, Remoting, WebForms, HTTP, package config, and legacy data
 families are represented as `kind: surface` with `surfaceKind` metadata. This
@@ -354,7 +366,8 @@ identity may include source index ID, commit SHA category or value when safe,
 scanner/extractor version, language, and a catalog-owned proof ID. Unmatched or
 ambiguous catalog entries emit claim-level gaps and do not promote evidence.
 
-`--minimum-claim-level public-safe` fails with
+`--minimum-claim-level demo-safe` and `--minimum-claim-level public-safe` fail
+with
 `NoVisibleEvidenceAfterFiltering` when no graph nodes remain visible after
 filtering. Summary counts, omitted hidden counts, and top-level metadata do not
 count as visible graph evidence.

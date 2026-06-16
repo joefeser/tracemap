@@ -93,7 +93,7 @@ implementation.
   - [ ] Test `--force` does not bypass claim-level, redaction, private-path, stale generated file, or schema gates.
   - [ ] Test explicit `--date` is required for public/demo dates and no wall-clock timestamps, ISO 8601 timestamps, or filesystem timestamp strings appear.
   - [ ] Test every exporter-created gap and limitation node carries a documented `vault-export.*.v1` rule ID.
-  - [ ] Test public-safe filtering fails when real nodes are removed and only gap nodes or summary counts remain.
+  - [ ] Test public-safe and demo-safe filtering fail when real nodes are removed and only gap nodes or summary counts remain.
 
 - [ ] 8. Document workflow and limitations. Requirements: 5, 6, 9.
   - [ ] Document command or script usage with placeholders only.

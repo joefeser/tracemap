@@ -98,6 +98,14 @@ Completed:
   - `graph.json` string-leaf redaction scanning is explicit in tasks.
   - `InputClaimLevelHidden` behavior is defined as a filter-time failure, not a
     default-hidden input failure.
+- PR review loop findings patched:
+  - Symbol stable IDs exclude mutable supporting fact ID sets.
+  - Design and tasks both require demo-safe and public-safe filters to fail when
+    only gap nodes or summary counts remain.
+  - Gap/limitation graph nodes are clarified as references to canonical
+    top-level gap/limitation records.
+  - Canonical YAML frontmatter serialization is narrowed to deterministic,
+    parseable scalar and array forms.
 
 ## Validation
 
