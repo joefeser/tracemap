@@ -882,10 +882,10 @@ public static class CombinedDependencyDiffer
         {
             var pathReport = await CombinedDependencyPathReporter.BuildReportAsync(
                 new CombinedDependencyPathOptions(
-                    indexPath,
-                    options.OutputPath,
-                    "json",
-                    endpointSelector is null ? null : $"{endpointSelector.Value.Method} {endpointSelector.Value.PathKey}",
+                    IndexPath: indexPath,
+                    OutputPath: options.OutputPath,
+                    Format: "json",
+                    FromEndpoint: endpointSelector is null ? null : $"{endpointSelector.Value.Method} {endpointSelector.Value.PathKey}",
                     FromSource: sourceFilter,
                     ToSurface: string.IsNullOrWhiteSpace(options.Surface) ? null : options.Surface,
                     SurfaceName: string.IsNullOrWhiteSpace(options.SurfaceName) ? null : options.SurfaceName,

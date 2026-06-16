@@ -250,6 +250,14 @@ public static class RuleIds
     public const string LegacyDataTypedDataSet = "legacy.data.typed-dataset.v1";
     public const string LegacyDataConfig = "legacy.data.config.v1";
     public const string LegacyDataGeneratedLink = "legacy.data.generated-link.v1";
+    public const string LegacyFlowInputAvailability = "legacy.flow.input-availability.v1";
+    public const string LegacyFlowRootSelection = "legacy.flow.root-selection.v1";
+    public const string LegacyFlowStaticTraversal = "legacy.flow.static-traversal.v1";
+    public const string LegacyFlowParameterForwardUnavailable = "legacy.flow.parameter-forward-unavailable.v1";
+    public const string LegacyFlowClassification = "legacy.flow.classification.v1";
+    public const string LegacyFlowGapPropagation = "legacy.flow.gap-propagation.v1";
+    public const string LegacyFlowRedaction = "legacy.flow.redaction.v1";
+    public const string LegacyFlowReport = "legacy.flow.report.v1";
     public const string ContractDeltaReduction = "contract.delta.reduce.v1";
     public const string ContractDeltaInput = "contract.delta.input.v2";
     public const string ContractDeltaImpact = "contract.delta.impact.v2";
