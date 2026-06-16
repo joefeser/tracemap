@@ -131,7 +131,7 @@ public sealed class LegacyBaselineArtifactsTests
             "original-parser-snapshot",
             outputPath,
             CreatedAt: "2026-06"));
-        var unsafeText = (await File.ReadAllTextAsync(result.ManifestPath!)).Replace("synthetic-alpha", "/Users/example/private-sample", StringComparison.Ordinal);
+        var unsafeText = (await File.ReadAllTextAsync(result.ManifestPath!)).Replace("synthetic-alpha", "/home/example/private-sample", StringComparison.Ordinal);
         await File.WriteAllTextAsync(result.ManifestPath!, unsafeText);
 
         using var output = new StringWriter();
@@ -140,7 +140,7 @@ public sealed class LegacyBaselineArtifactsTests
 
         Assert.Equal(1, exitCode);
         Assert.Contains("absolute-path", error.ToString());
-        Assert.DoesNotContain("/Users/example/private-sample", error.ToString());
+        Assert.DoesNotContain("/home/example/private-sample", error.ToString());
     }
 
     [Fact]
