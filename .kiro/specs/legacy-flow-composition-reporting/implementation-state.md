@@ -6,24 +6,24 @@ Public claim level: hidden
 
 ## Why This Spec Exists
 
-TraceMap has implemented WCF metadata normalization and WebForms event flow, and
-legacy data metadata extraction is queued as a ready implementation spec. Those
-pieces give older .NET codebases useful static facts, but users still need a
-conservative composition/reporting layer that explains possible WebForms or API
-entry-point paths to service, HTTP, SQL, and data metadata surfaces.
+TraceMap has implemented WCF metadata normalization, WebForms event flow, and a
+legacy data metadata MVP. Those pieces give older .NET codebases useful static
+facts, but users still need a conservative composition/reporting layer that
+explains possible WebForms or API entry-point paths to service, HTTP, SQL, and
+data metadata surfaces.
 
 The goal is an implementation-ready spec for making old-codebase demos
 understandable without claiming runtime proof.
 
 ## Scope Decisions
 
-- This branch is spec-only. It does not implement scanner, reducer, reporting,
-  or CLI code.
+- This branch is implemented. It extends the existing `tracemap paths` command
+  with conservative legacy-flow composition over existing static facts.
 - Composition reads existing facts and edges from `facts.ndjson`/`index.sqlite`
   outputs and combined indexes where available.
 - The feature should work when some extractor families are absent by emitting
   availability gaps.
-- The queued legacy data metadata facts are optional inputs, not prerequisites.
+- Legacy data metadata facts are optional inputs, not prerequisites.
 - Output classifications are conservative: `StrongStaticPath`,
   `ProbableStaticPath`, `NeedsReviewStaticPath`, `NoBackendEvidence`,
   `ReducedCoverage`, and `AnalysisGap`.
