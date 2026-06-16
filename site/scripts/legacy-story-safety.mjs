@@ -70,6 +70,34 @@ const hardLeakChecks = [
   }
 ];
 
+const evidenceRedactions = [
+  {
+    id: "connection-string",
+    pattern: /\b(?:Server|Data Source|Initial Catalog|Database|User ID|User Id|Uid|Password|Pwd)\s*=\s*[^;\s<>"']+(?:\s*;\s*(?:Server|Data Source|Initial Catalog|Database|User ID|User Id|Uid|Password|Pwd)\s*=\s*[^;\s<>"']+)+/gi,
+    replacement: "[redacted connection string]"
+  },
+  {
+    id: "credential-assignment",
+    pattern: /\b(?:api[_-]?key|access[_-]?token|secret|password|passwd|pwd|client[_-]?secret|connection[_-]?string)\s*(?:=|:)\s*["']?[^"'\s<>{}]+/gi,
+    replacement: "[redacted credential assignment]"
+  },
+  {
+    id: "private-local-url",
+    pattern: /\b(?:https?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}|[^/\s<>"']+\.local)(?::\d+)?(?:\/[^\s<>"']*)?|file:\/\/[^\s<>"']*)/gi,
+    replacement: "[redacted private URL]"
+  },
+  {
+    id: "local-absolute-path",
+    pattern: /(?:^|[\s"'(=])(?:\/Users\/|\/home\/|\/tmp\/|\/var\/folders\/|\/private\/var\/|[A-Z]:\\)[^\s<>"')]+/gi,
+    replacement: "[redacted local path]"
+  },
+  {
+    id: "raw-repository-remote",
+    pattern: /\b(?:git@[^:\s<>"']+:[^\s<>"']+|ssh:\/\/git@[^/\s<>"']+\/[^\s<>"']+|https:\/\/[^/\s<>"']+\/[^\s<>"']+\/[^\s<>"']+\.git)\b/gi,
+    replacement: "[redacted repository remote]"
+  }
+];
+
 export async function validateLegacyStorySafety({ root = defaultRoot } = {}) {
   const dist = resolve(root, "dist");
   const errors = [];
@@ -217,11 +245,67 @@ function normalizeRenderedContent(value) {
 }
 
 function stripTags(html) {
-  return html.replace(/<script\b[\s\S]*?<\/script>/gi, " ").replace(/<style\b[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
+  let text = "";
+  let insideTag = false;
+  let quote = "";
+  let skippingRawText = "";
+
+  for (let index = 0; index < html.length; index += 1) {
+    const char = html[index];
+
+    if (skippingRawText) {
+      const closingTag = `</${skippingRawText}`;
+      if (html.slice(index, index + closingTag.length).toLowerCase() === closingTag) {
+        skippingRawText = "";
+        insideTag = true;
+        quote = "";
+        text += " ";
+        index += closingTag.length - 1;
+      }
+      continue;
+    }
+
+    if (insideTag) {
+      if (quote) {
+        if (char === quote) {
+          quote = "";
+        }
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        quote = char;
+        continue;
+      }
+
+      if (char === ">") {
+        insideTag = false;
+        text += " ";
+      }
+      continue;
+    }
+
+    if (char === "<") {
+      const tagName = html.slice(index + 1).match(/^\s*\/?\s*([a-z][a-z0-9-]*)\b/i)?.[1]?.toLowerCase();
+      insideTag = true;
+      quote = "";
+      if (tagName === "script" || tagName === "style") {
+        skippingRawText = tagName;
+      }
+      continue;
+    }
+
+    text += char;
+  }
+
+  return text;
 }
 
 function decodeHtmlEntities(value) {
   return value
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#([0-9]+);/g, (_, decimal) => String.fromCodePoint(Number.parseInt(decimal, 10)))
+    .replaceAll("&nbsp;", " ")
     .replaceAll("&amp;", "&")
     .replaceAll("&lt;", "<")
     .replaceAll("&gt;", ">")
@@ -231,7 +315,13 @@ function decodeHtmlEntities(value) {
 }
 
 function trimEvidence(value) {
-  return value.trim().slice(0, 120);
+  let redacted = value.trim();
+
+  for (const rule of evidenceRedactions) {
+    redacted = redacted.replace(rule.pattern, rule.replacement);
+  }
+
+  return redacted.slice(0, 120);
 }
 
 function escapeRegExp(value) {
