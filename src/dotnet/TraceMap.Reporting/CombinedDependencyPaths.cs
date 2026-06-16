@@ -1727,8 +1727,28 @@ public static class CombinedDependencyPathReporter
     private static bool SourceSupportsRemotingExtraction(CombinedReportSource source)
     {
         return string.Equals(source.ScannerVersion, ScannerVersions.TraceMap, StringComparison.Ordinal)
-            || source.ScannerVersion.Contains("milestone16", StringComparison.OrdinalIgnoreCase)
-            || source.ScannerVersion.Contains("legacy-remoting", StringComparison.OrdinalIgnoreCase);
+            || source.ScannerVersion.Contains("legacy-remoting", StringComparison.OrdinalIgnoreCase)
+            || TryGetTraceMapMilestone(source.ScannerVersion, out var milestone) && milestone >= 16;
+    }
+
+    private static bool TryGetTraceMapMilestone(string value, out int milestone)
+    {
+        milestone = 0;
+        const string token = "milestone";
+        var index = value.IndexOf(token, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var start = index + token.Length;
+        var end = start;
+        while (end < value.Length && char.IsDigit(value[end]))
+        {
+            end++;
+        }
+
+        return end > start && int.TryParse(value[start..end], out milestone);
     }
 
     private static IReadOnlyList<string> SplitList(string? value)
@@ -3581,7 +3601,7 @@ public static class CombinedDependencyPathReporter
             return string.IsNullOrWhiteSpace(value) ? "source" : value;
         }
 
-        return LooksUnsafe(value) || value.Contains('/', StringComparison.Ordinal) || value.Contains('\\', StringComparison.Ordinal) || value.Contains(':', StringComparison.Ordinal)
+        return LooksUnsafeSourceLabel(value) || value.Contains('/', StringComparison.Ordinal) || value.Contains('\\', StringComparison.Ordinal) || value.Contains(':', StringComparison.Ordinal)
             ? $"source:{Hash(value, 16)}"
             : value;
     }
@@ -3612,7 +3632,12 @@ public static class CombinedDependencyPathReporter
             || value.Contains("secret", StringComparison.OrdinalIgnoreCase)
             || value.Contains("token", StringComparison.OrdinalIgnoreCase)
             || value.Contains("private", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("internal", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("internal", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksUnsafeSourceLabel(string value)
+    {
+        return LooksUnsafe(value)
             || value.Contains("corp", StringComparison.OrdinalIgnoreCase)
             || value.Contains("customer", StringComparison.OrdinalIgnoreCase)
             || value.Contains("prod", StringComparison.OrdinalIgnoreCase)

@@ -120,6 +120,7 @@ public sealed class LegacyFlowCompositionTests
 
         var path = Assert.Single(result.Report.Paths);
         Assert.Equal("wcf-operation", path.Nodes.Last().SurfaceKind);
+        Assert.Contains(path.Nodes, node => node.DisplayName.Contains("OrderClient", StringComparison.Ordinal));
         Assert.Contains(path.Edges, edge => edge.EdgeKind == "wcf-service-reference");
         Assert.DoesNotContain(path.Nodes, node => node.SymbolId == serviceImpl);
     }
@@ -757,9 +758,11 @@ public sealed class LegacyFlowCompositionTests
         var oldIndex = Path.Combine(temp.Path, "old.sqlite");
         var gapIndex = Path.Combine(temp.Path, "gap.sqlite");
         var currentIndex = Path.Combine(temp.Path, "current.sqlite");
+        var futureIndex = Path.Combine(temp.Path, "future.sqlite");
         var oldManifest = Manifest("legacy-app", scannerVersion: "tracemap-milestone15");
         var gapManifest = Manifest("legacy-app");
         var currentManifest = Manifest("legacy-app");
+        var futureManifest = Manifest("legacy-app", scannerVersion: "tracemap-milestone17-dev");
         var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
         SqliteIndexWriter.Write(currentIndex, currentManifest, [
             WebFormsBinding(currentManifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
@@ -773,6 +776,10 @@ public sealed class LegacyFlowCompositionTests
             WebFormsBinding(gapManifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
             WebFormsHandler(gapManifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding"),
             AnalysisGapFact(gapManifest, RuleIds.LegacyRemotingConfig, "ExternalConfigInclude", "App.config", 8)
+        ]);
+        SqliteIndexWriter.Write(futureIndex, futureManifest, [
+            WebFormsBinding(futureManifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12),
+            WebFormsHandler(futureManifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier1Semantic, "wf-binding")
         ]);
 
         var oldResult = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
@@ -790,6 +797,11 @@ public sealed class LegacyFlowCompositionTests
             OutputPath: Path.Combine(temp.Path, "gap-flows"),
             IncludeLegacyRoots: true,
             View: LegacyFlowReportConstants.View));
+        var futureResult = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: futureIndex,
+            OutputPath: Path.Combine(temp.Path, "future-flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View));
 
         var schemaGap = Assert.Single(oldResult.Report.Gaps, gap => gap.GapKind == "SchemaMissing" && gap.Reason == "legacy-remoting");
         Assert.Equal("abc123", schemaGap.CommitSha);
@@ -805,6 +817,8 @@ public sealed class LegacyFlowCompositionTests
         Assert.Contains("No Remoting evidence found under available Remoting extractor coverage", currentMarkdown, StringComparison.Ordinal);
         Assert.Contains("commit:abc123", currentMarkdown, StringComparison.Ordinal);
         Assert.Contains("scope:source-manifest", currentMarkdown, StringComparison.Ordinal);
+        Assert.Contains(futureResult.Report.Gaps, gap => gap.GapKind == "NoRemotingEvidenceFound" && gap.ExtractorVersion == "tracemap-milestone17-dev");
+        Assert.DoesNotContain(futureResult.Report.Gaps, gap => gap.GapKind == "SchemaMissing" && gap.Reason == "legacy-remoting");
         Assert.Contains(gapResult.Report.Gaps, gap => gap.GapKind == "ExternalConfigInclude" && gap.RuleId == RuleIds.LegacyFlowGapPropagation);
     }
 
