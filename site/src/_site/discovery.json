@@ -101,6 +101,23 @@
     ]
   },
   {
+    "path": "/deploy-audit/",
+    "title": "Deploy Audit",
+    "summary": "Static-site deploy audit for public routes, sitemap metadata, robots policy, LLM discovery, JSON indexes, and claim-boundary checks.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/validation/",
+    "limitations": [
+      "The audit verifies generated static output, not live AWS state, DNS, TLS, CDN cache, crawler state, or external availability.",
+      "Route presence and discovery files do not prove product completeness, runtime behavior, endpoint performance, release approval, or deployment success."
+    ],
+    "nonClaims": [
+      "No runtime behavior proof, production traffic proof, endpoint performance proof, deployment success proof, release safety proof, or release approval proof.",
+      "No raw facts, SQLite files, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, AI impact analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
     "path": "/packets/",
     "title": "Evidence Packet Guide",
     "summary": "Shows how public-safe packets keep summaries attached to proof paths, rule IDs, evidence tiers, coverage labels, and limitations.",

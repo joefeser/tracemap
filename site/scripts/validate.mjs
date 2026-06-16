@@ -8,6 +8,7 @@ import {
   validateDiscoveryNotInSitemap,
   validateRobotsDiscoveryComment
 } from "./discovery.mjs";
+import { validateDeployAuditDist } from "./deploy-audit.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
@@ -58,6 +59,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
   if (normalizedBaseUrl) {
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
     await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
   await validateTopNavigation({ dist, errors, htmlFiles });
