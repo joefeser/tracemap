@@ -161,8 +161,8 @@ rules:
       - Missing generated files or unsupported service-reference shapes are analysis gaps, not proof that no service dependency exists.
 
   - id: legacy.wcf.host.v1
-    name: Legacy WCF and ASMX service host evidence
-    description: Extracts safe service host declarations from .svc and ASMX directive-style files.
+    name: Legacy WCF service host evidence
+    description: Extracts safe WCF ServiceHost declarations from .svc directive-style files. Older indexes may contain historical ASMX WebService directive evidence under WcfServiceHostDeclared; new indexes use legacy.asmx.host.v1 for .asmx hosts.
     evidenceTier: Tier2Structural or Tier4Unknown
     emits:
       - WcfServiceHostDeclared
@@ -170,6 +170,7 @@ rules:
     limitations:
       - Host declarations are static file evidence and do not prove IIS configuration, deployment, route reachability, service activation, or runtime factory behavior.
       - Malformed or unsupported host declarations are emitted as gaps rather than absence of service evidence.
+      - Historical ASMX-under-WCF rows require a migration limitation and must not be interpreted as clean ASMX absence in older indexes.
 
   - id: legacy.wcf.metadata.v1
     name: Legacy WCF checked-in metadata evidence
@@ -212,6 +213,92 @@ rules:
       - Metadata-backed normalized mappings require generated client contract, normalized operation name, connected WSDL operation metadata, and service contract evidence; a random repository-level WSDL operation name is not sufficient.
       - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
       - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
+
+  - id: legacy.asmx.host.v1
+    name: Legacy ASMX host directive evidence
+    description: Extracts checked-in .asmx WebService directive candidates with safe service class, language, and code-behind metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AsmxHostDeclared
+      - AnalysisGap
+    limitations:
+      - ASMX host declarations are static checked-in file evidence only and do not prove ASP.NET hosting, IIS configuration, route availability, deployment, service activation, SOAP execution, authentication, authorization, reachability, or impact.
+      - Directive values that are paths, URLs, config-like values, unsupported expressions, credentials, tokens, or unsafe text are reduced to safe basenames, omitted, or represented by context-separated non-secret hashes where allowed; raw snippets are not stored.
+      - Malformed, missing, generated, or unsupported directives are emitted as AnalysisGap rows rather than clean absence.
+
+  - id: legacy.asmx.service.v1
+    name: Legacy ASMX service class evidence
+    description: Extracts C# ASMX/SOAP service class attributes such as WebService, WebServiceBinding, ScriptService, SoapDocumentService, and SoapRpcService.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AsmxServiceClassDeclared
+      - AnalysisGap
+    limitations:
+      - Service class evidence is static attribute evidence only and does not prove service activation, WSDL compatibility, endpoint deployment, runtime calls, authorization, or impact.
+      - Syntax-only rows are review-tier because aliases, project-defined lookalike attributes, inactive build configurations, and unresolved framework references can reduce confidence without semantic resolution.
+      - Comments, string literals, XML docs, arbitrary source text, and disabled preprocessor regions are not ASMX service evidence.
+
+  - id: legacy.asmx.operation.v1
+    name: Legacy ASMX and SOAP operation evidence
+    description: Extracts C# WebMethod declarations and SOAP operation-shape attributes such as SoapDocumentMethod and SoapRpcMethod while keeping public operation and SOAP binding evidence distinct.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AsmxOperationDeclared
+      - AsmxSoapOperationDeclared
+      - AnalysisGap
+    limitations:
+      - Operation rows are static declarations only and do not prove a SOAP request was sent, a method is reachable, a binding is compatible, auth succeeds, endpoint configuration is selected, deployment exists, or runtime impact occurred.
+      - SOAP action, namespace, binding, endpoint, config, credential, token, local path, and source-snippet values are hashed or omitted; credential-like values are omitted rather than hashed.
+      - Syntax-only rows remain review-tier when compiler symbols cannot disambiguate framework attributes from aliases or project-defined lookalikes.
+
+  - id: legacy.asmx.client.v1
+    name: Legacy ASMX generated SOAP client evidence
+    description: Extracts generated SOAP proxy/client classes and operations from SoapHttpClientProtocol inheritance, generated web-reference files, SOAP method attributes, and Invoke/BeginInvoke/EndInvoke wrapper patterns.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AsmxGeneratedClientDeclared
+      - AsmxClientOperationDeclared
+      - AnalysisGap
+    limitations:
+      - Generated client evidence is static proxy-shape evidence only and does not prove runtime endpoint selection, generated proxy freshness, service reachability, deployment, authentication, authorization, or impact.
+      - Dynamic proxy factories, runtime URL assignment, custom base classes, unsupported generated formats, and missing checked-in metadata are gaps or review-tier evidence.
+      - Raw endpoint addresses, SOAP actions, config values, namespaces, local paths, source snippets, credentials, and tokens are omitted or hashed according to ASMX redaction rules.
+
+  - id: legacy.asmx.metadata.v1
+    name: Legacy ASMX checked-in SOAP metadata evidence
+    description: Extracts safe structural evidence from checked-in ASMX/SOAP web-reference metadata such as WSDL, DISCO, DISCOMAP, and proxy map files when owned by old Web References-style paths.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AsmxProxyMetadataDeclared
+      - AnalysisGap
+    limitations:
+      - Metadata rows describe checked-in design-time metadata only; TraceMap does not fetch remote WSDL, follow external imports, resolve schemas, activate services, or prove runtime reachability.
+      - .svcmap-gated WCF service-reference metadata remains WCF-owned; ambiguous generic .map or source-map files are ignored or emitted as gaps rather than duplicated across families.
+      - Endpoint addresses, SOAP actions, target namespaces, import locations, schema locations, hostnames, local paths, raw XML snippets, credentials, and tokens are omitted or represented by context-separated non-secret hashes where allowed; credential-like values are omitted.
+
+  - id: legacy.asmx.config.v1
+    name: Legacy ASMX/SOAP config evidence
+    description: Extracts ASMX/SOAP-relevant checked-in config structures such as system.web/webServices and generated proxy URL appSettings keys with sanitized values.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AsmxConfigDeclared
+      - AnalysisGap
+    limitations:
+      - Config rows are checked-in static configuration evidence only and do not prove transform selection, machine.config state, runtime mutation, endpoint reachability, credential validity, or impact.
+      - Credentials, tokens, connection strings, secret-like values, local operator paths, raw endpoint URLs, and raw config values are omitted; allowed non-secret endpoint-ish values may be context-hashed.
+      - Config evidence can support review-tier mapping only when aligned with static proxy or metadata identifiers; hash equality alone does not prove client-to-server reachability.
+
+  - id: legacy.asmx.mapping.v1
+    name: Legacy ASMX service-reference mapping evidence
+    description: Emits probable static generated SOAP client-to-ASMX operation mappings when operation names, checked-in metadata, or service operation declarations align without ambiguity.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AsmxServiceReferenceMapping
+      - AnalysisGap
+    limitations:
+      - Mappings are probable static evidence only and do not prove SOAP request execution, endpoint selection, deployment, reachability, authorization, generated proxy freshness, or backend impact.
+      - Name-only or metadata-backed mappings without stronger semantic/config evidence remain review-tier and are capped by the weakest required evidence leg.
+      - Duplicate operation candidates, missing metadata, dynamic proxy factories, and ambiguous service-reference ownership emit gaps rather than choosing an arbitrary backend.
 
   - id: legacy.remoting.api.v1
     name: Legacy .NET Remoting API evidence

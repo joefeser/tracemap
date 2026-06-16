@@ -26,6 +26,8 @@ public static class FileInventory
         ".edmx",
         ".wsdl",
         ".disco",
+        ".discomap",
+        ".map",
         ".xsd"
     };
 
@@ -65,10 +67,15 @@ public static class FileInventory
             .Where(path => Path.GetExtension(path).Equals(".svcmap", StringComparison.OrdinalIgnoreCase))
             .Select(path => NormalizeRelativePath(Path.GetDirectoryName(Path.GetRelativePath(root, path)) ?? "."))
             .ToHashSet(StringComparer.Ordinal);
+        var webReferenceFolders = EnumerateCandidateFiles(root, options, outputFullPath)
+            .Where(path => IsAsmxMetadataExtension(Path.GetExtension(path)))
+            .Where(path => IsWebReferenceMetadataPath(root, path))
+            .Select(path => NormalizeRelativePath(Path.GetDirectoryName(Path.GetRelativePath(root, path)) ?? "."))
+            .ToHashSet(StringComparer.Ordinal);
 
         var items = EnumerateCandidateFiles(root, options, outputFullPath)
-            .Where(path => ShouldInclude(root, path, serviceReferenceFolders))
-            .Select(path => TryCreateItem(root, path, serviceReferenceFolders))
+            .Where(path => ShouldInclude(root, path, serviceReferenceFolders, webReferenceFolders))
+            .Select(path => TryCreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
             .Where(item => item is not null)
             .Select(item => item!)
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
@@ -83,14 +90,14 @@ public static class FileInventory
             .Where(path => !ShouldExclude(root, path, outputFullPath));
     }
 
-    private static FileInventoryItem? TryCreateItem(string root, string path, ISet<string> serviceReferenceFolders)
+    private static FileInventoryItem? TryCreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
     {
         try
         {
             var info = new FileInfo(path);
             return new FileInventoryItem(
                 NormalizeRelativePath(Path.GetRelativePath(root, path)),
-                GetKind(root, path, serviceReferenceFolders),
+                GetKind(root, path, serviceReferenceFolders, webReferenceFolders),
                 info.Length);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -113,7 +120,7 @@ public static class FileInventory
             || parts.Any(part => ExcludedDirectoryNames.Contains(part));
     }
 
-    private static bool ShouldInclude(string root, string path, ISet<string> serviceReferenceFolders)
+    private static bool ShouldInclude(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
     {
         var fullPath = Path.GetFullPath(path);
         var fileName = Path.GetFileName(fullPath);
@@ -125,7 +132,13 @@ public static class FileInventory
 
         if (IsWcfMetadataExtension(extension))
         {
-            return IsServiceReferenceMetadataPath(root, fullPath, serviceReferenceFolders);
+            return IsServiceReferenceMetadataPath(root, fullPath, serviceReferenceFolders)
+                || (IsAsmxMetadataExtension(extension) && IsAsmxMetadataPath(root, fullPath, webReferenceFolders));
+        }
+
+        if (IsAsmxMetadataExtension(extension))
+        {
+            return IsAsmxMetadataPath(root, fullPath, webReferenceFolders);
         }
 
         return IncludedFileNames.Contains(fileName) || IncludedExtensions.Contains(extension);
@@ -143,7 +156,7 @@ public static class FileInventory
         return parts.Count > 1 && parts[0].Equals("packages", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string GetKind(string root, string path, ISet<string> serviceReferenceFolders)
+    private static string GetKind(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
     {
         var fileName = Path.GetFileName(path);
         var extension = Path.GetExtension(path);
@@ -189,10 +202,14 @@ public static class FileInventory
             ".ascx" => "WebFormsMarkup",
             ".master" => "WebFormsMarkup",
             ".svc" => "ServiceHost",
-            ".asmx" => "ServiceHost",
+            ".asmx" => "AsmxServiceHost",
             ".svcmap" => "ServiceReferenceMetadata",
-            ".wsdl" => "ServiceReferenceMetadata",
-            ".disco" => "ServiceReferenceMetadata",
+            ".wsdl" when IsServiceReferenceMetadataPath(root, path, serviceReferenceFolders) => "ServiceReferenceMetadata",
+            ".wsdl" when IsAsmxMetadataPath(root, path, webReferenceFolders) => "AsmxServiceReferenceMetadata",
+            ".disco" when IsServiceReferenceMetadataPath(root, path, serviceReferenceFolders) => "ServiceReferenceMetadata",
+            ".disco" when IsAsmxMetadataPath(root, path, webReferenceFolders) => "AsmxServiceReferenceMetadata",
+            ".discomap" when IsAsmxMetadataPath(root, path, webReferenceFolders) => "AsmxServiceReferenceMetadata",
+            ".map" when IsAsmxMetadataPath(root, path, webReferenceFolders) => "AsmxServiceReferenceMetadata",
             ".xsd" when IsServiceReferenceMetadataPath(root, path, serviceReferenceFolders) => "ServiceReferenceMetadata",
             ".xsd" => "XsdSchema",
             ".dbml" => "Dbml",
@@ -230,6 +247,14 @@ public static class FileInventory
             || extension.Equals(".xsd", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsAsmxMetadataExtension(string extension)
+    {
+        return extension.Equals(".wsdl", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".disco", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".discomap", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".map", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsServiceReferenceMetadataPath(string root, string fullPath, ISet<string> serviceReferenceFolders)
     {
         var extension = Path.GetExtension(fullPath);
@@ -257,6 +282,38 @@ public static class FileInventory
             || segment.Equals("Service References", StringComparison.OrdinalIgnoreCase)
             || segment.Equals("ServiceReference", StringComparison.OrdinalIgnoreCase)
             || segment.Equals("ServiceReferences", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsAsmxMetadataPath(string root, string fullPath, ISet<string> webReferenceFolders)
+    {
+        var relativePath = Path.GetRelativePath(root, fullPath);
+        var normalizedRelativePath = NormalizeRelativePath(relativePath);
+        var directory = NormalizeRelativePath(Path.GetDirectoryName(relativePath) ?? ".");
+        if (webReferenceFolders.Contains(directory))
+        {
+            return true;
+        }
+
+        return IsWebReferenceMetadataPath(root, fullPath)
+            || normalizedRelativePath
+                .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                .Any(IsWebReferenceSegment);
+    }
+
+    private static bool IsWebReferenceMetadataPath(string root, string fullPath)
+    {
+        var relativePath = Path.GetRelativePath(root, fullPath);
+        return NormalizeRelativePath(relativePath)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Any(IsWebReferenceSegment);
+    }
+
+    private static bool IsWebReferenceSegment(string segment)
+    {
+        return segment.Equals("Web Reference", StringComparison.OrdinalIgnoreCase)
+            || segment.Equals("Web References", StringComparison.OrdinalIgnoreCase)
+            || segment.Equals("WebReference", StringComparison.OrdinalIgnoreCase)
+            || segment.Equals("WebReferences", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string NormalizeRelativePath(string path)

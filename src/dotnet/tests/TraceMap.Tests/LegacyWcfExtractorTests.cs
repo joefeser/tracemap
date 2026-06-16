@@ -219,7 +219,7 @@ public sealed class LegacyWcfExtractorTests
     }
 
     [Fact]
-    public void Scan_extracts_asmx_class_attribute_as_host_service_name()
+    public void Scan_does_not_emit_wcf_host_for_asmx_webservice_directive()
     {
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
@@ -231,9 +231,12 @@ public sealed class LegacyWcfExtractorTests
 
         var result = ScanEngine.Scan(new ScanOptions(repo, output));
 
-        Assert.Contains(result.Facts, fact =>
+        Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.WcfServiceHostDeclared
-            && fact.Properties.GetValueOrDefault("serviceName") == "Sample.Services.LegacyWebService");
+            && fact.Evidence.FilePath == "Legacy.asmx");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AsmxHostDeclared
+            && fact.Properties.GetValueOrDefault("serviceClassName") == "Sample.Services.LegacyWebService");
     }
 
     [Fact]
