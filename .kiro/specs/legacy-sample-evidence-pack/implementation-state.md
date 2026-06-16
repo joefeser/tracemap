@@ -105,7 +105,10 @@ validation and promotion gates pass.
   - Codex requested adding `--date` to the public-safe dry-run validation
     command;
   - Qodo requested preserving commit identity proof instead of allowing
-    public-safe packs to omit commit identity.
+    public-safe packs to omit commit identity;
+  - Codex requested row-level evidence metadata on count rows, so the schema
+    example now includes rule ID, evidence tier, source label, coverage label,
+    and safe provenance on per-section counts.
 - Tasks are intentionally unchecked because this branch delivers a spec only.
 
 ## Validation

@@ -254,7 +254,15 @@ Suggested JSON shape:
       "evidenceTiers": ["Tier2Structural", "Tier3SyntaxOrTextual"],
       "coverageLabel": "Level1SemanticAnalysisReduced",
       "counts": [
-        { "name": "bindingsObserved", "value": 0, "ruleId": "legacy.webforms.event-binding.v1" }
+        {
+          "name": "bindingsObserved",
+          "value": 0,
+          "ruleId": "legacy.webforms.event-binding.v1",
+          "evidenceTier": "Tier2Structural",
+          "sourceLabel": "legacy-alpha",
+          "coverageLabel": "Level1SemanticAnalysisReduced",
+          "safeProvenanceRef": "source:legacy-alpha#webforms-event-flow"
+        }
       ],
       "limitations": [
         {
@@ -288,7 +296,8 @@ local-only and are excluded from byte-stability expectations.
 Top-level `summary` is a pack-level aggregate backed by
 `legacy.evidence-pack.summary.v1`; individual scalar fields such as
 `factsTotal` do not need their own rule IDs. Evidence section rows, gaps,
-limitations, and per-section counts do require rule IDs and evidence tiers.
+limitations, and per-section counts do require rule IDs, evidence tiers, source
+labels, coverage labels, and safe provenance references.
 
 ## Proposed Rule IDs
 
