@@ -103,6 +103,10 @@ narrows start evidence to a source label, `--surface-name` filters terminal
 surface identity using the current exact/wildcard behavior, and `--source-pair`
 constrains explicit endpoint or dependency crossings where such combined
 evidence exists.
+Safe generated display identities, including redacted hash display values such
+as `<kind>-<hash-prefix>`, are surface identities for this selector model; they
+do not introduce language-specific implicit prefix matching outside the existing
+exact/wildcard behavior.
 
 ## Proposed Package Layout
 

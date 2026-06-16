@@ -217,8 +217,8 @@ Use existing `legacy.flow.gap-propagation.v1` and
 `legacy.flow.input-availability.v1` mechanisms for report-level gaps. Suggested
 gap/note codes:
 
-- `RemotingExtractorUnavailable`
-- `RemotingSchemaMissing`
+- `ExtractorUnavailable: legacy-remoting`
+- `SchemaMissing: legacy-remoting`
 - `RemotingReducedCoverage`
 - `UnsupportedRemotingChannelLink`
 - `UnsupportedRemotingActivationDetail`
@@ -227,6 +227,7 @@ gap/note codes:
 - `RemotingRuntimeProofUnavailable`
 - `AmbiguousRemotingTerminal`
 - `RemotingSelectorNoMatch`
+- `MalformedSupportingFactIds`
 
 These are report gap codes, not new scanner rule IDs. They should include the
 source Remoting rule IDs when a source fact exists.
@@ -235,16 +236,19 @@ Availability detection:
 
 - Full Remoting availability requires the index to expose the generic `facts`
   storage used by current TraceMap indexes, current fact properties, scan
-  manifest or source metadata with extractor versions, and no schema errors
-  while querying all known `Remoting*` fact types.
+  manifest or source metadata that proves the scanner/schema version includes
+  Remoting fact support, and no schema errors while querying all known
+  `Remoting*` fact types.
 - A current index with zero matching Remoting facts and no Remoting-related
-  `AnalysisGap` facts is full availability with zero evidence only when the scan
-  manifest or extractor-version metadata shows `LegacyRemotingExtractor` ran.
-- If the index predates extractor-version metadata, cannot expose required fact
-  properties, or cannot be queried for Remoting fact types, emit
-  `RemotingSchemaMissing`.
-- If extractor metadata is present and `LegacyRemotingExtractor` is absent,
-  emit `RemotingExtractorUnavailable`.
+  `AnalysisGap` facts is full availability with zero evidence when the scan
+  manifest, schema version, or extractor-version metadata proves Remoting fact
+  support was available to the scanner. The composer must not require
+  Remoting-specific emitted facts to prove zero-evidence availability.
+- If the index predates the manifest/schema metadata needed to prove Remoting
+  support, cannot expose required fact properties, or cannot be queried for
+  Remoting fact types, emit `SchemaMissing: legacy-remoting`.
+- If extractor metadata is present and proves Remoting support was not available,
+  emit `ExtractorUnavailable: legacy-remoting`.
 - If Remoting-related `AnalysisGap` facts exist, preserve them and mark Remoting
   availability as reduced for classification.
 
@@ -293,7 +297,7 @@ Forbidden display fields:
 identities, or display hashes. A user should not need to pass a raw URL or
 object URI to find Remoting evidence.
 
-Hash selector format:
+Hash display and selector format:
 
 - Markdown and JSON display hashes as `<kind>-<prefix>`, for example
   `url-1a2b3c4d`, `objectUri-9f8e7d6c`, `value-0123abcd`, or
@@ -301,11 +305,14 @@ Hash selector format:
 - The prefix is the first eight lowercase hex characters of the existing full
   source hash. The full hash remains available to the reader when stored by the
   source fact, but output uses the display prefix.
-- `--surface-name url-1a2b3c4d` matches Remoting facts whose `urlHash` begins
-  with that prefix using case-insensitive hex comparison.
-- Exact fact IDs and safe type names sort before hash-prefix matches.
-- If a hash prefix matches multiple facts, return all matches deterministically
-  and add an ambiguity note; do not choose one.
+- Display hashes are safe generated surface identities. `--surface-name` uses the
+  existing legacy-flow exact/wildcard behavior against those display identities;
+  it does not introduce a Remoting-only implicit prefix matcher. A user may pass
+  an exact display hash such as `url-1a2b3c4d`, or use the existing wildcard form
+  when wildcard matching is desired.
+- Exact fact IDs and safe type names sort before wildcard display-hash matches.
+- If a wildcard display-hash selector matches multiple facts, return all matches
+  deterministically and add an ambiguity note; do not choose one.
 - Never require or accept raw URL/object URI/config values for selector matching
   when a corresponding hash exists.
 

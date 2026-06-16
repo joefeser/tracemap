@@ -150,8 +150,9 @@ without overstating what static evidence proves.
    that no Remoting evidence was found under available coverage. It SHALL NOT
    claim the repository does not use Remoting at runtime.
 7. WHEN Remoting extractor availability is missing or reduced THEN absence SHALL
-   be reported as `ExtractorUnavailable`, `ReducedCoverage`, or `AnalysisGap`,
-   not clean absence.
+   be reported as `ExtractorUnavailable: legacy-remoting`,
+   `SchemaMissing: legacy-remoting`, `ReducedCoverage`, or `AnalysisGap`, not
+   clean absence.
 
 ### Requirement 4: Query And Display Behavior
 
@@ -168,8 +169,9 @@ legacy flow command and selector model.
    or `--to-surface remoting-channel` is provided THEN the selector SHALL match
    the corresponding safe Remoting terminal or intermediate evidence.
 3. WHEN `--surface-name` is used with Remoting evidence THEN matching SHALL use
-   safe type names, safe fact IDs, or display hashes only; raw URL, object URI,
-   config value, or local path matching SHALL NOT be required.
+   safe type names, safe fact IDs, or display hashes through existing
+   exact/wildcard selector behavior only; raw URL, object URI, config value, or
+   local path matching SHALL NOT be required.
 4. WHEN Remoting facts are selected by fact ID or symbol-backed safe identity
    THEN the report SHALL keep each source-local candidate separate and SHALL NOT
    stitch across sources by short name alone.
