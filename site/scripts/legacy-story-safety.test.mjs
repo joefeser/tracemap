@@ -77,6 +77,17 @@ test("legacy story guard redacts sensitive evidence from error messages", () => 
   assert.doesNotMatch(message, /Password=secret/);
 });
 
+test("legacy story guard redacts non-secret leak evidence from error messages", () => {
+  const errors = validateRenderedLegacyStoryHtml(
+    html("<main><p>Read .kiro/specs/private/requirements.md and source snippet: public void Save() {}</p></main>")
+  );
+  const message = errors.join("\n");
+
+  assert.match(message, /redacted evidence/);
+  assert.doesNotMatch(message, /\.kiro\/specs\/private/);
+  assert.doesNotMatch(message, /public void Save/);
+});
+
 test("legacy story guard rejects affirmative overclaims while allowing exact negated disclaimers", () => {
   assert.match(
     validateRenderedLegacyStoryHtml(html("<main><p>This page proves runtime proof and release safety.</p></main>")).join(
