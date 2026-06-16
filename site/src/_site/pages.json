@@ -50,6 +50,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/legacy-evidence/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/roadmap/",
     "changefreq": "monthly",
     "priority": "0.7"
