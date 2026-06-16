@@ -63,17 +63,19 @@ public static class FileInventory
             IgnoreInaccessible = true
         };
 
-        var serviceReferenceFolders = EnumerateCandidateFiles(root, options, outputFullPath)
+        var candidateFiles = EnumerateCandidateFiles(root, options, outputFullPath).ToArray();
+
+        var serviceReferenceFolders = candidateFiles
             .Where(path => Path.GetExtension(path).Equals(".svcmap", StringComparison.OrdinalIgnoreCase))
             .Select(path => NormalizeRelativePath(Path.GetDirectoryName(Path.GetRelativePath(root, path)) ?? "."))
             .ToHashSet(StringComparer.Ordinal);
-        var webReferenceFolders = EnumerateCandidateFiles(root, options, outputFullPath)
+        var webReferenceFolders = candidateFiles
             .Where(path => IsAsmxMetadataExtension(Path.GetExtension(path)))
             .Where(path => IsWebReferenceMetadataPath(root, path))
             .Select(path => NormalizeRelativePath(Path.GetDirectoryName(Path.GetRelativePath(root, path)) ?? "."))
             .ToHashSet(StringComparer.Ordinal);
 
-        var items = EnumerateCandidateFiles(root, options, outputFullPath)
+        var items = candidateFiles
             .Where(path => ShouldInclude(root, path, serviceReferenceFolders, webReferenceFolders))
             .Select(path => TryCreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
             .Where(item => item is not null)
