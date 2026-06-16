@@ -1,6 +1,7 @@
 # site-tracemap-tools-legacy-evidence-story implementation state
 
-Status: ready-for-implementation / not started
+Status: not-started
+Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
@@ -124,6 +125,15 @@ Spec-prep validation:
 - Run Kiro spec review with Opus and Sonnet models if configured.
 - Patch Medium+ findings.
 - Run `git diff --check`.
+
+Review-loop update:
+
+- Qodo flagged a link-policy conflict because public site pages already link to
+  GitHub URLs containing `.kiro/specs/...`.
+- The spec now forbids bare/internal `.kiro/specs/...` paths while allowing
+  intentional allowlisted public URLs, such as stable GitHub links, when they do
+  not expose private paths, local remotes, generated outputs, or raw sensitive
+  values.
 
 Future implementation validation:
 

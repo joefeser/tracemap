@@ -1,12 +1,8 @@
 # site-tracemap-tools-legacy-evidence-story design
 
-## Status
-
-Ready for implementation. Not started.
-
-## Public claim level
-
-concept
+Status: not-started
+Readiness: ready-for-implementation
+Public claim level: concept
 
 ## Overview
 

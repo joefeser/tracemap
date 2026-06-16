@@ -1,12 +1,8 @@
 # site-tracemap-tools-legacy-evidence-story
 
-## Status
-
-Ready for implementation. Not started.
-
-## Public claim level
-
-concept
+Status: not-started
+Readiness: ready-for-implementation
+Public claim level: concept
 
 ## Summary
 
@@ -76,9 +72,10 @@ output:
 - Local-only artifact contents and paths: combined SQLite file paths, analyzer
   log paths, raw scan directory paths, generated scan output roots, and
   references that imply publishing raw artifact contents.
-- Internal source paths or names: `.kiro/specs/...`, unpublished private spec
-  names, local absolute paths, raw repository remotes, private sample names, and
-  private repository names.
+- Internal source paths or names: bare/internal `.kiro/specs/...` paths that
+  are not part of an allowlisted public URL, unpublished private spec names,
+  local absolute paths, raw repository remotes, private sample names, and private
+  repository names.
 - Raw sensitive values: source snippets, SQL text, endpoint addresses, config
   values, connection strings, secrets, tokens, and credential-like literals.
 
@@ -113,7 +110,8 @@ Detection semantics and limitations:
   public HTML or text output.
 - Matching must be case-insensitive and must normalize ordinary whitespace and
   Unicode format characters before evaluating hard leak tokens.
-- Automated hard-leak detection must at minimum cover `.kiro/specs` paths, local
+- Automated hard-leak detection must at minimum cover bare/internal
+  `.kiro/specs` paths that are not part of an allowlisted public URL, local
   absolute paths, generated output root patterns, connection-string key/value
   forms, credential or token assignment patterns, raw repository remote patterns,
   and private/local URL patterns such as localhost, RFC1918 addresses, or
@@ -149,8 +147,12 @@ Detection semantics and limitations:
   `MarshalByRefObject`, `DBML`, and `EDMX` must not fail by themselves.
 - Boundary fixtures must also prove those legitimate legacy terms do not mask
   adjacent hard leak tokens or affirmative overclaims on the same rendered page.
-- Public spec source means a published documentation page or public URL, never
-  an internal `.kiro/specs/...` path.
+- Public spec source means a published documentation page or allowlisted public
+  URL, never a bare/internal `.kiro/specs/...` path. Allowlisted public URLs may
+  include stable `https://github.com/joefeser/tracemap/.../.kiro/specs/...`
+  links when they are intentionally used as public source references and do not
+  expose private paths, local remotes, generated outputs, or raw sensitive
+  values.
 
 ## Source Material
 
@@ -236,9 +238,10 @@ Acceptance criteria:
   IDs, and limitations.
 - Any page copy that references reduced analysis must state that partial
   evidence is useful but labeled partial.
-- Public copy must not link to, cite, or expose internal `.kiro/specs/...`
-  paths or private spec names; source-material paths remain implementation
-  guidance only.
+- Public copy must not link to, cite, or expose bare/internal
+  `.kiro/specs/...` paths or private spec names. If a public spec source link is
+  needed, it must use an allowlisted public URL such as a stable GitHub URL;
+  source-material paths remain implementation guidance only.
 
 ### Requirement 4: Promotion and omission rules
 
