@@ -69,7 +69,9 @@ details.
 3. WHEN a human-readable catalog is emitted THEN it SHALL use `catalog.md`
    generated from the JSON catalog and SHALL NOT be hand-edited independently.
 4. WHEN operators need local candidate sample paths or private source notes THEN
-   those inputs SHALL stay under ignored `.tmp/legacy-sample-smoke-catalog/`.
+   those inputs SHALL stay under ignored `.tmp/legacy-sample-smoke-catalog/`
+   only after the implementation proves that root is ignored with
+   `git check-ignore`.
 5. WHEN tracked catalog files are created or promoted THEN the workflow SHALL
    reject raw scan artifacts, raw validation summaries, baseline manifests,
    evidence-pack JSON, analyzer logs, SQLite indexes, and raw reports.
@@ -102,7 +104,8 @@ validates while keeping public, private, and local identities separated.
 5. WHEN commit identity exists for a non-public or not-yet-reviewed source THEN
    tracked catalog entries SHALL record `commitIdentity.kind` as
    `category-only` and SHALL preserve `shaPresent: true` when a SHA was
-   observed without exposing or hashing the raw SHA.
+   observed without exposing or hashing the raw SHA, and the entry SHALL be
+   classified no higher than `demo-safe`.
 6. WHEN a sample lacks a pinned commit or fixture version THEN the catalog entry
    SHALL be classified no higher than `hidden` and SHALL include a limitation
    explaining that expectations are not reproducible.
@@ -201,7 +204,8 @@ repo while clearly showing what can and cannot be claimed publicly.
    they were explicitly omitted before render using
    `--minimum-entry-claim-level <demo-safe|public-safe>`; validators SHALL
    reject any tracked catalog whose top-level classification is higher than the
-   least-safe included entry.
+   least-safe included entry, but SHALL NOT reject individual entries merely
+   because they are safer than that top-level classification.
 6. WHEN catalog text describes expected evidence THEN it SHALL avoid runtime
    behavior, production usage, service reachability, vulnerability/security
    posture, SQL execution, release approval, customer impact, business impact,
@@ -261,8 +265,9 @@ deterministic, safe, and useful before implementation is considered complete.
    secrets, snippets, analyzer diagnostics, endpoint values, and unsafe
    Markdown without echoing the unsafe token.
 3. WHEN public-safe entries are validated THEN tests SHALL prove they contain
-   only safe labels, safe source aliases, allowed commit identity, expected
-   evidence families, rule IDs or patterns, evidence tiers, coverage labels,
+   only safe labels, safe source aliases, pinned `public-sha` or
+   `fixture-version` commit identity, expected
+   evidence families, exact rule IDs, evidence tiers, coverage labels,
    limitations, extractor IDs, command template names, and safe relationship
    references.
 4. WHEN hidden or operator-local entries are present THEN tests SHALL prove they

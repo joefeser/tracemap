@@ -6,7 +6,7 @@
   - [ ] Create `legacy-sample-smoke-catalog.v1` JSON schema with catalog metadata, safety, entries, source identity, commit identity, evidence families, validation templates, relationships, limitations, and claim levels.
   - [ ] Create generated Markdown shape for `catalog.md` derived from `catalog.json`.
   - [ ] Add tracked storage under `docs/validation/legacy-sample-smoke-catalog/` with a README that describes catalog boundaries without sample-specific raw details.
-  - [ ] Add ignored local scratch/input storage under `.tmp/legacy-sample-smoke-catalog/` if not already covered by ignore rules, and prove it with `git check-ignore`.
+  - [ ] Add ignored local scratch/input storage under `.tmp/legacy-sample-smoke-catalog/` if not already covered by ignore rules, and prove it with `git check-ignore` before documenting it as usable for private operator inputs.
   - [ ] Define closed vocabularies for claim level, source classification, source identity kind, commit identity kind, evidence family, expectation state, command mode, timeout bucket, artifact-size bucket, relationship artifact kind, and redaction profile.
   - [ ] Define tracked `commitIdentity.kind` schema enum as exactly `public-sha`, `fixture-version`, and `category-only`; allow `redacted-sha256` and `local-only` only in ignored local-draft schema variants if implemented.
   - [ ] Define closed vocabularies for relationship artifact kind, command input kind, timeout bucket, artifact-size bucket, and extractor gap code.
@@ -18,8 +18,8 @@
   - [ ] Validate `sourceClassification` and cap private, local, operator-only, unknown, or unreviewed sources at `hidden`.
   - [ ] Validate `displayName` with redaction and prohibited-claim scans while allowing display-safe spaces and punctuation.
   - [ ] Allow raw checked-out commit SHAs only for reviewed public sources with source classification `public-repo` or `public-archive`.
-  - [ ] Preserve commit proof for non-public sources using `shaPresent: true` with `category-only` in tracked output or `local-only` in ignored `.tmp/` output.
-  - [ ] Reject public-safe entries without pinned public SHA, fixture version, or category-only `shaPresent: true` proof.
+  - [ ] Preserve commit proof for non-public sources using `shaPresent: true` with `category-only` in tracked output or `local-only` in ignored `.tmp/` output, and classify those tracked entries no higher than `demo-safe`.
+  - [ ] Reject public-safe entries without pinned public SHA or fixture version proof.
   - [ ] Reject `redacted-sha256` commit identity in tracked output; reserve it for ignored local-only drafts until a future hashing policy defines safe inputs.
   - [ ] Reject tracked output containing raw remotes, private repo names, organization names, usernames, hostnames, branch names, local paths, or local-only commit identity.
   - [ ] Ensure top-level catalog classification is no higher than the least-safe included entry.
@@ -84,11 +84,11 @@
   - [ ] Test label rejection classes separately: path separator, URI scheme, `.git`, `@` identity, Windows drive prefix, home fragment, hostname, organization/user pattern, private-looking token, and secret-like value.
   - [ ] Test raw public SHA is allowed only for reviewed public sources and raw private SHA is rejected in tracked output.
   - [ ] Test `public-sha` commit identity with `synthetic-fixture`, `private-local`, `operator-local`, or `unknown` source classification is rejected.
-  - [ ] Test public-safe entries fail without pinned public SHA, fixture version, or category-only `shaPresent: true` proof.
+  - [ ] Test public-safe entries fail without pinned public SHA or fixture version proof.
   - [ ] Test `redacted-sha256` commit identity is rejected in tracked catalog output.
   - [ ] Test `redacted-sha256` and `local-only` are absent from the tracked schema and accepted only by an ignored local-draft schema variant if that variant is implemented.
   - [ ] Test tracked schema rejects any `commitIdentity.kind` outside `public-sha`, `fixture-version`, and `category-only`.
-  - [ ] Test evidence families require rule IDs or patterns, tiers, coverage labels, extractor IDs or gap codes, limitations, and expectation state.
+  - [ ] Test evidence families require exact rule IDs, tiers, coverage labels, extractor IDs or gap codes, limitations, and expectation state.
   - [ ] Test non-hidden entries fail when their `families` array is empty.
   - [ ] Test entries fail when their `limitations` array is empty.
   - [ ] Test Tier3 fallback expectations remain Tier3 and reduced coverage is not rendered as semantic proof.
@@ -96,7 +96,7 @@
   - [ ] Test command templates reject raw paths, remotes, environment values, hostnames, branch names, usernames, secrets, and raw labels.
   - [ ] Test command templates reject literal identity-bearing option values such as `--label my-internal-project`.
   - [ ] Test command templates reject literal date values such as `--date 2026-06`; stored templates must use placeholders such as `--date <YYYY-MM>`.
-  - [ ] Test command templates accept boolean literals and fixed closed-vocabulary literals such as `--include-raw-snippets false`.
+  - [ ] Test command templates reject speculative or unsupported CLI flags, and accept only fixed closed-vocabulary literals for commands that exist in the current CLI.
   - [ ] Test command templates reject unknown `--input-kind` literal values.
   - [ ] Test relationship references cannot point to raw artifacts or ignored `.tmp` paths.
   - [ ] Test unknown relationship `artifactKind` values are rejected.
@@ -107,7 +107,7 @@
   - [ ] Test prohibited claim wording checks nested JSON strings and generated Markdown.
   - [ ] Test prohibited claim wording in `displayName` fails with a sanitized diagnostic pointing to the `displayName` JSON pointer.
   - [ ] Test `displayName` containing a raw remote, private name, path, or secret-like value is rejected by redaction scanning.
-  - [ ] Test top-level catalog classification fails validation when it is higher than the least-safe included entry.
+  - [ ] Test top-level catalog classification fails validation when it is higher than the least-safe included entry while allowing individual entries that are safer than the catalog floor.
   - [ ] Test a catalog whose top-level classification is `demo-safe` but contains a hidden entry fails with a specific sanitized claim-level diagnostic.
   - [ ] Test `--minimum-entry-claim-level demo-safe` renders a new output containing only demo-safe and public-safe entries, recomputes top-level classification from the remaining entries, and fails when no entries remain.
   - [ ] Test `--minimum-entry-claim-level public-safe` renders only public-safe entries and fails when all entries are filtered out.
@@ -120,14 +120,14 @@
   - [ ] Test extractor gap codes validate against the closed vocabulary.
   - [ ] Test a `large-repo-stress` entry without `timeoutBucket` or `artifactSizeBucket` fails validation.
   - [ ] Test render `--dry-run` runs validation gates and writes no files.
-  - [ ] Test `git check-ignore .tmp/legacy-sample-smoke-catalog/example` or the chosen ignored root.
+  - [ ] Test `git check-ignore .tmp/legacy-sample-smoke-catalog/example` or the chosen ignored root after the implementation adds the ignore rule.
   - [ ] Test implementation setup fails clearly when the ignored local root is not actually ignored.
   - [ ] Test promotion rejects ignored destinations and destinations outside the approved tracked root.
   - [ ] Test `--force` can overwrite existing tracked catalog files only after all validation gates pass and still rejects unsafe input.
 
 - [ ] 8. Document maintainer workflow. Requirements: 1, 4, 5, 6.
   - [ ] Document that the catalog is validation metadata, not raw scan output, not an evidence pack, not a baseline, not a site page, and not an impact-analysis result.
-  - [ ] Document how operators keep private sample paths in ignored `.tmp/legacy-sample-smoke-catalog/local-samples.json`.
+  - [ ] Document how operators keep private sample paths in ignored `.tmp/legacy-sample-smoke-catalog/local-samples.json` only after the implementation has added and verified the ignore rule.
   - [ ] Document safe sample labels, source classifications, commit identity kinds, claim levels, evidence family IDs, expectation states, command placeholders, and redaction rules.
   - [ ] Document how catalog entries relate to `legacy-codebase-validation`, `legacy-baseline-regression-artifacts`, and `legacy-sample-evidence-pack`.
   - [ ] Document that public claims should be based on promoted public-safe proof such as evidence packs, not this catalog alone.
@@ -136,7 +136,7 @@
 - [ ] 9. Validate implementation. Requirements: 7.
   - [ ] Update `.kiro/specs/legacy-sample-smoke-catalog/implementation-state.md` with implementation branch, scope decisions, script fallback blockers if any, validation results, and follow-up items.
   - [ ] Run focused catalog schema, render, validation, and promotion tests.
-  - [ ] Run `git check-ignore .tmp/legacy-sample-smoke-catalog/example`.
+  - [ ] Run `git check-ignore .tmp/legacy-sample-smoke-catalog/example` after adding the implementation ignore rule.
   - [ ] Run `./scripts/check-private-paths.sh`.
   - [ ] Run `git diff --check`.
   - [ ] Run `dotnet test src/dotnet/TraceMap.sln` if catalog tooling is implemented in .NET.

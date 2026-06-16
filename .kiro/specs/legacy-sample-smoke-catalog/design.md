@@ -31,7 +31,8 @@ docs/validation/legacy-sample-smoke-catalog/
 and used for maintainer review. `README.md` documents the workflow and should
 not contain per-sample raw details that are absent from the JSON.
 
-Ignored operator-only inputs and scratch outputs live under:
+After the implementation adds and verifies a matching ignore rule,
+operator-only inputs and scratch outputs live under:
 
 ```text
 .tmp/legacy-sample-smoke-catalog/
@@ -39,6 +40,10 @@ Ignored operator-only inputs and scratch outputs live under:
   candidate-catalog.json
   validation-result.json
 ```
+
+The implementation must prove this root is ignored with `git check-ignore`
+before writing private operator data there. The spec does not authorize storing
+private sample paths in that root until the ignore rule exists and passes.
 
 The tracked location is a docs/validation handoff location, not a static site
 page. Site specs may later consume public-safe evidence packs produced from
@@ -112,7 +117,8 @@ Suggested entry shape:
       "familyId": "wcf-service-reference",
       "expectation": "required",
       "expectedRuleIds": [
-        "legacy.wcf.service-reference.*"
+        "legacy.wcf.metadata.v1",
+        "legacy.wcf.mapping.v1"
       ],
       "expectedEvidenceTiers": [
         "Tier2Structural",
@@ -142,7 +148,7 @@ Suggested entry shape:
     "commandTemplates": [
       {
         "name": "scan-sample",
-        "template": "tracemap scan --repo <sample-root> --out <scan-output> --include-raw-snippets false",
+        "template": "tracemap scan --repo <sample-root> --out <scan-output>",
         "mode": "operator-local",
         "timeoutBucket": "medium",
         "artifactSizeBucket": "medium",
@@ -203,8 +209,12 @@ produce a new output set without those entries. `--minimum-entry-claim-level
 demo-safe` includes `demo-safe` and `public-safe` entries.
 `--minimum-entry-claim-level public-safe` includes only `public-safe` entries.
 If no entries remain after filtering, render fails with a sanitized diagnostic.
-The validator rejects any tracked catalog whose `safety.classification` or
-entry `claimLevel` is higher than the least-safe included entry.
+The validator rejects any tracked catalog whose `safety.classification` is
+higher than the least-safe included entry. Individual entries may be safer than
+the top-level classification; for example, a demo-safe catalog rendered with
+`--minimum-entry-claim-level demo-safe` may contain both `demo-safe` and
+`public-safe` entries. The top-level classification remains the floor for the
+included set, not a cap that rejects safer entries.
 
 ### Source Classification
 
@@ -225,7 +235,7 @@ entry `claimLevel` is higher than the least-safe included entry.
 | `public-sha` | Allowed only for reviewed public sources | Raw checked-out commit SHA. |
 | `fixture-version` | Allowed | Stable fixture version or fixture tag. |
 | `redacted-sha256` | Not allowed in tracked output | Reserved for ignored local-only `.tmp/` drafts if a future hashing policy defines safe inputs. |
-| `category-only` | Allowed | Commit exists or is absent as a category, with no raw value. |
+| `category-only` | Allowed for hidden or demo-safe entries only | Commit exists or is absent as a category, with no raw value. |
 | `local-only` | Not allowed in tracked public/demo output | Raw or local identity exists only in ignored `.tmp/` output. |
 
 The tracked catalog schema must not allow `redacted-sha256` or `local-only`.
@@ -243,10 +253,11 @@ Ignored local-draft catalog schema variants may additionally allow
 `redacted-sha256` and `local-only`, but those values are schema errors in
 tracked catalog files before policy validation runs.
 
-Public-safe catalog entries should preserve commit proof. If a private SHA is
-observed, use `shaPresent: true` with `category-only`; do not expose or hash the
-private SHA in tracked output. Do not hash secret-like, low-entropy, enumerable,
-or source-text values.
+Public-safe catalog entries require a pinned `public-sha` for reviewed public
+sources or a `fixture-version` for synthetic/public-doc fixtures. If a private
+SHA is observed, use `shaPresent: true` with `category-only`, keep the entry no
+higher than `demo-safe`, and do not expose or hash the private SHA in tracked
+output. Do not hash secret-like, low-entropy, enumerable, or source-text values.
 
 ### Evidence Family
 
@@ -360,7 +371,7 @@ Allowed tracked catalog data:
 - public commit SHAs only for reviewed public sources
 - fixture versions
 - category-only commit proof with `shaPresent: true`
-- evidence family IDs, expected rule IDs or patterns, evidence tiers, extractor
+- evidence family IDs, exact expected rule IDs, evidence tiers, extractor
   IDs, coverage labels, limitation codes, and expectation states
 - command templates containing placeholders only
 - safe artifact classes and related schema names
@@ -373,7 +384,7 @@ Catalog command templates should show the shape of validation without leaking a
 developer machine:
 
 ```bash
-tracemap scan --repo <sample-root> --out <scan-output> --include-raw-snippets false
+tracemap scan --repo <sample-root> --out <scan-output>
 tracemap legacy-codebase-validation summarize --input <scan-output> --out <redacted-summary>
 tracemap evidence-pack create --input <redacted-summary> --input-kind legacy-validation-summary --label <sample-label> --claim-level <claim-level> --date <YYYY-MM> --out <pack-output>
 catalog validate --catalog <catalog-json> --expected-claim-level <claim-level>
@@ -384,8 +395,9 @@ If implementation chooses a script fallback such as
 the blocker and migration plan to a first-class CLI command.
 
 Literal option values are permitted only for booleans, fixed enumerations from
-closed vocabularies, and fixed command switches such as
-`--include-raw-snippets false`. String option values that can carry identity or
+closed vocabularies, and fixed command switches that exist in the current CLI.
+The catalog must not document speculative scan options. String option values
+that can carry identity or
 operator-specific data, including labels, names, repo references, branch names,
 artifact IDs, source identifiers, and dates more precise than `YYYY-MM`, must be
 angle-bracket placeholders in tracked catalog templates. A literal
@@ -429,11 +441,15 @@ The prohibited claim check should reject wording that implies runtime execution,
 production usage, service reachability, SQL execution, vulnerability/security
 status, release approval, business impact, customer impact, or reducer impact.
 
-Rule IDs and rule ID patterns are ordinary strings for safety purposes. The
-validator must scan them for private names, raw SQL/table identifiers, snippets,
-and prohibited wording rather than assuming rule identifiers are always safe.
-`displayName` is also scanned for redaction and prohibited-claim violations, but
-it is not constrained to the `sampleLabel` syntax because it may contain spaces.
+Rule IDs are exact catalog IDs and must exist in `rules/rule-catalog.yml` when
+they refer to current TraceMap rules. This v1 schema does not use implicit glob,
+prefix, or regex matching inside `expectedRuleIds`; a future schema may add a
+separate `expectedRuleIdPatterns` field with explicit matching semantics. Rule
+IDs are still ordinary strings for safety purposes. The validator must scan them
+for private names, raw SQL/table identifiers, snippets, and prohibited wording
+rather than assuming rule identifiers are always safe. `displayName` is also
+scanned for redaction and prohibited-claim violations, but it is not constrained
+to the `sampleLabel` syntax because it may contain spaces.
 
 ## Determinism
 
