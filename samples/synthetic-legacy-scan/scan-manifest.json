@@ -3,7 +3,7 @@
   "repoName": "synthetic-alpha",
   "remoteUrl": null,
   "branch": null,
-  "commitSha": "fixture-commit",
+  "commitSha": "3687102e563487be2acca2eaccd804d1947350fc",
   "scannerVersion": "tracemap-fixture",
   "scannedAt": "2026-06-01T00:00:00+00:00",
   "analysisLevel": "Level1SemanticAnalysisReduced",

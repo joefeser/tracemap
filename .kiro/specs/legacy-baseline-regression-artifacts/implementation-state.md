@@ -127,7 +127,7 @@ Completed:
 - `git diff --check`.
 - `dotnet build src/dotnet/TraceMap.sln`.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyBaselineArtifactsTests`.
-- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06 --created-at 2026-06`.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06 --created-at 2026-06 --public-source`.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- baseline validate --manifest .kiro/baselines/legacy/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json`.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose original-parser-snapshot --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 --created-at 2026-06 --dry-run`.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- baseline create --scan-output samples/synthetic-legacy-scan --label synthetic-alpha --purpose candidate --out .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07 --created-at 2026-07 --local-only`.
