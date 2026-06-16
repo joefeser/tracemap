@@ -471,6 +471,7 @@ add_section "release-review" "available" "PartialAnalysis" "PartialAnalysis" "" 
   "reports/release-review/public-demo/release-review.md,reports/release-review/public-demo/release-review.json" \
   "$RELEASE_REVIEW_COUNTS"
 
+node "$ASSERT_HELPER" scrub-public-report-json "$OUT_ROOT"
 node "$ASSERT_HELPER" write-summary "$OUT_ROOT" "$SECTIONS_JSONL" "$OUT_ROOT/demo-summary.json" "$OUT_ROOT/demo-summary.md"
 node "$ASSERT_HELPER" validate-summary "$OUT_ROOT/demo-summary.json"
 node "$ASSERT_HELPER" sentinel-scan "$OUT_ROOT"

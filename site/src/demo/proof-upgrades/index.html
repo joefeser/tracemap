@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap demo proof upgrades: reproducible public-demo evidence for combined reports, paths, reverse lookup, portfolio, diff, impact, and release-review outputs."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Demo Proof Upgrades | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/demo/proof-upgrades/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Demo Proof Upgrades">
+    <meta
+      property="og:description"
+      content="A public-safe evidence ledger for the demo rows that moved from deferred to reproducible static evidence."
+    >
+    <meta property="og:url" content="https://tracemap.tools/demo/proof-upgrades/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Demo proof upgrades</p>
+        <h1>The rows that were deferred now have reproducible demo evidence.</h1>
+        <p class="hero-subhead">
+          The public demo now generates combined dependency reports, path and
+          reverse reports, a portfolio report, before/after diff output, impact
+          output, and release-review output from checked-in samples.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. These rows are static, rule-backed,
+          coverage-labeled evidence from public samples. They do not prove
+          runtime behavior, production traffic, deployment state, endpoint
+          performance, release safety, or AI impact analysis.
+        </p>
+        <nav class="hero-actions" aria-label="Demo proof upgrade links">
+          <a class="button primary" href="/demo/result/">Read current result</a>
+          <a class="button secondary" href="/roadmap/">Read roadmap gates</a>
+          <a class="button secondary" href="/demo/proof-assets/">View proof assets</a>
+        </nav>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Run</p>
+          <h2>Regenerate the evidence from a clean checkout.</h2>
+          <p>
+            The counts below are a snapshot from a fresh public demo run on
+            June 15, 2026. Use an ignored or temporary output directory because
+            raw generated scan artifacts remain local.
+          </p>
+        </div>
+        <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
+cd tracemap
+./scripts/demo-public.sh /tmp/tracemap-demo
+
+sed -n '1,220p' /tmp/tracemap-demo/demo-summary.md</code></pre>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What changed</p>
+          <h2>The public demo can now show the fuller static evidence trail.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Before</strong><span>The first demo result intentionally labeled combined reports, paths, reverse lookup, portfolio, diff, impact, and release review as deferred.</span></div>
+          <div><strong>Now</strong><span>Those rows are available demo evidence when generated from checked-in public samples.</span></div>
+          <div><strong>Still bounded</strong><span>The generated rows keep <code>PartialAnalysis</code>, gaps, rule IDs, evidence tiers, and artifact safety boundaries visible.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Evidence ledger</p>
+          <h2>Each upgraded row points to public-safe generated reports and visible limits.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>combine-and-dependency-report</h3>
+            <p>Status: available demo evidence. Coverage: PartialAnalysis. Tier: Tier2Structural.</p>
+            <p>Artifacts: dependency report Markdown and JSON for endpoint-stack and mixed-stack outputs.</p>
+            <p>Counts: 6 sources, 14 endpoint findings, 62 dependency surfaces, 77 dependency edges, 2 gaps.</p>
+          </article>
+          <article>
+            <h3>paths-and-reverse</h3>
+            <p>Status: available demo evidence. Coverage: PartialAnalysis. Tier: Tier2Structural.</p>
+            <p>Artifacts: paths report Markdown and JSON, plus reverse report Markdown and JSON.</p>
+            <p>Counts: 12 paths, 37 path gaps, 25 reverse paths, 6 reverse roots, 23 reverse gaps, 5 selected surfaces.</p>
+          </article>
+          <article>
+            <h3>portfolio</h3>
+            <p>Status: available demo evidence. Coverage: PartialAnalysis. Tier: Tier2Structural.</p>
+            <p>Artifacts: generated portfolio manifest plus portfolio report Markdown and JSON.</p>
+            <p>Counts: 2 portfolio inputs, 6 sources, 9 dependency surfaces, 10 dependency edges, 4 endpoint findings, 4 gaps.</p>
+          </article>
+          <article>
+            <h3>diff</h3>
+            <p>Status: available demo evidence. Coverage: PartialAnalysis. Tier: Tier2Structural.</p>
+            <p>Artifacts: diff report Markdown and JSON generated from the checked-in before/after fixtures.</p>
+            <p>Counts: 14 diff rows, 12 surface diffs, 0 endpoint diffs, 0 edge diffs, 0 gaps.</p>
+          </article>
+          <article>
+            <h3>impact</h3>
+            <p>Status: available demo evidence. Coverage: PartialAnalysis. Tier: Tier2Structural.</p>
+            <p>Artifacts: impact report Markdown and JSON generated from the public demo diff.</p>
+            <p>Counts: 14 diff rows considered, 12 impact items, 12 surface impacts, 0 endpoint impacts, 0 edge impacts, 0 gaps.</p>
+          </article>
+          <article>
+            <h3>release-review</h3>
+            <p>Status: available demo evidence. Coverage: PartialAnalysis. Tier: Tier2Structural.</p>
+            <p>Artifacts: release-review Markdown and JSON generated from the public demo before/after inputs.</p>
+            <p>Counts: 50 findings, 50 top changed surfaces, 0 contract findings, 3 gaps, 53 checklist items.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Proof paths</p>
+          <h2>The page summarizes generated outputs without publishing raw internals.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>demo-summary.md</code><span>Public-safe summary of section status, rule IDs, evidence tiers, coverage labels, counts, and reasons.</span></div>
+          <div><code>demo-summary.json</code><span>Machine-readable row ledger with generated artifact paths relative to the demo output root.</span></div>
+          <div><code>reports/dependency/**</code><span>Generated combined dependency reports for endpoint-stack and mixed-stack examples.</span></div>
+          <div><code>reports/paths/**</code><span>Generated endpoint-to-surface path reports.</span></div>
+          <div><code>reports/reverse/**</code><span>Generated surface-to-endpoint reverse lookup reports.</span></div>
+          <div><code>portfolio-manifest.json</code><span>Generated manifest with relative combined-index inputs for the portfolio report.</span></div>
+          <div><code>reports/portfolio/**</code><span>Generated portfolio report built from generated combined indexes and a generated portfolio manifest.</span></div>
+          <div><code>reports/diff/**</code><span>Generated before/after diff reports from the checked-in public demo fixtures.</span></div>
+          <div><code>reports/impact/**</code><span>Generated impact reports derived from the public demo diff output.</span></div>
+          <div><code>reports/release-review/**</code><span>Generated release-review reports that roll static findings into a review checklist.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Claim boundary</p>
+          <h2>What this upgraded demo can and cannot support.</h2>
+        </div>
+        <ul>
+          <li>Safe: the checked-in public demo can generate these six report families and summary rows.</li>
+          <li>Safe: the rows are static, rule-backed, evidence-tiered, coverage-labeled, and limited by visible gaps.</li>
+          <li>Safe: reviewers can inspect generated public-safe Markdown and JSON reports for sample evidence trails.</li>
+          <li>Not safe: claiming full impact, runtime topology, release approval, production dependency understanding, endpoint performance, or production usage.</li>
+          <li>Not safe: publishing raw source snippets, raw SQL, config values, secrets, local absolute paths, raw repository remotes, facts, SQLite indexes, combined SQLite files, or analyzer logs.</li>
+        </ul>
+      </section>
+
+      <section class="section callout-section">
+        <h2>This is an evidence upgrade, not a louder promise.</h2>
+        <p>
+          The stronger site claim is narrow: these six rows moved from
+          deferred to demo because the public demo now produces reproducible,
+          public-safe evidence from checked-in samples. Shipped production
+          claims still require the relevant capability, proof path, and
+          limitations to be true on <code>main</code>.
+        </p>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Incident review is still concept-level.</h2>
+        <p>
+          The <a href="/use-cases/incident-review/">incident review orientation</a>
+          page can point to these demo proof rows only as static evidence and
+          limitation examples. It does not upgrade incident follow-up into
+          runtime proof, production dependency understanding, P1 root cause, or
+          release approval.
+        </p>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Source material</p>
+          <h2>Follow the upgraded rows back to repository evidence.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">Demo script source</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public-assert.mjs">Demo assertion helper</a>
+          <a href="https://github.com/joefeser/tracemap/tree/main/samples/public-demo">Before/after public demo fixtures</a>
+          <a href="/use-cases/incident-review/">Incident review orientation</a>
+          <a href="/demo/result/">Current demo result</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/demo/proof-assets/">Demo proof assets</a>
+          <a href="/roadmap/">Public roadmap</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/limitations/">Limitations</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/demo/result/">current demo result</a>,
+        the
+        <a href="/roadmap/">roadmap</a>,
+        or the
+        <a href="/packets/">packet guide</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

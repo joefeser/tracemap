@@ -82,8 +82,8 @@ Pinned smoke rationale:
 
 ## Oddities
 
-- The preferred branch name was already checked out in the separate
-  `tracemap-site` worktree, so this work uses
+- The preferred branch name was already checked out in a separate site worktree,
+  so this work uses
   `codex/legacy-baseline-regression-artifacts-2` and leaves that worktree alone.
 - `origin/dev` already contained the legacy flow composition work, so this
   branch includes it only as landed base code.

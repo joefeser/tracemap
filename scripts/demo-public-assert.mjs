@@ -68,6 +68,30 @@ function assertNoVolatileKeys(value, label) {
   assert(!hasVolatileKey(value), `${label} contains a volatile generatedAt/timestamp/scannedAt field.`);
 }
 
+function scrubPublicJsonValue(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      scrubPublicJsonValue(item);
+    }
+    return value;
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  for (const key of Object.keys(value)) {
+    if (/^(?:remoteUrl|repositoryRemote|repoRemote|gitRemote)$/i.test(key)) {
+      delete value[key];
+      continue;
+    }
+
+    scrubPublicJsonValue(value[key]);
+  }
+
+  return value;
+}
+
 function publicReportFiles(reportDir, markdownName, jsonName) {
   const markdown = path.join(reportDir, markdownName);
   const json = path.join(reportDir, jsonName);
@@ -716,6 +740,8 @@ function findSentinelFailures(root) {
   const checks = [
     ...localAbsolutePathChecks(root),
     ["windows-absolute-path", /[A-Za-z]:\\(?:Users|home|workspace|workspaces|tmp|temp|repo|agent|a)\\/i],
+    ["raw-repository-remote", /\b(?:git@|https?:\/\/[^/\s]+\/[^/\s]+\/[^/\s]+\.git\b)/i],
+    ["git-path", /(?:^|[\/\\])\.git(?:[\/\\]|$)/i],
     ["url-credential", /https?:\/\/[^/\s:@]+:[^/\s@]+@/i],
     ["connection-string", /\b(?:Password|Pwd|User Id|AccountKey|SharedAccessKey|ConnectionString)\s*=/i],
     ["secret-looking-value", /\b(?:token|secret|password|apikey|api_key|credential)\b\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{8,}/i],
@@ -779,6 +805,25 @@ function collectPublicFiles(dir, files) {
     if (isSummary || isReport || isPortfolioManifest || relative === "demo-summary.md" || relative === "demo-summary.json") {
       files.push(fullPath);
     }
+  }
+}
+
+function scrubPublicReportJson() {
+  const [outRoot] = args;
+  assert(outRoot, "scrub-public-report-json requires output root.");
+  const root = path.resolve(outRoot);
+  const files = [];
+  collectPublicFiles(root, files);
+
+  for (const file of files) {
+    const relative = path.relative(root, file).split(path.sep).join("/");
+    if (!relative.startsWith("reports/") || !relative.endsWith(".json")) {
+      continue;
+    }
+
+    const json = readJson(file);
+    scrubPublicJsonValue(json);
+    fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`, "utf8");
   }
 }
 
@@ -1078,6 +1123,9 @@ switch (command) {
     break;
   case "write-summary":
     writeSummary();
+    break;
+  case "scrub-public-report-json":
+    scrubPublicReportJson();
     break;
   case "sentinel-scan":
     sentinelScan();

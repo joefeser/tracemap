@@ -1,50 +1,185 @@
 # Legacy Data Metadata Extraction Implementation State
 
-Status: implemented-pr-review-loop-in-progress
-Branch: codex/legacy-data-metadata-extraction-9305
+Status: implementation-mvp-ready-for-review
+Branch: codex/legacy-data-metadata-extraction
 Public claim level: hidden
 
-## Implemented Scope
+## Why This Spec Exists
 
-- Added `LegacyData*` fact type constants and `ScannerVersions.LegacyDataExtractor`.
-- Added `LegacyDataMetadataExtractor` for checked-in DBML, EDMX, typed DataSet XSD/TableAdapter, data-provider config, and generated designer linkage.
-- Added XXE-safe XML loading with DTD prohibition, `XmlResolver = null`, document-size and node-count bounds, line info, and stable metadata hashing.
-- Widened inventory for `.dbml`, `.edmx`, and repository-local `.xsd`; service-reference WCF XSDs remain classified as service-reference metadata, while unrelated loose XSDs are only generic `XsdSchema` inventory until typed DataSet indicators are present.
-- DBML extraction emits static entity, storage object, column, association, routine, and mapping descriptors at `Tier2Structural`.
-- EDMX extraction emits CSDL/SSDL descriptors plus simple unambiguous MSL entity/table and property/column mappings, with unsupported mapping shapes and ambiguous containers as gaps.
-- Typed DataSet extraction is gated on XSD-intrinsic indicators and emits DataSet/DataTable/DataColumn/relation/TableAdapter descriptors. Complete static TableAdapter command text emits only existing SQL hash/shape evidence; raw SQL is not stored.
-- Config extraction emits `LegacyDataProviderConfigDeclared` for connection names, provider names, provider factories, and EF provider sections without raw connection strings or config values. External includes, encrypted sections, and transforms are gaps.
-- Generated-code linkage uses compiler-resolved `TypeDeclared` facts when scoped to generated files, otherwise falls back to deterministic generated file/type syntax. Missing or ambiguous candidates emit gaps.
-- Scan report now includes a Legacy Data Metadata section and static metadata limitations.
-- Rule catalog, adapter contract, validation guide, and acceptance matrix document new fact types, safe keys, limitations, and validation guidance.
+WCF metadata normalization and WebForms event flow are now implemented on `dev`.
+The next missing static layer for older .NET codebases is design-time data
+metadata: LINQ to SQL DBML, Entity Framework EDMX, typed DataSet/XSD,
+TableAdapter metadata, config provider/connection metadata, and generated data
+code linkage.
 
-## Scope Decisions And Oddities
+Old repositories frequently fail local project load because dependencies,
+toolsets, SDKs, or Visual Studio design-time generators are unavailable. The
+scanner should still preserve useful deterministic evidence from checked-in
+metadata and clearly label reduced coverage when it cannot prove a link.
 
-- Descriptor facts remain capped at `Tier2Structural`; a `Tier1Semantic` generated-code link does not upgrade the metadata descriptor tier.
-- The MVP does not emit `DatabaseColumnMapping` from metadata alone. Existing SQL/query/reducer rules still own runtime-adjacent conclusions.
-- EDMX support is intentionally conservative: complex types, conditions, inheritance/split mappings, many-to-many mappings, duplicate containers, and provider extensions become gaps or review evidence.
-- Typed DataSet `.designer.cs` presence is corroborating only after XSD-intrinsic indicators are present.
-- Generic config extraction now uses the same safe XML reader as legacy data metadata extraction.
-- Qodo review feedback patched after PR creation: file read failures now normalize to safe XML gaps, config and metadata parse gaps avoid raw parser text, typed DataSet XSD gating requires msdata/msprop-specific evidence, and report output preserves existing stable legacy-data hash labels.
-- Codex review feedback patched after PR creation: EF config `<provider>` elements are now extracted, and XML loading now uses byte streams so `XmlReader` honors declared XML encodings.
-- Public claims remain hidden until redacted validation summaries are intentionally reviewed.
+## Scope Decisions
 
-## Validation
+- This branch is spec-only. It does not implement scanner code.
+- Static checked-in metadata only; no runtime database connections, SQL
+  execution, service calls, EF model loading, or config transform execution.
+- DBML and EDMX are included anywhere in the repository because their extensions
+  are specific data metadata formats.
+- Typed DataSet `.xsd` extraction is gated by deterministic typed DataSet or
+  TableAdapter indicators so unrelated schemas do not become data facts.
+- TableAdapter command text uses existing SQL hash/shape conventions only when
+  complete static text is visible; raw SQL is never stored.
+- Config provider and connection metadata can explain names and provider
+  declarations but must not reveal raw connection strings or imply runtime
+  environment selection.
+- Generated-code linkage can be semantic, structural, syntax/textual, or unknown;
+  ambiguity produces gaps.
+- New facts should support existing reducer/report surfaces without changing
+  current reducer semantics.
+- Public claim level stays hidden until redacted validation artifacts are
+  intentionally reviewed.
+
+## Review State
+
+Initial spec drafted for Kiro Opus and Sonnet review. This should not be marked
+ready-for-implementation until Medium+ and blocking review findings are resolved.
+
+Review outcomes:
+
+- Sonnet spec review completed with full coverage. Blocking findings patched:
+  fact type selection rules, validation test ambiguity, parser safety test
+  detail, typed DataSet `.xsd` gating, safe identifier examples, and additional
+  missing tests.
+- Opus spec review timed out after the 10 minute wrapper limit and produced
+  reduced coverage. Partial findings patched: exact gap classifications,
+  rule-to-fact/tier mapping, config extractor relationship, tier ceilings,
+  determinism, extractor version naming, committed scope decisions, and PR
+  slicing guidance.
+- Sonnet re-review completed with reduced coverage because Kiro reported denied
+  shell access after reading files. Remaining blockers patched: copy-ready rule
+  catalog entries and XSD-intrinsic typed DataSet gating.
+- Final Sonnet re-review completed with reduced coverage because Kiro reported
+  denied shell access after reading files. No blocking or important issues
+  remain. Spec is ready for implementation.
+- The six `legacy.data.*` rule catalog entries remain an implementation task;
+  this spec-only import does not change `rules/rule-catalog.yml`.
+- PR review loop addressed Gemini's actionable note about config fact ownership:
+  `legacy.data.config.v1` no longer lists `ConfigKeyDeclared` as an emitted fact;
+  generic config-key evidence remains under existing config rules.
+- PR review loop addressed Qodo's actionable note about typed DataSet `.xsd`
+  gating: requirements now require XSD-intrinsic indicators first and treat
+  `.designer.cs` or generated-code linkage as corroborating evidence only.
+
+## Suggested PR Boundaries
+
+- PR 1: Tasks 1-4, covering rule catalog, fact model, extractor version,
+  inventory, parser safety, and safe identifier policy.
+- PR 2: Task 5, covering DBML extraction.
+- PR 3: Task 8, covering config provider and connection metadata.
+- PR 4: Task 6, covering EDMX extraction.
+- PR 5: Tasks 7 and 9, covering typed DataSet/TableAdapter extraction and
+  generated-code linkage.
+- PR 6: Tasks 10 and 11, covering docs, validation, compatibility, and final
+  implementation validation.
+
+## Validation Commands For Spec Delivery
+
+```bash
+node scripts/kiro-review.mjs --phase legacy-data-metadata-extraction --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000
+node scripts/kiro-review.mjs --phase legacy-data-metadata-extraction --kind spec --model claude-sonnet-4.5 --fresh --timeout-ms 600000
+node scripts/kiro-review.mjs --phase legacy-data-metadata-extraction --kind re-review --model claude-sonnet-4.5 --fresh --timeout-ms 600000
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+No .NET implementation validation is required for this spec-only branch unless
+review patches touch source code, docs outside the spec, or validation scripts.
+
+## Implementation Validation
+
+Implemented on `codex/legacy-data-metadata-extraction` as a conservative MVP
+covering:
+
+- Rule catalog entries, fact type constants, and
+  `ScannerVersions.LegacyDataExtractor`.
+- Safe XML helper shared by config and legacy metadata parsing. DTDs are
+  prohibited, `XmlResolver` is null, line info is preserved, and size/depth/node
+  bounds emit explicit gaps.
+- Inventory and extraction for DBML, EDMX, typed DataSet/XSD/TableAdapter,
+  relevant XML config provider/connection metadata, and `.designer.cs` linkage
+  candidates.
+- Static descriptor facts for DBML/EDMX/typed DataSet entities, storage
+  objects, columns, mappings, routines, provider config, and generated-code
+  links.
+- TableAdapter complete static command text evidence as `SqlTextUsed` hash/length
+  and SQL-shape `QueryPatternDetected` only; raw SQL is not stored.
+- Scan report section and docs for legacy data metadata facts and limitations.
+- Focused tests for DBML, EDMX, typed DataSet, config redaction, XSD gating,
+  generated-code linkage, parser safety, deterministic fact IDs, and SQLite
+  privacy checks.
+
+Validation run:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests
+dotnet test src/dotnet/TraceMap.sln
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo <temporary-git-fixture> --out <temporary-output>
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Observed results:
 
 - `dotnet build src/dotnet/TraceMap.sln`: passed.
-- `dotnet test src/dotnet/TraceMap.sln`: passed.
-- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-data-sample-scan`: passed and produced all required scan artifacts.
-- Focused tests added in `LegacyDataMetadataExtractorTests`.
-- `python3 -m unittest scripts.tests.test_legacy_codebase_validation`: not run because the legacy validation harness was not extended.
-- Pinned smoke checks from `docs/VALIDATION.md`: deferred; implementation is covered by checked-in focused fixtures and no local/private legacy smoke artifacts were introduced.
+- Focused legacy data metadata tests: passed, 9 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 270 tests.
+- CLI smoke against a temporary committed Git fixture: exit code 0, emitted
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log`; manifest had a concrete commit SHA; SQLite contained
+  `LegacyDataColumnDeclared`, `LegacyDataEntityDeclared`,
+  `LegacyDataMappingDeclared`, `LegacyDataMetadataDeclared`,
+  `LegacyDataProviderConfigDeclared`, and `LegacyDataStorageObjectDeclared`;
+  raw connection string values were absent from report and facts.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
-- Post-review rerun: `dotnet build`, `dotnet test` (300 tests), sample scan, private-path guard, and `git diff --check` passed after the Qodo fixes.
-- Final post-Codex rerun: `dotnet build`, `dotnet test` (301 tests), sample scan, private-path guard, and `git diff --check` passed.
+- `python3 -m unittest scripts.tests.test_legacy_codebase_validation`: skipped
+  because this MVP did not extend `scripts/legacy_codebase_validation.py`.
+- Broader pinned OSS/combined smoke checks from `docs/VALIDATION.md`: deferred
+  because this slice only adds single-scan fact/report rows and does not change
+  combined report/path/reverse/impact/release-review command behavior. Task 10
+  keeps broad compatibility tests unchecked for a follow-up.
 
-## Follow-Ups
+Scope decisions and oddities:
 
-- Rich EDMX inheritance, complex type, conditional, split, and many-to-many mapping support.
-- Additional old ORM descriptors such as NHibernate XML/Fluent or project-specific mapping DSLs.
-- Generated-code freshness detection beyond deterministic static linkage.
-- Public/redacted legacy data metadata validation summaries.
+- Generated `.designer.cs` files remain skipped by the general C# syntax and
+  semantic extractors. This MVP parses them only inside
+  `LegacyDataMetadataExtractor` for descriptor-scoped generated-code linkage.
+  Links are `Tier2Structural` for explicit generated file matches and
+  `Tier3SyntaxOrTextual` for scoped filename/type fallback. Semantic generated
+  linkage remains a follow-up.
+- Metadata descriptor facts are capped at `Tier2Structural`; generated-code
+  linkage does not upgrade descriptor tiers.
+- Config extraction now uses the shared safe XML loader. Generic config facts
+  remain under `config.key.v1`; legacy data provider/connection facts are emitted
+  separately under `legacy.data.config.v1`.
+- DBML multiple `<Database>` descriptors use the documented
+  `UnsupportedLegacyDataMetadataVersion` gap classification rather than adding a
+  new MVP classification string.
+- Public claim level remains hidden; no site copy or public validation artifacts
+  were added.
+
+## Follow-Ups To Keep Out Of This Slice
+
+- Semantic generated-code linkage for generated data types without classifying
+  generated code as hand-authored business logic.
+- Broader compatibility tests across combine, report, paths, reverse, impact,
+  release-review, and portfolio commands.
+- Deeper DBML provider-extension tests, multiple-Database ambiguity tests, EDMX
+  inheritance/complex/split/condition mapping tests, typed DataSet stale designer
+  tests, encrypted/transform config tests, and oversized/deeply nested XML tests.
+- Site copy or public site claims.
+- Runtime data access proof.
+- EF runtime model loading or query evaluation.
+- Arbitrary ORM DSL support without a deterministic parser spec.
+- Committed local sample names, private paths, raw SQL, connection strings,
+  config values, remotes, snippets, or generated smoke artifacts.

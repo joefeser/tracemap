@@ -1,0 +1,258 @@
+{
+  "publicClaimLevel": "demo",
+  "sections": [
+    {
+      "artifacts": [],
+      "classification": "NoActionableEvidence",
+      "counts": {
+        "requiredTools": 4
+      },
+      "coverage": "FullEvidenceAvailable",
+      "evidenceTier": "Tier2Structural",
+      "id": "toolchains",
+      "name": "toolchains",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    },
+    {
+      "artifacts": [],
+      "classification": "NoActionableEvidence",
+      "counts": {
+        "requested": 0
+      },
+      "coverage": "not_requested",
+      "evidenceTier": "Tier2Structural",
+      "id": "python",
+      "name": "python",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "not_requested"
+    },
+    {
+      "artifacts": [],
+      "classification": "PartialAnalysis",
+      "counts": {
+        "java21Available": 0
+      },
+      "coverage": "unavailable",
+      "evidenceTier": "Tier4Unknown",
+      "id": "jvm",
+      "name": "jvm",
+      "reason": "Java 21 was not detected; JVM demo scan is optional in this slice.",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "unavailable"
+    },
+    {
+      "artifacts": [],
+      "classification": "NoActionableEvidence",
+      "counts": {
+        "dotnet": 1,
+        "typescript": 1
+      },
+      "coverage": "FullEvidenceAvailable",
+      "evidenceTier": "Tier2Structural",
+      "id": "build",
+      "name": "build",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    },
+    {
+      "artifacts": [],
+      "classification": "PartialAnalysis",
+      "counts": {
+        "factsFiles": 6,
+        "fullCoverageScans": 5,
+        "knownGaps": 8,
+        "reducedCoverageScans": 1,
+        "scannedSources": 6
+      },
+      "coverage": "PartialAnalysis",
+      "evidenceTier": "Tier2Structural",
+      "id": "sample-scans",
+      "localOnlyArtifactFamilies": [
+        "scan-reports"
+      ],
+      "name": "sample-scans",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    },
+    {
+      "artifacts": [
+        "reports/dependency/endpoint-stack/dependency-report.json",
+        "reports/dependency/endpoint-stack/dependency-report.md",
+        "reports/dependency/mixed-stack/dependency-report.json",
+        "reports/dependency/mixed-stack/dependency-report.md"
+      ],
+      "classification": "PartialAnalysis",
+      "counts": {
+        "dependencyEdges": 77,
+        "dependencySurfaces": 62,
+        "endpointFindings": 14,
+        "endpointStackDependencyEdges": 24,
+        "endpointStackDependencySurfaces": 22,
+        "endpointStackEndpointFindings": 6,
+        "endpointStackGaps": 1,
+        "endpointStackSources": 2,
+        "gaps": 2,
+        "mixedStackDependencyEdges": 53,
+        "mixedStackDependencySurfaces": 40,
+        "mixedStackEndpointFindings": 8,
+        "mixedStackGaps": 1,
+        "mixedStackSources": 4,
+        "sources": 6
+      },
+      "coverage": "PartialAnalysis",
+      "evidenceTier": "Tier2Structural",
+      "id": "combine-and-dependency-report",
+      "name": "combine-and-dependency-report",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    },
+    {
+      "artifacts": [
+        "reports/paths/endpoint-to-sql/paths-report.json",
+        "reports/paths/endpoint-to-sql/paths-report.md",
+        "reports/reverse/sql-to-endpoints/reverse-report.json",
+        "reports/reverse/sql-to-endpoints/reverse-report.md"
+      ],
+      "classification": "PartialAnalysis",
+      "counts": {
+        "pathGaps": 37,
+        "paths": 12,
+        "reverseGaps": 23,
+        "reversePaths": 25,
+        "reverseRoots": 6,
+        "selectedSurfaces": 5
+      },
+      "coverage": "PartialAnalysis",
+      "evidenceTier": "Tier2Structural",
+      "id": "paths-and-reverse",
+      "name": "paths-and-reverse",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    },
+    {
+      "artifacts": [
+        "portfolio-manifest.json",
+        "reports/portfolio/portfolio-report.json",
+        "reports/portfolio/portfolio-report.md"
+      ],
+      "classification": "PartialAnalysis",
+      "counts": {
+        "dependencyEdges": 10,
+        "dependencySurfaces": 9,
+        "endpointFindings": 4,
+        "gaps": 4,
+        "portfolioInputs": 2,
+        "portfolioSources": 6,
+        "sharedSurfaces": 0
+      },
+      "coverage": "PartialAnalysis",
+      "evidenceTier": "Tier2Structural",
+      "id": "portfolio",
+      "name": "portfolio",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    },
+    {
+      "artifacts": [
+        "reports/diff/public-demo/diff-report.json",
+        "reports/diff/public-demo/diff-report.md"
+      ],
+      "classification": "PartialAnalysis",
+      "counts": {
+        "diffRows": 14,
+        "edgeDiffs": 0,
+        "endpointDiffs": 0,
+        "gaps": 0,
+        "surfaceDiffs": 12
+      },
+      "coverage": "PartialAnalysis",
+      "evidenceTier": "Tier2Structural",
+      "id": "diff",
+      "name": "diff",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    },
+    {
+      "artifacts": [
+        "reports/impact/public-demo/impact-report.json",
+        "reports/impact/public-demo/impact-report.md"
+      ],
+      "classification": "PartialAnalysis",
+      "counts": {
+        "diffRows": 14,
+        "edgeImpacts": 0,
+        "endpointImpacts": 0,
+        "gaps": 0,
+        "impactItems": 12,
+        "surfaceImpacts": 12
+      },
+      "coverage": "PartialAnalysis",
+      "evidenceTier": "Tier2Structural",
+      "id": "impact",
+      "name": "impact",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    },
+    {
+      "artifacts": [
+        "reports/release-review/public-demo/release-review.json",
+        "reports/release-review/public-demo/release-review.md"
+      ],
+      "classification": "PartialAnalysis",
+      "counts": {
+        "checklistItems": 53,
+        "contractFindings": 0,
+        "findings": 50,
+        "gaps": 3,
+        "topChangedSurfaces": 50
+      },
+      "coverage": "PartialAnalysis",
+      "evidenceTier": "Tier2Structural",
+      "id": "release-review",
+      "name": "release-review",
+      "reason": "",
+      "ruleIds": [
+        "public.demo.summary.v1"
+      ],
+      "status": "available"
+    }
+  ],
+  "source": {
+    "demoSummary": {
+      "outputRootHash": "path-hash:c624c14f5071aecbf8c5c0b4",
+      "version": "1.0"
+    },
+    "generator": "scripts/demo-public.sh"
+  },
+  "version": "1.0"
+}

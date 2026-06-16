@@ -15,6 +15,8 @@ test("buildSite publishes generated blog pages and keeps private blog folders ou
   await writeFile(join(root, "src", "_headers"), "/*\n  cache-control: public\n", "utf8");
   await mkdir(join(root, "src", "_blog", "private"));
   await writeFile(join(root, "src", "_blog", "private", "hidden.txt"), "hidden", "utf8");
+  await mkdir(join(root, "src", "_data"));
+  await writeFile(join(root, "src", "_data", "demo-public-summary.json"), "{}\n", "utf8");
 
   await buildSite({ log: () => {}, root });
 
@@ -36,6 +38,7 @@ test("buildSite publishes generated blog pages and keeps private blog folders ou
   assert.match(sitemap, /<loc>https:\/\/tracemap\.tools\/blog\/first-post\/<\/loc>/);
   await assert.rejects(stat(join(root, "dist", "_blog")), /ENOENT/);
   await assert.rejects(stat(join(root, "dist", "_site")), /ENOENT/);
+  await assert.rejects(stat(join(root, "dist", "_data", "demo-public-summary.json")), /ENOENT/);
 });
 
 test("buildSite replaces source headers with additional attributes and class order changes", async () => {

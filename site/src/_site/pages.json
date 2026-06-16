@@ -40,6 +40,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/use-cases/incident-review/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/legacy-validation/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -95,7 +100,22 @@
     "priority": "0.8"
   },
   {
+    "path": "/demo/proof-upgrades/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/demo/proof-assets/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/packets/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/manager-packet/",
     "changefreq": "monthly",
     "priority": "0.8"
   }
