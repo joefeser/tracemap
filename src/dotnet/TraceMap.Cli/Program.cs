@@ -49,9 +49,10 @@ public static class TraceMapCommand
                 "portfolio" => PortfolioHelp(),
                 "package-impact" => PackageImpactHelp(),
                 "contract-diff" => ContractDiffHelp(),
+                "baseline" => BaselineHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "contract-diff" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "contract-diff" or "baseline" ? 0 : 1;
         }
 
         try
@@ -75,6 +76,7 @@ public static class TraceMapCommand
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
                 "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
                 "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
+                "baseline" => await RunBaselineAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -789,6 +791,145 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasFindings ? 1 : 0;
     }
 
+    private static async Task<int> RunBaselineAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0 || IsHelp(args[0]))
+        {
+            await output.WriteLineAsync(BaselineHelp());
+            return 0;
+        }
+
+        var subcommand = args[0].ToLowerInvariant();
+        var values = ParseOptions(args.Skip(1).ToArray());
+        switch (subcommand)
+        {
+            case "create":
+            {
+                if (!values.TryGetValue("--scan-output", out var scanOutput) || string.IsNullOrWhiteSpace(scanOutput))
+                {
+                    await error.WriteLineAsync("error: baseline create requires --scan-output <path>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--label", out var label) || string.IsNullOrWhiteSpace(label))
+                {
+                    await error.WriteLineAsync("error: baseline create requires --label <neutral-slug>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--purpose", out var purpose) || string.IsNullOrWhiteSpace(purpose))
+                {
+                    await error.WriteLineAsync("error: baseline create requires --purpose <neutral-slug>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+                {
+                    await error.WriteLineAsync("error: baseline create requires --out <path>.");
+                    return 1;
+                }
+
+                var result = await LegacyBaselineArtifacts.CreateAsync(
+                    new LegacyBaselineCreateOptions(
+                        scanOutput,
+                        label,
+                        purpose,
+                        outputPath,
+                        values.GetValueOrDefault("--classification") ?? LegacyBaselineClassifications.PublicSafe,
+                        values.GetValueOrDefault("--created-at"),
+                        values.HasFlag("--dry-run"),
+                        values.HasFlag("--public-source")),
+                    cancellationToken);
+
+                await output.WriteLineAsync($"TraceMap baseline create {(values.HasFlag("--dry-run") ? "dry-run " : string.Empty)}completed: {result.Manifest.BaselineId}");
+                await output.WriteLineAsync($"Safety classification: {result.Manifest.Safety.Classification}");
+                await output.WriteLineAsync($"Facts: {result.Manifest.Counts.FactsTotal}");
+                await output.WriteLineAsync($"Gaps: {result.Manifest.Counts.GapsTotal}");
+                foreach (var diagnostic in result.Diagnostics)
+                {
+                    await WriteBaselineDiagnosticAsync(error, diagnostic);
+                }
+
+                if (result.ManifestPath is not null)
+                {
+                    await output.WriteLineAsync($"Manifest: {result.ManifestPath}");
+                    await output.WriteLineAsync($"Summary: {result.SummaryPath}");
+                }
+
+                return result.Manifest.Safety.Classification == LegacyBaselineClassifications.Rejected ? 1 : 0;
+            }
+
+            case "validate":
+            {
+                if (!values.TryGetValue("--manifest", out var manifestPath) || string.IsNullOrWhiteSpace(manifestPath))
+                {
+                    await error.WriteLineAsync("error: baseline validate requires --manifest <path>.");
+                    return 1;
+                }
+
+                var result = await LegacyBaselineArtifacts.ValidateAsync(new LegacyBaselineValidateOptions(manifestPath), cancellationToken);
+                await output.WriteLineAsync($"TraceMap baseline validate completed: {manifestPath}");
+                await output.WriteLineAsync($"Safety classification: {result.Classification}");
+                await output.WriteLineAsync($"Valid: {result.IsValid.ToString().ToLowerInvariant()}");
+                foreach (var diagnostic in result.Diagnostics)
+                {
+                    await WriteBaselineDiagnosticAsync(error, diagnostic);
+                }
+
+                return result.IsValid ? 0 : 1;
+            }
+
+            case "compare":
+            {
+                if (!values.TryGetValue("--baseline", out var baselinePath) || string.IsNullOrWhiteSpace(baselinePath))
+                {
+                    await error.WriteLineAsync("error: baseline compare requires --baseline <baseline-manifest.json>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--candidate", out var candidatePath) || string.IsNullOrWhiteSpace(candidatePath))
+                {
+                    await error.WriteLineAsync("error: baseline compare requires --candidate <baseline-manifest.json>.");
+                    return 1;
+                }
+
+                if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+                {
+                    await error.WriteLineAsync("error: baseline compare requires --out <path>.");
+                    return 1;
+                }
+
+                var result = await LegacyBaselineArtifacts.CompareAsync(
+                    new LegacyBaselineCompareOptions(
+                        baselinePath,
+                        candidatePath,
+                        outputPath,
+                        values.GetValueOrDefault("--migration-map"),
+                        values.GetValueOrDefault("--generated-at")),
+                    cancellationToken);
+
+                await output.WriteLineAsync($"TraceMap baseline compare completed: {result.JsonPath}");
+                await output.WriteLineAsync($"Overall status: {result.Comparison.OverallStatus}");
+                await output.WriteLineAsync($"Review entries: {result.Comparison.ReviewNeeded.Count}");
+                foreach (var diagnostic in result.Diagnostics)
+                {
+                    await WriteBaselineDiagnosticAsync(error, diagnostic);
+                }
+
+                return 0;
+            }
+
+            default:
+                await error.WriteLineAsync($"error: unknown baseline subcommand '{subcommand}'.");
+                return 1;
+        }
+    }
+
+    private static async Task WriteBaselineDiagnosticAsync(TextWriter error, LegacyBaselineValidationDiagnostic diagnostic)
+    {
+        await error.WriteLineAsync($"warning: {diagnostic.Category}: ruleId={diagnostic.RuleId}; path={diagnostic.Path}; {diagnostic.Message}");
+    }
+
     private static async Task<int> RunEndpointsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
@@ -991,7 +1132,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-legacy-roots" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review")
+            if (arg is "--restore" or "--include-paths" or "--include-legacy-roots" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--dry-run" or "--public-source")
             {
                 flags.Add(arg);
                 continue;
@@ -1102,6 +1243,7 @@ public static class TraceMapCommand
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
               tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
+              tracemap baseline create --scan-output <path> --label <neutral-slug> --purpose <neutral-slug> --out <path>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -1121,6 +1263,7 @@ public static class TraceMapCommand
               release-review Assemble a deterministic before/after release evidence packet.
               portfolio Summarize dependency evidence across many TraceMap indexes.
               package-impact Report static package upgrade evidence from indexed package declarations.
+              baseline Create, validate, and compare redacted legacy baseline summaries.
             """;
     }
 
@@ -1466,6 +1609,35 @@ public static class TraceMapCommand
 
             Outputs:
               package-impact-report.md and/or package-impact-report.json
+            """;
+    }
+
+    private static string BaselineHelp()
+    {
+        return """
+            Usage:
+              tracemap baseline create --scan-output <path> --label <neutral-slug> --purpose <neutral-slug> --out <path> [--dry-run]
+              tracemap baseline validate --manifest <baseline-manifest.json>
+              tracemap baseline compare --baseline <baseline-manifest.json> --candidate <baseline-manifest.json> --out <path>
+
+            Create required:
+              --scan-output <path>       Existing TraceMap scan output under samples/ or ignored .tmp storage.
+              --label <neutral-slug>     Neutral sample label. Paths, remotes, hostnames, and identity-looking labels are rejected.
+              --purpose <neutral-slug>   Neutral baseline purpose such as original-parser-snapshot.
+              --out <path>               .tmp/legacy-baselines/<baseline-id> or .kiro/baselines/legacy/<baseline-id>.
+
+            Create optional:
+              --classification <value>   public-safe or local-only. Default: public-safe.
+              --created-at <yyyy-MM>     Fixture-pinned creation period for deterministic output.
+              --public-source            Allow public repository identity hash and commit SHA.
+              --dry-run                  Report safety classification without writing output files.
+
+            Compare optional:
+              --migration-map <path>     legacy-baseline-migration-map.v1 JSON file for schema, rule, or fact renames.
+              --generated-at <yyyy-MM>   Fixture-pinned comparison period for deterministic output.
+
+            Outputs:
+              baseline-manifest.json, baseline-summary.md, comparison.json, comparison.md
             """;
     }
 
