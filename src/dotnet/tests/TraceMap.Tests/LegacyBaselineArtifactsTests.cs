@@ -258,6 +258,45 @@ public sealed class LegacyBaselineArtifactsTests
     }
 
     [Fact]
+    public async Task Missing_facts_artifact_is_preserved_as_partial_gap()
+    {
+        var scanPath = TestBaselinePath("missing-facts-scan");
+        DeleteIfExists(scanPath);
+        Directory.CreateDirectory(scanPath);
+        await File.WriteAllTextAsync(Path.Combine(scanPath, "scan-manifest.json"), """
+            {
+              "scanId": "missing-facts-scan",
+              "repoName": "synthetic-missing-facts-fixture",
+              "remoteUrl": null,
+              "branch": null,
+              "commitSha": "3333333333333333333333333333333333333333",
+              "scannerVersion": "test-fixture",
+              "scannedAt": "2026-06-01T00:00:00Z",
+              "analysisLevel": "Level1SemanticAnalysis",
+              "buildStatus": "Succeeded",
+              "solutions": ["MissingFacts.sln"],
+              "projects": ["src/MissingFacts/MissingFacts.csproj"],
+              "targetFrameworks": ["net48"],
+              "knownGaps": []
+            }
+            """);
+
+        var result = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            scanPath,
+            "synthetic-alpha",
+            "original-parser-snapshot",
+            TestBaselinePath("missing-facts-out"),
+            CreatedAt: "2026-06"));
+
+        Assert.Equal(0, result.Manifest.Counts.FactsTotal);
+        Assert.True(result.Manifest.Scan.Partial);
+        Assert.Equal("artifact-missing-partial", result.Manifest.Scan.ScanStatus);
+        Assert.Contains("FactsArtifactMissing", result.Manifest.KnownGaps);
+        Assert.Equal(1, result.Manifest.Counts.ByKnownGap["FactsArtifactMissing"]);
+        Assert.Contains(result.Manifest.Limitations, item => item.Contains("facts.ndjson is missing", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Compare_reports_movements_review_flags_and_neutral_markdown()
     {
         var baselineOut = TestBaselinePath("compare-baseline");
@@ -292,10 +331,11 @@ public sealed class LegacyBaselineArtifactsTests
             compareOut,
             GeneratedAt: "2026-07"));
 
-        Assert.Equal("unchanged-or-increase-only", comparison.Comparison.OverallStatus);
+        Assert.Equal("review-needed", comparison.Comparison.OverallStatus);
         Assert.Contains(comparison.Comparison.Dimensions["byFactType"], row => row.Category == "HttpCallDetected" && row.Movement == "new-category");
         Assert.Contains(comparison.Comparison.Dimensions["totals"], row => row.Category == "factsTotal" && row.Movement == "increase");
         Assert.Contains(comparison.Comparison.Dimensions["coverage"], row => row.Category == "coverageLabel" && row.Movement == "unchanged");
+        Assert.Contains(comparison.Comparison.ReviewNeeded, item => item.Category == "extractor:csharp.syntax" && item.RuleId == "legacy.baseline.regression-comparison.v1");
         var markdown = await File.ReadAllTextAsync(comparison.MarkdownPath);
         foreach (var phrase in new[] { "impacted", "safe", "unsafe", "reachable", "production", "business" })
         {
@@ -345,6 +385,92 @@ public sealed class LegacyBaselineArtifactsTests
         Assert.Contains(".tmp/legacy-baselines", error.ToString());
         Assert.False(File.Exists(Path.Combine(unsafeOut, "comparison.json")));
         Assert.False(File.Exists(Path.Combine(unsafeOut, "comparison.md")));
+    }
+
+    [Fact]
+    public async Task Compare_rejects_invalid_manifest_without_writing_files()
+    {
+        var baselineOut = TestBaselinePath("invalid-compare-baseline");
+        var candidateOut = TestBaselinePath("invalid-compare-candidate");
+        var compareOut = TestBaselinePath("comparisons/invalid-input");
+        DeleteIfExists(baselineOut);
+        DeleteIfExists(candidateOut);
+        DeleteIfExists(compareOut);
+
+        var baseline = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            "samples/synthetic-legacy-scan",
+            "synthetic-alpha",
+            "original-parser-snapshot",
+            baselineOut,
+            CreatedAt: "2026-06"));
+        var candidate = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            "samples/synthetic-legacy-scan",
+            "synthetic-alpha",
+            "candidate",
+            candidateOut,
+            CreatedAt: "2026-07"));
+
+        var unsafeText = (await File.ReadAllTextAsync(candidate.ManifestPath!)).Replace("synthetic-alpha", "/home/example/private-sample", StringComparison.Ordinal);
+        await File.WriteAllTextAsync(candidate.ManifestPath!, unsafeText);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync([
+            "baseline",
+            "compare",
+            "--baseline",
+            baseline.ManifestPath!,
+            "--candidate",
+            candidate.ManifestPath!,
+            "--out",
+            compareOut,
+            "--generated-at",
+            "2026-07"
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("failed validation", error.ToString());
+        Assert.DoesNotContain("/home/example/private-sample", error.ToString());
+        Assert.False(File.Exists(Path.Combine(compareOut, "comparison.json")));
+        Assert.False(File.Exists(Path.Combine(compareOut, "comparison.md")));
+    }
+
+    [Fact]
+    public async Task Extractor_version_changes_require_review()
+    {
+        var baselineOut = TestBaselinePath("extractor-baseline");
+        var candidateOut = TestBaselinePath("extractor-candidate");
+        var compareOut = TestBaselinePath("comparisons/extractor-drift");
+        DeleteIfExists(baselineOut);
+        DeleteIfExists(candidateOut);
+        DeleteIfExists(compareOut);
+
+        var baseline = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            "samples/synthetic-legacy-scan",
+            "synthetic-alpha",
+            "original-parser-snapshot",
+            baselineOut,
+            CreatedAt: "2026-06"));
+        var candidate = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            "samples/synthetic-legacy-scan",
+            "synthetic-alpha",
+            "candidate",
+            candidateOut,
+            CreatedAt: "2026-07"));
+
+        var extractors = candidate.Manifest.Extractors.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        extractors["csharp.semantic"] = new LegacyBaselineExtractor("2.0.0");
+        await WriteJsonAsync(candidate.ManifestPath!, candidate.Manifest with { Extractors = extractors });
+
+        var comparison = await LegacyBaselineArtifacts.CompareAsync(new LegacyBaselineCompareOptions(
+            baseline.ManifestPath!,
+            candidate.ManifestPath!,
+            compareOut,
+            GeneratedAt: "2026-07"));
+
+        Assert.Equal("review-needed", comparison.Comparison.OverallStatus);
+        Assert.Contains(comparison.Comparison.SchemaCompatibility.Extractors, item => item.ExtractorId == "csharp.semantic" && item.Movement == "coverage-changed");
+        Assert.Contains(comparison.Comparison.ReviewNeeded, item => item.Category == "extractor:csharp.semantic" && item.RuleId == "legacy.baseline.regression-comparison.v1");
     }
 
     [Fact]
