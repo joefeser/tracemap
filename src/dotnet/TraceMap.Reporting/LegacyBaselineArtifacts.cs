@@ -345,7 +345,7 @@ public static class LegacyBaselineArtifacts
             return new LegacyBaselineCreateResult(manifest, validation, null, null);
         }
 
-        ValidateOutputBoundary(options.OutputPath, manifest.Safety.Classification);
+        ValidateOutputBoundary(options.OutputPath, options.LocalOnly || manifest.Safety.Classification == "rejected" ? "local-only" : manifest.Safety.Classification);
         Directory.CreateDirectory(options.OutputPath);
         var outputManifestPath = Path.Combine(options.OutputPath, "baseline-manifest.json");
         var outputSummaryPath = Path.Combine(options.OutputPath, "baseline-summary.md");
@@ -395,6 +395,7 @@ public static class LegacyBaselineArtifacts
         rows.AddRange(CompareMap("byFactType", ApplyRenames(baseline.Counts.ByFactType, migrationMapApplies ? migrationMap?.FactTypeRenames : null, r => r.FromFactType, r => r.ToFactType), candidate.Counts.ByFactType));
         rows.AddRange(CompareMap("byEvidenceTier", baseline.Counts.ByEvidenceTier, candidate.Counts.ByEvidenceTier));
         rows.AddRange(CompareMap("byExtractor", baseline.Counts.ByExtractor, candidate.Counts.ByExtractor));
+        rows.AddRange(CompareExtractorVersions(baseline.Extractors, candidate.Extractors));
         rows.AddRange(CompareMap("bySurface", baseline.Counts.BySurface, candidate.Counts.BySurface));
         rows.AddRange(CompareMap("byKnownGap", baseline.Counts.ByKnownGap, candidate.Counts.ByKnownGap));
         rows.Add(CompareLabel("coverage", "coverageLabel", baseline.Scan.CoverageLabel, candidate.Scan.CoverageLabel));
@@ -912,6 +913,26 @@ public static class LegacyBaselineArtifacts
 
             return Row(dimension, name, baselineCount, candidateCount);
         }).ToArray();
+    }
+
+    private static IReadOnlyList<LegacyComparisonRow> CompareExtractorVersions(
+        IReadOnlyDictionary<string, LegacyBaselineExtractor> baseline,
+        IReadOnlyDictionary<string, LegacyBaselineExtractor> candidate)
+    {
+        var names = baseline.Keys.Concat(candidate.Keys).Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal);
+        return names
+            .Where(name => baseline.TryGetValue(name, out var before)
+                && candidate.TryGetValue(name, out var after)
+                && !string.Equals(before.Version, after.Version, StringComparison.Ordinal))
+            .Select(name => new LegacyComparisonRow(
+                "byExtractor",
+                $"{name}.version",
+                null,
+                null,
+                "coverage-changed",
+                RegressionComparisonRuleId,
+                EvidenceTiers.Tier4Unknown))
+            .ToArray();
     }
 
     private static LegacyComparisonRow Row(string dimension, string name, int? baselineCount, int? candidateCount, string? movement = null)
