@@ -252,6 +252,65 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_does_not_project_wcf_flow_from_operation_name_collision()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "Service References", "Rating"));
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:Button runat="server" ID="SaveButton" OnClick="Save_Click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Contracts.cs"), """
+            using System.ServiceModel;
+            namespace Sample.Contracts;
+            [ServiceContract]
+            public interface IRatingService
+            {
+                [OperationContract]
+                string Rate(string request);
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "RatingClient.cs"), """
+            using System.ServiceModel;
+            namespace Sample.Contracts;
+            public partial class RatingClient : ClientBase<IRatingService>, IRatingService
+            {
+                public string Rate(string request) => Channel.Rate(request);
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Default
+            {
+                protected void Save_Click(object sender, EventArgs e)
+                {
+                    Rate();
+                }
+
+                private void Rate()
+                {
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var wcfFactIds = result.Facts
+            .Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping)
+            .Select(fact => fact.FactId)
+            .ToArray();
+        Assert.NotEmpty(wcfFactIds);
+        var flow = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventFlowProjected);
+        Assert.NotEqual("StrongStaticEventFlow", flow.Properties.GetValueOrDefault("flowClassification"));
+        Assert.NotEqual("wcf-operation", flow.Properties.GetValueOrDefault("terminalSurfaceKind"));
+        var supportingFactIds = flow.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty;
+        Assert.DoesNotContain(wcfFactIds, id => supportingFactIds.Contains(id, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Scan_reports_no_backend_evidence_under_full_coverage()
     {
         using var temp = new TempDirectory();

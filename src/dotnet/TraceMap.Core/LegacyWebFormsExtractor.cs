@@ -733,7 +733,7 @@ public static partial class LegacyWebFormsExtractor
 
     private static IEnumerable<CodeFact> WcfMappingsForCalls(IReadOnlyList<CodeFact> wcfMappings, IReadOnlyList<CodeFact> directFacts)
     {
-        var callees = directFacts
+        var clientSymbols = directFacts
             .Where(fact => fact.FactType == FactTypes.CallEdge)
             .SelectMany(fact => new[]
             {
@@ -745,9 +745,8 @@ public static partial class LegacyWebFormsExtractor
             .Select(value => value!)
             .ToHashSet(StringComparer.Ordinal);
 
-        return wcfMappings.Where(fact => callees.Contains(fact.ContractElement ?? string.Empty)
-                || callees.Contains(fact.Properties.GetValueOrDefault("clientOperationName") ?? string.Empty)
-                || callees.Contains(fact.Properties.GetValueOrDefault("operationName") ?? string.Empty));
+        return wcfMappings.Where(fact => !string.IsNullOrWhiteSpace(fact.SourceSymbol)
+            && clientSymbols.Contains(fact.SourceSymbol));
     }
 
     private static CodeFact? FindSemanticHandlerEvidence(WebFormsMethod method, IReadOnlyList<CodeFact> existingFacts)
