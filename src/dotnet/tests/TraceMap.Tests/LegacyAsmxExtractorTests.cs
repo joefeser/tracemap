@@ -335,6 +335,7 @@ public sealed class LegacyAsmxExtractorTests
                 <add key="ApiBaseUrl" value="https://example.invalid/api" />
                 <add key="ServiceBusConnection" value="Endpoint=sb://example.invalid/;SharedAccessKey=secret" />
                 <add key="NotificationEndpointUrl" value="https://example.invalid/api/notify" />
+                <add key="RatingUrl" value="https://example.invalid/Rating.asmx" />
                 <add key="RatingServiceUrl" value="https://example.invalid/Rating.asmx" />
                 <add key="RatingServiceEndpointUrl" value="https://example.invalid/Rating.asmx" />
                 <add key="RatingEndpointUrl" value="https://example.invalid/Rating.asmx" />
@@ -350,6 +351,7 @@ public sealed class LegacyAsmxExtractorTests
             .Where(key => !string.IsNullOrWhiteSpace(key))
             .ToArray();
 
+        Assert.Contains("RatingUrl", configKeys);
         Assert.Contains("RatingServiceUrl", configKeys);
         Assert.Contains("RatingServiceEndpointUrl", configKeys);
         Assert.Contains("RatingEndpointUrl", configKeys);
