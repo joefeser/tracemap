@@ -278,11 +278,19 @@ function validateProofPathsPage(html, sections, errors) {
   assertContains(html, "Public status:", page, "public status labels", errors);
 
   for (const section of sections.values()) {
-    assertContains(html, section.name, page, `section name ${section.name}`, errors);
-    assertContains(html, section.evidenceTier, page, `${section.id} evidence tier`, errors);
-    assertContains(html, section.coverage, page, `${section.id} coverage label`, errors);
-    for (const ruleId of section.ruleIds) {
-      assertContains(html, ruleId, page, `${section.id} rule ID ${ruleId}`, errors);
+    const heading = proofPathsSectionHeading(section.id);
+    assertContains(html, `<h3>${heading}</h3>`, page, `${section.id} card`, errors);
+
+    const cardText = extractArticleText(html, heading);
+    if (!cardText) {
+      errors.push(`${page} is missing scoped article for ${section.id}.`);
+      continue;
+    }
+
+    assertContains(cardText, section.evidenceTier, page, `${section.id} scoped evidence tier`, errors);
+    assertContains(cardText, section.coverage, page, `${section.id} scoped coverage label`, errors);
+    for (const ruleId of section.ruleIds || []) {
+      assertContains(cardText, ruleId, page, `${section.id} scoped rule ID ${ruleId}`, errors);
     }
   }
 
@@ -386,6 +394,14 @@ function extractArticleText(html, heading) {
   const escapedHeading = escapeRegExp(heading);
   const match = html.match(new RegExp(`<h3>${escapedHeading}</h3>([\\s\\S]*?)<\\/article>`));
   return match ? htmlText(match[1]) : "";
+}
+
+function proofPathsSectionHeading(sectionId) {
+  const headings = new Map([
+    ["python", "python and jvm optional rows"],
+    ["jvm", "python and jvm optional rows"]
+  ]);
+  return headings.get(sectionId) ?? sectionId;
 }
 
 function extractCount(text, label) {
