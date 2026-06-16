@@ -723,9 +723,20 @@ public sealed class LegacyFlowCompositionTests
             IncludeLegacyRoots: true,
             View: LegacyFlowReportConstants.View));
 
-        Assert.Contains(oldResult.Report.Gaps, gap => gap.GapKind == "SchemaMissing" && gap.Reason == "legacy-remoting");
-        Assert.Contains(currentResult.Report.Gaps, gap => gap.GapKind == "NoRemotingEvidenceFound" && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence);
-        Assert.Contains("No Remoting evidence found under available Remoting extractor coverage", await File.ReadAllTextAsync(Path.Combine(temp.Path, "current-flows", "paths-report.md")), StringComparison.Ordinal);
+        var schemaGap = Assert.Single(oldResult.Report.Gaps, gap => gap.GapKind == "SchemaMissing" && gap.Reason == "legacy-remoting");
+        Assert.Equal("abc123", schemaGap.CommitSha);
+        Assert.Equal("tracemap-milestone15", schemaGap.ExtractorVersion);
+        Assert.Equal("source-manifest", schemaGap.EvidenceScope);
+
+        var noEvidenceGap = Assert.Single(currentResult.Report.Gaps, gap => gap.GapKind == "NoRemotingEvidenceFound" && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence);
+        Assert.Equal("abc123", noEvidenceGap.CommitSha);
+        Assert.Equal(ScannerVersions.TraceMap, noEvidenceGap.ExtractorVersion);
+        Assert.Equal("source-manifest", noEvidenceGap.EvidenceScope);
+
+        var currentMarkdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "current-flows", "paths-report.md"));
+        Assert.Contains("No Remoting evidence found under available Remoting extractor coverage", currentMarkdown, StringComparison.Ordinal);
+        Assert.Contains("commit:abc123", currentMarkdown, StringComparison.Ordinal);
+        Assert.Contains("scope:source-manifest", currentMarkdown, StringComparison.Ordinal);
         Assert.Contains(gapResult.Report.Gaps, gap => gap.GapKind == "ExternalConfigInclude" && gap.RuleId == RuleIds.LegacyFlowGapPropagation);
     }
 
