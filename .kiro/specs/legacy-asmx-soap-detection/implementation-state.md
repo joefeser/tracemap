@@ -1,151 +1,114 @@
 # Legacy ASMX/SOAP Detection Implementation State
 
-Status: spec-review
-Branch: codex/spec-legacy-asmx-soap-detection
-Scope: spec-only
+Status: implementation-mvp
+Branch: codex/implement-legacy-asmx-soap-detection
+Scope: first implementation slice
 Public claim level: hidden
-Readiness: ready-for-review
+Readiness: ready-for-pr-review-loop
 
 ## Summary
 
-This spec defines a future deterministic ASMX/SOAP evidence family for old
-ASP.NET and WebForms-era codebases. It covers `.asmx` host directives,
-`[WebService]` and `[WebMethod]` attributes, SOAP operation attributes,
-generated SOAP clients/proxies, checked-in WSDL/DISCO/proxy metadata, config
-evidence, static mapping evidence, and downstream report/path/reverse/release
-review consumption boundaries.
+This slice adds a deterministic ASMX/SOAP evidence family to the .NET scanner.
+It migrates new `.asmx` host detection out of WCF host facts, adds ASMX-specific
+fact types and rule IDs, extracts syntax/static evidence for service classes,
+operations, SOAP operation attributes, generated SOAP clients, checked-in
+Web References metadata, selected config structures, and probable static
+client-operation mappings.
 
-The spec is intentionally static. It does not authorize runtime hosting, SOAP
-requests, WSDL downloads, deployment inference, endpoint reachability, auth or
-security claims, production usage, or impact conclusions.
+The implementation remains static. It does not host ASP.NET, execute SOAP calls,
+download WSDL, resolve remote imports, infer deployment, prove endpoint
+reachability, validate credentials, classify vulnerabilities, or claim runtime
+impact.
 
 ## Scope Decisions
 
-- This branch creates spec files only under
-  `.kiro/specs/legacy-asmx-soap-detection/`.
-- Scanner, storage, reporter, CLI, site, docs outside the spec, and tests are
-  implementation work for later PRs.
-- ASMX/SOAP is modeled as a sibling to WCF/SVC and .NET Remoting. Fact types,
-  rule IDs, selector surfaces, and limitations remain distinct unless a future
-  old-service-reference normalization spec says otherwise.
-- Generated SOAP proxy mapping is probable static evidence only. Duplicate
-  candidates, name-only matches, dynamic proxy factories, config transforms,
-  and external WSDL imports are gaps or review-tier evidence.
-- Public claim level remains hidden until separate validation or evidence-pack
-  work promotes a safe demo/public claim.
-- No local sample paths, private repo names, raw remotes, raw URLs, SOAP action
-  values, config values, source snippets, analyzer output, or secrets are
-  stored in this spec.
+- `.asmx` files are inventoried as `AsmxServiceHost`; `.svc` files remain WCF
+  `ServiceHost` inventory.
+- `legacy.wcf.host.v1` is narrowed for new indexes to WCF `.svc` directives.
+  Historical ASMX-under-WCF compatibility remains a follow-up for older-index
+  consumers.
+- `legacy.asmx.flow.v1` is not used in this slice. Report and combined-surface
+  rows cite ASMX source rules (`legacy.asmx.*`) and reuse existing generic
+  projection/report behavior; deeper path traversal remains a follow-up under
+  existing `legacy.flow.*` rule families.
+- C# ASMX attribute extraction is syntax-first in this slice and emits
+  `Tier3SyntaxOrTextual` review-tier facts with alias/lookalike limitations.
+  Compiler-resolved `Tier1Semantic` ASMX attribute and proxy evidence remains a
+  follow-up.
+- ASMX metadata ownership is limited to old Web References-style paths. `.svcmap`
+  gated metadata remains WCF-owned even when ASMX host evidence exists nearby.
+- Credential-like values are omitted rather than hashed. Allowed non-secret
+  endpoint-ish or namespace values are represented with context-separated hashes
+  or safe identifiers only.
 
-## Review State
+## Implemented
 
-- Initial files drafted:
-  - `requirements.md`
-  - `design.md`
-  - `tasks.md`
-  - `review-prompts.md`
-  - `implementation-state.md`
-- Tasks are intentionally unchecked because this branch is spec-only.
-- Opus and Sonnet first-pass reviews completed with full coverage.
-- Review fixes applied:
-  - documented existing ASMX host extraction under `legacy.wcf.host.v1` and
-    `WcfServiceHostDeclared`;
-  - defined the ASMX host split as a migration from current WCF behavior, not a
-    brand-new parallel detector;
-  - added older-index compatibility expectations for ASMX evidence stored under
-    historical WCF host facts;
-  - defined deterministic WCF-vs-ASMX metadata ownership for `.wsdl`, `.disco`,
-    `.discomap`, `.map`, and `.svcmap`;
-  - clarified ASMX config facts as supplemental to generic `ConfigKeyDeclared`;
-  - clarified mapping tier caps, dual `[WebMethod]` plus SOAP attribute
-    behavior, `legacy.asmx.flow.v1` rule timing, and task/test coverage.
+- Added ASMX fact constants and rule IDs for host, service, operation, generated
+  client, client operation, metadata, config, and mapping evidence.
+- Added `LegacyAsmxExtractor` for `.asmx` directives, C# attributes, generated
+  SOAP client/proxy patterns, WSDL/DISCO/DISCOMAP/proxy map metadata, config
+  structures, and conservative mapping facts.
+- Updated file inventory to classify `.asmx` as `AsmxServiceHost` and old Web
+  References metadata as `AsmxServiceReferenceMetadata`.
+- Narrowed the WCF directive parser so `WebService` directives no longer emit
+  `WcfServiceHostDeclared` in new indexes.
+- Added ASMX report section and limitations, plus combined surface display names
+  for `asmx-service`, `asmx-operation`, `asmx-client`, `asmx-config`, and
+  `asmx-metadata`.
+- Added rule catalog entries and WCF host migration limitation text.
+- Added focused tests for directive parsing, malformed directives, attributes,
+  dual WebMethod/SOAP attribute facts, generated SOAP clients, WSDL metadata,
+  config redaction, mapping, WCF `.svcmap` ownership, generic source-map
+  rejection, report wording, and `.DS_Store` ignore coverage.
+- Addressed PR-loop review findings for duplicate directive attributes,
+  directive line spans, ambiguous metadata-only mappings, external WSDL import
+  gaps, and URL-shaped config keys.
 
 ## Validation
-
-Planned:
-
-```bash
-node scripts/kiro-review.mjs --self-test
-node scripts/kiro-review.mjs --phase legacy-asmx-soap-detection --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
-node scripts/kiro-review.mjs --phase legacy-asmx-soap-detection --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
-./scripts/check-private-paths.sh
-git diff --check
-```
 
 Completed:
 
 ```bash
-node scripts/kiro-review.mjs --self-test
-node scripts/kiro-review.mjs --phase legacy-asmx-soap-detection --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
-node scripts/kiro-review.mjs --phase legacy-asmx-soap-detection --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~LegacyAsmxExtractorTests|FullyQualifiedName~LegacyWcfExtractorTests"
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+python3 -m unittest scripts.tests.test_legacy_codebase_validation
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out .tmp/legacy-asmx-soap-scan-smoke
 ./scripts/check-private-paths.sh
 git diff --check
 ```
 
-First-pass review output:
+Result:
 
-- Opus coverage: Full.
-- Sonnet coverage: Full.
-- Blocking findings: existing ASMX host evidence is currently emitted under WCF
-  host rules/facts; WSDL/DISCO metadata ownership overlaps with WCF metadata;
-  validation was pending.
-- Result: patched in spec files; private-path and whitespace validation passed.
+- Focused ASMX/WCF tests: 33 passed, 0 failed.
+- Solution build: succeeded with 0 warnings and 0 errors.
+- Full .NET tests: 383 passed, 0 failed.
+- WCF-adjacent validation-summary unit tests: 11 passed, 0 failed.
+- CLI scan smoke over a checked-in sample completed and emitted required scan artifacts.
+- Private-path guard passed.
+- Whitespace diff check passed.
 
-First re-review:
+Pinned smoke note:
 
-- Opus re-review coverage: Full.
-- Sonnet re-review coverage: Reduced because the reviewer reported denied tool
-  access after reading the relevant files.
-- Sonnet findings patched in spec files:
-  - clarified that `rules/rule-catalog.yml` edits belong in the implementation
-    slice that first emits ASMX facts or report rows, because this branch is
-    spec-only and writes only this spec folder;
-  - clarified the same-slice requirement for narrowing existing WCF rule
-    descriptions;
-  - added explicit dual `[WebMethod]` plus SOAP-attribute acceptance criteria;
-  - named the target `.asmx` inventory kind as `AsmxServiceHost`;
-  - added a regression-test requirement that `.asmx` no longer emits
-    `legacy.wcf.host.v1` in new indexes after migration.
-- Opus findings patched in spec files:
-  - removed the `.svcmap` acceptance-criteria contradiction by keeping
-    `.svcmap` WCF-owned;
-  - named ASMX `Web References` and WCF `Service References` folder-shape
-    ownership rules;
-  - clarified that code-behind/code-file directive values with path separators
-    are reduced or hashed;
-  - clarified that fully qualified type and operation symbols are safe code
-    identifiers while operator-local labels, paths, endpoint values, and raw
-    diagnostics remain redacted;
-  - added consumer older-index, `.svcmap` negative ownership, and
-    `Web References` versus `Service References` test requirements.
+- No ASMX-specific pinned smoke exists yet in `docs/VALIDATION.md`.
+- The WCF/SVC validation-summary unit test is planned because this slice narrows
+  WCF host ownership and metadata-adjacent inventory.
+- Broader cross-language adapter commands from the global validation matrix are
+  deferred because this slice changes only the .NET legacy scanner/report
+  surfaces.
 
-Second re-review:
+## Follow-Ups
 
-- Opus re-review coverage: Full.
-- Sonnet re-review coverage: Reduced because the reviewer reported denied tool
-  access after reading the relevant files.
-- Sonnet finding status: no blockers; spec reported ready to merge.
-- Opus finding status: one design wording blocker found and patched.
-- Sonnet non-blocking suggestions folded into `tasks.md`:
-  - require implementation state notes to record reused `legacy.flow.*` rule IDs
-    when `legacy.asmx.flow.v1` is not used;
-  - add a hash-only config mapping negative test;
-  - add a generic source-map negative metadata test;
-  - add an explicit mapping tier-cap test.
-- Opus suggestions folded into spec files:
-  - made `.svcmap` ownership unconditional for WCF in `design.md`;
-  - documented existing WCF metadata behavior and required coordination with
-    WCF metadata normalization;
-  - included `.map` in the ASMX metadata acceptance criteria;
-  - added `.svcmap` nearby-corroboration negative tests and `.discomap`
-    inventory tests.
-
-## Follow-Ups For Implementation
-
-- Slice 1 should likely implement host/directive and service/operation
-  attributes with focused fixtures.
-- Slice 2 should add generated SOAP client/proxy and checked-in WSDL/DISCO
-  metadata extraction.
-- Slice 3 should add mapping and report/path/reverse consumption.
-- Any public sample smoke should use neutral labels and reviewed redacted
-  summaries only.
+- Add semantic `Tier1Semantic` ASMX attribute, service symbol, method symbol,
+  and `SoapHttpClientProtocol` inheritance evidence.
+- Add older-index consumer compatibility for historical ASMX evidence stored as
+  `WcfServiceHostDeclared` under `legacy.wcf.host.v1`.
+- Add richer generated proxy ambiguity and dynamic endpoint/factory gaps.
+- Expand metadata parsing beyond WSDL operation rows while preserving WCF/ASMX
+  ownership boundaries.
+- Add directive-to-service-class mapping and stronger generated-client mapping
+  when semantic/config/metadata legs align.
+- Add explicit availability gaps or consumption behavior for combined report,
+  paths, reverse, impact, release-review, and portfolio consumers.
+- Add an ASMX-specific pinned smoke or public fixture after reviewed redacted
+  summaries or checked-in synthetic fixtures are available.

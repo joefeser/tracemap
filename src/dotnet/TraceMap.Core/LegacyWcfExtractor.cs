@@ -1317,7 +1317,7 @@ public static partial class LegacyWcfExtractor
             : 1;
     }
 
-    [GeneratedRegex(@"<%@\s*(?:ServiceHost|WebService)\b[^%]*%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"<%@\s*ServiceHost\b[^%]*%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex ServiceHostDirective();
 
     [GeneratedRegex(@"(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*""(?<value>[^""]*)""", RegexOptions.IgnoreCase)]

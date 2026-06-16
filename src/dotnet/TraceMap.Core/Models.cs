@@ -175,6 +175,15 @@ public static class FactTypes
     public const string WcfServiceReferenceMetadataDeclared = nameof(WcfServiceReferenceMetadataDeclared);
     public const string WcfMetadataOperationDeclared = nameof(WcfMetadataOperationDeclared);
     public const string WcfServiceReferenceMapping = nameof(WcfServiceReferenceMapping);
+    public const string AsmxHostDeclared = nameof(AsmxHostDeclared);
+    public const string AsmxServiceClassDeclared = nameof(AsmxServiceClassDeclared);
+    public const string AsmxOperationDeclared = nameof(AsmxOperationDeclared);
+    public const string AsmxSoapOperationDeclared = nameof(AsmxSoapOperationDeclared);
+    public const string AsmxGeneratedClientDeclared = nameof(AsmxGeneratedClientDeclared);
+    public const string AsmxClientOperationDeclared = nameof(AsmxClientOperationDeclared);
+    public const string AsmxProxyMetadataDeclared = nameof(AsmxProxyMetadataDeclared);
+    public const string AsmxConfigDeclared = nameof(AsmxConfigDeclared);
+    public const string AsmxServiceReferenceMapping = nameof(AsmxServiceReferenceMapping);
     public const string RemotingApiUsageDeclared = nameof(RemotingApiUsageDeclared);
     public const string RemotingMarshalByRefObjectDeclared = nameof(RemotingMarshalByRefObjectDeclared);
     public const string RemotingChannelDeclared = nameof(RemotingChannelDeclared);
@@ -250,6 +259,13 @@ public static class RuleIds
     public const string LegacyWcfMetadata = "legacy.wcf.metadata.v1";
     public const string LegacyWcfOperationNormalization = "legacy.wcf.operation-normalization.v1";
     public const string LegacyWcfMapping = "legacy.wcf.mapping.v1";
+    public const string LegacyAsmxHost = "legacy.asmx.host.v1";
+    public const string LegacyAsmxService = "legacy.asmx.service.v1";
+    public const string LegacyAsmxOperation = "legacy.asmx.operation.v1";
+    public const string LegacyAsmxClient = "legacy.asmx.client.v1";
+    public const string LegacyAsmxMetadata = "legacy.asmx.metadata.v1";
+    public const string LegacyAsmxConfig = "legacy.asmx.config.v1";
+    public const string LegacyAsmxMapping = "legacy.asmx.mapping.v1";
     public const string LegacyRemotingApi = "legacy.remoting.api.v1";
     public const string LegacyRemotingMarshalByRef = "legacy.remoting.marshal-by-ref.v1";
     public const string LegacyRemotingChannel = "legacy.remoting.channel.v1";
@@ -297,6 +313,7 @@ public static class ScannerVersions
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
+    public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
