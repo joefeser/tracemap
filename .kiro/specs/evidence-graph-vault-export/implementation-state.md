@@ -68,6 +68,13 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
+Latest review-follow-up validation:
+
+- Focused vault export tests: 10 passed.
+- Full .NET suite: 395 passed.
+- Private path guard: passed.
+- Diff whitespace check: passed.
+
 Pinned smoke checks from `docs/VALIDATION.md` are deferred for this branch
 because the change is an exporter over existing artifacts and does not modify a
 language adapter or scanner extractor.
