@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { createDiscoveryOutputs } from "./discovery.mjs";
+import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -94,25 +95,36 @@ async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
-  sitemapUrls = ["https://tracemap.tools/", "https://tracemap.tools/docs/"]
+  sitemapUrls = deployAuditRequiredRoutes.map((route) => `https://tracemap.tools${route}`)
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
   const dist = join(root, "dist");
 
-  for (const path of [
-    "blog",
-    "capabilities",
-    "demo",
-    "docs",
-    "evidence",
-    "examples",
-    "limitations",
-    "outputs",
-    "validation",
-    "workflows"
-  ]) {
+  const fixtureRoutes = new Set([
+    ...deployAuditRequiredRoutes,
+    "/blog/",
+    "/capabilities/",
+    "/demo/start-here/",
+    "/demo/proof-upgrades/",
+    "/demo/proof-assets/",
+    "/evidence/",
+    "/examples/",
+    "/outputs/",
+    "/workflows/"
+  ]);
+
+  for (const route of fixtureRoutes) {
+    if (route === "/") {
+      continue;
+    }
+
+    const path = route.replace(/^\/|\/$/g, "");
     await mkdir(join(dist, path), { recursive: true });
-    await writeFile(join(dist, path, "index.html"), page(`<p>${path}</p>`), "utf8");
+    await writeFile(
+      join(dist, path, "index.html"),
+      route === "/deploy-audit/" ? deployAuditPage() : page(`<p>${path}</p>`),
+      "utf8"
+    );
   }
 
   await writeFile(join(dist, "index.html"), indexHtml, "utf8");
@@ -127,17 +139,17 @@ async function createDistFixture({
 async function writeDiscoveryFiles(dist) {
   const outputs = await createDiscoveryOutputs(
     [
-      {
-        path: "/",
+      ...deployAuditRequiredRoutes.map((route) => ({
+        path: route,
         title: "Fixture Home",
         summary: "Fixture route for deterministic static evidence validation.",
         publicClaimLevel: "demo",
         sourceType: "site-page",
-        hintCategory: "start",
+        hintCategory: route === "/limitations/" ? "limitations" : "evidence",
         preferredProofPath: "/docs/",
         limitations: ["Fixture limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
-      },
+      })),
       {
         url: "https://github.com/joefeser/tracemap/blob/main/README.md",
         title: "Fixture README",
@@ -166,6 +178,15 @@ ${urls.map((url) => `  <url><loc>${url}</loc></url>`).join("\n")}
 
 function page(body, { nav = topNav() } = {}) {
   return `<!doctype html><html><body>${nav}<main>${body}</main></body></html>`;
+}
+
+function deployAuditPage() {
+  return page(`
+    <p>Public claim level: demo</p>
+    <p>No public conclusion without evidence</p>
+    <p>This is not live AWS state, not runtime behavior proof, and not deployment success proof.</p>
+    <p>sitemap.xml robots.txt llms.txt docs-index.json routes-index.json</p>
+  `);
 }
 
 function topNav({ omitHref } = {}) {
