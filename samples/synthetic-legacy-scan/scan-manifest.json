@@ -1,0 +1,27 @@
+{
+  "scanId": "synthetic-legacy-scan-001",
+  "repoName": "synthetic-legacy-fixture",
+  "remoteUrl": null,
+  "branch": null,
+  "commitSha": "1111111111111111111111111111111111111111",
+  "scannerVersion": "test-fixture",
+  "scannedAt": "2026-06-01T00:00:00Z",
+  "analysisLevel": "Level1SemanticAnalysisReduced",
+  "buildStatus": "FailedOrPartial",
+  "solutions": [
+    "Synthetic.sln"
+  ],
+  "projects": [
+    "src/Synthetic/Synthetic.csproj"
+  ],
+  "targetFrameworks": [
+    "net48"
+  ],
+  "knownGaps": [
+    "LegacyProjectLoadFailed",
+    "SyntaxFallbackUsed"
+  ],
+  "scanRootRelativePath": ".",
+  "scanRootPathHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "gitRootHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

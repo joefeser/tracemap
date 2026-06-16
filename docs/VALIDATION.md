@@ -172,6 +172,57 @@ The smoke writes generated manifests, logs, SQLite files, and reports under a ca
 
 For portfolio report changes, run the .NET solution build and test suite plus `./scripts/check-private-paths.sh` and `git diff --check`. The focused portfolio tests cover direct inputs, manifest inputs, combined-source expansion, before/after manifest source comparison, projected surface/edge comparison, deterministic output, read-only input handling, and public-output redaction. Run the public combined-path smoke only when the portfolio change also modifies language adapters, combine/report behavior, endpoint extraction, dependency-surface projection, paths, reverse, diff, impact, or release-review code shared outside `tracemap portfolio`.
 
+## Legacy Baseline Regression Artifacts
+
+When changing `tracemap baseline` creation, validation, or comparison behavior,
+run the .NET build/test suite plus the baseline smoke over the checked-in
+synthetic scan fixture:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline create \
+  --scan-output samples/synthetic-legacy-scan \
+  --label synthetic-alpha \
+  --purpose original-parser-snapshot \
+  --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 \
+  --created-at 2026-06 \
+  --dry-run
+
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline create \
+  --scan-output samples/synthetic-legacy-scan \
+  --label synthetic-alpha \
+  --purpose original-parser-snapshot \
+  --out .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06 \
+  --created-at 2026-06
+
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline create \
+  --scan-output samples/synthetic-legacy-scan \
+  --label synthetic-alpha \
+  --purpose candidate \
+  --out .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07 \
+  --created-at 2026-07
+
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline compare \
+  --baseline .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json \
+  --candidate .tmp/legacy-baselines/synthetic-alpha__candidate__2026-07/baseline-manifest.json \
+  --out .tmp/legacy-baselines/comparisons/synthetic-alpha \
+  --generated-at 2026-07
+
+dotnet run --project src/dotnet/TraceMap.Cli -- baseline validate \
+  --manifest .tmp/legacy-baselines/synthetic-alpha__original-parser-snapshot__2026-06/baseline-manifest.json
+
+git check-ignore .tmp/legacy-baselines/example
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Baseline manifests and comparisons are redacted summaries. Do not commit raw
+scan outputs, facts, SQLite files, analyzer logs, source snippets, SQL text,
+config values, remotes, endpoint addresses, connection strings, secrets, local
+absolute paths, or private sample identities. Local-only outputs must remain
+under ignored `.tmp/legacy-baselines/`. Public-safe promotion requires
+`tracemap baseline validate`, the redaction validator, and the private-path
+guard over the promoted files.
+
 ## Legacy WCF/SVC Metadata Smoke
 
 When changing legacy WCF extraction, service-reference metadata parsing, or WCF operation normalization, run the .NET build/test suite plus the validation summary unit tests:
