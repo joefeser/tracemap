@@ -202,6 +202,23 @@
     ]
   },
   {
+    "path": "/proof-paths/",
+    "title": "Proof Path Index",
+    "summary": "Public-demo index that maps TraceMap public routes and demo sections to artifact type, rule ID or rule family, evidence tier, coverage label, proof path, limitation, and public status.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "The index is a route map over public-safe proof surfaces; it does not replace generated artifacts, rule documentation, or repository docs.",
+      "Raw scan artifacts and SQLite files remain local-only unless a future public-safe sample explicitly checks in sanitized output."
+    ],
+    "nonClaims": [
+      "No runtime proof, production traffic proof, endpoint performance proof, deployment state proof, release safety proof, or release approval proof.",
+      "No AI impact analysis, LLM calls, embeddings, vector databases, prompt-based classification, raw facts, SQLite indexes, analyzer logs, raw SQL, secrets, local paths, raw remotes, or generated scan directories are published."
+    ]
+  },
+  {
     "path": "/roadmap/",
     "title": "Roadmap Gates",
     "summary": "Explains how public copy moves from concept to demo only when public-safe evidence and limitations exist.",

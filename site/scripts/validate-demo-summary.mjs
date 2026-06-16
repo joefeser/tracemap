@@ -9,6 +9,7 @@ const affectedPages = [
   "demo/result/index.html",
   "demo/proof-upgrades/index.html",
   "demo/proof-assets/index.html",
+  "proof-paths/index.html",
   "packets/index.html",
   "manager-packet/index.html",
   "capabilities/index.html"
@@ -140,6 +141,9 @@ async function validateAffectedPages({ errors, fixture, root }) {
   if (pages.has("demo/proof-assets/index.html")) {
     validateProofAssetsPage(pages.get("demo/proof-assets/index.html"), sections, errors);
   }
+  if (pages.has("proof-paths/index.html")) {
+    validateProofPathsPage(pages.get("proof-paths/index.html"), sections, errors);
+  }
   if (pages.has("packets/index.html")) {
     validatePacketsPage(pages.get("packets/index.html"), sections, errors);
   }
@@ -254,6 +258,61 @@ function validateProofAssetsPage(html, sections, errors) {
 
   for (const family of publicReportFamilies(sections)) {
     assertContains(html, family, page, `public report family ${family}`, errors);
+  }
+}
+
+function validateProofPathsPage(html, sections, errors) {
+  const page = "proof-paths/index.html";
+
+  assertContains(html, "Public claim level: demo", page, "page claim level", errors);
+  assertContains(html, "No public conclusion", page, "shared site principle", errors);
+  assertContains(html, "runtime proof", page, "runtime non-claim", errors);
+  assertContains(html, "production traffic proof", page, "production traffic non-claim", errors);
+  assertContains(html, "endpoint performance proof", page, "endpoint performance non-claim", errors);
+  assertContains(html, "deployment state proof", page, "deployment state non-claim", errors);
+  assertContains(html, "release safety proof", page, "release safety non-claim", errors);
+  assertContains(html, "AI impact analysis", page, "AI impact non-claim", errors);
+  assertContains(html, "publicClaimLevel: demo", page, "route metadata distinction", errors);
+  assertContains(html, "publicClaimLevel: concept", page, "concept route distinction", errors);
+  assertContains(html, "no generated scan coverage label", page, "route coverage limitation", errors);
+  assertContains(html, "Public status:", page, "public status labels", errors);
+
+  for (const section of sections.values()) {
+    assertContains(html, section.name, page, `section name ${section.name}`, errors);
+    assertContains(html, section.evidenceTier, page, `${section.id} evidence tier`, errors);
+    assertContains(html, section.coverage, page, `${section.id} coverage label`, errors);
+    for (const ruleId of section.ruleIds) {
+      assertContains(html, ruleId, page, `${section.id} rule ID ${ruleId}`, errors);
+    }
+  }
+
+  for (const artifact of [
+    "scan-manifest.json",
+    "facts.ndjson",
+    "index.sqlite",
+    "report.md",
+    "logs/analyzer.log",
+    "demo-summary.md",
+    "demo-summary.json"
+  ]) {
+    assertContains(html, artifact, page, `artifact vocabulary ${artifact}`, errors);
+  }
+
+  for (const family of publicReportFamilies(sections)) {
+    assertContains(html, family, page, `public report family ${family}`, errors);
+  }
+
+  for (const route of [
+    "/demo/",
+    "/demo/result/",
+    "/demo/proof-assets/",
+    "/demo/proof-upgrades/",
+    "/packets/",
+    "/capabilities/",
+    "/roadmap/",
+    "/docs/"
+  ]) {
+    assertContains(html, `href="${route}"`, page, `proof surface link ${route}`, errors);
   }
 }
 
