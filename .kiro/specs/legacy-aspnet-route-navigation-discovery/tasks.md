@@ -23,8 +23,8 @@ and compatibility notes exist.
   the first implementation slice that emits route/navigation facts or report
   rows. Requirements: 1, 2, 3, 4, 5, 6, 7.
   - [ ] Add or reuse fact types for ASP.NET surface, route, config, handler,
-    PageMethod, navigation reference, navigation edge, and deferred flow
-    evidence only if `implementation-state.md` records that existing
+    PageMethod, navigation reference, and navigation edge evidence. Add deferred
+    flow evidence only if `implementation-state.md` records that existing
     `legacy.flow.*` rules are insufficient.
   - [ ] Add `legacy.aspnet.surface.v1`, `legacy.aspnet.route.v1`,
     `legacy.aspnet.config.v1`, `legacy.aspnet.handler.v1`,
@@ -115,8 +115,10 @@ and compatibility notes exist.
     `Server.Transfer`.
   - [ ] Emit navigation reference facts with source surface, target descriptor
     or hash, reference kind, line span, rule ID, evidence tier, and limitations.
-  - [ ] Emit target edges only when checked-in page, route, config, handler, or
-    PageMethod evidence supports the target.
+  - [ ] Emit target edges only when checked-in page, route, config, or handler
+    evidence supports the target; PageMethod and ScriptMethod facts require
+    separate script/service-call evidence and are not direct standard navigation
+    targets.
   - [ ] Emit gaps or facts at `Tier3SyntaxOrTextual` or `Tier4Unknown` for
     JavaScript-generated, data-bound, resource-driven, concatenated,
     database-backed, role-trimmed, or runtime master/control-tree navigation.
