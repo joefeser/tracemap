@@ -324,8 +324,10 @@ or script fragments are hashed or omitted; credential-like values are omitted.
 
 Emit `AspNetNavigationReferenceDeclared` for a supported reference. Emit
 `AspNetNavigationEdgeDeclared` only when the target links to a checked-in page,
-route fact, config mapping, handler, or page method with credible static
-evidence.
+route fact, config mapping, or handler with credible static evidence. PageMethod
+and ScriptMethod facts are AJAX callback surfaces; they can connect through
+script/service-call evidence when separately supported, but they are not direct
+targets of standard page-to-page navigation references.
 
 Do not emit concrete edges for:
 
@@ -431,6 +433,9 @@ logs, review summaries, SQLite display fields, or export artifacts.
 - Browser crawling, HTTP probing, or JavaScript execution.
 - Data-bound, database-driven, or localization-resource navigation resolution.
 - Deep master-page/control-tree composition.
+- Classic ASP.NET MVC convention-based routing such as `routes.MapRoute(...)`
+  in `RouteConfig.cs` or `Global.asax.cs`; this MVP focuses on WebForms-era
+  `MapPageRoute` and handler/page/navigation evidence.
 - Cross-application route alignment beyond existing combined evidence models.
 - ASP.NET-specific flow facts such as `AspNetSurfaceFlowProjected` and
   `legacy.aspnet.flow.v1` unless existing `legacy.flow.*` rules prove

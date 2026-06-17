@@ -109,8 +109,8 @@
   two-cycle cap was reached:
   - pinned the canonical ASP.NET route/navigation hash context prefix shape and
     32-character lowercase hex length;
-  - added schema/combined-reader compatibility decision coverage for new
-    `AspNet*` fact types;
+  - added a task requiring schema/combined-reader compatibility decisions for
+    new `AspNet*` fact types before those facts first ship;
   - added test obligations for superficially safe `location` paths with query
     or fragment components, cross-fact-type navigation hash matches, canonical
     hash format, and role-separated hashes.
