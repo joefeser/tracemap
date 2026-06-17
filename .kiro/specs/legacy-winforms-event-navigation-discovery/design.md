@@ -284,17 +284,18 @@ Projection rules:
 - preserve supporting fact IDs and edge IDs;
 - cap evidence tier by weakest required evidence;
 - label reduced coverage when project load, semantic analysis, designer parsing,
-  generated code, call edges, value flow, backend metadata, or combined graph
-  data is unavailable;
+  generated code, scan-local call edges, scan-local value flow, or scan-local
+  backend metadata is unavailable;
 - prefer direct handler-to-call evidence over name-only downstream matches;
 - reuse existing dependency path and value-flow semantics instead of creating
   incompatible flow claims;
-- when upstream call, value-flow, backend metadata, or optional report-time
-  graph data is absent because the extractor did not run, the index was created
-  by an older scanner, or the workflow is unavailable, emit
+- when scan-local call, value-flow, or backend metadata is absent because the
+  extractor did not run or the index was created by an older scanner, emit
   `WinFormsBackendPathUnavailable` or another specific `AnalysisGap`
   classification with reduced coverage instead of treating absence as a clean
-  result;
+  result. Absence of combined dependency-path, reverse, graph-export, or vault
+  data must be handled by the later report-time workflow as an availability gap,
+  not as reduced coverage on the scan-time handler-flow fact;
 - do not infer collection contents, branch feasibility, mutation ordering,
   runtime DI targets, reflection targets, dynamic dispatch targets, thread
   scheduling, auth/role outcome, or database/service reachability.

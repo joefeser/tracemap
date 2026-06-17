@@ -75,6 +75,9 @@ stored.
   inventory-versus-surface enrichment redundancy, event-binding gap terminology,
   fully qualified WinForms base types, callback-boundary classification wording,
   and evidence-tier versus classification wording in handler-flow tasks.
+- PR review loop second follow-up patched one Codex P2 finding so absent
+  report-time combined graph data does not downgrade scan-time handler-flow
+  evidence.
 
 ## Validation Plan For This Spec PR
 
