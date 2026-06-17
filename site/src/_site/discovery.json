@@ -304,6 +304,23 @@
     ]
   },
   {
+    "path": "/manager-brief/",
+    "title": "Manager Problem Brief",
+    "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a concept-level explanation, not a product-completeness or release-safety claim.",
+      "Static evidence packets can reduce manual dependency questions but cannot replace human review or operational proof."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, generated scan directories, AI impact analysis, LLM analysis, or complete product coverage claim."
+    ]
+  },
+  {
     "url": "https://github.com/joefeser/tracemap/blob/main/README.md",
     "title": "Repository README",
     "summary": "Source-of-truth project overview for CLI goals, required scan outputs, demo commands, and product boundaries.",

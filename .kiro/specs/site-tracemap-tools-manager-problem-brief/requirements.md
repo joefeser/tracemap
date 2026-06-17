@@ -1,19 +1,19 @@
 # Site TraceMap Tools Manager Problem Brief Requirements
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-review
 Public claim level: concept
 
 ## Summary
 
-Add a spec-only site phase for a public-safe manager/problem brief page or
-article on `tracemap.tools`. The future page should explain the recurring
+Add a public-safe manager/problem brief page on `tracemap.tools`. The page
+explains the recurring
 coordination problem TraceMap is meant to reduce: teams often need to answer
 manual dependency questions during review pressure, but static evidence can be
 scattered, partial, and hard to inspect consistently.
 
-This phase does not implement site code. It defines a concept-level public page
-that helps managers and technical leads understand why deterministic evidence
+This phase implements a concept-level public page that helps managers and
+technical leads understand why deterministic evidence
 packets can reduce manual dependency-indexing and review burden while keeping
 uncertainty, gaps, and public claim boundaries visible.
 
