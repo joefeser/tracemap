@@ -1,5 +1,14 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+
+import {
+  decodeHtmlEntities,
+  escapeRegExp,
+  fileExists,
+  normalizeBaseUrl,
+  normalizeRenderedText,
+  readSitemapLocSet
+} from "./validate-utils.mjs";
 
 export const incidentCallRoute = "/incident-call/";
 export const incidentCallRequiredLinks = [
@@ -64,10 +73,7 @@ async function validateSitemap({ baseUrl, dist, errors }) {
     return;
   }
 
-  const sitemap = await readFile(sitemapPath, "utf8");
-  const sitemapUrls = new Set(
-    [...sitemap.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/g)].map((match) => decodeHtmlEntities(match[1].trim()))
-  );
+  const sitemapUrls = await readSitemapLocSet(sitemapPath);
 
   if (!sitemapUrls.has(`${baseUrl}${incidentCallRoute}`)) {
     errors.push(`Incident call sitemap is missing required route: ${baseUrl}${incidentCallRoute}`);
@@ -93,9 +99,25 @@ async function validateRoutesIndex({ dist, errors }) {
     return;
   }
 
-  const paths = new Set(parsed.entries.map((entry) => entry?.path).filter(Boolean));
-  if (!paths.has(incidentCallRoute)) {
+  const incidentCallEntry = parsed.entries.find((entry) => entry?.path === incidentCallRoute);
+  if (!incidentCallEntry) {
     errors.push(`Incident call routes-index.json is missing required route: ${incidentCallRoute}`);
+    return;
+  }
+
+  const expectedFields = {
+    publicClaimLevel: "concept",
+    hintCategory: "use-case",
+    sourceType: "site-page",
+    preferredProofPath: "/proof-paths/"
+  };
+
+  for (const [field, expected] of Object.entries(expectedFields)) {
+    if (incidentCallEntry[field] !== expected) {
+      errors.push(
+        `Incident call routes-index.json expected ${field} ${expected}, got ${String(incidentCallEntry[field])}`
+      );
+    }
   }
 }
 
@@ -125,63 +147,5 @@ async function validateIncidentCallPage({ pagePath, errors }) {
 
 function hasHref(html, href) {
   const escaped = escapeRegExp(href);
-  return new RegExp(`<a\\b[^>]*\\bhref=["']${escaped}["']`, "i").test(html);
-}
-
-function normalizeBaseUrl(value) {
-  return String(value).replace(/\/+$/, "");
-}
-
-function normalizeRenderedText(html) {
-  return decodeHtmlEntities(html)
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function decodeHtmlEntities(value) {
-  return String(value).replace(/&(#x[0-9a-f]+|#[0-9]+|amp|apos|gt|lt|quot);/gi, (entity, token) => {
-    const normalized = token.toLowerCase();
-    if (normalized.startsWith("#x")) {
-      return decodeCodePoint(Number.parseInt(normalized.slice(2), 16), entity);
-    }
-
-    if (normalized.startsWith("#")) {
-      return decodeCodePoint(Number.parseInt(normalized.slice(1), 10), entity);
-    }
-
-    return (
-      {
-        amp: "&",
-        apos: "'",
-        gt: ">",
-        lt: "<",
-        quot: "\""
-      }[normalized] ?? entity
-    );
-  });
-}
-
-function decodeCodePoint(codePoint, fallback) {
-  if (!Number.isFinite(codePoint)) {
-    return fallback;
-  }
-
-  try {
-    return String.fromCodePoint(codePoint);
-  } catch {
-    return fallback;
-  }
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-async function fileExists(path) {
-  try {
-    return (await stat(path)).isFile();
-  } catch {
-    return false;
-  }
+  return new RegExp(`<a\\b[^>]*\\bhref\\s*=\\s*["']${escaped}["']`, "i").test(html);
 }

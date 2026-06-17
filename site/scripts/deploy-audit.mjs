@@ -1,5 +1,13 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+
+import {
+  decodeHtmlEntities,
+  fileExists,
+  normalizeBaseUrl,
+  normalizeRenderedText,
+  readSitemapLocSet
+} from "./validate-utils.mjs";
 
 export const deployAuditRequiredRoutes = [
   "/",
@@ -74,10 +82,7 @@ async function validateSitemap({ baseUrl, dist, errors }) {
     return;
   }
 
-  const sitemap = await readFile(sitemapPath, "utf8");
-  const sitemapUrls = new Set(
-    [...sitemap.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/g)].map((match) => decodeHtmlEntities(match[1].trim()))
-  );
+  const sitemapUrls = await readSitemapLocSet(sitemapPath);
   for (const route of deployAuditRequiredRoutes) {
     if (!sitemapUrls.has(`${baseUrl}${route}`)) {
       errors.push(`Deploy audit sitemap is missing required route: ${baseUrl}${route}`);
@@ -152,61 +157,7 @@ async function validateDeployAuditPage({ dist, errors }) {
   }
 }
 
-function normalizeBaseUrl(value) {
-  return String(value).replace(/\/+$/, "");
-}
-
-function normalizeRenderedText(html) {
-  return decodeHtmlEntities(html)
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function decodeHtmlEntities(value) {
-  return String(value).replace(/&(#x[0-9a-f]+|#[0-9]+|amp|apos|gt|lt|quot);/gi, (entity, token) => {
-    const normalized = token.toLowerCase();
-    if (normalized.startsWith("#x")) {
-      return decodeCodePoint(Number.parseInt(normalized.slice(2), 16), entity);
-    }
-
-    if (normalized.startsWith("#")) {
-      return decodeCodePoint(Number.parseInt(normalized.slice(1), 10), entity);
-    }
-
-    return (
-      {
-        amp: "&",
-        apos: "'",
-        gt: ">",
-        lt: "<",
-        quot: "\""
-      }[normalized] ?? entity
-    );
-  });
-}
-
-function decodeCodePoint(codePoint, fallback) {
-  if (!Number.isFinite(codePoint)) {
-    return fallback;
-  }
-
-  try {
-    return String.fromCodePoint(codePoint);
-  } catch {
-    return fallback;
-  }
-}
-
 async function publicPathExists(dist, route) {
   const normalized = route.endsWith("/") ? route : `${route}/`;
   return fileExists(resolve(dist, `.${normalized}`, "index.html"));
-}
-
-async function fileExists(path) {
-  try {
-    return (await stat(path)).isFile();
-  } catch {
-    return false;
-  }
 }
