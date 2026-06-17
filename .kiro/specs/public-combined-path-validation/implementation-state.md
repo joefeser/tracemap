@@ -1,5 +1,7 @@
 # Public Combined Path Validation Implementation State
 
+Status: implemented
+
 ## Branch
 
 - `codex/public-combined-path-validation`

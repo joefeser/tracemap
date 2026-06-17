@@ -1,11 +1,15 @@
 # Legacy Baseline Regression Artifacts Implementation State
 
-Status: implemented-validated
+Status: implemented
 Branch: codex/legacy-baseline-regression-artifacts-2
 Scope: CLI baseline creation, validation, comparison, fixtures, docs, tests, and rule catalog
 Public claim level: hidden
 
 ## Summary
+
+Status normalized during spec-state cleanup. The baseline CLI workflow,
+fixtures, docs, rule IDs, tests, and validation notes are present on `dev`;
+portfolio comparisons and optional drilldowns remain follow-up scope.
 
 Implemented a deterministic `tracemap baseline` workflow for redacted legacy
 baseline manifests and regression comparisons. The implementation reads existing
