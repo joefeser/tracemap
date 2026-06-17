@@ -153,15 +153,11 @@ endpoint matching behavior used by combined reporting and paths over
 `combined_facts` and `index_sources`. Persisted endpoint-match ownership remains
 a follow-up unless the combined schema changes.
 
-Route-flow presence is machine-checkable only through a documented schema
-signal. Until issue #159 defines one, property-flow should treat route-flow as
-unavailable, emit `RouteFlowUnavailable` gaps, and avoid pretending server
-internal flow is complete.
-
 The machine-checkable route-flow schema signal is undefined pending issue #159.
 Until #159 supplies a concrete signal definition, all combined indexes are
-treated as route-flow-unavailable and implementation must not invent a fallback
-route-flow signal.
+treated as route-flow-unavailable; property-flow emits `RouteFlowUnavailable`
+gaps where route-flow-specific traversal would be needed and must not invent a
+fallback route-flow signal.
 
 ## Selector Model
 
@@ -396,7 +392,7 @@ Razor form-to-handler hop may be within one source. If a future scan layout
 places Razor facts in a separate source index, the hop must use the same
 documented cross-source mechanisms as any other source transition. When scan
 layout differs or source ownership is uncertain, property-flow emits an
-`AnalysisGap` rather than assuming a same-source hop.
+`UnknownAnalysisGap` rather than assuming a same-source hop.
 
 Path conclusions are coverage-relative:
 
@@ -562,11 +558,13 @@ The `snapshot` object summarizes the input without exposing local identity:
 {
   "inputKind": "combined-index",
   "combinedIndexHash": "hash-or-null",
+  "repositoryIdentityHash": "hash-or-null",
   "sourceCount": 2,
   "sources": [
     {
       "sourceIndexId": "source-...",
       "sourceLabel": "client",
+      "repositoryIdentityHash": "hash-or-null",
       "scanId": "scan-...",
       "commitSha": "abc123",
       "analysisLevel": "Level2Structural",
