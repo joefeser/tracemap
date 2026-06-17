@@ -1,12 +1,10 @@
 # UI Field and Property Lineage Implementation State
 
+Status: implementation-slice-in-progress
+
 ## Current Branch
 
 `codex/implement-ui-field-property-lineage`
-
-## Status
-
-`implementation-slice-in-progress`
 
 ## Current Slice
 

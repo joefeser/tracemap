@@ -1,6 +1,6 @@
 # Route-Centered Static Flow Report Implementation State
 
-Status: implemented-pending-pr-review
+Status: implemented-partial
 
 ## Branch
 
@@ -8,6 +8,12 @@ Status: implemented-pending-pr-review
   `codex/implement-route-centered-static-flow-report`.
 
 ## Scope
+
+Status normalized during spec-state cleanup. `origin/dev` contains
+`tracemap route-flow`, `CombinedRouteFlowReport`, CLI wiring, rule catalog
+entries, docs, and focused tests. The state remains partial because the same
+state file and `tasks.md` identify unfinished direct fact-symbol/argument-flow
+readers, broader interface-bridge tests, and expanded scenario coverage.
 
 This implementation adds the first product slice for the route-centered static
 call flow report. It implements `tracemap route-flow` as a deterministic
