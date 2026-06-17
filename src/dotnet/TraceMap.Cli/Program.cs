@@ -41,6 +41,7 @@ public static class TraceMapCommand
                 "endpoints" => EndpointsHelp(),
                 "combine" => CombineHelp(),
                 "paths" => PathsHelp(),
+                "route-flow" => RouteFlowHelp(),
                 "diff" => DiffHelp(),
                 "snapshot-diff" => SnapshotDiffHelp(),
                 "impact" => ImpactHelp(),
@@ -54,7 +55,7 @@ public static class TraceMapCommand
                 "evidence-pack" => EvidencePackHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
         }
 
         try
@@ -70,6 +71,7 @@ public static class TraceMapCommand
                 "endpoints" => await RunEndpointsAsync(rest, output, error, cancellationToken),
                 "combine" => await RunCombineAsync(rest, output, error, cancellationToken),
                 "paths" => await RunPathsAsync(rest, output, error, cancellationToken),
+                "route-flow" => await RunRouteFlowAsync(rest, output, error, cancellationToken),
                 "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
                 "snapshot-diff" => await RunSnapshotDiffAsync(rest, output, error, cancellationToken),
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
@@ -303,6 +305,63 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return 0;
+    }
+
+    private static async Task<int> RunRouteFlowAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: route-flow requires --index <combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: route-flow requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: route-flow --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(
+            new CombinedRouteFlowOptions(
+                indexPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--route"),
+                values.GetValueOrDefault("--client-call"),
+                values.GetValueOrDefault("--from-endpoint"),
+                values.GetValueOrDefault("--from-webforms-event"),
+                values.GetValueOrDefault("--from-symbol"),
+                values.GetValueOrDefault("--from-source"),
+                values.GetValueOrDefault("--to-surface"),
+                values.GetValueOrDefault("--surface-name"),
+                values.GetValueOrDefault("--classification"),
+                ParsePositiveInt(values, "--max-depth", 8),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-logic-rows", 200),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                values.HasFlag("--exit-code")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap route-flow completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Classification: {result.Report.Summary.Classification}");
+        await output.WriteLineAsync($"Entry evidence: {result.Report.Summary.EntryEvidenceCount}");
+        await output.WriteLineAsync($"Static flow rows: {result.Report.Summary.FlowRowCount}");
+        await output.WriteLineAsync($"Business/data logic rows: {result.Report.Summary.LogicRowCount}");
+        await output.WriteLineAsync($"Dependency surfaces: {result.Report.Summary.DependencySurfaceCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.ExitCodeWouldBeNonZero ? 1 : 0;
     }
 
     private static async Task<int> RunDiffAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -1486,6 +1545,7 @@ public static class TraceMapCommand
               endpoints Align client HTTP calls with server HTTP route bindings.
               combine   Combine multiple TraceMap indexes into one queryable SQLite database.
               paths     Trace deterministic dependency paths through a combined index.
+              route-flow Report static route-centered call flow evidence from a combined index.
               diff      Compare two combined indexes and report static evidence changes.
               snapshot-diff Compare two TraceMap snapshots by source, coverage, and extractor evidence.
               contract-diff Compare API/DTO static contract evidence between two indexes.
@@ -1579,6 +1639,47 @@ public static class TraceMapCommand
 
             Outputs:
               paths-report.md and/or paths-report.json
+            """;
+    }
+
+    private static string RouteFlowHelp()
+    {
+        return """
+            Usage:
+              tracemap route-flow --index <combined.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --index <path>             Combined TraceMap index from tracemap combine.
+              --out <path>               Output directory or file path.
+
+            Selectors:
+              --route "<M> <P>"          Select server HTTP route evidence.
+              --client-call "<M> <P>"    Select client HTTP call evidence.
+              --from-endpoint "<M> <P>"  Reuse paths endpoint selector grammar.
+              --from-webforms-event <id> Reuse paths WebForms root selector grammar.
+              --from-symbol <symbol>     Reuse paths symbol selector grammar.
+              --from-source <label>      Constrain entry evidence to a source label.
+              --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
+                                          package-config, wcf-operation, remoting endpoint/object/API,
+                                          legacy-data, or dependency-surface.
+              --surface-name <text>      Exact name, or leading/trailing * wildcard.
+              --classification <value>   StrongStaticRouteFlow, ProbableStaticRouteFlow,
+                                          NeedsReviewStaticRouteFlow, NoRouteFlowEvidence,
+                                          or UnknownAnalysisGap.
+
+            Bounds:
+              --max-depth <n>            Default: 8.
+              --max-paths <n>            Default: 100.
+              --max-frontier <n>         Default: 10000.
+              --max-logic-rows <n>       Default: 200.
+              --max-gaps <n>             Default: 1000.
+              --exit-code                Return 1 for review, no-evidence, unknown, or blocking-gap results.
+
+            Outputs:
+              route-flow-report.md and/or route-flow-report.json
+
+            Notes:
+              Route-flow reports are static evidence only. They do not prove runtime execution, traffic, auth, dependency-injection target selection, SQL execution, or production use.
             """;
     }
 
