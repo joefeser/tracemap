@@ -94,8 +94,9 @@
   - [ ] Emit `WinFormsHandlerFlowProjected` with supporting fact IDs, edge IDs,
         rule IDs, evidence tiers, terminal surface kind, coverage, and
         classification.
-  - [ ] Cap classification by weakest required evidence tier and label reduced
-        coverage explicitly.
+  - [ ] Cap the projected evidence tier by the weakest required supporting
+        evidence tier, choose the flow classification from that capped evidence,
+        and label reduced coverage explicitly.
   - [ ] Add tests for service-client mapping, SQL/query context, legacy data
         metadata context, remoting context, no-backend-evidence under full
         coverage, tier capping by weakest supporting evidence, and

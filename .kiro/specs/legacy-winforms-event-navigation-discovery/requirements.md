@@ -90,9 +90,10 @@ controls that could act as UI entry surfaces.
 
 Acceptance Criteria:
 
-1. WHEN form, user-control, component, or application context classes are
-   detected THEN TraceMap SHALL emit facts describing the surface kind, safe type
-   identity, partial-class linkage, file span, and evidence tier.
+1. WHEN inventoried WinForms form, user-control, component, or application
+   context classes are parsed THEN TraceMap SHALL enrich the inventory evidence
+   with the surface kind, safe type identity, partial-class linkage, file span,
+   and evidence tier rather than emitting a duplicate inventory-only claim.
 2. WHEN designer fields or `InitializeComponent` assignments create controls or
    components such as `Button`, `MenuStrip`, `ToolStrip`, `ToolStripMenuItem`,
    `DataGridView`, `ListView`, `TreeView`, `TabControl`, `Timer`, or
@@ -133,8 +134,11 @@ Acceptance Criteria:
 4. WHEN event subscription uses lambdas, anonymous delegates, method groups on
    other objects, reflection, string-based handler names, custom event brokers,
    dependency injection, or runtime subscription outside deterministic scope
-   THEN TraceMap SHALL emit needs-review or `AnalysisGap` evidence rather than
-   choosing an arbitrary handler.
+   THEN TraceMap SHALL emit a `WinFormsEventBindingDeclared` or
+   `WinFormsHandlerResolved` fact with a needs-review classification when direct
+   binding evidence is still safe, or an `AnalysisGap` fact with a specific
+   classification such as `UnsupportedWinFormsEventSubscription` or
+   `RuntimeWinFormsEventSubscription` when the target cannot be resolved safely.
 5. WHEN multiple handlers, duplicate fields, duplicate partial classes, stale
    designer files, or ambiguous type identities could satisfy an event binding
    THEN TraceMap SHALL preserve all direct evidence and emit ambiguity gaps
