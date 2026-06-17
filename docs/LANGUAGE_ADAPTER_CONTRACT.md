@@ -82,6 +82,38 @@ Facts intended to participate in existing contract reduction should reuse existi
 
 Language-specific fact types can be added, but they need rule catalog entries and documented reducer/report behavior.
 
+### UI Field And Property Facts
+
+Adapters that emit UI field, form-control, template binding, Razor helper, or
+view/model property evidence should use the shared safe metadata below so
+`tracemap property-flow` can select and compose roots consistently.
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `UiTemplateBinding` | Angular or template binding evidence such as interpolation, property binding, and two-way binding. | `uiFramework`, `bindingKind`, `propertyPath`, `propertyName`, `memberName`, `componentClass`, `templateOrigin`, `expressionKind`, `expressionHash` |
+| `UiFormControlBinding` | Static form-control identity evidence such as `formControlName`, form group names, template-driven names, or control names. | `uiFramework`, `bindingKind`, `controlName`, `formControlName`, `formGroupName`, `propertyName`, `componentClass` |
+| `UiEventBinding` | Static UI event binding to a handler name when visible. | `uiFramework`, `bindingKind`, `eventName`, `handlerName`, `componentClass`, `expressionHash` |
+| `UiTemplateVariable` | Static template variable or local reference evidence. | `uiFramework`, `bindingKind`, `templateVariableName`, `templateVariableExport`, `componentClass` |
+| `UiBindingGap` | Dynamic or unsupported template binding evidence boundary. | `uiFramework`, `gapKind`, `expressionHash`, `expressionKind`, `message` |
+| `RazorBinding` | Razor `asp-for` or `Html.*For` model-property binding evidence. | `uiFramework`, `bindingKind`, `controlKind`, `propertyPath`, `propertyName`, `modelType` |
+| `RazorFormTarget` | Razor static form target metadata. | `uiFramework`, `bindingKind`, `controlKind`, `httpMethod`, `actionName`, `controllerName`, `handlerName`, `pagePathHash` |
+| `RazorModelBindingTarget` | Razor Pages/MVC model-binding target evidence when an adapter can prove it. | `uiFramework`, `bindingKind`, `modelType`, `propertyName`, `handlerName`, `actionName`, `controllerName` |
+| `RazorBindingGap` | Dynamic Razor model/view-data/partial/template evidence boundary. | `uiFramework`, `gapKind`, `message` |
+
+These facts are static evidence only. They do not prove runtime rendering,
+visibility to every user, submitted values, model-binding success, validation
+outcome, route selection, authorization, role checks, feature flags, branch
+feasibility, browser state, dependency-injection targets, serializer runtime
+configuration, SQL execution, deployment, or production use.
+
+UI/property facts must not store raw template snippets, raw form values, raw
+URLs, raw SQL, local absolute paths, raw remotes, connection strings, secrets,
+credentials, or private data by default. Store safe names, hashes, lengths,
+kinds, and line spans instead. Function calls, pipes, dynamic property names,
+custom directive semantics, ViewBag/ViewData, partial/template ambiguity, and
+runtime-generated forms should emit explicit gap facts or review-tier evidence
+rather than invented property paths.
+
 ### Legacy WCF Metadata Facts
 
 The .NET adapter emits two WCF-specific metadata fact types for checked-in service-reference evidence:

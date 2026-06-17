@@ -210,6 +210,15 @@ public static class FactTypes
     public const string LegacyDataMappingDeclared = nameof(LegacyDataMappingDeclared);
     public const string LegacyDataProviderConfigDeclared = nameof(LegacyDataProviderConfigDeclared);
     public const string LegacyDataGeneratedCodeLinked = nameof(LegacyDataGeneratedCodeLinked);
+    public const string UiTemplateBinding = nameof(UiTemplateBinding);
+    public const string UiFormControlBinding = nameof(UiFormControlBinding);
+    public const string UiEventBinding = nameof(UiEventBinding);
+    public const string UiTemplateVariable = nameof(UiTemplateVariable);
+    public const string UiBindingGap = nameof(UiBindingGap);
+    public const string RazorBinding = nameof(RazorBinding);
+    public const string RazorFormTarget = nameof(RazorFormTarget);
+    public const string RazorModelBindingTarget = nameof(RazorModelBindingTarget);
+    public const string RazorBindingGap = nameof(RazorBindingGap);
 }
 
 public static class RuleIds
@@ -296,6 +305,10 @@ public static class RuleIds
     public const string ContractDeltaImpact = "contract.delta.impact.v2";
     public const string ContractDeltaContext = "contract.delta.context.v2";
     public const string EndpointAlignment = "endpoint.alignment.v1";
+    public const string RazorBinding = "csharp.razor.binding.v1";
+    public const string RazorFormTarget = "csharp.razor.form-target.v1";
+    public const string RazorModelBinding = "csharp.razor.model-binding.v1";
+    public const string RazorBindingGap = "csharp.razor.binding-gap.v1";
 }
 
 public static class ScannerVersions
@@ -318,4 +331,5 @@ public static class ScannerVersions
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
+    public const string RazorBindingExtractor = "csharp-razor-binding/0.1.0";
 }
