@@ -30,6 +30,11 @@ export const RuleIds = {
   TypeScriptIntegrationContractMapping: "typescript.integration.contractmapping.v1",
   TypeScriptIntegrationBoundary: "typescript.integration.boundary.v1",
   TypeScriptIntegrationQueryPattern: "typescript.integration.querypattern.v1",
+  TypeScriptAngularTemplateBinding: "typescript.angular.template-binding.v1",
+  TypeScriptAngularFormBinding: "typescript.angular.form-binding.v1",
+  TypeScriptAngularEventBinding: "typescript.angular.event-binding.v1",
+  TypeScriptAngularTemplateVariable: "typescript.angular.template-variable.v1",
+  TypeScriptAngularBindingGap: "typescript.angular.binding-gap.v1",
   ContractDeltaReduction: "contract.delta.reduce.v1"
 } as const;
 
@@ -43,5 +48,6 @@ export const ScannerVersions = {
   TypeScriptSyntaxExtractor: "typescript-syntax/0.1.0",
   TypeScriptSemanticExtractor: "typescript-semantic/0.1.0",
   TypeScriptIntegrationExtractor: "typescript-integration/0.1.0",
-  TypeScriptAngularHttpClientExtractor: "typescript-angular-httpclient/0.1.0"
+  TypeScriptAngularHttpClientExtractor: "typescript-angular-httpclient/0.1.0",
+  TypeScriptAngularTemplateExtractor: "typescript-angular-template/0.1.0"
 } as const;

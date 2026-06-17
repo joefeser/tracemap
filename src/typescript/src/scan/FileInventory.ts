@@ -4,7 +4,7 @@ import { FileInventoryItem, ScanOptions } from "../facts/Models";
 import { matchesSimpleGlob, normalizePath, repoRelative } from "../util/Paths";
 
 const defaultExcludedNames = new Set([".git", "node_modules", ".pnpm-store", "dist", "build", "coverage", ".angular", ".next", ".nuxt", ".turbo"]);
-const sourceExtensions = new Set([".ts", ".tsx", ".d.ts", ".json"]);
+const sourceExtensions = new Set([".ts", ".tsx", ".d.ts", ".json", ".html"]);
 
 export async function collectFileInventory(options: ScanOptions): Promise<FileInventoryItem[]> {
   const repoPath = path.resolve(options.repoPath);
@@ -73,6 +73,9 @@ function kindFor(relativePath: string): string {
   }
   if (relativePath.endsWith(".ts")) {
     return "typescript";
+  }
+  if (relativePath.endsWith(".html")) {
+    return "angular-template";
   }
   if (path.basename(relativePath) === "package.json") {
     return "package-json";

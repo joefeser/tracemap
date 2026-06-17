@@ -129,6 +129,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sqlite --out <tmp>/combined-report
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
 dotnet run --project src/dotnet/TraceMap.Cli -- route-flow --index <tmp>/combined.sqlite --from-source first --out <tmp>/route-flow
+dotnet run --project src/dotnet/TraceMap.Cli -- property-flow --index <tmp>/combined.sqlite --property fact:<combinedFactId> --out <tmp>/property-flow
 dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index <tmp>/combined.sqlite --surface sql-query --to endpoints --out <tmp>/combined-reverse
 dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-diff
 dotnet run --project src/dotnet/TraceMap.Cli -- contract-diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/contract-diff
@@ -141,6 +142,8 @@ test -f <tmp>/combined-paths/paths-report.md
 test -f <tmp>/combined-paths/paths-report.json
 test -f <tmp>/route-flow/route-flow-report.md
 test -f <tmp>/route-flow/route-flow-report.json
+test -f <tmp>/property-flow/property-flow-report.md
+test -f <tmp>/property-flow/property-flow-report.json
 test -f <tmp>/combined-reverse/reverse-report.md
 test -f <tmp>/combined-reverse/reverse-report.json
 test -f <tmp>/combined-diff/diff-report.md
@@ -154,6 +157,27 @@ test -f <tmp>/combined-impact/impact-report.json
 test -f <tmp>/release-review/release-review.md
 test -f <tmp>/release-review/release-review.json
 ```
+
+For property-flow changes, run the focused .NET and TypeScript tests plus the
+normal report safety gates:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests
+npm run check --prefix src/typescript
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Expected behavior: Angular template fixtures emit `UiTemplateBinding`,
+`UiFormControlBinding`, `UiEventBinding`, `UiTemplateVariable`, and
+`UiBindingGap` facts with rule IDs and safe metadata only; Razor fixtures emit
+`RazorBinding`, `RazorFormTarget`, and `RazorBindingGap` facts; property-flow
+reports reject single-language indexes, keep input SQLite files read-only, emit
+route-flow/schema gaps where needed, and write deterministic Markdown/JSON
+without source snippets, raw SQL, raw URLs, connection strings, secrets, remotes,
+or local absolute paths.
 
 For value-origin flow changes, also inspect the source `parameter_forward_edges` table from a semantic .NET sample or focused fixture:
 

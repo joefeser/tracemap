@@ -2,79 +2,143 @@
 
 ## Current Branch
 
-`codex/spec-ui-field-property-lineage`
+`codex/implement-ui-field-property-lineage`
 
 ## Status
 
-`not-started`
+`implementation-slice-in-progress`
 
 ## Current Slice
 
-This branch is spec-only. It adds the Kiro spec for UI field/property lineage
-under `.kiro/specs/ui-field-property-lineage/` and does not implement scanner,
-reporting, CLI, rule-catalog, fixture, or product-code changes.
+This slice implements a deterministic v1 of `tracemap property-flow` over
+combined indexes, adds Angular template/form source facts in the TypeScript
+adapter, adds Razor binding/form-target source facts in the .NET adapter, adds
+rule catalog entries and limitations, and updates validation/docs for the new
+UI/property evidence families.
+
+The implementation remains static-evidence only. It does not add LLM calls,
+embeddings, vector databases, prompt-based classification, live browser
+requirements, live HTTP proof, DB connections, credential capture, or runtime
+claims.
 
 ## Source Material
 
-- Issue #165: https://github.com/joefeser/tracemap/issues/165
-- Related issue #159: https://github.com/joefeser/tracemap/issues/159
+- Issue #165: UI field/property lineage from visible UI fields, controls,
+  template bindings, Razor helpers, model/DTO properties, and supported
+  downstream static evidence.
+- Related issue #159: route-centered static flow. Current repo state includes a
+  route-flow report implementation, but `property-flow` still emits a
+  `RouteFlowUnavailable` schema gap unless a concrete route-flow schema signal
+  such as `combined_route_flow_edges` is present.
 
-Issue #165 asks TraceMap to answer a user-facing static evidence question that
-starts from a visible UI field or bound property and follows evidence through
-template/control binding, component/view-model property, client service payload,
-server DTO/model property, controller/action usage, service/repository calls,
-and data/entity surfaces where available.
+## Evidence Inventory
 
-Issue #159 is the related route-centered static flow proposal. This spec treats
-route-centered flow as a composable downstream evidence family: UI
-field/property lineage can reuse route/client-call flow after a property reaches
-HTTP call or endpoint evidence, but property-flow must remain useful and honest
-when route-flow evidence is unavailable.
+- TypeScript/Angular before this slice already emitted HTTP client call facts,
+  normalized route metadata, object-shape facts, argument/value-origin facts,
+  call edges, local aliases, query/config/package facts, and reduced-coverage
+  gaps.
+- TypeScript/Angular new in this slice emits `UiTemplateBinding`,
+  `UiFormControlBinding`, `UiEventBinding`, `UiTemplateVariable`, and
+  `UiBindingGap` facts under `typescript.angular.*.v1` rules. It supports
+  interpolation, property binding, event binding, two-way binding,
+  `formControlName`, `formGroup`, `formArrayName`, template-driven `name` plus
+  `ngModel`, template variables, external `templateUrl`, and inline templates.
+  Dynamic expressions are stored as gap facts with hashes rather than snippets.
+- .NET before this slice had C# syntax/semantic declarations, property access,
+  call edges, argument flow, parameter forwarding, object creation,
+  ASP.NET route facts, query/data/dependency surfaces, legacy WebForms flow
+  evidence, and combined path/route-flow/reverse/report/vault reuse points.
+- Razor/cshtml support was new for this slice. It now emits `RazorBinding`,
+  `RazorFormTarget`, and `RazorBindingGap` facts for `asp-for`, `Html.*For`,
+  static form target attributes, and dynamic Razor model/view-data/partial
+  gaps.
+- Combined path and route-flow reporters are reused as read-only report-layer
+  evidence sources. `property-flow` does not mutate `endpoint_matches`, source
+  indexes, source repositories, or derived tables.
+- DTO/model/property, mapping/projection, validation/read/write,
+  service/repository, query/data/entity, and dependency surfaces are consumed
+  where existing combined path graph evidence exposes them. Dedicated
+  property-to-property mapper/projection and Razor model-binding target links
+  remain follow-up work.
 
 ## Scope Decisions
 
-- Proposed CLI shape is `tracemap property-flow --index <combined.sqlite> --property <selector> --out <path>`.
-- The command is modeled as a combined-index report/query layer, not a new monolithic scanner.
-- Angular and Razor/cshtml are the first UI evidence families described.
-- Browser/computer-use evidence is only an optional follow-up demo/validation layer. It is not required for core deterministic claims and cannot replace rule-backed static facts.
-- Every evidence row must preserve rule ID, evidence tier, source label, file span, commit SHA, and extractor ID/version where available.
-- Reports must include coverage labels, analysis gaps, limitations, and public/private safety rules.
-- Endpoint alignment inside a combined index should reuse current combined endpoint matching behavior over `combined_facts` and `index_sources`; persisted `endpoint_matches` rows are not required for v1.
-- Route-flow from issue #159 has no concrete schema in this branch, so the spec requires a `RouteFlowUnavailable` gap until #159 defines a machine-checkable route-flow table or equivalent metadata.
-- Until issue #159 supplies a route-flow schema signal, implementation must treat route-flow as unavailable and must not invent a fallback route-flow signal.
-- `fact:<combinedFactId>` selectors refer to `combined_facts.combined_fact_id`, not a new property-flow-specific ID format.
-- No product code, site files, generated outputs, or rule catalog entries are changed in this spec-only slice.
-- Rule catalog requirements in the spec are gates for future implementation slices that emit source facts or derived property-flow rows, not a merge gate for this spec-only PR.
+- `tracemap property-flow --index <combined.sqlite> --property <selector>
+  --out <path>` is a combined-index report/query command.
+- Supported selector prefixes are `field:`, `control:`, `binding:`, `model:`,
+  `dto:`, `symbol:`, and `fact:`.
+- `--source` is a case-insensitive exact source label filter.
+- `--framework` supports `angular`, `razor`, and `any`, defaulting to `any`.
+- Directory and extensionless outputs write `property-flow-report.md` and
+  `property-flow-report.json`; explicit `.md` or `.json` paths write the
+  compatible selected format.
+- Generic property names such as `status` are allowed but downgraded to
+  `NeedsReviewLineage` unless narrowed by source/type/symbol/fact identity.
+- Missing optional schema produces `MissingOptionalSchema` gaps; route-flow
+  schema absence produces `RouteFlowUnavailable`.
+- Optional browser/computer-use evidence is not implemented in this slice and
+  remains outside the core command.
 
-## Validation Plan For This Spec-Only Slice
+## Oddities
 
-- `git diff --check`
-- `./scripts/check-private-paths.sh` if available
-- Kiro review through `scripts/kiro-review.mjs` if local Kiro review tooling is available
+- Route-flow code exists in the current checkout even though the public related
+  issue is still open. The property-flow implementation treats route-flow
+  schema availability as machine-checkable rather than issue-state-based.
+- The TypeScript scanId stability test needed deterministic test commit dates
+  so identical synthetic repositories produce identical commit SHAs.
+- Razor model-binding target facts (`RazorModelBindingTarget`) have rule catalog
+  entries reserved, but action-parameter/handler binding extraction is not
+  implemented in this slice.
 
-Kiro CLI Opus and Sonnet reviews should be attempted if locally available. If
-the review commands are unavailable, record the exact blocker and use
-self-review.
-
-## Implementation Validation Plan For Future Slices
+## Validation
 
 - `dotnet build src/dotnet/TraceMap.sln`
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`
+- `npm run check --prefix src/typescript`
 - `dotnet test src/dotnet/TraceMap.sln`
-- TypeScript adapter tests and build when Angular extraction changes.
-- Razor/.NET adapter tests when Razor extraction changes.
-- Combined report/path/reverse tests when graph composition changes.
-- Relevant pinned smoke checks from `docs/VALIDATION.md` for changed adapters.
 - `./scripts/check-private-paths.sh`
 - `git diff --check`
 
-## Open Questions For Implementation
+Python and JVM adapter smoke checks were deferred as not relevant for this
+slice; no Python or JVM adapter code changed. The relevant TypeScript adapter
+check and .NET/Razor tests were run.
 
-- Whether Razor/cshtml extraction should live in an existing .NET scanner project or a focused Razor extractor helper.
-- Whether Angular template parsing should use Angular compiler APIs, a lightweight template parser, or a conservative syntax parser in the first slice.
-- Whether property-flow should share the existing path graph builder directly or use a thin adapter that projects UI/property roots into path-compatible nodes.
-- Which route-flow rule IDs from issue #159 become the stable integration point once that feature lands.
-- Whether AutoMapper/projection evidence already has enough stable property-to-property metadata for strong lineage, or should start as review-tier only.
+## Pending Validation
+
+- PR review loop after PR creation.
+
+## Kiro Review
+
+- Initial implementation review completed with reduced coverage because the
+  wrapper reported denied tool access for one shell command.
+- Actionable findings patched:
+  - Deduplicated property-flow start nodes by node ID.
+  - Replaced overly broad display-name substring matching with bounded symbol
+    matching.
+  - Added focused tests for `fact:` selector output, Razor framework filtering,
+    and explicit Markdown/JSON file outputs.
+- One re-review cycle completed with reduced coverage for the same denied-tool
+  condition. It reported no remaining merge-blocking implementation issues for
+  the completed slice. Follow-ups remain documented for Razor model-binding
+  target extraction and deeper property-specific downstream hops.
+- Additional patch after re-review: Razor `@model` type metadata is now captured
+  for `model:<type>.<property>` selector precision, with focused tests.
+
+## Follow-Ups
+
+- Connect Razor form targets to MVC actions/Razor Page handlers.
+- Emit `RazorModelBindingTarget` facts for action parameters,
+  `[FromBody]`, `[FromForm]`, `[BindProperty]`, page models, and view models.
+- Add stronger event-handler-to-payload and payload-field-to-HTTP property
+  hops using direct assignment/value-origin evidence.
+- Add DTO/model property mapping through manual assignment, object initializer,
+  projection, and AutoMapper-like evidence where rule-backed facts exist.
+- Add deeper validation/read/write, service/repository, query/data/entity, and
+  dependency surface property hops.
+- Add optional observed/browser metadata as demo-only evidence in a future
+  opt-in workflow, without upgrading static classifications.
 
 ## Blockers
 
-None for the spec-only slice.
+None for the implemented v1 slice. Remaining items above are scoped follow-ups,
+not blockers for the current deterministic report and source-fact slice.

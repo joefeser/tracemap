@@ -119,5 +119,10 @@ export const FactTypes = {
   ConfigKeyDeclared: "ConfigKeyDeclared",
   HttpRouteBinding: "HttpRouteBinding",
   DatabaseColumnMapping: "DatabaseColumnMapping",
-  SerializerContractMember: "SerializerContractMember"
+  SerializerContractMember: "SerializerContractMember",
+  UiTemplateBinding: "UiTemplateBinding",
+  UiFormControlBinding: "UiFormControlBinding",
+  UiEventBinding: "UiEventBinding",
+  UiTemplateVariable: "UiTemplateVariable",
+  UiBindingGap: "UiBindingGap"
 } as const;
