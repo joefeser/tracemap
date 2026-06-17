@@ -8,6 +8,7 @@ import { createDiscoveryOutputs } from "./discovery.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
+import { staticTriageRoute } from "./static-triage.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -97,7 +98,7 @@ async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
-  sitemapUrls = [...deployAuditRequiredRoutes, incidentCallRoute, managerBriefRoute].map(
+  sitemapUrls = [...deployAuditRequiredRoutes, incidentCallRoute, managerBriefRoute, staticTriageRoute].map(
     (route) => `https://tracemap.tools${route}`
   )
 } = {}) {
@@ -115,6 +116,7 @@ async function createDistFixture({
     "/examples/",
     incidentCallRoute,
     managerBriefRoute,
+    staticTriageRoute,
     "/outputs/",
     "/use-cases/incident-review/",
     "/workflows/"
@@ -133,8 +135,10 @@ async function createDistFixture({
         ? deployAuditPage()
         : route === incidentCallRoute
           ? incidentCallPage()
-          : route === managerBriefRoute
-            ? managerBriefPage()
+        : route === managerBriefRoute
+          ? managerBriefPage()
+          : route === staticTriageRoute
+            ? staticTriagePage()
             : page(`<p>${path}</p>`),
       "utf8"
     );
@@ -186,6 +190,17 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
+        path: staticTriageRoute,
+        title: "Static Triage",
+        summary: "Fixture static triage route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture static triage limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
         url: "https://github.com/joefeser/tracemap/blob/main/README.md",
         title: "Fixture README",
         summary: "Fixture source document for validation.",
@@ -231,12 +246,14 @@ function incidentCallPage() {
     <p>static dependency evidence and not runtime observability</p>
     <p>not operational approval</p>
     <p>P1-call orientation and incident review are related, not identical</p>
+    <p>static triage checklist</p>
     <a href="/proof-paths/">Proof paths</a>
     <a href="/validation/">Validation</a>
     <a href="/docs/">Docs</a>
     <a href="/limitations/">Limitations</a>
     <a href="/demo/result/">Demo result</a>
     <a href="/use-cases/incident-review/">Incident review orientation</a>
+    <a href="/static-triage/">static triage checklist</a>
   `);
 }
 
@@ -253,6 +270,27 @@ function managerBriefPage() {
     <a href="/limitations/">Limitations</a>
     <a href="/demo/">Demo</a>
     <a href="/docs/">Docs</a>
+    <p>${filler}</p>
+  `);
+}
+
+function staticTriagePage() {
+  const filler = Array.from({ length: 90 }, (_, index) => `static triage evidence boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>static evidence checklist</p>
+    <p>evidence tier</p>
+    <p>handoff questions</p>
+    <p>Partial static evidence is useful when labeled as partial</p>
+    <p>Static triage is the engineer checklist and handoff page, distinct from the incident-call orientation page.</p>
+    <p>The checklist is not telemetry, diagnosis, or approval.</p>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/validation/">Validation</a>
+    <a href="/docs/">Docs</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/demo/result/">Demo result</a>
+    <a href="/incident-call/">Incident-call orientation</a>
     <p>${filler}</p>
   `);
 }

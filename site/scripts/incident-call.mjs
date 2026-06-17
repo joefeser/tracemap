@@ -17,7 +17,8 @@ export const incidentCallRequiredLinks = [
   "/docs/",
   "/limitations/",
   "/demo/result/",
-  "/use-cases/incident-review/"
+  "/use-cases/incident-review/",
+  "/static-triage/"
 ];
 
 const requiredText = [
@@ -26,7 +27,8 @@ const requiredText = [
   "static dependency evidence",
   "not runtime observability",
   "not operational approval",
-  "P1-call orientation and incident review are related, not identical"
+  "P1-call orientation and incident review are related, not identical",
+  "static triage checklist"
 ];
 
 const forbiddenText = [
