@@ -401,12 +401,13 @@ before any route/navigation facts are emitted.
 
 Canonical ASP.NET route/navigation value hashes should use a 32-character
 lowercase hex prefix. The input shape is
-`legacy.aspnet.<rule-family>:<propertyRole>:<normalizedValue>`, where
+`legacy.aspnet.<rule-family>|<propertyRole>|<normalizedValue>`, where
 `rule-family` is one of `surface`, `route`, `config`, `handler`,
 `page-method`, or `navigation`, and `propertyRole` is a stable closed token such
 as `route-pattern`, `config-location-path`, or `navigation-target`. Report and
 export code should carry scanner-emitted hashes forward; when it must recompute
-an equivalent display hash, it must use the same context prefix and length.
+an equivalent display hash, it must use the same context prefix and length. The
+hash seed is opaque and must not be parsed or split by delimiter after hashing.
 
 Omit credential-like values rather than hashing them. Unsafe route patterns,
 URLs, hostnames, config values, physical paths, source snippets, local absolute
