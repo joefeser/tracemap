@@ -321,6 +321,23 @@
     ]
   },
   {
+    "path": "/review-room/",
+    "title": "Evidence Review Room",
+    "summary": "Concept-level meeting agenda for deciding what static dependency evidence is known, partial, or missing without claiming runtime proof.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a concept-level review agenda, not a completed approval workflow.",
+      "Static dependency evidence can organize review questions but cannot prove runtime behavior, release safety, or complete coverage."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, generated scan directories, AI impact analysis, LLM analysis, or complete product coverage claim."
+    ]
+  },
+  {
     "url": "https://github.com/joefeser/tracemap/blob/main/README.md",
     "title": "Repository README",
     "summary": "Source-of-truth project overview for CLI goals, required scan outputs, demo commands, and product boundaries.",
