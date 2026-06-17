@@ -71,6 +71,10 @@ stored.
     conditions, WinForms-only `legacy.validation.ui-events.v1` supersession,
     WebForms-attributed evidence preservation, hash-format consistency, MVP
     integration priority, and explicit non-divergence/backward-compat/hash tests.
+- PR review loop follow-up patched five medium Gemini wording findings:
+  inventory-versus-surface enrichment redundancy, event-binding gap terminology,
+  fully qualified WinForms base types, callback-boundary classification wording,
+  and evidence-tier versus classification wording in handler-flow tasks.
 
 ## Validation Plan For This Spec PR
 

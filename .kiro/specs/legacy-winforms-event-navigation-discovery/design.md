@@ -128,8 +128,10 @@ Malformed, unreadable, too-large, or parser-rejected files should produce
 Semantic pass:
 
 - resolve base types such as `System.Windows.Forms.Form`,
-  `UserControl`, `Control`, `Component`, `ApplicationContext`, and derived
-  custom types when possible;
+  `System.Windows.Forms.UserControl`, `System.Windows.Forms.Control`,
+  `System.ComponentModel.Component`,
+  `System.Windows.Forms.ApplicationContext`, and derived custom types when
+  possible;
 - include symbol identity using existing C# conventions;
 - treat generated/designer partials as supporting evidence, not business logic.
 
@@ -254,8 +256,10 @@ state that scheduling, ordering, cancellation, progress semantics, and thread
 affinity are not proven.
 
 Calls named `Invoke` or `BeginInvoke` on unknown or non-control receiver types
-should not become `UiMarshalBoundary` facts. Emit `AsyncDelegateBoundary` or an
-`AnalysisGap` when receiver identity is not credible.
+should not become `UiMarshalBoundary` facts. Emit a
+`WinFormsCallbackBoundaryDeclared` fact with `AsyncDelegateBoundary`
+classification, or an `AnalysisGap` fact with a specific classification, when
+receiver identity is not credible.
 
 ## Handler Flow Projection
 
