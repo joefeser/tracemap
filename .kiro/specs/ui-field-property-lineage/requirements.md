@@ -76,7 +76,7 @@ where that property is used downstream.
 6. WHEN the command runs THEN it SHALL open the input database read-only and SHALL NOT mutate source indexes, source repositories, or derived tables.
 7. WHEN the command completes THEN the CLI SHALL print output path, selected root count, path count, gap count, truncation state, and report coverage.
 8. WHEN no selector is provided THEN the command SHALL fail with a clear usage error; there is no default whole-application property query in v1.
-9. WHEN the output path is an explicit `.md` or `.json` file THEN TraceMap SHALL write only that format unless `--format` selects a compatible format; a file path without `--format` SHALL default to Markdown unless the extension is `.json`.
+9. WHEN the output path is an explicit `.md` or `.json` file path with an extension THEN TraceMap SHALL write only that format unless `--format` selects a compatible format; an extensionless output path is treated as a directory per AC 3.
 10. WHEN route-centered flow from issue #159 exists in the same combined index through a documented schema signal THEN property-flow MAY reuse route-flow edges after the property reaches an HTTP call or endpoint; it SHALL preserve the route-flow rule IDs as supporting evidence.
 11. WHEN route-centered flow is unavailable THEN property-flow SHALL still report local UI, payload, endpoint, DTO/model, and surface evidence where present, plus an explicit route-flow-unavailable gap where downstream traversal would otherwise depend on #159.
 12. WHEN endpoint alignment is needed inside a combined index THEN property-flow SHALL reuse the existing combined endpoint matching behavior over `combined_facts` and `index_sources` or a documented successor; it SHALL NOT require persisted `endpoint_matches` rows unless a future schema explicitly makes them authoritative.
@@ -111,7 +111,7 @@ private source text.
 4. WHEN two-way binding such as `[(ngModel)]` is present THEN the scanner SHALL represent both read and write directions as lineage-capable evidence while preserving that this is template binding evidence, not runtime mutation proof.
 5. WHEN reactive forms use `formControlName`, `formGroup`, `formArrayName`, or `FormControl`/`FormGroup` construction THEN the scanner SHALL emit control-name and group-shape evidence where static.
 6. WHEN template-driven forms use `name`, `ngModel`, or template references such as `#email="ngModel"` THEN the scanner SHALL emit control identity evidence where static.
-7. WHEN template variables, local refs, or structural directives make a property path ambiguous THEN TraceMap SHALL emit `NeedsReview` or `AnalysisGap` evidence rather than inventing a property path.
+7. WHEN template variables, local refs, or structural directives make a property path ambiguous THEN TraceMap SHALL emit `NeedsReviewLineage` or `UnknownAnalysisGap` evidence rather than inventing a property path.
 8. WHEN external templates are referenced from a TypeScript component THEN TraceMap SHALL connect the template file to the component class only when the static `templateUrl` or inline template evidence is available.
 9. WHEN template expressions call arbitrary functions, pipes, bracket notation, safe-navigation chains, dynamic property names, or custom directive inputs that cannot be resolved statically THEN TraceMap SHALL preserve available syntax evidence but downgrade lineage classification.
 10. WHEN raw template snippets would be persisted THEN the scanner SHALL store binding kind, names, spans, expression hashes, and safe property paths only; raw snippets remain behind a future explicit raw-snippet option.
@@ -217,15 +217,15 @@ private source text.
 
 1. WHEN JSON is emitted THEN it SHALL include top-level `reportType`, `version`, `reportCoverage`, `coverageWarnings`, `query`, `snapshot`, `summary`, `sources`, `selectedRoots`, `lineagePaths`, `gaps`, `inventory`, `observedEvidence`, and `limitations`.
 2. WHEN query metadata is emitted THEN it SHALL include selector kind, normalized selector, source filter, framework filter, max roots, max paths, max depth, max frontier, max inventory rows, max gaps, and algorithm/version identifiers.
-3. WHEN a selected root is emitted THEN it SHALL include stable root ID, root kind, classification, source label, source index ID, scan ID, commit SHA, combined fact ID, symbol ID, rule ID, evidence tier, file path, start line, end line, extractor ID/version, safe display metadata, supporting fact IDs, and limitations.
-4. WHEN a path is emitted THEN it SHALL include `pathId`, `classification`, `confidence`, `length`, `startRootId`, `endNodeId`, `nodes`, `edges`, `supportingFactIds`, `supportingEdgeIds`, and structured notes; confidence SHALL be one of `High`, `Medium`, or `Low` derived from the fixed classification mapping.
+3. WHEN a selected root is emitted THEN it SHALL include `rootId`, `rootKind`, `classification`, `sourceLabel`, `sourceIndexId`, `scanId`, `commitSha`, `combinedFactId`, `symbolId`, `ruleId`, `evidenceTier`, `filePath`, `startLine`, `endLine`, `extractorId`, `extractorVersion`, `safeDisplay`, `supportingFactIds`, and `limitations`.
+4. WHEN a path is emitted THEN it SHALL include `pathId`, `classification`, `confidence`, `length`, `startRootId`, `endNodeId`, `nodes`, `edges`, `supportingFactIds`, `supportingEdgeIds`, and `notes`; confidence SHALL be one of `High`, `Medium`, or `Low` derived from the fixed classification mapping.
 5. WHEN a node is emitted THEN it SHALL include `nodeId`, `nodeKind`, `displayName`, `sourceIndexId`, `sourceLabel`, `scanId`, `commitSha`, `symbolId`, `combinedFactId`, `ruleId`, `evidenceTier`, `filePath`, `startLine`, `endLine`, and safe metadata.
 6. WHEN an edge is emitted THEN it SHALL include `edgeId`, `edgeKind`, `fromNodeId`, `toNodeId`, `classification`, `ruleId`, `evidenceTier`, `supportingFactIds`, `supportingEdgeIds`, `supportingCombinedEdgeIds`, `filePath`, `startLine`, and `endLine`.
 7. WHEN arrays or maps are emitted THEN ordering SHALL be deterministic and metadata keys SHALL be sorted.
 8. WHEN data is missing THEN JSON SHALL use `null` or empty arrays consistently rather than omitting required fields.
 9. WHEN raw input properties contain unsafe values THEN JSON SHALL omit, hash, or category-label those values and emit safety gaps where needed.
 10. WHEN the JSON shape changes in a future version THEN the top-level `version` SHALL change.
-11. WHEN `snapshot` is emitted THEN it SHALL include input kind, combined index identity hash when available, source count, source labels, scan IDs, commit SHAs or unknown markers, scanner/extractor version summaries, coverage summaries, and schema compatibility flags without generated timestamps or local absolute paths.
+11. WHEN `snapshot` is emitted THEN it SHALL include `inputKind`, `combinedIndexHash`, `repositoryIdentityHash` where available, `sourceCount`, `sources`, `scannerVersions`, `extractorVersions`, `coverageSummary`, and `schema` without generated timestamps, raw remotes, or local absolute paths.
 
 ### Requirement 11: Browser/Computer-Use Follow-Up Boundary
 
