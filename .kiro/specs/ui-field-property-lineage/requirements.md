@@ -217,15 +217,15 @@ private source text.
 
 1. WHEN JSON is emitted THEN it SHALL include top-level `reportType`, `version`, `reportCoverage`, `coverageWarnings`, `query`, `snapshot`, `summary`, `sources`, `selectedRoots`, `lineagePaths`, `gaps`, `inventory`, `observedEvidence`, and `limitations`.
 2. WHEN query metadata is emitted THEN it SHALL include selector kind, normalized selector, source filter, framework filter, max roots, max paths, max depth, max frontier, max inventory rows, max gaps, and algorithm/version identifiers.
-3. WHEN a selected root is emitted THEN it SHALL include `rootId`, `rootKind`, `classification`, `sourceLabel`, `sourceIndexId`, `scanId`, `commitSha`, `combinedFactId`, `symbolId`, `ruleId`, `evidenceTier`, `filePath`, `startLine`, `endLine`, `extractorId`, `extractorVersion`, `safeDisplay`, `supportingFactIds`, and `limitations`.
+3. WHEN a selected root is emitted THEN it SHALL include `rootId`, `rootKind`, `classification`, `sourceLabel`, `sourceIndexId`, `repositoryIdentityHash`, `scanId`, `commitSha`, `combinedFactId`, `symbolId`, `ruleId`, `evidenceTier`, `filePath`, `startLine`, `endLine`, `extractorId`, `extractorVersion`, `safeDisplay`, `supportingFactIds`, and `limitations`.
 4. WHEN a path is emitted THEN it SHALL include `pathId`, `classification`, `confidence`, `length`, `startRootId`, `endNodeId`, `nodes`, `edges`, `supportingFactIds`, `supportingEdgeIds`, and `notes`; confidence SHALL be one of `High`, `Medium`, or `Low` derived from the fixed classification mapping.
-5. WHEN a node is emitted THEN it SHALL include `nodeId`, `nodeKind`, `displayName`, `sourceIndexId`, `sourceLabel`, `scanId`, `commitSha`, `symbolId`, `combinedFactId`, `ruleId`, `evidenceTier`, `filePath`, `startLine`, `endLine`, and safe metadata.
+5. WHEN a node is emitted THEN it SHALL include `nodeId`, `nodeKind`, `displayName`, `sourceIndexId`, `sourceLabel`, `repositoryIdentityHash`, `scanId`, `commitSha`, `symbolId`, `combinedFactId`, `ruleId`, `evidenceTier`, `filePath`, `startLine`, `endLine`, and safe metadata.
 6. WHEN an edge is emitted THEN it SHALL include `edgeId`, `edgeKind`, `fromNodeId`, `toNodeId`, `classification`, `ruleId`, `evidenceTier`, `supportingFactIds`, `supportingEdgeIds`, `supportingCombinedEdgeIds`, `filePath`, `startLine`, and `endLine`.
 7. WHEN arrays or maps are emitted THEN ordering SHALL be deterministic and metadata keys SHALL be sorted.
 8. WHEN data is missing THEN JSON SHALL use `null` or empty arrays consistently rather than omitting required fields.
 9. WHEN raw input properties contain unsafe values THEN JSON SHALL omit, hash, or category-label those values and emit safety gaps where needed.
 10. WHEN the JSON shape changes in a future version THEN the top-level `version` SHALL change.
-11. WHEN `snapshot` is emitted THEN it SHALL include `inputKind`, `combinedIndexHash`, `repositoryIdentityHash` where available, `sourceCount`, `sources`, `scannerVersions`, `extractorVersions`, `coverageSummary`, and `schema` without generated timestamps, raw remotes, or local absolute paths.
+11. WHEN `snapshot` and top-level `sources` are emitted THEN each source summary SHALL include `sourceIndexId`, `sourceLabel`, `repositoryIdentityHash`, `scanId`, `commitSha`, `scannerVersion`, `extractorVersions`, `analysisLevel`, `buildStatus`, and coverage labels without generated timestamps, raw remotes, or local absolute paths.
 
 ### Requirement 11: Browser/Computer-Use Follow-Up Boundary
 
