@@ -102,6 +102,17 @@ test("validateStaticTriageDist rejects encoded private text", async (t) => {
   assert.match(errors.join("\n"), /contains forbidden public text: file:\/\//);
 });
 
+test("validateStaticTriageDist rejects case variants of forbidden public text", async (t) => {
+  const root = await createManagedStaticTriageDistFixture(t, {
+    staticTriageHtml: staticTriagePage("<p>Connection String details stay private.</p>")
+  });
+  const errors = [];
+
+  await validateStaticTriageDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /contains forbidden public text: connection string/);
+});
+
 async function createManagedStaticTriageDistFixture(t, options = {}) {
   const root = await createStaticTriageDistFixture(options);
   t.after(() => rm(root, { recursive: true, force: true }));
