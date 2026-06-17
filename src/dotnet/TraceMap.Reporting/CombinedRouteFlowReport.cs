@@ -1073,7 +1073,7 @@ public static class CombinedRouteFlowReporter
         }
 
         if (node.RuleId?.Contains("validation", StringComparison.OrdinalIgnoreCase) == true
-            || node.DisplayName.Contains("guard", StringComparison.OrdinalIgnoreCase))
+            || node.DisplayName?.Contains("guard", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "validation-or-guard";
         }
@@ -1229,9 +1229,9 @@ public static class CombinedRouteFlowReporter
             && value.Trim('0').Length > 0;
     }
 
-    private static string SafeLabel(string value)
+    private static string SafeLabel(string? value)
     {
-        return SafeSelector(value) ?? $"source-label-hash:{CombinedReportHelpers.Hash(value, 16)}";
+        return SafeSelector(value) ?? $"source-label-hash:{CombinedReportHelpers.Hash(value ?? "unknown", 16)}";
     }
 
     private static string? SafeSelector(string? value)
@@ -1260,7 +1260,7 @@ public static class CombinedRouteFlowReporter
     {
         return string.Equals(node.SymbolId, selector, StringComparison.Ordinal)
             || string.Equals(node.DisplayName, selector, StringComparison.Ordinal)
-            || node.DisplayName.Contains(selector, StringComparison.OrdinalIgnoreCase)
+            || node.DisplayName?.Contains(selector, StringComparison.OrdinalIgnoreCase) == true
             || string.Equals(node.CombinedFactId, selector, StringComparison.Ordinal);
     }
 
