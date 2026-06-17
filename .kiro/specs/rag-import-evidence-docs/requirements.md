@@ -107,9 +107,9 @@ manifest so ingestion jobs can detect changes deterministically.
 
 1. WHEN docs export writes an output directory THEN it SHALL create
    `manifest.json` for every successful run, plus `chunks.jsonl` and generated
-   Markdown files unless `--format markdown`, `--format jsonl`, or
-   `--format markdown,jsonl` narrows the selected content formats. `--format`
-   SHALL NOT suppress `manifest.json`.
+   Markdown files unless `--format markdown`, `--format jsonl`, or both format
+   tokens narrows the selected content formats. `--format` token order SHALL be
+   normalized and SHALL NOT suppress `manifest.json`.
 2. WHEN JSONL is emitted THEN each line SHALL be one UTF-8 JSON object using
    schema version `tracemap-evidence-docs.v1`.
 3. WHEN chunk Markdown is emitted THEN every generated chunk file SHALL start
