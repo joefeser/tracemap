@@ -304,6 +304,23 @@
     ]
   },
   {
+    "path": "/static-triage/",
+    "title": "Static Incident Triage Checklist",
+    "summary": "Concept-level engineer checklist and handoff questions for orienting static code evidence around a named endpoint, package, config, SQL-facing, or dependency surface during a P1 or production call.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "Static triage is concept-level orientation, not operational approval or runtime proof.",
+      "Partial static evidence must be labeled partial; analysis gaps remain visible."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, model-driven impact claims, or complete product coverage proof.",
+      "No raw generated facts, local database indexes, analyzer diagnostics, source excerpts, database query text, configuration values, credentials, local paths, remotes, scan directories, or private sample identities are published."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
