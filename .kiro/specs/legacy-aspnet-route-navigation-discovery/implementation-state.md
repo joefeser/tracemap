@@ -2,9 +2,8 @@
 
 Status: not-started
 
-## Status
+## Spec Metadata
 
-- Status: `not-started`
 - Spec branch: `codex/spec-legacy-aspnet-route-navigation-discovery`
 - Spec path: `.kiro/specs/legacy-aspnet-route-navigation-discovery/`
 - Current scope: spec-only branch for requirements, design, implementation
