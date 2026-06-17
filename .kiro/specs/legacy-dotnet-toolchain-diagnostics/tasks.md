@@ -86,6 +86,9 @@
   Requirements: 3, 4, 6.
   - [ ] Update release review so reduced toolchain capability remains
     coverage-relative in source/coverage and no-evidence explanations.
+  - [ ] Update the release-review single-index fact loading path, including
+    `ReadSingleComparableFactsAsync` or its replacement, so
+    `AnalyzerCapabilityDiagnostic` facts are not silently filtered out.
   - [ ] Assert release review does not upgrade to definite impact, definite
     no-impact, or clean absence because a toolchain hint exists.
   - [ ] Assert release review emits a schema/capability compatibility gap

@@ -108,16 +108,21 @@ Common properties:
 | `sourceScope` | Safe repo-relative project/config path, source label, or `workspace` |
 | `projectStyle` | `sdk-style`, `non-sdk-style`, `legacy-web-application`, `non-csharp-project`, `unknown`, or omitted |
 | `frameworkFamily` | Safe normalized family such as `.NET Framework`, `.NET`, `.NET Standard`, `ASP.NET Web Application`, `unknown`, or omitted |
-| `supportingFactIds` | Bounded, sorted IDs for supporting `BuildEnvironmentDiagnostic`, `BuildStatus`, or `AnalysisGap` facts |
-| `supportingGapKinds` | Bounded, sorted safe gap/category codes when fact IDs are unavailable |
+| `supportingFactIds` | Bounded, sorted IDs for supporting `BuildEnvironmentDiagnostic`, `BuildStatus`, or `AnalysisGap` facts, encoded as a single deterministic string property |
+| `supportingGapKinds` | Bounded, sorted safe gap/category codes when fact IDs are unavailable, encoded as a single deterministic string property |
 | `strongestSupportingEvidenceTier` | Optional strongest tier among cited support facts, used so derived capability facts do not inflate their own tier |
-| `limitationCode` | Stable limitation code such as `missing-reference-assemblies`, `unsupported-project-shape`, `syntax-fallback-only`, `restore-not-attempted`, `design-time-linkage-gap`, or `unknown-toolchain-gap` |
+| `limitationCode` | Stable limitation code such as `semantic-status-derived`, `project-config-static-only`, `syntax-fallback-only`, `restore-not-attempted`, `design-time-linkage-gap`, or `unknown-toolchain-gap` |
 | `guidanceCode` | Conservative guidance code for reports, not an install command |
 | `schemaVersion` | `legacy-dotnet-toolchain-diagnostics.v1` |
 
 `schemaVersion` on each `AnalyzerCapabilityDiagnostic` fact is part of the MVP.
 Define it as a constant alongside the fact vocabulary so downstream consumers
 can branch safely without requiring manifest schema expansion.
+
+TraceMap fact properties are string-valued. Any list-like capability property
+must be serialized as a bounded, sorted, delimiter-safe string or count/hash
+summary before fact creation, never as a JSON array value inside
+`CodeFact.Properties`.
 
 Initial guidance codes:
 
@@ -170,8 +175,8 @@ Initial code set:
 | `ReferenceAssemblyResolution` | `analyzer.capability.semantic.v1` | semantic | `available`, `unavailable`, `unknown` | Tier2 for available status, Tier4 for gaps | Does not prove local install inventory beyond observed scan behavior |
 | `SyntaxFallbackAvailable` | `analyzer.capability.syntax-fallback.v1` | syntax-fallback | `available`, `not-applicable`, `unknown` | Tier3 or Tier4 | Indicates fallback evidence was produced or could run |
 | `LegacyProjectConfigInspection` | `analyzer.capability.project-config.v1` | project-config | `available`, `reduced`, `unknown` | Tier2 or Tier4 | Static XML/project/config metadata only |
-| `LegacyFrameworkSignalDetected` | `analyzer.capability.legacy-toolchain.v1` | legacy-toolchain | `available`, `informational`, `unknown` | Tier2 or Tier4 | Normalized target framework/config hints |
-| `LegacyMSBuildToolsetSignalDetected` | `analyzer.capability.legacy-toolchain.v1` | legacy-toolchain | `available`, `informational`, `unknown` | Tier2 or Tier4 | ToolsVersion, VS version, imports, project type categories |
+| `LegacyFrameworkSignalDetected` | `analyzer.capability.legacy-toolchain.v1` | legacy-toolchain | `available`, `unknown`, `not-applicable` | Tier2 or Tier4 | Normalized target framework/config hints; static signals may use `coverageEffect = informational` |
+| `LegacyMSBuildToolsetSignalDetected` | `analyzer.capability.legacy-toolchain.v1` | legacy-toolchain | `available`, `unknown`, `not-applicable` | Tier2 or Tier4 | ToolsVersion, VS version, imports, project type categories; static signals may use `coverageEffect = informational` |
 | `LegacyNuGetRestoreAwareness` | `analyzer.capability.package-restore.v1` | package-restore | `available`, `not-requested`, `reduced`, `unknown` | Tier2/Tier3/Tier4 | Shape is structural; explicit restore failure categories may be Tier3 |
 | `GeneratedDesignerLinkage` | `analyzer.capability.generated-design-time.v1` | generated-design-time | `available`, `reduced`, `unknown` | Tier2/Tier3/Tier4 | Present/missing/unlinked/malformed design-time evidence |
 | `LegacyWebStackShape` | `analyzer.capability.legacy-toolchain.v1` | legacy-toolchain | `available`, `reduced`, `unknown` | Tier2/Tier4 | WebForms/WCF/ASMX web app markers without runtime claims |
