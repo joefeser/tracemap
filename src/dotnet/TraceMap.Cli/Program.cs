@@ -42,6 +42,7 @@ public static class TraceMapCommand
                 "combine" => CombineHelp(),
                 "paths" => PathsHelp(),
                 "route-flow" => RouteFlowHelp(),
+                "property-flow" => PropertyFlowHelp(),
                 "diff" => DiffHelp(),
                 "snapshot-diff" => SnapshotDiffHelp(),
                 "impact" => ImpactHelp(),
@@ -55,7 +56,7 @@ public static class TraceMapCommand
                 "evidence-pack" => EvidencePackHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
         }
 
         try
@@ -72,6 +73,7 @@ public static class TraceMapCommand
                 "combine" => await RunCombineAsync(rest, output, error, cancellationToken),
                 "paths" => await RunPathsAsync(rest, output, error, cancellationToken),
                 "route-flow" => await RunRouteFlowAsync(rest, output, error, cancellationToken),
+                "property-flow" => await RunPropertyFlowAsync(rest, output, error, cancellationToken),
                 "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
                 "snapshot-diff" => await RunSnapshotDiffAsync(rest, output, error, cancellationToken),
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
@@ -362,6 +364,61 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.ExitCodeWouldBeNonZero ? 1 : 0;
+    }
+
+    private static async Task<int> RunPropertyFlowAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: property-flow requires --index <combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--property", out var propertySelector) || string.IsNullOrWhiteSpace(propertySelector))
+        {
+            await error.WriteLineAsync("error: property-flow requires --property <selector>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: property-flow requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: property-flow --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await PropertyFlowReporter.WriteAsync(
+            new PropertyFlowOptions(
+                indexPath,
+                outputPath,
+                propertySelector,
+                format,
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--framework") ?? "any",
+                ParsePositiveInt(values, "--max-roots", 25),
+                ParsePositiveInt(values, "--max-depth", 10),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-inventory", 1000),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap property-flow completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Selected roots: {result.Report.Summary.SelectedRootCount} of {result.Report.Summary.TotalCandidateCount}");
+        await output.WriteLineAsync($"Paths: {result.Report.Summary.PathCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Truncated: {result.Report.Summary.Truncated}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return 0;
     }
 
     private static async Task<int> RunDiffAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -1680,6 +1737,46 @@ public static class TraceMapCommand
 
             Notes:
               Route-flow reports are static evidence only. They do not prove runtime execution, traffic, auth, dependency-injection target selection, SQL execution, or production use.
+            """;
+    }
+
+    private static string PropertyFlowHelp()
+    {
+        return """
+            Usage:
+              tracemap property-flow --index <combined.sqlite> --property <selector> --out <path> [--format <markdown|json>]
+
+            Required:
+              --index <path>             Combined TraceMap index from tracemap combine.
+              --property <selector>      field:, control:, binding:, model:, dto:, symbol:, or fact: selector.
+              --out <path>               Output directory or file path.
+
+            Selectors:
+              field:<name>               UI field or safe visible field/control name.
+              control:<name>             Form control name such as formControlName or HTML name.
+              binding:<name>             Template binding expression or property path.
+              model:<type>.<property>    Model or view-model property evidence.
+              dto:<type>.<property>      DTO/serializer contract property evidence.
+              symbol:<id-or-display>     Source-local symbol identity or safe display name.
+              fact:<combinedFactId>      Exact combined_facts.combined_fact_id.
+
+            Filters:
+              --source <label>           Case-insensitive exact source label filter.
+              --framework <value>        angular, razor, or any. Default: any.
+
+            Bounds:
+              --max-roots <n>            Default: 25.
+              --max-depth <n>            Default: 10.
+              --max-paths <n>            Default: 100.
+              --max-frontier <n>         Default: 10000.
+              --max-inventory <n>        Default: 1000.
+              --max-gaps <n>             Default: 1000.
+
+            Outputs:
+              property-flow-report.md and/or property-flow-report.json
+
+            Notes:
+              Property-flow reports are static evidence only. They do not prove runtime UI visibility, submitted values, branch feasibility, auth, dependency-injection target selection, SQL execution, or production use.
             """;
     }
 

@@ -194,6 +194,27 @@ For every successful `tracemap paths --index <combined.sqlite> --out <out>` run,
 - no-path conclusions are coverage-relative when contributing sources have reduced coverage.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, or local absolute paths.
 
+For every successful `tracemap property-flow --index <combined.sqlite> --property <selector> --out <out>` run, verify:
+
+- property-flow rejects single-language indexes and empty/invalid combined indexes with a clear combined-index error.
+- `--property` accepts only `field:`, `control:`, `binding:`, `model:`, `dto:`, `symbol:`, and `fact:` selectors, and rejects unsafe local paths, raw URLs, snippets, and secret-like values with sanitized diagnostics.
+- directory or extensionless output writes `property-flow-report.md` and `property-flow-report.json`.
+- explicit `.md` or `.json` output writes only the compatible selected format.
+- the input combined database is opened read-only and source evidence tables are not mutated.
+- selected roots include root kind, source label, source index ID, scan ID, commit SHA, combined fact ID, symbol ID where available, rule ID, evidence tier, file path, line span, extractor ID/version, safe display metadata, supporting fact IDs, and limitations.
+- selected roots preserve source rule IDs such as `typescript.angular.template-binding.v1`, `typescript.angular.form-binding.v1`, `typescript.angular.event-binding.v1`, `csharp.razor.binding.v1`, and `csharp.razor.form-target.v1`; derived classifications also cite `property-flow.*.v1` gap/path/root rules as applicable.
+- `--source` filters source labels by deterministic case-insensitive exact match, and `--framework angular|razor|any` constrains UI roots.
+- generic selectors such as `field:status` are allowed but no stronger than `NeedsReviewLineage` unless narrowed by source/type/symbol/fact identity.
+- ambiguous selector matches report deterministic top-N roots, total candidate count, and an `AmbiguousSelector` gap instead of choosing a hidden winner.
+- selector misses emit `SelectorNoMatch`; reduced coverage emits `UnknownAnalysisGap` rather than proof of no lineage.
+- missing optional combined precision tables emit `MissingOptionalSchema` gaps; missing route-flow schema emits `RouteFlowUnavailable` while preserving any available combined path evidence.
+- lineage paths and edges include rule IDs, evidence tiers, source labels, file spans, supporting fact IDs, and supporting edge IDs where available.
+- classifications are limited to `StrongStaticLineage`, `ProbableStaticLineage`, `NeedsReviewLineage`, `UnknownAnalysisGap`, `NoLineageEvidence`, `SelectorNoMatch`, and `TruncatedByLimit`, with confidence derived deterministically from classification.
+- Markdown sections appear in this order: Summary, Query, Sources and Coverage, Selected Roots, Lineage Paths, Gaps, Evidence Inventory, Optional Observed Evidence, Limitations.
+- JSON includes `reportType: property-flow`, `version: 1.0`, `reportCoverage`, `coverageWarnings`, `query`, `snapshot`, `summary`, `sources`, `selectedRoots`, `lineagePaths`, `gaps`, `inventory`, `observedEvidence`, and `limitations`.
+- reports do not include raw SQL, raw source snippets, raw remotes, local absolute paths, raw URLs, connection strings, secrets, credentials, private data, or unsafe literal values.
+- optional observed/browser metadata, when present in a future slice, is labeled demo/validation metadata only and cannot upgrade static classifications.
+
 For every successful `tracemap reverse --index <combined.sqlite> --out <out>` run, verify:
 
 - reverse reports reject single-language indexes with a clear combined-index error.
