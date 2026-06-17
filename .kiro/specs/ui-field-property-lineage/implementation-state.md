@@ -133,6 +133,13 @@ check and .NET/Razor tests were run.
     strips both leading `@` and `Model.` from static model property paths.
   - Property-flow bounded display-name matching now uses index scanning instead
     of dynamically constructing regular expressions per node comparison.
+- Follow-up Qodo findings patched:
+  - Property-flow edge and gap rows now expose structured line-span and
+    extractor metadata, plus source/commit attribution where current evidence
+    supports it.
+  - Coverage warnings are now structured evidence rows with rule ID, evidence
+    tier, extractor metadata, supporting source IDs, source labels, and commit
+    SHAs rather than bare strings.
 - Focused .NET property-flow tests, TypeScript adapter checks, full .NET build,
   full .NET tests, private-path guard, and whitespace checks passed after these
   patches.

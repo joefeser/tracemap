@@ -77,14 +77,38 @@ public sealed class PropertyFlowTests
         {
             Assert.False(string.IsNullOrWhiteSpace(gap.RuleId));
             Assert.False(string.IsNullOrWhiteSpace(gap.EvidenceTier));
+            Assert.False(string.IsNullOrWhiteSpace(gap.ExtractorId));
+            Assert.False(string.IsNullOrWhiteSpace(gap.ExtractorVersion));
+            Assert.True(gap.LineSpan is not null || gap.SupportingFactIds.Count > 0 || gap.SupportingSourceIds.Count > 0 || gap.CommitShas.Count > 0);
+        });
+        Assert.All(result.Report.Inventory.EvidenceEdges, edge =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(edge.RuleId));
+            Assert.False(string.IsNullOrWhiteSpace(edge.EvidenceTier));
+            Assert.False(string.IsNullOrWhiteSpace(edge.ExtractorId));
+            Assert.False(string.IsNullOrWhiteSpace(edge.ExtractorVersion));
+            if (edge.StartLine is not null || edge.EndLine is not null)
+            {
+                Assert.NotNull(edge.LineSpan);
+            }
+        });
+        Assert.All(result.Report.CoverageWarnings, warning =>
+        {
+            Assert.Equal("property-flow.coverage.v1", warning.RuleId);
+            Assert.Equal(EvidenceTiers.Tier4Unknown, warning.EvidenceTier);
+            Assert.NotEmpty(warning.SupportingSourceIds);
+            Assert.NotEmpty(warning.ExtractorId);
+            Assert.NotEmpty(warning.ExtractorVersion);
         });
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "property-flow-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "property-flow-report.json"));
         Assert.Contains("TraceMap Property Flow Report", markdown);
         Assert.Contains("Selected Roots", markdown);
+        Assert.Contains("Coverage Warnings", markdown);
         Assert.Contains("Optional Observed Evidence", markdown);
         Assert.Contains("\"reportType\": \"property-flow\"", json);
+        Assert.Contains("\"extractorId\": \"property-flow\"", json);
         Assert.DoesNotContain(temp.Path, markdown);
         Assert.DoesNotContain(temp.Path, json);
         Assert.DoesNotContain("user.email.toString", markdown);
