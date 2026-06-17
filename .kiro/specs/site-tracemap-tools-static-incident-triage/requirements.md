@@ -59,7 +59,7 @@ Acceptance criteria:
   spans, commit SHA, and extractor versions when those details are available in
   public-safe summaries.
 - The page avoids saying an endpoint, package, config surface, SQL-facing
-  surface, or dependency is impacted unless a reducer-backed result and
+  surface, or dependency is affected unless a reducer-backed result and
   evidence are present in public-safe material.
 - The page clearly distinguishes analysis gaps and reduced coverage from clean
   or complete evidence.
