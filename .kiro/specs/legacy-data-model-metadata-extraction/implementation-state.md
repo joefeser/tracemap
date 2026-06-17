@@ -31,9 +31,10 @@ replacing it.
   relationship, and surface rules document derived projection semantics rather
   than re-emitting existing source facts under duplicate rule IDs.
 - Start old ORM extraction with a reviewable NHibernate `.hbm.xml` MVP.
-- Reuse the legacy-data family's `LegacyDataXml` parser behavior and existing
-  safety/malformed/too-large gap classification strings unless implementation
-  explicitly extends that shared reader consistently.
+- Reuse the parser helper used by the implemented legacy data metadata extractor,
+  currently `SafeXml`, and existing safety/malformed/too-large gap
+  classification strings unless implementation explicitly changes that shared
+  reader consistently.
 - Recognize other old ORM descriptor families as unsupported gaps unless a
   future spec defines deterministic parsers.
 - Keep generated-code linkage separate from descriptor facts; semantic links do
@@ -93,10 +94,16 @@ node scripts/kiro-review.mjs --phase legacy-data-model-metadata-extraction --kin
   primarily own derived identity/relationship/surface semantics, while
   NHibernate and unsupported ORM rules own new source evidence.
 - Re-review Opus had reduced coverage due to denied shell access and found a
-  parser/taxonomy alignment blocker. Patched by replacing `SafeXml` instructions
-  with `LegacyDataXml` alignment and reusing existing
-  `LegacyDataParserSecurityRejected`, `MalformedLegacyDataMetadata`, and
-  `LegacyDataMetadataTooLarge` gap classifications.
+  parser/taxonomy alignment blocker. Patched by aligning NHibernate parsing with
+  the same helper used by `LegacyDataMetadataExtractor`, currently `SafeXml`,
+  and reusing existing `LegacyDataParserSecurityRejected`,
+  `MalformedLegacyDataMetadata`, and `LegacyDataMetadataTooLarge` gap
+  classifications.
+- PR review loop found four unresolved review threads. Patched by adding
+  `config` to `metadataFormat` surface fields, moving NHibernate query and
+  named-query metadata to unsupported/needs-review gaps, aligning parser
+  instructions with `SafeXml`, and preserving existing relationship
+  `mappingKind` values through additive model relationship metadata.
 
 Medium+ actionable findings from the first review cycle and first re-review
 cycle are patched. No further re-review cycle should be run unless the spec
@@ -113,6 +120,8 @@ git diff --check
 
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- After PR-thread patches, reran `./scripts/check-private-paths.sh`: passed.
+- After PR-thread patches, reran `git diff --check`: passed.
 - No additional spec/docs validation scripts were found beyond
   `scripts/kiro-review.mjs`, `scripts/check-private-paths.sh`, and
   `scripts/validate-legacy-codebases.sh`; the legacy codebase validation script
