@@ -83,6 +83,7 @@ public sealed record RouteFlowSource(
     string AnalysisLevel,
     string BuildStatus,
     bool IdentityVerified,
+    string ScannerVersion,
     IReadOnlyList<string> CoverageWarnings);
 
 public sealed record RouteFlowSummary(
@@ -284,7 +285,7 @@ public static class CombinedRouteFlowReporter
             options.MaxGaps,
             options.ExitCode);
 
-        var entryEvidence = SelectEntryEvidence(options, routeSelector, clientSelector, endpointSelector, inventory.Nodes)
+        var entryEvidence = SelectEntryEvidence(options, routeSelector, clientSelector, endpointSelector, inventory.Nodes, sources)
             .OrderBy(row => row.EntryKind, StringComparer.Ordinal)
             .ThenBy(row => row.Evidence.SourceLabel, StringComparer.Ordinal)
             .ThenBy(row => row.NormalizedPathKey, StringComparer.Ordinal)
@@ -532,11 +533,12 @@ public static class CombinedRouteFlowReporter
                     SafeLabel(source.Label),
                     source.SourceIndexId,
                     source.ScanId,
-                    KnownCommit(source.CommitSha) ? source.CommitSha : null,
+                    SafeCommitSha(source.CommitSha),
                     source.Language ?? "unknown",
                     source.AnalysisLevel,
                     source.BuildStatus,
                     IdentityVerified(source),
+                    SafeSelector(source.ScannerVersion) ?? "unknown",
                     sourceWarnings);
             })
             .ToArray();
@@ -547,46 +549,47 @@ public static class CombinedRouteFlowReporter
         string? routeSelector,
         string? clientSelector,
         string? endpointSelector,
-        IReadOnlyList<CombinedPathNode> nodes)
+        IReadOnlyList<CombinedPathNode> nodes,
+        IReadOnlyList<RouteFlowSource> sources)
     {
         var rows = new List<RouteFlowEntryEvidence>();
         if (routeSelector is not null)
         {
-            rows.AddRange(EndpointEntries(nodes, routeSelector, "EndpointRoute", "route-root"));
+            rows.AddRange(EndpointEntries(nodes, routeSelector, "EndpointRoute", "route-root", sources));
         }
 
         if (clientSelector is not null)
         {
-            rows.AddRange(EndpointEntries(nodes, clientSelector, "EndpointClient", "client-call-root"));
+            rows.AddRange(EndpointEntries(nodes, clientSelector, "EndpointClient", "client-call-root", sources));
         }
 
         if (endpointSelector is not null)
         {
-            rows.AddRange(EndpointEntries(nodes, endpointSelector, null, "endpoint-root"));
+            rows.AddRange(EndpointEntries(nodes, endpointSelector, null, "endpoint-root", sources));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromWebFormsEvent))
         {
             rows.AddRange(nodes
                 .Where(node => node.NodeKind is "webforms-event" or "webforms-lifecycle" && NodeMatches(node, options.FromWebFormsEvent!))
-                .Select(node => EntryFromNode(node, "webforms-event-root")));
+                .Select(node => EntryFromNode(node, "webforms-event-root", sources)));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromSymbol))
         {
             rows.AddRange(nodes
                 .Where(node => node.NodeKind is "Symbol" or "Method" or "Type" or "EndpointRoute" or "EndpointClient" && NodeMatches(node, options.FromSymbol!))
-                .Select(node => EntryFromNode(node, "symbol-root")));
+                .Select(node => EntryFromNode(node, "symbol-root", sources)));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromSource))
         {
             rows.AddRange(nodes
                 .Where(node => string.Equals(node.SourceLabel, options.FromSource, StringComparison.OrdinalIgnoreCase))
-                .Select(node => EntryFromNode(node, "source-root")));
+                .Select(node => EntryFromNode(node, "source-root", sources)));
         }
 
-        var aligned = AlignedEntry(nodes, routeSelector ?? clientSelector ?? endpointSelector);
+        var aligned = AlignedEntry(nodes, routeSelector ?? clientSelector ?? endpointSelector, sources);
         if (aligned is not null)
         {
             rows.Add(aligned);
@@ -609,7 +612,7 @@ public static class CombinedRouteFlowReporter
         return paths.Where(path => string.Equals(path.Nodes.FirstOrDefault()?.NodeKind, requiredNodeKind, StringComparison.Ordinal));
     }
 
-    private static RouteFlowEntryEvidence? AlignedEntry(IReadOnlyList<CombinedPathNode> nodes, string? selector)
+    private static RouteFlowEntryEvidence? AlignedEntry(IReadOnlyList<CombinedPathNode> nodes, string? selector, IReadOnlyList<RouteFlowSource> sources)
     {
         if (selector is null)
         {
@@ -633,14 +636,14 @@ public static class CombinedRouteFlowReporter
         }
 
         var first = matching.First();
-        return EntryFromNode(first, "aligned-route-pair") with
+        return EntryFromNode(first, "aligned-route-pair", sources) with
         {
             EntryId = $"entry:aligned:{CombinedReportHelpers.Hash($"{parsed.Method}\0{parsed.PathKey}", 16)}",
             Classification = RouteFlowClassifications.ProbableStaticRouteFlow
         };
     }
 
-    private static IEnumerable<RouteFlowEntryEvidence> EndpointEntries(IReadOnlyList<CombinedPathNode> nodes, string selector, string? nodeKind, string entryKind)
+    private static IEnumerable<RouteFlowEntryEvidence> EndpointEntries(IReadOnlyList<CombinedPathNode> nodes, string selector, string? nodeKind, string entryKind, IReadOnlyList<RouteFlowSource> sources)
     {
         var parsed = ParseNormalizedEndpoint(selector);
         return nodes
@@ -648,10 +651,10 @@ public static class CombinedRouteFlowReporter
             .Where(node => nodeKind is null || node.NodeKind == nodeKind)
             .Where(node => string.Equals(node.NormalizedPathKey, parsed.PathKey, StringComparison.Ordinal)
                 && CombinedDependencyReporter.MethodsCompatible(parsed.Method, node.HttpMethod ?? "ANY"))
-            .Select(node => EntryFromNode(node, entryKind));
+            .Select(node => EntryFromNode(node, entryKind, sources));
     }
 
-    private static RouteFlowEntryEvidence EntryFromNode(CombinedPathNode node, string entryKind)
+    private static RouteFlowEntryEvidence EntryFromNode(CombinedPathNode node, string entryKind, IReadOnlyList<RouteFlowSource> sources)
     {
         var method = node.HttpMethod ?? string.Empty;
         var pathKey = node.NormalizedPathKey ?? string.Empty;
@@ -664,7 +667,7 @@ public static class CombinedRouteFlowReporter
             node.SymbolId ?? node.DisplayName,
             ClassificationForTier(node.EvidenceTier),
             CoverageFor(node.EvidenceTier),
-            EvidenceFromNode(EntryRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? EntryRuleId]));
+            EvidenceFromNode(EntryRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? EntryRuleId], sources));
     }
 
     private static IReadOnlyList<RouteFlowRow> BuildFlowRows(IReadOnlyList<CombinedPath> paths, IReadOnlyList<RouteFlowSource> sources, List<RouteFlowGap> gaps)
@@ -709,8 +712,8 @@ public static class CombinedRouteFlowReporter
                     edge?.FromNodeId,
                     edge?.ToNodeId ?? node.NodeId,
                     edge is null
-                        ? EvidenceFromNode(PathRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? PathRuleId])
-                        : EvidenceFromEdge(rowKind == "interface-implementation-candidate" ? InterfaceBridgeRuleId : PathRuleId, edge, [edge.RuleId], previous?.SourceLabel, previous?.CommitSha)));
+                        ? EvidenceFromNode(PathRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? PathRuleId], sources)
+                        : EvidenceFromEdge(rowKind == "interface-implementation-candidate" ? InterfaceBridgeRuleId : PathRuleId, edge, [edge.RuleId], sources, previous?.SourceLabel, previous?.CommitSha)));
 
             }
         }
@@ -745,7 +748,7 @@ public static class CombinedRouteFlowReporter
                         ("textHash", node.TextHash),
                         ("packageName", node.PackageName),
                         ("configKey", node.ConfigKey)),
-                    EvidenceFromNode(DependencySurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? DependencySurfaceRuleId]));
+                    EvidenceFromNode(DependencySurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? DependencySurfaceRuleId], sources));
             })
             .GroupBy(surface => surface.StableKey, StringComparer.Ordinal)
             .Select(group => group.First())
@@ -781,7 +784,7 @@ public static class CombinedRouteFlowReporter
                     ("operationName", node.OperationName),
                     ("sourceKind", node.SourceKind),
                     ("shapeHash", node.ShapeHash)),
-                EvidenceFromNode(LogicSurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? LogicSurfaceRuleId])));
+                EvidenceFromNode(LogicSurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? LogicSurfaceRuleId], sources)));
         }
 
         foreach (var edge in paths.SelectMany(path => path.Edges).OrderBy(edge => edge.EdgeId, StringComparer.Ordinal))
@@ -800,7 +803,7 @@ public static class CombinedRouteFlowReporter
                 ClassifyRouteRow(edge, null, sources),
                 CoverageFor(edge.EvidenceTier),
                 Metadata(("edgeKind", edge.EdgeKind)),
-                EvidenceFromEdge(LogicSurfaceRuleId, edge, [edge.RuleId])));
+                EvidenceFromEdge(LogicSurfaceRuleId, edge, [edge.RuleId], sources)));
         }
 
         return rows
@@ -931,7 +934,7 @@ public static class CombinedRouteFlowReporter
             .Where(source => !source.IdentityVerified)
             .Select(source => new RouteFlowGap(
                 $"gap:identity:{CombinedReportHelpers.Hash($"{source.SourceLabel}:{source.SourceIndexId}", 16)}",
-                string.IsNullOrWhiteSpace(source.CommitSha) ? "UnknownCommitSha" : "ReducedCoverage",
+                KnownCommit(source.CommitSha) ? "ReducedCoverage" : "UnknownCommitSha",
                 $"Source `{source.SourceLabel}` has missing or unverified identity metadata.",
                 GapRuleId,
                 EvidenceTiers.Tier4Unknown,
@@ -942,36 +945,36 @@ public static class CombinedRouteFlowReporter
                 ["Unknown or unverified source identity caps route-flow conclusions."]));
     }
 
-    private static RouteFlowEvidenceRef EvidenceFromNode(string routeRuleId, CombinedPathNode node, IReadOnlyList<string> facts, IReadOnlyList<string> edges, IReadOnlyList<string?> supportingRules)
+    private static RouteFlowEvidenceRef EvidenceFromNode(string routeRuleId, CombinedPathNode node, IReadOnlyList<string> facts, IReadOnlyList<string> edges, IReadOnlyList<string?> supportingRules, IReadOnlyList<RouteFlowSource> sources)
     {
         return new RouteFlowEvidenceRef(
             routeRuleId,
             node.EvidenceTier ?? EvidenceTiers.Tier4Unknown,
             SafeLabel(node.SourceLabel),
-            KnownCommit(node.CommitSha) ? node.CommitSha : null,
+            SafeCommitSha(node.CommitSha),
             CombinedReportHelpers.SafePath(node.FilePath),
             node.StartLine,
             node.EndLine,
             ExtractorName(node.RuleId),
-            null,
+            ExtractorVersionFor(node.SourceLabel, sources),
             facts.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             edges.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             supportingRules.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!).Append(routeRuleId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             LimitationsFor(routeRuleId));
     }
 
-    private static RouteFlowEvidenceRef EvidenceFromEdge(string routeRuleId, CombinedPathEdge edge, IReadOnlyList<string?> supportingRules, string? sourceLabel = null, string? commitSha = null)
+    private static RouteFlowEvidenceRef EvidenceFromEdge(string routeRuleId, CombinedPathEdge edge, IReadOnlyList<string?> supportingRules, IReadOnlyList<RouteFlowSource> sources, string? sourceLabel = null, string? commitSha = null)
     {
         return new RouteFlowEvidenceRef(
             routeRuleId,
             edge.EvidenceTier,
             SafeLabel(sourceLabel ?? "unknown"),
-            KnownCommit(commitSha) ? commitSha : null,
+            SafeCommitSha(commitSha),
             CombinedReportHelpers.SafePath(edge.FilePath),
             edge.StartLine,
             edge.EndLine,
             ExtractorName(edge.RuleId),
-            null,
+            ExtractorVersionFor(sourceLabel, sources),
             edge.SupportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             edge.SupportingCombinedEdgeIds.Append(edge.EdgeId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             supportingRules.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!).Append(routeRuleId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1237,18 +1240,18 @@ public static class CombinedRouteFlowReporter
     {
         var value = string.Join("|", new[]
         {
-            node.SurfaceKind ?? "dependency-surface",
-            node.SourceLabel,
-            node.NormalizedPathKey,
-            node.PackageName,
-            node.ConfigKey,
-            node.OperationName,
-            node.TableName,
-            node.ShapeHash,
-            node.TextHash,
-            node.SurfaceName ?? node.DisplayName
+            SafeSelector(node.SurfaceKind) ?? "dependency-surface",
+            SafeLabel(node.SourceLabel),
+            SafeSelector(node.NormalizedPathKey),
+            SafeSelector(node.PackageName),
+            SafeSelector(node.ConfigKey),
+            SafeSelector(node.OperationName),
+            SafeSelector(node.TableName),
+            SafeSelector(node.ShapeHash),
+            SafeSelector(node.TextHash),
+            SafeSelector(node.SurfaceName ?? node.DisplayName)
         }.Where(item => !string.IsNullOrWhiteSpace(item)));
-        return value.Length <= 160 ? value : $"surface-key-hash:{CombinedReportHelpers.Hash(value, 32)}";
+        return $"surface-key-hash:{CombinedReportHelpers.Hash(value, 32)}";
     }
 
     private static IReadOnlyDictionary<string, string> Metadata(params (string Key, string? Value)[] values)
@@ -1273,6 +1276,27 @@ public static class CombinedRouteFlowReporter
         return !string.IsNullOrWhiteSpace(value)
             && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
             && value.Trim('0').Length > 0;
+    }
+
+    private static string SafeCommitSha(string? value)
+    {
+        return KnownCommit(value)
+            ? value!.Trim()
+            : "unknown";
+    }
+
+    private static string? ExtractorVersionFor(string? sourceLabel, IReadOnlyList<RouteFlowSource> sources)
+    {
+        if (string.IsNullOrWhiteSpace(sourceLabel))
+        {
+            return null;
+        }
+
+        var safeLabel = SafeLabel(sourceLabel);
+        return sources
+            .Where(source => string.Equals(source.SourceLabel, safeLabel, StringComparison.Ordinal))
+            .Select(source => SafeSelector(source.ScannerVersion))
+            .FirstOrDefault(version => !string.IsNullOrWhiteSpace(version));
     }
 
     private static string SafeLabel(string? value)

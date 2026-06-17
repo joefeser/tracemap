@@ -128,6 +128,8 @@ Codex/Gemini review threads:
 - preservation of path-level review downgrades when projecting route-flow rows;
 - gap truncation accounting across all route-flow gaps, not only path/schema
   gaps.
+- explicit evidence/source commit placeholders, source scanner-version evidence
+  fallback, and hashed dependency-surface stable keys from sanitized parts.
 
 Pinned language-adapter smoke checks are deferred for this slice because the
 change is a combined reporting/CLI layer over existing facts and does not modify
