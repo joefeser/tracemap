@@ -41,6 +41,9 @@ product-code PR performs the work.
         names, not raw SQL, when they are not SQL text.
   - [ ] Treat safe repo-relative paths containing SQL action words as paths, not
         raw SQL, when they are not SQL text.
+  - [ ] Implement stable ID construction and transformation from validated
+        components, ensuring nodes or edges are omitted and safety gaps are
+        emitted on component rejection.
   - [ ] Ensure transforms happen before final Markdown and `graph.json`
         validation and before any files are written.
 

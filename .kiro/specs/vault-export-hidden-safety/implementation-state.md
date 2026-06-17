@@ -71,6 +71,12 @@ Review outcomes:
   names, normalization stability, claim-level transitions, and gap
   determinism. No third Kiro re-review was run because the requested maximum was
   two re-review cycles.
+- PR review loop found four unresolved actionable threads from Gemini and
+  Codex. Patched after initial PR: hidden fallback now excludes every hard-fail
+  category, requirement/design category labels are aligned, the symbol display
+  section no longer repeats path/evidence-location behavior, and tasks now
+  explicitly include stable ID construction/transformation from validated
+  components.
 
 Patch Medium+ actionable review findings, with at most two re-review cycles.
 

@@ -101,10 +101,10 @@ secret-like words but are not raw secret material.
 4. WHEN a symbol, route, action, model, or member display name is accepted in
    hidden mode THEN it SHALL be bounded by a documented length, printable, and
    used only as local evidence display text or evidence metadata.
-5. WHEN a safe-context value fails hidden-mode validation but does not contain
-   raw secret material THEN the exporter SHALL omit the field or render a
-   category label and emit an exporter safety gap instead of failing the entire
-   export.
+5. WHEN a safe-context value fails hidden-mode validation but does not match any
+   Requirement 3 hard-fail category THEN the exporter SHALL omit the field or
+   render a category label and emit an exporter safety gap instead of failing
+   the entire export.
 6. WHEN preserving raw hidden/local display text is unnecessary for navigation
    THEN the exporter SHALL prefer stable context-separated hashes or
    category labels over raw display. Safe repo-relative paths and evidence
@@ -162,9 +162,10 @@ rule-backed gap rather than silently disappearing.
    limitations.
 3. WHEN a gap references an unsafe field THEN it SHALL use a closed category
    whose rendered label is itself safe under final validation, such as
-   `sensitive-word-safe-context-omitted`, `hidden-display-name-hashed`,
-   `evidence-location-category-only`, `raw-sensitive-value-rejected`, or
-   `local-path-rejected`, and SHALL NOT echo the raw value.
+   `sensitive-word-safe-name`, `hidden-display-name-hashed`,
+   `repo-relative-path-sensitive-word`, `evidence-location-category-only`,
+   `raw-sensitive-value-rejected`, or `local-path-rejected`, and SHALL NOT echo
+   the raw value.
 4. WHEN a hidden/local graph becomes partial because fields were omitted THEN
    `graph.json` settings and Markdown index pages SHALL mark the export partial.
 5. WHEN a public/demo export omits hidden evidence because of claim-level
