@@ -2,6 +2,11 @@
 
 ## Implementation Tasks
 
+Current state: `implemented-mvp`. The first ASMX/SOAP scanner and report slice
+is implemented on `dev`. Remaining unchecked boxes are follow-up/backlog scope,
+not blockers for the landed MVP, unless a future implementation slice claims
+that work.
+
 - [ ] 1. Add ASMX/SOAP schema, facts, and rules in the first implementation
   slice that emits ASMX facts or report rows. Requirements: 1, 2, 3, 4, 5, 7.
   - [x] Add ASMX/SOAP fact types or equivalent additive schema fields for host, service class, operation, generated client, client operation, metadata, config, and mapping evidence.

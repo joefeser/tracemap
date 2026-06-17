@@ -1,6 +1,6 @@
 # Snapshot Diff By SHA Implementation State
 
-Status: implemented MVP with explicit follow-up backlog.
+Status: implemented-mvp
 
 Branch/PR:
 
