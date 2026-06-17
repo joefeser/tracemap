@@ -71,8 +71,8 @@ coverage.
   target.
 - `cd site && npm run build` passed.
 - `./scripts/check-private-paths.sh` passed.
-- Browser sanity passed with Playwright CLI against
-  `http://localhost:4187/review-room/`.
+- Browser sanity passed with Playwright CLI against the local `/review-room/`
+  route.
   - Desktop `1280x900`: page title rendered and DOM overflow check returned no
     overflowing elements.
   - Mobile `390x844`: page title rendered and DOM overflow check returned no
