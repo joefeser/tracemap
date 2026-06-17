@@ -8,6 +8,7 @@ import { createDiscoveryOutputs } from "./discovery.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
+import { reviewRoomRoute } from "./review-room.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -97,7 +98,7 @@ async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
-  sitemapUrls = [...deployAuditRequiredRoutes, incidentCallRoute, managerBriefRoute].map(
+  sitemapUrls = [...deployAuditRequiredRoutes, incidentCallRoute, managerBriefRoute, reviewRoomRoute].map(
     (route) => `https://tracemap.tools${route}`
   )
 } = {}) {
@@ -115,6 +116,8 @@ async function createDistFixture({
     "/examples/",
     incidentCallRoute,
     managerBriefRoute,
+    "/manager-packet/",
+    reviewRoomRoute,
     "/outputs/",
     "/use-cases/incident-review/",
     "/workflows/"
@@ -135,6 +138,8 @@ async function createDistFixture({
           ? incidentCallPage()
           : route === managerBriefRoute
             ? managerBriefPage()
+            : route === reviewRoomRoute
+              ? reviewRoomPage()
             : page(`<p>${path}</p>`),
       "utf8"
     );
@@ -183,6 +188,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "use-case",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture manager brief limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: reviewRoomRoute,
+        title: "Review Room",
+        summary: "Fixture review room route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture review room limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -253,6 +269,26 @@ function managerBriefPage() {
     <a href="/limitations/">Limitations</a>
     <a href="/demo/">Demo</a>
     <a href="/docs/">Docs</a>
+    <p>${filler}</p>
+  `);
+}
+
+function reviewRoomPage() {
+  const filler = Array.from({ length: 100 }, (_, index) => `evidence review agenda boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>claim proof path rule ID/evidence tier coverage label limitation owner decision gap</p>
+    <p>Known evidence is reducer-backed and public-safe; partial evidence is reduced-coverage and labeled; missing evidence is an explicit gap for human review.</p>
+    <meta property="og:type" content="article">
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/evidence/">Evidence model</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/manager-brief/">Manager brief</a>
+    <a href="/manager-packet/">Manager packet</a>
+    <a href="/incident-call/">Incident call</a>
+    <a href="/use-cases/incident-review/">Incident review</a>
     <p>${filler}</p>
   `);
 }
