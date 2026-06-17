@@ -5,7 +5,6 @@ import {
   decodeHtmlEntities,
   escapeRegExp,
   fileExists,
-  normalizeBaseUrl,
   normalizeRenderedText,
   readSitemapLocSet
 } from "./validate-utils.mjs";
@@ -46,7 +45,7 @@ const forbiddenText = [
 
 export async function validateManagerBriefDist({ baseUrl = "https://tracemap.tools", dist, errors }) {
   const localErrors = [];
-  const cleanBaseUrl = normalizeBaseUrl(baseUrl);
+  const cleanBaseUrl = normalizeManagerBriefBaseUrl(baseUrl, localErrors);
   const pagePath = resolve(dist, "manager-brief", "index.html");
 
   if (!(await fileExists(pagePath))) {
@@ -55,7 +54,9 @@ export async function validateManagerBriefDist({ baseUrl = "https://tracemap.too
     return;
   }
 
-  await validateSitemap({ baseUrl: cleanBaseUrl, dist, errors: localErrors });
+  if (cleanBaseUrl) {
+    await validateSitemap({ baseUrl: cleanBaseUrl, dist, errors: localErrors });
+  }
   await validateRoutesIndex({ dist, errors: localErrors });
   await validateManagerBriefPage({ pagePath, errors: localErrors });
 
@@ -72,6 +73,24 @@ async function validateSitemap({ baseUrl, dist, errors }) {
   if (!sitemapUrls.has(`${baseUrl}${managerBriefRoute}`)) {
     errors.push(`Manager brief sitemap is missing required route: ${baseUrl}${managerBriefRoute}`);
   }
+}
+
+function normalizeManagerBriefBaseUrl(value, errors) {
+  let url;
+
+  try {
+    url = new URL(value);
+  } catch {
+    errors.push(`Manager brief baseUrl must be a valid absolute URL: ${String(value)}`);
+    return null;
+  }
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    errors.push(`Manager brief baseUrl must use http or https: ${String(value)}`);
+    return null;
+  }
+
+  return url.origin;
 }
 
 async function validateRoutesIndex({ dist, errors }) {
@@ -117,6 +136,7 @@ async function validateManagerBriefPage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
   const pageText = normalizeRenderedText(html);
+  const positioningText = `${decodedHtml} ${pageText}`;
   const wordCount = countWords(pageText);
 
   for (const phrase of requiredText) {
@@ -135,7 +155,7 @@ async function validateManagerBriefPage({ pagePath, errors }) {
     errors.push(`Manager brief page word count must be between 400 and 1500 words, got ${wordCount}`);
   }
 
-  if (forbiddenManagerBriefPositioning.test(pageText)) {
+  if (forbiddenManagerBriefPositioning.test(positioningText)) {
     errors.push("Manager brief page contains forbidden AI/LLM positioning.");
   }
 
