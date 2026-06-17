@@ -9,72 +9,72 @@
 
 ## Implementation Tasks
 
-- [ ] 1. Confirm current evidence inventory. Requirements: 1, 3, 4, 5, 6, 7.
-  - [ ] Inventory existing Angular/TypeScript HTTP call, payload, object-shape, value-origin, call-edge, and coverage-gap facts.
-  - [ ] Inventory existing C#/Razor/cshtml support and identify whether Razor binding extraction is new or partially available.
-  - [ ] Inventory DTO/model/property facts, mapping/projection evidence, validation/read/write evidence, query patterns, data/entity surfaces, and dependency surfaces.
-  - [ ] Inventory combined path, reverse path, route-centered flow, endpoint alignment, and vault export model reuse points.
-  - [ ] Document which hops can be supported by existing facts and which need new scanner rules.
-  - [ ] Record the inventory findings in `implementation-state.md` under an Evidence Inventory section before closing this task.
+- [x] 1. Confirm current evidence inventory. Requirements: 1, 3, 4, 5, 6, 7.
+  - [x] Inventory existing Angular/TypeScript HTTP call, payload, object-shape, value-origin, call-edge, and coverage-gap facts.
+  - [x] Inventory existing C#/Razor/cshtml support and identify whether Razor binding extraction is new or partially available.
+  - [x] Inventory DTO/model/property facts, mapping/projection evidence, validation/read/write evidence, query patterns, data/entity surfaces, and dependency surfaces.
+  - [x] Inventory combined path, reverse path, route-centered flow, endpoint alignment, and vault export model reuse points.
+  - [x] Document which hops can be supported by existing facts and which need new scanner rules.
+  - [x] Record the inventory findings in `implementation-state.md` under an Evidence Inventory section before closing this task.
 
-- [ ] 2. Define rule catalog entries and limitations. Requirements: 3, 5, 8, 13.
-  - [ ] Add or update rule IDs for Angular template/form/event/template-variable facts before emitting them.
-  - [ ] Add or update rule IDs for Razor binding/form-target/model-binding facts before emitting them.
-  - [ ] Add derived `property-flow.*.v1` or equivalent rule IDs for roots, edges, paths, selector gaps, coverage gaps, schema gaps, truncation, and optional observed evidence.
-  - [ ] Document limitations for runtime visibility, auth/role/feature flags, branch feasibility, runtime DI, reflection, serializer behavior, browser observation, dynamic UI, and redaction.
+- [x] 2. Define rule catalog entries and limitations. Requirements: 3, 5, 8, 13.
+  - [x] Add or update rule IDs for Angular template/form/event/template-variable facts before emitting them.
+  - [x] Add or update rule IDs for Razor binding/form-target/model-binding facts before emitting them.
+  - [x] Add derived `property-flow.*.v1` or equivalent rule IDs for roots, edges, paths, selector gaps, coverage gaps, schema gaps, truncation, and optional observed evidence.
+  - [x] Document limitations for runtime visibility, auth/role/feature flags, branch feasibility, runtime DI, reflection, serializer behavior, browser observation, dynamic UI, and redaction.
 
-- [ ] 3. Add Angular template and form extraction. Requirements: 3, 4, 14.
-  - [ ] Extract interpolation, property binding, event binding, and two-way binding facts.
-  - [ ] Extract reactive form evidence for `formControlName`, `formGroup`, `formArrayName`, and static form control construction.
-  - [ ] Extract template-driven form evidence for `name`, `ngModel`, and static template variables.
-  - [ ] Connect external templates to component classes through static `templateUrl` evidence.
-  - [ ] Emit gaps for dynamic expressions, unsupported custom directive inputs, ambiguous template variables, and unresolved external templates.
-  - [ ] Add public-safe Angular fixture tests for supported and downgraded patterns.
+- [x] 3. Add Angular template and form extraction. Requirements: 3, 4, 14.
+  - [x] Extract interpolation, property binding, event binding, and two-way binding facts.
+  - [x] Extract reactive form evidence for `formControlName`, `formGroup`, `formArrayName`, and static form control construction.
+  - [x] Extract template-driven form evidence for `name`, `ngModel`, and static template variables.
+  - [x] Connect external templates to component classes through static `templateUrl` evidence.
+  - [x] Emit gaps for dynamic expressions, unsupported custom directive inputs, ambiguous template variables, and unresolved external templates.
+  - [x] Add public-safe Angular fixture tests for supported and downgraded patterns.
 
 - [ ] 4. Add Razor/MVC/Pages binding extraction. Requirements: 5, 6, 14.
-  - [ ] Extract `asp-for` evidence on input/select/textarea/label/validation elements.
-  - [ ] Extract `Html.*For` helper model-expression evidence where static.
-  - [ ] Extract static form target metadata from `asp-action`, `asp-controller`, `asp-page`, `asp-page-handler`, and method attributes.
+  - [x] Extract `asp-for` evidence on input/select/textarea/label/validation elements.
+  - [x] Extract `Html.*For` helper model-expression evidence where static.
+  - [x] Extract static form target metadata from `asp-action`, `asp-controller`, `asp-page`, `asp-page-handler`, and method attributes.
   - [ ] Connect form targets to MVC actions or Razor Page handlers where static evidence supports it.
   - [ ] Extract model-binding targets from action parameters, `[FromBody]`, `[FromForm]`, `[BindProperty]`, page models, and view models where available.
-  - [ ] Emit gaps for ViewBag/ViewData, dynamic models, partial/template ambiguity, custom tag helpers, and generated Razor gaps.
-  - [ ] Add public-safe Razor/cshtml fixture tests for supported and downgraded patterns.
+  - [x] Emit gaps for ViewBag/ViewData, dynamic models, partial/template ambiguity, custom tag helpers, and generated Razor gaps.
+  - [x] Add public-safe Razor/cshtml fixture tests for supported and downgraded patterns.
 
-- [ ] 5. Build property-flow selector and graph models. Requirements: 1, 2, 7, 8, 10.
-  - [ ] Implement selector parsing for `field:`, `control:`, `binding:`, `model:`, `dto:`, `symbol:`, and `fact:`.
-  - [ ] Add source and framework filters.
-  - [ ] Add generic property-name downgrade behavior.
-  - [ ] Define root, node, edge, path, gap, inventory, source, snapshot, and limitation models.
-  - [ ] Preserve source labels, source index IDs, scan IDs, commit SHAs, rule IDs, tiers, file spans, extractor IDs/versions, supporting fact IDs, and supporting edge IDs.
-  - [ ] Reject unsafe selectors and sanitize diagnostics.
+- [x] 5. Build property-flow selector and graph models. Requirements: 1, 2, 7, 8, 10.
+  - [x] Implement selector parsing for `field:`, `control:`, `binding:`, `model:`, `dto:`, `symbol:`, and `fact:`.
+  - [x] Add source and framework filters.
+  - [x] Add generic property-name downgrade behavior.
+  - [x] Define root, node, edge, path, gap, inventory, source, snapshot, and limitation models.
+  - [x] Preserve source labels, source index IDs, scan IDs, commit SHAs, rule IDs, tiers, file spans, extractor IDs/versions, supporting fact IDs, and supporting edge IDs.
+  - [x] Reject unsafe selectors and sanitize diagnostics.
 
 - [ ] 6. Compose downstream lineage evidence. Requirements: 4, 6, 7, 8.
-  - [ ] Connect template/control roots to TypeScript component members when static evidence supports it.
+  - [x] Connect template/control roots to TypeScript component members when static evidence supports it.
   - [ ] Connect event bindings to handlers and handlers to payload construction through call/value-origin evidence.
   - [ ] Connect payload fields to HTTP calls and endpoint alignment evidence.
   - [ ] Connect server endpoints to action/handler parameters and DTO/model properties.
   - [ ] Connect DTO/model properties through mapping/projection/manual assignment evidence.
   - [ ] Connect validation reads, service/repository calls, query patterns, and data/entity surfaces.
-  - [ ] Reuse route-flow from issue #159 and combined path/reverse helpers where available; before #159 lands, emit `RouteFlowUnavailable` gaps as the default server-internal traversal behavior.
-  - [ ] Emit gaps rather than paths for missing route-flow, missing schema, ambiguous endpoint, dynamic dispatch, runtime DI, reflection, serializer mapping, callbacks, mutation, and branch feasibility.
+  - [x] Reuse route-flow from issue #159 and combined path/reverse helpers where available; before #159 lands, emit `RouteFlowUnavailable` gaps as the default server-internal traversal behavior.
+  - [x] Emit gaps rather than paths for missing route-flow, missing schema, ambiguous endpoint, dynamic dispatch, runtime DI, reflection, serializer mapping, callbacks, mutation, and branch feasibility.
 
-- [ ] 7. Add deterministic traversal and classification. Requirements: 7, 8.
-  - [ ] Implement bounded deterministic traversal with documented root, depth, path, frontier, and gap caps.
-  - [ ] Sort roots, edges, paths, gaps, inventory rows, and metadata deterministically.
-  - [ ] Classify `StrongStaticLineage`, `ProbableStaticLineage`, `NeedsReviewLineage`, `UnknownAnalysisGap`, `NoLineageEvidence`, `SelectorNoMatch`, and `TruncatedByLimit`.
-  - [ ] Derive confidence from classification through a fixed mapping.
-  - [ ] Ensure reduced coverage downgrades no-lineage conclusions to `UnknownAnalysisGap`.
-  - [ ] Ensure cross-source traversal only occurs through documented combined evidence.
+- [x] 7. Add deterministic traversal and classification. Requirements: 7, 8.
+  - [x] Implement bounded deterministic traversal with documented root, depth, path, frontier, and gap caps.
+  - [x] Sort roots, edges, paths, gaps, inventory rows, and metadata deterministically.
+  - [x] Classify `StrongStaticLineage`, `ProbableStaticLineage`, `NeedsReviewLineage`, `UnknownAnalysisGap`, `NoLineageEvidence`, `SelectorNoMatch`, and `TruncatedByLimit`.
+  - [x] Derive confidence from classification through a fixed mapping.
+  - [x] Ensure reduced coverage downgrades no-lineage conclusions to `UnknownAnalysisGap`.
+  - [x] Ensure cross-source traversal only occurs through documented combined evidence.
 
-- [ ] 8. Add Markdown and JSON output. Requirements: 9, 10, 12.
-  - [ ] Emit Markdown sections in the documented order.
-  - [ ] Emit JSON top-level shape `property-flow` version `1.0`.
-  - [ ] Include selected roots, lineage paths, gaps, inventory, optional observed evidence, and limitations.
-  - [ ] Use `null` and empty arrays consistently for missing values.
-  - [ ] Escape Markdown table/link characters.
-  - [ ] Suppress or hash raw SQL, snippets, raw remotes, local absolute paths, raw URLs, connection strings, secrets, credentials, and private data.
-  - [ ] Prove Markdown and JSON byte stability for identical inputs.
-  - [ ] Cover non-combined-index rejection, required-versus-optional table behavior, route-flow-unavailable gaps, source/framework filters, top-N ambiguity, truncation, confidence mapping, cross-source boundary rendering, and full-versus-reduced no-lineage classifications.
+- [x] 8. Add Markdown and JSON output. Requirements: 9, 10, 12.
+  - [x] Emit Markdown sections in the documented order.
+  - [x] Emit JSON top-level shape `property-flow` version `1.0`.
+  - [x] Include selected roots, lineage paths, gaps, inventory, optional observed evidence, and limitations.
+  - [x] Use `null` and empty arrays consistently for missing values.
+  - [x] Escape Markdown table/link characters.
+  - [x] Suppress or hash raw SQL, snippets, raw remotes, local absolute paths, raw URLs, connection strings, secrets, credentials, and private data.
+  - [x] Prove Markdown and JSON byte stability for identical inputs.
+  - [x] Cover non-combined-index rejection, required-versus-optional table behavior, route-flow-unavailable gaps, source/framework filters, top-N ambiguity, truncation, confidence mapping, cross-source boundary rendering, and full-versus-reduced no-lineage classifications.
 
 - [ ] 9. Add optional browser-observed evidence support only after core static reporting. Requirements: 11, 14.
   - [ ] Keep browser/computer-use capture outside the core deterministic scanner/reporting requirement.
@@ -82,22 +82,22 @@
   - [ ] Reject workflows that require production login, credentials, private data capture, or live secret-bearing HTTP.
   - [ ] Add tests proving observed evidence cannot upgrade static classifications by itself.
 
-- [ ] 10. Wire CLI and docs. Requirements: 1, 12, 13, 14.
-  - [ ] Add `tracemap property-flow --help`.
-  - [ ] Document selector forms, output files, classifications, coverage semantics, safety rules, and limitations.
-  - [ ] Update `docs/ACCEPTANCE.md` and `docs/VALIDATION.md`.
-  - [ ] Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` if new shared UI/property roles are introduced.
-  - [ ] Keep public copy bounded to deterministic static evidence claims.
+- [x] 10. Wire CLI and docs. Requirements: 1, 12, 13, 14.
+  - [x] Add `tracemap property-flow --help`.
+  - [x] Document selector forms, output files, classifications, coverage semantics, safety rules, and limitations.
+  - [x] Update `docs/ACCEPTANCE.md` and `docs/VALIDATION.md`.
+  - [x] Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` if new shared UI/property roles are introduced.
+  - [x] Keep public copy bounded to deterministic static evidence claims.
 
-- [ ] 11. Validate implementation. Requirements: 14.
-  - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-  - [ ] Run TypeScript adapter tests and build when Angular extraction changes.
-  - [ ] Run Razor/.NET adapter tests when Razor extraction changes.
-  - [ ] Run relevant combined path/reverse/report tests when graph composition changes.
-  - [ ] Run pinned smoke checks required by `docs/VALIDATION.md` for changed adapters.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
+- [x] 11. Validate implementation. Requirements: 14.
+  - [x] Run `dotnet build src/dotnet/TraceMap.sln`.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [x] Run TypeScript adapter tests and build when Angular extraction changes.
+  - [x] Run Razor/.NET adapter tests when Razor extraction changes.
+  - [x] Run relevant combined path/reverse/report tests when graph composition changes.
+  - [x] Run pinned smoke checks required by `docs/VALIDATION.md` for changed adapters.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
 
 ## Recommended PR Slices
 

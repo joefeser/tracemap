@@ -1,4 +1,188 @@
 rules:
+  - id: property-flow.root.v1
+    name: Property flow selected root
+    description: Records deterministic selected root rows for UI field, control, binding, model, DTO, symbol, or fact selectors over a combined index.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - property-flow selected root row
+    limitations:
+      - Selected roots are static evidence anchors; they do not prove runtime UI visibility, submission, authorization, feature-flag state, or production use.
+      - Generic or ambiguous names such as id, name, value, state, or status remain review-tier unless narrowed by source, type, symbol, or fact identity.
+      - Root rows preserve source fact rule IDs and tiers; derived root classification does not replace source evidence.
+
+  - id: property-flow.edge.v1
+    name: Property flow derived edge
+    description: Records deterministic report-time lineage edges derived from available combined facts and path graph evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - property-flow edge row
+      - property-flow root-to-graph gap
+    limitations:
+      - Derived edges are bounded static composition and do not prove runtime mutation, callback execution, dependency-injection target selection, reflection behavior, serializer configuration, branch feasibility, or SQL execution.
+      - Syntax-only and same-name edges are review-tier unless a stronger rule-backed source fact supports the hop.
+      - Missing edges are analysis gaps under reduced coverage, not proof that no lineage exists.
+
+  - id: property-flow.path.v1
+    name: Property flow static path classification
+    description: Classifies bounded property-lineage paths as strong, probable, or needs-review static evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - property-flow path row
+    limitations:
+      - Path classifications are evidence-strength labels, not model judgment and not runtime proof.
+      - A path does not prove a field is rendered, visible to every user, submitted, validated successfully, persisted, executed in production, or authorized.
+      - Dynamic UI, callbacks, async boundaries, mutation, runtime DI, serializer behavior, reflection, and branch feasibility can downgrade or stop traversal.
+
+  - id: property-flow.selector.v1
+    name: Property flow selector result
+    description: Records selector parsing, no-match, ambiguity, and unsafe-selector outcomes for property-flow queries.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - selector no-match gap
+      - ambiguous selector gap
+      - unsafe selector rejection
+    limitations:
+      - Selector matching is deterministic and coverage-relative; no match does not prove absence when contributing evidence is reduced or unsupported.
+      - Unsafe selector diagnostics are sanitized and must not echo local paths, raw URLs, snippets, secrets, credentials, connection strings, or private values.
+
+  - id: property-flow.coverage.v1
+    name: Property flow coverage conclusion
+    description: Records coverage-relative no-lineage or unknown-analysis conclusions for property-flow reports.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - no-lineage evidence gap
+      - reduced coverage gap
+    limitations:
+      - Reduced coverage, unknown commit identity, failed build, missing optional evidence, or source analysis gaps prevent clean absence conclusions.
+      - No-lineage evidence is scoped to available deterministic static evidence and does not prove a property is unused, unsubmitted, unmapped, unvalidated, or not persisted at runtime.
+
+  - id: property-flow.schema.v1
+    name: Property flow schema availability
+    description: Records required and optional combined-index schema availability for property-flow.
+    evidenceTier: Tier4Unknown
+    emits:
+      - missing required schema rejection
+      - missing optional schema gap
+      - route-flow unavailable gap
+    limitations:
+      - Schema gaps describe evidence availability only; they do not prove source behavior or source evidence absence.
+      - Missing optional route-flow schema prevents route-flow-specific promotion but does not discard existing combined path evidence.
+
+  - id: property-flow.truncation.v1
+    name: Property flow truncation
+    description: Records deterministic root, path, depth, frontier, inventory, or gap cap truncation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - truncation gap
+    limitations:
+      - Truncated reports are partial and must not be read as exhaustive lineage or absence evidence.
+      - Caps are report bounds, not evidence about repository complexity or runtime behavior.
+
+  - id: property-flow.observed-evidence.v1
+    name: Property flow optional observed evidence boundary
+    description: Reserved rule for optional browser/computer-use observed evidence metadata that may accompany property-flow reports.
+    evidenceTier: Tier4Unknown
+    emits:
+      - observed evidence metadata row
+      - observed evidence discrepancy gap
+    limitations:
+      - Observed DOM/browser metadata is demo validation metadata only and cannot upgrade static lineage classifications by itself.
+      - Workflows requiring credentials, production login, private data capture, live secret-bearing HTTP, or captured secrets are rejected for public/default artifacts.
+
+  - id: typescript.angular.template-binding.v1
+    name: Angular template binding evidence
+    description: Extracts safe Angular interpolation, property binding, and two-way binding property-path metadata from checked-in templates and inline component templates.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - UiTemplateBinding
+      - UiBindingGap
+    limitations:
+      - Template binding evidence does not prove runtime rendering, visibility, change-detection outcome, user access, submitted values, handler execution, auth, role, feature-flag state, or production use.
+      - Function calls, pipes, bracket notation, dynamic property names, unsupported directive semantics, and ambiguous expressions are gaps or review-tier evidence.
+      - Raw template snippets are not stored; expression hashes and safe property paths are stored instead.
+
+  - id: typescript.angular.form-binding.v1
+    name: Angular form binding evidence
+    description: Extracts safe Angular form-control metadata such as formControlName, formGroup/formArrayName, template-driven name/ngModel controls, and control names.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - UiFormControlBinding
+      - UiBindingGap
+    limitations:
+      - Form-control evidence is static structure only and does not prove a value is submitted, enabled, visible, validated, or reachable in every runtime state.
+      - Same-name control/property links remain review-tier unless value-origin or assignment facts support the hop.
+
+  - id: typescript.angular.event-binding.v1
+    name: Angular event binding evidence
+    description: Extracts safe Angular event-binding metadata and static handler names when visible in templates.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - UiEventBinding
+      - UiBindingGap
+    limitations:
+      - Event binding evidence does not prove runtime event firing, handler execution, browser state, authorization, or branch feasibility.
+      - Dynamic handler expressions and unsupported callback semantics are gaps or review-tier evidence.
+
+  - id: typescript.angular.template-variable.v1
+    name: Angular template variable evidence
+    description: Extracts safe Angular template variable names and export aliases where statically visible.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - UiTemplateVariable
+    limitations:
+      - Template variables are syntax-visible evidence and do not by themselves prove property identity, runtime rendering, directive semantics, or submitted values.
+
+  - id: typescript.angular.binding-gap.v1
+    name: Angular binding analysis gap
+    description: Records unsupported or dynamic Angular template expressions encountered by the template binding extractor.
+    evidenceTier: Tier4Unknown
+    emits:
+      - UiBindingGap
+    limitations:
+      - Binding gaps identify unsupported static analysis boundaries only; they do not prove that a field, binding, event, or property is absent.
+      - Diagnostics store expression hashes and category labels, not raw snippets or unsafe literal values.
+
+  - id: csharp.razor.binding.v1
+    name: Razor binding evidence
+    description: Extracts safe Razor asp-for and Html.*For model-property binding metadata from checked-in .cshtml files.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - RazorBinding
+      - RazorBindingGap
+    limitations:
+      - Razor binding evidence does not prove runtime rendering, route selection, model-binding success, auth, role visibility, feature flags, validation outcome, or browser submission.
+      - Dynamic models, ViewBag/ViewData, partial templates, custom tag helpers, and generated Razor uncertainty remain gaps or review-tier evidence.
+
+  - id: csharp.razor.form-target.v1
+    name: Razor form target evidence
+    description: Extracts safe static Razor form target metadata from asp-action, asp-controller, asp-page, asp-page-handler, and method attributes.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - RazorFormTarget
+    limitations:
+      - Form target evidence is static markup metadata and does not prove runtime routing, handler execution, antiforgery behavior, auth, model binding success, or submitted values.
+      - Page paths and unsafe target-like values are hashed or omitted rather than rendered raw.
+
+  - id: csharp.razor.model-binding.v1
+    name: Razor model-binding target evidence
+    description: Reserved rule for static Razor Pages/MVC model-binding target evidence such as handlers, action parameters, BindProperty, FromBody, and FromForm metadata.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - RazorModelBindingTarget
+    limitations:
+      - Model-binding target evidence does not prove runtime binding success, serializer behavior, validation outcome, route selection, auth, or branch feasibility.
+      - Convention-only or syntax-only model-binding evidence remains review-tier unless semantic facts support the link.
+
+  - id: csharp.razor.binding-gap.v1
+    name: Razor binding analysis gap
+    description: Records dynamic Razor model/view-data/partial/template constructs that prevent precise static field/property lineage.
+    evidenceTier: Tier4Unknown
+    emits:
+      - RazorBindingGap
+    limitations:
+      - Razor binding gaps are static analysis boundaries and do not prove that a binding, form, handler, or model property is absent.
+      - Diagnostics are sanitized and must not render source snippets, raw form values, raw URLs, local paths, secrets, or private data.
+
   - id: vault-export.gap.schema-incompatible.v1
     name: Vault export schema compatibility gap
     description: Records when a vault export input cannot be read through a documented combined-index, paths-report, reverse-report, or claim-catalog schema.
