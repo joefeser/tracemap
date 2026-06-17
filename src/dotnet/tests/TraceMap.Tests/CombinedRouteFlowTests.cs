@@ -35,12 +35,20 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call" && row.SourceSymbol.Contains(controller, StringComparison.Ordinal));
         Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-filter-sort-selection");
+        Assert.Contains(result.Report.Snapshot.Sources, source => source.ScannerVersion == "tracemap-milestone15");
         Assert.All(result.Report.FlowRows, row =>
         {
             Assert.StartsWith("combined.route-flow.", row.Evidence.RuleId, StringComparison.Ordinal);
             Assert.NotEmpty(row.Evidence.SupportingRuleIds);
+            Assert.False(string.IsNullOrWhiteSpace(row.Evidence.CommitSha));
+            Assert.False(string.IsNullOrWhiteSpace(row.Evidence.ExtractorVersion));
         });
         Assert.DoesNotContain(result.Report.DependencySurfaces, surface => surface.StableKey.Contains("fact-", StringComparison.OrdinalIgnoreCase));
+        Assert.All(result.Report.DependencySurfaces, surface =>
+        {
+            Assert.StartsWith("surface-key-hash:", surface.StableKey, StringComparison.Ordinal);
+            Assert.DoesNotContain("orders", surface.StableKey, StringComparison.OrdinalIgnoreCase);
+        });
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.json"));
@@ -58,6 +66,7 @@ public sealed class CombinedRouteFlowTests
         var sqlSurface = parsed!.DependencySurfaces.Single(surface => surface.SurfaceKind == "sql-query");
         Assert.NotEmpty(sqlSurface.Evidence.SupportingFactIds);
         Assert.Contains(RuleIds.CSharpSyntaxQueryPattern, sqlSurface.Evidence.SupportingRuleIds);
+        Assert.Equal("tracemap-milestone15", sqlSurface.Evidence.ExtractorVersion);
 
         var secondOutDir = outDir;
         await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
