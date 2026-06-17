@@ -24,6 +24,10 @@ export const reviewRoomRequiredLinks = [
 export const forbiddenReviewRoomPositioning =
   /\b(AI[- ]?powered|AI impact analysis|LLM[- ]?powered|LLM analysis|machine learning impact analysis|artificial intelligence impact analysis|intelligent analysis|smart impact)\b/i;
 
+const reviewRoomPageArtifact = "review-room/index.html";
+const sitemapArtifact = "sitemap.xml";
+const routesIndexArtifact = "routes-index.json";
+
 const requiredText = [
   "Public claim level: concept",
   "No public conclusion without evidence",
@@ -64,7 +68,7 @@ export async function validateReviewRoomDist({ baseUrl = "https://tracemap.tools
   const pagePath = resolve(dist, "review-room", "index.html");
 
   if (!(await fileExists(pagePath))) {
-    localErrors.push("Review room page is missing required public route: /review-room/");
+    localErrors.push(withEvidence("Review room page is missing required public route: /review-room/", reviewRoomPageArtifact));
     errors.push(...localErrors);
     return;
   }
@@ -86,7 +90,7 @@ async function validateSitemap({ baseUrl, dist, errors }) {
 
   const sitemapUrls = await readSitemapLocSet(sitemapPath);
   if (!sitemapUrls.has(`${baseUrl}${reviewRoomRoute}`)) {
-    errors.push(`Review room sitemap is missing required route: ${baseUrl}${reviewRoomRoute}`);
+    errors.push(withEvidence(`Review room sitemap is missing required route: ${baseUrl}${reviewRoomRoute}`, sitemapArtifact));
   }
 }
 
@@ -96,12 +100,12 @@ function normalizeReviewRoomBaseUrl(value, errors) {
   try {
     url = new URL(value);
   } catch {
-    errors.push(`Review room baseUrl must be a valid absolute URL: ${String(value)}`);
+    errors.push(withEvidence(`Review room baseUrl must be a valid absolute URL: ${String(value)}`, "baseUrl input"));
     return null;
   }
 
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    errors.push(`Review room baseUrl must use http or https: ${String(value)}`);
+    errors.push(withEvidence(`Review room baseUrl must use http or https: ${String(value)}`, "baseUrl input"));
     return null;
   }
 
@@ -118,18 +122,18 @@ async function validateRoutesIndex({ dist, errors }) {
   try {
     parsed = JSON.parse(await readFile(indexPath, "utf8"));
   } catch (error) {
-    errors.push(`Review room could not parse routes-index.json: ${error.message}`);
+    errors.push(withEvidence(`Review room could not parse routes-index.json: ${error.message}`, routesIndexArtifact));
     return;
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.entries)) {
-    errors.push("Review room routes-index.json is invalid: expected entries array");
+    errors.push(withEvidence("Review room routes-index.json is invalid: expected entries array", routesIndexArtifact));
     return;
   }
 
   const routeEntry = parsed.entries.find((entry) => entry?.path === reviewRoomRoute);
   if (!routeEntry) {
-    errors.push(`Review room routes-index.json is missing required route: ${reviewRoomRoute}`);
+    errors.push(withEvidence(`Review room routes-index.json is missing required route: ${reviewRoomRoute}`, routesIndexArtifact));
     return;
   }
 
@@ -142,7 +146,7 @@ async function validateRoutesIndex({ dist, errors }) {
 
   for (const [field, expected] of Object.entries(expectedFields)) {
     if (routeEntry[field] !== expected) {
-      errors.push(`Review room routes-index.json expected ${field} ${expected}, got ${String(routeEntry[field])}`);
+      errors.push(withEvidence(`Review room routes-index.json expected ${field} ${expected}, got ${String(routeEntry[field])}`, routesIndexArtifact));
     }
   }
 }
@@ -156,33 +160,37 @@ async function validateReviewRoomPage({ pagePath, errors }) {
 
   for (const phrase of requiredText) {
     if (!pageText.includes(phrase)) {
-      errors.push(`Review room page is missing required text: ${phrase}`);
+      errors.push(withEvidence(`Review room page is missing required text: ${phrase}`, reviewRoomPageArtifact));
     }
   }
 
   for (const link of reviewRoomRequiredLinks) {
     if (!hasHref(html, link)) {
-      errors.push(`Review room page is missing required link: ${link}`);
+      errors.push(withEvidence(`Review room page is missing required link: ${link}`, reviewRoomPageArtifact));
     }
   }
 
   if (!hasOgTypeArticle(html)) {
-    errors.push('Review room page must include <meta property="og:type" content="article">.');
+    errors.push(withEvidence('Review room page must include <meta property="og:type" content="article">.', reviewRoomPageArtifact));
   }
 
   if (wordCount < 400 || wordCount > 1500) {
-    errors.push(`Review room page word count must be between 400 and 1500 words, got ${wordCount}`);
+    errors.push(withEvidence(`Review room page word count must be between 400 and 1500 words, got ${wordCount}`, reviewRoomPageArtifact));
   }
 
   if (forbiddenReviewRoomPositioning.test(positioningText)) {
-    errors.push("Review room page contains forbidden AI/LLM positioning.");
+    errors.push(withEvidence("Review room page contains forbidden AI/LLM positioning.", reviewRoomPageArtifact));
   }
 
   for (const text of forbiddenText) {
     if (html.includes(text) || decodedHtml.includes(text) || pageText.includes(text)) {
-      errors.push(`Review room page contains forbidden public text: ${text}`);
+      errors.push(withEvidence(`Review room page contains forbidden public text: ${text}`, reviewRoomPageArtifact));
     }
   }
+}
+
+function withEvidence(message, artifact) {
+  return `${message} Evidence: ${artifact}.`;
 }
 
 function hasHref(html, href) {
