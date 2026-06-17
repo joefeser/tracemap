@@ -6,10 +6,6 @@ Status: not-started
 
 `codex/spec-ui-field-property-lineage`
 
-## Status
-
-`not-started`
-
 ## Current Slice
 
 This branch is spec-only. It adds the Kiro spec for UI field/property lineage
