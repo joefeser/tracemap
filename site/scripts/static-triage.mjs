@@ -153,10 +153,15 @@ async function validateStaticTriagePage({ pagePath, errors }) {
   }
 
   for (const text of forbiddenText) {
-    if (html.includes(text) || decodedHtml.includes(text) || pageText.includes(text)) {
+    if (containsForbiddenText(text, html, decodedHtml, pageText)) {
       errors.push(`Static triage page contains forbidden public text: ${text}`);
     }
   }
+}
+
+function containsForbiddenText(text, ...values) {
+  const normalizedText = text.toLowerCase();
+  return values.some((value) => value.toLowerCase().includes(normalizedText));
 }
 
 function hasHref(html, href) {
