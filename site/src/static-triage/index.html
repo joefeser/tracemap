@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap checklist for orienting static code evidence and handoff questions during incident triage."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Static Incident Triage Checklist | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/static-triage/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Static Incident Triage Checklist | TraceMap">
+    <meta
+      property="og:description"
+      content="Engineer-facing static evidence checklist and handoff questions for P1 code triage without runtime claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/static-triage/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Static incident triage</p>
+        <h1>Turn the live code question into a static evidence checklist.</h1>
+        <p class="hero-subhead">
+          TraceMap can help engineers and incident leads frame what static
+          repository evidence exists around a named endpoint, package,
+          configuration surface, SQL-facing surface, route, handler, DTO, or
+          nearby dependency surface.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          Static triage is the engineer checklist and handoff page, distinct
+          from the incident-call orientation page.
+        </p>
+        <nav class="hero-actions" aria-label="Static triage evidence links">
+          <a class="button primary" href="/proof-paths/">Follow proof paths</a>
+          <a class="button secondary" href="/validation/">Review validation</a>
+          <a class="button secondary" href="/incident-call/">Incident-call orientation</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">First minute</p>
+          <h2>Name the surface before widening the search.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Surface</strong><span>What exact endpoint, package, config family, SQL-facing surface, handler, DTO, or adapter is the room asking about?</span></div>
+          <div><strong>Static references</strong><span>Which routes, method calls, project references, package references, config/project surfaces, and database-facing references appear in public-safe summaries?</span></div>
+          <div><strong>Evidence tier</strong><span>Was the trail compiler-resolved, structural, syntax/textual, or an unknown analysis gap?</span></div>
+          <div><strong>Gap label</strong><span>Did project load, semantic resolution, language coverage, or generated-output review stop short of a complete map?</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Checklist</p>
+          <h2>The static evidence checklist keeps the call from drifting into guesswork.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>1. Pin the name</h3>
+            <p>Record the endpoint, package, configuration surface, or SQL-facing surface under discussion before collecting nearby facts.</p>
+          </article>
+          <article>
+            <h3>2. Follow rule-backed rows</h3>
+            <p>Look for rule IDs, evidence tiers, file paths, line spans, commit SHA, extractor versions, and supporting artifact families in public-safe summaries.</p>
+          </article>
+          <article>
+            <h3>3. Keep partial labels attached</h3>
+            <p>Partial static evidence is useful when labeled as partial; reduced coverage and analysis gaps should stay visible in the triage note.</p>
+          </article>
+          <article>
+            <h3>4. Decide the next owner</h3>
+            <p>Send static findings to the person who can confirm runtime behavior with telemetry, logs, traces, tests, ownership context, or release process.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Handoff questions</p>
+          <h2>Static evidence narrows inspection; it does not close the incident.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>handoff questions</code><span>Which static findings should move to runtime owners, and which conclusions remain outside static analysis?</span></div>
+          <div><code>named surface</code><span>What did the call ask about, and which spelling or route pattern was actually searched?</span></div>
+          <div><code>found references</code><span>Which public-safe summary rows point to routes, handlers, DTOs, config/project metadata, package references, or database-facing code?</span></div>
+          <div><code>evidence tier</code><span>Which findings are semantic proof, structural clues, syntax/textual evidence, or unknown gaps?</span></div>
+          <div><code>coverage label</code><span>Is this complete for the scanned scope, reduced, partial, or unavailable because a deterministic extractor could not prove more?</span></div>
+          <div><code>runtime owner</code><span>Who will check traffic, logs, traces, metrics, deployment state, incident timeline, and service-owner confirmation?</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundary</p>
+          <h2>The checklist is not telemetry, diagnosis, or approval.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, or operational safety.</li>
+          <li>TraceMap does not prove complete product coverage or that a dependency is affected unless reducer-backed public-safe evidence supports that wording.</li>
+          <li>TraceMap concept pages do not provide model-driven impact claims, prompt-based classification, or a replacement for service-owner review.</li>
+          <li>TraceMap keeps analysis gaps and reduced coverage visible so a partial static map does not become a clean bill of health.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Public-safe handoff</p>
+          <h2>Share the orientation layer, not private scanner material.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe to summarize</strong><span>Rule IDs, evidence tiers, coverage labels, limitations, sanitized file spans, commit SHA, extractor versions, counts, hashes, and public proof paths.</span></div>
+          <div><strong>Keep private</strong><span>Raw generated facts, local database indexes, analyzer diagnostics, source excerpts, database query text, configuration values, credentials, local paths, remotes, scan directories, and private sample names.</span></div>
+          <div><strong>Review before publishing</strong><span>Private repository scans should stay private until a human has reviewed the summary and removed material that should not become public copy.</span></div>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Use this when the room asks, "what depends on this?"</h2>
+        <p>
+          The answer should be a bounded checklist: the named surface, the
+          static references found, the evidence tier for each trail, the
+          coverage label, the limitation, and the owner of the next runtime
+          question. That is enough to orient the call without pretending static
+          source evidence is production confirmation.
+        </p>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Evidence trail</p>
+          <h2>Follow the checklist into public proof and boundaries.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/validation/">Validation</a>
+          <a href="/docs/">Docs</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/demo/result/">Demo result</a>
+          <a href="/incident-call/">Incident-call orientation</a>
+          <a href="/evidence/">Evidence model</a>
+          <a href="/packets/">Evidence packet guide</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Static triage checklist links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/validation/">validation</a>,
+        <a href="/limitations/">limitations</a>,
+        and
+        <a href="/incident-call/">incident-call orientation</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
