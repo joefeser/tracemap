@@ -74,6 +74,13 @@ coverage explanations.
   keys, or raw remote markers.
 - No general Kiro spec validator was found; this branch used the local Kiro
   review wrapper and its self-test as the available spec-review tooling.
+- PR loop initially reported four unresolved review threads. Patched the
+  actionable findings by clarifying string-only fact property encoding,
+  aligning limitation-code examples with the closed vocabulary, adding the
+  release-review fact-loader task, and keeping `informational` as a
+  `coverageEffect` rather than a capability state.
+- Passed after PR-loop patch: `git diff --check`.
+- Passed after PR-loop patch: `./scripts/check-private-paths.sh`.
 
 ## Follow-Up Items
 
