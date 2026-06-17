@@ -61,7 +61,7 @@ Current default behavior:
 - combines a mixed stack with labels `public-dotnet-modern`, `public-dotnet-server`, `public-ts-modern`, and `public-ts-client`
 - combines before/after public-demo snapshots with label `public-demo-api`
 - runs the combined dependency report and asserts endpoint evidence from the combined report
-- runs targeted `tracemap paths` and `tracemap reverse` over the generated endpoint stack
+- runs targeted `tracemap paths`, `tracemap route-flow`, and `tracemap reverse` over the generated endpoint stack
 - generates `portfolio-manifest.json` from generated combined indexes and runs `tracemap portfolio`
 - runs `tracemap diff`, `tracemap impact`, and `tracemap release-review` over the generated public-demo before/after snapshots
 - writes `demo-summary.md` and `demo-summary.json`
@@ -117,7 +117,7 @@ neutral labels/counts only; do not commit raw facts, SQLite indexes, analyzer
 logs, raw SQL, connection strings, config values, raw remotes, private sample
 names, local absolute paths, or source snippets.
 
-For combined dependency report, path-query, reverse-query, diff, contract-diff, or snapshot-diff changes, run a combine/report/paths/reverse/diff/contract-diff/snapshot-diff smoke over any two existing local scan outputs:
+For combined dependency report, path-query, route-flow, reverse-query, diff, contract-diff, or snapshot-diff changes, run a combine/report/paths/route-flow/reverse/diff/contract-diff/snapshot-diff smoke over any two existing local scan outputs:
 For combined change-impact changes, include the `impact` command in the same smoke.
 For release-review changes, include `release-review` in the same smoke and verify `release-review.md` plus `release-review.json` are produced.
 
@@ -128,6 +128,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --out <tmp>/combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sqlite --out <tmp>/combined-report
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
+dotnet run --project src/dotnet/TraceMap.Cli -- route-flow --index <tmp>/combined.sqlite --from-source first --out <tmp>/route-flow
 dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index <tmp>/combined.sqlite --surface sql-query --to endpoints --out <tmp>/combined-reverse
 dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-diff
 dotnet run --project src/dotnet/TraceMap.Cli -- contract-diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/contract-diff
@@ -138,6 +139,8 @@ test -f <tmp>/combined-report/dependency-report.md
 test -f <tmp>/combined-report/dependency-report.json
 test -f <tmp>/combined-paths/paths-report.md
 test -f <tmp>/combined-paths/paths-report.json
+test -f <tmp>/route-flow/route-flow-report.md
+test -f <tmp>/route-flow/route-flow-report.json
 test -f <tmp>/combined-reverse/reverse-report.md
 test -f <tmp>/combined-reverse/reverse-report.json
 test -f <tmp>/combined-diff/diff-report.md

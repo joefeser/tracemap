@@ -1120,6 +1120,140 @@ rules:
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
 
+  - id: combined.route-flow.selector.v1
+    name: Route-flow selector handling
+    description: Selects route-centered entry evidence from combined HTTP route, HTTP client call, WebForms, symbol, or source selectors using normalized static evidence.
+    evidenceTier: Tier4Unknown for selector gaps; otherwise inherits weakest selected evidence
+    emits:
+      - route-flow query metadata
+      - route-flow entry selector gap
+    limitations:
+      - Route and client-call selectors are normalized method/path aliases over existing combined endpoint evidence; they do not prove runtime routing, traffic, deployment, auth, middleware, proxy, CORS, or reachability behavior.
+      - Overlapping selectors reuse the paths selector grammar where supported. Route-flow additions are --route, --client-call, --classification, --max-logic-rows, and --max-gaps.
+      - Unsupported or unknown surface kinds fail validation or emit selector gaps rather than guessed route-flow rows.
+      - Percent-encoded selectors are normalized only for safe ordinary path characters; encoded slashes, traversal-like material, host material, and unsafe raw selectors must not be rendered.
+
+  - id: combined.route-flow.entry.v1
+    name: Route-flow entry evidence
+    description: Emits route-centered entry evidence for selected HTTP route bindings, HTTP client calls, endpoint roots, WebForms roots, symbols, sources, and aligned route/client pairs.
+    evidenceTier: Inherits weakest supporting route, client-call, or endpoint-alignment evidence
+    emits:
+      - route-flow entry evidence row
+    limitations:
+      - Entry evidence is static source evidence only and does not prove runtime execution, request reachability, live traffic, or handler activation.
+      - Missing client or server side evidence is a coverage-relative gap and must not be treated as clean absence under reduced coverage.
+      - File spans, extractor versions, and commit SHA values may be unavailable in older indexes; route-flow must preserve explicit unavailable placeholders.
+
+  - id: combined.route-flow.path.v1
+    name: Route-flow static path evidence
+    description: Projects bounded combined dependency paths into route-centered static flow rows while preserving supporting fact IDs, edge IDs, rule IDs, evidence tiers, files, and line spans.
+    evidenceTier: Inherits weakest required path-edge evidence
+    emits:
+      - route-flow static flow row
+    limitations:
+      - Path rows are static evidence trails, not runtime execution, dynamic dispatch certainty, dependency-injection binding proof, branch feasibility, generated-code freshness proof, serializer runtime proof, or production use.
+      - Bounded breadth-first traversal can omit possible static paths when depth, path, cycle, or frontier caps are reached.
+      - Syntax-only, textual, fallback, ambiguous, high fan-out, generated-code uncertain, or reduced-coverage links remain review-tier and cannot be upgraded by composition.
+
+  - id: combined.route-flow.interface-bridge.v1
+    name: Route-flow interface implementation candidate bridge
+    description: Emits candidate interface-to-implementation bridge rows only when combined symbol-relationship evidence supports the candidate.
+    evidenceTier: Inherits relationship evidence and caps classification at NeedsReviewStaticRouteFlow
+    emits:
+      - interface-implementation-candidate row
+      - RuntimeBindingNotProven gap
+      - ImplementationCandidateUnavailable gap
+    limitations:
+      - Candidate implementation evidence is not runtime dependency-injection target proof and must not select one runtime implementation.
+      - Name-only, syntax-only, fallback, cross-source, or cross-language implementation guesses are not strong bridge evidence in v1.
+      - Reflection, factories, service locators, configuration-driven bindings, and dynamic dispatch remain analysis gaps unless a future deterministic rule covers them.
+
+  - id: combined.route-flow.logic-surface.v1
+    name: Route-flow business and data logic surface
+    description: Emits projection, object-shape, query-shape, validation, guard, branch, async, serializer, contract, and flow-boundary rows as path-context evidence.
+    evidenceTier: Inherits weakest supporting logic or surface evidence
+    emits:
+      - route-flow business/data logic row
+    limitations:
+      - Business/data logic rows are static review context and do not prove branch feasibility, authorization result, business intent, business impact, query execution, persistence, or production use.
+      - Adjacent context requires shared symbol, method/member span, supporting fact or edge ID, or argument-flow linkage; same-file evidence alone is not adjacent in v1.
+      - Raw snippets, raw SQL, URLs, literals, config values, connection strings, and secret-like values must be omitted or hashed.
+
+  - id: combined.route-flow.dependency-surface.v1
+    name: Route-flow dependency and data surface evidence
+    description: Emits terminal dependency/data surface rows reached from route-flow path evidence, including SQL/query, persistence, package/config, HTTP client, WCF/service, remoting, legacy data, storage, queue/event, or generic dependency surfaces.
+    evidenceTier: Inherits weakest supporting dependency/data evidence
+    emits:
+      - route-flow dependency/data surface row
+    limitations:
+      - Dependency/data surface rows do not prove runtime traffic, SQL execution, database existence, schema compatibility, persistence, package loading, queue activity, service hosting, or production use.
+      - Stable keys use safe source-scoped identity fields and must not include scan-specific fact IDs, raw SQL, raw URLs, config values, snippets, connection strings, local paths, remotes, or secrets.
+      - Duplicate stable surface identities are review-tier identity gaps rather than proof of one unique terminal surface.
+
+  - id: combined.route-flow.classification.v1
+    name: Route-flow summary classification
+    description: Stamps the overall route-flow summary classification from selected entry evidence, path rows, dependency/data surfaces, coverage, source identity, schema availability, truncation, and gaps.
+    evidenceTier: Derived report rule over supporting evidence
+    emits:
+      - StrongStaticRouteFlow summary
+      - ProbableStaticRouteFlow summary
+      - NeedsReviewStaticRouteFlow summary
+      - NoRouteFlowEvidence summary
+      - UnknownAnalysisGap summary
+    limitations:
+      - StrongStaticRouteFlow and NoRouteFlowEvidence require full route-flow coverage, known commit SHA, verified source identity, compatible extractor availability, and no blocking gaps.
+      - NeedsReviewStaticRouteFlow is required for syntax-only, textual, dynamic URL, fallback, ambiguous, implementation-candidate, generated-code uncertain, high fan-out, or truncated evidence.
+      - UnknownAnalysisGap is required when selector matching, schema, extractor availability, source identity, commit SHA, reduced coverage, or caps prevent a clean conclusion.
+      - The v1 high-fan-out threshold is 10 or more candidates, or more than one candidate for generic terminal keys status, id, name, value, result, or response. This conservative threshold requires future calibration against redacted validation data.
+      - This rule stamps the overall summary classification; it does not classify business impact or runtime behavior.
+
+  - id: combined.route-flow.gap.v1
+    name: Route-flow analysis gap
+    description: Emits route-flow gaps for selector misses, missing schema, extractor unavailability, implementation candidate gaps, runtime binding uncertainty, dynamic dispatch boundaries, reduced coverage, unknown commit SHA, no route-flow evidence, unknown analysis, truncation, and unsafe value omission.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch gap
+      - SchemaMissing gap
+      - ExtractorUnavailable gap
+      - ImplementationCandidateUnavailable gap
+      - RuntimeBindingNotProven gap
+      - DynamicDispatchBoundary gap
+      - DynamicClientUrlNeedsReview gap
+      - ReducedCoverage gap
+      - UnknownCommitSha gap
+      - NoRouteFlowEvidence gap
+      - UnknownAnalysisGap gap
+      - TruncatedByLimit gap
+      - UnsafeValueOmitted gap
+    limitations:
+      - Gaps are coverage-relative explanations of missing or weak static evidence and must not be rendered as clean absence under reduced coverage.
+      - Truncation gaps mean the report is partial.
+      - Gap messages must not echo unsafe selectors, local paths, raw remotes, raw SQL/config values, snippets, connection strings, private labels, or secret-like values.
+
+  - id: combined.route-flow.redaction.v1
+    name: Route-flow public artifact redaction
+    description: Documents route-flow output redaction for Markdown, JSON, query metadata, row metadata, source labels, paths, and diagnostic-like strings.
+    evidenceTier: Tier4Unknown
+    emits:
+      - UnsafeValueOmitted gap
+      - redacted route-flow metadata value
+    limitations:
+      - Raw local absolute paths, private repository names, raw remotes, URLs, endpoint addresses, WSDL/SOAP addresses, raw SQL, config values, connection strings, source snippets, analyzer diagnostics, and secret-like values are omitted or hashed.
+      - Redaction preserves deterministic public-safe identity only where safe source-scoped fields exist.
+      - Redaction does not prove an artifact is public-approved; generated artifacts still require review and private-path guard validation.
+
+  - id: combined.route-flow.report.v1
+    name: Route-flow report envelope
+    description: Stamps the route-flow Markdown and JSON report envelope, output-format metadata, deterministic ordering, coverage labels, limitations, and byte-stable rendering contract.
+    evidenceTier: Derived report rule over supporting evidence
+    emits:
+      - route-flow-report.md
+      - route-flow-report.json
+    limitations:
+      - The report envelope is a deterministic view over existing combined-index evidence and does not mutate the combined index.
+      - Markdown and JSON must use static-evidence wording and must not say impacted, executed, called at runtime, authorized, used in production, proves DI target, query runs, or business impact.
+      - Directory outputs write both Markdown and JSON; file outputs default to Markdown unless JSON format is requested.
+
   - id: repo.manifest.v1
     name: Repository manifest
     description: Captures repo metadata, commit SHA, project inventory, scan status, and known gaps.

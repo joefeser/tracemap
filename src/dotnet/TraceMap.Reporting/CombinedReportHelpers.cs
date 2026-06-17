@@ -6,6 +6,14 @@ namespace TraceMap.Reporting;
 
 internal static class CombinedReportHelpers
 {
+    public static bool SourceIdentityVerified(CombinedReportSource source)
+    {
+        return !string.IsNullOrWhiteSpace(source.CommitSha)
+            && !source.CommitSha.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+            && source.CommitSha.Trim('0').Length > 0
+            && !string.IsNullOrWhiteSpace(source.GitRootHash);
+    }
+
     public static string NormalizeFormat(string? format, string commandName)
     {
         return (format ?? "markdown").ToLowerInvariant() switch

@@ -1134,9 +1134,7 @@ public static class CombinedReverseReporter
 
     private static bool SourceIdentityUnverified(CombinedReportSource source)
     {
-        return string.IsNullOrWhiteSpace(source.CommitSha)
-            || source.CommitSha.Equals("unknown", StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(source.GitRootHash);
+        return !CombinedReportHelpers.SourceIdentityVerified(source);
     }
 
     private static string SurfaceId(CombinedPathNode node) => $"reverse-surface:{CombinedReportHelpers.Hash(SurfaceIdentity(node), 32)}";
