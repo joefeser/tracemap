@@ -62,9 +62,9 @@ routes to be visible without running the application.
    code declare deterministic route registration patterns such as
    `RouteTable.Routes.MapPageRoute`, `routes.MapPageRoute`,
    `RouteCollection.MapPageRoute`, or static `Route` additions THEN TraceMap
-   SHALL emit route facts with route name, safe route pattern hash or safe
-   pattern descriptor, mapped page identity when safe, rule ID, evidence tier,
-   line span, commit SHA, and extractor version.
+   SHALL emit route facts with safe route-name descriptor or hash, safe route
+   pattern hash or safe pattern descriptor, mapped page identity when safe, rule
+   ID, evidence tier, line span, commit SHA, and extractor version.
 2. WHEN route registration resolves to framework symbols through Roslyn
    semantic analysis THEN TraceMap SHOULD emit `Tier1Semantic` evidence with
    resolved method/type symbols.
@@ -72,9 +72,10 @@ routes to be visible without running the application.
    identifies known route-registration shapes THEN TraceMap SHALL emit
    `Tier3SyntaxOrTextual` or `Tier2Structural` evidence with alias/lookalike
    limitations.
-4. WHEN route patterns, page paths, defaults, constraints, or data tokens contain
-   unsafe values THEN raw values SHALL NOT be stored. Safe descriptors and
-   context-separated hashes MAY be stored when useful for deterministic joins.
+4. WHEN route names, route patterns, page paths, defaults, constraints, or data
+   tokens contain unsafe values THEN raw values SHALL NOT be stored. Safe
+   descriptors and context-separated hashes MAY be stored when useful for
+   deterministic joins.
 5. WHEN route construction depends on dynamic strings, config values,
    reflection, external code, loops over unknown data, runtime transforms, or
    custom route subclasses that cannot be understood statically THEN TraceMap

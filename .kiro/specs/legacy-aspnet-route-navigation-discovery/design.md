@@ -235,7 +235,7 @@ Tiering for these shapes:
 
 Safe route properties:
 
-- route name or hash;
+- safe route name descriptor or hash;
 - route pattern descriptor or hash;
 - mapped page file name or hash;
 - registration method symbol when available;
