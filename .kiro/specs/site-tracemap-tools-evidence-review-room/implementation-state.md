@@ -7,7 +7,6 @@ Public claim level: concept
 ## Branch
 
 Implementation branch: `codex/site-evidence-review-room`
-Worktree: `/Users/josephfeser/src/gh-joe/tracemap-site-review-room`
 Base: `origin/main`
 
 ## Scope
