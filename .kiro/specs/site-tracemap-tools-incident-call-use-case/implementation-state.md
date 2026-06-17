@@ -1,69 +1,71 @@
 # Site TraceMap Tools Incident Call Use Case Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-review
 Public claim level: concept
 
 ## Branch
 
-Spec branch: `codex/site-incident-call-use-case-spec`
+Implementation branch: `codex/site-incident-call-use-case-impl`
 
 ## Scope
 
-This branch only creates the spec for a future public-safe incident-call use
-case page or article. It does not implement site code, edit `site/src`, update
-scripts, change docs, or modify unrelated specs.
+This branch implements the concept-level `/incident-call/` site route from the
+site incident-call use case spec. It adds the public page, sitemap metadata,
+discovery metadata, cross-links, focused validation, tests, and completed spec
+state. It does not add runtime monitoring, APM integration, incident diagnosis,
+or core scanner/reducer behavior.
 
-No implementation has been started on this branch.
+## Implemented
 
-## Planned
-
-- Add a concept-level `/incident-call/` page or article.
-- Address the reader who is on a production incident/P1 call and needs to know
-  what static dependencies and proof paths surround an endpoint or surface.
-- Link to public-safe proof paths, validation, docs, limitations, and demo
-  evidence where those routes exist.
-- Add discovery metadata, sitemap coverage, route-index coverage, and focused
-  validation for the page.
-- Cross-link `/incident-call/` with `/use-cases/incident-review/` using
-  disambiguation copy that distinguishes P1-call orientation from broader
-  post-incident review orientation.
+- Added `site/src/incident-call/index.html`.
+- Added `/incident-call/` to `site/src/_site/pages.json`.
+- Added `/incident-call/` discovery metadata with `publicClaimLevel: concept`.
+- Linked the route from `/use-cases/` and `/use-cases/incident-review/`.
+- Added `site/scripts/incident-call.mjs` with route, sitemap,
+  `routes-index.json`, required-copy, required-link, and forbidden-text checks.
+- Added `site/scripts/incident-call.test.mjs`.
+- Wired incident-call validation into `site/scripts/validate.mjs`.
+- Updated `site/scripts/validate.test.mjs` fixtures for the new validation.
+- Marked the spec tasks as complete.
 
 ## Claim Boundaries
 
-- Safe to say: TraceMap can present static dependency evidence and proof paths
-  with rule IDs, evidence tiers, coverage labels, limitations, file paths, line
-  spans, commit SHA, extractor versions, and generated artifact references when
-  those details are available in public-safe summaries.
+- Safe to say: the site now publishes a concept-level incident-call orientation
+  route that explains how static dependency evidence can narrow inspection
+  during a P1 or production incident call.
+- Safe to say: the route links readers to proof paths, validation, docs,
+  limitations, demo result, and incident review orientation.
 - Not safe to say: TraceMap proves runtime behavior, production traffic,
-  endpoint performance, outage cause, Dynatrace/APM replacement, release
-  safety, or operational safety.
-- Public implementation should use public-safe generated summaries and demo
-  evidence, not raw `facts.ndjson`, `index.sqlite`, analyzer logs, raw source
-  snippets, raw SQL, config values, secrets, local absolute paths, raw repo
-  remotes, generated scan directories, or private sample identities.
+  endpoint performance, outage cause, release safety, operational safety,
+  production dependency completeness, or APM replacement.
+- Public copy avoids raw fact streams, SQLite indexes, analyzer logs, source
+  excerpts, raw SQL, config values, secrets, local paths, repository remotes,
+  scan directories, and private sample identities.
 
 ## Validation
 
-Validation performed before PR:
+Run before PR:
 
-- `git diff --check` - passed.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-incident-call-use-case --kind spec --model auto --fresh --timeout-ms 600000 --save-review-text` - ran multiple focused passes. Earlier passes found actionable spec feedback, which was patched. Final pass exited 0 and reported "Ready to merge" with no blocking issues.
+- `git diff --check`
+- `cd site && npm test`
+- `cd site && npm run validate`
+- `cd site && npm run build`
+- `./scripts/check-private-paths.sh`
 
-Kiro review/check status:
+Browser sanity:
 
-- Final saved clean review:
-  `.tmp/kiro-reviews/site-tracemap-tools-incident-call-use-case/2026-06-16T220832-431Z-spec-auto.clean.md`.
-- Final review coverage: reduced. The wrapper recorded
-  `kiro.review.wrapper.v1` / `Tier4Unknown` because Kiro reported denied shell
-  tool access after completing the content review. The review still completed,
-  read the spec files, and reported no blocking issues.
-- Site build and site validation were not run because this is a spec-only
-  branch and no site code changed.
+- Served the site locally with `PORT=4183 npm run dev`.
+- Opened `http://localhost:4183/incident-call/` with the Playwright CLI.
+- Desktop check at `1280x900`: page rendered with no visible text boxes
+  offscreen or wider than the viewport.
+- Mobile check at `390x844`: page rendered with no visible text boxes offscreen
+  or wider than the viewport.
+- Captured a mobile viewport screenshot under `.playwright-cli/`.
+- Stopped the local server after the check.
 
 ## Follow-Ups
 
-- Future implementation should update this state file after site code,
-  metadata, validation, and build checks are complete.
-- Keep all public copy bounded to the shared principle: no public conclusion
-  without evidence.
+- Future phases can add a richer public-safe generated demo summary for an
+  endpoint-to-route-to-surface trail, but must keep the route at concept level
+  until checked-in demo evidence supports stronger wording.
