@@ -103,10 +103,6 @@ Python and JVM adapter smoke checks were deferred as not relevant for this
 slice; no Python or JVM adapter code changed. The relevant TypeScript adapter
 check and .NET/Razor tests were run.
 
-## Pending Validation
-
-- PR review loop after PR creation.
-
 ## Kiro Review
 
 - Initial implementation review completed with reduced coverage because the
@@ -123,6 +119,23 @@ check and .NET/Razor tests were run.
   target extraction and deeper property-specific downstream hops.
 - Additional patch after re-review: Razor `@model` type metadata is now captured
   for `model:<type>.<property>` selector precision, with focused tests.
+
+## PR Review Loop
+
+- Initial PR loop returned `actionable_findings` with four unresolved Gemini
+  review threads.
+- Actionable findings patched:
+  - Angular template extraction now supports bracketed
+    `[formControlName]`, `[formGroup]`, and `[formArrayName]` bindings when the
+    value is a static literal, and emits deterministic gap facts for dynamic
+    names.
+  - Razor `asp-for` extraction now normalizes before static validation and
+    strips both leading `@` and `Model.` from static model property paths.
+  - Property-flow bounded display-name matching now uses index scanning instead
+    of dynamically constructing regular expressions per node comparison.
+- Focused .NET property-flow tests, TypeScript adapter checks, full .NET build,
+  full .NET tests, private-path guard, and whitespace checks passed after these
+  patches.
 
 ## Follow-Ups
 

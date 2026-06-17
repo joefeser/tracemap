@@ -1051,8 +1051,31 @@ public static class PropertyFlowReporter
 
     private static bool BoundedDisplayMatch(string displayName, string symbol)
     {
-        return !string.IsNullOrWhiteSpace(symbol)
-            && Regex.IsMatch(displayName, $@"(^|[^\w]){Regex.Escape(symbol)}($|[^\w])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return false;
+        }
+
+        var index = displayName.IndexOf(symbol, StringComparison.OrdinalIgnoreCase);
+        while (index >= 0)
+        {
+            var before = index == 0 ? '\0' : displayName[index - 1];
+            var afterIndex = index + symbol.Length;
+            var after = afterIndex >= displayName.Length ? '\0' : displayName[afterIndex];
+            if (!IsIdentifierChar(before) && !IsIdentifierChar(after))
+            {
+                return true;
+            }
+
+            index = displayName.IndexOf(symbol, index + symbol.Length, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private static bool IsIdentifierChar(char value)
+    {
+        return value == '_' || char.IsLetterOrDigit(value);
     }
 
     private static bool IsTerminalNode(CombinedPathNode node)

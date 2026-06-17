@@ -36,6 +36,8 @@ describe("Angular template binding extraction", () => {
     await fsp.writeFile(path.join(repo, "src", "app", "profile.component.html"), `
       <input [value]="user.email" (change)="save()" [(ngModel)]="user.email" name="email" ngModel #emailModel="ngModel">
       <input formControlName="email" />
+      <input [formControlName]="'secondaryEmail'" />
+      <section [formGroup]="'profileForm'"></section>
       <section>{{ user.email }}</section>
       <section>{{ format(user.email) }}</section>
     `);
@@ -76,6 +78,16 @@ describe("Angular template binding extraction", () => {
       factType: FactTypes.UiFormControlBinding,
       ruleId: RuleIds.TypeScriptAngularFormBinding,
       targetSymbol: "email"
+    }));
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.UiFormControlBinding,
+      ruleId: RuleIds.TypeScriptAngularFormBinding,
+      targetSymbol: "secondaryEmail"
+    }));
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.UiFormControlBinding,
+      ruleId: RuleIds.TypeScriptAngularFormBinding,
+      targetSymbol: "profileForm"
     }));
     expect(result.facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.UiTemplateVariable,
