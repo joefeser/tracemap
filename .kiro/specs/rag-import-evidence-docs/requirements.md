@@ -260,12 +260,12 @@ chunks grouped by evidence family so retrieval can cite the right artifact.
 9. WHEN evidence gaps or limitations exist THEN the exporter SHALL emit
    `gap` and `limitation` chunks and link claim-bearing chunks to those records.
 10. WHEN a chunk family is requested but unsupported by the input schema THEN the
-    exporter SHALL emit a schema or unavailable-family gap rather than silently
+    exporter SHALL emit a schema or unsupported-family gap rather than silently
     omitting the family.
 11. WHEN `--families` selects a supported subset THEN unselected families SHALL
     be recorded as `not_requested` in manifest counts and SHALL NOT emit gaps;
     requested families with unavailable or incompatible evidence SHALL emit
-    unavailable-family or schema gaps.
+    unsupported-family or schema gaps.
 
 ### Requirement 6: Claim Levels and Safety Model
 

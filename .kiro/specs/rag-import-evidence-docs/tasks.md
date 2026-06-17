@@ -102,6 +102,7 @@
   - [ ] Test hidden outputs without `--date` use the `local-only` date sentinel and remain byte-stable.
   - [ ] Test schema shape and required fields for `tracemap-evidence-docs.v1`.
   - [ ] Test stable chunk IDs across reruns, output directories, and input row permutations.
+  - [ ] Test stable ID input records use the documented length-prefixed field delimiter format.
   - [ ] Test duplicate chunk identity emits gaps rather than arbitrary merges.
   - [ ] Test every claim-bearing chunk includes rule IDs, evidence tiers, source label, commit identity where available, coverage label, file path/line span where available, supporting IDs, extractor/version where available, gaps, and limitations.
   - [ ] Test lower-tier, reduced-coverage, fallback, high-fan-out, hidden, syntax-only, and textual evidence is not promoted.

@@ -109,7 +109,7 @@ from this closed set:
 
 Unselected supported families are recorded as `not_requested` in the manifest
 and do not emit gaps. Requested families that the input cannot support emit
-schema or unavailable-family gaps. Empty, whitespace-only, or out-of-vocabulary
+schema or unsupported-family gaps. Empty, whitespace-only, or out-of-vocabulary
 family tokens are CLI argument errors, not unsupported-family gaps.
 
 ## Input Sources
@@ -395,15 +395,21 @@ with a rule-backed gap. Do not omit required citation keys silently.
 
 ## Stable IDs
 
-Stable IDs use SHA-256 over UTF-8 records with explicit context prefixes. Hash
-outputs are lowercase hex and truncated to 24 hex characters for v1 IDs. The
-context string, field order, field delimiters, and truncation length are schema
-contract.
+Stable IDs use SHA-256 over UTF-8 records with explicit context prefixes. ID
+input records are length-prefixed UTF-8 fields in this canonical form:
+`<field-name-length>:<field-name>=<value-length>:<value>\n`, with fields in the
+schema-defined order for the entity. Empty values use `0:` and missing optional
+fields are omitted only when the schema explicitly allows omission. Hash outputs
+are lowercase hex and truncated to 24 hex characters for v1 IDs. The context
+string, field order, length-prefix delimiter format, and truncation length are
+schema contract.
 
 Duplicate-identity detection compares the full pre-truncation, context-separated
 ID input record and full SHA-256 digest, not only the 24-hex displayed ID. A
 truncation collision from different full input records emits
-`docs-export.gap.duplicate-stable-identity.v1` rather than merging chunks.
+`docs-export.gap.duplicate-stable-identity.v1`; the colliding claim chunks are
+omitted from claim output and represented by the gap so the exporter never
+chooses a winner.
 
 Suggested contexts:
 
@@ -692,6 +698,12 @@ would sort earlier. Optional key names must not duplicate fixed key names. Only
 plain scalars and block arrays are allowed. The hash is computed over that
 serialized YAML text plus the Markdown body; generators must not hash an
 unordered YAML map.
+
+Fixed chunk frontmatter key order is:
+`tracemap_generated`, `tracemap_export_schema`, `tracemap_generator`,
+`tracemap_content_sha256`, `chunk_id`, `chunk_family`, `claim_level`,
+`source_labels`. Summary frontmatter uses the same order but replaces
+`chunk_id`, `chunk_family` with `summary_kind`.
 
 `manifest.json` is recognized as generated only when it has
 `schemaVersion: "tracemap-evidence-docs.v1"`, `tracemapGenerated: true`,
