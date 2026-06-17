@@ -130,6 +130,7 @@ Codex/Gemini review threads:
   gaps.
 - explicit evidence/source commit placeholders, source scanner-version evidence
   fallback, and hashed dependency-surface stable keys from sanitized parts.
+- `ReducedCoverage` identity gaps now reduce the report coverage rollup.
 
 Pinned language-adapter smoke checks are deferred for this slice because the
 change is a combined reporting/CLI layer over existing facts and does not modify

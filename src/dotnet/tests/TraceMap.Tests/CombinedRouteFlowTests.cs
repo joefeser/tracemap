@@ -142,6 +142,23 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_identity_reduced_coverage_gap_reduces_report_coverage()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp, serverBuildStatus: "Failed");
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+        Assert.Equal("ReducedCoverage", result.Report.Summary.ReportCoverage);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ReducedCoverage" && gap.SourceLabel == "server");
+    }
+
+    [Fact]
     public async Task Route_flow_cli_exit_code_follows_summary_mapping()
     {
         using var temp = new TempDirectory();
@@ -163,13 +180,13 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(string.Empty, error.ToString());
     }
 
-    private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp)
+    private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp, string serverBuildStatus = "Succeeded")
     {
         var clientIndex = Path.Combine(temp.Path, "client.sqlite");
         var serverIndex = Path.Combine(temp.Path, "server.sqlite");
         var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
         var client = Manifest("client", "tracemap-typescript/0.1.0");
-        var server = Manifest("server", "tracemap-milestone15");
+        var server = Manifest("server", "tracemap-milestone15", buildStatus: serverBuildStatus);
         var clientMethod = "Client.OrderService.loadOrder(System.Int32)";
         var controller = "Server.OrdersController.Get(System.Int32)";
         var service = "Server.IOrderService.Get(System.Int32)";
@@ -188,7 +205,7 @@ public sealed class CombinedRouteFlowTests
         return (combinedPath, controller, repository);
     }
 
-    private static ScanManifest Manifest(string repo, string scannerVersion)
+    private static ScanManifest Manifest(string repo, string scannerVersion, string buildStatus = "Succeeded")
     {
         return new ScanManifest(
             $"scan-{repo}",
@@ -199,7 +216,7 @@ public sealed class CombinedRouteFlowTests
             scannerVersion,
             DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
             "Level1SemanticAnalysis",
-            "Succeeded",
+            buildStatus,
             [],
             [],
             [],
