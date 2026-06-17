@@ -118,10 +118,29 @@ coverage, UnknownAnalysisGap rollup precedence, duplicate aligned entry rows,
 and identity gap IDs. No third Kiro cycle was run per the requested two-cycle
 limit.
 
+PR review loop follow-up patches addressed actionable route-flow findings from
+Codex/Gemini review threads:
+
+- null-safe route-flow display-name and label handling;
+- route/client selector side filtering so a route-selected report does not
+  compose client-rooted path rows, and a client-selected report does not compose
+  route-rooted path rows;
+- preservation of path-level review downgrades when projecting route-flow rows;
+- gap truncation accounting across all route-flow gaps, not only path/schema
+  gaps.
+
 Pinned language-adapter smoke checks are deferred for this slice because the
 change is a combined reporting/CLI layer over existing facts and does not modify
 language adapters, endpoint extraction, dependency-surface extraction, or source
 scanner behavior.
+
+Latest local validation after PR review loop patches:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`
+- `dotnet build src/dotnet/TraceMap.sln`
+- `dotnet test src/dotnet/TraceMap.sln`
+- `./scripts/check-private-paths.sh`
+- `git diff --check`
 
 ## Spec Delivery Notes
 

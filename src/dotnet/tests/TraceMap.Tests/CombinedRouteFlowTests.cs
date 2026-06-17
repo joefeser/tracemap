@@ -31,7 +31,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(result.Report.ReportCoverage, result.Report.Summary.ReportCoverage);
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "aligned-route-pair");
-        Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "client-server-alignment");
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.EdgeKind == "client-server-alignment");
         Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call" && row.SourceSymbol.Contains(controller, StringComparison.Ordinal));
         Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-filter-sort-selection");

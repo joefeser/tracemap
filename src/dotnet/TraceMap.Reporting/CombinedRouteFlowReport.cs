@@ -258,6 +258,7 @@ public static class CombinedRouteFlowReporter
             MaxDepth: options.MaxDepth,
             MaxPaths: options.MaxPaths,
             MaxFrontier: options.MaxFrontier), cancellationToken);
+        var selectedPaths = FilterPathsForSelectorSide(pathReport.Paths, routeSelector, clientSelector).ToArray();
         var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
 
         var schemaGaps = await ReadRouteFlowSchemaGapsAsync(options.IndexPath, cancellationToken);
@@ -312,19 +313,19 @@ public static class CombinedRouteFlowReporter
                 ["Selector matching is static and coverage-relative."]));
         }
 
-        var flowRows = BuildFlowRows(pathReport.Paths, sources, gaps)
+        var flowRows = BuildFlowRows(selectedPaths, sources, gaps)
             .OrderBy(row => row.Sequence)
             .ThenBy(row => row.Evidence.SourceLabel, StringComparer.Ordinal)
             .ThenBy(row => row.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(row => row.Evidence.StartLine ?? 0)
             .ThenBy(row => row.RowId, StringComparer.Ordinal)
             .ToList();
-        var dependencySurfaces = BuildDependencySurfaces(pathReport.Paths, sources)
+        var dependencySurfaces = BuildDependencySurfaces(selectedPaths, sources)
             .OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ThenBy(surface => surface.StableKey, StringComparer.Ordinal)
             .ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal)
             .ToList();
-        var allLogicRows = BuildLogicRows(pathReport.Paths, flowRows, sources)
+        var allLogicRows = BuildLogicRows(selectedPaths, flowRows, sources)
             .OrderBy(row => row.LogicKind, StringComparer.Ordinal)
             .ThenBy(row => row.DisplayName, StringComparer.Ordinal)
             .ThenBy(row => row.LogicRowId, StringComparer.Ordinal)
@@ -360,15 +361,15 @@ public static class CombinedRouteFlowReporter
                 ["No downstream static evidence is coverage-relative and is not proof of runtime absence."]));
         }
 
-        gaps = gaps
+        var sortedGaps = gaps
             .GroupBy(gap => gap.GapId, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
             .ThenBy(gap => gap.SourceLabel, StringComparer.Ordinal)
             .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
-            .Take(options.MaxGaps)
             .ToList();
-        var truncatedByGapCap = gaps.Count == options.MaxGaps && (pathReport.Gaps.Count + schemaGaps.Count) > options.MaxGaps;
+        var truncatedByGapCap = sortedGaps.Count > options.MaxGaps;
+        gaps = sortedGaps.Take(options.MaxGaps).ToList();
         if (truncatedByGapCap && gaps.All(gap => gap.GapKind != "TruncatedByLimit"))
         {
             gaps[^1] = new RouteFlowGap(
@@ -597,6 +598,17 @@ public static class CombinedRouteFlowReporter
             .ToArray();
     }
 
+    private static IEnumerable<CombinedPath> FilterPathsForSelectorSide(IReadOnlyList<CombinedPath> paths, string? routeSelector, string? clientSelector)
+    {
+        if (routeSelector is null && clientSelector is null)
+        {
+            return paths;
+        }
+
+        var requiredNodeKind = clientSelector is not null ? "EndpointClient" : "EndpointRoute";
+        return paths.Where(path => string.Equals(path.Nodes.FirstOrDefault()?.NodeKind, requiredNodeKind, StringComparison.Ordinal));
+    }
+
     private static RouteFlowEntryEvidence? AlignedEntry(IReadOnlyList<CombinedPathNode> nodes, string? selector)
     {
         if (selector is null)
@@ -684,7 +696,7 @@ public static class CombinedRouteFlowReporter
                     continue;
                 }
 
-                var classification = ClassifyRouteRow(edge, node, sources);
+                var classification = MaxClassification(ClassifyRouteRow(edge, node, sources), ClassificationFromPath(path.Classification));
                 rows.Add(new RouteFlowRow(
                     $"row:{path.PathId}:{index:000}",
                     sequence,
@@ -1107,6 +1119,40 @@ public static class CombinedRouteFlowReporter
         return tier == EvidenceTiers.Tier1Semantic
             ? RouteFlowClassifications.StrongStaticRouteFlow
             : RouteFlowClassifications.ProbableStaticRouteFlow;
+    }
+
+    private static string ClassificationFromPath(string pathClassification)
+    {
+        return pathClassification switch
+        {
+            CombinedDependencyPathClassifications.StrongStaticPath => RouteFlowClassifications.StrongStaticRouteFlow,
+            CombinedDependencyPathClassifications.ProbableStaticPath => RouteFlowClassifications.ProbableStaticRouteFlow,
+            CombinedDependencyPathClassifications.NoBackendEvidence or CombinedDependencyPathClassifications.NoPathFound => RouteFlowClassifications.NoRouteFlowEvidence,
+            CombinedDependencyPathClassifications.AnalysisGap
+                or CombinedDependencyPathClassifications.UnknownAnalysisGap
+                or CombinedDependencyPathClassifications.ReducedCoverage
+                or CombinedDependencyPathClassifications.SelectorNoMatch
+                or CombinedDependencyPathClassifications.ClassificationFilterNoMatch => RouteFlowClassifications.UnknownAnalysisGap,
+            _ => RouteFlowClassifications.NeedsReviewStaticRouteFlow
+        };
+    }
+
+    private static string MaxClassification(string left, string right)
+    {
+        return ClassificationRank(left) >= ClassificationRank(right) ? left : right;
+    }
+
+    private static int ClassificationRank(string classification)
+    {
+        return classification switch
+        {
+            RouteFlowClassifications.StrongStaticRouteFlow => 0,
+            RouteFlowClassifications.ProbableStaticRouteFlow => 1,
+            RouteFlowClassifications.NeedsReviewStaticRouteFlow => 2,
+            RouteFlowClassifications.NoRouteFlowEvidence => 3,
+            RouteFlowClassifications.UnknownAnalysisGap => 4,
+            _ => 4
+        };
     }
 
     private static string ClassificationForTier(string? tier)
