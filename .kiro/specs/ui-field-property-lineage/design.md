@@ -509,7 +509,17 @@ Top-level shape:
   "query": {},
   "snapshot": {},
   "summary": {},
-  "sources": [],
+  "sources": [
+    {
+      "sourceIndexId": "source-...",
+      "sourceLabel": "client",
+      "repositoryIdentityHash": "hash-or-null",
+      "scanId": "scan-...",
+      "commitSha": "abc123",
+      "analysisLevel": "Level2Structural",
+      "buildStatus": "Reduced"
+    }
+  ],
   "selectedRoots": [],
   "lineagePaths": [],
   "gaps": [],
@@ -528,6 +538,7 @@ Selected root shape:
   "classification": "ProbableStaticLineage",
   "sourceIndexId": "source-...",
   "sourceLabel": "client",
+  "repositoryIdentityHash": "hash-or-null",
   "scanId": "scan-...",
   "commitSha": "abc123",
   "combinedFactId": "fact-...",
