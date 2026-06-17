@@ -102,6 +102,18 @@ test("validateReviewRoomDist rejects encoded private text", async (t) => {
   assert.match(errors.join("\n"), /contains forbidden public text: file:\/\//);
 });
 
+test("validateReviewRoomDist rejects raw-remotes and secrets text", async (t) => {
+  const root = await createManagedReviewRoomDistFixture(t, {
+    reviewRoomHtml: reviewRoomPage("<p>Raw Remotes and Secrets stay private.</p>")
+  });
+  const errors = [];
+
+  await validateReviewRoomDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /contains forbidden public text: raw remotes/);
+  assert.match(errors.join("\n"), /contains forbidden public text: secrets/);
+});
+
 test("validateReviewRoomDist reports invalid base urls clearly", async (t) => {
   const root = await createManagedReviewRoomDistFixture(t);
   const errors = [];

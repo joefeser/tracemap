@@ -53,11 +53,13 @@ const forbiddenText = [
   "analyzer.log",
   "raw SQL",
   "raw source snippets",
+  "raw remotes",
   "ConnectionString",
   "connection string",
   "Server=",
   "User Id=",
   "Password=",
+  "secrets",
   "generated scan directories",
   "private sample names"
 ];
@@ -183,7 +185,7 @@ async function validateReviewRoomPage({ pagePath, errors }) {
   }
 
   for (const text of forbiddenText) {
-    if (html.includes(text) || decodedHtml.includes(text) || pageText.includes(text)) {
+    if (containsForbiddenText(text, html, decodedHtml, pageText)) {
       errors.push(withEvidence(`Review room page contains forbidden public text: ${text}`, reviewRoomPageArtifact));
     }
   }
@@ -191,6 +193,11 @@ async function validateReviewRoomPage({ pagePath, errors }) {
 
 function withEvidence(message, artifact) {
   return `${message} Evidence: ${artifact}.`;
+}
+
+function containsForbiddenText(text, ...values) {
+  const normalizedText = text.toLowerCase();
+  return values.some((value) => value.toLowerCase().includes(normalizedText));
 }
 
 function hasHref(html, href) {
