@@ -69,6 +69,27 @@ test("validateManagerBriefDist rejects forbidden AI positioning", async (t) => {
   assert.match(errors.join("\n"), /forbidden AI\/LLM positioning/);
 });
 
+test("validateManagerBriefDist rejects forbidden AI positioning in attributes", async (t) => {
+  const root = await createManagedManagerBriefDistFixture(t, {
+    managerBriefHtml: managerBriefPage('<img alt="AI-powered impact analysis graphic">')
+  });
+  const errors = [];
+
+  await validateManagerBriefDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden AI\/LLM positioning/);
+});
+
+test("validateManagerBriefDist reports invalid base urls clearly", async (t) => {
+  const root = await createManagedManagerBriefDistFixture(t);
+  const errors = [];
+
+  await validateManagerBriefDist({ baseUrl: "not a url", dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /Manager brief baseUrl must be a valid absolute URL: not a url/);
+  assert.doesNotMatch(errors.join("\n"), /undefined\/manager-brief/);
+});
+
 test("validateManagerBriefDist rejects encoded private text", async (t) => {
   const root = await createManagedManagerBriefDistFixture(t, {
     managerBriefHtml: managerBriefPage("<p>file&#58;//private/report</p>")
