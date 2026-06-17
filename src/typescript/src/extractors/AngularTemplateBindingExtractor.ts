@@ -154,11 +154,24 @@ function extractTemplate(manifest: ScanManifest, input: TemplateInput, baseLine 
     ));
   }
 
-  for (const match of input.text.matchAll(/\bformControlName\s*=\s*["']([^"']+)["']/g)) {
-    facts.push(controlFact(manifest, input, starts, baseLine, match.index ?? 0, match[0].length, "form-control", match[1], { formControlName: match[1] }));
+  for (const match of input.text.matchAll(/(?:\[formControlName\]|formControlName)\s*=\s*(?:"([^"]+)"|'([^']+)')/g)) {
+    const expression = match[1] ?? match[2];
+    const controlName = staticBindingValue(expression);
+    if (!controlName) {
+      addGap(match.index ?? 0, expression, "dynamic-form-control-name", "formControlName binding is not a static control name.");
+      continue;
+    }
+    facts.push(controlFact(manifest, input, starts, baseLine, match.index ?? 0, match[0].length, "form-control", controlName, { formControlName: controlName }));
   }
-  for (const match of input.text.matchAll(/\bform(Group|ArrayName)\s*=\s*["']([^"']+)["']/g)) {
-    facts.push(controlFact(manifest, input, starts, baseLine, match.index ?? 0, match[0].length, match[1] === "Group" ? "form-group" : "form-array", match[2], { formGroupName: match[2] }));
+  for (const match of input.text.matchAll(/(?:\[form(Group|ArrayName)\]|form(Group|ArrayName))\s*=\s*(?:"([^"]+)"|'([^']+)')/g)) {
+    const groupKind = match[1] ?? match[2];
+    const expression = match[3] ?? match[4];
+    const groupName = staticBindingValue(expression);
+    if (!groupName) {
+      addGap(match.index ?? 0, expression, "dynamic-form-group-name", "formGroup/formArrayName binding is not a static group name.");
+      continue;
+    }
+    facts.push(controlFact(manifest, input, starts, baseLine, match.index ?? 0, match[0].length, groupKind === "Group" ? "form-group" : "form-array", groupName, { formGroupName: groupName }));
   }
   for (const match of input.text.matchAll(/\bname\s*=\s*["']([^"']+)["'][^>]*\bngModel\b/g)) {
     facts.push(controlFact(manifest, input, starts, baseLine, match.index ?? 0, match[0].length, "template-driven-control", match[1], { controlName: match[1] }));
@@ -269,6 +282,15 @@ function common(input: TemplateInput, values: Record<string, string>): Record<st
 function isStaticPropertyPath(expression: string): boolean {
   return /^[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*$/.test(expression)
     && !/[()[\]|]/.test(expression);
+}
+
+function staticBindingValue(expression: string): string | null {
+  const trimmed = expression.trim();
+  const literal = /^['"]([A-Za-z_$][\w$-]*)['"]$/.exec(trimmed);
+  if (literal) {
+    return literal[1];
+  }
+  return /^[A-Za-z_$][\w$-]*$/.test(trimmed) ? trimmed : null;
 }
 
 function inlineTemplates(text: string): { text: string; index: number; startLine: number }[] {

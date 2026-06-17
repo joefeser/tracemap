@@ -26,13 +26,13 @@ public static class RazorBindingExtractor
             foreach (Match match in AspForRegex.Matches(text))
             {
                 var expression = match.Groups["expr"].Value.Trim();
-                if (!IsStaticModelExpression(expression))
+                var propertyPath = NormalizeModelExpression(expression);
+                if (!IsStaticModelExpression(propertyPath))
                 {
                     facts.Add(Gap(manifest, item.RelativePath, LineFor(lineStarts, match.Index), "dynamic-asp-for", "asp-for expression was not a static model property path."));
                     continue;
                 }
 
-                var propertyPath = NormalizeModelExpression(expression);
                 var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["uiFramework"] = "razor",
@@ -192,7 +192,13 @@ public static class RazorBindingExtractor
 
     private static string NormalizeModelExpression(string value)
     {
-        return value.Trim().TrimStart('@');
+        var normalized = value.Trim().TrimStart('@');
+        if (normalized.StartsWith("Model.", StringComparison.Ordinal))
+        {
+            normalized = normalized["Model.".Length..];
+        }
+
+        return normalized;
     }
 
     private static string? ExtractLambdaProperty(string expression)

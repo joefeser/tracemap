@@ -19,7 +19,7 @@ public sealed class PropertyFlowTests
         File.WriteAllText(Path.Combine(repo, "Views", "Profile", "Edit.cshtml"), """
             @model ProfileViewModel
             <form asp-controller="Profile" asp-action="Save" method="post">
-              <input asp-for="Email" />
+              <input asp-for="@Model.Email" />
               @Html.TextBoxFor(m => m.DisplayName)
               @ViewBag.DynamicValue
             </form>
