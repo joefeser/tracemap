@@ -14,7 +14,7 @@ public sealed class CombinedRouteFlowTests
     public async Task Route_flow_writes_route_centered_markdown_and_json_without_mutating_combined_index()
     {
         using var temp = new TempDirectory();
-        var (combinedPath, controller, repository) = await CreateRouteFlowCombinedIndexAsync(temp);
+        var (combinedPath, controller, _) = await CreateRouteFlowCombinedIndexAsync(temp);
         var outDir = Path.Combine(temp.Path, "route-flow");
         var before = await CombinedIndexFingerprintAsync(combinedPath);
 
@@ -55,7 +55,9 @@ public sealed class CombinedRouteFlowTests
 
         var parsed = JsonSerializer.Deserialize<RouteFlowReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(parsed);
-        Assert.Equal(repository, parsed!.DependencySurfaces.Single(surface => surface.SurfaceKind == "sql-query").Evidence.SupportingFactIds.Count == 0 ? repository : repository);
+        var sqlSurface = parsed!.DependencySurfaces.Single(surface => surface.SurfaceKind == "sql-query");
+        Assert.NotEmpty(sqlSurface.Evidence.SupportingFactIds);
+        Assert.Contains(RuleIds.CSharpSyntaxQueryPattern, sqlSurface.Evidence.SupportingRuleIds);
 
         var secondOutDir = outDir;
         await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
