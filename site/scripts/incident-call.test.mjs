@@ -164,6 +164,7 @@ function incidentCallPage(extra = "", { spacedHref = false } = {}) {
     <p>static dependency evidence and not runtime observability</p>
     <p>not operational approval</p>
     <p>P1-call orientation and incident review are related, not identical</p>
+    <p>static triage checklist</p>
     ${incidentRequiredLinks().map((route) => href(route)).join("\n")}
     ${extra}
   `);

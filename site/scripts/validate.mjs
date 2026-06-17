@@ -13,6 +13,7 @@ import { validateIncidentCallDist } from "./incident-call.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
 import { validateReviewRoomDist } from "./review-room.mjs";
+import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -66,6 +67,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
   await validateTopNavigation({ dist, errors, htmlFiles });
