@@ -1198,7 +1198,7 @@ public static class CombinedRouteFlowReporter
 
     private static bool IsBlockingGap(RouteFlowGap gap)
     {
-        return gap.GapKind is "SelectorNoMatch" or "SchemaMissing" or "ExtractorUnavailable" or "UnknownCommitSha" or "UnknownAnalysisGap" or "TruncatedByLimit";
+        return gap.GapKind is "SelectorNoMatch" or "SchemaMissing" or "ExtractorUnavailable" or "UnknownCommitSha" or "UnknownAnalysisGap" or "ReducedCoverage" or "TruncatedByLimit";
     }
 
     private static string GapClassification(RouteFlowGap gap)
