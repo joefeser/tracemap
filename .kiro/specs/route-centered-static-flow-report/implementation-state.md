@@ -1,17 +1,19 @@
 # Route-Centered Static Flow Report Implementation State
 
-Status: not-started
+Status: implemented-pending-pr-review
 
 ## Branch
 
-- Suggested implementation/spec branch:
-  `codex/spec-route-centered-static-flow-report`.
+- Current implementation branch:
+  `codex/implement-route-centered-static-flow-report`.
 
 ## Scope
 
-This is spec-only work for a future route-centered static call flow report. It
-does not implement product code, edit scanner/reducer behavior, update site
-files, or add generated outputs.
+This implementation adds the first product slice for the route-centered static
+call flow report. It implements `tracemap route-flow` as a deterministic
+reporting/query layer over a combined SQLite index. It does not add scanner
+extractors, runtime proof, LLM calls, browser execution, database connections,
+site changes, or generated public outputs.
 
 The proposed feature is a deterministic reporting/query layer over a combined
 TraceMap index. It should compose existing evidence families where possible:
@@ -62,17 +64,86 @@ recorded here.
 
 ## Current Validation
 
-Spec-only validation should run:
+Implementation validation should run:
 
 ```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ./scripts/check-private-paths.sh
 ```
 
-Kiro spec review should be attempted with Opus and Sonnet through
+Kiro implementation review should be attempted with Opus or Sonnet through
 `scripts/kiro-review.mjs` when `kiro-cli` and auth are available locally. If
 Kiro review is unavailable, record the exact blocker in this file or the PR
 summary and perform self-review.
+
+Focused validation completed so far:
+
+- `dotnet build src/dotnet/TraceMap.Reporting/TraceMap.Reporting.csproj`
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj`
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`
+- `dotnet build src/dotnet/TraceMap.sln`
+- `dotnet test src/dotnet/TraceMap.sln`
+- `./scripts/check-private-paths.sh`
+- `git diff --check`
+
+Kiro implementation review completed with full coverage using Sonnet:
+
+```bash
+node scripts/kiro-review.mjs --phase route-centered-static-flow-report --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
+```
+
+Patched actionable blocking findings from that review:
+
+- replaced the SQLite no-mutation file hash with a read-only logical schema and row-count fingerprint;
+- reused shared combined source identity semantics, including git-root identity;
+- blocked strong route-flow classifications unless report coverage is full;
+- made logic-row truncation single-pass and deterministic;
+- emitted reduced-coverage gaps when route-flow detail tables are present but not directly projected in v1;
+- blocked cross-source implementation candidate bridges and emitted runtime-binding gaps;
+- added implementation-candidate-unavailable gaps for interface-shaped call targets without traversed candidate evidence;
+- populated edge-backed evidence source labels from path source nodes where available.
+
+Ran two re-review cycles with Sonnet, both with full coverage. The final
+re-review still reported the implementation as not merge-ready because the
+larger spec matrix remains incomplete, specifically active
+`combined_symbol_relationships` interface-target detection, direct
+`combined_fact_symbols` and `combined_argument_flows` readers, a checked-in
+paths/reverse shared-helper regression fixture, and broad Req 9 scenario tests.
+After the final re-review, patched the small correctness findings around
+StrongStaticRouteFlow terminal-surface requirements, NoRouteFlowEvidence gap
+coverage, UnknownAnalysisGap rollup precedence, duplicate aligned entry rows,
+and identity gap IDs. No third Kiro cycle was run per the requested two-cycle
+limit.
+
+PR review loop follow-up patches addressed actionable route-flow findings from
+Codex/Gemini review threads:
+
+- null-safe route-flow display-name and label handling;
+- route/client selector side filtering so a route-selected report does not
+  compose client-rooted path rows, and a client-selected report does not compose
+  route-rooted path rows;
+- preservation of path-level review downgrades when projecting route-flow rows;
+- gap truncation accounting across all route-flow gaps, not only path/schema
+  gaps.
+- explicit evidence/source commit placeholders, source scanner-version evidence
+  fallback, and hashed dependency-surface stable keys from sanitized parts.
+- `ReducedCoverage` identity gaps now reduce the report coverage rollup.
+
+Pinned language-adapter smoke checks are deferred for this slice because the
+change is a combined reporting/CLI layer over existing facts and does not modify
+language adapters, endpoint extraction, dependency-surface extraction, or source
+scanner behavior.
+
+Latest local validation after PR review loop patches:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`
+- `dotnet build src/dotnet/TraceMap.sln`
+- `dotnet test src/dotnet/TraceMap.sln`
+- `./scripts/check-private-paths.sh`
+- `git diff --check`
 
 ## Spec Delivery Notes
 
@@ -102,10 +173,16 @@ summary and perform self-review.
 
 ## Follow-Ups For Implementation
 
-- Add route-flow rule catalog entries before emitting report rows.
-- Add public-safe fixture coverage for aligned client/server route flow.
-- Update `docs/VALIDATION.md` when implementation changes CLI behavior or
-  shared path/report validation requirements.
-- Run pinned smoke checks from `docs/VALIDATION.md` if implementation changes
-  combined path traversal, endpoint alignment, language adapters, or shared
-  reporting helpers.
+- Broaden public-safe fixture coverage for dynamic URL, optional segments,
+  duplicate normalized route keys, missing TypeScript facts, missing route
+  facts, reduced coverage, unknown commit SHA, old combined schemas, high
+  fan-out, and all cap/truncation paths.
+- Read and project richer `combined_fact_symbols` and `combined_argument_flows`
+  detail rows directly; the current slice emits schema availability gaps and
+  reuses existing path graph evidence.
+- Expand conservative interface bridge tests with explicit
+  `combined_symbol_relationships` implementation-candidate fixtures.
+- Replace the current SQLite no-mutation hash test with a WAL-neutral logical
+  schema/row-count/content fingerprint.
+- Run pinned combined smoke checks if future work changes shared path traversal,
+  endpoint alignment, language adapters, or shared report helpers.
