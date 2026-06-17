@@ -196,8 +196,6 @@ Hidden mode may preserve bounded display names when they:
 When a display name is secret-like but otherwise safe, hidden mode SHALL use
 this default representation:
 
-- preserve raw local display for safe repo-relative paths and evidence
-  locations when useful navigation depends on it;
 - use `displayCategory: "sensitive-word-safe-name"` or
   `displayHash: "symbol-display-sha256:<truncated-hex>"` for symbol, route,
   action, model, and member display names unless raw local display is clearly
