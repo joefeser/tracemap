@@ -16,9 +16,9 @@
   - [ ] Define gap object schema, including `UnknownAnalysisGap` records and closed reason codes.
   - [ ] Define generated Markdown frontmatter sentinel and content hash behavior.
   - [ ] Define canonical JSON, JSONL, frontmatter, Markdown, array, and file ordering rules.
-  - [ ] Define `--format` as one comma-separated value from `markdown`, `jsonl`, or `markdown,jsonl`.
+  - [ ] Define `--format` as one comma-separated value containing one or both closed tokens, `markdown` and `jsonl`, with token order normalized.
   - [ ] Define `--families` as one comma-separated value from the closed vocabulary and implement unsupported-family gap behavior.
-  - [ ] Treat repeated `--format`, out-of-set `--format`, empty `--families`, whitespace-only `--families`, and out-of-vocabulary family tokens as sanitized CLI argument errors.
+  - [ ] Treat repeated `--format`, duplicate/out-of-set/empty `--format` tokens, empty `--families`, whitespace-only `--families`, and out-of-vocabulary family tokens as sanitized CLI argument errors.
   - [ ] Define stable ID hash contexts, input fields, truncation length, collision handling, and duplicate-identity gaps for chunks, citations, redactions, gaps, limitations, file names, links, and manifest entries.
   - [ ] Add `docs-export.*.v1` rule catalog entries before emitting docs-export chunks, gaps, limitations, or validation findings.
   - [ ] Document rule limitations for static evidence, schema compatibility, claim levels, redaction, generated-file safety, and external ingestion boundaries.
@@ -35,7 +35,7 @@
   - [ ] Read source-claim catalog JSON and match entries by stable source identity.
   - [ ] Audit compatible report JSON schemas for stable row/finding/section IDs before implementing report-derived chunks.
   - [ ] Emit missing-provenance or identity gaps when a compatible report lacks stable IDs required for chunk identity.
-  - [ ] Emit schema, unsupported-family, missing-provenance, reduced-coverage, and unavailable-input gaps for unknown or incompatible inputs.
+  - [ ] Emit schema-incompatible, unsupported-family, missing-provenance, and reduced-coverage gaps for unknown or incompatible inputs.
   - [ ] Fail with sanitized diagnostics when no compatible input can produce any chunks.
 
 - [ ] 3. Implement the chunk projection model. Requirements: 3, 4, 5.
@@ -119,6 +119,7 @@
   - [ ] Test `--force` does not bypass non-generated user file collisions.
   - [ ] Test `--dry-run` writes no files.
   - [ ] Test `--format markdown`, `--format jsonl`, and `--format markdown,jsonl`.
+  - [ ] Test `--format jsonl,markdown` normalizes to `markdown,jsonl`.
   - [ ] Test `--format markdown` omits `chunks.jsonl` and `--format jsonl` omits generated Markdown files.
   - [ ] Test `manifest.json` is written for every successful `--format` value and remains the generated-file integrity anchor.
   - [ ] Test repeated `--format` and out-of-set `--format` values fail with sanitized parse errors.

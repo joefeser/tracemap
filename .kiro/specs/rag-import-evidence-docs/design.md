@@ -82,9 +82,10 @@ Report inputs can enrich chunks but do not replace the indexed source identity
 anchor. If a future locked evidence-pack-only workflow is needed, it should be a
 separate spec update.
 
-`--format` accepts one comma-separated argument from this closed set:
-`markdown`, `jsonl`, or `markdown,jsonl`. Repeating `--format` is invalid in v1.
-Out-of-set values and repeated flags are CLI argument errors with sanitized
+`--format` accepts one comma-separated argument containing one or both closed
+tokens: `markdown` and `jsonl`. Token order is normalized, so `jsonl,markdown`
+and `markdown,jsonl` are equivalent. Duplicate tokens, empty tokens, out-of-set
+values, and repeated `--format` flags are CLI argument errors with sanitized
 diagnostics. `manifest.json` is always written for successful exports;
 `--format` selects only the Markdown and/or JSONL content artifacts.
 
@@ -346,7 +347,11 @@ Gap shape:
 `reduced-coverage`, `unknown-commit-sha`, `missing-provenance`,
 `schema-incompatible`, `unsupported-family`, `hidden-evidence-omitted`,
 `claim-level-hidden`, `claim-level-unmatched`, `duplicate-stable-identity`,
-`selector-no-match`, `truncated`, and `extractor-unavailable`.
+`selector-no-match`, `truncated`, `extractor-unavailable`,
+`mutation-boundary`, `collection-boundary`, `branch-feasibility-boundary`,
+`dynamic-dispatch-boundary`, `dependency-injection-boundary`,
+`reflection-boundary`, `serializer-boundary`, and
+`generated-code-boundary`.
 
 Reason-to-rule mapping:
 
@@ -364,6 +369,14 @@ Reason-to-rule mapping:
 | `selector-no-match` | `docs-export.gap.unknown-analysis.v1` |
 | `truncated` | `docs-export.gap.unknown-analysis.v1` |
 | `extractor-unavailable` | `docs-export.gap.unknown-analysis.v1` |
+| `mutation-boundary` | `docs-export.gap.unknown-analysis.v1` |
+| `collection-boundary` | `docs-export.gap.unknown-analysis.v1` |
+| `branch-feasibility-boundary` | `docs-export.gap.unknown-analysis.v1` |
+| `dynamic-dispatch-boundary` | `docs-export.gap.unknown-analysis.v1` |
+| `dependency-injection-boundary` | `docs-export.gap.unknown-analysis.v1` |
+| `reflection-boundary` | `docs-export.gap.unknown-analysis.v1` |
+| `serializer-boundary` | `docs-export.gap.unknown-analysis.v1` |
+| `generated-code-boundary` | `docs-export.gap.unknown-analysis.v1` |
 
 ### Citation
 
@@ -522,8 +535,10 @@ The family name is user-oriented, but the schema should also use
 - constructor/member origin evidence;
 - callback and async boundaries;
 - dependency-surface terminals;
-- mutation, collection, branch, dynamic, DI, reflection, serializer, generated
-  code, and reduced-coverage gaps.
+- mutation-boundary, collection-boundary, branch-feasibility-boundary,
+  dynamic-dispatch-boundary, dependency-injection-boundary,
+  reflection-boundary, serializer-boundary, generated-code-boundary, and
+  reduced-coverage gaps.
 
 They never claim full taint analysis, runtime values, object identity, or
 collection contents.
@@ -691,19 +706,22 @@ The Markdown content hash is computed over canonical frontmatter plus body after
 UTF-8, LF, and final newline normalization, with the hash field replaced by the
 empty string.
 
-Canonical frontmatter serialization uses the fixed key order shown in the
-sentinel example, followed by schema-defined optional keys in ordinal key order.
+Canonical frontmatter serialization uses the fixed key order documented below
+for the file kind, followed by schema-defined optional keys in ordinal key order.
 Fixed keys always appear first in the documented order even if optional keys
 would sort earlier. Optional key names must not duplicate fixed key names. Only
 plain scalars and block arrays are allowed. The hash is computed over that
 serialized YAML text plus the Markdown body; generators must not hash an
 unordered YAML map.
 
-Fixed chunk frontmatter key order is:
+Fixed chunk Markdown frontmatter key order is:
 `tracemap_generated`, `tracemap_export_schema`, `tracemap_generator`,
 `tracemap_content_sha256`, `chunk_id`, `chunk_family`, `claim_level`,
-`source_labels`. Summary frontmatter uses the same order but replaces
-`chunk_id`, `chunk_family` with `summary_kind`.
+`source_labels`.
+
+Fixed summary Markdown frontmatter key order is:
+`tracemap_generated`, `tracemap_export_schema`, `tracemap_generator`,
+`tracemap_content_sha256`, `summary_kind`, `claim_level`, `source_labels`.
 
 `manifest.json` is recognized as generated only when it has
 `schemaVersion: "tracemap-evidence-docs.v1"`, `tracemapGenerated: true`,
