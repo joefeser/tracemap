@@ -1,12 +1,18 @@
 # Legacy ASMX/SOAP Detection Implementation State
 
-Status: implementation-mvp
+Status: implemented-mvp
 Branch: codex/implement-legacy-asmx-soap-detection
 Scope: first implementation slice
 Public claim level: hidden
 Readiness: ready-for-pr-review-loop
 
 ## Summary
+
+Status normalized during spec-state cleanup: `origin/dev` contains
+`LegacyAsmxExtractor`, ASMX fact/rule IDs, ASMX report output, focused tests,
+and validation notes. The shipped state remains MVP because semantic ASMX
+resolution, historical WCF-host compatibility, and broader downstream consumer
+coverage are still documented follow-ups.
 
 This slice adds a deterministic ASMX/SOAP evidence family to the .NET scanner.
 It migrates new `.asmx` host detection out of WCF host facts, adds ASMX-specific

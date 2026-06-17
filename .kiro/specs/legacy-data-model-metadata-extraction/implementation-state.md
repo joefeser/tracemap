@@ -1,10 +1,14 @@
 # Legacy Data Model Metadata Extraction Implementation State
 
-Status: spec-drafting
+Status: spec-ready
 Branch: codex/spec-legacy-data-model-metadata-extraction
 Public claim level: hidden
 
 ## Why This Spec Exists
+
+Status normalized during spec-state cleanup. The spec authoring tasks, review
+patches, PR-thread fixes, and spec-only validation are complete; product
+implementation tasks remain not started.
 
 The earlier `legacy-data-metadata-extraction` spec implemented a conservative
 MVP for DBML, EDMX, typed DataSet/TableAdapter, config provider metadata, and
