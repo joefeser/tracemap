@@ -5,7 +5,7 @@
 Current state: `implemented-partial`. The first `tracemap route-flow` product
 slice is implemented on `dev`, but unchecked items below remain explicit
 follow-up/backlog scope for richer readers, bridge evidence, and scenario
-coverage.
+coverage; they are not blockers for the landed partial slice.
 
 - [x] 1. Confirm command boundary and rule catalog entries. Requirements: 1, 2, 6, 7, 8.
   - [x] Confirm final command shape: `tracemap route-flow --index <combined.sqlite> --route "<METHOD> <PATH>" --out <path>`.

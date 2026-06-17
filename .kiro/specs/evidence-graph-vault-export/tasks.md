@@ -4,8 +4,9 @@
 
 Current state: `implemented-mvp`. The core combined-index plus paths/reverse
 report export is implemented on `dev`. Unchecked items below are deferred
-follow-up/backlog items or intentionally non-MVP input families unless a task is
-explicitly checked.
+follow-up/backlog items for future slices or intentionally non-MVP input
+families unless a task is explicitly checked; they are not blockers for the
+landed MVP.
 
 Recommended first PR boundary: implement the core combined-index plus
 paths/reverse-report MVP, source claim catalog, deterministic Markdown/JSON, and
