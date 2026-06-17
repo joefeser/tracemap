@@ -7,6 +7,7 @@ import test from "node:test";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
+import { managerBriefRoute } from "./manager-brief.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -96,7 +97,9 @@ async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
-  sitemapUrls = [...deployAuditRequiredRoutes, incidentCallRoute].map((route) => `https://tracemap.tools${route}`)
+  sitemapUrls = [...deployAuditRequiredRoutes, incidentCallRoute, managerBriefRoute].map(
+    (route) => `https://tracemap.tools${route}`
+  )
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
   const dist = join(root, "dist");
@@ -111,6 +114,7 @@ async function createDistFixture({
     "/evidence/",
     "/examples/",
     incidentCallRoute,
+    managerBriefRoute,
     "/outputs/",
     "/use-cases/incident-review/",
     "/workflows/"
@@ -125,7 +129,13 @@ async function createDistFixture({
     await mkdir(join(dist, path), { recursive: true });
     await writeFile(
       join(dist, path, "index.html"),
-      route === "/deploy-audit/" ? deployAuditPage() : route === incidentCallRoute ? incidentCallPage() : page(`<p>${path}</p>`),
+      route === "/deploy-audit/"
+        ? deployAuditPage()
+        : route === incidentCallRoute
+          ? incidentCallPage()
+          : route === managerBriefRoute
+            ? managerBriefPage()
+            : page(`<p>${path}</p>`),
       "utf8"
     );
   }
@@ -162,6 +172,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "use-case",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture incident call limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: managerBriefRoute,
+        title: "Manager Brief",
+        summary: "Fixture manager brief route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture manager brief limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -216,6 +237,23 @@ function incidentCallPage() {
     <a href="/limitations/">Limitations</a>
     <a href="/demo/result/">Demo result</a>
     <a href="/use-cases/incident-review/">Incident review orientation</a>
+  `);
+}
+
+function managerBriefPage() {
+  const filler = Array.from({ length: 90 }, (_, index) => `evidence packet review boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>Manual dependency indexing is expensive</p>
+    <p>deterministic artifacts</p>
+    <p>Static evidence is useful because its limits stay visible</p>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/demo/">Demo</a>
+    <a href="/docs/">Docs</a>
+    <p>${filler}</p>
   `);
 }
 
