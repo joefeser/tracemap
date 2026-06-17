@@ -287,6 +287,23 @@
     ]
   },
   {
+    "path": "/incident-call/",
+    "title": "Incident Call Static Dependency Evidence",
+    "summary": "Concept-level use case for using static dependency evidence and proof paths during a production incident or P1 call without claiming runtime proof.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a concept-level orientation page, not a completed operational workflow.",
+      "Static dependency evidence can narrow inspection but cannot prove production behavior or incident cause."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, APM replacement, release safety, operational safety, or release approval proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, or generated scan directories are published."
+    ]
+  },
+  {
     "url": "https://github.com/joefeser/tracemap/blob/main/README.md",
     "title": "Repository README",
     "summary": "Source-of-truth project overview for CLI goals, required scan outputs, demo commands, and product boundaries.",

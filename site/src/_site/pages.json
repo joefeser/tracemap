@@ -45,6 +45,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/incident-call/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/legacy-validation/",
     "changefreq": "monthly",
     "priority": "0.7"
