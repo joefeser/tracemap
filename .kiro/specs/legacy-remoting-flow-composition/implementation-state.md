@@ -1,10 +1,14 @@
 # Legacy Remoting Flow Composition Implementation State
 
-Status: implementation-complete
+Status: implemented
 Branch: codex/implement-legacy-remoting-flow-composition
 Public claim level: hidden
 
 ## Scope
+
+Status normalized during spec-state cleanup. The implementation-state notes and
+`tasks.md` checklist show the Remoting flow composition slice complete with
+validation and follow-ups separated below.
 
 This implementation integrates existing .NET Remoting facts into
 `tracemap paths --view legacy-flows` and `--include-legacy-roots` as static,

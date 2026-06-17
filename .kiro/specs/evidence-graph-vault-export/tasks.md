@@ -2,6 +2,12 @@
 
 ## Implementation Tasks
 
+Current state: `implemented-mvp`. The core combined-index plus paths/reverse
+report export is implemented on `dev`. Unchecked items below are deferred
+follow-up/backlog items for future slices or intentionally non-MVP input
+families unless a task is explicitly checked; they are not blockers for the
+landed MVP.
+
 Recommended first PR boundary: implement the core combined-index plus
 paths/reverse-report MVP, source claim catalog, deterministic Markdown/JSON, and
 safety validation. Portfolio, release-review, and evidence-pack readers should
@@ -66,7 +72,7 @@ implementation.
   - [x] Return sanitized diagnostics with category plus JSON pointer or Markdown section/line.
   - [x] Use context-separated deterministic hashes only for allowed safe inputs.
   - [x] Omit or category-label secret-like, credential-like, low-entropy, and enumerable private values rather than hashing them.
-  - [ ] Ensure `./scripts/check-private-paths.sh` passes without machine-specific allowlists.
+  - [x] Ensure `./scripts/check-private-paths.sh` passes without machine-specific allowlists.
 
 - [ ] 7. Add fixtures and tests. Requirements: 1, 2, 3, 4, 5, 6, 7, 8, 10.
   - [x] Add focused fixtures or generated in-test artifacts for combined index, paths/reverse report, and gap-heavy reduced coverage cases.
@@ -104,15 +110,15 @@ implementation.
   - [x] Document site relationship as future consumption only.
   - [x] Document validation commands and troubleshooting.
 
-- [ ] 9. Validate implementation. Requirements: 8, 10.
-  - [ ] Update this spec's `implementation-state.md` with branch, scope decisions, validation, and follow-ups.
-  - [ ] Run focused vault export tests.
-  - [ ] Run stale generated output and redaction validation tests.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
-  - [ ] Run `dotnet build src/dotnet/TraceMap.sln` and `dotnet test src/dotnet/TraceMap.sln` if .NET code changes.
-  - [ ] Run focused script tests and document deferred .NET tests if implementation is script-only.
-  - [ ] Run or explicitly defer relevant pinned smoke checks from `docs/VALIDATION.md`.
+- [x] 9. Validate implementation. Requirements: 8, 10.
+  - [x] Update this spec's `implementation-state.md` with branch, scope decisions, validation, and follow-ups.
+  - [x] Run focused vault export tests.
+  - [x] Run stale generated output and redaction validation tests.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
+  - [x] Run `dotnet build src/dotnet/TraceMap.sln` and `dotnet test src/dotnet/TraceMap.sln` if .NET code changes.
+  - [x] Script fallback validation is not applicable because the shipped implementation is the .NET CLI path.
+  - [x] Run or explicitly defer relevant pinned smoke checks from `docs/VALIDATION.md`.
 
 ## Deferred Follow-Ups
 

@@ -1,6 +1,6 @@
 # Evidence Graph Vault Export Implementation State
 
-Status: implementation-in-progress
+Status: implemented-mvp
 Branch: codex/implement-evidence-graph-vault-export
 Worktree: requested implementation worktree
 Scope: .NET CLI MVP
@@ -8,6 +8,12 @@ Public claim level: implementation available; public/demo claims require
 public-safe inputs, a source claim catalog, and successful validation.
 
 ## Summary
+
+Status normalized during spec-state cleanup: `origin/dev` contains the .NET
+`tracemap vault export` CLI, `VaultExporter` implementation, focused
+`VaultExportTests`, docs, and rule catalog entries. The shipped state is an MVP
+because portfolio, release-review, evidence-pack promotion, and some duplicate
+identity/gap hardening remain explicit follow-ups in `tasks.md`.
 
 This branch implements a first-class `tracemap vault export` command for the
 evidence graph/vault export MVP. The exporter reads existing TraceMap combined

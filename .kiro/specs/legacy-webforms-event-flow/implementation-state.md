@@ -1,6 +1,6 @@
 # Legacy WebForms Event Flow Implementation State
 
-Status: implemented and ready for PR review
+Status: implemented
 
 Branch/PR:
 
@@ -18,6 +18,9 @@ Scope:
 
 State Notes:
 
+- Status normalized during spec-state cleanup. The implementation is on `dev`
+  with PR-loop follow-up fixes recorded below; remaining multi-hop/public demo
+  work is follow-up scope.
 - This spec intentionally follows the legacy WCF evidence work and should reuse
   existing WCF/service-reference facts where possible.
 - Local legacy samples may be used for ignored smoke testing, but committed

@@ -9,15 +9,21 @@ Every spec folder should contain `implementation-state.md` once work begins or o
 Recommended status values:
 
 - `implemented`: shipped on `dev`; unchecked boxes should not remain in `tasks.md`.
-- `implemented MVP with post-MVP backlog`: the first useful slice shipped; future work should be plain backlog bullets or a new spec.
-- `active`: currently being implemented in a branch or child worktree.
+- `implemented-mvp`: the first useful slice shipped; any unshipped work must be explicitly labeled follow-up/backlog scope.
+- `implemented-partial`: a product slice shipped, but the original spec matrix still has open follow-up implementation tasks that are not blockers for the landed slice.
+- `spec-ready`: spec authoring/review is complete enough for a future implementation branch; product work has not started.
 - `not-started`: ready or proposed, but not implemented.
-- `deferred`: intentionally postponed; use plain backlog bullets, not unchecked task boxes.
+- `needs-human-review`: status cannot be determined safely from repo evidence alone.
 - `superseded`: replaced by another spec or implementation.
 
 ## Checkbox Rule
 
-Unchecked task boxes mean current ready implementation work. Do not use unchecked boxes for deferred ideas, post-MVP backlog, or future language/framework wishlist items. Use plain bullets under `Deferred Follow-Ups` or `Post-MVP Backlog` instead.
+Unchecked task boxes normally mean current ready implementation work. In an
+`implemented-mvp` or `implemented-partial` spec, unchecked boxes may remain only
+when a nearby state note clearly labels them as follow-up/backlog scope for a
+future slice and the shipped status is backed by `implementation-state.md`.
+Pure wishlist items should still be plain bullets under `Deferred Follow-Ups`
+or `Post-MVP Backlog`.
 
 Do not mix plain deferred bullets under checked implementation parents. If only part of a task shipped, keep the shipped subtasks checked in the implementation section and move the deferred subtasks to a backlog section with enough context to find them later.
 
