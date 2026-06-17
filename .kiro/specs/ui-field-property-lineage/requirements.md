@@ -71,7 +71,7 @@ where that property is used downstream.
 1. WHEN the user runs `tracemap property-flow --index <combined.sqlite> --property <selector> --out <path> [--max-roots <n>] [--max-depth <n>] [--max-paths <n>] [--max-frontier <n>] [--max-inventory <n>] [--max-gaps <n>]` THEN TraceMap SHALL read a combined index and emit a property-lineage report.
 2. WHEN `--format json` is provided with a file output THEN TraceMap SHALL emit machine-readable JSON.
 3. WHEN the output path is an existing directory or a path without an extension THEN TraceMap SHALL write `property-flow-report.md` and `property-flow-report.json`.
-4. WHEN the input is not a combined index THEN TraceMap SHALL fail with a clear schema error and SHALL NOT silently treat a single-language index as fully lineage-queryable.
+4. WHEN the input is not a combined index with `index_sources` containing at least one row THEN TraceMap SHALL fail with a clear schema error and SHALL NOT silently treat a single-language index or empty stub database as fully lineage-queryable.
 5. WHEN required combined tables are missing THEN the command SHALL emit schema gaps or fail with a sanitized missing-table error according to whether the table is optional or required.
 6. WHEN the command runs THEN it SHALL open the input database read-only and SHALL NOT mutate source indexes, source repositories, or derived tables.
 7. WHEN the command completes THEN the CLI SHALL print output path, selected root count, path count, gap count, truncation state, and report coverage.

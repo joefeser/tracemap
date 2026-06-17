@@ -119,7 +119,8 @@ composes facts.
 ## Combined Index Schema Contract
 
 The command accepts a combined index, not a single-language index. For v1, a
-database is recognized as a combined index only when it contains:
+database is recognized as a combined index only when it contains the required
+objects below and `index_sources` has at least one row:
 
 | Object | Required? | Purpose |
 | --- | --- | --- |
@@ -172,8 +173,6 @@ fallback route-flow signal.
 | `dto:<type>.<property>` | DTO property selector; only DTO facts are candidates. |
 | `symbol:<id-or-display>` | Source-local symbol ID or safe display selector. |
 | `fact:<combinedFactId>` | Exact `combined_facts.combined_fact_id` root. |
-| `--source <label>` | Optional source filter using deterministic case-insensitive exact source-label matching. |
-| `--framework angular|razor|any` | Optional UI root framework filter; default is `any`. |
 
 Selectors are safe display selectors, not source snippets. They should be
 normalized by trimming whitespace, rejecting line breaks, rejecting local
@@ -190,6 +189,11 @@ When a model and DTO selector could both describe the same underlying property,
 the prefix controls the fact family. If one fact is legitimately both a model
 and DTO property, the root remains valid but the overlap is reported as
 ambiguous supporting metadata.
+
+`--source <label>` and `--framework angular|razor|any` are separate CLI filters,
+not selector prefixes inside `--property`. Source labels use deterministic
+case-insensitive exact matching. The framework filter constrains UI root
+evidence and defaults to `any`.
 
 ## Source Facts
 
