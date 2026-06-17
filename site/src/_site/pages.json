@@ -138,5 +138,10 @@
     "path": "/manager-packet/",
     "changefreq": "monthly",
     "priority": "0.8"
+  },
+  {
+    "path": "/manager-brief/",
+    "changefreq": "monthly",
+    "priority": "0.7"
   }
 ]
