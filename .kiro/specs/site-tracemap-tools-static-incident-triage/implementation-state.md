@@ -8,9 +8,6 @@ Public claim level: concept
 
 Implementation branch: `codex/site-static-incident-triage`
 
-Worktree:
-`/Users/josephfeser/src/gh-joe/tracemap-site-static-incident-triage`
-
 Base: `origin/main`
 
 ## Scope
