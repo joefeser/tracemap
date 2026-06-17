@@ -11,6 +11,7 @@ import {
 import { validateDeployAuditDist } from "./deploy-audit.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
+import { validateManagerBriefDist } from "./manager-brief.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -62,6 +63,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
   await validateTopNavigation({ dist, errors, htmlFiles });
