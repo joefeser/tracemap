@@ -2,6 +2,11 @@
 
 ## Implementation Tasks
 
+Current state: `implemented-partial`. The first `tracemap route-flow` product
+slice is implemented on `dev`, but unchecked items below remain explicit
+follow-up/backlog scope for richer readers, bridge evidence, and scenario
+coverage.
+
 - [x] 1. Confirm command boundary and rule catalog entries. Requirements: 1, 2, 6, 7, 8.
   - [x] Confirm final command shape: `tracemap route-flow --index <combined.sqlite> --route "<METHOD> <PATH>" --out <path>`.
   - [x] Keep `tracemap route-flow` as the public command and do not add a public `tracemap paths --view route-flow` alias in the first implementation slice.

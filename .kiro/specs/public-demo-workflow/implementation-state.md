@@ -1,5 +1,7 @@
 # Public Demo Workflow Implementation State
 
+Status: implemented
+
 ## Current State
 
 Implemented the first public-demo slice in `dev`.

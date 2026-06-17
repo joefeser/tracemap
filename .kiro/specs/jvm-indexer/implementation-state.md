@@ -1,6 +1,6 @@
 # JVM Indexer Implementation State
 
-Status: implemented MVP with post-MVP backlog open.
+Status: implemented-mvp
 
 Branch/PR:
 
@@ -32,4 +32,3 @@ Open Follow-Ups:
 - Additional JVM framework detectors and deeper ORM/query support.
 - Derived parameter-forward edges beyond direct argument facts.
 - Public OSS smoke automation beyond local/manual validation.
-

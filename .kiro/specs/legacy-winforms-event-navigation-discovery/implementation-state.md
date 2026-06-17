@@ -1,10 +1,14 @@
 # Legacy WinForms Event Navigation Discovery Implementation State
 
-Status: spec authored for review
+Status: spec-ready
 Branch: codex/spec-legacy-winforms-event-navigation-discovery
 Public claim level: hidden
 
 ## Why This Spec Exists
+
+Status normalized during spec-state cleanup. This is a spec-only slice with
+review and validation notes recorded below; product implementation remains
+deferred to future implementation tasks.
 
 TraceMap has deterministic legacy evidence for WebForms event flow, WCF and ASMX
 service references, remoting, legacy data metadata, SQL/query surfaces, value

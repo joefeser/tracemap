@@ -1,5 +1,7 @@
 # Multi-Index Portfolio Report Implementation State
 
+Status: implemented
+
 ## Current State
 
 Implemented v1 portfolio report in `dev`; follow-up surface/edge comparison slice is also merged into `dev`.

@@ -1,6 +1,6 @@
 # Cross-App Endpoint Alignment Implementation State
 
-Status: implemented MVP with post-MVP backlog
+Status: implemented-mvp
 
 ## Shipped Scope
 

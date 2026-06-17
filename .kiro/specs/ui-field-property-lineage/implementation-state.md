@@ -1,5 +1,7 @@
 # UI Field and Property Lineage Implementation State
 
+Status: not-started
+
 ## Current Branch
 
 `codex/spec-ui-field-property-lineage`
