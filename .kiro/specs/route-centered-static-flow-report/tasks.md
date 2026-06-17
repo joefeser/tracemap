@@ -36,18 +36,18 @@
   - [ ] Reuse `CombinedReverseSourceInfo` or its shared identity helper for `IdentityVerified`, and reuse existing combined source projections for language, analysis level, build status, and coverage.
   - [ ] Define closed-set `RouteMatchMode`, `GapKind`, `RowKind`, `EdgeKind`, `LogicKind`, and `SurfaceKind` values.
   - [ ] Ensure `RouteFlowReport.ReportCoverage` and `RouteFlowSummary.ReportCoverage` are identical.
-  - [ ] Define `RouteFlowDependencySurface.StableKey` from safe source-scoped fields and supporting fact IDs.
+  - [ ] Define `RouteFlowDependencySurface.StableKey` from safe source-scoped identity fields, without scan-specific fact IDs or edge IDs.
   - [ ] Use deterministic empty arrays, `null`, and closed-set placeholder values.
   - [ ] Add model tests for JSON shape, summary rollup, sanitized query paths, and stable ordering.
 
 - [ ] 4. Implement selector handling and entry evidence selection. Requirements: 1, 2, 3, 6.
   - [ ] Parse `--route`.
   - [ ] Parse `--client-call`.
-  - [ ] Parse `--from-endpoint`, `--from-symbol`, `--from-source`, `--to-surface`, `--surface-name`, `--classification`, `--max-depth`, `--max-paths`, `--max-frontier`, `--max-logic-rows`, `--max-gaps`, `--format`, and `--exit-code`.
+  - [ ] Parse `--from-endpoint`, `--from-webforms-event`, `--from-symbol`, `--from-source`, `--to-surface`, `--surface-name`, `--classification`, `--max-depth`, `--max-paths`, `--max-frontier`, `--max-logic-rows`, `--max-gaps`, `--format`, and `--exit-code`.
   - [ ] Reject non-combined indexes with a clear diagnostic.
   - [ ] Reuse the existing `tracemap paths` selector grammar for overlapping selectors or document any rule-backed deviation before implementation.
-  - [ ] Treat `--route`, `--client-call`, `--classification`, `--max-logic-rows`, and `--max-gaps` as documented route-flow additions to the paths selector grammar.
-  - [ ] Define `symbol-root` and `source-root` entry evidence for `--from-symbol` and `--from-source`.
+  - [ ] Treat `--route`, `--client-call`, `--classification`, `--max-logic-rows`, and `--max-gaps` as documented route-flow additions to the paths selector grammar while reusing `--from-webforms-event` from paths legacy-root selectors.
+  - [ ] Define closed entry evidence kinds for `--route`, `--client-call`, `--from-endpoint`, `--from-webforms-event`, `--from-symbol`, `--from-source`, and aligned route/client pairs.
   - [ ] Select `HttpRouteBinding` facts by method and normalized route key/template.
   - [ ] Select `HttpCallDetected` facts by method and normalized route key/template.
   - [ ] Include endpoint-alignment context when client and server evidence match.
@@ -83,7 +83,7 @@
   - [ ] Define adjacency as shared combined symbol ID, same method/member span, shared supporting fact/edge ID, or shared source/target fact ID through a traversed `combined_argument_flows` row; do not attach same-file evidence by default.
   - [ ] Attach query/filter/sort/select/include/mutation and SQL-shape evidence using safe derived metadata.
   - [ ] Attach validation/guard, branch/condition, authorization marker, async boundary, serializer/contract shape, and flow-boundary evidence where facts exist.
-  - [ ] Attach repository, DbSet-like, ORM, SQL/persistence, HTTP client, package/config, WCF/service, legacy-data, storage, queue/event, and dependency-surface rows.
+  - [ ] Attach repository, DbSet-like, ORM, SQL/persistence, HTTP client, package/config, WCF/service, remoting, legacy-data, storage, queue/event, and dependency-surface rows.
   - [ ] Label adjacent evidence as `path-context` rather than path edges.
   - [ ] Add tests for projection, query shape, repository/data access, business boundary, and path-context wording.
 
@@ -121,8 +121,9 @@
   - [ ] Add tests for combined indexes with only one relevant language adapter present.
   - [ ] Add no-mutation tests by hashing the combined database before and after route-flow runs.
   - [ ] Use a logical schema/row-count/content fingerprint or WAL-neutralized hash for no-mutation tests rather than a naive SQLite file hash.
-  - [ ] Add filter tests for `--to-surface`, `--surface-name`, and `--classification`.
+  - [ ] Add filter tests for `--to-surface`, including remoting surface kinds, `--surface-name`, and `--classification`.
   - [ ] Add tests for `--from-endpoint` against endpoint alignment evidence.
+  - [ ] Add tests for `--from-webforms-event` against legacy-root path evidence.
   - [ ] Add a test where `--classification` filters every row out and yields `SelectorNoMatch` plus overall `UnknownAnalysisGap`.
   - [ ] Add a test proving `RouteFlowSummary.ExitCodeWouldBeNonZero` matches the observed process exit code when `--exit-code` is used.
   - [ ] Add `--max-logic-rows` truncation tests.
