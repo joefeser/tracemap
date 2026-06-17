@@ -26,7 +26,7 @@ public sealed record PropertyFlowReport(
     string ReportType,
     string Version,
     string ReportCoverage,
-    IReadOnlyList<string> CoverageWarnings,
+    IReadOnlyList<PropertyFlowCoverageWarning> CoverageWarnings,
     PropertyFlowQuery Query,
     PropertyFlowSnapshot Snapshot,
     PropertyFlowSummary Summary,
@@ -88,6 +88,20 @@ public sealed record PropertyFlowSource(
     string AnalysisLevel,
     string BuildStatus,
     IReadOnlyList<string> CoverageLabels);
+
+public sealed record PropertyFlowLineSpan(int? StartLine, int? EndLine);
+
+public sealed record PropertyFlowCoverageWarning(
+    string WarningId,
+    string Message,
+    string RuleId,
+    string EvidenceTier,
+    IReadOnlyList<string> SupportingSourceIds,
+    IReadOnlyList<string> SourceLabels,
+    IReadOnlyList<string> CommitShas,
+    string ExtractorId,
+    string ExtractorVersion,
+    IReadOnlyList<string> Limitations);
 
 public sealed record PropertyFlowRoot(
     string RootId,
@@ -155,7 +169,16 @@ public sealed record PropertyFlowEdge(
     IReadOnlyList<string> SupportingCombinedEdgeIds,
     string? FilePath,
     int? StartLine,
-    int? EndLine);
+    int? EndLine)
+{
+    public string? SourceIndexId { get; init; }
+    public string? SourceLabel { get; init; }
+    public string? ScanId { get; init; }
+    public string? CommitSha { get; init; }
+    public string ExtractorId { get; init; } = "property-flow";
+    public string ExtractorVersion { get; init; } = "property-flow/1.0";
+    public PropertyFlowLineSpan? LineSpan { get; init; } = StartLine is null && EndLine is null ? null : new PropertyFlowLineSpan(StartLine, EndLine);
+}
 
 public sealed record PropertyFlowGap(
     string GapId,
@@ -170,7 +193,17 @@ public sealed record PropertyFlowGap(
     int? StartLine,
     int? EndLine,
     IReadOnlyList<string> SupportingFactIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations)
+{
+    public string? SourceIndexId { get; init; }
+    public string? ScanId { get; init; }
+    public string? CommitSha { get; init; }
+    public IReadOnlyList<string> CommitShas { get; init; } = [];
+    public IReadOnlyList<string> SupportingSourceIds { get; init; } = [];
+    public string ExtractorId { get; init; } = "property-flow";
+    public string ExtractorVersion { get; init; } = "property-flow/1.0";
+    public PropertyFlowLineSpan? LineSpan { get; init; } = StartLine is null && EndLine is null ? null : new PropertyFlowLineSpan(StartLine, EndLine);
+}
 
 public sealed record PropertyFlowInventory(
     IReadOnlyDictionary<string, int> RootsByKind,
@@ -303,6 +336,8 @@ public static class PropertyFlowReporter
         var facts = await ReadFactsAsync(connection, cancellationToken);
         var missingOptional = await MissingOptionalObjectsAsync(connection, cancellationToken);
         var sources = read.Sources.Select(ToSource).OrderBy(source => source.SourceLabel, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray();
+        var sourceIds = sources.Select(source => source.SourceIndexId).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var sourceCommitShas = sources.Select(source => source.CommitSha).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
 
         var allCandidates = MatchCandidates(facts, selector, sourceFilter, framework).ToArray();
         var totalCandidateCount = allCandidates.Length;
@@ -333,7 +368,11 @@ public static class PropertyFlowReporter
                 null,
                 null,
                 [],
-                ["Missing optional schema is an availability gap, not proof of no lineage."]));
+                ["Missing optional schema is an availability gap, not proof of no lineage."])
+            {
+                SupportingSourceIds = sourceIds,
+                CommitShas = sourceCommitShas
+            });
         }
 
         if (missingOptional.Contains("combined_route_flow_edges", StringComparer.Ordinal))
@@ -351,7 +390,11 @@ public static class PropertyFlowReporter
                 null,
                 null,
                 [],
-                ["Route-flow absence limits downstream route-specific conclusions. Existing combined path evidence may still be shown."]));
+                ["Route-flow absence limits downstream route-specific conclusions. Existing combined path evidence may still be shown."])
+            {
+                SupportingSourceIds = sourceIds,
+                CommitShas = sourceCommitShas
+            });
         }
 
         if (totalCandidateCount == 0)
@@ -369,7 +412,11 @@ public static class PropertyFlowReporter
                 null,
                 null,
                 [],
-                ["Selector matching is static and coverage-relative."]));
+                ["Selector matching is static and coverage-relative."])
+            {
+                SupportingSourceIds = sourceIds,
+                CommitShas = sourceCommitShas
+            });
         }
         else if (totalCandidateCount > roots.Length)
         {
@@ -386,7 +433,11 @@ public static class PropertyFlowReporter
                 null,
                 null,
                 selectedFacts.Select(fact => fact.CombinedFactId).ToArray(),
-                ["Use --source, model:/dto:, symbol:, or fact: selectors to narrow ambiguous properties."]));
+                ["Use --source, model:/dto:, symbol:, or fact: selectors to narrow ambiguous properties."])
+            {
+                SupportingSourceIds = selectedFacts.Select(fact => fact.SourceIndexId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                CommitShas = selectedFacts.Select(fact => fact.CommitSha).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
+            });
         }
 
         var paths = BuildPaths(roots, selectedFacts, graph, options, gaps);
@@ -406,10 +457,14 @@ public static class PropertyFlowReporter
                 null,
                 null,
                 [],
-                ["Increase max roots, depth, paths, frontier, inventory, or gaps for a wider static search."]));
+                ["Increase max roots, depth, paths, frontier, inventory, or gaps for a wider static search."])
+            {
+                SupportingSourceIds = sourceIds,
+                CommitShas = sourceCommitShas
+            });
         }
 
-        var coverageWarnings = read.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var coverageWarnings = ToCoverageWarnings(read.CoverageWarnings, sources);
         var sourceReduced = coverageWarnings.Length > 0 || sources.Any(source => source.CoverageLabels.Contains("ReducedCoverage", StringComparer.Ordinal));
         if (roots.Length > 0 && paths.Paths.Count == 0)
         {
@@ -428,7 +483,11 @@ public static class PropertyFlowReporter
                 null,
                 null,
                 roots.Select(root => root.CombinedFactId).ToArray(),
-                ["No-lineage conclusions are coverage-relative."]));
+                ["No-lineage conclusions are coverage-relative."])
+            {
+                SupportingSourceIds = roots.Select(root => root.SourceIndexId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                CommitShas = roots.Select(root => root.CommitSha).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
+            });
         }
 
         var cappedGaps = gaps
@@ -440,7 +499,8 @@ public static class PropertyFlowReporter
             .Take(options.MaxGaps)
             .ToArray();
         var evidenceNodes = graph.Nodes.Select(ToNode).Take(options.MaxInventory).ToArray();
-        var evidenceEdges = graph.Edges.Select(ToEdge).Take(options.MaxInventory).ToArray();
+        var graphNodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var evidenceEdges = graph.Edges.Select(edge => ToEdge(edge, graphNodesById)).Take(options.MaxInventory).ToArray();
         var reportCoverage = CoverageLabel(coverageWarnings.Length > 0, truncated, cappedGaps);
         var classification = SummaryClassification(roots, paths.Paths, cappedGaps);
 
@@ -953,7 +1013,16 @@ public static class PropertyFlowReporter
                     root.StartLine,
                     root.EndLine,
                     [root.CombinedFactId],
-                    ["A future scanner or route/value-flow slice may provide a stronger root-to-graph edge."]));
+                    ["A future scanner or route/value-flow slice may provide a stronger root-to-graph edge."])
+                {
+                    SourceIndexId = root.SourceIndexId,
+                    ScanId = root.ScanId,
+                    CommitSha = root.CommitSha,
+                    CommitShas = [root.CommitSha],
+                    SupportingSourceIds = [root.SourceIndexId],
+                    ExtractorId = root.ExtractorId,
+                    ExtractorVersion = root.ExtractorVersion
+                });
                 continue;
             }
 
@@ -1089,7 +1158,8 @@ public static class PropertyFlowReporter
     private static PropertyFlowPath ToPath(PropertyFlowRoot root, IReadOnlyList<CombinedPathNode> nodes, IReadOnlyList<CombinedPathEdge> edges, int ordinal)
     {
         var pathNodes = nodes.Select(ToNode).ToArray();
-        var pathEdges = edges.Select(ToEdge).ToArray();
+        var nodeMap = nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var pathEdges = edges.Select(edge => ToEdge(edge, nodeMap)).ToArray();
         var classification = ClassifyPath(root, pathNodes, pathEdges);
         return new PropertyFlowPath(
             $"path-{ordinal:D4}-{CombinedReportHelpers.Hash(root.RootId + ":" + string.Join(">", pathEdges.Select(edge => edge.EdgeId)), 12)}",
@@ -1164,8 +1234,9 @@ public static class PropertyFlowReporter
             ]));
     }
 
-    private static PropertyFlowEdge ToEdge(CombinedPathEdge edge)
+    private static PropertyFlowEdge ToEdge(CombinedPathEdge edge, IReadOnlyDictionary<string, CombinedPathNode>? nodesById = null)
     {
+        var attribution = AttributionNode(edge, nodesById);
         return new PropertyFlowEdge(
             edge.EdgeId,
             edge.EdgeKind,
@@ -1179,7 +1250,30 @@ public static class PropertyFlowReporter
             edge.SupportingCombinedEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             edge.FilePath is null ? null : CombinedReportHelpers.SafePath(edge.FilePath),
             edge.StartLine,
-            edge.EndLine);
+            edge.EndLine)
+        {
+            SourceIndexId = attribution?.SourceIndexId,
+            SourceLabel = attribution?.SourceLabel is null ? null : SafeSourceLabel(attribution.SourceLabel),
+            ScanId = attribution?.ScanId,
+            CommitSha = attribution?.CommitSha,
+            ExtractorId = "combined-path-edge",
+            ExtractorVersion = "combined-path-edge/1.0"
+        };
+    }
+
+    private static CombinedPathNode? AttributionNode(CombinedPathEdge edge, IReadOnlyDictionary<string, CombinedPathNode>? nodesById)
+    {
+        if (nodesById is null)
+        {
+            return null;
+        }
+
+        if (nodesById.TryGetValue(edge.FromNodeId, out var from))
+        {
+            return from;
+        }
+
+        return nodesById.TryGetValue(edge.ToNodeId, out var to) ? to : null;
     }
 
     private static KeyValuePair<string, string?> Pair(string key, string? value) => new(key, value);
@@ -1235,6 +1329,27 @@ public static class PropertyFlowReporter
         {
             ["scanner"] = scannerVersion
         };
+    }
+
+    private static PropertyFlowCoverageWarning[] ToCoverageWarnings(IEnumerable<string> warnings, IReadOnlyList<PropertyFlowSource> sources)
+    {
+        var sourceIds = sources.Select(source => source.SourceIndexId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var sourceLabels = sources.Select(source => source.SourceLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var commitShas = sources.Select(source => source.CommitSha).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        return warnings
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Select((warning, index) => new PropertyFlowCoverageWarning(
+                $"coverage-warning-{index + 1:D4}-{CombinedReportHelpers.Hash(warning, 12)}",
+                warning,
+                CoverageRuleId,
+                EvidenceTiers.Tier4Unknown,
+                sourceIds,
+                sourceLabels,
+                commitShas,
+                "property-flow",
+                "property-flow/1.0",
+                ["Coverage warnings are report-level evidence; file-level spans are only present on supporting facts, roots, paths, edges, and gaps."]))
+            .ToArray();
     }
 
     private static string? RepositoryIdentityHash(IReadOnlyList<PropertyFlowSource> sources)
@@ -1396,6 +1511,23 @@ public static class PropertyFlowReporter
         }
 
         builder.AppendLine();
+        builder.AppendLine("## Coverage Warnings");
+        builder.AppendLine();
+        if (report.CoverageWarnings.Count == 0)
+        {
+            builder.AppendLine("No coverage warnings were emitted.");
+        }
+        else
+        {
+            builder.AppendLine("| Warning | Rule | Tier | Supporting sources | Commits | Message |");
+            builder.AppendLine("| --- | --- | --- | --- | --- | --- |");
+            foreach (var warning in report.CoverageWarnings)
+            {
+                builder.AppendLine($"| `{Cell(warning.WarningId)}` | `{Cell(warning.RuleId)}` | `{Cell(warning.EvidenceTier)}` | `{Cell(string.Join(", ", warning.SourceLabels))}` | `{Cell(string.Join(", ", warning.CommitShas))}` | {Cell(warning.Message)} |");
+            }
+        }
+
+        builder.AppendLine();
         builder.AppendLine("## Selected Roots");
         builder.AppendLine();
         if (report.SelectedRoots.Count == 0)
@@ -1448,11 +1580,14 @@ public static class PropertyFlowReporter
         }
         else
         {
-            builder.AppendLine("| Gap | Classification | Rule | Tier | Source | Message |");
-            builder.AppendLine("| --- | --- | --- | --- | --- | --- |");
+            builder.AppendLine("| Gap | Classification | Rule | Tier | Source | Evidence | Message |");
+            builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- |");
             foreach (var gap in report.Gaps)
             {
-                builder.AppendLine($"| `{Cell(gap.GapKind)}` | `{Cell(gap.Classification)}` | `{Cell(gap.RuleId)}` | `{Cell(gap.EvidenceTier)}` | `{Cell(gap.SourceLabel ?? string.Empty)}` | {Cell(gap.Message)} |");
+                var evidence = gap.LineSpan is null
+                    ? string.Join(", ", gap.SupportingSourceIds.Concat(gap.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+                    : $"{gap.FilePath}:{gap.LineSpan.StartLine}-{gap.LineSpan.EndLine}";
+                builder.AppendLine($"| `{Cell(gap.GapKind)}` | `{Cell(gap.Classification)}` | `{Cell(gap.RuleId)}` | `{Cell(gap.EvidenceTier)}` | `{Cell(gap.SourceLabel ?? string.Empty)}` | `{Cell(evidence)}` | {Cell(gap.Message)} |");
             }
         }
 
