@@ -96,7 +96,7 @@ descriptor evidence.
 | `LegacyDataEntityDeclared` | Existing DBML/EDMX/typed DataSet rules; new NHibernate class mappings use `legacy.data.orm.nhibernate.v1`. | Add `modelKind`, `metadataFormat`, `descriptorRole`, and normalized identity properties. |
 | `LegacyDataStorageObjectDeclared` | Existing DBML/EDMX/typed DataSet rules; new NHibernate storage mappings use `legacy.data.orm.nhibernate.v1`. | Add model storage role, stable keys, and safe display/hash fields. |
 | `LegacyDataColumnDeclared` | Existing DBML/EDMX/typed DataSet rules; new NHibernate property/id/key mappings use `legacy.data.orm.nhibernate.v1`. | Add property/column role, model identity, and redaction metadata. |
-| `LegacyDataMappingDeclared` | Existing DBML/EDMX/typed DataSet generated mapping rules; new NHibernate mappings use `legacy.data.orm.nhibernate.v1`. | Add required `mappingKind` for new/changed relationship, identity, entity-storage, property-column, adapter-command, ORM class, and ORM property mappings. |
+| `LegacyDataMappingDeclared` | Existing DBML/EDMX/typed DataSet generated mapping rules; new NHibernate mappings use `legacy.data.orm.nhibernate.v1`. | Preserve existing source `mappingKind` values and add model relationship semantics through additive properties such as `modelRelationshipKind` or derived surface fields. |
 | `LegacyDataGeneratedCodeLinked` | Existing `legacy.data.generated-link.v1`; optionally `legacy.data.model.generated-link.v1` if model-normalized links need a distinct rule. | Add descriptor identity hashes and scoped model linkage metadata. |
 | `AnalysisGap` | Existing source rules and new old ORM rules. | Represents parser, unsupported descriptor, ambiguity, missing generated-code, selector, and availability gaps. |
 
@@ -158,7 +158,8 @@ displayNameHash      hash when display name is unsafe or omitted
 containerName        safe container or namespace segment, when allowed
 containerHash        hash when unsafe or omitted
 storageKind          table | view | column | routine | entity-set | relation | unknown
-mappingKind          identity | entity-storage | property-column | relationship | adapter-command | orm-class | orm-property
+mappingKind          existing source value, such as association | relation | entity-storage | property-column | adapter-command | orm-class | orm-property
+modelRelationshipKind relationship | none, when a source mapping represents model relationship semantics
 sourceMetadataFactId supporting descriptor fact ID
 supportingFactIds    sorted deterministic supporting facts
 supportingEdgeIds    sorted deterministic supporting edges, if any
@@ -176,7 +177,8 @@ values, URLs, remotes, machine paths, schema locations, or secret-looking values
 MVP parser responsibilities:
 
 - safely parse checked-in `.hbm.xml` or config-referenced mapping XML using the
-  legacy-data family's safe XML reader;
+  same safe XML helper used by `LegacyDataMetadataExtractor`, currently
+  `SafeXml.LoadDocument`;
 - inventory mapping documents with `legacy.data.orm.nhibernate.v1`;
 - extract class/entity mapping descriptors when `class` elements provide scoped
   `name` and optional safe table metadata;
@@ -188,14 +190,13 @@ MVP parser responsibilities:
 - emit gaps for unsupported inheritance, joined subclass, union subclass,
   dynamic component, composite id, formula-only mapping, filters, named queries,
   custom SQL, and provider extensions unless handled by a future spec.
-- cap descriptor emission to parser-safe bounds. MVP should reuse the
-  legacy-data family's `LegacyDataXml` behavior for consistency: 2 MiB XML file
-  size, 2 MiB maximum characters in document, and 75,000 descendant nodes.
-  Before adding NHibernate parsing, either extend `LegacyDataXml` with a
-  documented depth bound such as 128 or record in implementation state why the
-  existing no-depth-bound behavior is retained with tests. Exceeding bounds
-  emits the existing `LegacyDataMetadataTooLarge` classification, not a clean
-  absence conclusion.
+- cap descriptor emission to parser-safe bounds. MVP should reuse the same XML
+  helper and bounds as the implemented legacy data metadata extractor, currently
+  `SafeXml`: 2 MiB XML file size, 4 MiB maximum characters in document, 100,000
+  descendant nodes, and depth 128. If the shared helper changes, DBML, EDMX,
+  typed DataSet, config, and NHibernate parser-bound tests must be updated
+  together. Exceeding bounds emits the existing
+  `LegacyDataMetadataTooLarge` classification, not a clean absence conclusion.
 - cap per-class descriptor emission at 500 property/column-like descriptors and
   200 relationship/collection descriptors, then emit a truncation/too-large gap
   for the skipped descriptors. These caps are deterministic and may be tightened
@@ -222,7 +223,11 @@ metadata was parsed.
 ## Relationship Extraction Rules
 
 Relationship evidence is represented as `LegacyDataMappingDeclared` with
-`mappingKind = relationship` and source-specific model metadata.
+source-specific mapping metadata. Existing source `mappingKind` values such as
+`association` and `relation` remain stable; model-normalized relationship
+semantics should be carried by additive properties such as
+`modelRelationshipKind = relationship` or by derived `legacy-data` surface
+fields.
 
 - Bidirectional relationships are emitted as one relationship evidence row with
   both endpoint identities when both ends are deterministic.
@@ -281,7 +286,7 @@ Suggested surface fields:
 surfaceKind          legacy-data
 surfaceSubtype       data-model
 modelKind            entity | storage-object | column | relationship | adapter | routine | mapped-type
-metadataFormat       dbml | edmx | typed-dataset | tableadapter | nhibernate-hbm | generated-code
+metadataFormat       dbml | edmx | typed-dataset | tableadapter | nhibernate-hbm | config | generated-code
 stableSurfaceKey     stableModelKey or derived deterministic hash
 safeDisplayName      safe name or redacted hash label
 sourceLabel          combined source label, where applicable
@@ -372,14 +377,14 @@ All XML/config parsing must use safe settings:
 The parser should not use framework APIs that resolve machine config, external
 config includes, provider assemblies, or environment-specific values.
 
-MVP implementations should reuse `LegacyDataXml` so DBML, EDMX, typed DataSet,
-config, and NHibernate parser behavior stays aligned: 2 MiB file size, 2 MiB
-maximum characters in document, and 75,000 descendant nodes. If implementation
-extends `LegacyDataXml` with a depth bound, pin that bound in tests and apply it
-consistently to the legacy data family. Exceeding a bound emits
-`LegacyDataMetadataTooLarge`; malformed XML emits `MalformedLegacyDataMetadata`;
-DTD/entity/security rejection emits `LegacyDataParserSecurityRejected`; scan
-continues with reduced coverage.
+MVP implementations should reuse the parser helper used by
+`LegacyDataMetadataExtractor`, currently `SafeXml`, so DBML, EDMX, typed DataSet,
+config, and NHibernate parser behavior stays aligned: 2 MiB file size, 4 MiB
+maximum characters in document, 100,000 descendant nodes, and depth 128. If that
+shared helper changes, pin the new bounds in tests and apply them consistently
+to the legacy data family. Exceeding a bound emits `LegacyDataMetadataTooLarge`;
+malformed XML emits `MalformedLegacyDataMetadata`; DTD/entity/security rejection
+emits `LegacyDataParserSecurityRejected`; scan continues with reduced coverage.
 
 ## Gap Classifications
 
@@ -430,8 +435,8 @@ Focused tests should cover:
 - descriptor tier ceiling where a `Tier1Semantic` generated-code link does not
   upgrade a `Tier2Structural` descriptor or downstream surface;
 - parser safety for malformed XML, DTD/entity rejection, external entity no-op,
-  oversized/deep metadata where bounds exist, pinned to the selected
-  `LegacyDataXml` bounds;
+  oversized/deep metadata where bounds exist, pinned to the shared legacy data
+  parser helper's bounds;
 - safety/malformed/too-large gap classification tests proving NHibernate uses
   the same strings as the existing legacy data family;
 - deterministic stable keys and byte-stable reports for identical inputs;

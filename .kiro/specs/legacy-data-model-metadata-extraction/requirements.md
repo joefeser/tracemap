@@ -138,22 +138,25 @@ Acceptance Criteria:
 
 1. WHEN a checked-in NHibernate `.hbm.xml` mapping in MVP scope declares classes,
    components, properties, many-to-one, one-to-many, many-to-many, id, version,
-   table, column, schema, catalog, discriminator, collection, query, or
-   named-query metadata THEN TraceMap SHALL emit safe descriptor, relationship,
-   and mapping evidence where deterministic.
+   table, column, schema, catalog, discriminator, or collection metadata THEN
+   TraceMap SHALL emit safe descriptor, relationship, and mapping evidence where
+   deterministic.
 2. WHEN NHibernate mapping references schema, catalog, connection, dialect,
    formula, filter, SQL fragment, query text, or provider-specific values THEN
    TraceMap SHALL omit or hash unsafe values and SHALL NOT store raw SQL or
    config values by default.
-3. WHEN old ORM descriptors are recognized for formats outside the MVP, such as
+3. WHEN NHibernate query or named-query metadata is visible in MVP scope THEN
+   TraceMap SHALL emit unsupported-shape or needs-review gap evidence unless a
+   future spec defines deterministic query-shape extraction and redaction rules.
+4. WHEN old ORM descriptors are recognized for formats outside the MVP, such as
    Fluent-only mappings, LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, Castle
    ActiveRecord, or project-specific mapping DSLs, TraceMap SHALL emit
    unsupported-descriptor gaps with limitations unless this spec is amended.
-4. WHEN mappings use inheritance, components, joins, formulas, filters,
+5. WHEN mappings use inheritance, components, joins, formulas, filters,
    composite keys, dynamic components, custom user types, or provider extensions
    beyond the MVP parser's deterministic rules THEN TraceMap SHALL emit
    needs-review or analysis-gap evidence instead of choosing arbitrary mappings.
-5. Old ORM extraction SHALL NOT claim runtime session factory loading, lazy
+6. Old ORM extraction SHALL NOT claim runtime session factory loading, lazy
    loading, cascade behavior, dirty tracking, database schema existence, or
    query execution.
 

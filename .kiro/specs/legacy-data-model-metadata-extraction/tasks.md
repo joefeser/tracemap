@@ -25,8 +25,9 @@
         semantics rule over existing source facts, not as a second emitter for
         existing DBML/EDMX/typed DataSet facts.
   - [ ] Add `legacy.data.model.relationship.v1` as a derived relationship
-        semantics rule over `LegacyDataMappingDeclared` source facts with
-        `mappingKind = relationship`, not as a duplicate source emitter.
+        semantics rule over `LegacyDataMappingDeclared` source facts while
+        preserving existing source `mappingKind` values such as `association`
+        and `relation`.
   - [ ] Add `legacy.data.orm.nhibernate.v1`.
   - [ ] Add `legacy.data.orm.unsupported.v1`.
   - [ ] Add `legacy.data.model.surface.v1` for derived `legacy-data`
@@ -60,9 +61,10 @@
         unambiguous MSL relationship mapping where supported.
   - [ ] Emit deterministic relationship evidence for typed DataSet relations and
         constraints.
-  - [ ] Represent relationships as `LegacyDataMappingDeclared` with
-        `mappingKind = relationship`, including both endpoint identities when
-        deterministic.
+  - [ ] Represent relationships as `LegacyDataMappingDeclared` while preserving
+        existing source `mappingKind` values and adding
+        `modelRelationshipKind = relationship` or an equivalent derived surface
+        field when deterministic.
   - [ ] Emit unidirectional relationship evidence with a limitation when only
         one endpoint is deterministic.
   - [ ] Emit needs-review or analysis-gap evidence for ambiguous, duplicate,
@@ -73,10 +75,10 @@
 - [ ] 4. Add NHibernate mapping XML MVP. Requirements: 1, 3, 7, 8.
   - [ ] Safely parse checked-in `.hbm.xml` files with DTD/entity resolution
         disabled.
-  - [ ] Reuse `LegacyDataXml` bounds or documented stricter equivalents: 2 MiB
-        XML file size, 2 MiB maximum characters in document, and 75,000
-        descendant nodes; add a depth bound consistently to `LegacyDataXml` or
-        record a tested deferral in implementation state.
+  - [ ] Reuse the same parser helper and bounds as
+        `LegacyDataMetadataExtractor`, currently `SafeXml`: 2 MiB XML file size,
+        4 MiB maximum characters in document, 100,000 descendant nodes, and
+        depth 128.
   - [ ] Inventory mapping documents and emit parser gaps for malformed or unsafe
         XML.
   - [ ] Extract class, id, version, property, component, collection,
