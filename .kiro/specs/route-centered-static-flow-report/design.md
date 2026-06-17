@@ -80,9 +80,10 @@ Additional selectors, aligned with `tracemap paths` where possible:
 
 ```text
 --from-endpoint "<METHOD> <PATH>"
+--from-webforms-event <page-or-event-selector>
 --from-symbol <symbol-selector>
 --from-source <label>
---to-surface <sql-query|sql-persistence|http-route|http-client|package-config|legacy-data|wcf-operation|dependency-surface>
+--to-surface <sql-query|sql-persistence|http-route|http-client|package-config|legacy-data|wcf-operation|remoting-endpoint|remoting-registration|remoting-channel|remoting-object|remoting-api|dependency-surface>
 --surface-name <text>
 --classification <StrongStaticRouteFlow|ProbableStaticRouteFlow|NeedsReviewStaticRouteFlow|NoRouteFlowEvidence|UnknownAnalysisGap>
 --max-depth <n>
@@ -134,9 +135,10 @@ selector grammar.
 
 ## Selector Additions And Deviations From `tracemap paths`
 
-Overlapping selectors (`--from-endpoint`, `--from-symbol`, `--from-source`,
-`--to-surface`, and `--surface-name`) should reuse `tracemap paths` grammar and
-matching semantics. Route-flow adds these selectors and caps:
+Overlapping selectors (`--from-endpoint`, `--from-webforms-event`,
+`--from-symbol`, `--from-source`, `--to-surface`, and `--surface-name`) should
+reuse `tracemap paths` grammar and matching semantics. Route-flow adds these
+selectors and caps:
 
 - `--route` as a server-route alias over normalized method/path entry evidence;
 - `--client-call` as a client-call alias over normalized method/path entry
@@ -300,6 +302,7 @@ public sealed record RouteFlowQuery(
     string? Route,
     string? ClientCall,
     string? FromEndpoint,
+    string? FromWebFormsEvent,
     string? FromSymbol,
     string? FromSource,
     string? ToSurface,
@@ -473,8 +476,18 @@ Recommended `RowKind` values:
 `symbol-relationship`, `fact-symbol-attachment`, `path-context`,
 `terminal-surface`, or `unknown`.
 
-When the selector is `--from-symbol` or `--from-source`, `EntryKind` is
-`symbol-root` or `source-root` respectively. `Method`,
+Entry evidence uses this closed `EntryKind` set:
+
+- `route-root` for `--route`;
+- `client-call-root` for `--client-call`;
+- `endpoint-root` for `--from-endpoint`;
+- `webforms-event-root` for `--from-webforms-event`;
+- `symbol-root` for `--from-symbol`;
+- `source-root` for `--from-source`;
+- `aligned-route-pair` when the selected route and client call are both present
+  and endpoint alignment supports the pair.
+
+When the selector is `--from-symbol` or `--from-source`, `Method`,
 `NormalizedPathTemplate`, and `NormalizedPathKey` are empty strings, and the
 report emits a coverage gap noting that route/client-call entry evidence was not
 selected.
@@ -522,12 +535,15 @@ public sealed record RouteFlowDependencySurface(
 `StableKey` is derived from safe, source-scoped static identity:
 
 ```text
-surface-kind | source-label | normalized route key or package/config/query/data stable key | sorted supporting fact IDs
+surface-kind | source-label | normalized route key or package/config/query/data stable key | safe display identity
 ```
 
 If no existing combined/paths/reverse stable key exists for a surface, compute a
-deterministic hash over the safe fields above. Do not include raw SQL, raw URLs,
-config values, local paths, snippets, or unsanitized metadata in the key input.
+deterministic hash over the safe fields above. Do not include scan-specific fact
+IDs, edge IDs, row IDs, raw SQL, raw URLs, config values, local paths, snippets,
+or unsanitized metadata in the key input. Supporting fact and edge IDs remain in
+the evidence envelope, not in the surface stable key. Duplicate stable keys emit
+identity gaps instead of being disambiguated with volatile IDs.
 
 Gaps:
 
@@ -775,9 +791,10 @@ Focused tests should include:
   `--classification`;
 - `--format json` with file output;
 - `--exit-code` for strong/probable, needs-review, no-evidence, and gap states;
-- `--classification`, `--from-endpoint`, `--from-symbol`, and `--from-source`
-  semantics;
+- `--classification`, `--from-endpoint`, `--from-webforms-event`,
+  `--from-symbol`, and `--from-source` semantics;
 - `--from-endpoint` against endpoint alignment evidence;
+- `--from-webforms-event` against legacy-root path evidence;
 - `--classification` filter reducing to zero rows and producing
   `SelectorNoMatch` plus overall `UnknownAnalysisGap`;
 - `RouteFlowSummary.ExitCodeWouldBeNonZero` matching the actual process exit

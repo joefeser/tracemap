@@ -35,11 +35,12 @@ one API interaction.
 2. WHEN `--client-call "<METHOD> <PATH>"` is provided instead of `--route` THEN
    TraceMap SHALL select matching `HttpCallDetected` client-call evidence as the
    query root.
-3. WHEN `--from-endpoint`, `--from-symbol`, or `--from-source` are provided THEN
-   TraceMap SHALL reuse the existing `tracemap paths` selector grammar where the
-   selector names overlap; any deviation SHALL be documented in the route-flow
-   rule limitations and design before implementation. Route and client-call
-   selectors SHALL remain first-class aliases in the report query metadata.
+3. WHEN `--from-endpoint`, `--from-webforms-event`, `--from-symbol`, or
+   `--from-source` are provided THEN TraceMap SHALL reuse the existing
+   `tracemap paths` selector grammar where the selector names overlap; any
+   deviation SHALL be documented in the route-flow rule limitations and design
+   before implementation. Route and client-call selectors SHALL remain
+   first-class aliases in the report query metadata.
 4. WHEN the input is not a combined index THEN the command SHALL fail clearly
    and SHALL NOT silently treat one single-language scan as complete route
    coverage.
@@ -119,8 +120,9 @@ existing fact families instead of creating a second scanner.
    report MAY use them to connect endpoint, method, interface, implementation,
    override, or type nodes within the conservative limits of Requirement 4.
 7. WHEN query-pattern, SQL-shape, persistence, package/config, HTTP-client,
-   WCF/service, legacy-data, or dependency-surface facts are reached THEN the
-   report SHALL include them as dependency/data/business surfaces.
+   WCF/service, legacy-data, remoting endpoint/registration/channel/object/API,
+   or dependency-surface facts are reached THEN the report SHALL include them as
+   dependency/data/business surfaces.
 8. WHEN object shape, projection shape, schema/DTO, serializer, validation,
    branching, async boundary, or flow-boundary facts exist on or near the path
    THEN the report SHALL include them as business-logic rows without claiming
@@ -312,9 +314,10 @@ route-flow report is deterministic, conservative, and safe.
    runtime`, `authorized`, `used in production`, or `query runs`.
 8. Tests SHALL prove `--format json` file output and `--exit-code` behavior.
 9. Tests SHALL prove `--max-logic-rows` emits a truncation gap.
-10. Tests SHALL prove `--classification`, `--from-endpoint`, `--from-symbol`,
-    and `--from-source` behavior, including entry evidence kinds for symbol and
-    source roots.
+10. Tests SHALL prove `--classification`, `--from-endpoint`,
+    `--from-webforms-event`, `--from-symbol`, and `--from-source` behavior,
+    including entry evidence kinds for endpoint, WebForms, symbol, and source
+    roots.
 11. Tests SHALL prove empty combined snapshots and `index_sources` with zero rows
     produce `UnknownAnalysisGap`.
 12. Tests SHALL prove no timestamps or generation-time values appear in route
