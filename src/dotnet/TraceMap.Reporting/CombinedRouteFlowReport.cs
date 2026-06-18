@@ -169,7 +169,10 @@ public sealed record RouteFlowGap(
     string? SourceLabel,
     string? AffectedRowId,
     IReadOnlyList<string> SupportingFactIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    string? FilePath = null,
+    int? StartLine = null,
+    int? EndLine = null);
 
 public static class RouteFlowClassifications
 {
@@ -305,12 +308,16 @@ public static class CombinedRouteFlowReporter
             .ToArray();
 
         var sourceIdentityGaps = SourceIdentityGaps(sources).ToList();
-        var gaps = pathReport.Gaps.Select(FromPathGap)
+        var endpointMissingRouteRoot = endpointComposition.Gaps.Any(gap => gap.GapKind == "MissingRouteRoot");
+        var pathGaps = pathReport.Gaps
+            .Select(FromPathGap)
+            .Where(gap => !endpointMissingRouteRoot || gap.GapKind != "SelectorNoMatch");
+        var gaps = pathGaps
             .Concat(schemaGaps)
             .Concat(sourceIdentityGaps)
             .Concat(endpointComposition.Gaps)
             .ToList();
-        if (entryEvidence.Length == 0)
+        if (entryEvidence.Length == 0 && !endpointMissingRouteRoot)
         {
             gaps.Add(new RouteFlowGap(
                 "gap:selector:no-entry",
@@ -681,19 +688,30 @@ public static class CombinedRouteFlowReporter
             .ToArray();
         if (roots.Length == 0)
         {
-            var matchedOppositeEndpoint = requiredNodeKind is not null
-                && inventory.Nodes.Any(node => node.NodeKind is "EndpointRoute" or "EndpointClient"
-                    && SourceMatches(node, options.FromSource)
-                    && node.NodeKind != requiredNodeKind
-                    && string.Equals(node.NormalizedPathKey, parsed.PathKey, StringComparison.Ordinal)
-                    && CombinedDependencyReporter.MethodsCompatible(parsed.Method, node.HttpMethod ?? "ANY"));
-            if (matchedOppositeEndpoint)
-            {
-                var sourceLabel = inventory.Nodes
+            var oppositeEndpointNodes = requiredNodeKind is null
+                ? []
+                : inventory.Nodes
                     .Where(node => node.NodeKind is "EndpointRoute" or "EndpointClient")
-                    .Select(node => SafeLabel(node.SourceLabel))
+                    .Where(node => SourceMatches(node, options.FromSource))
+                    .Where(node => node.NodeKind != requiredNodeKind)
+                    .Where(node => string.Equals(node.NormalizedPathKey, parsed.PathKey, StringComparison.Ordinal)
+                        && CombinedDependencyReporter.MethodsCompatible(parsed.Method, node.HttpMethod ?? "ANY"))
+                    .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
+                    .ThenBy(node => node.NodeKind, StringComparer.Ordinal)
+                    .ThenBy(node => node.FilePath, StringComparer.Ordinal)
+                    .ThenBy(node => node.StartLine ?? 0)
+                    .ThenBy(node => node.NodeId, StringComparer.Ordinal)
+                    .ToArray();
+            if (oppositeEndpointNodes.Length > 0)
+            {
+                var firstOppositeEndpoint = oppositeEndpointNodes[0];
+                var supportingFactIds = oppositeEndpointNodes
+                    .Select(node => node.CombinedFactId)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value!)
+                    .Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal)
-                    .FirstOrDefault();
+                    .ToArray();
                 return new EndpointCompositionResult([], [
                     new RouteFlowGap(
                         $"gap:endpoint-composition:MissingRouteRoot:{CombinedReportHelpers.Hash($"{requiredNodeKind}:{parsed.Method}:{parsed.PathKey}", 16)}",
@@ -702,10 +720,13 @@ public static class CombinedRouteFlowReporter
                         GapRuleId,
                         EvidenceTiers.Tier4Unknown,
                         "ReducedCoverage",
-                        sourceLabel,
-                        null,
-                        [],
-                        ["Missing route-root evidence is an availability gap and does not prove endpoint absence."])
+                        SafeLabel(firstOppositeEndpoint.SourceLabel),
+                        firstOppositeEndpoint.NodeId,
+                        supportingFactIds,
+                        ["Missing route-root evidence is an availability gap and does not prove endpoint absence."],
+                        CombinedReportHelpers.SafePath(firstOppositeEndpoint.FilePath),
+                        firstOppositeEndpoint.StartLine,
+                        firstOppositeEndpoint.EndLine)
                 ], false);
             }
 
@@ -731,6 +752,7 @@ public static class CombinedRouteFlowReporter
         var paths = new List<CombinedPath>();
         var queue = new Queue<EndpointTraversalState>();
         var emittedPathsByRoot = roots.ToDictionary(root => root.NodeId, _ => 0, StringComparer.Ordinal);
+        var bridgedMethodIdsByRoot = roots.ToDictionary(root => root.NodeId, _ => new List<string>(), StringComparer.Ordinal);
         foreach (var root in roots)
         {
             var bridgeEdges = outgoing.GetValueOrDefault(root.NodeId, [])
@@ -758,15 +780,16 @@ public static class CombinedRouteFlowReporter
 
             foreach (var edge in bridgeEdges)
             {
+                bridgedMethodIdsByRoot[root.NodeId].Add(edge.ToNodeId);
                 queue.Enqueue(new EndpointTraversalState([root, nodesById[edge.ToNodeId]], [edge]));
             }
         }
 
         var truncated = false;
         var emittedSequence = 0;
-        var rawCallEdgesBySource = inventory.Edges
+        var callLikeEdgesByFromNodeId = inventory.Edges
             .Where(edge => edge.EdgeKind is "calls" or "creates" or "argument-passed" or "parameter-forward")
-            .GroupBy(edge => nodesById.TryGetValue(edge.FromNodeId, out var node) ? node.SourceIndexId ?? string.Empty : string.Empty, StringComparer.Ordinal)
+            .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         while (queue.Count > 0 && paths.Count < options.MaxPaths)
@@ -837,15 +860,14 @@ public static class CombinedRouteFlowReporter
             }
 
             if (!expanded
-                && !string.IsNullOrWhiteSpace(current.SourceIndexId)
-                && rawCallEdgesBySource.TryGetValue(current.SourceIndexId, out var currentSourceCalls)
-                && currentSourceCalls.Length > 0)
+                && callLikeEdgesByFromNodeId.TryGetValue(current.NodeId, out var currentCallEdges)
+                && currentCallEdges.Length > 0)
             {
                 gaps.Add(RouteBridgeGap(
                     "MissingCallEdge",
                     current,
                     "Route-flow traversal reached a static dead end before a terminal surface; no source-local downstream call edge was available from this method.",
-                    currentSourceCalls.SelectMany(edge => edge.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(20).ToArray()));
+                    currentCallEdges.SelectMany(edge => edge.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(20).ToArray()));
             }
 
             if (!expanded && IsInterfaceMemberSymbol(current, symbolKinds))
@@ -872,15 +894,16 @@ public static class CombinedRouteFlowReporter
 
         foreach (var root in roots.Where(root => emittedPathsByRoot.GetValueOrDefault(root.NodeId) == 0))
         {
-            if (!string.IsNullOrWhiteSpace(root.SourceIndexId)
-                && rawCallEdgesBySource.TryGetValue(root.SourceIndexId, out var sourceCalls)
-                && sourceCalls.Length > 0)
+            var bridgedMethodCallEdges = bridgedMethodIdsByRoot.GetValueOrDefault(root.NodeId, [])
+                .SelectMany(methodNodeId => callLikeEdgesByFromNodeId.GetValueOrDefault(methodNodeId, []))
+                .ToArray();
+            if (bridgedMethodCallEdges.Length > 0)
             {
                 gaps.Add(RouteBridgeGap(
                     "MissingCallEdge",
                     root,
-                    "Downstream call evidence exists in the source, but route-flow could not connect it from this endpoint method root under static traversal rules.",
-                    sourceCalls.SelectMany(edge => edge.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(20).ToArray()));
+                    "Downstream call evidence exists on the bridged endpoint method, but route-flow could not connect it under static traversal rules.",
+                    bridgedMethodCallEdges.SelectMany(edge => edge.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(20).ToArray()));
             }
         }
 
@@ -1126,7 +1149,10 @@ public static class CombinedRouteFlowReporter
             SafeLabel(node.SourceLabel),
             node.NodeId,
             supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            ["Endpoint route-flow composition uses bounded source-local static evidence and does not infer runtime behavior."]);
+            ["Endpoint route-flow composition uses bounded source-local static evidence and does not infer runtime behavior."],
+            CombinedReportHelpers.SafePath(node.FilePath),
+            node.StartLine,
+            node.EndLine);
     }
 
     private static RouteFlowGap TraversalBoundsGap(string reason, CombinedPathNode node)
@@ -1141,7 +1167,10 @@ public static class CombinedRouteFlowReporter
             SafeLabel(node.SourceLabel),
             node.NodeId,
             node.CombinedFactId is null ? [] : [node.CombinedFactId],
-            ["Traversal bounds make route-flow output partial and cap clean absence conclusions."]);
+            ["Traversal bounds make route-flow output partial and cap clean absence conclusions."],
+            CombinedReportHelpers.SafePath(node.FilePath),
+            node.StartLine,
+            node.EndLine);
     }
 
     private static IEnumerable<CombinedPath> FilterPathsForSelectorSide(IReadOnlyList<CombinedPath> paths, string? routeSelector, string? clientSelector)

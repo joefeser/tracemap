@@ -208,7 +208,10 @@ public sealed class CombinedRouteFlowTests
 
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
         Assert.Empty(result.Report.FlowRows);
-        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge" && gap.RuleId == "combined.route-flow.gap.v1");
+        var bridgeGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge" && gap.RuleId == "combined.route-flow.gap.v1");
+        Assert.Equal("Controllers/OrdersController.cs", bridgeGap.FilePath);
+        Assert.Equal(10, bridgeGap.StartLine);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MissingCallEdge");
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
     }
 
@@ -230,7 +233,11 @@ public sealed class CombinedRouteFlowTests
             Path.Combine(temp.Path, "route-flow"),
             Route: "GET /api/orders/{id}"));
 
-        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingRouteRoot");
+        var missingRoot = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "MissingRouteRoot");
+        Assert.NotEmpty(missingRoot.SupportingFactIds);
+        Assert.Equal("src/orders.ts", missingRoot.FilePath);
+        Assert.Equal(5, missingRoot.StartLine);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
     }
 

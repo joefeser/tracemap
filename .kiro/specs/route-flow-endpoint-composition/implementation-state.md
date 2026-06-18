@@ -89,6 +89,11 @@ redacted.
   P2 route-flow compatibility threads. Patched null `source_index_id` reads,
   null source-bucket keys, source compatibility checks, client-call path
   preservation, and `--from-source` scoping for endpoint composition roots.
+- PR review loop later found Qodo action-required threads for route-root gap
+  evidence, composition gap file/line metadata, unrelated same-source
+  `MissingCallEdge` provenance, and generic selector gaps conflicting with
+  `MissingRouteRoot`. Patched each path and added focused assertions for the
+  evidence/provenance behavior.
 
 ### Spec Review Notes
 
@@ -154,6 +159,9 @@ redacted.
   terminal surfaces. Surface display falls back to safe descriptors such as
   `shape:` or `text-hash:` rather than raw snippets, SQL, URLs, or config
   values.
+- Route-flow gap JSON now includes optional safe file path and line-span fields
+  for composition gaps when a concrete static node anchors the gap. This is an
+  additive schema extension.
 - Focused tests cover route-bound-to-symbol rows, semantic and syntax-tier route
   bridge behavior, missing route roots, missing method-symbol bridges, direct
   downstream calls, missing call edges, single and multiple interface
