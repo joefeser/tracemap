@@ -1,8 +1,8 @@
 # Route Flow Service/Data Composition Implementation State
 
-Status: spec-ready; implementation not started.
+Status: implementation-slice-in-progress.
 
-Branch: `codex/spec-route-flow-service-data-composition`
+Branch: `codex/implement-route-flow-service-data-composition`
 
 Base branch: `dev`
 
@@ -10,8 +10,9 @@ Issue: `#179`
 
 ## Scope Decisions
 
-- This branch adds a Kiro spec only. It does not change scanner, reducer,
-  reporting, CLI, tests, schemas, rule catalog, or generated artifacts.
+- This branch implements the first product slice for the already-reviewed spec:
+  route-flow rule catalog additions plus read-only projection of
+  `combined_argument_flows` and `combined_fact_symbols`.
 - The spec targets deterministic route-flow composition over existing combined
   index evidence by extending the existing `tracemap route-flow` command and
   `CombinedRouteFlowReporter`.
@@ -67,19 +68,88 @@ Review artifacts were saved under the ignored Kiro review artifact directory.
 - Residual safety scan for stale route-flow names, local absolute paths, private
   sample fragments, and old speculative rule IDs: passed.
 
-## Follow-Up For Implementation
+## Implementation Slice: Projection Read Model
 
-- Implement projection as a backward-compatible extension of the existing
-  `route-flow-report.json` contract.
-- Use concrete existing sources for the first implementation slice:
-  `combined_facts`, `combined_fact_symbols`, `combined_argument_flows`,
-  `combined_dependency_edges`, `FactTypes.ObjectShapeInferred`, and
-  `FactTypes.QueryPatternDetected`.
-- Treat `combined_fact_symbols` as a linking table; join to `combined_facts` for
-  rule ID, evidence tier, file path, and line-span provenance.
-- Parameter-forward bridge coverage is not deferred; implementation Task 10 and
-  Requirement 7 require focused coverage for `combined_parameter_forward_edges`
-  or an explicit future deferral with rationale.
-- Repository-like rows are derived from method/symbol plus surface evidence;
-  there is no dedicated repository table in this spec.
-- Keep implementation PRs small and update this file as each slice lands.
+2026-06-18 branch `codex/implement-route-flow-service-data-composition`
+implements the first suggested PR boundary:
+
+- Added `combined.route-flow.argument-projection.v1` and
+  `combined.route-flow.fact-symbol-projection.v1` to `rules/rule-catalog.yml`
+  with limitations before emitting those rule IDs.
+- Extended `combined.route-flow.gap.v1` with
+  `ArgumentProjectionUnavailable` and `FactSymbolProjectionUnavailable`.
+- Removed the broad present-but-unprojected `ExtractorUnavailable` gap for
+  `combined_argument_flows` and `combined_fact_symbols`.
+- Added a read-only route-flow projection reader for `combined_argument_flows`
+  and `combined_fact_symbols`.
+- Projected joined argument-flow rows into existing `LogicRows` as
+  `argument-flow` rows only when caller/callee symbols are already connected by
+  selected route-flow path evidence.
+- Projected joined fact-symbol rows into existing `LogicRows` as object/query/
+  data/dependency-style rows by joining `combined_fact_symbols` to
+  `combined_facts` and selected source-local symbols.
+- Added scoped projection gaps when optional rows exist but cannot be joined to
+  the selected route-flow path.
+- Added a scoped fact-symbol projection gap when the table exists but this first
+  slice does not project the observed fact types directly.
+- Hashed dependency-surface `tableName`, `columnNames`, and `configKey`
+  metadata in route-flow output and added regression assertions for those
+  fields.
+- Projection rows now cite `combined.route-flow.redaction.v1` in supporting
+  rule IDs when unsafe source/target/table/argument values are hashed.
+- Kept the route-flow JSON contract backward-compatible: `reportType` remains
+  `route-flow` and `version` remains `1.0`.
+- Added focused route-flow tests for projection rows, scoped projection gaps,
+  old gap suppression, public-safe metadata hashing, deterministic output, and
+  rule catalog resolution.
+
+## Current Validation
+
+- `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests`: passed
+  after projection implementation and after Kiro review fixes.
+- Kiro implementation review with Sonnet (`claude-sonnet-4.6`) completed with
+  reduced coverage on first run and found blocking issues. Patched:
+  classification-cap helper naming, sensitive config/connection fact-symbol
+  projection, fragile logic-row substring heuristics, display-name fallback
+  joins, redaction provenance, dependency-surface table/column/config metadata
+  hashing, and unsupported fact-symbol gap silence.
+- Kiro implementation re-review with Sonnet completed with full coverage and
+  identified dependency-surface metadata hashing as the remaining blocking
+  issue; patched as noted above.
+- Final allowed Kiro implementation re-review round completed with reduced
+  coverage and reported additional blocking concerns. Patched concrete current
+  slice issues without requesting another re-review: safe entry display symbols,
+  sensitive parameter-name hashing, selected-source scoping for projection
+  reads, and unbounded projection table reads. The report also listed deferred
+  future-scope items for interface candidates, parameter-forward traversal, and
+  downstream bridge/data-surface gaps.
+- Final local validation after all Kiro-driven patches:
+  `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests` passed;
+  `dotnet test src/dotnet/TraceMap.sln` passed with 439 tests;
+  `git diff --check` passed; `./scripts/check-private-paths.sh` passed.
+- Ran the checked-in combined path/reverse smoke via
+  `./scripts/smoke-combined-paths.sh <tmp>` after installing local TypeScript
+  dependencies with `npm --prefix src/typescript ci`, then ran a direct
+  `tracemap route-flow` CLI smoke against that combined index and verified
+  `route-flow-report.md`, `route-flow-report.json`, report type/version, summary
+  shape, and forbidden runtime wording.
+- Private legacy ASP.NET smoke was not run in this PR. The implemented slice is
+  covered by synthetic combined-index tests and the checked-in sample smoke;
+  private smoke remains a follow-up for downstream traversal/data-surface PRs
+  where private legacy route-flow validation is materially broader.
+
+## Remaining Follow-Up For Implementation
+
+- Continue downstream traversal beyond the existing selected combined path graph:
+  route root to service/repository/data methods with bridge gaps.
+- Add interface implementation candidate expansion tests and classification
+  caps for single, multiple, no-candidate, syntax-only, name-only, and high
+  fan-out cases.
+- Attach broader object-shape, repository-like, data-surface, and
+  parameter-forward evidence, or record explicit deferrals with rationale.
+- Add focused coverage for `combined_parameter_forward_edges` as a route-flow
+  traversal bridge. Deferred to the downstream traversal PR because the first
+  slice only enriches already-selected route-flow paths and does not yet own
+  route-root bridge expansion.
+- Run broader validation, Kiro implementation review, PR review loop, and record
+  final results below before merge.

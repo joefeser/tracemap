@@ -35,6 +35,9 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call" && row.SourceSymbol.Contains(controller, StringComparison.Ordinal));
         Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-filter-sort-selection");
+        Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "argument-flow" && row.Evidence.RuleId == "combined.route-flow.argument-projection.v1");
+        Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-shape" && row.Evidence.RuleId == "combined.route-flow.fact-symbol-projection.v1");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.Contains(result.Report.Snapshot.Sources, source => source.ScannerVersion == "tracemap-milestone15");
         Assert.All(result.Report.FlowRows, row =>
         {
@@ -57,6 +60,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("candidate implementation", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Server=private", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Password=secret", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("generatedAt", json, StringComparison.OrdinalIgnoreCase);
         AssertForbiddenRuntimeWording(markdown);
         AssertForbiddenRuntimeWording(json);
@@ -67,6 +72,30 @@ public sealed class CombinedRouteFlowTests
         Assert.NotEmpty(sqlSurface.Evidence.SupportingFactIds);
         Assert.Contains(RuleIds.CSharpSyntaxQueryPattern, sqlSurface.Evidence.SupportingRuleIds);
         Assert.Equal("tracemap-milestone15", sqlSurface.Evidence.ExtractorVersion);
+        Assert.Contains("tableNameHash", sqlSurface.SafeMetadata.Keys);
+        Assert.Contains("columnNamesHash", sqlSurface.SafeMetadata.Keys);
+        Assert.DoesNotContain("tableName", sqlSurface.SafeMetadata.Keys);
+        Assert.DoesNotContain("columnNames", sqlSurface.SafeMetadata.Keys);
+        Assert.DoesNotContain("orders", JsonSerializer.Serialize(sqlSurface.SafeMetadata), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("id;status", JsonSerializer.Serialize(sqlSurface.SafeMetadata), StringComparison.OrdinalIgnoreCase);
+        var argumentProjection = parsed.LogicRows.Single(row => row.Evidence.RuleId == "combined.route-flow.argument-projection.v1");
+        Assert.Equal("argument-projection", argumentProjection.AttachmentKind);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, argumentProjection.Classification);
+        Assert.Contains("parameterName", argumentProjection.SafeMetadata.Keys);
+        Assert.StartsWith("parameter-name-hash:", argumentProjection.SafeMetadata["parameterName"], StringComparison.Ordinal);
+        Assert.DoesNotContain("apiSecret", JsonSerializer.Serialize(argumentProjection.SafeMetadata), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("argumentSymbol", argumentProjection.SafeMetadata.Keys);
+        Assert.Contains(argumentProjection.Evidence.SupportingRuleIds, rule => rule == RuleIds.CSharpSemanticValueFlow);
+        Assert.Contains(argumentProjection.Evidence.SupportingRuleIds, rule => rule == "combined.route-flow.redaction.v1");
+        var factSymbolProjection = parsed.LogicRows.Single(row => row.Evidence.RuleId == "combined.route-flow.fact-symbol-projection.v1");
+        Assert.Equal("fact-symbol-projection", factSymbolProjection.AttachmentKind);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, factSymbolProjection.Classification);
+        Assert.Contains(factSymbolProjection.Evidence.SupportingRuleIds, rule => rule == RuleIds.CSharpSyntaxQueryPattern);
+        Assert.Contains(factSymbolProjection.Evidence.SupportingRuleIds, rule => rule == "combined.route-flow.redaction.v1");
+        Assert.Contains("tableNameHash", factSymbolProjection.SafeMetadata.Keys);
+        Assert.DoesNotContain("orders", JsonSerializer.Serialize(factSymbolProjection.SafeMetadata), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(parsed.LogicRows, row => row.SafeMetadata.TryGetValue("factType", out var factType)
+            && factType == FactTypes.ConnectionStringDeclared);
 
         var secondOutDir = outDir;
         await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
@@ -180,6 +209,49 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(string.Empty, error.ToString());
     }
 
+    [Fact]
+    public async Task Route_flow_optional_projection_tables_emit_scoped_gaps_when_rows_cannot_join_selected_path()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateUnjoinableProjectionCombinedIndexAsync(temp);
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}"));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ArgumentProjectionUnavailable");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.RuleId is "combined.route-flow.argument-projection.v1" or "combined.route-flow.fact-symbol-projection.v1");
+    }
+
+    [Fact]
+    public void Route_flow_rule_catalog_resolves_projection_rule_ids()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        foreach (var ruleId in new[]
+        {
+            "combined.route-flow.selector.v1",
+            "combined.route-flow.entry.v1",
+            "combined.route-flow.path.v1",
+            "combined.route-flow.interface-bridge.v1",
+            "combined.route-flow.logic-surface.v1",
+            "combined.route-flow.dependency-surface.v1",
+            "combined.route-flow.argument-projection.v1",
+            "combined.route-flow.fact-symbol-projection.v1",
+            "combined.route-flow.classification.v1",
+            "combined.route-flow.gap.v1",
+            "combined.route-flow.redaction.v1",
+            "combined.route-flow.report.v1"
+        })
+        {
+            Assert.Contains($"- id: {ruleId}", catalog);
+        }
+
+        Assert.DoesNotContain("- id: route.flow.", catalog, StringComparison.Ordinal);
+    }
+
     private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp, string serverBuildStatus = "Succeeded")
     {
         var clientIndex = Path.Combine(temp.Path, "client.sqlite");
@@ -198,11 +270,34 @@ public sealed class CombinedRouteFlowTests
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
             CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            ArgumentPassedFact(server, controller, service, "apiSecret", "apiSecret", "System.String", "Controllers/OrdersController.cs", 14),
             CallFact(server, service, repository, "Services/OrderService.cs", 21),
-            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true),
+            ConnectionStringFact(server, repository, "Infrastructure/OrderRepository.cs", 32)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
         return (combinedPath, controller, repository);
+    }
+
+    private static async Task<string> CreateUnjoinableProjectionCombinedIndexAsync(TempDirectory temp)
+    {
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+        var unrelatedCaller = "Server.Unrelated.Start(System.Int32)";
+        var unrelatedCallee = "Server.Unrelated.Finish(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31),
+            ArgumentPassedFact(server, unrelatedCaller, unrelatedCallee, "id", "id", "System.Int32", "Services/Unrelated.cs", 20),
+            QueryPatternFact(server, unrelatedCallee, "Infrastructure/UnrelatedRepository.cs", 41, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+        return combinedPath;
     }
 
     private static ScanManifest Manifest(string repo, string scannerVersion, string buildStatus = "Succeeded")
@@ -285,8 +380,57 @@ public sealed class CombinedRouteFlowTests
             });
     }
 
-    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
+    private static CodeFact ArgumentPassedFact(
+        ScanManifest manifest,
+        string caller,
+        string callee,
+        string argumentSymbol,
+        string parameterName,
+        string parameterType,
+        string file,
+        int line)
     {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ArgumentPassed,
+            RuleIds.CSharpSemanticValueFlow,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["argumentExpressionHash"] = "arg-hash",
+                ["argumentExpressionKind"] = "IdentifierName",
+                ["argumentOrdinal"] = "0",
+                ["argumentSymbol"] = argumentSymbol,
+                ["argumentSymbolKind"] = "Parameter",
+                ["argumentType"] = parameterType,
+                ["callKind"] = "method",
+                ["parameterName"] = parameterName,
+                ["parameterOrdinal"] = "0",
+                ["parameterType"] = parameterType
+            });
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line, bool attachSymbol = false)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["operationName"] = "SELECT",
+            ["tableName"] = "orders",
+            ["columnNames"] = "id;status",
+            ["sqlSourceKind"] = "literal-string",
+            ["queryShapeHash"] = "shape123"
+        };
+        if (attachSymbol && sourceSymbol is not null)
+        {
+            properties["sourceSymbolId"] = sourceSymbol;
+            properties["sourceSymbolDisplayName"] = sourceSymbol;
+            properties["sourceSymbolKind"] = "Method";
+            properties["sourceSymbolLanguage"] = "csharp";
+        }
+
         return FactFactory.Create(
             manifest,
             FactTypes.QueryPatternDetected,
@@ -295,13 +439,29 @@ public sealed class CombinedRouteFlowTests
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             sourceSymbol: sourceSymbol,
             targetSymbol: "orders",
+            properties: properties);
+    }
+
+    private static CodeFact ConnectionStringFact(ScanManifest manifest, string sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ConnectionStringDeclared,
+            RuleIds.ConfigKey,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "ConnectionStrings:Orders",
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["operationName"] = "SELECT",
-                ["tableName"] = "orders",
-                ["columnNames"] = "id;status",
-                ["sqlSourceKind"] = "literal-string",
-                ["queryShapeHash"] = "shape123"
+                ["configKey"] = "ConnectionStrings:Orders",
+                ["connectionName"] = "Orders",
+                ["connectionStringHash"] = "conn-shape-hash",
+                ["sourceSymbolId"] = sourceSymbol,
+                ["sourceSymbolDisplayName"] = sourceSymbol,
+                ["sourceSymbolKind"] = "Method",
+                ["sourceSymbolLanguage"] = "csharp",
+                ["value"] = "Server=private;Password=secret;"
             });
     }
 
@@ -355,5 +515,21 @@ public sealed class CombinedRouteFlowTests
         Assert.DoesNotContain("authorized", value, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("used in production", value, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("query runs", value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }
