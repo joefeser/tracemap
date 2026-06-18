@@ -40,6 +40,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/adoption/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/use-cases/incident-review/",
     "changefreq": "monthly",
     "priority": "0.7"
