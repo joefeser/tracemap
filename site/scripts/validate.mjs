@@ -21,6 +21,7 @@ import { validateReviewClaimChecklistDist } from "./review-claim-checklist.mjs";
 import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
+import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -82,6 +83,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateRoadmapClaimLedgerDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
   await validateTopNavigation({ dist, errors, htmlFiles });
