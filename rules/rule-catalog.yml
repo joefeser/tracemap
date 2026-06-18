@@ -2411,6 +2411,83 @@ rules:
       - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
 
+  - id: analyzer.capability.semantic.v1
+    name: Analyzer semantic capability diagnostics
+    description: Summarizes semantic compilation, MSBuild project load, and reference assembly capability from scan status and sanitized workspace evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Capability diagnostics are derived status rows and are not primary compiler symbol observations.
+      - Available or reduced semantic capability does not prove runtime behavior, deployment readiness, production usage, or clean repository health.
+      - Reference assembly and SDK categories summarize observed scan behavior only; they do not enumerate installed tools or prove absence outside the scan scope.
+
+  - id: analyzer.capability.syntax-fallback.v1
+    name: Analyzer syntax fallback capability diagnostics
+    description: Summarizes whether syntax fallback evidence was available when semantic coverage is reduced or unavailable.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Syntax fallback evidence cannot prove compiler-resolved behavior, runtime reachability, overload binding, or dependency resolution.
+      - Syntax fallback availability does not turn no-evidence outcomes into clean absence.
+      - The diagnostic cites sanitized support facts and closed coverage labels rather than source snippets.
+
+  - id: analyzer.capability.project-config.v1
+    name: Analyzer project and config capability diagnostics
+    description: Summarizes static project/config inspection capability from checked-in project, target framework, and toolchain metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Project/config capability is static metadata inspection and does not evaluate arbitrary MSBuild conditions, imports, runtime config transforms, or design-time execution.
+      - Conditional, unsupported, malformed, or unresolved metadata remains reduced or unknown coverage rather than a clean absence conclusion.
+      - Private project values are omitted, hashed, or represented as closed categories before fact IDs and artifacts are produced.
+
+  - id: analyzer.capability.package-restore.v1
+    name: Analyzer package and restore capability diagnostics
+    description: Summarizes NuGet/package restore awareness from package-shape diagnostics, explicit restore option state, and sanitized restore failure categories.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Restore not requested means dependencies were not resolved by TraceMap; it is not evidence that packages are missing.
+      - Restore failure categories are sanitized and do not include package source URLs, credentials, command output, local caches, or raw config values.
+      - Package/restore capability does not prove vulnerability, license, runtime loading, transitive closure, or deployment behavior.
+
+  - id: analyzer.capability.generated-design-time.v1
+    name: Analyzer generated and design-time capability diagnostics
+    description: Summarizes generated/designer-file and design-time linkage capability for supported legacy static patterns.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Generated/design-time capability rows do not prove generated code absence or freshness outside checked-in repository evidence.
+      - Missing, malformed, unlinked, or unknown design-time artifacts cap confidence but do not suppress valid syntax/config facts.
+      - TraceMap does not execute designers, regenerate files, contact services, or inspect private local tool state.
+
+  - id: analyzer.capability.legacy-toolchain.v1
+    name: Analyzer legacy toolchain capability diagnostics
+    description: Summarizes legacy framework, MSBuild/toolset, WebForms, WCF, ASMX, ASP.NET, and remoting capability signals from static repository evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Legacy toolchain capability is static guidance, not proof that Visual Studio, .NET Framework, IIS, service hosts, or runtime dependencies are installed.
+      - Web, service, remoting, and generated shape evidence does not prove activation, event firing, endpoint reachability, proxy freshness, deployment, or impact.
+      - Toolchain signals are informational unless observed scan behavior reduces coverage.
+
+  - id: analyzer.capability.downstream-coverage.v1
+    name: Analyzer downstream coverage capability diagnostics
+    description: Summarizes reduced or unknown analyzer capability for downstream no-evidence and coverage-relative report explanations.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Downstream coverage context does not prove absence, impact, no-impact, runtime behavior, release readiness, or clean repository health.
+      - Consumers must keep no-evidence conclusions coverage-relative when this capability is reduced, unavailable, or unknown.
+      - Unsupported capability schema versions must be surfaced as compatibility gaps rather than silently dropped.
+
   - id: http.client.invocation.v1
     name: HTTP client invocation
     description: Finds outbound HTTP calls through common .NET HTTP APIs.

@@ -60,6 +60,7 @@ public static class MarkdownReportWriter
         }
 
         AddBuildEnvironmentDiagnostics(lines, result);
+        AddAnalyzerCapabilityDiagnostics(lines, result);
 
         lines.Add("");
         lines.Add("## Facts By Type");
@@ -428,6 +429,49 @@ public static class MarkdownReportWriter
             var limitation = DisplayTableValue(fact.Properties.GetValueOrDefault("limitation") ?? "Static diagnostic evidence only.");
             lines.Add($"| `{code}` | `{fact.EvidenceTier}` | `{fact.RuleId}` | `{evidence}` | {guidance} | {limitation} |");
         }
+    }
+
+    private static void AddAnalyzerCapabilityDiagnostics(List<string> lines, ScanResult result)
+    {
+        var diagnostics = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic)
+            .OrderBy(fact => fact.Properties.GetValueOrDefault("sourceScope"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("capabilityCode"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("capabilityState"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.RuleId, StringComparer.Ordinal)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (diagnostics.Length == 0 || diagnostics.All(IsQuietCapabilityDiagnostic))
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## Analyzer Capability Diagnostics");
+        lines.Add("");
+        lines.Add("Capability diagnostics summarize analyzer coverage and legacy toolchain signals. They do not prove absence, impact, no-impact, runtime behavior, or local tool installation.");
+        lines.Add("");
+        lines.Add("| Capability | State | Coverage | Tier | Rule | Scope | Support | Guidance | Limitation |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in diagnostics.Take(100))
+        {
+            var code = DisplayCodeValue(fact.Properties.GetValueOrDefault("capabilityCode") ?? fact.ContractElement ?? "unknown");
+            var state = DisplayCodeValue(fact.Properties.GetValueOrDefault("capabilityState") ?? "unknown");
+            var coverage = DisplayCodeValue(fact.Properties.GetValueOrDefault("coverageEffect") ?? "unknown-gap");
+            var scope = DisplayCodeValue(fact.Properties.GetValueOrDefault("sourceScope") ?? "workspace");
+            var support = DisplayCodeValue(fact.Properties.GetValueOrDefault("supportingFactCount") ?? "0");
+            var guidance = DisplayTableValue(fact.Properties.GetValueOrDefault("guidance") ?? fact.Properties.GetValueOrDefault("guidanceCode") ?? "Review capability evidence.");
+            var limitation = DisplayTableValue(fact.Properties.GetValueOrDefault("limitation") ?? "Coverage context only.");
+            lines.Add($"| `{code}` | `{state}` | `{coverage}` | `{fact.EvidenceTier}` | `{fact.RuleId}` | `{scope}` | `{support}` | {guidance} | {limitation} |");
+        }
+    }
+
+    private static bool IsQuietCapabilityDiagnostic(CodeFact fact)
+    {
+        var state = fact.Properties.GetValueOrDefault("capabilityState");
+        var effect = fact.Properties.GetValueOrDefault("coverageEffect");
+        return state == "available" && (effect is "full-semantic" or "informational");
     }
 
     private static string DisplayFactName(CodeFact fact)
