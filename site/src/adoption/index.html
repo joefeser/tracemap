@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap adoption playbook for introducing deterministic static evidence into review workflows."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Adoption Playbook | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/adoption/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Adoption Playbook | TraceMap">
+    <meta
+      property="og:description"
+      content="Introduce TraceMap through demo evidence, candidate repositories, scan packets, visible gaps, and owner follow-up."
+    >
+    <meta property="og:url" content="https://tracemap.tools/adoption/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Adoption playbook</p>
+        <h1>Introduce TraceMap as a review workflow, not a verdict machine.</h1>
+        <p class="hero-subhead">
+          This playbook gives engineering leads, reviewers, staff engineers,
+          managers, and repository owners a bounded way to try deterministic
+          static evidence before asking a team to change how it reviews code.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page is process guidance for review conversations, not a product
+          promise or replacement for engineering judgment.
+        </p>
+        <nav class="hero-actions" aria-label="Adoption playbook proof links">
+          <a class="button primary" href="/demo/">Start with the public demo</a>
+          <a class="button secondary" href="/proof-paths/">Follow proof paths</a>
+          <a class="button secondary" href="/review-room/">Open review room</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Starting posture</p>
+          <h2>Begin with a public packet before touching private code.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Demo first</strong><span>Run or read the public demo and current demo result so the team sees the shape of generated summaries, proof paths, evidence tiers, coverage labels, counts, and limitations.</span></div>
+          <div><strong>Public example</strong><span>The first workflow pass should start with the public demo before any private repository scan enters the conversation.</span></div>
+          <div><strong>Question first</strong><span>Name one review question and one repository owner before widening the scan scope. The first adoption pass should answer whether the evidence is useful, not whether the system is complete.</span></div>
+          <div><strong>Boundaries first</strong><span>Review validation and limitations before presenting results so partial coverage, syntax fallback, missing project load, and unsupported framework knowledge stay visible.</span></div>
+          <div><strong>Owner first</strong><span>Every remaining question should land with the person or team that can inspect source, tests, telemetry, documentation, or future extractor work.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Workflow</p>
+          <h2>Six adoption steps keep the first rollout small and inspectable.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>1. Read the demo packet</h3>
+            <p>Start with <a href="/demo/result/">the public demo result</a> and the proof upgrades page. The goal is to understand how TraceMap labels evidence, gaps, and public-safe summaries.</p>
+          </article>
+          <article>
+            <h3>2. Pick a candidate area</h3>
+            <p>Choose one repository, service area, or review surface with a clear owner and a concrete static question, such as which routes, packages, config families, or database-facing surfaces are nearby.</p>
+          </article>
+          <article>
+            <h3>3. Run a deterministic scan</h3>
+            <p>Run TraceMap against a repository and commit SHA. Treat generated artifacts as evidence to inspect, not conclusions to accept blindly.</p>
+          </article>
+          <article>
+            <h3>4. Read the evidence packet</h3>
+            <p>Look for rule IDs, evidence tiers, file paths, line spans, commit SHA, extractor versions, coverage labels, and documented limitations when those details are available.</p>
+          </article>
+          <article>
+            <h3>5. Make gaps explicit</h3>
+            <p>Partial analysis is useful only when it is clearly labeled as partial. Reduced coverage, syntax fallback, unavailable project load, and owner-review rows should stay attached to the packet.</p>
+          </article>
+          <article>
+            <h3>6. Assign follow-up</h3>
+            <p>Route the remaining questions to repository owners, runtime owners, test owners, documentation owners, or future extractor work instead of asking static evidence to answer everything.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>The first useful outcome is a better review question.</h2>
+        <p>
+          A successful adoption pass does not need to settle every dependency
+          conversation. It should show whether a team can move from broad
+          dependency worry to a smaller packet: the named surface, the static
+          paths found, the evidence tier, the coverage label, the limitation,
+          and the owner of the next check.
+        </p>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What TraceMap contributes</p>
+          <h2>Static evidence gives the room a common object to inspect.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>rule id</code><span>Which deterministic extractor or reducer rule produced the row?</span></div>
+          <div><code>evidence tier</code><span>Is the support semantic, structural, syntax/textual, or an explicit unknown?</span></div>
+          <div><code>coverage label</code><span>Is this complete for the scanned scope, reduced, partial, or unavailable?</span></div>
+          <div><code>proof path</code><span>Where can a reviewer inspect the public-safe route, demo result, report family, or source-backed reference?</span></div>
+          <div><code>limitation</code><span>What does the packet not prove, and who owns that remaining review step?</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>The playbook is not runtime proof or release approval.</h2>
+        </div>
+        <ul>
+          <li>TraceMap organizes deterministic static evidence; it does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, or operational safety.</li>
+          <li>TraceMap does not replace CI/CD, tests, telemetry, ownership, human review, release approval, incident response, or governance.</li>
+          <li>TraceMap should not say a change is affected unless reducer-backed public-safe evidence supports that wording.</li>
+          <li>TraceMap concept pages describe how to work with evidence and gaps; they do not prove complete product coverage.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Public-safe material</p>
+          <h2>Share the orientation layer, then keep private scans private.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe to summarize</strong><span>Public routes, public demo summaries, sanitized labels, hashes, counts, rule IDs, evidence tiers, coverage labels, limitations, and reviewed proof paths.</span></div>
+          <div><strong>Keep private</strong><span>Source excerpts, database query text, configuration values, credentials, workstation paths, repository locations, scan folders, private sample identities, local fact streams, local indexes, and analyzer diagnostics.</span></div>
+          <div><strong>Review before publishing</strong><span>Private repository evidence needs a human-cleared public-safe summary before it becomes site copy, meeting material, or broad stakeholder communication.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Next routes</p>
+          <h2>Use the existing surfaces to keep adoption grounded.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/demo/">Public demo</a>
+          <a href="/demo/result/">Demo result</a>
+          <a href="/docs/">Docs</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/review-room/">Review room</a>
+          <a href="/static-triage/">Static triage</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Adoption playbook links the
+        <a href="/demo/">public demo</a>,
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/review-room/">review room</a>,
+        and
+        <a href="/static-triage/">static triage checklist</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

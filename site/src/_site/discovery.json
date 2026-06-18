@@ -287,6 +287,23 @@
     ]
   },
   {
+    "path": "/adoption/",
+    "title": "Adoption Playbook",
+    "summary": "Concept-level onboarding workflow for introducing TraceMap through public demo evidence, candidate repositories, scan packets, visible gaps, and owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a concept-level onboarding workflow, not a product-completeness claim.",
+      "Static evidence can organize review questions but cannot replace owners, tests, telemetry, or release controls."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, deployment state, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
+      "No private source excerpts, database query text, config values, credentials, workstation paths, repository locations, scan folders, local fact streams, local indexes, or analyzer diagnostics are published."
+    ]
+  },
+  {
     "path": "/incident-call/",
     "title": "Incident Call Static Dependency Evidence",
     "summary": "Concept-level use case for using static dependency evidence and proof paths during a production incident or P1 call without claiming runtime proof.",

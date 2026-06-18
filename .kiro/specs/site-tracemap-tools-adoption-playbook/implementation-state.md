@@ -1,31 +1,43 @@
 # Site TraceMap Tools Adoption Playbook Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: ready-for-review
 Public claim level: concept
 
 ## Branch
 
 Spec branch: `codex/spec-site-adoption-playbook`
-
-Future implementation must update this field with the implementation branch
-name before beginning site work.
+Implementation branch: `codex/impl-site-adoption-playbook`
 
 ## Scope
 
-This branch creates a spec-only site phase for a future public adoption
-playbook page. The future page should explain how a team can introduce
-TraceMap into review workflows by starting with public demo material,
-identifying a candidate repository, running deterministic scans, reading
-evidence packets, making gaps explicit, and assigning follow-up ownership.
+This implementation adds a concept-level `/adoption/` page that explains how a
+team can introduce TraceMap into review workflows by starting with public demo
+material, identifying a candidate repository, running deterministic scans,
+reading evidence packets, making gaps explicit, and assigning follow-up
+ownership.
 
-No site code is implemented in this phase.
+Site code is implemented for this phase.
 
 ## Route Decision
 
-Not selected yet. Future implementation must choose `/adoption/` or
-`/playbook/` based on the site information architecture at that time and record
-the decision here.
+Selected route: `/adoption/`.
+
+Rejected route: `/playbook/`.
+
+Reason: `/adoption/` is clearer as the public URL for teams introducing
+TraceMap, while "playbook" remains the page framing and visible copy.
+
+Verified routes linked from the page:
+
+- `/demo/`
+- `/demo/result/`
+- `/docs/`
+- `/validation/`
+- `/limitations/`
+- `/proof-paths/`
+- `/review-room/`
+- `/static-triage/`
 
 ## Claim Boundaries
 
@@ -56,8 +68,22 @@ Spec-phase validation (already run; do not repeat at implementation time):
 `npm run validate` existence should be confirmed in `site/package.json` before
 running future implementation validation; record as a gap if absent.
 
-Future implementation validation is defined in `requirements.md` and
-`tasks.md`.
+Implementation validation completed on 2026-06-18:
+
+- `git diff --check` passed.
+- `npm test` from `site/` passed.
+- `npm run validate` from `site/` passed.
+- `npm run build` from `site/` passed.
+- `./scripts/check-private-paths.sh` passed from the repository root.
+- Desktop browser sanity check for `/adoption/` at 1440px width confirmed the
+  expected title, H1, claim-level text, shared principle, and no horizontal
+  overflow.
+- Mobile browser sanity check for `/adoption/` at 390px width confirmed no
+  horizontal overflow.
+
+Oddity: an initial parallel run of `npm run validate` and `npm run build`
+failed because both commands mutate generated site output. The commands passed
+when rerun sequentially.
 
 ## Review Findings
 
@@ -103,10 +129,6 @@ Future implementation validation is defined in `requirements.md` and
 
 ## Follow-Ups
 
-- Future implementation must select the public route and record the route
-  decision.
-- Future implementation must verify the current public routes for demo, docs,
-  validation, limitations, proof paths, review room, and static triage before
-  linking.
-- Future implementation must update this file with implementation scope,
-  validation results, oddities, and unresolved route gaps.
+- No unresolved route gaps.
+- Future site work can consider whether `/adoption/` should become a top-level
+  navigation item after traffic or reader feedback justifies it.

@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import {
+  adoptionPartialAnalysisSentence,
+  adoptionPlaybookRoute
+} from "./adoption-playbook.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
@@ -101,6 +105,7 @@ async function createDistFixture({
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
   sitemapUrls = [
     ...deployAuditRequiredRoutes,
+    adoptionPlaybookRoute,
     incidentCallRoute,
     managerBriefRoute,
     reviewRoomRoute,
@@ -112,6 +117,7 @@ async function createDistFixture({
 
   const fixtureRoutes = new Set([
     ...deployAuditRequiredRoutes,
+    adoptionPlaybookRoute,
     "/blog/",
     "/capabilities/",
     "/demo/start-here/",
@@ -140,15 +146,17 @@ async function createDistFixture({
       join(dist, path, "index.html"),
       route === "/deploy-audit/"
         ? deployAuditPage()
-        : route === incidentCallRoute
-          ? incidentCallPage()
-          : route === managerBriefRoute
-            ? managerBriefPage()
-            : route === reviewRoomRoute
-              ? reviewRoomPage()
-              : route === staticTriageRoute
-                ? staticTriagePage()
-                : page(`<p>${path}</p>`),
+        : route === adoptionPlaybookRoute
+          ? adoptionPage()
+          : route === incidentCallRoute
+            ? incidentCallPage()
+            : route === managerBriefRoute
+              ? managerBriefPage()
+              : route === reviewRoomRoute
+                ? reviewRoomPage()
+                : route === staticTriageRoute
+                  ? staticTriagePage()
+                  : page(`<p>${path}</p>`),
       "utf8"
     );
   }
@@ -176,6 +184,17 @@ async function writeDiscoveryFiles(dist) {
         limitations: ["Fixture limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       })),
+      {
+        path: adoptionPlaybookRoute,
+        title: "Adoption Playbook",
+        summary: "Fixture adoption playbook route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture adoption limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
       {
         path: incidentCallRoute,
         title: "Incident Call",
@@ -274,6 +293,29 @@ function incidentCallPage() {
     <a href="/demo/result/">Demo result</a>
     <a href="/use-cases/incident-review/">Incident review orientation</a>
     <a href="/static-triage/">static triage checklist</a>
+  `);
+}
+
+function adoptionPage() {
+  const filler = Array.from({ length: 95 }, (_, index) => `adoption evidence workflow boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>not a product promise or replacement for engineering judgment</p>
+    <p>start with the public demo</p>
+    <p>repository owners runtime owners test owners documentation owners future extractor work</p>
+    <p>${adoptionPartialAnalysisSentence}</p>
+    <p>The playbook is not runtime proof or release approval</p>
+    <meta property="og:type" content="article">
+    <a href="/demo/">Public demo</a>
+    <a href="/demo/result/">Demo result</a>
+    <a href="/docs/">Docs</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/review-room/">Review room</a>
+    <a href="/static-triage/">Static triage</a>
+    <p>${filler}</p>
   `);
 }
 
