@@ -262,6 +262,18 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Legacy ASP.NET Static Surface Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.AspNetSurfaceDeclared
+                or FactTypes.AspNetRouteDeclared
+                or FactTypes.AspNetConfigSurfaceDeclared
+                or FactTypes.AspNetHandlerDeclared
+                or FactTypes.AspNetPageMethodDeclared
+                or FactTypes.AspNetNavigationReferenceDeclared
+                or FactTypes.AspNetNavigationEdgeDeclared),
+            FormatLegacyAspNetFact);
+
+        AddFactSection(
+            lines,
             "Boilerplate Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -311,6 +323,16 @@ public static class MarkdownReportWriter
             lines.Add("");
             lines.Add("- WebForms event evidence is static markup, code-behind, designer, and direct backend evidence. It does not prove runtime event firing, page lifecycle execution, event bubbling, deployment, service reachability, SQL execution, branch feasibility, or production usage.");
             lines.Add("- Static logic signals and UI-boilerplate signals are deterministic heuristics, not proof of business logic or code quality.");
+        }
+
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("AspNet", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## Legacy ASP.NET Surface Limitations");
+            lines.Add("");
+            lines.Add("- ASP.NET surface, route, config, handler, PageMethod, and navigation rows are deterministic static evidence from checked-in files only.");
+            lines.Add("- Each route candidate or navigation reference candidate does not prove runtime route matching, IIS deployment, URL rewriting, authorization, browser behavior, JavaScript execution, page rendering, request handling, user reachability, or runtime impact.");
+            lines.Add("- Raw URLs, hostnames, config values, local absolute paths, remotes, endpoint values, snippets, credentials, and secret-looking values are hashed or omitted.");
         }
 
         lines.Add("");
@@ -443,6 +465,32 @@ public static class MarkdownReportWriter
             ?? fact.Properties.GetValueOrDefault("sourceKind")
             ?? fact.FactType;
         return $"- `{fact.FactType}` `{name}` as static ASMX/SOAP `{classification}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`";
+    }
+
+    private static string FormatLegacyAspNetFact(CodeFact fact)
+    {
+        var name = FirstPresentValue(
+            fact.Properties.GetValueOrDefault("routeName"),
+            HashLabel(fact, "routeNameHash", "route-name"),
+            fact.Properties.GetValueOrDefault("targetPath"),
+            HashLabel(fact, "targetPathHash", "navigation-target"),
+            fact.Properties.GetValueOrDefault("mappedPagePath"),
+            HashLabel(fact, "routePatternHash", "route-pattern"),
+            fact.Properties.GetValueOrDefault("handlerTypeName"),
+            fact.Properties.GetValueOrDefault("typeName"),
+            fact.Properties.GetValueOrDefault("methodName"),
+            fact.Properties.GetValueOrDefault("sectionKind"),
+            DisplayFactName(fact));
+        var role = FirstPresentValue(
+            fact.Properties.GetValueOrDefault("surfaceKind"),
+            fact.Properties.GetValueOrDefault("routeShape"),
+            fact.Properties.GetValueOrDefault("sectionKind"),
+            fact.Properties.GetValueOrDefault("handlerKind"),
+            fact.Properties.GetValueOrDefault("referenceKind"),
+            fact.Properties.GetValueOrDefault("edgeKind"),
+            fact.FactType);
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return $"- `{fact.FactType}` `{DisplayCodeValue(name)}` as static ASP.NET `{DisplayCodeValue(role)}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`";
     }
 
     private static string FormatLegacyDataMetadataFact(CodeFact fact)

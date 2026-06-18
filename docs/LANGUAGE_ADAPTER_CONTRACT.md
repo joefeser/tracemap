@@ -141,6 +141,36 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 
 These facts are static evidence only. They do not prove runtime page lifecycle execution, postbacks, event bubbling, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
 
+### Legacy ASP.NET Route And Navigation Facts
+
+The .NET adapter also emits deterministic classic ASP.NET surface evidence
+around WebForms pages and handlers. Existing `WebForms*` facts remain
+authoritative for page/control/master event evidence; the ASP.NET facts add
+route, config, handler, PageMethod, and navigation context without running IIS
+or executing the app.
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `AspNetSurfaceDeclared` | Inventories checked-in ASP.NET application and handler surface files, while reusing WebForms page/control/master inventory instead of duplicating it. | `surfaceKind`, safe directive metadata or role-separated hashes, `coverageLabel`, `ruleLimitations` |
+| `AspNetRouteDeclared` | Records supported static classic ASP.NET route registration candidates such as `MapPageRoute`. | `routeShape`, `routePatternHash`, safe route name or hash, mapped page descriptor or hash, `coverageLabel` |
+| `AspNetConfigSurfaceDeclared` | Records safe structures from checked-in handler/module/pages/controls/namespaces/urlMappings/compilation config. | `sectionKind`, safe type/path/verb descriptors or role-separated hashes, `coverageLabel` |
+| `AspNetHandlerDeclared` | Records `.ashx`, `IHttpHandler`, `IHttpAsyncHandler`, and handler-factory static evidence. | `handlerKind`, safe type identity, unresolved factory flags when needed, `coverageLabel` |
+| `AspNetPageMethodDeclared` | Records `[WebMethod]`, `[ScriptMethod]`, and `[ScriptService]` PageMethod/script-service evidence without reclassifying it as ASMX. | `methodName`, `containingTypeName`, `attributeNames`, `isStatic`, `coverageLabel` |
+| `AspNetNavigationReferenceDeclared` | Records static navigation reference candidates from markup, sitemap XML, or supported C# APIs. | `referenceKind`, `sourceSurface`, target descriptor or role-separated hash, `coverageLabel` |
+| `AspNetNavigationEdgeDeclared` | Links a navigation reference to checked-in page, route, config, or handler evidence only when non-hash target evidence supports the edge. | `edgeKind`, `referenceFactId`, `targetFactId`, `targetFactType`, `supportingFactIds` |
+
+ASP.NET route/navigation hashes use the scanner-side context shape
+`legacy.aspnet.<family>|<propertyRole>|<normalizedValue>` and store the
+32-character lowercase hex prefix. The same unsafe raw value in route pattern,
+config, and navigation target roles must produce different stored hashes.
+
+These facts are static evidence only. They do not prove route-table execution,
+IIS deployment, runtime URL rewriting, authorization, browser behavior,
+JavaScript execution, page rendering, request handling, user reachability, or
+runtime impact. Raw URLs, hostnames, config values, endpoint values, local
+absolute paths, remotes, snippets, credentials, and secrets are omitted or
+hashed.
+
 ### Legacy Data Metadata Facts
 
 The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX, typed DataSet XSD/TableAdapter, data-provider config, and deterministic generated-code linkage.
