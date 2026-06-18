@@ -469,7 +469,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
                 States.Available,
                 Effects.StructuralOnly,
                 RuleIds.AnalyzerCapabilityLegacyToolchain,
-                StrongestTier(rows) == EvidenceTiers.Tier4Unknown ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural,
+                CapabilityTierFromSupport(rows),
                 GuidanceCodes.ReviewLegacyToolchainSignals,
                 LimitationCodes.LegacyToolchainStaticSignal,
                 first,
@@ -492,7 +492,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
                 States.Available,
                 Effects.StructuralOnly,
                 RuleIds.AnalyzerCapabilityLegacyToolchain,
-                StrongestTier(support) == EvidenceTiers.Tier4Unknown ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural,
+                CapabilityTierFromSupport(support),
                 GuidanceCodes.ReviewLegacyToolchainSignals,
                 LimitationCodes.LegacyToolchainStaticSignal,
                 first,
@@ -644,6 +644,16 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             2 => EvidenceTiers.Tier2Structural,
             3 => EvidenceTiers.Tier3SyntaxOrTextual,
             _ => EvidenceTiers.Tier4Unknown
+        };
+    }
+
+    private static string CapabilityTierFromSupport(IEnumerable<CodeFact> facts)
+    {
+        return StrongestTier(facts) switch
+        {
+            EvidenceTiers.Tier4Unknown => EvidenceTiers.Tier4Unknown,
+            EvidenceTiers.Tier3SyntaxOrTextual => EvidenceTiers.Tier3SyntaxOrTextual,
+            _ => EvidenceTiers.Tier2Structural
         };
     }
 

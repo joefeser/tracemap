@@ -157,6 +157,28 @@ public sealed class AnalyzerCapabilityDiagnosticTests
     }
 
     [Fact]
+    public void Syntax_only_remoting_support_preserves_tier3_capability_evidence()
+    {
+        var manifest = Manifest("Level1SemanticAnalysisReduced", "FailedOrPartial");
+        var inventory = new[] { new FileInventoryItem("src/Legacy/RemotingHost.cs", "CSharp", 1) };
+        var semantic = new SemanticExtractionResult([], [], Attempted: true, ReducedCoverage: true);
+        var support = RemotingSyntaxFact(manifest);
+
+        var capabilities = AnalyzerCapabilityDiagnosticExtractor.Extract(
+            manifest,
+            inventory,
+            semantic,
+            [support],
+            new ScanOptions("repo", "out"));
+
+        var remoting = Assert.Single(capabilities, fact =>
+            fact.Properties.GetValueOrDefault("capabilityCode") == AnalyzerCapabilityDiagnosticExtractor.Codes.LegacyRemotingShape);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, remoting.EvidenceTier);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, remoting.Properties.GetValueOrDefault("strongestSupportingEvidenceTier"));
+        Assert.Equal(support.FactId, remoting.Properties.GetValueOrDefault("supportingFactIds"));
+    }
+
+    [Fact]
     public async Task Capability_diagnostics_are_queryable_in_sqlite_and_combined_indexes()
     {
         using var temp = new TempDirectory();
@@ -433,6 +455,23 @@ public sealed class AnalyzerCapabilityDiagnosticTests
                 ["schemaVersion"] = AnalyzerCapabilityDiagnosticExtractor.SchemaVersion,
                 ["sourceScope"] = "workspace",
                 ["supportingFactIds"] = string.Empty
+            });
+    }
+
+    private static CodeFact RemotingSyntaxFact(ScanManifest manifest)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingApiUsageDeclared,
+            RuleIds.LegacyRemotingApi,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan("src/Legacy/RemotingHost.cs", 12, 12, null, "LegacyRemotingExtractor", ScannerVersions.LegacyRemotingExtractor),
+            targetSymbol: "System.Runtime.Remoting.RemotingConfiguration",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["apiKind"] = "syntax-name",
+                ["apiName"] = "System.Runtime.Remoting.RemotingConfiguration",
+                ["limitation"] = "Syntax-only Remoting API reference; project-defined lookalikes remain review-tier evidence."
             });
     }
 
