@@ -554,7 +554,7 @@ public static partial class LegacyAspNetExtractor
                 var attributeNames = attrs.Select(attribute => AttributeShortName(attribute)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                 var methodName = method.Identifier.ValueText;
                 var symbol = $"{typeName}.{methodName}";
-                if (IsAsmxOperationMethod(asmxOperationsByFile, item.RelativePath, methodName, symbol))
+                if (IsAsmxOperationMethod(asmxOperationsByFile, item.RelativePath, typeName, methodName, symbol))
                 {
                     continue;
                 }
@@ -1237,12 +1237,13 @@ public static partial class LegacyAspNetExtractor
             : null;
     }
 
-    private static bool IsAsmxOperationMethod(IReadOnlyDictionary<string, CodeFact[]> asmxOperationsByFile, string filePath, string methodName, string symbol)
+    private static bool IsAsmxOperationMethod(IReadOnlyDictionary<string, CodeFact[]> asmxOperationsByFile, string filePath, string typeName, string methodName, string symbol)
     {
         return asmxOperationsByFile.TryGetValue(filePath, out var candidates)
             && candidates.Any(fact =>
-                fact.ContractElement?.Equals(methodName, StringComparison.Ordinal) == true
-                || fact.TargetSymbol?.Equals(symbol, StringComparison.Ordinal) == true);
+                fact.TargetSymbol?.Equals(symbol, StringComparison.Ordinal) == true
+                || (fact.SourceSymbol?.Equals(typeName, StringComparison.Ordinal) == true
+                    && fact.ContractElement?.Equals(methodName, StringComparison.Ordinal) == true));
     }
 
     private static bool ParentNameEquals(XElement element, string name)

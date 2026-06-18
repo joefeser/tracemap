@@ -147,6 +147,15 @@ Status: implemented
   - `./scripts/check-private-paths.sh`
   - `git diff --check`
   - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
+- Third fresh Codex review follow-up validation passed after tightening ASMX
+  PageMethod suppression to type+method identity so same-named PageMethods in
+  other types are preserved:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (20 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (484 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
 
 ## Kiro Review State
 

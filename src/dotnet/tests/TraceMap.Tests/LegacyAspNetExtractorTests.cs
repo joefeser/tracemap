@@ -470,6 +470,51 @@ public sealed class LegacyAspNetExtractorTests
     }
 
     [Fact]
+    public void Scan_does_not_suppress_same_named_page_method_in_different_type()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Legacy.asmx"), """
+            <%@ WebService Language="C#" CodeBehind="Shared.cs" Class="Sample.LegacyService" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Shared.cs" Inherits="Sample.Default" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Shared.cs"), """
+            using System.Web.Services;
+            namespace Sample;
+            [WebService]
+            public sealed class LegacyService
+            {
+                [WebMethod]
+                public string Lookup(string value) => value;
+            }
+
+            public partial class Default
+            {
+                [WebMethod]
+                public static string Lookup(string value) => value;
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AsmxOperationDeclared
+            && fact.SourceSymbol == "Sample.LegacyService"
+            && fact.ContractElement == "Lookup");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetPageMethodDeclared
+            && fact.SourceSymbol == "Sample.Default"
+            && fact.ContractElement == "Lookup");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetPageMethodDeclared
+            && fact.SourceSymbol == "Sample.LegacyService"
+            && fact.ContractElement == "Lookup");
+    }
+
+    [Fact]
     public void Scan_omits_secret_like_navigation_target_without_edge()
     {
         using var temp = new TempDirectory();
