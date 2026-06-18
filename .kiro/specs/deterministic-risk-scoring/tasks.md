@@ -14,7 +14,7 @@
 
 Recommended first implementation PR: release-review opt-in scoring only, including shared scoring models/rules, rule catalog entries, Markdown/JSON output, and focused tests. Do not add scoring to diff, impact, paths, reverse, or portfolio in the first implementation PR unless release-review integration remains small and the shared API is already stable.
 
-The first implementation PR should prefer ordinal priority if numeric score weights are not fully settled. If numeric scoring is emitted, every component value and aggregation rule must be visible in JSON and covered by tests.
+The first implementation PR uses ordinal priority only. Numeric `priorityScore` weights are deferred to a future scoring model version.
 
 ## Implementation Tasks
 
@@ -23,10 +23,9 @@ The first implementation PR should prefer ordinal priority if numeric score weig
   - [ ] Confirm first workflow target: `tracemap release-review`.
   - [ ] Confirm opt-in flag name, suggested as `--include-priority`.
   - [ ] Confirm JSON model version, suggested as `review-priority.v1`.
-  - [ ] Confirm whether v1 emits ordinal-only priority or numeric `priorityScore`.
-  - [ ] Treat ordinal-vs-numeric as a hard gate before implementing component values and aggregation.
-  - [ ] If numeric scoring is chosen, define and document the cap-to-score function before implementation.
-  - [ ] Document the ordinal-vs-numeric decision in the rule catalog before component-value or aggregation code is written.
+  - [ ] Confirm v1 ordinal-only scoring and `priorityScore: null` JSON behavior.
+  - [ ] Document ordinal candidates, caps, unknown behavior, and report aggregation in the rule catalog before output code is enabled.
+  - [ ] Defer numeric scoring and cap-to-score functions to a future scoring model version.
   - [ ] Confirm release-review JSON compatibility choice: opt-in sidecar with byte-identical opt-out, or always-present additive `not_requested` section with version/compatibility policy.
   - [ ] Confirm closed vocabularies for `severityHint`, `attentionLevel`, and section status.
   - [ ] Confirm scoring is not a release gate, runtime risk predictor, security scanner, or business-criticality model.
@@ -36,7 +35,7 @@ The first implementation PR should prefer ordinal priority if numeric score weig
   - [ ] Add `review.priority.aggregate.v1` or equivalent aggregation rule.
   - [ ] Add downgrade rules for coverage, identity, commit SHA, schema, fallback evidence, and truncation.
   - [ ] Add unavailable-workflow and selector rules.
-  - [ ] Document ordinal precedence or numeric component weights, including cap and unknown behavior.
+  - [ ] Document ordinal precedence, public-surface inputs, cross-repo reach inputs, caps, and unknown behavior.
   - [ ] Document inputs, outputs, evidence tiers, downgrade behavior, and limitations for every scoring rule.
   - [ ] Document that scoring is deterministic static review prioritization, not runtime probability, AI judgment, release approval, vulnerability scanning, or compliance.
 
@@ -60,6 +59,8 @@ The first implementation PR should prefer ordinal priority if numeric score weig
 
 - [ ] 5. Implement deterministic component rules. Requirements: 2, 4, 5.
   - [ ] Map strong static evidence classifications to base review-priority components.
+  - [ ] Map existing public-surface evidence to `public_surface` components without inferring runtime exposure.
+  - [ ] Map existing combined/portfolio cross-source evidence to `cross_repo_reach` components without inferring ownership, deployment, or business reach.
   - [ ] Map review-tier, syntax-only, textual, hash-only, ambiguous, duplicate, name-only, fallback, and high-fan-out evidence to capped review components.
   - [ ] Map evidence tiers to documented strength or cap components.
   - [ ] Map deterministic fan-out counts to fan-out components.
@@ -70,8 +71,8 @@ The first implementation PR should prefer ordinal priority if numeric score weig
 
 - [ ] 6. Implement aggregation and severity mapping. Requirements: 3, 4, 5.
   - [ ] Aggregate row components deterministically into `severityHint`.
-  - [ ] If numeric scoring is emitted, aggregate component values into `priorityScore` with documented fixed weights.
-  - [ ] If numeric scoring is emitted, apply cap components through a documented tested function such as `effectiveScore = min(rawScore, capScore)`.
+  - [ ] Emit `priorityScore: null` for v1 ordinal scoring where the schema includes the field.
+  - [ ] Do not emit numeric component weights or numeric score bands in v1.
   - [ ] Apply cap rules after positive components.
   - [ ] Emit `unknown` with `priorityScore: null` when limiting gaps prevent a credible score.
   - [ ] Aggregate report-level `attentionLevel` from row severities, section completeness, and gap components.
@@ -140,8 +141,8 @@ The first implementation PR should prefer ordinal priority if numeric score weig
   - [ ] Component ordering is deterministic.
   - [ ] Closed-vocabulary exhaustiveness for every emitted `severityHint`, `attentionLevel`, and section status.
   - [ ] Opt-out output remains byte-identical when `--include-priority` is absent, unless an always-present additive section is explicitly versioned.
-  - [ ] Priority score type consistency: fixtures either emit `priorityScore: null` consistently for ordinal mode or integer scores consistently for numeric mode.
-  - [ ] `ComponentValue` is `null` for ordinal-only components or integer for numeric components according to the documented model.
+  - [ ] Priority score type consistency: v1 fixtures emit `priorityScore: null` consistently where the field is present.
+  - [ ] `ComponentValue` is `null` for v1 ordinal-only components.
   - [ ] Sidecar `rowId` values are stable across repeated identical inputs and do not use volatile database row IDs.
   - [ ] Scoring `modelVersion` is asserted against a known constant.
   - [ ] Markdown delimiter escaping covers pipes, line endings, brackets, parentheses, backticks, angle brackets, and allowed user-controlled labels or limitations.

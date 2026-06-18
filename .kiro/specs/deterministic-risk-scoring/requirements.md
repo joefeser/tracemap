@@ -12,7 +12,7 @@ This feature is a static evidence prioritization layer. It is not runtime risk p
 
 In scope:
 
-- Define a deterministic review priority model based only on existing TraceMap evidence: evidence tiers, rule IDs, classifications, coverage labels, analysis gaps, changed facts, paths, surfaces, fan-out, source identity, schema availability, caps, and documented limitations.
+- Define a deterministic review priority model based only on existing TraceMap evidence: evidence tiers, rule IDs, classifications, coverage labels, analysis gaps, changed facts, paths, public surfaces, cross-repo reach, fan-out, source identity, schema availability, caps, and documented limitations.
 - Emit score components and severity hints that each cite source evidence, rule IDs, evidence tiers, supporting IDs, and limitations.
 - Integrate conceptually with release-review, combined diff, combined impact, route-flow/path, reverse, portfolio, and Markdown/JSON report outputs.
 - Define strict downgrade and unknown behavior for reduced coverage, missing commit SHA, missing or conflicting source identity, missing optional schema, ambiguous evidence, hash-only identity, truncation, and unavailable workflows.
@@ -61,6 +61,8 @@ Out of scope:
 7. WHEN source identity, commit SHA, or schema metadata is missing or conflicting THEN the scoring output SHALL cite the gap and downgrade or mark affected components unknown.
 8. WHEN a component depends on optional data that was not requested or not available THEN the component SHALL record that limitation and SHALL NOT infer absence of risk.
 9. WHEN arbitrary metadata is included in scoring JSON THEN it SHALL use canonical sorted key/value arrays, not unordered dictionaries.
+10. WHEN public-surface evidence contributes THEN it SHALL be derived only from existing static evidence such as HTTP route/client facts, API/DTO contract rows, SQL/schema surface rows, package manifest or lockfile surface rows, route-flow roots, reverse selected surfaces, or portfolio shared surfaces; absence of such evidence SHALL be a limitation, not proof that no public surface exists.
+11. WHEN cross-repo reach contributes THEN it SHALL be derived only from existing combined or portfolio evidence such as source labels, source identity hashes, source counts, shared surface groups, endpoint alignment rows, path/reverse roots across sources, or before/after manifest comparisons; it SHALL NOT infer organization topology, ownership, deployment coupling, or business reach.
 
 ### Requirement 3: Closed Priority Vocabulary
 
@@ -70,8 +72,8 @@ Out of scope:
 
 1. WHEN row-level priority is emitted THEN `severityHint` SHALL use a closed vocabulary: `critical_review`, `high_review`, `medium_review`, `low_review`, `info`, and `unknown`.
 2. WHEN report-level priority is emitted THEN `attentionLevel` SHALL use a closed vocabulary: `highest_attention`, `high_attention`, `moderate_attention`, `low_attention`, `informational`, and `unknown`.
-3. WHEN a numeric score is emitted THEN it SHALL be named `priorityScore`, SHALL be an integer in a fixed range, and SHALL be accompanied by component rows whose sum or deterministic aggregation explains it.
-4. WHEN a numeric score is not necessary for v1 THEN TraceMap MAY emit ordinal priority only, but the choice SHALL be documented in design and JSON versioning.
+3. WHEN v1 scoring is emitted THEN TraceMap SHALL emit ordinal priority only, SHALL set `priorityScore` to `null` where the schema includes it, and SHALL NOT emit numeric score weights.
+4. WHEN numeric scoring is introduced in a future version THEN it SHALL be named `priorityScore`, SHALL be an integer in a fixed range, SHALL be accompanied by component rows whose deterministic aggregation explains it, and SHALL require a new scoring model version.
 5. WHEN `unknown` is emitted THEN the output SHALL include at least one limiting gap or unavailable component explaining why no stronger or lower priority could be stated.
 6. WHEN a report contains only no-evidence results under verified identity and full requested coverage THEN priority SHALL be no stronger than `informational` or `low_review`, unless checklist or gap rules produce a higher review-attention hint.
 7. WHEN evidence is syntax-only, textual, hash-only, ambiguous, duplicate, name-only, coverage-relative, or high fan-out from noisy names THEN row priority SHALL be capped at `medium_review` unless an explicit scoring rule documents a stronger static evidence condition.
@@ -86,8 +88,8 @@ Out of scope:
 
 1. WHEN a score is emitted THEN TraceMap SHALL emit component records with `componentKind`, `componentValue`, `direction`, `ruleId`, `evidenceTier`, `sourceEvidenceIds`, and `limitations`.
 2. WHEN multiple components apply to the same row THEN aggregation SHALL be deterministic and documented.
-3. WHEN component weights are used THEN every weight SHALL be named, fixed in code, documented in design, covered by tests, and visible in JSON output.
-4. WHEN component weights, ordinal precedence, cap behavior, or row/report aggregation rules are changed in a future version THEN JSON version or scoring model version SHALL change.
+3. WHEN ordinal scoring is emitted in v1 THEN every component SHALL map to a documented ordinal candidate, cap, downgrade, or unknown behavior; hidden weights SHALL NOT be used.
+4. WHEN ordinal precedence, cap behavior, row/report aggregation rules, or future numeric weights are changed in a future version THEN JSON version or scoring model version SHALL change.
 5. WHEN a downgrade applies THEN the output SHALL include both the positive evidence component and the downgrade component rather than hiding the original evidence.
 6. WHEN caps are hit before scoring can inspect all rows THEN scoring SHALL emit a truncation component and SHALL NOT present the report-level score as complete.
 7. WHEN row sorting uses score output THEN ties SHALL be broken deterministically by attention level, severity hint, underlying classification order, evidence tier, source label, stable key, file path, line span, and stable ID.
