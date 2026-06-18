@@ -111,6 +111,81 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Client_call_selector_preserves_generic_client_server_paths()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone15");
+        var clientMethod = "Client.OrderService.loadOrder(System.Int32)";
+        var clientCache = "Client.OrderCache.read(System.Int32)";
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5, clientMethod),
+            CallFact(client, clientMethod, clientCache, "src/orders.ts", 8),
+            QueryPatternFact(client, clientCache, "src/cache.ts", 13, attachSymbol: true)
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            ClientCall: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.FlowRows, row => row.RowKind == "client-server-alignment");
+        Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(controller, StringComparison.Ordinal));
+        Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(clientCache, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Route_selector_composition_honors_from_source_scope()
+    {
+        using var temp = new TempDirectory();
+        var firstIndex = Path.Combine(temp.Path, "server-a.sqlite");
+        var secondIndex = Path.Combine(temp.Path, "server-b.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var first = Manifest("server-a", "tracemap-milestone15");
+        var second = Manifest("server-b", "tracemap-milestone15");
+        var firstController = "ServerA.OrdersController.Get(System.Int32)";
+        var firstRepository = "ServerA.OrderRepository.Query(System.Int32)";
+        var secondController = "ServerB.OrdersController.Get(System.Int32)";
+        var secondRepository = "ServerB.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(firstIndex, first, [
+            RouteFact(first, "GET", "/api/orders/{id}", "/api/orders/{}", firstController, "Controllers/OrdersController.cs", 10),
+            CallFact(first, firstController, firstRepository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(first, firstRepository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        SqliteIndexWriter.Write(secondIndex, second, [
+            RouteFact(second, "GET", "/api/orders/{id}", "/api/orders/{}", secondController, "Controllers/OrdersController.cs", 10),
+            CallFact(second, secondController, secondRepository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(second, secondRepository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([firstIndex, secondIndex], combinedPath, ["server-a", "server-b"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            FromSource: "server-b",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(secondController, StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains(firstController, StringComparison.Ordinal)
+            || row.TargetSymbol?.Contains(firstRepository, StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
     public async Task Route_flow_emits_missing_method_symbol_bridge_for_route_roots_without_source_local_handler_symbol()
     {
         using var temp = new TempDirectory();

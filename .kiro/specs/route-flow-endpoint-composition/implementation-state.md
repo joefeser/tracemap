@@ -85,6 +85,10 @@ redacted.
   Kiro denied shell tool access. Code blockers were resolved; remaining
   blockers were stale implementation state and validation task status, patched
   in this file and `tasks.md`. Non-blocking follow-ups remain listed below.
+- PR review loop found three Gemini null-source handling threads and two Codex
+  P2 route-flow compatibility threads. Patched null `source_index_id` reads,
+  null source-bucket keys, source compatibility checks, client-call path
+  preservation, and `--from-source` scoping for endpoint composition roots.
 
 ### Spec Review Notes
 
@@ -115,8 +119,8 @@ redacted.
 
 - `dotnet build src/dotnet/TraceMap.sln`: passed.
 - `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests`:
-  passed with 16 focused route-flow tests.
-- `dotnet test src/dotnet/TraceMap.sln`: passed with 462 tests.
+  passed with 18 focused route-flow tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed with 464 tests.
 - Public route-flow CLI smoke against `.tracemap-demo/combined/endpoint-stack.sqlite`
   passed using selector `GET /api/admin/runner/get-by-id/{id}`. Output files
   were written under ignored `.tmp/route-flow-endpoint-composition-smoke/` and
@@ -155,8 +159,9 @@ redacted.
   downstream calls, missing call edges, single and multiple interface
   implementation candidates, no-candidate gaps, direct concrete calls alongside
   interface bridges, mixed-tier classification caps, clean no-evidence gap
-  preconditions, deterministic Markdown/JSON output, rule catalog coverage, and
-  privacy redaction.
+  preconditions, client-call generic path preservation, source-scoped
+  composition roots, deterministic Markdown/JSON output, rule catalog coverage,
+  and privacy redaction.
 
 ## Deferred Follow-Up
 
