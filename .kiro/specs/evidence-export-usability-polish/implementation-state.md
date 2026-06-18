@@ -101,6 +101,10 @@ Review results:
   indexes, a CLI/request surface for unsupported additive question-family gaps,
   additional title-kind redaction records beyond existing safety behavior, and
   deterministic review graph mode.
+- Initial PR review loop stopped on two Qodo review threads. Patched both:
+  replaced a hard-coded tier literal with a local tier constant and changed
+  structured docs-export claim limitations to reference stable gap/limitation
+  IDs rather than free-text limitation messages.
 - Initial Opus spec review completed with full coverage. It found no blocking
   public-safety issues and requested clarifications around vault snapshot-mode
   inputs, docs snapshot-change inputs, `Start Here` link encoding, alias source
