@@ -212,7 +212,7 @@ Acceptance criteria:
   | Evidence-status label | Existing-surface vocabulary | Claim-ledger notes |
   | --- | --- | --- |
   | `evidence-backed` | `Tier1Semantic` or `Tier2Structural` with `Full` or `FullEvidenceAvailable` coverage | Rule IDs, evidence tiers, and proof paths are public-safe and specific. |
-  | `partial/reduced coverage` | `Partial`, `Reduced`, or `ReducedCoverage` coverage, or `Tier3SyntaxOrTextual` evidence | Rule-family or proof-path reference exists, but coverage gaps are labeled. |
+  | `partial/reduced coverage` | `Partial`, `PartialAnalysis`, `Reduced`, or `ReducedCoverage` coverage, or `Tier3SyntaxOrTextual` evidence | Rule-family or proof-path reference exists, but coverage gaps are labeled. |
   | `gap-labeled demo evidence` | `not_requested`, `unavailable`, `Tier4Unknown`, or explicit gap labels on demo rows | The gap label remains visible; do not restate it as clean coverage or parity. |
   | `future-only` | Proof-path-index `future` entry; no resolvable artifact yet | Proof path is not yet available; row is not evidence-backed. |
   | `hidden/internal` | No capability-matrix or proof-path-index counterpart | Aggregate abstract placeholder; discloses no unreleased detail. |
