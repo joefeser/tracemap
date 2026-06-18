@@ -78,6 +78,11 @@ Implementation validation run on 2026-06-18:
   41 HTML files, 1224 internal references, 40 sitemap URLs, and 1 legacy story
   safety target.
 - `npm run build` from `site/`: passed.
+- After PR-loop review fixes, `npm test`, `git diff --check`,
+  `./scripts/check-private-paths.sh`, `npm run validate`, and
+  `npm run build` were rerun and passed. The first attempted parallel
+  validate/build rerun raced on `site/dist`; the commands passed when rerun
+  sequentially.
 - Browser sanity check for `/review-claim-checklist/`: desktop 1440x1000 and
   mobile 390x844 both rendered the expected title, hero, checklist table, and
   illustrative examples.
@@ -97,6 +102,10 @@ Implementation validation run on 2026-06-18:
 - Implementation-time validation also found one overclaim-guard issue around
   the heading `Proof-safe routes`. The heading was changed to
   `Proof-bounded routes`.
+- First PR-loop pass stopped with three unresolved Gemini review threads in
+  `site/scripts/review-claim-checklist.mjs`: make `overclaimPattern` global,
+  reuse it directly in `hasUnsanctionedOverclaim`, and allow whitespace around
+  `=` in sanctioned-section regexes. All three were patched.
 
 ## Oddities
 
@@ -111,5 +120,4 @@ Implementation validation run on 2026-06-18:
 ## Follow-ups
 
 - No implementation follow-ups are currently open.
-- PR review-loop findings, if any, should be recorded here after the PR loop
-  runs.
+- Final PR review-loop decision should be recorded after the rerun completes.
