@@ -62,6 +62,20 @@ test("validateStaticVsRuntimeDist reports route metadata regressions", async (t)
   assert.match(errors.join("\n"), /expected preferredProofPath \/proof-paths\/, got \/validation\//);
 });
 
+test("validateStaticVsRuntimeDist handles missing route text fields without undefined text", async (t) => {
+  const root = await createManagedStaticVsRuntimeDistFixture(t);
+  await rewriteStaticVsRuntimeRoutesIndexEntry(join(root, "dist"), {
+    title: undefined,
+    summary: undefined,
+    limitations: undefined
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.doesNotMatch(errors.join("\n"), /inflates concept metadata/);
+});
+
 test("validateStaticVsRuntimeDist rejects missing non-claim parity", async (t) => {
   const root = await createManagedStaticVsRuntimeDistFixture(t);
   await rewriteStaticVsRuntimeRoutesIndexEntry(join(root, "dist"), {
@@ -83,6 +97,19 @@ test("validateStaticVsRuntimeDist rejects forbidden positioning", async (t) => {
   await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /forbidden runtime or AI\/LLM positioning/);
+});
+
+test("validateStaticVsRuntimeDist accepts flexible impacted boundary disclaimer", async (t) => {
+  const root = await createManagedStaticVsRuntimeDistFixture(t, {
+    pageHtml: staticVsRuntimePage(
+      "<p>TraceMap should   not say a surface is impacted unless reducer-backed public-safe evidence supports that wording.</p>"
+    )
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
 });
 
 test("validateStaticVsRuntimeDist rejects unsupported impacted wording", async (t) => {
