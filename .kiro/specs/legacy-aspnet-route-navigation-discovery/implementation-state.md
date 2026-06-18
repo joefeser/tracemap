@@ -112,6 +112,15 @@ Status: implemented
 - Pinned public route/navigation smoke is explicitly deferred because no
   reviewed public route/navigation smoke baseline exists yet; `docs/VALIDATION.md`
   now documents the focused synthetic test command and local-only smoke rules.
+- PR-loop follow-up validation passed after patching review findings for
+  malformed `.ashx` directives, commented markup navigation, and local C#
+  variables named like navigation properties:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (12 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (476 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
 
 ## Kiro Review State
 

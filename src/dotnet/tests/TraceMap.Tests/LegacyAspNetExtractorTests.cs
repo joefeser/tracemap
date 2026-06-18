@@ -157,6 +157,91 @@ public sealed class LegacyAspNetExtractorTests
     }
 
     [Fact]
+    public void Scan_does_not_emit_handler_fact_for_malformed_ashx_directive()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Broken.ashx"), """
+            <%@ Handler Language="C#" Class="Sample.BrokenHandler" %>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetHandler
+            && fact.Properties.GetValueOrDefault("gapKind") == "MalformedAspNetHandlerDirective");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetHandlerDeclared
+            && fact.Evidence.FilePath == "Broken.ashx");
+    }
+
+    [Fact]
+    public void Scan_ignores_static_navigation_inside_markup_comments()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:HyperLink runat="server" ID="DetailsLink" NavigateUrl="~/Details.aspx" />
+            <!-- <asp:HyperLink runat="server" ID="HiddenHtml" NavigateUrl="~/HiddenHtml.aspx" /> -->
+            <%-- <asp:HyperLink runat="server" ID="HiddenServer" NavigateUrl="~/HiddenServer.aspx" /> --%>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            namespace Sample;
+            public partial class Default { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var navigationTargets = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AspNetNavigationReferenceDeclared)
+            .Select(fact => fact.Properties.GetValueOrDefault("targetPath"))
+            .Where(value => value is not null)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Contains("Details.aspx", navigationTargets);
+        Assert.DoesNotContain("HiddenHtml.aspx", navigationTargets);
+        Assert.DoesNotContain("HiddenServer.aspx", navigationTargets);
+    }
+
+    [Fact]
+    public void Scan_ignores_local_variables_named_like_navigation_properties()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            namespace Sample;
+            public partial class Default
+            {
+                protected void Configure()
+                {
+                    string Action;
+                    Action = "~/Hidden.aspx";
+                    Link.NavigateUrl = "~/Details.aspx";
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var navigationTargets = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AspNetNavigationReferenceDeclared)
+            .Select(fact => fact.Properties.GetValueOrDefault("targetPath"))
+            .Where(value => value is not null)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Contains("Details.aspx", navigationTargets);
+        Assert.DoesNotContain("Hidden.aspx", navigationTargets);
+    }
+
+    [Fact]
     public void Scan_hashes_leading_slash_paths_before_normalizing()
     {
         using var temp = new TempDirectory();

@@ -202,6 +202,12 @@ public static partial class LegacyAspNetExtractor
             contractElement: Path.GetFileName(item.RelativePath),
             properties: surfaceProperties));
 
+        if (!match.Success)
+        {
+            facts.Add(CreateGap(manifest, item.RelativePath, 1, RuleIds.LegacyAspNetHandler, "MalformedAspNetHandlerDirective", "Unable to parse ASP.NET WebHandler directive.", null));
+            return;
+        }
+
         var handlerProperties = BaseProperties(manifest, RuleIds.LegacyAspNetHandler, "Handler evidence is static declaration only and does not prove request execution, deployment, pipeline order, auth, or factory result.");
         handlerProperties["handlerKind"] = "ashx-directive";
         handlerProperties["surfaceFile"] = item.RelativePath;
@@ -218,10 +224,6 @@ public static partial class LegacyAspNetExtractor
             contractElement: Path.GetFileName(item.RelativePath),
             properties: handlerProperties));
 
-        if (!match.Success)
-        {
-            facts.Add(CreateGap(manifest, item.RelativePath, 1, RuleIds.LegacyAspNetHandler, "MalformedAspNetHandlerDirective", "Unable to parse ASP.NET WebHandler directive.", null));
-        }
     }
 
     private static void ExtractConfigFile(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
@@ -306,7 +308,8 @@ public static partial class LegacyAspNetExtractor
         }
 
         var source = SourceText.From(text);
-        foreach (Match tag in MarkupTagRegex().Matches(text).Cast<Match>())
+        var scanText = MaskMarkupComments(text);
+        foreach (Match tag in MarkupTagRegex().Matches(scanText).Cast<Match>())
         {
             var attrs = ParseAttributes(tag.Groups["attrs"].Value);
             foreach (var (name, value) in attrs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
@@ -581,12 +584,9 @@ public static partial class LegacyAspNetExtractor
 
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
-            var leftName = assignment.Left switch
-            {
-                IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-                MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
-                _ => string.Empty
-            };
+            var leftName = assignment.Left is MemberAccessExpressionSyntax member
+                ? member.Name.Identifier.ValueText
+                : string.Empty;
             if (!NavigationAttributes.Contains(leftName))
             {
                 continue;
@@ -1096,6 +1096,11 @@ public static partial class LegacyAspNetExtractor
             || value.Contains("${", StringComparison.Ordinal);
     }
 
+    private static string MaskMarkupComments(string text)
+    {
+        return MarkupCommentRegex().Replace(text, match => new string(' ', match.Length));
+    }
+
     private static bool LooksJavaScriptNavigation(string value)
     {
         return value.TrimStart().StartsWith("javascript:", StringComparison.OrdinalIgnoreCase)
@@ -1273,6 +1278,9 @@ public static partial class LegacyAspNetExtractor
 
     [GeneratedRegex(@"<(?<name>[A-Za-z][\w:.-]*)\b(?<attrs>[^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex MarkupTagRegex();
+
+    [GeneratedRegex(@"<!--.*?-->|<%--.*?--%>", RegexOptions.Singleline)]
+    private static partial Regex MarkupCommentRegex();
 
     [GeneratedRegex(@"(?<name>[A-Za-z_:][\w:.-]*)\s*=\s*(?:""(?<dq>[^""]*)""|'(?<sq>[^']*)')", RegexOptions.Singleline)]
     private static partial Regex AttributeRegex();
