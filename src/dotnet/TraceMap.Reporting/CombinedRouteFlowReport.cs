@@ -872,9 +872,9 @@ public static class CombinedRouteFlowReporter
 
         if (await TableExistsAsync(connection, "combined_argument_flows", cancellationToken))
         {
-            var argumentRows = selectedSourceIndexIds.Count == 0
+            var argumentRows = selectedSourceIndexIds.Count == 0 || pathModel.PairCandidates.Count == 0
                 ? []
-                : await ReadArgumentFlowProjectionRowsAsync(connection, selectedSourceIndexIds, cancellationToken);
+                : await ReadArgumentFlowProjectionRowsAsync(connection, pathModel.PairCandidates, cancellationToken);
             var projected = 0;
             foreach (var row in argumentRows)
             {
@@ -918,36 +918,43 @@ public static class CombinedRouteFlowReporter
                         redactionApplied: parameterNameRedacted || !string.IsNullOrWhiteSpace(row.ArgumentSymbol))));
             }
 
-            if (argumentRows.Count > 0 && projected == 0)
+            var unprojectedArgumentFactIds = argumentRows.Count > 0
+                ? argumentRows.Select(row => row.CombinedFactId).ToArray()
+                : await ReadArgumentFlowProjectionFactIdsAsync(connection, selectedSourceIndexIds, cancellationToken);
+            if (unprojectedArgumentFactIds.Count > 0 && projected == 0)
             {
                 gaps.Add(ProjectionUnavailableGap(
                     "argument",
                     "ArgumentProjectionUnavailable",
                     "Argument-flow rows were present, but none could be connected to the selected route-flow path by direct static call evidence.",
                     ArgumentProjectionRuleId,
-                    argumentRows.Select(row => row.CombinedFactId).ToArray()));
+                    unprojectedArgumentFactIds));
             }
         }
 
         if (await TableExistsAsync(connection, "combined_fact_symbols", cancellationToken))
         {
-            var factSymbolRows = selectedSourceIndexIds.Count == 0
+            var factSymbolRows = selectedSourceIndexIds.Count == 0 || pathModel.SymbolCandidates.Count == 0
                 ? []
-                : await ReadFactSymbolProjectionRowsAsync(connection, selectedSourceIndexIds, cancellationToken);
+                : await ReadFactSymbolProjectionRowsAsync(connection, pathModel.SymbolCandidates, cancellationToken);
             var projected = 0;
+            var projectableFactIds = new List<string>();
+            var unsupportedAttachedFactIds = new List<string>();
             foreach (var row in factSymbolRows)
             {
-                if (!ShouldProjectFactSymbol(row))
-                {
-                    continue;
-                }
-
                 var attached = pathModel.FlowRowForSymbol(row.SourceIndexId, row.CombinedSymbolId, row.SymbolDisplayName, row.SourceSymbol, row.TargetSymbol);
                 if (attached is null)
                 {
                     continue;
                 }
 
+                if (!ShouldProjectFactSymbol(row))
+                {
+                    unsupportedAttachedFactIds.Add(row.CombinedFactId);
+                    continue;
+                }
+
+                projectableFactIds.Add(row.CombinedFactId);
                 projected++;
                 var kind = FactSymbolLogicKind(row);
                 rows.Add(new RouteFlowLogicRow(
@@ -974,24 +981,30 @@ public static class CombinedRouteFlowReporter
                         redactionApplied: FactSymbolRedactionApplied(row))));
             }
 
-            var projectableFactSymbolRows = factSymbolRows.Where(ShouldProjectFactSymbol).ToArray();
-            if (projectableFactSymbolRows.Length > 0 && projected == 0)
+            var sourceFactSymbolIds = factSymbolRows.Count == 0
+                ? await ReadFactSymbolProjectionFactIdsAsync(connection, selectedSourceIndexIds, cancellationToken)
+                : [];
+            var factSymbolGapIds = projectableFactIds.Count > 0
+                ? projectableFactIds
+                : sourceFactSymbolIds;
+            if (factSymbolGapIds.Count > 0 && projected == 0)
             {
                 gaps.Add(ProjectionUnavailableGap(
                     "fact-symbol",
                     "FactSymbolProjectionUnavailable",
                     "Fact-symbol rows were present, but none could be connected to the selected route-flow path by source-local symbol evidence.",
                     FactSymbolProjectionRuleId,
-                    projectableFactSymbolRows.Select(row => row.CombinedFactId).ToArray()));
+                    factSymbolGapIds));
             }
-            else if (factSymbolRows.Count > 0 && projectableFactSymbolRows.Length == 0)
+
+            if (unsupportedAttachedFactIds.Count > 0)
             {
                 gaps.Add(ProjectionUnavailableGap(
                     "fact-symbol-unsupported",
                     "FactSymbolProjectionUnavailable",
                     "Fact-symbol rows were present, but this route-flow slice does not project their fact types directly.",
                     FactSymbolProjectionRuleId,
-                    factSymbolRows.Select(row => row.CombinedFactId).ToArray()));
+                    unsupportedAttachedFactIds));
             }
         }
 
@@ -1011,11 +1024,21 @@ public static class CombinedRouteFlowReporter
         private readonly Dictionary<string, RouteFlowRow> _flowRowsByPair;
         private readonly Dictionary<string, RouteFlowRow> _flowRowsBySymbol;
 
-        public SelectedPathModel(Dictionary<string, RouteFlowRow> flowRowsByPair, Dictionary<string, RouteFlowRow> flowRowsBySymbol)
+        public SelectedPathModel(
+            Dictionary<string, RouteFlowRow> flowRowsByPair,
+            Dictionary<string, RouteFlowRow> flowRowsBySymbol,
+            IReadOnlyList<SymbolPairCandidate> pairCandidates,
+            IReadOnlyList<SymbolCandidate> symbolCandidates)
         {
             _flowRowsByPair = flowRowsByPair;
             _flowRowsBySymbol = flowRowsBySymbol;
+            PairCandidates = pairCandidates;
+            SymbolCandidates = symbolCandidates;
         }
+
+        public IReadOnlyList<SymbolPairCandidate> PairCandidates { get; }
+
+        public IReadOnlyList<SymbolCandidate> SymbolCandidates { get; }
 
         public RouteFlowRow? FlowRowForPair(string sourceIndexId, string? callerSymbol, string? calleeSymbol)
         {
@@ -1058,22 +1081,23 @@ public static class CombinedRouteFlowReporter
             .ToDictionary(group => group.Key, group => group.OrderBy(row => row.Sequence).First(), StringComparer.Ordinal);
         var byPair = new Dictionary<string, RouteFlowRow>(StringComparer.Ordinal);
         var bySymbol = new Dictionary<string, RouteFlowRow>(StringComparer.Ordinal);
+        var pairCandidates = new List<SymbolPairCandidate>();
+        var symbolCandidates = new List<SymbolCandidate>();
 
         foreach (var path in selectedPaths)
         {
             foreach (var node in path.Nodes)
             {
-                var attached = flowRowsByNode.GetValueOrDefault(node.NodeId)
-                    ?? flowRows.OrderBy(row => row.Sequence).FirstOrDefault(row => row.ToNodeId == node.NodeId);
+                var attached = flowRowsByNode.GetValueOrDefault(node.NodeId);
                 if (attached is null)
                 {
                     continue;
                 }
 
-                AddSymbol(bySymbol, node.SourceIndexId, node.SymbolId, attached);
+                AddSymbol(bySymbol, symbolCandidates, node.SourceIndexId, node.SymbolId, attached);
                 if (string.IsNullOrWhiteSpace(node.SymbolId))
                 {
-                    AddSymbol(bySymbol, node.SourceIndexId, node.DisplayName, attached);
+                    AddSymbol(bySymbol, symbolCandidates, node.SourceIndexId, node.DisplayName, attached);
                 }
             }
 
@@ -1091,43 +1115,64 @@ public static class CombinedRouteFlowReporter
                     continue;
                 }
 
-                AddPair(byPair, from.SourceIndexId, from.SymbolId ?? from.DisplayName, to.SymbolId ?? to.DisplayName, attached);
-                AddPair(byPair, from.SourceIndexId, from.DisplayName, to.DisplayName, attached);
-                AddSymbol(bySymbol, from.SourceIndexId, from.SymbolId, attached);
-                AddSymbol(bySymbol, to.SourceIndexId, to.SymbolId, attached);
+                AddPair(byPair, pairCandidates, from.SourceIndexId, from.SymbolId ?? from.DisplayName, to.SymbolId ?? to.DisplayName, attached);
+                AddPair(byPair, pairCandidates, from.SourceIndexId, from.DisplayName, to.DisplayName, attached);
+                AddSymbol(bySymbol, symbolCandidates, from.SourceIndexId, from.SymbolId, attached);
+                AddSymbol(bySymbol, symbolCandidates, to.SourceIndexId, to.SymbolId, attached);
                 if (string.IsNullOrWhiteSpace(from.SymbolId))
                 {
-                    AddSymbol(bySymbol, from.SourceIndexId, from.DisplayName, attached);
+                    AddSymbol(bySymbol, symbolCandidates, from.SourceIndexId, from.DisplayName, attached);
                 }
 
                 if (string.IsNullOrWhiteSpace(to.SymbolId))
                 {
-                    AddSymbol(bySymbol, to.SourceIndexId, to.DisplayName, attached);
+                    AddSymbol(bySymbol, symbolCandidates, to.SourceIndexId, to.DisplayName, attached);
                 }
             }
         }
 
-        return new SelectedPathModel(byPair, bySymbol);
+        return new SelectedPathModel(byPair, bySymbol, pairCandidates, symbolCandidates);
     }
 
-    private static void AddPair(Dictionary<string, RouteFlowRow> values, string sourceIndexId, string? sourceSymbol, string? targetSymbol, RouteFlowRow row)
+    private sealed record SymbolPairCandidate(string SourceIndexId, string CallerSymbol, string CalleeSymbol);
+
+    private sealed record SymbolCandidate(string SourceIndexId, string Symbol);
+
+    private static void AddPair(
+        Dictionary<string, RouteFlowRow> values,
+        List<SymbolPairCandidate> candidates,
+        string sourceIndexId,
+        string? sourceSymbol,
+        string? targetSymbol,
+        RouteFlowRow row)
     {
         if (string.IsNullOrWhiteSpace(sourceSymbol) || string.IsNullOrWhiteSpace(targetSymbol))
         {
             return;
         }
 
-        values.TryAdd(SymbolPairKey(sourceIndexId, sourceSymbol!, targetSymbol!), row);
+        if (values.TryAdd(SymbolPairKey(sourceIndexId, sourceSymbol!, targetSymbol!), row))
+        {
+            candidates.Add(new SymbolPairCandidate(sourceIndexId, sourceSymbol!, targetSymbol!));
+        }
     }
 
-    private static void AddSymbol(Dictionary<string, RouteFlowRow> values, string sourceIndexId, string? symbol, RouteFlowRow row)
+    private static void AddSymbol(
+        Dictionary<string, RouteFlowRow> values,
+        List<SymbolCandidate> candidates,
+        string sourceIndexId,
+        string? symbol,
+        RouteFlowRow row)
     {
         if (string.IsNullOrWhiteSpace(symbol))
         {
             return;
         }
 
-        values.TryAdd(SymbolKey(sourceIndexId, symbol!), row);
+        if (values.TryAdd(SymbolKey(sourceIndexId, symbol!), row))
+        {
+            candidates.Add(new SymbolCandidate(sourceIndexId, symbol!));
+        }
     }
 
     private static string SymbolPairKey(string sourceIndexId, string sourceSymbol, string targetSymbol)
@@ -1140,10 +1185,10 @@ public static class CombinedRouteFlowReporter
         return $"{sourceIndexId}\0{symbol}";
     }
 
-    private static async Task<IReadOnlyList<ArgumentFlowProjectionRow>> ReadArgumentFlowProjectionRowsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<ArgumentFlowProjectionRow>> ReadArgumentFlowProjectionRowsAsync(SqliteConnection connection, IReadOnlyList<SymbolPairCandidate> pairCandidates, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        var pairFilter = AddArgumentPairFilterParameters(command, pairCandidates);
         command.CommandText = """
             select flows.combined_fact_id,
                    flows.source_index_id,
@@ -1166,9 +1211,8 @@ public static class CombinedRouteFlowReporter
                    flows.end_line
             from combined_argument_flows flows
             join index_sources sources on sources.source_index_id = flows.source_index_id
-            where flows.source_index_id in (
-            """ + sourceFilter + """
-            )
+            where
+            """ + pairFilter + """
             order by flows.source_index_id, flows.caller_symbol, flows.callee_symbol, flows.parameter_ordinal, flows.combined_fact_id;
             """;
         var rows = new List<ArgumentFlowProjectionRow>();
@@ -1200,10 +1244,10 @@ public static class CombinedRouteFlowReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<FactSymbolProjectionRow>> ReadFactSymbolProjectionRowsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<FactSymbolProjectionRow>> ReadFactSymbolProjectionRowsAsync(SqliteConnection connection, IReadOnlyList<SymbolCandidate> symbolCandidates, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        var symbolFilter = AddFactSymbolFilterParameters(command, symbolCandidates);
         command.CommandText = """
             select links.combined_fact_id,
                    links.combined_symbol_id,
@@ -1226,9 +1270,8 @@ public static class CombinedRouteFlowReporter
             join combined_facts facts on facts.combined_fact_id = links.combined_fact_id
             join index_sources sources on sources.source_index_id = links.source_index_id
             left join combined_symbols symbols on symbols.combined_symbol_id = links.combined_symbol_id
-            where links.source_index_id in (
-            """ + sourceFilter + """
-            )
+            where
+            """ + symbolFilter + """
             order by links.source_index_id, links.combined_symbol_id, links.role, links.combined_fact_id;
             """;
         var rows = new List<FactSymbolProjectionRow>();
@@ -1256,6 +1299,96 @@ public static class CombinedRouteFlowReporter
         }
 
         return rows;
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadArgumentFlowProjectionFactIdsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    {
+        if (sourceIndexIds.Count == 0)
+        {
+            return [];
+        }
+
+        await using var command = connection.CreateCommand();
+        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        command.CommandText = """
+            select combined_fact_id
+            from combined_argument_flows
+            where source_index_id in (
+            """ + sourceFilter + """
+            )
+            order by source_index_id, caller_symbol, callee_symbol, parameter_ordinal, combined_fact_id
+            limit 20;
+            """;
+        return await ReadFactIdsAsync(command, cancellationToken);
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadFactSymbolProjectionFactIdsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    {
+        if (sourceIndexIds.Count == 0)
+        {
+            return [];
+        }
+
+        await using var command = connection.CreateCommand();
+        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        command.CommandText = """
+            select distinct combined_fact_id
+            from combined_fact_symbols
+            where source_index_id in (
+            """ + sourceFilter + """
+            )
+            order by combined_fact_id
+            limit 20;
+            """;
+        return await ReadFactIdsAsync(command, cancellationToken);
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadFactIdsAsync(SqliteCommand command, CancellationToken cancellationToken)
+    {
+        var values = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            values.Add(reader.GetString(0));
+        }
+
+        return values;
+    }
+
+    private static string AddArgumentPairFilterParameters(SqliteCommand command, IReadOnlyList<SymbolPairCandidate> pairCandidates)
+    {
+        var clauses = new List<string>();
+        for (var index = 0; index < pairCandidates.Count; index++)
+        {
+            var sourceParameter = $"$pairSource{index}";
+            var callerParameter = $"$pairCaller{index}";
+            var calleeParameter = $"$pairCallee{index}";
+            command.Parameters.AddWithValue(sourceParameter, pairCandidates[index].SourceIndexId);
+            command.Parameters.AddWithValue(callerParameter, pairCandidates[index].CallerSymbol);
+            command.Parameters.AddWithValue(calleeParameter, pairCandidates[index].CalleeSymbol);
+            clauses.Add($"(flows.source_index_id = {sourceParameter} and flows.caller_symbol = {callerParameter} and flows.callee_symbol = {calleeParameter})");
+        }
+
+        return clauses.Count == 0
+            ? "0 = 1"
+            : string.Join($"{Environment.NewLine}               or ", clauses);
+    }
+
+    private static string AddFactSymbolFilterParameters(SqliteCommand command, IReadOnlyList<SymbolCandidate> symbolCandidates)
+    {
+        var clauses = new List<string>();
+        for (var index = 0; index < symbolCandidates.Count; index++)
+        {
+            var sourceParameter = $"$symbolSource{index}";
+            var symbolParameter = $"$symbol{index}";
+            command.Parameters.AddWithValue(sourceParameter, symbolCandidates[index].SourceIndexId);
+            command.Parameters.AddWithValue(symbolParameter, symbolCandidates[index].Symbol);
+            clauses.Add($"(links.source_index_id = {sourceParameter} and (links.combined_symbol_id = {symbolParameter} or facts.source_symbol = {symbolParameter} or facts.target_symbol = {symbolParameter} or symbols.display_name = {symbolParameter}))");
+        }
+
+        return clauses.Count == 0
+            ? "0 = 1"
+            : string.Join($"{Environment.NewLine}               or ", clauses);
     }
 
     private static string AddSourceFilterParameters(SqliteCommand command, IReadOnlyList<string> sourceIndexIds)

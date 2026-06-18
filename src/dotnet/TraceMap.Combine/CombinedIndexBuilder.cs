@@ -433,6 +433,9 @@ public static class CombinedIndexBuilder
             create index ix_combined_call_edges_caller on combined_call_edges(caller_symbol);
             create index ix_combined_call_edges_callee on combined_call_edges(callee_symbol);
             create index ix_combined_call_edges_callee_assembly on combined_call_edges(callee_assembly_name, callee_symbol);
+            create index ix_combined_fact_symbols_source_symbol on combined_fact_symbols(source_index_id, combined_symbol_id);
+            create index ix_combined_fact_symbols_source_fact on combined_fact_symbols(source_index_id, combined_fact_id);
+            create index ix_combined_argument_flows_source_pair on combined_argument_flows(source_index_id, caller_symbol, callee_symbol);
             create index ix_combined_argument_flows_argument_symbol on combined_argument_flows(argument_symbol);
             create index ix_combined_parameter_forward_edges_source on combined_parameter_forward_edges(source_node_key);
             create index ix_combined_parameter_forward_edges_target on combined_parameter_forward_edges(target_node_key);
