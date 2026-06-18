@@ -94,7 +94,17 @@ public sealed record ReleaseReviewSourceInfo(
     string Coverage,
     string BuildStatus,
     string AnalysisLevel,
-    IReadOnlyList<string> GapCodes);
+    IReadOnlyList<string> GapCodes,
+    IReadOnlyList<ReleaseReviewCapabilitySummary>? AnalyzerCapabilities = null);
+
+public sealed record ReleaseReviewCapabilitySummary(
+    string CapabilityCode,
+    string CapabilityState,
+    string CoverageEffect,
+    string RuleId,
+    string EvidenceTier,
+    string SchemaVersion,
+    IReadOnlyList<string> SupportingFactIds);
 
 public sealed record ReleaseReviewSummary(
     string RollupClassification,
@@ -1098,6 +1108,7 @@ public static class ReleaseReviewReporter
     private static async Task<ReleaseReviewSnapshot> ReadCombinedSnapshotAsync(SqliteConnection connection, string side, CancellationToken cancellationToken)
     {
         var sources = new List<ReleaseReviewSourceInfo>();
+        var capabilitiesBySource = await ReadCombinedCapabilitySummariesAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
             select label,
@@ -1126,6 +1137,11 @@ public static class ReleaseReviewReporter
             var gaps = manifest?.KnownGaps ?? [];
             var analysisLevel = StringOrDefault(reader, 8, "unknown");
             var buildStatus = StringOrDefault(reader, 9, "unknown");
+            capabilitiesBySource.TryGetValue(label, out var capabilities);
+            var sourceGaps = gaps
+                .Concat(CapabilityGapCodes(capabilities ?? []))
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
             sources.Add(new ReleaseReviewSourceInfo(
                 label,
                 StringOrNull(reader, 1) ?? InferLanguage(scannerVersion),
@@ -1133,10 +1149,11 @@ public static class ReleaseReviewReporter
                 NullIfUnknown(StringOrNull(reader, 3)),
                 RepositoryIdentityHash(StringOrNull(reader, 5), StringOrNull(reader, 4)),
                 StringOrNull(reader, 6),
-                CoverageFrom(analysisLevel, buildStatus, gaps),
+                CoverageFrom(analysisLevel, buildStatus, sourceGaps),
                 buildStatus,
                 analysisLevel,
-                gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray()));
+                sourceGaps,
+                capabilities));
         }
 
         var warnings = CoverageWarnings(sources);
@@ -1145,6 +1162,7 @@ public static class ReleaseReviewReporter
 
     private static async Task<ReleaseReviewSnapshot> ReadSingleSnapshotAsync(SqliteConnection connection, string side, CancellationToken cancellationToken)
     {
+        var capabilities = await ReadSingleCapabilitySummariesAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
             select scan_id,
@@ -1169,6 +1187,10 @@ public static class ReleaseReviewReporter
         var scannerVersion = StringOrDefault(reader, 3, "unknown");
         var analysisLevel = StringOrDefault(reader, 4, "unknown");
         var buildStatus = StringOrDefault(reader, 5, "unknown");
+        var sourceGaps = gaps
+            .Concat(CapabilityGapCodes(capabilities))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
         var source = new ReleaseReviewSourceInfo(
             "single",
             InferLanguage(scannerVersion),
@@ -1176,12 +1198,135 @@ public static class ReleaseReviewReporter
             NullIfUnknown(StringOrNull(reader, 2)),
             RepositoryIdentityHash(manifest?.RemoteUrl, StringOrNull(reader, 1)),
             manifest?.ScanRootPathHash,
-            CoverageFrom(analysisLevel, buildStatus, gaps),
+            CoverageFrom(analysisLevel, buildStatus, sourceGaps),
             buildStatus,
             analysisLevel,
-            gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            sourceGaps,
+            capabilities);
         var warnings = CoverageWarnings([source]);
         return new ReleaseReviewSnapshot(side, "single", [source], warnings.Count == 0 ? "Full" : "Reduced", warnings, [new KeyValuePair<string, string>($"single:{scannerVersion}", scannerVersion)]);
+    }
+
+    private static async Task<IReadOnlyDictionary<string, IReadOnlyList<ReleaseReviewCapabilitySummary>>> ReadCombinedCapabilitySummariesAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var result = new SortedDictionary<string, List<ReleaseReviewCapabilitySummary>>(StringComparer.Ordinal);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select sources.label,
+                   facts.original_fact_id,
+                   facts.rule_id,
+                   facts.evidence_tier,
+                   facts.properties_json
+            from combined_facts facts
+            join index_sources sources on sources.source_index_id = facts.source_index_id
+            where facts.fact_type = 'AnalyzerCapabilityDiagnostic'
+            order by sources.label, facts.file_path, facts.start_line, facts.original_fact_id;
+            """;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var label = StringOrDefault(reader, 0, "unknown");
+            var factId = StringOrDefault(reader, 1, "unknown");
+            var summary = CapabilitySummaryFromProperties(
+                factId,
+                StringOrDefault(reader, 2, RuleIds.AnalyzerCapabilityDownstreamCoverage),
+                StringOrDefault(reader, 3, EvidenceTiers.Tier4Unknown),
+                ParseProperties(StringOrNull(reader, 4)));
+            if (!result.TryGetValue(label, out var list))
+            {
+                list = [];
+                result[label] = list;
+            }
+
+            list.Add(summary);
+        }
+
+        return result.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<ReleaseReviewCapabilitySummary>)pair.Value
+                .OrderBy(item => item.CapabilityCode, StringComparer.Ordinal)
+                .ThenBy(item => item.CapabilityState, StringComparer.Ordinal)
+                .ThenBy(item => item.RuleId, StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+    }
+
+    private static async Task<IReadOnlyList<ReleaseReviewCapabilitySummary>> ReadSingleCapabilitySummariesAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var result = new List<ReleaseReviewCapabilitySummary>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select fact_id,
+                   rule_id,
+                   evidence_tier,
+                   properties_json
+            from facts
+            where fact_type = 'AnalyzerCapabilityDiagnostic'
+            order by file_path, start_line, fact_id;
+            """;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(CapabilitySummaryFromProperties(
+                StringOrDefault(reader, 0, "unknown"),
+                StringOrDefault(reader, 1, RuleIds.AnalyzerCapabilityDownstreamCoverage),
+                StringOrDefault(reader, 2, EvidenceTiers.Tier4Unknown),
+                ParseProperties(StringOrNull(reader, 3))));
+        }
+
+        return result
+            .OrderBy(item => item.CapabilityCode, StringComparer.Ordinal)
+            .ThenBy(item => item.CapabilityState, StringComparer.Ordinal)
+            .ThenBy(item => item.RuleId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static ReleaseReviewCapabilitySummary CapabilitySummaryFromProperties(string factId, string ruleId, string evidenceTier, IReadOnlyDictionary<string, string> properties)
+    {
+        var support = SplitSafeList(properties.GetValueOrDefault("supportingFactIds"));
+        var supportingFactIds = new[] { factId }
+            .Concat(support)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(12)
+            .ToArray();
+        return new ReleaseReviewCapabilitySummary(
+            properties.GetValueOrDefault("capabilityCode") ?? "unknown",
+            properties.GetValueOrDefault("capabilityState") ?? "unknown",
+            properties.GetValueOrDefault("coverageEffect") ?? "unknown-gap",
+            ruleId,
+            evidenceTier,
+            properties.GetValueOrDefault("schemaVersion") ?? "unknown",
+            supportingFactIds);
+    }
+
+    private static IEnumerable<string> CapabilityGapCodes(IReadOnlyList<ReleaseReviewCapabilitySummary> capabilities)
+    {
+        foreach (var item in capabilities)
+        {
+            if (!string.Equals(item.SchemaVersion, AnalyzerCapabilityDiagnosticExtractor.SchemaVersion, StringComparison.Ordinal))
+            {
+                yield return $"AnalyzerCapabilitySchemaUnsupported:{item.SchemaVersion}";
+            }
+
+            if (item.CapabilityState is "reduced" or "unavailable" or "unknown"
+                || item.CoverageEffect is "reduced-semantic" or "syntax-only" or "structural-only" or "config-only" or "unknown-gap")
+            {
+                yield return $"AnalyzerCapability:{item.CapabilityCode}:{item.CapabilityState}:{item.CoverageEffect}";
+            }
+        }
+    }
+
+    private static IReadOnlyList<string> SplitSafeList(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(item => item.StartsWith("fact-", StringComparison.Ordinal))
+                .OrderBy(item => item, StringComparer.Ordinal)
+                .Take(12)
+                .ToArray();
     }
 
     private static IReadOnlyList<ReleaseReviewGap> SourceIdentityAndCoverageGaps(ReleaseReviewSnapshot before, ReleaseReviewSnapshot after)
@@ -1213,9 +1358,69 @@ public static class ReleaseReviewReporter
             {
                 gaps.Add(Gap("source", "ReducedCoverage", "sourceCoverage", source.Key, SourceRuleId, ReleaseReviewClassifications.PartialAnalysis, $"Source `{source.Key}` has reduced static analysis coverage."));
             }
+
+            foreach (var group in (beforeSource.AnalyzerCapabilities ?? []).Concat(afterSource.AnalyzerCapabilities ?? [])
+                .Where(IsReducedCapability)
+                .GroupBy(item => $"{item.CapabilityCode}|{item.CapabilityState}|{item.CoverageEffect}|{item.RuleId}|{item.EvidenceTier}", StringComparer.Ordinal)
+                .OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                var item = group.First();
+                var classification = item.CapabilityState == "unknown" || item.CoverageEffect == "unknown-gap"
+                    ? ReleaseReviewClassifications.UnknownAnalysisGap
+                    : ReleaseReviewClassifications.PartialAnalysis;
+                var message = $"Source `{source.Key}` has `{item.CapabilityCode}` analyzer capability `{item.CapabilityState}` with `{item.CoverageEffect}` coverage; no-evidence conclusions remain coverage-relative.";
+                gaps.Add(new ReleaseReviewGap(
+                    StableId("gap", "sourceCoverage", source.Key, item.CapabilityCode, item.CapabilityState, item.CoverageEffect),
+                    "ToolchainCapabilityReducedCoverage",
+                    "sourceCoverage",
+                    source.Key,
+                    item.RuleId,
+                    item.EvidenceTier,
+                    classification,
+                    message,
+                    [],
+                    group.SelectMany(summary => summary.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(12).ToArray(),
+                    [],
+                    CombinedReportHelpers.SortedMetadata([
+                        Pair("capabilityCode", item.CapabilityCode),
+                        Pair("capabilityState", item.CapabilityState),
+                        Pair("coverageEffect", item.CoverageEffect),
+                        Pair("schemaVersion", item.SchemaVersion)
+                    ])));
+            }
+
+            foreach (var group in (beforeSource.AnalyzerCapabilities ?? []).Concat(afterSource.AnalyzerCapabilities ?? [])
+                .Where(item => !string.Equals(item.SchemaVersion, AnalyzerCapabilityDiagnosticExtractor.SchemaVersion, StringComparison.Ordinal))
+                .GroupBy(item => $"{item.SchemaVersion}|{item.RuleId}", StringComparer.Ordinal)
+                .OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                var item = group.First();
+                gaps.Add(new ReleaseReviewGap(
+                    StableId("gap", "sourceCoverage", source.Key, "CapabilitySchema", item.SchemaVersion),
+                    "AnalyzerCapabilitySchemaUnsupported",
+                    "sourceCoverage",
+                    source.Key,
+                    item.RuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    ReleaseReviewClassifications.UnknownAnalysisGap,
+                    $"Source `{source.Key}` has analyzer capability schema `{item.SchemaVersion}`; release review preserved the fact and emitted a compatibility gap instead of silently dropping it.",
+                    [],
+                    group.SelectMany(summary => summary.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(12).ToArray(),
+                    [],
+                    CombinedReportHelpers.SortedMetadata([
+                        Pair("schemaVersion", item.SchemaVersion),
+                        Pair("expectedSchemaVersion", AnalyzerCapabilityDiagnosticExtractor.SchemaVersion)
+                    ])));
+            }
         }
 
         return gaps;
+    }
+
+    private static bool IsReducedCapability(ReleaseReviewCapabilitySummary item)
+    {
+        return item.CapabilityState is "reduced" or "unavailable" or "unknown"
+            || item.CoverageEffect is "reduced-semantic" or "syntax-only" or "structural-only" or "config-only" or "unknown-gap";
     }
 
     private static IReadOnlyList<ReleaseReviewSourceCoverage> PairSourceCoverage(ReleaseReviewSnapshot before, ReleaseReviewSnapshot after, IReadOnlyList<ReleaseReviewGap> gaps)
@@ -1286,7 +1491,8 @@ public static class ReleaseReviewReporter
               'SqlCommandDetected',
               'DapperCallDetected',
               'ConfigKeyDeclared',
-              'ConfigBinding'
+              'ConfigBinding',
+              'AnalyzerCapabilityDiagnostic'
             )
             order by fact_type, file_path, start_line, fact_id;
             """;
@@ -1996,6 +2202,21 @@ public static class ReleaseReviewReporter
             "configKeyHash",
             "keyHash"
         };
+        if (factType == FactTypes.AnalyzerCapabilityDiagnostic)
+        {
+            allowed =
+            [
+                "capabilityCode",
+                "capabilityKind",
+                "capabilityState",
+                "coverageEffect",
+                "guidanceCode",
+                "limitationCode",
+                "schemaVersion",
+                "sourceScope"
+            ];
+        }
+
         var values = allowed
             .Where(properties.ContainsKey)
             .Select(key => Pair(key, SafeMetadataValue(key, properties[key])))
@@ -2013,7 +2234,8 @@ public static class ReleaseReviewReporter
         }
 
         if (key.EndsWith("Hash", StringComparison.Ordinal)
-            || key is "operation" or "sourceKind" or "ecosystem" or "httpMethod" or "httpMethods" or "surfaceKind" or "normalizedPathKey" or "normalizedPathTemplate")
+            || key is "operation" or "sourceKind" or "ecosystem" or "httpMethod" or "httpMethods" or "surfaceKind" or "normalizedPathKey" or "normalizedPathTemplate"
+                or "capabilityCode" or "capabilityKind" or "capabilityState" or "coverageEffect" or "guidanceCode" or "limitationCode" or "schemaVersion" or "sourceScope")
         {
             return value;
         }
@@ -2039,6 +2261,7 @@ public static class ReleaseReviewReporter
             FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "sql-query",
             FactTypes.PackageReferenced => "package-config",
             FactTypes.ConfigKeyDeclared or FactTypes.ConfigBinding => "config",
+            FactTypes.AnalyzerCapabilityDiagnostic => "analyzer-capability",
             _ => "fact"
         };
     }
