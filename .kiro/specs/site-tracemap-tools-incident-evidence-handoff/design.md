@@ -199,17 +199,18 @@ concept validator patterns. The validator should check:
   inline in validator source, and the three groups are organizational sections,
   not optional rollout phases. All groups must be active in the same validator
   and covered by the same negative test suite.
-- Non-claim overclaim phrases checked against normalized rendered body text:
-  proves runtime behavior, proves production traffic, endpoint performance
-  proof, proves outage cause, proves release safety, proves operational safety,
-  AI-powered, LLM-powered, AI impact analysis engine, LLM impact analysis
-  engine, complete product coverage, and production dependency understanding.
+- Non-claim overclaim phrases checked against normalized rendered body text,
+  decoded HTML attributes, and public metadata values: proves runtime behavior,
+  proves production traffic, endpoint performance proof, proves outage cause,
+  proves release safety, proves operational safety, AI-powered, LLM-powered, AI
+  impact analysis engine, LLM impact analysis engine, complete product coverage,
+  and production dependency understanding.
 - Replacement-boundary overclaim phrases checked against normalized rendered
-  body text: replaces telemetry, replaces logs, replaces traces, replaces APM,
-  replaces incident command, replaces incident response, replaces ownership,
-  replaces ownership review, replaces tests, replaces release controls,
-  replaces service-owner judgment, replaces database-owner judgment, and
-  replaces source review.
+  body text, decoded HTML attributes, and public metadata values: replaces
+  telemetry, replaces logs, replaces traces, replaces APM, replaces incident
+  command, replaces incident response, replaces ownership, replaces ownership
+  review, replaces tests, replaces release controls, replaces service-owner
+  judgment, replaces database-owner judgment, and replaces source review.
 - Private/raw artifact exposure phrases checked against raw HTML, decoded HTML
   attributes, metadata values, and rendered body text: raw fact stream, raw
   SQLite, analyzer log, raw source snippet, raw SQL, raw config value,
