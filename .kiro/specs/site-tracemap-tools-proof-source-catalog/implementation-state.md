@@ -1,203 +1,123 @@
 # Site TraceMap Tools Proof Source Catalog Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: ready-for-review
 Public claim level: demo
 
 ## Branch
 
-Spec branch: `codex/spec-site-proof-source-catalog`
+Implementation branch: `codex/impl-site-proof-source-catalog`
 
 Base: `origin/dev`
 
-## Scope
+Scope: public site source under `site/src/`, site validation scripts under
+`site/scripts/`, and this spec state/checklist.
 
-This delegated worker phase creates only the Kiro spec for
-`site-tracemap-tools-proof-source-catalog`. It does not implement site code,
-edit site source, edit generated site output, or mark implementation tasks
-complete.
+## Placement Decision
 
-The future site phase should define a public-safe proof source catalog that maps
-existing public routes and claim labels to allowed proof sources: route, claim
-level, proof path, source artifact or source document, rule ID or rule family
-where available, evidence tier or coverage label where available, limitations,
-and non-claims.
+Selected placement: standalone public route `/proof-source-catalog/`.
 
-## Public Claim Level Decision
+Rejected alternative: adding the catalog as another section of `/proof-paths/`.
+That page already maps evidence trails by artifact family, rule, tier,
+coverage, proof path, limitation, and public status. The catalog has a different
+axis: route-to-source mapping for public wording. Keeping it standalone avoids
+turning `/proof-paths/` into a competing claim ledger while still linking back
+to `/proof-paths/` for evidence-trail detail.
 
-Selected page-level public claim level: `demo`.
+The page references the future `site-tracemap-tools-claim-ledger` spec by name
+without linking to an unpublished route. The catalog links outward to published
+proof/governance routes instead of restating claim-ledger authority.
 
-Reasoning: the catalog is intended to index current checked-in public site
-metadata, public-safe demo summary rows, public routes, repository docs, and
-rule catalog references. It is not a new source of truth and does not claim
-runtime behavior or production behavior. Row-level claim fields still use
-`shipped`, `demo`, `concept`, or `hidden`, and the page-level `demo` label must
-not upgrade concept or hidden rows.
+## Implemented Scope
 
-## Scope Boundaries
+- Added `/proof-source-catalog/` with page-level `Public claim level: demo`.
+- Added nine catalog rows, including one hidden aggregate placeholder and no
+  per-capability hidden detail.
+- Added claim-level and evidence-status mapping tables.
+- Added row anchors derived from route and claim label, with the reserved hidden
+  aggregate anchor.
+- Added route metadata to sitemap and discovery data with
+  `publicClaimLevel: demo`.
+- Added bounded cross-links from `/proof-paths/`, `/roadmap/`, `/capabilities/`,
+  `/docs/`, `/validation/`, and `/limitations/`.
+- Added `site/scripts/proof-source-catalog.mjs` and focused tests.
+- Wired the validator into `site/scripts/validate.mjs`.
 
-Safe to specify:
+## Claim-Boundary Decisions
 
-- A public-safe index/orientation layer over existing routes and source
-  material.
-- Required row fields for route, claim label, `Public claim level`, proof path,
-  source artifact or source document, rule ID or rule family, evidence tier or
-  coverage label, limitation, and non-claims.
-- Mapping from existing site vocabulary such as `main`, `demo`, `concept`,
-  `future`, `dev`, and `hidden` into the required catalog claim levels.
-- Mapping from evidence source vocabulary such as `FullEvidenceAvailable`,
-  `PartialAnalysis`, `not_requested`, `unavailable`, and TraceMap evidence tiers
-  into bounded evidence-status labels.
-
-Not safe to specify as public claims:
-
-- Runtime behavior, production traffic, endpoint performance, outage cause,
-  release safety, operational safety, AI impact analysis, LLM analysis, or
-  complete product coverage.
-- Publication of raw facts, raw SQLite indexes, analyzer logs, raw source
-  snippets, raw SQL, config values, secrets, local absolute paths, raw remotes,
-  generated scan directories, private sample names, or hidden private-work
-  details.
-
-## Spec Review Commands
-
-Planned:
-
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-
-Results:
-
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  passed with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062036-979Z-spec-claude-opus-4.8.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062036-979Z-spec-claude-opus-4.8.meta.json`.
-  Findings: three Medium spec tightenings. Patched the catalog relationship to
-  `site-tracemap-tools-claim-ledger`, added hidden-row aggregate validation,
-  and added validation for the complete required row field set with non-empty
-  limitations and non-claims.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062352-158Z-spec-claude-sonnet-4.6.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062352-158Z-spec-claude-sonnet-4.6.meta.json`.
-  Findings: one High and three Medium spec issues. Patched by adding
-  `design.md`, clarifying shipped rows on a demo-labeled page, making
-  `not-yet-backed` a pre-publication blocker, and specifying the hidden
-  aggregate placeholder format.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062551-944Z-re-review-claude-sonnet-4.6.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062551-944Z-re-review-claude-sonnet-4.6.meta.json`.
-  Findings: four Medium clarity gaps. Patched task wording so
-  `not-yet-backed` blocks publishing, clarified in tasks that page-level `demo`
-  is not a ceiling on row-level claim status, added the catalog's
-  route-to-source distinction to `design.md`, and added a forbidden public
-  wording pattern list for future validation.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062722-139Z-re-review-claude-sonnet-4.6.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062722-139Z-re-review-claude-sonnet-4.6.meta.json`.
-  Findings: four Medium spec clarity issues. Patched the page-level `demo`
-  rationale, strengthened `not-yet-backed` schema language, added validation for
-  catalog rows that duplicate `/proof-paths/` evidence trails, and expanded the
-  hidden aggregate placeholder to list every required field.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062900-050Z-re-review-claude-sonnet-4.6.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T062900-050Z-re-review-claude-sonnet-4.6.meta.json`.
-  Findings: no High or Medium issues. Patched the three Low validation polish
-  items by adding proof-path sentinels, hidden count/cadence/sequencing
-  forbidden patterns, and row-anchor format validation.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T063056-517Z-re-review-claude-opus-4.8.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T063056-517Z-re-review-claude-opus-4.8.meta.json`.
-  Findings: one High and two Medium consistency issues. Patched forbidden
-  wording validation so it applies to affirmative claim contexts and exempts
-  negated limitation/non-claims text, aligned proof-path sentinel rules between
-  requirements and design, and clarified that `/claims/` is linked only after
-  the claim-ledger route ships.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  exited 0 with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T063409-430Z-re-review-claude-opus-4.8.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T063409-430Z-re-review-claude-opus-4.8.meta.json`.
-  Findings: four Medium consistency issues despite exit 0. Patched anchor
-  derivation with a reserved hidden-anchor exception, moved hidden placeholder
-  negated wording out of `allowedPublicWording`, required live status-token
-  enumeration for `/capabilities/`, `/roadmap/`, and `/proof-paths/`, and tied
-  private-name validation to `scripts/check-private-paths.sh`.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  exited 0 with reduced review coverage because Kiro reported denied tool
-  access. Saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T063736-668Z-re-review-claude-opus-4.8.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T063736-668Z-re-review-claude-opus-4.8.meta.json`.
-  Findings: two Medium consistency gaps. Patched the hidden placeholder
-  `proofPath` to use the bare `hidden` sentinel and added a
-  claim-level/evidence-status allowed-combination matrix for future validation.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T064114-110Z-re-review-claude-sonnet-4.6.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T064114-110Z-re-review-claude-sonnet-4.6.meta.json`.
-  Findings: three Medium precision gaps. Patched the Final Validation Gate
-  deferral note, route-anchor stripping rules, and the meaning of a
-  `shipped` row backed only by demo-grade evidence.
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-proof-source-catalog --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with full review coverage and saved artifacts:
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T064249-762Z-re-review-claude-sonnet-4.6.clean.md`
-  and
-  `.tmp/kiro-reviews/site-tracemap-tools-proof-source-catalog/2026-06-18T064249-762Z-re-review-claude-sonnet-4.6.meta.json`.
-  Findings: no Medium or High issues; five Low refinements. Patched the manual
-  unchecked-task note, per-field word-count requirement text, anchor slug edge
-  cases, deferred word-count follow-up, and drive-letter pattern guidance.
+- Page-level `demo` is the maturity label for the catalog page itself. It is
+  not a ceiling for row-level `shipped` rows and does not upgrade `concept` or
+  `hidden` rows.
+- Row-level `Public claim level` uses exactly `shipped`, `demo`, `concept`, or
+  `hidden`.
+- Published evidence status excludes `not-yet-backed`; that value appears only
+  in the mapping table as a pre-publication blocker.
+- Hidden work is represented by a single aggregate placeholder with route
+  `hidden`, proof path sentinel `hidden`, and no names, counts, cadence,
+  sequencing, or in-flight status.
+- The validator treats `public-safe` as allowed boundary vocabulary while still
+  rejecting standalone affirmative `safe` claims in claim fields.
 
 ## Validation
 
-Run before PR:
+Completed after implementation:
 
 - `git diff --check` passed.
 - `./scripts/check-private-paths.sh` passed.
-- `rg -n "^- \\[x\\]" .kiro/specs/site-tracemap-tools-proof-source-catalog/tasks.md`
-  returned no checked implementation tasks.
+- `npm test` from `site/` passed: 141 tests.
+- `npm run validate` from `site/` passed: 39 HTML files, 1124 internal
+  references, 38 sitemap URLs, and 1 legacy story safety target.
+- `npm run build` from `site/` passed.
+- Browser sanity for `/proof-source-catalog/` passed on desktop and mobile.
+  Desktop viewport: document scroll width 1440, client width 1440, no horizontal
+  overflow, 9 catalog rows. Mobile viewport: document scroll width 390, client
+  width 390, no horizontal page overflow, 9 catalog rows; table wrappers scroll
+  internally.
 
-Implementation validation such as `npm test`, `npm run validate`,
-`npm run build`, and browser sanity checks is deferred to the future site
-implementation phase because this branch intentionally changes only spec files.
-The Final Validation Gate tasks in `tasks.md` are correctly listed as unchecked;
-they are future implementation tasks and will not be checkable on this
-spec-only branch.
+Word-count bound selected for row fields: 55 words for each row's
+`limitation` and `allowedPublicWording` fields.
+
+Status vocabulary enumerated from the current `/capabilities/`, `/roadmap/`,
+and `/proof-paths/` rendered output by validation. Encountered status phrases
+must map to the catalog claim-level mapping.
+
+## Review Findings
+
+PR loop on PR #205 returned `actionable_findings` with
+`UNRESOLVED_REVIEW_THREADS` for one Gemini thread in
+`site/scripts/proof-source-catalog.mjs`.
+
+Finding: hidden aggregate validation built `hiddenText` from `limitation` and
+`nonClaims` without nullish coalescing, which could interpolate the string
+`undefined` if a field failed to extract.
+
+Fix: patched `hiddenText` to use empty-string fallbacks for missing
+`limitation` and `nonClaims`, then reran validation.
+
+Second PR loop returned `actionable_findings` with `ACTIONABLE_BOT_FINDINGS`
+from Qodo.
+
+Finding: `validateProofPath()` checked for an anchor anywhere in the row, so a
+route-cell link could satisfy proof-path validation even when the `proofPath`
+cell was plain text.
+
+Fix: scoped proof-path link validation to the `proofPath` cell HTML and added a
+regression test that keeps the route cell linked while replacing only the
+proof-path cell with non-link text.
 
 ## Oddities
 
-- The primary checkout contained unrelated modified files, so this spec was
-  created in a dedicated worktree from `origin/dev`.
-- First attempted Kiro review before the files were moved into the dedicated
-  worktree failed with:
-  `Error: Missing expected spec files: .kiro/specs/site-tracemap-tools-proof-source-catalog/requirements.md, .kiro/specs/site-tracemap-tools-proof-source-catalog/design.md, .kiro/specs/site-tracemap-tools-proof-source-catalog/tasks.md`.
-  The files were then moved into the worktree. This transient issue is
-  resolved; the spec now includes `design.md`.
-- This spec intentionally uses catalog `shipped` as the public row label for
-  existing source vocabulary that says `main`; `main` remains source vocabulary,
-  not the required public claim-level enum.
+- Local preview port `4173` was already occupied, so browser sanity used an
+  alternate local preview port.
+- The first browser metric capture was rerun sequentially because concurrent
+  Playwright commands shared one session and mixed viewport state. The final
+  recorded desktop and mobile metrics are sequential and current.
 
 ## Follow-Ups
 
-- If new Medium or higher Kiro findings are introduced, patch them before
-  keeping readiness at `ready-for-implementation` or merging this spec branch.
-- Keep implementation tasks unchecked until a future site implementation branch
-  changes site code.
-- Future implementation must verify `site/package.json` includes the expected
-  `validate` script before checking validation tasks complete; if missing, add
-  it with the catalog-specific checks from Requirement 7.
-- Word-count bound per row field, including `limitation` and
-  `allowedPublicWording`, is not set on this spec-only branch. The future
-  implementation phase must choose and record it in this file before the
-  word-count validation task can be marked complete.
+- If a future claim-ledger route ships, update the catalog to link to it where
+  claim wording, claim level, evidence status, limitations, or non-claims are
+  already governed there.
+- If new public status vocabulary appears on `/capabilities/`, `/roadmap/`, or
+  `/proof-paths/`, add it to the claim-level mapping with rationale before
+  publishing.

@@ -253,6 +253,23 @@
     ]
   },
   {
+    "path": "/proof-source-catalog/",
+    "title": "Proof Source Catalog",
+    "summary": "Public-demo route-to-source catalog mapping public route wording to proof paths, source artifact families, rule families, evidence tiers or coverage labels, limitations, and non-claims.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The catalog is an orientation layer and does not replace generated artifacts, rule catalog entries, repository docs, route metadata, coverage labels, or documented limitations.",
+      "Page-level demo status does not upgrade concept or hidden rows, and it does not downgrade shipped source-document rows."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No raw facts, raw SQLite, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden private-work details are published."
+    ]
+  },
+  {
     "path": "/roadmap/",
     "title": "Roadmap Claim Ledger",
     "summary": "Canonical concept-level ledger for public claim wording, proof paths, evidence status, wording status, and limitations.",
