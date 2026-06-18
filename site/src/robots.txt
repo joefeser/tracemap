@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 
+# LLM discovery: https://tracemap.tools/llms.txt
 Sitemap: https://tracemap.tools/sitemap.xml

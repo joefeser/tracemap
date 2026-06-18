@@ -4,6 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { createDiscoveryOutputs } from "./discovery.mjs";
+import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
+import { incidentCallRoute } from "./incident-call.mjs";
+import { managerBriefRoute } from "./manager-brief.mjs";
+import { reviewRoomRoute } from "./review-room.mjs";
+import { staticTriageRoute } from "./static-triage.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -80,7 +86,7 @@ test("validateDist rejects stale top navigation", async () => {
 
 test("validateDist requires robots sitemap directive", async () => {
   const root = await createDistFixture({
-    robots: "User-agent: *\nAllow: /\n"
+    robots: "User-agent: *\nAllow: /\n# LLM discovery: https://tracemap.tools/llms.txt\n"
   });
 
   await assert.rejects(
@@ -92,34 +98,145 @@ test("validateDist requires robots sitemap directive", async () => {
 async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
-  robots = "User-agent: *\nAllow: /\n\nSitemap: https://tracemap.tools/sitemap.xml\n",
-  sitemapUrls = ["https://tracemap.tools/", "https://tracemap.tools/docs/"]
+  robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
+  sitemapUrls = [
+    ...deployAuditRequiredRoutes,
+    incidentCallRoute,
+    managerBriefRoute,
+    reviewRoomRoute,
+    staticTriageRoute
+  ].map((route) => `https://tracemap.tools${route}`)
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
   const dist = join(root, "dist");
 
-  for (const path of [
-    "blog",
-    "capabilities",
-    "demo",
-    "docs",
-    "evidence",
-    "examples",
-    "limitations",
-    "outputs",
-    "validation",
-    "workflows"
-  ]) {
+  const fixtureRoutes = new Set([
+    ...deployAuditRequiredRoutes,
+    "/blog/",
+    "/capabilities/",
+    "/demo/start-here/",
+    "/demo/proof-upgrades/",
+    "/demo/proof-assets/",
+    "/evidence/",
+    "/examples/",
+    incidentCallRoute,
+    managerBriefRoute,
+    "/manager-packet/",
+    reviewRoomRoute,
+    staticTriageRoute,
+    "/outputs/",
+    "/use-cases/incident-review/",
+    "/workflows/"
+  ]);
+
+  for (const route of fixtureRoutes) {
+    if (route === "/") {
+      continue;
+    }
+
+    const path = route.replace(/^\/|\/$/g, "");
     await mkdir(join(dist, path), { recursive: true });
-    await writeFile(join(dist, path, "index.html"), page(`<p>${path}</p>`), "utf8");
+    await writeFile(
+      join(dist, path, "index.html"),
+      route === "/deploy-audit/"
+        ? deployAuditPage()
+        : route === incidentCallRoute
+          ? incidentCallPage()
+          : route === managerBriefRoute
+            ? managerBriefPage()
+            : route === reviewRoomRoute
+              ? reviewRoomPage()
+              : route === staticTriageRoute
+                ? staticTriagePage()
+                : page(`<p>${path}</p>`),
+      "utf8"
+    );
   }
 
   await writeFile(join(dist, "index.html"), indexHtml, "utf8");
   await writeFile(join(dist, "docs", "index.html"), docsHtml, "utf8");
   await writeFile(join(dist, "robots.txt"), robots, "utf8");
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
+  await writeDiscoveryFiles(dist);
 
   return root;
+}
+
+async function writeDiscoveryFiles(dist) {
+  const outputs = await createDiscoveryOutputs(
+    [
+      ...deployAuditRequiredRoutes.map((route) => ({
+        path: route,
+        title: "Fixture Home",
+        summary: "Fixture route for deterministic static evidence validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: route === "/limitations/" ? "limitations" : "evidence",
+        preferredProofPath: "/docs/",
+        limitations: ["Fixture limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      })),
+      {
+        path: incidentCallRoute,
+        title: "Incident Call",
+        summary: "Fixture incident call route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture incident call limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: managerBriefRoute,
+        title: "Manager Brief",
+        summary: "Fixture manager brief route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture manager brief limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: reviewRoomRoute,
+        title: "Review Room",
+        summary: "Fixture review room route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture review room limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: staticTriageRoute,
+        title: "Static Triage",
+        summary: "Fixture static triage route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture static triage limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        url: "https://github.com/joefeser/tracemap/blob/main/README.md",
+        title: "Fixture README",
+        summary: "Fixture source document for validation.",
+        publicClaimLevel: "main",
+        sourceType: "repo-doc",
+        hintCategory: "repo-doc",
+        limitations: ["Fixture docs require validation context."],
+        nonClaims: ["No release approval proof."]
+      }
+    ],
+    { dist, resolveInternalPaths: true }
+  );
+
+  await writeFile(join(dist, "llms.txt"), outputs.llmsText, "utf8");
+  await writeFile(join(dist, "docs-index.json"), outputs.docsIndexJson, "utf8");
+  await writeFile(join(dist, "routes-index.json"), outputs.routesIndexJson, "utf8");
 }
 
 function renderSitemap(urls) {
@@ -131,6 +248,91 @@ ${urls.map((url) => `  <url><loc>${url}</loc></url>`).join("\n")}
 
 function page(body, { nav = topNav() } = {}) {
   return `<!doctype html><html><body>${nav}<main>${body}</main></body></html>`;
+}
+
+function deployAuditPage() {
+  return page(`
+    <p>Public claim level: demo</p>
+    <p>No public conclusion without evidence</p>
+    <p>This is not live AWS state, not runtime behavior proof, and not deployment success proof.</p>
+    <p>sitemap.xml robots.txt llms.txt docs-index.json routes-index.json</p>
+  `);
+}
+
+function incidentCallPage() {
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>static dependency evidence and not runtime observability</p>
+    <p>not operational approval</p>
+    <p>P1-call orientation and incident review are related, not identical</p>
+    <p>static triage checklist</p>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/validation/">Validation</a>
+    <a href="/docs/">Docs</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/demo/result/">Demo result</a>
+    <a href="/use-cases/incident-review/">Incident review orientation</a>
+    <a href="/static-triage/">static triage checklist</a>
+  `);
+}
+
+function managerBriefPage() {
+  const filler = Array.from({ length: 90 }, (_, index) => `evidence packet review boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>Manual dependency indexing is expensive</p>
+    <p>deterministic artifacts</p>
+    <p>Static evidence is useful because its limits stay visible</p>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/demo/">Demo</a>
+    <a href="/docs/">Docs</a>
+    <p>${filler}</p>
+  `);
+}
+
+function reviewRoomPage() {
+  const filler = Array.from({ length: 100 }, (_, index) => `evidence review agenda boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>claim proof path rule ID/evidence tier coverage label limitation owner decision gap</p>
+    <p>Known evidence is reducer-backed and public-safe; partial evidence is reduced-coverage and labeled; missing evidence is an explicit gap for human review.</p>
+    <meta property="og:type" content="article">
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/evidence/">Evidence model</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/manager-brief/">Manager brief</a>
+    <a href="/manager-packet/">Manager packet</a>
+    <a href="/incident-call/">Incident call</a>
+    <a href="/use-cases/incident-review/">Incident review</a>
+    <p>${filler}</p>
+  `);
+}
+
+function staticTriagePage() {
+  const filler = Array.from({ length: 90 }, (_, index) => `static triage evidence boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>static evidence checklist</p>
+    <p>evidence tier</p>
+    <p>handoff questions</p>
+    <p>Partial static evidence is useful when labeled as partial</p>
+    <p>Static triage is the engineer checklist and handoff page, distinct from the incident-call orientation page.</p>
+    <p>The checklist is not telemetry, diagnosis, or approval.</p>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/validation/">Validation</a>
+    <a href="/docs/">Docs</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/demo/result/">Demo result</a>
+    <a href="/incident-call/">Incident-call orientation</a>
+    <p>${filler}</p>
+  `);
 }
 
 function topNav({ omitHref } = {}) {

@@ -9,6 +9,7 @@ const affectedPages = [
   "demo/result/index.html",
   "demo/proof-upgrades/index.html",
   "demo/proof-assets/index.html",
+  "proof-paths/index.html",
   "packets/index.html",
   "manager-packet/index.html",
   "capabilities/index.html"
@@ -140,6 +141,9 @@ async function validateAffectedPages({ errors, fixture, root }) {
   if (pages.has("demo/proof-assets/index.html")) {
     validateProofAssetsPage(pages.get("demo/proof-assets/index.html"), sections, errors);
   }
+  if (pages.has("proof-paths/index.html")) {
+    validateProofPathsPage(pages.get("proof-paths/index.html"), sections, errors);
+  }
   if (pages.has("packets/index.html")) {
     validatePacketsPage(pages.get("packets/index.html"), sections, errors);
   }
@@ -257,6 +261,69 @@ function validateProofAssetsPage(html, sections, errors) {
   }
 }
 
+function validateProofPathsPage(html, sections, errors) {
+  const page = "proof-paths/index.html";
+
+  assertContains(html, "Public claim level: demo", page, "page claim level", errors);
+  assertContains(html, "No public conclusion", page, "shared site principle", errors);
+  assertContains(html, "runtime proof", page, "runtime non-claim", errors);
+  assertContains(html, "production traffic proof", page, "production traffic non-claim", errors);
+  assertContains(html, "endpoint performance proof", page, "endpoint performance non-claim", errors);
+  assertContains(html, "deployment state proof", page, "deployment state non-claim", errors);
+  assertContains(html, "release safety proof", page, "release safety non-claim", errors);
+  assertContains(html, "AI impact analysis", page, "AI impact non-claim", errors);
+  assertContains(html, "publicClaimLevel: demo", page, "route metadata distinction", errors);
+  assertContains(html, "publicClaimLevel: concept", page, "concept route distinction", errors);
+  assertContains(html, "no generated scan coverage label", page, "route coverage limitation", errors);
+  assertContains(html, "Public status:", page, "public status labels", errors);
+
+  for (const section of sections.values()) {
+    const heading = proofPathsSectionHeading(section.id);
+    assertContains(html, `<h3>${heading}</h3>`, page, `${section.id} card`, errors);
+
+    const cardText = extractArticleText(html, heading);
+    if (!cardText) {
+      errors.push(`${page} is missing scoped article for ${section.id}.`);
+      continue;
+    }
+
+    assertContains(cardText, section.evidenceTier, page, `${section.id} scoped evidence tier`, errors);
+    assertContains(cardText, section.coverage, page, `${section.id} scoped coverage label`, errors);
+    for (const ruleId of section.ruleIds || []) {
+      assertContains(cardText, ruleId, page, `${section.id} scoped rule ID ${ruleId}`, errors);
+    }
+  }
+
+  for (const artifact of [
+    "scan-manifest.json",
+    "facts.ndjson",
+    "index.sqlite",
+    "report.md",
+    "logs/analyzer.log",
+    "demo-summary.md",
+    "demo-summary.json"
+  ]) {
+    assertContains(html, artifact, page, `artifact vocabulary ${artifact}`, errors);
+  }
+
+  for (const family of publicReportFamilies(sections)) {
+    assertContains(html, family, page, `public report family ${family}`, errors);
+  }
+
+  for (const route of [
+    "/demo/",
+    "/demo/result/",
+    "/demo/proof-assets/",
+    "/demo/proof-upgrades/",
+    "/packets/",
+    "/capabilities/",
+    "/roadmap/",
+    "/docs/"
+  ]) {
+    assertContains(html, `href="${route}"`, page, `proof surface link ${route}`, errors);
+  }
+}
+
 function validatePacketsPage(html, sections, errors) {
   const page = "packets/index.html";
   assertContains(html, "demo-summary.md", page, "public-safe summary artifact", errors);
@@ -327,6 +394,14 @@ function extractArticleText(html, heading) {
   const escapedHeading = escapeRegExp(heading);
   const match = html.match(new RegExp(`<h3>${escapedHeading}</h3>([\\s\\S]*?)<\\/article>`));
   return match ? htmlText(match[1]) : "";
+}
+
+function proofPathsSectionHeading(sectionId) {
+  const headings = new Map([
+    ["python", "python and jvm optional rows"],
+    ["jvm", "python and jvm optional rows"]
+  ]);
+  return headings.get(sectionId) ?? sectionId;
 }
 
 function extractCount(text, label) {
