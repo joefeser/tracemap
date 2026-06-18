@@ -178,7 +178,10 @@ public static class LegacyWinFormsExtractor
             .ToArray();
         var surfaces = files
             .SelectMany(file => file.Classes)
-            .Where(type => IsWinFormsSurface(type) || files.Any(file => file.IsDesigner && file.Classes.Any(designerType => SameType(designerType.TypeName, type.TypeName))))
+            .Where(type => IsWinFormsSurface(type)
+                || files.Any(designerFile => designerFile.IsDesigner
+                    && !designerFile.FilePath.Equals(type.FilePath, StringComparison.Ordinal)
+                    && designerFile.Classes.Any(designerType => SameType(designerType.TypeName, type.TypeName))))
             .OrderBy(type => type.FilePath, StringComparer.Ordinal)
             .ThenBy(type => type.Line)
             .ThenBy(type => type.TypeName, StringComparer.Ordinal)
@@ -707,8 +710,16 @@ public static class LegacyWinFormsExtractor
             .Where(fact => IsDirectHandlerEvidence(fact, handlerName, handlerSymbol, handler.Evidence.FilePath))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
-        var terminals = directFacts.Where(fact => TerminalFactTypes.Contains(fact.FactType)).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
-        var supporting = directFacts.Append(handler).DistinctBy(fact => fact.FactId).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
+        var serviceMappings = allFacts
+            .Where(fact => fact.FactType is FactTypes.WcfServiceReferenceMapping or FactTypes.AsmxServiceReferenceMapping)
+            .ToArray();
+        var terminals = directFacts
+            .Where(fact => TerminalFactTypes.Contains(fact.FactType))
+            .Concat(ServiceReferenceMappingsForCalls(serviceMappings, directFacts))
+            .DistinctBy(fact => fact.FactId)
+            .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var supporting = directFacts.Concat(terminals).Append(handler).DistinctBy(fact => fact.FactId).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
         var hasReducedCoverage = manifest.BuildStatus != "Succeeded";
         var classification = terminals.Length > 0
             ? handler.EvidenceTier == EvidenceTiers.Tier1Semantic && terminals.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic) ? "StrongStaticHandlerFlow"
@@ -1026,10 +1037,53 @@ public static class LegacyWinFormsExtractor
             return true;
         }
 
+        if (fact.Properties.GetValueOrDefault("callerSymbol")?.Equals(handlerSymbol, StringComparison.Ordinal) ?? false)
+        {
+            return true;
+        }
+
         return sameFile
             && ((fact.Properties.GetValueOrDefault("callerName")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
                 || (fact.Properties.GetValueOrDefault("containingMember")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
                 || (fact.Properties.GetValueOrDefault("containingMethod")?.Equals(handlerName, StringComparison.Ordinal) ?? false));
+    }
+
+    private static IEnumerable<CodeFact> ServiceReferenceMappingsForCalls(IReadOnlyList<CodeFact> serviceMappings, IReadOnlyList<CodeFact> directFacts)
+    {
+        var clientSymbols = directFacts
+            .Where(fact => fact.FactType == FactTypes.CallEdge)
+            .SelectMany(fact => new[]
+            {
+                fact.ContractElement,
+                fact.TargetSymbol,
+                fact.Properties.GetValueOrDefault("calleeName")
+            })
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return serviceMappings.Where(mapping => clientSymbols.Any(symbol => ServiceMappingMatchesCall(mapping, symbol)));
+    }
+
+    private static bool ServiceMappingMatchesCall(CodeFact mapping, string callSymbol)
+    {
+        if (string.IsNullOrWhiteSpace(callSymbol))
+        {
+            return false;
+        }
+
+        var sourceSymbol = mapping.SourceSymbol ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(sourceSymbol)
+            && (sourceSymbol.Equals(callSymbol, StringComparison.Ordinal)
+                || sourceSymbol.StartsWith(callSymbol + ".", StringComparison.Ordinal)
+                || sourceSymbol.EndsWith("." + callSymbol, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        return (mapping.ContractElement?.Equals(callSymbol, StringComparison.Ordinal) ?? false)
+            || (mapping.Properties.GetValueOrDefault("operationName")?.Equals(callSymbol, StringComparison.Ordinal) ?? false)
+            || (mapping.Properties.GetValueOrDefault("originalOperationName")?.Equals(callSymbol, StringComparison.Ordinal) ?? false);
     }
 
     private static string TerminalSurfaceKind(CodeFact fact)
