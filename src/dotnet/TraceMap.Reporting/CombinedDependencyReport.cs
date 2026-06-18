@@ -327,9 +327,64 @@ public static class CombinedDependencyReporter
         }
 
         var facts = await ReadFactsAsync(connection, cancellationToken);
+        knownGaps.AddRange(ReadAnalyzerCapabilityKnownGaps(sources, facts, warnings));
         var edges = await ReadEdgesAsync(connection, cancellationToken);
         var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
         return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges, valueOriginCounts);
+    }
+
+    private static IReadOnlyList<CombinedKnownGapRow> ReadAnalyzerCapabilityKnownGaps(
+        IReadOnlyList<CombinedReportSource> sources,
+        IReadOnlyList<CombinedFactRow> facts,
+        List<string> warnings)
+    {
+        var sourceById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
+        return facts
+            .Where(fact => fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic)
+            .Select(fact => new
+            {
+                Fact = fact,
+                Code = fact.Properties.GetValueOrDefault("capabilityCode") ?? "unknown",
+                State = fact.Properties.GetValueOrDefault("capabilityState") ?? "unknown",
+                Effect = fact.Properties.GetValueOrDefault("coverageEffect") ?? "unknown-gap",
+                SchemaVersion = fact.Properties.GetValueOrDefault("schemaVersion") ?? "unknown"
+            })
+            .Where(row => row.State is "reduced" or "unavailable" or "unknown"
+                || row.Effect is "reduced-semantic" or "syntax-only" or "structural-only" or "config-only" or "unknown-gap"
+                || !string.Equals(row.SchemaVersion, AnalyzerCapabilityDiagnosticExtractor.SchemaVersion, StringComparison.Ordinal))
+            .GroupBy(row => new
+            {
+                row.Fact.SourceIndexId,
+                row.Fact.SourceLabel,
+                row.Code,
+                row.State,
+                row.Effect,
+                row.SchemaVersion
+            })
+            .OrderBy(group => group.Key.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(group => group.Key.Code, StringComparer.Ordinal)
+            .ThenBy(group => group.Key.State, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                if (sourceById.TryGetValue(group.Key.SourceIndexId, out var source))
+                {
+                    warnings.Add($"{source.Label} has analyzer capability gaps; dependency conclusions are reduced coverage.");
+                }
+
+                var category = string.Equals(group.Key.SchemaVersion, AnalyzerCapabilityDiagnosticExtractor.SchemaVersion, StringComparison.Ordinal)
+                    ? $"AnalyzerCapability:{group.Key.Code}:{group.Key.State}"
+                    : $"AnalyzerCapabilitySchemaGap:{group.Key.SchemaVersion}";
+                var example = string.Equals(group.Key.SchemaVersion, AnalyzerCapabilityDiagnosticExtractor.SchemaVersion, StringComparison.Ordinal)
+                    ? $"{group.Key.Code} {group.Key.State} {group.Key.Effect}"
+                    : $"Unsupported analyzer capability schema {group.Key.SchemaVersion}";
+                return new CombinedKnownGapRow(
+                    group.Key.SourceIndexId,
+                    group.Key.SourceLabel,
+                    category,
+                    group.Count(),
+                    example);
+            })
+            .ToArray();
     }
 
     private static async Task<IReadOnlyDictionary<string, long>> ReadValueOriginEvidenceCountsAsync(SqliteConnection connection, CancellationToken cancellationToken)
