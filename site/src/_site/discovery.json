@@ -1,0 +1,437 @@
+[
+  {
+    "path": "/",
+    "title": "TraceMap Home",
+    "summary": "Start with the deterministic static evidence boundary, then follow routes to proof, limitations, docs, and demo pages.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "start",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "Home-page copy is orientation, not the source of proof.",
+      "Claims must route to public evidence pages or repository documents."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production usage, deployment state, endpoint performance, or release approval proof.",
+      "No AI impact analysis, embeddings, vector databases, or prompt-based classification in core TraceMap."
+    ]
+  },
+  {
+    "path": "/capabilities/",
+    "title": "Capabilities",
+    "summary": "Demo-level capability map for scanner, reducer, report, language adapter, and review-packet surfaces with status labels.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "start",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "Capability rows are status-framed and should not be upgraded beyond their supporting public proof.",
+      "Future and dev-only rows remain bounded until main evidence exists."
+    ],
+    "nonClaims": [
+      "No release approval, operational safety, endpoint performance, or deployment state proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, or logs/analyzer.log are published."
+    ]
+  },
+  {
+    "path": "/docs/",
+    "title": "Docs",
+    "summary": "Public documentation hub linking source-of-truth repository docs, validation notes, acceptance criteria, and packet guidance.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "start",
+    "preferredProofPath": "/validation/",
+    "limitations": [
+      "The docs hub is navigation; repository docs remain the source-of-truth references.",
+      "Readers should inspect validation and limitations before summarizing product behavior."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production usage, release approval, or absence-of-impact proof.",
+      "No AI impact analysis or LLM-based product feature claim."
+    ]
+  },
+  {
+    "path": "/evidence/",
+    "title": "Evidence Model",
+    "summary": "Explains rule IDs, evidence tiers, file spans, coverage labels, and why public conclusions need supporting proof.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "limitations": [
+      "Static evidence can show source relationships and gaps, not operational behavior.",
+      "Tier labels describe evidence strength and analysis gaps."
+    ],
+    "nonClaims": [
+      "No production traffic, branch feasibility, deployment state, endpoint performance, or release approval proof.",
+      "No prompt-based classification or AI impact analysis in the scanner or reducer."
+    ]
+  },
+  {
+    "path": "/outputs/",
+    "title": "Output Artifacts",
+    "summary": "Names the scanner outputs and describes which artifact families stay public-safe versus local-only.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/demo/result/",
+    "limitations": [
+      "Artifact names do not replace generated evidence rows, rule IDs, tiers, spans, or coverage labels.",
+      "Private repository artifacts stay local unless explicitly redacted and reviewed."
+    ],
+    "nonClaims": [
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, or logs/analyzer.log are public discovery outputs.",
+      "No production usage, deployment state, release approval, or runtime behavior proof."
+    ]
+  },
+  {
+    "path": "/validation/",
+    "title": "Validation",
+    "summary": "Lists deterministic checks, smoke runs, sample-repo validation, generated-output guards, and artifact acceptance criteria.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "Validation commands show the checked scope of a change, not broad operational certainty.",
+      "Language-adapter coverage depends on the pinned checks and sample repositories named by the docs."
+    ],
+    "nonClaims": [
+      "No release approval, production traffic proof, endpoint performance proof, or clean bill of health under reduced coverage.",
+      "No embeddings, vector databases, LLM calls, or prompt-based classification in core TraceMap."
+    ]
+  },
+  {
+    "path": "/deploy-audit/",
+    "title": "Deploy Audit",
+    "summary": "Static-site deploy audit for public routes, sitemap metadata, robots policy, LLM discovery, JSON indexes, and claim-boundary checks.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/validation/",
+    "limitations": [
+      "The audit verifies generated static output, not live AWS state, DNS, TLS, CDN cache, crawler state, or external availability.",
+      "Route presence and discovery files do not prove product completeness, runtime behavior, endpoint performance, release approval, or deployment success."
+    ],
+    "nonClaims": [
+      "No runtime behavior proof, production traffic proof, endpoint performance proof, deployment success proof, release safety proof, or release approval proof.",
+      "No raw facts, SQLite files, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, AI impact analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
+    "path": "/packets/",
+    "title": "Evidence Packet Guide",
+    "summary": "Shows how public-safe packets keep summaries attached to proof paths, rule IDs, evidence tiers, coverage labels, and limitations.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/demo/proof-assets/",
+    "limitations": [
+      "Packet copy must stay attached to supporting proof and coverage labels.",
+      "Visual or narrative packet layers do not replace generated artifacts."
+    ],
+    "nonClaims": [
+      "No production usage, runtime reachability, release safety, or release approval proof.",
+      "No raw fact streams, SQLite indexes, analyzer logs, raw SQL, secrets, or local output roots are public packet content."
+    ]
+  },
+  {
+    "path": "/limitations/",
+    "title": "Limitations",
+    "summary": "Starts with what TraceMap cannot prove so readers keep static evidence separate from operational claims.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "limitations",
+    "limitations": [
+      "Reduced coverage must remain labeled and cannot support absence-of-impact statements.",
+      "Static analysis cannot prove operational state or release readiness."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production usage, deployment state, endpoint performance, release approval, or release safety proof.",
+      "No AI impact analysis, LLM calls, embeddings, vector databases, or prompt-based classification in core TraceMap."
+    ]
+  },
+  {
+    "path": "/demo/result/",
+    "title": "Public Demo Result",
+    "summary": "Current demo result guide with generated summary rows, rule IDs, evidence tiers, coverage labels, counts, and reasons.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "Demo counts and statuses are tied to checked-in samples and local toolchain coverage.",
+      "Raw local artifacts are not public discovery content."
+    ],
+    "nonClaims": [
+      "No full-impact proof, runtime behavior proof, production traffic proof, production dependency understanding, endpoint performance proof, or release safety proof.",
+      "No facts.ndjson, index.sqlite, logs/analyzer.log, raw source snippets, raw SQL, config values, or secrets are published."
+    ]
+  },
+  {
+    "path": "/demo/start-here/",
+    "title": "Demo Walkthrough",
+    "summary": "Guided public demo route for running checked-in samples, reading summaries, following static evidence, and reviewing limitations.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/demo/result/",
+    "limitations": [
+      "The walkthrough is scoped to checked-in samples and local generated outputs.",
+      "Deeper artifacts stay local unless a public-safe summary exists."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, release safety, release approval, or AI impact analysis proof.",
+      "No raw source snippets, raw SQL, facts.ndjson, index.sqlite, logs/analyzer.log, or local output roots are published."
+    ]
+  },
+  {
+    "path": "/demo/proof-upgrades/",
+    "title": "Demo Proof Upgrades",
+    "summary": "Evidence ledger for demo rows that moved from deferred to reproducible public-demo proof with coverage labels.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/demo/result/",
+    "limitations": [
+      "Proof rows are public-demo evidence from samples, not general production proof.",
+      "Rows retain partial-analysis and gap labels where coverage is reduced."
+    ],
+    "nonClaims": [
+      "No runtime topology, production usage, production dependency understanding, endpoint performance, release approval, or release safety proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, combined SQLite files, or analyzer logs are published."
+    ]
+  },
+  {
+    "path": "/demo/proof-assets/",
+    "title": "Demo Proof Assets",
+    "summary": "Public-safe visual orientation for generated demo summaries and report families without replacing source-backed proof.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "Visual assets are secondary orientation over rule-backed evidence and limitations.",
+      "Generated summaries and reports remain the proof paths."
+    ],
+    "nonClaims": [
+      "No full-impact proof, runtime reachability proof, production dependency understanding, endpoint performance, release approval, or release safety proof.",
+      "No raw fact streams, SQLite indexes, analyzer logs, local output roots, raw SQL, or secrets are published."
+    ]
+  },
+  {
+    "path": "/proof-paths/",
+    "title": "Proof Path Index",
+    "summary": "Public-demo index that maps TraceMap public routes and demo sections to artifact type, rule ID or rule family, evidence tier, coverage label, proof path, limitation, and public status.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "The index is a route map over public-safe proof surfaces; it does not replace generated artifacts, rule documentation, or repository docs.",
+      "Raw scan artifacts and SQLite files remain local-only unless a future public-safe sample explicitly checks in sanitized output."
+    ],
+    "nonClaims": [
+      "No runtime proof, production traffic proof, endpoint performance proof, deployment state proof, release safety proof, or release approval proof.",
+      "No AI impact analysis, LLM calls, embeddings, vector databases, prompt-based classification, raw facts, SQLite indexes, analyzer logs, raw SQL, secrets, local paths, raw remotes, or generated scan directories are published."
+    ]
+  },
+  {
+    "path": "/roadmap/",
+    "title": "Roadmap Gates",
+    "summary": "Explains how public copy moves from concept to demo only when public-safe evidence and limitations exist.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "roadmap",
+    "preferredProofPath": "/limitations/",
+    "limitations": [
+      "Roadmap entries are planning notes, not proof.",
+      "Concept rows need checked-in samples, generated summaries, and visible limitations before promotion."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, or AI impact analysis proof.",
+      "No LLM calls, embeddings, vector databases, or prompt-based classification in core TraceMap."
+    ]
+  },
+  {
+    "path": "/legacy-evidence/",
+    "title": "Legacy Evidence Story",
+    "summary": "Concept claim ledger for hidden legacy-adjacent static evidence themes, promotion gates, and public-safe boundaries.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "roadmap",
+    "preferredProofPath": "/legacy-validation/",
+    "limitations": [
+      "Theme rows remain hidden pending redacted validation or checked-in public-safe proof.",
+      "Concept copy describes the evidence story shape, not completed legacy theme results."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, deployment state, endpoint performance, exploitability, database existence, package compatibility, incident cause, release approval, or release safety proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, or local output roots are published."
+    ]
+  },
+  {
+    "path": "/use-cases/incident-review/",
+    "title": "Incident Review Orientation",
+    "summary": "Describes how static evidence can orient incident-adjacent code questions while operational proof stays outside TraceMap.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/limitations/",
+    "limitations": [
+      "This is a bounded workflow idea, not proof of production cause or operational state.",
+      "Telemetry, logs, traces, tests, and humans remain responsible for runtime proof."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, deployment state, endpoint performance, P1 root cause, release safety, or release approval proof.",
+      "No AI impact analysis or prompt-based product classification."
+    ]
+  },
+  {
+    "path": "/incident-call/",
+    "title": "Incident Call Static Dependency Evidence",
+    "summary": "Concept-level use case for using static dependency evidence and proof paths during a production incident or P1 call without claiming runtime proof.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a concept-level orientation page, not a completed operational workflow.",
+      "Static dependency evidence can narrow inspection but cannot prove production behavior or incident cause."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, APM replacement, release safety, operational safety, or release approval proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, or generated scan directories are published."
+    ]
+  },
+  {
+    "path": "/static-triage/",
+    "title": "Static Incident Triage Checklist",
+    "summary": "Concept-level engineer checklist and handoff questions for orienting static code evidence around a named endpoint, package, config, SQL-facing, or dependency surface during a P1 or production call.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "Static triage is concept-level orientation, not operational approval or runtime proof.",
+      "Partial static evidence must be labeled partial; analysis gaps remain visible."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, model-driven impact claims, or complete product coverage proof.",
+      "No raw generated facts, local database indexes, analyzer diagnostics, source excerpts, database query text, configuration values, credentials, local paths, remotes, scan directories, or private sample identities are published."
+    ]
+  },
+  {
+    "path": "/manager-brief/",
+    "title": "Manager Problem Brief",
+    "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a concept-level explanation, not a product-completeness or release-safety claim.",
+      "Static evidence packets can reduce manual dependency questions but cannot replace human review or operational proof."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, generated scan directories, AI impact analysis, LLM analysis, or complete product coverage claim."
+    ]
+  },
+  {
+    "path": "/review-room/",
+    "title": "Evidence Review Room",
+    "summary": "Concept-level meeting agenda for deciding what static dependency evidence is known, partial, or missing without claiming runtime proof.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a concept-level review agenda, not a completed approval workflow.",
+      "Static dependency evidence can organize review questions but cannot prove runtime behavior, release safety, or complete coverage."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, generated scan directories, AI impact analysis, LLM analysis, or complete product coverage claim."
+    ]
+  },
+  {
+    "url": "https://github.com/joefeser/tracemap/blob/main/README.md",
+    "title": "Repository README",
+    "summary": "Source-of-truth project overview for CLI goals, required scan outputs, demo commands, and product boundaries.",
+    "publicClaimLevel": "main",
+    "sourceType": "repo-doc",
+    "hintCategory": "repo-doc",
+    "limitations": [
+      "The README describes repository behavior and command intent; run validation for current local results.",
+      "Public site pages may summarize the README but should not strengthen it."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production usage, deployment state, endpoint performance, or release approval proof.",
+      "No LLM calls, embeddings, vector databases, or prompt-based classification in TraceMap core."
+    ]
+  },
+  {
+    "url": "https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md",
+    "title": "Acceptance Criteria",
+    "summary": "Source-of-truth criteria for artifacts, reducer behavior, evidence rows, coverage labels, and public-safe packet expectations.",
+    "publicClaimLevel": "main",
+    "sourceType": "repo-doc",
+    "hintCategory": "repo-doc",
+    "limitations": [
+      "Acceptance criteria define expected behavior but still require implementation and validation evidence.",
+      "Criteria should be read with the rule catalog and validation docs."
+    ],
+    "nonClaims": [
+      "No production traffic proof, runtime reachability proof, deployment state proof, endpoint performance proof, or release approval proof.",
+      "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, or logs/analyzer.log are published by discovery metadata."
+    ]
+  },
+  {
+    "url": "https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md",
+    "title": "Validation Guide",
+    "summary": "Source-of-truth validation guide for deterministic tests, smoke checks, sample repositories, and language-adapter checks.",
+    "publicClaimLevel": "main",
+    "sourceType": "repo-doc",
+    "hintCategory": "repo-doc",
+    "limitations": [
+      "Validation is scoped to the commands, samples, and adapters named by the guide.",
+      "Deferred checks must be recorded plainly when not run."
+    ],
+    "nonClaims": [
+      "No release approval, production usage, endpoint performance, deployment state, or absence-of-impact proof under reduced coverage.",
+      "No AI impact analysis, embeddings, vector databases, or prompt-based classification in core TraceMap."
+    ]
+  },
+  {
+    "url": "https://github.com/joefeser/tracemap/blob/main/docs/LANGUAGE_ADAPTER_CONTRACT.md",
+    "title": "Language Adapter Contract",
+    "summary": "Source-of-truth adapter contract for facts, relationships, reports, coverage labels, and reducer-compatible evidence.",
+    "publicClaimLevel": "main",
+    "sourceType": "repo-doc",
+    "hintCategory": "repo-doc",
+    "limitations": [
+      "Adapter maturity depends on each language implementation and its pinned checks.",
+      "Syntax fallback remains useful but must be labeled when semantic coverage is reduced."
+    ],
+    "nonClaims": [
+      "No runtime traffic, production usage, deployment state, endpoint performance, release safety, or release approval proof.",
+      "No LLM calls, embeddings, vector databases, or prompt-based classification in adapter extraction."
+    ]
+  },
+  {
+    "url": "https://github.com/joefeser/tracemap/blob/main/rules/rule-catalog.yml",
+    "title": "Rule Catalog",
+    "summary": "Source-of-truth rule catalog used to connect evidence rows to documented rule IDs and limitations.",
+    "publicClaimLevel": "main",
+    "sourceType": "repo-doc",
+    "hintCategory": "repo-doc",
+    "limitations": [
+      "Rule documentation bounds what each rule can and cannot support.",
+      "A rule ID is required before public discovery metadata can summarize an evidence conclusion."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production usage, release approval, or endpoint performance proof.",
+      "No AI impact analysis or prompt-based classification rule."
+    ]
+  }
+]

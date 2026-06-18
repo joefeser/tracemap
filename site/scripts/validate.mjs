@@ -3,6 +3,17 @@ import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
+import {
+  validateDiscoveryDist,
+  validateDiscoveryNotInSitemap,
+  validateRobotsDiscoveryComment
+} from "./discovery.mjs";
+import { validateDeployAuditDist } from "./deploy-audit.mjs";
+import { validateIncidentCallDist } from "./incident-call.mjs";
+import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
+import { validateManagerBriefDist } from "./manager-brief.mjs";
+import { validateReviewRoomDist } from "./review-room.mjs";
+import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -12,10 +23,11 @@ export async function validateSite(options = {}) {
 
   await buildSite({ log, root });
   await validateDemoSummary({ root });
+  const legacyStoryResult = await validateLegacyStorySafety({ root });
   const result = await validateDist({ root });
 
   log(
-    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, and ${result.sitemapUrlCount} sitemap URLs.`
+    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, and ${legacyStoryResult.scannedFileCount} legacy story safety targets.`
   );
 
   return result;
@@ -34,6 +46,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
   await validateRequiredFile(robotsPath, "robots.txt", errors);
 
   const sitemapUrls = await readSitemapUrls(sitemapPath, errors);
+  validateDiscoveryNotInSitemap({ errors, sitemapUrls });
   if (normalizedBaseUrl) {
     await validateSitemapUrls({ baseUrl: normalizedBaseUrl, dist, errors, sitemapUrls });
   }
@@ -49,6 +62,12 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
 
   if (normalizedBaseUrl) {
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
+    await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
   await validateTopNavigation({ dist, errors, htmlFiles });
@@ -170,6 +189,8 @@ async function validateRobotsSitemap({ baseUrl, errors, robotsPath }) {
   if (!robots.split(/\r?\n/).some((line) => line.trim() === expected)) {
     errors.push(`robots.txt must include "${expected}".`);
   }
+
+  validateRobotsDiscoveryComment({ baseUrl, errors, robots });
 }
 
 async function validateTopNavigation({ dist, errors, htmlFiles }) {

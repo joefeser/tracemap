@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap review-room agenda for deciding what static dependency evidence is known, partial, or missing."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Evidence Review Room | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/review-room/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Review Room">
+    <meta
+      property="og:description"
+      content="A bounded static-evidence agenda for review meetings: claim, proof path, rule ID/evidence tier, coverage label, limitation, and owner decision gap."
+    >
+    <meta property="og:url" content="https://tracemap.tools/review-room/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Evidence review room</p>
+        <h1>Give the meeting a bounded static-evidence agenda.</h1>
+        <p class="hero-subhead">
+          TraceMap can help managers, reviewers, architects, and engineers keep
+          a review meeting attached to what static dependency evidence is known,
+          what is partial, and what is still missing.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page describes a review-room agenda for static dependency
+          evidence, not runtime behavior, production traffic, endpoint
+          performance, outage cause, release safety, operational safety,
+          automated impact judgment, or complete product coverage.
+        </p>
+        <nav class="hero-actions" aria-label="Review room proof links">
+          <a class="button primary" href="/proof-paths/">Open proof paths</a>
+          <a class="button secondary" href="/manager-brief/">Read manager brief</a>
+          <a class="button secondary" href="/manager-packet/">Open manager packet</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Meeting question</p>
+          <h2>What can this room say, and what still needs an owner?</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Known evidence</strong><span>Point to a public-safe proof path, rule ID/evidence tier, coverage label, file path, line span, commit SHA, extractor version, and limitation when those fields are available.</span></div>
+          <div><strong>Partial evidence</strong><span>Keep reduced coverage and analysis gaps visible so the room does not turn a narrow static trail into a broad answer.</span></div>
+          <div><strong>Missing evidence</strong><span>Name the absent proof, the owner decision gap, and the next human review step instead of filling uncertainty with confidence.</span></div>
+          <div><strong>Bounded language</strong><span>Use impact wording only when a reducer-backed result and public-safe supporting evidence are present.</span></div>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Known evidence is reducer-backed and public-safe; partial evidence is reduced-coverage and labeled; missing evidence is an explicit gap for human review.</h2>
+        <p>
+          That sentence is the review-room rule. It keeps the meeting from
+          blending evidence tiers, coverage labels, and owner judgment into a
+          single uncheckable claim.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Agenda</p>
+          <h2>Six columns are enough to keep the conversation honest.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>claim</h3>
+            <p>Write the exact statement the room wants to make about a static dependency, changed contract, or review surface.</p>
+          </article>
+          <article>
+            <h3>proof path</h3>
+            <p>Link the statement to a public-safe route, generated summary, report family, or source-backed reference the reviewer can follow.</p>
+          </article>
+          <article>
+            <h3>rule ID/evidence tier</h3>
+            <p>Name the deterministic rule and evidence strength so semantic, structural, syntax-only, and unknown evidence are not treated alike.</p>
+          </article>
+          <article>
+            <h3>coverage label</h3>
+            <p>Carry complete, partial, reduced, or unavailable coverage beside the claim instead of burying it in a side note.</p>
+          </article>
+          <article>
+            <h3>limitation</h3>
+            <p>Say what the evidence cannot prove, including runtime behavior, production usage, deployment state, and release approval.</p>
+          </article>
+          <article>
+            <h3>owner decision gap</h3>
+            <p>Assign the remaining human question to source review, tests, telemetry, ownership, release process, or another accountable path.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Room roles</p>
+          <h2>Everyone gets the same evidence, but asks a different question.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Managers</strong><span>Which decision is blocked by missing evidence, and which follow-up belongs outside the static packet?</span></div>
+          <div><strong>Reviewers</strong><span>Which rule, tier, supporting ID, file span, and limitation justify this statement?</span></div>
+          <div><strong>Architects</strong><span>Which static paths suggest coupling, and where does the map stop because coverage is reduced?</span></div>
+          <div><strong>Engineers</strong><span>Which source area should be inspected next, and what claim should be avoided until the reducer or owner has proof?</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Evidence states</p>
+          <h2>The useful review output is small, named, and limited.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>known</code><span>A statement has a public-safe proof path, rule ID/evidence tier, coverage label, and stated limitation.</span></div>
+          <div><code>partial</code><span>A statement has some static support, but reduced coverage or syntax-only evidence changes how strongly it can be used.</span></div>
+          <div><code>missing</code><span>A statement lacks the proof path needed for the meeting to say more than "needs review."</span></div>
+          <div><code>decision</code><span>The room records who owns the remaining review step instead of asking the static map to approve the change.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The review room is not an operational decision system.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, or operational safety.</li>
+          <li>TraceMap does not replace source review, ownership decisions, test results, telemetry, logs, traces, incident response, or release approval.</li>
+          <li>TraceMap does not prove complete product coverage or convert partial static evidence into a clean result.</li>
+          <li>TraceMap concept pages are meeting orientation, not automated classification or approval.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Public-safe material</p>
+          <h2>Bring agenda rows, not private internals.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe to discuss</strong><span>Public routes, proof paths, rule/status framing, evidence tiers, coverage labels, limitations, generated summary names, file paths, line spans, commit SHA, and extractor versions when the summary is approved for sharing.</span></div>
+          <div><strong>Keep private</strong><span>Source excerpts, database text, configuration values, credentials, workstation paths, repository remotes, scan output folders, analyzer diagnostics, and private sample identities.</span></div>
+          <div><strong>Review first</strong><span>Private repository evidence needs a private scan and human review before a public summary can be written from it.</span></div>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Incident and review pages answer adjacent questions.</h2>
+        <p>
+          Use <a href="/incident-call/">incident-call orientation</a> when a
+          live call needs a quick static map around a named surface. Use
+          <a href="/use-cases/incident-review/">incident review orientation</a>
+          when the meeting is broader follow-up after the event. The review room
+          is the agenda that keeps either conversation attached to evidence and
+          visible gaps.
+        </p>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof trail</p>
+          <h2>Follow the agenda into the existing evidence surfaces.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/evidence/">Evidence model</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/manager-brief/">Manager brief</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/incident-call/">Incident-call orientation</a>
+          <a href="/use-cases/incident-review/">Incident review orientation</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/capabilities/">Capability matrix</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Evidence review-room orientation links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/evidence/">evidence tiers</a>,
+        <a href="/validation/">validation</a>,
+        and
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

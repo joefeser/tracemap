@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level manager brief on how TraceMap reduces manual dependency questions with deterministic static evidence packets."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Manager Problem Brief | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/manager-brief/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Manager Problem Brief | TraceMap">
+    <meta
+      property="og:description"
+      content="Why deterministic static evidence packets help teams inspect dependency questions without overstating certainty."
+    >
+    <meta property="og:url" content="https://tracemap.tools/manager-brief/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Manager problem brief</p>
+        <h1>Dependency questions should start from evidence, not reconstruction.</h1>
+        <p class="hero-subhead">
+          TraceMap exists for a common review problem: teams need to understand
+          static dependency surfaces under pressure, but the evidence is often
+          scattered across code, generated reports, package files, configuration,
+          and human memory.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page explains the manager problem TraceMap is meant to reduce. It
+          does not claim runtime behavior, production traffic, endpoint
+          performance, outage cause, release safety, operational safety, or
+          complete product coverage.
+        </p>
+        <nav class="hero-actions" aria-label="Manager brief links">
+          <a class="button primary" href="/proof-paths/">Open proof paths</a>
+          <a class="button secondary" href="/validation/">Review validation</a>
+          <a class="button secondary" href="/limitations/">Read limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">The problem</p>
+          <h2>Manual dependency indexing is expensive when the room needs an answer.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Review pressure</strong><span>A change can touch contracts, routes, package surfaces, SQL-facing code, and configuration, while the team still has to explain what is known and what remains uncertain.</span></div>
+          <div><strong>Coordination friction</strong><span>Different people may hold different parts of the map, so review turns into repeated searches, screenshots, summaries, and hand-built dependency lists.</span></div>
+          <div><strong>Partial knowledge</strong><span>Some repositories do not load cleanly, some evidence is syntax-only, and some paths are gaps. Hiding that uncertainty makes a review look cleaner than it is.</span></div>
+          <div><strong>Handoff loss</strong><span>When the reasoning lives in a meeting or chat thread, future reviewers cannot audit the same path without rebuilding the story.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">What TraceMap changes</p>
+          <h2>An evidence packet gives managers a shared review surface.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Known surfaces</h3>
+            <p>Routes, contracts, packages, project metadata, configuration families, SQL-facing surfaces, and generated summaries can be discussed from the same static packet.</p>
+          </article>
+          <article>
+            <h3>Evidence strength</h3>
+            <p>Rule IDs and evidence tiers separate compiler-resolved evidence from structural, syntax/textual, and unknown evidence.</p>
+          </article>
+          <article>
+            <h3>Visible gaps</h3>
+            <p>Coverage labels and limitations make partial analysis useful without letting it become a hidden certainty claim.</p>
+          </article>
+          <article>
+            <h3>Review memory</h3>
+            <p>Public-safe proof paths let a future reviewer follow the same trail instead of trusting a prose-only summary.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">How managers should read it</p>
+          <h2>The packet narrows the conversation; it does not approve the decision.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>rule id</code><span>What deterministic rule produced this fact or path?</span></div>
+          <div><code>evidence tier</code><span>How strong is the evidence, and where did semantic coverage stop?</span></div>
+          <div><code>coverage label</code><span>Is this complete for the scanned scope, reduced, partial, or explicitly unavailable?</span></div>
+          <div><code>proof path</code><span>Where can a reviewer inspect the public-safe summary, limitation, or demo result?</span></div>
+          <div><code>decision gap</code><span>What still needs owner review, tests, telemetry, release process, or operational judgment?</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Sanitized evidence shape</p>
+          <h2>A useful summary names the rule, tier, coverage, and limit together.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>csharp.semantic.methodinvocation.v1</code><span>Tier1Semantic example: compiler-resolved call evidence inside the scanned commit, with supporting IDs and a public proof path rather than source excerpts.</span></div>
+          <div><code>database.sql.shape.v1</code><span>Tier3SyntaxOrTextual example: a SQL-facing surface can be counted and labeled, while execution, query plan, and production usage remain outside the static packet.</span></div>
+          <div><code>contract.delta.impact.v2</code><span>Reducer example: a review row can carry a classification, coverage label, supporting fact IDs, and limitations without becoming a release approval.</span></div>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>The origin story is coordination, not blame.</h2>
+        <p>
+          TraceMap is a response to a repeated work shape: someone needs a
+          dependency map, someone else needs proof, and the team loses time
+          translating scattered static evidence into a reviewable packet. The
+          goal is to reduce that loop with deterministic artifacts, not to
+          criticize any role, vendor, process, or team.
+        </p>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>Static evidence is useful because its limits stay visible.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, or operational safety.</li>
+          <li>TraceMap does not replace human review, ownership, tests, telemetry, logs, traces, release process, or incident response.</li>
+          <li>TraceMap does not turn static evidence into complete product coverage or a production dependency guarantee.</li>
+          <li>TraceMap core scanning and reduction stay deterministic: no LLM calls, embeddings, vector databases, or prompt-based classification.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Public-safe sharing</p>
+          <h2>Use summaries and demo evidence, not private internals.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe to discuss</strong><span>Rule IDs, evidence tiers, coverage labels, limitations, sanitized counts, hashes, public proof paths, and generated report families.</span></div>
+          <div><strong>Keep local</strong><span>Raw fact streams, SQLite indexes, analyzer logs, source excerpts, SQL text, configuration values, secrets, local paths, repository remotes, scan directories, and private sample identities.</span></div>
+          <div><strong>Keep attached</strong><span>A manager summary should stay attached to the proof path and limitation that support it.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof surface</p>
+          <h2>Follow the brief into the existing evidence pages.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/demo/">Public demo</a>
+          <a href="/docs/">Docs</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/review-room/">Evidence review room</a>
+          <a href="/incident-call/">Incident call orientation</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/roadmap/">Claim roadmap</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Manager problem brief links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/validation/">validation</a>,
+        <a href="/limitations/">limitations</a>,
+        and the
+        <a href="/manager-packet/">manager packet</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

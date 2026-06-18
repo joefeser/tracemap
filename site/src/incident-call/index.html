@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap use case for using static dependency evidence during a production incident call without claiming runtime proof."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Incident Call Static Dependency Evidence | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/incident-call/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Incident Call Static Dependency Evidence">
+    <meta
+      property="og:description"
+      content="How static dependency evidence can orient a P1 call while runtime proof stays with telemetry, logs, tests, and human review."
+    >
+    <meta property="og:url" content="https://tracemap.tools/incident-call/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Incident call use case</p>
+        <h1>When the call is live, start with what static evidence can prove.</h1>
+        <p class="hero-subhead">
+          TraceMap can orient a production incident or P1 call by showing the
+          static dependencies and proof paths around an endpoint, route, package,
+          configuration surface, or code path.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page describes static dependency evidence, not runtime
+          observability, production traffic, endpoint performance, outage cause,
+          release safety, operational safety, or an APM replacement.
+        </p>
+        <nav class="hero-actions" aria-label="Incident call proof links">
+          <a class="button primary" href="/proof-paths/">Follow proof paths</a>
+          <a class="button secondary" href="/demo/result/">Read demo result</a>
+          <a class="button secondary" href="/limitations/">Check limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">The call question</p>
+          <h2>What static dependencies surround this surface?</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Name the surface</strong><span>Start with the endpoint, handler, DTO, package, config key family, or SQL-facing surface the team is discussing.</span></div>
+          <div><strong>Follow evidence</strong><span>Trace from that name into rule-backed public-safe summaries with rule IDs, evidence tiers, coverage labels, and limitations.</span></div>
+          <div><strong>Separate proof</strong><span>Use TraceMap for static repository evidence while telemetry, logs, traces, tests, and owners prove runtime behavior.</span></div>
+          <div><strong>Keep gaps visible</strong><span>Reduced coverage and analysis gaps stay in the packet so a partial map does not become a clean bill of health.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Fast orientation</p>
+          <h2>The useful output is a narrow list of places to inspect next.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Endpoint to route</h3>
+            <p>Show which static route, handler, controller, service method, or adapter surface produced the evidence row.</p>
+          </article>
+          <article>
+            <h3>Route to code path</h3>
+            <p>Link the public-safe summary to file paths, line spans, supporting IDs, commit SHA, extractor version, and coverage label.</p>
+          </article>
+          <article>
+            <h3>Code path to nearby surfaces</h3>
+            <p>Keep related DTOs, packages, SQL-facing surfaces, config/project metadata, and cross-app references visible when demo evidence supports them.</p>
+          </article>
+          <article>
+            <h3>Finding to limitation</h3>
+            <p>Attach analysis gaps and reduced-coverage labels before anyone turns static evidence into a runtime conclusion.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Proof path shape</p>
+          <h2>A call note should point back to evidence, not memory.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>rule id</code><span>Which deterministic rule produced the visible fact or path?</span></div>
+          <div><code>evidence tier</code><span>Was it compiler-resolved, structural, syntax/textual, or an unknown gap?</span></div>
+          <div><code>coverage label</code><span>Is the analysis complete for this scope, reduced, partial, or explicitly unavailable?</span></div>
+          <div><code>supporting ids</code><span>Which public-safe summary rows, artifact references, and file spans support the statement?</span></div>
+          <div><code>limitation</code><span>What should the incident team avoid concluding from this static evidence?</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundary</p>
+          <h2>This is not the system of record for production behavior.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, or operational safety.</li>
+          <li>TraceMap does not replace Dynatrace, APM tooling, logs, traces, metrics, tests, incident command, or service ownership.</li>
+          <li>TraceMap should not use impact language for a dependency unless reducer-backed public-safe evidence supports that wording.</li>
+          <li>TraceMap concept pages are orientation, not operational approval or a production dependency guarantee.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Public-safe packet</p>
+          <h2>Publish the orientation layer, keep private internals local.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe to share</strong><span>Rule IDs, evidence tiers, coverage labels, limitations, public-demo file spans, commit SHA, extractor versions, counts, and generated report families.</span></div>
+          <div><strong>Keep private</strong><span>Raw fact streams, SQLite indexes, analyzer logs, source excerpts, SQL text, config values, secrets, local paths, repository remotes, scan directories, and private sample identities.</span></div>
+          <div><strong>Review first</strong><span>Private repository evidence should stay private until a human has reviewed and redacted the summary for public use.</span></div>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>P1-call orientation and incident review are related, not identical.</h2>
+        <p>
+          Use this page when the team needs a quick static map around a named
+          endpoint or surface during a live call. Use
+          <a href="/use-cases/incident-review/">incident review orientation</a>
+          for broader follow-up after the event, when the question is how static
+          evidence can support review notes, ownership conversations, and future
+          code inspection. Use the
+          <a href="/static-triage/">static triage checklist</a> when engineers
+          need handoff questions for a named static code surface during the call.
+        </p>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Evidence trail</p>
+          <h2>Follow the concept through the public proof surface.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/validation/">Validation</a>
+          <a href="/docs/">Docs</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/demo/result/">Demo result</a>
+          <a href="/static-triage/">Static triage checklist</a>
+          <a href="/use-cases/incident-review/">Incident review orientation</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/review-room/">Evidence review room</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/evidence/">Evidence model</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Incident-call orientation links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/validation/">validation</a>,
+        <a href="/limitations/">limitations</a>,
+        and the
+        <a href="/demo/result/">public demo result</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
