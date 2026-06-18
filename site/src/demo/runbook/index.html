@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap public demo runbook: an operator checklist for running checked-in samples, inspecting public-safe summaries, following proof paths, and keeping demo claims bounded."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Public Demo Runbook | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/demo/runbook/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Public Demo Runbook">
+    <meta
+      property="og:description"
+      content="A public-safe operator checklist for running the TraceMap demo and sharing only evidence-backed summary claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/demo/runbook/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Public demo runbook</p>
+        <h1>Run the demo, follow the evidence, and stop before the claim gets bigger.</h1>
+        <p class="hero-subhead">
+          This is an operator checklist for the public demo. It helps a reader
+          run checked-in samples, inspect public-safe summaries, trace one row
+          through proof paths, and decide what can be shared.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. Shared site principle: No public conclusion
+          without evidence. The runbook is a checklist over existing public demo
+          proof surfaces, not a product capability page, production diagnostic,
+          release procedure, runtime verification guide, or scanner
+          implementation guide.
+        </p>
+        <nav class="hero-actions" aria-label="Public demo runbook links">
+          <a class="button primary" href="/demo/start-here/">Start the walkthrough</a>
+          <a class="button secondary" href="/demo/result/">Read the result guide</a>
+          <a class="button secondary" href="/demo/evidence-trail/">Follow evidence trail</a>
+          <a class="button secondary" href="/limitations/">Read limitations</a>
+        </nav>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Operator checklist</p>
+          <h2>Use this sequence before sharing a public demo result.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-runbook-step="pre-run">
+            <h3>1. Prepare a clean public checkout</h3>
+            <p>
+              Start from the public repository and choose an ignored or
+              temporary output directory. Keep the output location neutral in
+              notes and examples.
+            </p>
+            <p><strong>Output placeholder:</strong> <code>&lt;ignored-output-dir&gt;</code>.</p>
+          </article>
+          <article data-runbook-step="run">
+            <h3>2. Run the checked-in workflow</h3>
+            <p>
+              Run the public demo script that is checked into the repository.
+              Do not modify the script to create a stronger public claim.
+            </p>
+            <p><strong>Script:</strong> <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">scripts/demo-public.sh</a>.</p>
+          </article>
+          <article data-runbook-step="inspect">
+            <h3>3. Inspect public-safe summaries first</h3>
+            <p>
+              Open the generated public-safe summary before opening local-only
+              scan artifacts. The summary is a presentation layer over
+              deterministic evidence, not a replacement for evidence rows.
+            </p>
+            <p><strong>Compare with:</strong> <a href="/demo/result/">current demo result</a>.</p>
+          </article>
+          <article data-runbook-step="review-result">
+            <h3>4. Review row status</h3>
+            <p>
+              Compare generated rows against the result guide and upgraded-row
+              ledger before repeating any status claim.
+            </p>
+            <p><strong>Check:</strong> <a href="/demo/result/">result guide</a> and <a href="/demo/proof-upgrades/">proof upgrades</a>.</p>
+          </article>
+          <article data-runbook-step="follow-evidence">
+            <h3>5. Follow the evidence</h3>
+            <p>
+              Pick at least one row and follow it through the evidence trail and
+              proof path index before saying why it is evidence-backed or
+              gap-labeled.
+            </p>
+            <p><strong>Trace:</strong> <a href="/demo/evidence-trail/">evidence trail</a> and <a href="/proof-paths/">proof paths</a>.</p>
+          </article>
+          <article data-runbook-step="validate-limit">
+            <h3>6. Validate and limit the share</h3>
+            <p>
+              Read the validation and limitations pages before sending output
+              outside the local review context.
+            </p>
+            <p><strong>Gate:</strong> <a href="/validation/">validation</a> and <a href="/limitations/">limitations</a>.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Run</p>
+          <h2>The command is reproducible, but the claim still needs review.</h2>
+          <p>
+            The command source is the checked-in public demo script. The output
+            directory is deliberately shown as a placeholder so the runbook does
+            not publish workstation details.
+          </p>
+        </div>
+        <pre class="command-block"><code># From a clean public checkout.
+./scripts/demo-public.sh &lt;ignored-output-dir&gt;</code></pre>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Publish stop condition</p>
+          <h2>Stop instead of repeating an unsupported claim.</h2>
+        </div>
+        <ul>
+          <li>Do not publish or repeat a claim when generated output lacks a public-safe summary.</li>
+          <li>Do not publish or repeat a claim when the visible output contains forbidden private material.</li>
+          <li>Do not publish or repeat a claim when the cited row lacks rule IDs, evidence tiers, coverage labels, or limitations.</li>
+          <li>Do not publish the page or shared summary when <code>./scripts/check-private-paths.sh</code> fails.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" data-runbook-section="artifact-boundary">
+        <div>
+          <p class="section-kicker">Artifact boundary</p>
+          <h2>Share summaries only after the public-safety checks pass.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>demo-summary.md</code><span>Shareable only when produced from checked-in public demo samples and reviewed after sentinel/private-text checks pass.</span></div>
+          <div><code>demo-summary.json</code><span>Shareable as public-safe row metadata when it keeps rule IDs, evidence tiers, coverage labels, reasons, and limitations visible.</span></div>
+          <div><code>report-family Markdown/JSON summaries</code><span>Shareable only when generated from public demo samples and reviewed as public-safe summaries.</span></div>
+          <div><code>scan-manifest.json</code><span>Local-only raw scan identity and coverage context unless a future sanitized sample explicitly checks in safe output.</span></div>
+          <div><code>facts.ndjson</code><span>Local-only raw fact stream. Public copy can summarize rows, not publish raw facts.</span></div>
+          <div><code>index.sqlite</code><span>Local-only queryable index. Combined SQLite files stay local-only.</span></div>
+          <div><code>report.md</code><span>Local-only when generated from private or unchecked inputs; reviewed public-safe reports are the shareable layer.</span></div>
+          <div><code>logs/analyzer.log</code><span>Local-only diagnostic output for extraction and coverage troubleshooting.</span></div>
+          <div><code>raw source snippets</code><span>Local-only. Share file paths, line spans, snippet hashes, rule IDs, and limitations when a public-safe artifact exposes them.</span></div>
+          <div><code>raw SQL, config values, secrets</code><span>Local-only categories. Do not publish values, credentials, environment details, or database text.</span></div>
+          <div><code>local absolute paths, raw repository remotes</code><span>Local-only categories. Do not put machine locations or raw remote values in public copy.</span></div>
+          <div><code>generated scan directories, private sample names</code><span>Local-only categories unless a public-safe sample name is checked in and cited by the public demo route.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Evidence checklist</p>
+          <h2>Every shareable conclusion stays attached to deterministic evidence.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Rule IDs</strong><span>Verify the row cites a rule ID such as <code>public.demo.summary.v1</code> before summarizing it.</span></div>
+          <div><strong>Evidence tiers</strong><span>Verify the tier, such as <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</span></div>
+          <div><strong>Coverage labels</strong><span>Transcribe labels case-sensitively from the cited artifact, including examples such as full, partial, reduced, unknown, <code>PartialAnalysis</code>, <code>not_requested</code>, or <code>unavailable</code> only when present.</span></div>
+          <div><strong>Gaps</strong><span>Keep gap-labeled rows visible. Do not turn reduced, unknown, unavailable, or partial coverage into clean wording.</span></div>
+          <div><strong>Proof paths</strong><span>Link the claim back to <a href="/proof-paths/">proof paths</a> or the relevant public demo route.</span></div>
+          <div><strong>Source context</strong><span>Use checked-in public sample sources and public-safe summaries for shareable demo conclusions.</span></div>
+          <div><strong>Limitations</strong><span>Keep the documented limitation beside the claim instead of moving it to a footnote.</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-runbook-section="sharing-guidance">
+        <div class="section-header">
+          <p class="section-kicker">Claim-safe sharing</p>
+          <h2>Use wording that keeps the evidence boundary intact.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Safe wording</h3>
+            <p>static evidence from checked-in public demo samples.</p>
+            <p>rule ID <code>&lt;id&gt;</code>, <code>Tier2Structural</code>, public demo coverage only.</p>
+            <p>gap-labeled row: partial coverage, no clean reducer conclusion.</p>
+          </article>
+          <article data-runbook-section="red-flag">
+            <h3>Red flags</h3>
+            <p>
+              Avoid runtime behavior, production traffic, endpoint performance,
+              outage cause, release safety, operational safety, AI impact
+              analysis, LLM analysis, and complete product coverage wording.
+            </p>
+            <p>
+              Avoid saying a demo row is impacted unless a deterministic
+              reducer output and cited evidence row support that bounded word.
+            </p>
+          </article>
+          <article>
+            <h3>Escalation rule</h3>
+            <p>
+              When a claim would require runtime telemetry, production
+              deployment facts, customer traffic, external incident context, or
+              release policy, link to <a href="/limitations/">limitations</a>
+              instead of making the claim.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-runbook-section="red-flag">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>Demo evidence can route review and inspection, not approve work.</h2>
+        </div>
+        <ul>
+          <li>It cannot approve a release, diagnose a production outage, prove endpoint performance, prove production usage, or certify operational safety.</li>
+          <li>It cannot replace runtime telemetry, deployment records, customer traffic, external incident context, or release policy.</li>
+          <li>It cannot turn public-safe summaries into the source of truth; deterministic TraceMap artifacts, checked-in sample sources, rule IDs, coverage labels, and documented limitations remain authoritative.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Bridge routes</p>
+          <h2>The runbook connects existing proof surfaces without replacing them.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/demo/start-here/">Demo walkthrough</a>
+          <a href="/demo/result/">Current demo result</a>
+          <a href="/demo/evidence-trail/">Demo evidence trail</a>
+          <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">Demo script source</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/demo/start-here/">walkthrough</a>,
+        <a href="/demo/evidence-trail/">evidence trail</a>,
+        <a href="/proof-paths/">proof path index</a>,
+        <a href="/validation/">validation</a>,
+        and
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
