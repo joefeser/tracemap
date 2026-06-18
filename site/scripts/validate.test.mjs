@@ -20,6 +20,7 @@ import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
+import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -121,7 +122,8 @@ async function createDistFixture({
     reviewClaimChecklistRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
-    staticTriageRoute
+    staticTriageRoute,
+    staticVsRuntimeRoute
   ].map((route) => `https://tracemap.tools${route}`)
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
@@ -150,6 +152,7 @@ async function createDistFixture({
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
     staticTriageRoute,
+    staticVsRuntimeRoute,
     "/outputs/",
     "/use-cases/incident-review/",
     "/workflows/"
@@ -188,7 +191,9 @@ async function createDistFixture({
                           ? roadmapClaimLedgerPage()
                           : route === staticTriageRoute
                             ? staticTriagePage()
-                            : page(
+                            : route === staticVsRuntimeRoute
+                              ? staticVsRuntimePage()
+                              : page(
                                 `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
                               ),
       "utf8"
@@ -340,6 +345,20 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture static triage limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: staticVsRuntimeRoute,
+        title: "Static Vs Runtime",
+        summary: "Fixture static versus runtime concept route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture static versus runtime limitations remain bounded."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete product coverage, incident root cause, service ownership, production dependency understanding, or test sufficiency proof.",
+          "No AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis."
+        ]
       },
       {
         url: "https://github.com/joefeser/tracemap/blob/main/README.md",
@@ -667,6 +686,51 @@ function staticTriagePage() {
     <a href="/limitations/">Limitations</a>
     <a href="/demo/result/">Demo result</a>
     <a href="/incident-call/">Incident-call orientation</a>
+    <p>${filler}</p>
+  `);
+}
+
+function staticVsRuntimePage() {
+  const filler = Array.from({ length: 115 }, (_, index) => `static runtime evidence boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>deterministic static repository evidence</p>
+    <p>runtime observability remains the source</p>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Static evidence question</th>
+          <th scope="col">TraceMap evidence shape</th>
+          <th scope="col">Runtime question</th>
+          <th scope="col">Runtime system owner</th>
+        </tr>
+      </thead>
+    </table>
+    <section id="static-questions"></section>
+    <section id="runtime-questions"></section>
+    <section id="handoff-workflow"></section>
+    <section id="proof-paths"></section>
+    <section id="limitations"></section>
+    <section id="non-claims"></section>
+    <p>Before runtime review</p>
+    <p>During handoff</p>
+    <p>After runtime review</p>
+    <p>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, incident root cause, service ownership, production dependency understanding, test sufficiency, or complete product coverage.</p>
+    <p>TraceMap does not replace logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.</p>
+    <p>TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis.</p>
+    <p>TraceMap should not use impact wording for a surface unless reducer-backed public-safe evidence supports that wording.</p>
+    <a href="/docs/">Docs</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/outputs/">Outputs</a>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/capabilities/">Capabilities</a>
+    <a href="/demo/">Demo</a>
+    <a href="/demo/result/">Demo result</a>
+    <a href="/static-triage/">Static triage</a>
+    <a href="/incident-call/">Incident call</a>
+    <a href="/use-cases/incident-review/">Incident review</a>
     <p>${filler}</p>
   `);
 }

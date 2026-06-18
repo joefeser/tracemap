@@ -389,6 +389,24 @@
     ]
   },
   {
+    "path": "/static-vs-runtime/",
+    "title": "Static Evidence Vs Runtime Telemetry",
+    "summary": "Concept-level comparison of TraceMap deterministic static repository evidence with runtime telemetry and observability questions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This route explains boundaries between static repository evidence and runtime systems; it does not describe a current runtime telemetry capability.",
+      "Static evidence can prepare and follow up on operational review, but runtime tools and owners remain responsible for live-system conclusions."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete product coverage, incident root cause, service ownership, production dependency understanding, or test sufficiency proof.",
+      "No replacement for logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
