@@ -355,6 +355,23 @@
     ]
   },
   {
+    "path": "/manager-faq/",
+    "title": "Manager FAQ",
+    "summary": "Concept-level stakeholder FAQ for reading TraceMap deterministic static evidence, proof boundaries, limitations, and owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The FAQ is stakeholder orientation, not a product-completeness or release decision surface.",
+      "Static evidence can shape review questions but cannot replace owners, telemetry, tests, or release process."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
+      "No source excerpts, database text, config values, credentials, workstation paths, repository locations, scan folders, local fact streams, local indexes, combined local databases, or analyzer diagnostics are published."
+    ]
+  },
+  {
     "path": "/review-room/",
     "title": "Evidence Review Room",
     "summary": "Concept-level meeting agenda for deciding what static dependency evidence is known, partial, or missing without claiming runtime proof.",
