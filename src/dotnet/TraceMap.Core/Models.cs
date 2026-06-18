@@ -203,6 +203,14 @@ public static class FactTypes
     public const string WebFormsHandlerResolved = nameof(WebFormsHandlerResolved);
     public const string WebFormsEventFlowProjected = nameof(WebFormsEventFlowProjected);
     public const string WebFormsLogicSignalDetected = nameof(WebFormsLogicSignalDetected);
+    public const string WinFormsSurfaceDeclared = nameof(WinFormsSurfaceDeclared);
+    public const string WinFormsControlDeclared = nameof(WinFormsControlDeclared);
+    public const string WinFormsEventBindingDeclared = nameof(WinFormsEventBindingDeclared);
+    public const string WinFormsHandlerResolved = nameof(WinFormsHandlerResolved);
+    public const string WinFormsNavigationEdgeDeclared = nameof(WinFormsNavigationEdgeDeclared);
+    public const string WinFormsCallbackBoundaryDeclared = nameof(WinFormsCallbackBoundaryDeclared);
+    public const string WinFormsHandlerFlowProjected = nameof(WinFormsHandlerFlowProjected);
+    public const string WinFormsResourceMetadataDeclared = nameof(WinFormsResourceMetadataDeclared);
     public const string AspNetSurfaceDeclared = nameof(AspNetSurfaceDeclared);
     public const string AspNetRouteDeclared = nameof(AspNetRouteDeclared);
     public const string AspNetConfigSurfaceDeclared = nameof(AspNetConfigSurfaceDeclared);
@@ -293,6 +301,14 @@ public static class RuleIds
     public const string LegacyWebFormsDesignerControl = "legacy.webforms.designer-control.v1";
     public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
+    public const string LegacyWinFormsInventory = "legacy.winforms.inventory.v1";
+    public const string LegacyWinFormsControl = "legacy.winforms.control.v1";
+    public const string LegacyWinFormsEventBinding = "legacy.winforms.event-binding.v1";
+    public const string LegacyWinFormsHandlerResolution = "legacy.winforms.handler-resolution.v1";
+    public const string LegacyWinFormsNavigation = "legacy.winforms.navigation.v1";
+    public const string LegacyWinFormsCallbackBoundary = "legacy.winforms.callback-boundary.v1";
+    public const string LegacyWinFormsHandlerFlow = "legacy.winforms.handler-flow.v1";
+    public const string LegacyWinFormsResourceMetadata = "legacy.winforms.resource-metadata.v1";
     public const string LegacyAspNetSurface = "legacy.aspnet.surface.v1";
     public const string LegacyAspNetRoute = "legacy.aspnet.route.v1";
     public const string LegacyAspNetConfig = "legacy.aspnet.config.v1";
@@ -348,6 +364,7 @@ public static class ScannerVersions
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.1.0";
+    public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";

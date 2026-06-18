@@ -398,34 +398,35 @@ def probe_ui_events(facts: list[dict[str, Any]], enabled: bool = True) -> dict[s
             ],
         }
 
-    precise_webforms = [
+    precise_ui_facts = [
         fact
         for fact in facts
         if str(fact.get("factType", "")).startswith("WebForms")
+        or str(fact.get("factType", "")).startswith("WinForms")
     ]
-    if precise_webforms:
-        tiers = sorted({str(fact.get("evidenceTier", "Tier4Unknown")) for fact in precise_webforms})
-        rule_ids = sorted({str(fact.get("ruleId", "unknown")) for fact in precise_webforms})
-        fact_types = sorted({str(fact.get("factType", "unknown")) for fact in precise_webforms})
+    if precise_ui_facts:
+        tiers = sorted({str(fact.get("evidenceTier", "Tier4Unknown")) for fact in precise_ui_facts})
+        rule_ids = sorted({str(fact.get("ruleId", "unknown")) for fact in precise_ui_facts})
+        fact_types = sorted({str(fact.get("factType", "unknown")) for fact in precise_ui_facts})
         classification = (
             "semantic-static-wiring"
-            if any(str(fact.get("factType")) == "WebFormsHandlerResolved" and str(fact.get("evidenceTier")) == "Tier1Semantic" for fact in precise_webforms)
+            if any(str(fact.get("factType")) in {"WebFormsHandlerResolved", "WinFormsHandlerResolved"} and str(fact.get("evidenceTier")) == "Tier1Semantic" for fact in precise_ui_facts)
             else "structural-static-wiring"
-            if any(str(fact.get("factType")) in {"WebFormsEventBindingDeclared", "WebFormsHandlerResolved"} for fact in precise_webforms)
+            if any(str(fact.get("factType")) in {"WebFormsEventBindingDeclared", "WebFormsHandlerResolved", "WinFormsEventBindingDeclared", "WinFormsHandlerResolved"} for fact in precise_ui_facts)
             else "syntax-or-text-static-wiring"
         )
         return {
             "classification": classification,
-            "semanticMatches": sum(1 for fact in precise_webforms if str(fact.get("evidenceTier")) == "Tier1Semantic"),
-            "structuralMatches": sum(1 for fact in precise_webforms if str(fact.get("evidenceTier")) == "Tier2Structural"),
-            "syntaxOrTextMatches": sum(1 for fact in precise_webforms if str(fact.get("evidenceTier")) == "Tier3SyntaxOrTextual"),
-            "downstreamEvidenceMatches": sum(1 for fact in precise_webforms if str(fact.get("factType")) == "WebFormsEventFlowProjected"),
+            "semanticMatches": sum(1 for fact in precise_ui_facts if str(fact.get("evidenceTier")) == "Tier1Semantic"),
+            "structuralMatches": sum(1 for fact in precise_ui_facts if str(fact.get("evidenceTier")) == "Tier2Structural"),
+            "syntaxOrTextMatches": sum(1 for fact in precise_ui_facts if str(fact.get("evidenceTier")) == "Tier3SyntaxOrTextual"),
+            "downstreamEvidenceMatches": sum(1 for fact in precise_ui_facts if str(fact.get("factType")) in {"WebFormsEventFlowProjected", "WinFormsHandlerFlowProjected"}),
             "ruleIds": rule_ids,
             "evidenceTiers": tiers,
             "factTypes": fact_types,
             "limitations": [
-                "Precise WebForms evidence supersedes the coarse legacy UI token probe for this sample.",
-                "Static WebForms wiring and flow evidence does not prove runtime execution.",
+                "Precise WebForms and WinForms evidence supersedes the coarse legacy UI token probe for this sample.",
+                "Static WebForms and WinForms wiring and flow evidence does not prove runtime execution.",
                 "No match is a scanner evidence gap, not proof of absence.",
             ],
         }

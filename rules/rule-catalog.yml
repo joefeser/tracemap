@@ -1164,6 +1164,100 @@ rules:
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
 
+  - id: legacy.winforms.inventory.v1
+    name: Legacy WinForms file and surface inventory
+    description: Inventories static WinForms form, user-control, control, component, application-context, designer, startup, and linked resource surface evidence from checked-in files.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WinFormsSurfaceDeclared
+      - AnalysisGap
+    limitations:
+      - WinForms surface inventory is static repository evidence and does not prove runtime form creation, visibility, user reachability, authorization, deployment, or production usage.
+      - Syntax and designer fallback can be reduced by failed MSBuild load, stale generated files, missing partial classes, malformed C#, duplicate type identities, or unsupported generated shapes.
+      - File paths are repo-relative; raw source snippets, local absolute paths, raw remotes, resource values, config values, URLs, endpoint addresses, and secrets are omitted.
+
+  - id: legacy.winforms.control.v1
+    name: Legacy WinForms control and component evidence
+    description: Extracts deterministic static WinForms control and component field/object-creation evidence from designer and code files.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WinFormsControlDeclared
+      - AnalysisGap
+    limitations:
+      - Control/component rows do not prove runtime parentage, control-tree construction, layout, visibility, enabled state, data binding result, localization result, role gating, user access, or production usage.
+      - Dynamic controls, collection lookups, factories, dependency injection, generated designer drift, and runtime state are reduced-coverage gaps rather than guessed controls.
+      - Raw snippets, resource values, local absolute paths, raw remotes, endpoint values, config values, and secrets are not stored.
+
+  - id: legacy.winforms.event-binding.v1
+    name: Legacy WinForms static event binding evidence
+    description: Extracts explicit static WinForms event subscriptions such as Click, grid events, BackgroundWorker callbacks, and Timer ticks from designer and code files.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WinFormsEventBindingDeclared
+      - AnalysisGap
+    limitations:
+      - Event bindings are static declarations and do not prove that a control exists at runtime, that a user can reach the event, that a handler executes, or that backend behavior occurred.
+      - Lambdas, anonymous delegates, custom brokers, reflection, dependency injection, runtime subscription, duplicate handlers, ambiguous partial classes, and unsupported subscription shapes are needs-review or gap evidence.
+      - TraceMap preserves direct evidence and does not choose arbitrary winners when multiple handlers, controls, or partial classes could match.
+
+  - id: legacy.winforms.handler-resolution.v1
+    name: Legacy WinForms handler resolution
+    description: Resolves static WinForms event bindings to scoped partial-class handler methods using semantic evidence when available and structural or syntax fallback when not.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WinFormsHandlerResolved
+      - AnalysisGap
+    limitations:
+      - Handler resolution is static evidence and does not prove runtime event execution, scheduling, branch feasibility, authorization, deployment, or production usage.
+      - Generated designer drift, missing partial classes, overloaded handlers, ambiguous duplicate methods, failed semantic analysis, dynamic wiring, reflection, and dependency injection can reduce confidence.
+      - Handler names are scoped to visible form/control/component partial classes and are not matched globally across the repository.
+
+  - id: legacy.winforms.navigation.v1
+    name: Legacy WinForms static navigation evidence
+    description: Records deterministic static Application.Run, Show, ShowDialog, owner/parent, and MDI navigation or containment evidence from checked-in C#.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WinFormsNavigationEdgeDeclared
+      - AnalysisGap
+    limitations:
+      - Navigation rows do not prove that a form opens at runtime, that a user can reach it, that auth/role checks allow it, that the window is visible, or that navigation occurs in production.
+      - Dynamic factories, dependency injection, reflection, branch gating, role/user-state checks, runtime state, duplicate candidates, and unresolved construction targets are gaps or needs-review classifications.
+      - Navigation evidence remains separate from event binding, handler, call, and object-creation evidence and cites supporting IDs where available.
+
+  - id: legacy.winforms.callback-boundary.v1
+    name: Legacy WinForms callback boundary evidence
+    description: Records static BackgroundWorker, timer, UI marshalling, async/delegate, and callback-boundary evidence linked to WinForms event handlers where possible.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WinFormsCallbackBoundaryDeclared
+      - AnalysisGap
+    limitations:
+      - Callback rows do not prove scheduling, execution order, cancellation, progress semantics, thread affinity, race freedom, completion, service reachability, SQL execution, or production usage.
+      - Unknown receivers, anonymous delegates, async callbacks, thread scheduling, runtime state, and reduced semantic coverage cap confidence and remain boundary-limited evidence.
+
+  - id: legacy.winforms.handler-flow.v1
+    name: Legacy WinForms handler-to-backend static flow projection
+    description: Projects resolved WinForms handlers to directly connected call, object-creation, WCF, ASMX, remoting, legacy data, SQL/query, HTTP, config, or dependency-surface evidence from the same scan.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WinFormsHandlerFlowProjected
+      - AnalysisGap
+    limitations:
+      - Handler-flow projection is static direct evidence and does not prove runtime execution, branch feasibility, dynamic dispatch, dependency injection targets, callback ordering, service reachability, SQL execution, database existence, or production usage.
+      - The projected tier is capped by the weakest required handler/path/terminal evidence; reduced semantic coverage, missing call/value-flow/backend facts, generated-code drift, reflection, and dynamic dispatch produce partial or unknown classifications.
+      - Terminal names that are unsafe for cleartext are hashed using stable TraceMap digest conventions; raw SQL, endpoint addresses, config values, source snippets, local paths, remotes, and secrets are omitted.
+
+  - id: legacy.winforms.resource-metadata.v1
+    name: Legacy WinForms safe resource metadata
+    description: Records conservative .resx presence, culture suffix, safe key hashes, and resource kind labels linked to WinForms surfaces when safe deterministic evidence exists.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WinFormsResourceMetadataDeclared
+      - AnalysisGap
+    limitations:
+      - Resource rows do not store raw strings, binary payloads, images, icons, file paths, URLs, config-looking values, secrets, localization results, runtime text, layout, or user-facing behavior.
+      - DTD/entity expansion, external references, malformed XML, unsupported resource kinds, ambiguous linkage, and too-large resources are parser/security gaps rather than partial raw output.
+
   - id: legacy.aspnet.surface.v1
     name: Legacy ASP.NET static surface inventory
     description: Inventories classic ASP.NET application and handler files, directive metadata, and supporting designer-file gaps while reusing WebForms inventory facts for page/control/master evidence.
