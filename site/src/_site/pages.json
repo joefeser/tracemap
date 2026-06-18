@@ -135,6 +135,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/demo/evidence-trail/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/proof-paths/",
     "changefreq": "monthly",
     "priority": "0.8"
