@@ -243,7 +243,8 @@ actual work completed.
 
 Acceptance criteria:
 
-- `tasks.md` remains unchecked until future implementation work begins.
+- Future implementation tasks in `tasks.md` remain unchecked until future
+  implementation work begins.
 - Implementation tasks are checked only after the corresponding implementation
   and validation work is complete.
 - This spec-only phase keeps `Status: not-started` and moves `Readiness` to
