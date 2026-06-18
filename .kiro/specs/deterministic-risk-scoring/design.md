@@ -378,8 +378,8 @@ Model version: review-priority.v1
 Attention level: high_attention
 Completeness: partial, limited by coverage_gap and truncation
 
-| Priority | Score | Evidence | Components | Limitations |
-| --- | ---: | --- | --- | --- |
+| Priority | Evidence | Components | Limitations |
+| --- | --- | --- | --- |
 ```
 
 Do not render raw values. Use safe identifiers, hashes, source labels, rule IDs, evidence tiers, file spans, and limitations.
@@ -394,7 +394,7 @@ Suggested top-level shape:
     "status": "available",
     "modelVersion": "review-priority.v1",
     "attentionLevel": "high_attention",
-    "priorityScore": 72,
+    "priorityScore": null,
     "complete": false,
     "contributingSections": ["topChangedSurfaces", "pathContext"],
     "limitedSections": ["sourceCoverage"],
@@ -412,7 +412,7 @@ Row annotations should be nested on rows where supported:
 {
   "reviewPriority": {
     "severityHint": "medium_review",
-    "priorityScore": 42,
+    "priorityScore": null,
     "complete": true,
     "components": [],
     "sourceEvidenceIds": ["impact:..."],
