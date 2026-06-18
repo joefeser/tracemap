@@ -190,8 +190,11 @@ public static class CombinedRouteFlowReporter
     private const string InterfaceBridgeRuleId = "combined.route-flow.interface-bridge.v1";
     private const string LogicSurfaceRuleId = "combined.route-flow.logic-surface.v1";
     private const string DependencySurfaceRuleId = "combined.route-flow.dependency-surface.v1";
+    private const string ArgumentProjectionRuleId = "combined.route-flow.argument-projection.v1";
+    private const string FactSymbolProjectionRuleId = "combined.route-flow.fact-symbol-projection.v1";
     private const string ClassificationRuleId = "combined.route-flow.classification.v1";
     private const string GapRuleId = "combined.route-flow.gap.v1";
+    private const string RedactionRuleId = "combined.route-flow.redaction.v1";
     private const int MarkdownRowLimit = 200;
 
     private static readonly HashSet<string> AllowedClassifications = new(StringComparer.Ordinal)
@@ -326,7 +329,17 @@ public static class CombinedRouteFlowReporter
             .ThenBy(surface => surface.StableKey, StringComparer.Ordinal)
             .ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal)
             .ToList();
+        var selectedSourceIndexIds = selectedPaths
+            .SelectMany(path => path.Nodes)
+            .Select(node => node.SourceIndexId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var projections = await BuildProjectionRowsAsync(options.IndexPath, selectedPaths, selectedSourceIndexIds, flowRows, sources, cancellationToken);
+        gaps.AddRange(projections.Gaps);
         var allLogicRows = BuildLogicRows(selectedPaths, flowRows, sources)
+            .Concat(projections.Rows)
             .OrderBy(row => row.LogicKind, StringComparer.Ordinal)
             .ThenBy(row => row.DisplayName, StringComparer.Ordinal)
             .ThenBy(row => row.LogicRowId, StringComparer.Ordinal)
@@ -494,25 +507,6 @@ public static class CombinedRouteFlowReporter
             }
         }
 
-        foreach (var table in new[] { "combined_fact_symbols", "combined_argument_flows" })
-        {
-            if (await TableExistsAsync(connection, table, cancellationToken)
-                && await CountRowsAsync(connection, table, cancellationToken) > 0)
-            {
-                gaps.Add(new RouteFlowGap(
-                    $"gap:extractor-unavailable:{table}",
-                    "ExtractorUnavailable",
-                    $"Route-flow v1 detected `{table}` evidence but does not yet project the table's detail rows directly; report rows remain limited to shared combined path graph evidence.",
-                    GapRuleId,
-                    EvidenceTiers.Tier4Unknown,
-                    "ReducedCoverage",
-                    null,
-                    null,
-                    [],
-                    ["Present-but-unprojected route-flow detail tables cap clean absence conclusions."]));
-            }
-        }
-
         return gaps;
     }
 
@@ -664,7 +658,7 @@ public static class CombinedRouteFlowReporter
             method,
             pathKey,
             pathKey,
-            node.SymbolId ?? node.DisplayName,
+            SafeSelector(node.SymbolId ?? node.DisplayName),
             ClassificationForTier(node.EvidenceTier),
             CoverageFor(node.EvidenceTier),
             EvidenceFromNode(EntryRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? EntryRuleId], sources));
@@ -699,14 +693,14 @@ public static class CombinedRouteFlowReporter
                     continue;
                 }
 
-                var classification = MaxClassification(ClassifyRouteRow(edge, node, sources), ClassificationFromPath(path.Classification));
+                var classification = WeakestClassification(ClassifyRouteRow(edge, node, sources), ClassificationFromPath(path.Classification));
                 rows.Add(new RouteFlowRow(
                     $"row:{path.PathId}:{index:000}",
                     sequence,
                     rowKind,
                     edge is null ? "none" : EdgeKind(edge),
-                    index == 0 ? node.DisplayName : path.Nodes[index - 1].DisplayName,
-                    edge is null ? node.DisplayName : node.DisplayName,
+                    SafeSelector(index == 0 ? node.DisplayName : path.Nodes[index - 1].DisplayName) ?? "redacted",
+                    SafeSelector(edge is null ? node.DisplayName : node.DisplayName) ?? "redacted",
                     classification,
                     CoverageFor(edge?.EvidenceTier ?? node.EvidenceTier),
                     edge?.FromNodeId,
@@ -741,13 +735,13 @@ public static class CombinedRouteFlowReporter
                     CoverageFor(node.EvidenceTier),
                     Metadata(
                         ("operationName", node.OperationName),
-                        ("tableName", node.TableName),
-                        ("columnNames", node.ColumnNames),
+                        ("tableNameHash", string.IsNullOrWhiteSpace(node.TableName) ? null : CombinedReportHelpers.Hash(node.TableName!, 16)),
+                        ("columnNamesHash", string.IsNullOrWhiteSpace(node.ColumnNames) ? null : CombinedReportHelpers.Hash(node.ColumnNames!, 16)),
                         ("sourceKind", node.SourceKind),
                         ("shapeHash", node.ShapeHash),
                         ("textHash", node.TextHash),
                         ("packageName", node.PackageName),
-                        ("configKey", node.ConfigKey)),
+                        ("configKeyHash", string.IsNullOrWhiteSpace(node.ConfigKey) ? null : CombinedReportHelpers.Hash(node.ConfigKey!, 16))),
                     EvidenceFromNode(DependencySurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? DependencySurfaceRuleId], sources));
             })
             .GroupBy(surface => surface.StableKey, StringComparer.Ordinal)
@@ -812,6 +806,648 @@ public static class CombinedRouteFlowReporter
             .ToArray();
     }
 
+    private sealed record ProjectionResult(
+        IReadOnlyList<RouteFlowLogicRow> Rows,
+        IReadOnlyList<RouteFlowGap> Gaps);
+
+    private sealed record ArgumentFlowProjectionRow(
+        string CombinedFactId,
+        string SourceIndexId,
+        string SourceLabel,
+        string CommitSha,
+        string EvidenceTier,
+        string RuleId,
+        string? CallerSymbol,
+        string CalleeSymbol,
+        int ParameterOrdinal,
+        string ParameterName,
+        string? ParameterType,
+        int ArgumentOrdinal,
+        string? ArgumentExpressionKind,
+        string? ArgumentExpressionHash,
+        string? ArgumentSymbol,
+        string? ArgumentSymbolKind,
+        string FilePath,
+        int StartLine,
+        int EndLine);
+
+    private sealed record FactSymbolProjectionRow(
+        string CombinedFactId,
+        string CombinedSymbolId,
+        string SourceIndexId,
+        string SourceLabel,
+        string CommitSha,
+        string FactType,
+        string RuleId,
+        string EvidenceTier,
+        string? SourceSymbol,
+        string? TargetSymbol,
+        string SymbolDisplayName,
+        string SymbolKind,
+        string Role,
+        string FilePath,
+        int StartLine,
+        int EndLine,
+        IReadOnlyDictionary<string, string> Properties);
+
+    private static async Task<ProjectionResult> BuildProjectionRowsAsync(
+        string indexPath,
+        IReadOnlyList<CombinedPath> selectedPaths,
+        IReadOnlyList<string> selectedSourceIndexIds,
+        IReadOnlyList<RouteFlowRow> flowRows,
+        IReadOnlyList<RouteFlowSource> sources,
+        CancellationToken cancellationToken)
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = indexPath,
+            Mode = SqliteOpenMode.ReadOnly
+        }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        var rows = new List<RouteFlowLogicRow>();
+        var gaps = new List<RouteFlowGap>();
+        var pathModel = BuildSelectedPathModel(selectedPaths, flowRows);
+
+        if (await TableExistsAsync(connection, "combined_argument_flows", cancellationToken))
+        {
+            var argumentRows = selectedSourceIndexIds.Count == 0
+                ? []
+                : await ReadArgumentFlowProjectionRowsAsync(connection, selectedSourceIndexIds, cancellationToken);
+            var projected = 0;
+            foreach (var row in argumentRows)
+            {
+                var attached = pathModel.FlowRowForPair(row.SourceIndexId, row.CallerSymbol, row.CalleeSymbol);
+                if (attached is null)
+                {
+                    continue;
+                }
+
+                projected++;
+                var parameterName = SafeParameterName(row.ParameterName, out var parameterNameRedacted);
+                rows.Add(new RouteFlowLogicRow(
+                    $"logic:argument-projection:{CombinedReportHelpers.Hash($"{row.CombinedFactId}\0{attached.RowId}", 16)}",
+                    "argument-flow",
+                    $"parameter:{parameterName}",
+                    "argument-projection",
+                    attached.RowId,
+                    WeakestClassification(ClassificationForTier(row.EvidenceTier), RouteFlowClassifications.ProbableStaticRouteFlow),
+                    CoverageFor(row.EvidenceTier),
+                    Metadata(
+                        ("parameterName", parameterName),
+                        ("parameterType", row.ParameterType),
+                        ("parameterOrdinal", row.ParameterOrdinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("argumentOrdinal", row.ArgumentOrdinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("argumentExpressionKind", row.ArgumentExpressionKind),
+                        ("argumentExpressionHash", row.ArgumentExpressionHash),
+                        ("argumentSymbolKind", row.ArgumentSymbolKind),
+                        ("argumentSymbolHash", string.IsNullOrWhiteSpace(row.ArgumentSymbol) ? null : CombinedReportHelpers.Hash(row.ArgumentSymbol!, 16))),
+                    EvidenceFromProjection(
+                        ArgumentProjectionRuleId,
+                        row.EvidenceTier,
+                        row.SourceLabel,
+                        row.CommitSha,
+                        row.FilePath,
+                        row.StartLine,
+                        row.EndLine,
+                        row.RuleId,
+                        [row.CombinedFactId],
+                        attached.Evidence.SupportingEdgeIds,
+                        sources,
+                        redactionApplied: parameterNameRedacted || !string.IsNullOrWhiteSpace(row.ArgumentSymbol))));
+            }
+
+            if (argumentRows.Count > 0 && projected == 0)
+            {
+                gaps.Add(ProjectionUnavailableGap(
+                    "argument",
+                    "ArgumentProjectionUnavailable",
+                    "Argument-flow rows were present, but none could be connected to the selected route-flow path by direct static call evidence.",
+                    ArgumentProjectionRuleId,
+                    argumentRows.Select(row => row.CombinedFactId).ToArray()));
+            }
+        }
+
+        if (await TableExistsAsync(connection, "combined_fact_symbols", cancellationToken))
+        {
+            var factSymbolRows = selectedSourceIndexIds.Count == 0
+                ? []
+                : await ReadFactSymbolProjectionRowsAsync(connection, selectedSourceIndexIds, cancellationToken);
+            var projected = 0;
+            foreach (var row in factSymbolRows)
+            {
+                if (!ShouldProjectFactSymbol(row))
+                {
+                    continue;
+                }
+
+                var attached = pathModel.FlowRowForSymbol(row.SourceIndexId, row.CombinedSymbolId, row.SymbolDisplayName, row.SourceSymbol, row.TargetSymbol);
+                if (attached is null)
+                {
+                    continue;
+                }
+
+                projected++;
+                var kind = FactSymbolLogicKind(row);
+                rows.Add(new RouteFlowLogicRow(
+                    $"logic:fact-symbol-projection:{CombinedReportHelpers.Hash($"{row.CombinedFactId}\0{row.CombinedSymbolId}\0{row.Role}", 16)}",
+                    kind,
+                    FactSymbolDisplayName(row, kind),
+                    "fact-symbol-projection",
+                    attached.RowId,
+                    WeakestClassification(ClassificationForTier(row.EvidenceTier), RouteFlowClassifications.ProbableStaticRouteFlow),
+                    CoverageFor(row.EvidenceTier),
+                    FactSymbolMetadata(row),
+                    EvidenceFromProjection(
+                        FactSymbolProjectionRuleId,
+                        row.EvidenceTier,
+                        row.SourceLabel,
+                        row.CommitSha,
+                        row.FilePath,
+                        row.StartLine,
+                        row.EndLine,
+                        row.RuleId,
+                        [row.CombinedFactId],
+                        attached.Evidence.SupportingEdgeIds,
+                        sources,
+                        redactionApplied: FactSymbolRedactionApplied(row))));
+            }
+
+            var projectableFactSymbolRows = factSymbolRows.Where(ShouldProjectFactSymbol).ToArray();
+            if (projectableFactSymbolRows.Length > 0 && projected == 0)
+            {
+                gaps.Add(ProjectionUnavailableGap(
+                    "fact-symbol",
+                    "FactSymbolProjectionUnavailable",
+                    "Fact-symbol rows were present, but none could be connected to the selected route-flow path by source-local symbol evidence.",
+                    FactSymbolProjectionRuleId,
+                    projectableFactSymbolRows.Select(row => row.CombinedFactId).ToArray()));
+            }
+            else if (factSymbolRows.Count > 0 && projectableFactSymbolRows.Length == 0)
+            {
+                gaps.Add(ProjectionUnavailableGap(
+                    "fact-symbol-unsupported",
+                    "FactSymbolProjectionUnavailable",
+                    "Fact-symbol rows were present, but this route-flow slice does not project their fact types directly.",
+                    FactSymbolProjectionRuleId,
+                    factSymbolRows.Select(row => row.CombinedFactId).ToArray()));
+            }
+        }
+
+        return new ProjectionResult(
+            rows
+                .GroupBy(row => row.LogicRowId, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .OrderBy(row => row.LogicKind, StringComparer.Ordinal)
+                .ThenBy(row => row.DisplayName, StringComparer.Ordinal)
+                .ThenBy(row => row.LogicRowId, StringComparer.Ordinal)
+                .ToArray(),
+            gaps);
+    }
+
+    private sealed class SelectedPathModel
+    {
+        private readonly Dictionary<string, RouteFlowRow> _flowRowsByPair;
+        private readonly Dictionary<string, RouteFlowRow> _flowRowsBySymbol;
+
+        public SelectedPathModel(Dictionary<string, RouteFlowRow> flowRowsByPair, Dictionary<string, RouteFlowRow> flowRowsBySymbol)
+        {
+            _flowRowsByPair = flowRowsByPair;
+            _flowRowsBySymbol = flowRowsBySymbol;
+        }
+
+        public RouteFlowRow? FlowRowForPair(string sourceIndexId, string? callerSymbol, string? calleeSymbol)
+        {
+            if (string.IsNullOrWhiteSpace(callerSymbol) || string.IsNullOrWhiteSpace(calleeSymbol))
+            {
+                return null;
+            }
+
+            return _flowRowsByPair.GetValueOrDefault(SymbolPairKey(sourceIndexId, callerSymbol!, calleeSymbol!));
+        }
+
+        public RouteFlowRow? FlowRowForSymbol(string sourceIndexId, params string?[] symbols)
+        {
+            foreach (var symbol in symbols)
+            {
+                if (string.IsNullOrWhiteSpace(symbol))
+                {
+                    continue;
+                }
+
+                if (_flowRowsBySymbol.TryGetValue(SymbolKey(sourceIndexId, symbol!), out var row))
+                {
+                    return row;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    private static SelectedPathModel BuildSelectedPathModel(IReadOnlyList<CombinedPath> selectedPaths, IReadOnlyList<RouteFlowRow> flowRows)
+    {
+        var nodesById = selectedPaths
+            .SelectMany(path => path.Nodes)
+            .GroupBy(node => node.NodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var flowRowsByNode = flowRows
+            .Where(row => !string.IsNullOrWhiteSpace(row.ToNodeId))
+            .GroupBy(row => row.ToNodeId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(row => row.Sequence).First(), StringComparer.Ordinal);
+        var byPair = new Dictionary<string, RouteFlowRow>(StringComparer.Ordinal);
+        var bySymbol = new Dictionary<string, RouteFlowRow>(StringComparer.Ordinal);
+
+        foreach (var path in selectedPaths)
+        {
+            foreach (var node in path.Nodes)
+            {
+                var attached = flowRowsByNode.GetValueOrDefault(node.NodeId)
+                    ?? flowRows.OrderBy(row => row.Sequence).FirstOrDefault(row => row.ToNodeId == node.NodeId);
+                if (attached is null)
+                {
+                    continue;
+                }
+
+                AddSymbol(bySymbol, node.SourceIndexId, node.SymbolId, attached);
+                if (string.IsNullOrWhiteSpace(node.SymbolId))
+                {
+                    AddSymbol(bySymbol, node.SourceIndexId, node.DisplayName, attached);
+                }
+            }
+
+            foreach (var edge in path.Edges)
+            {
+                if (!nodesById.TryGetValue(edge.FromNodeId, out var from) || !nodesById.TryGetValue(edge.ToNodeId, out var to))
+                {
+                    continue;
+                }
+
+                var attached = flowRows.FirstOrDefault(row => row.Evidence.SupportingEdgeIds.Contains(edge.EdgeId, StringComparer.Ordinal))
+                    ?? flowRowsByNode.GetValueOrDefault(edge.ToNodeId);
+                if (attached is null)
+                {
+                    continue;
+                }
+
+                AddPair(byPair, from.SourceIndexId, from.SymbolId ?? from.DisplayName, to.SymbolId ?? to.DisplayName, attached);
+                AddPair(byPair, from.SourceIndexId, from.DisplayName, to.DisplayName, attached);
+                AddSymbol(bySymbol, from.SourceIndexId, from.SymbolId, attached);
+                AddSymbol(bySymbol, to.SourceIndexId, to.SymbolId, attached);
+                if (string.IsNullOrWhiteSpace(from.SymbolId))
+                {
+                    AddSymbol(bySymbol, from.SourceIndexId, from.DisplayName, attached);
+                }
+
+                if (string.IsNullOrWhiteSpace(to.SymbolId))
+                {
+                    AddSymbol(bySymbol, to.SourceIndexId, to.DisplayName, attached);
+                }
+            }
+        }
+
+        return new SelectedPathModel(byPair, bySymbol);
+    }
+
+    private static void AddPair(Dictionary<string, RouteFlowRow> values, string sourceIndexId, string? sourceSymbol, string? targetSymbol, RouteFlowRow row)
+    {
+        if (string.IsNullOrWhiteSpace(sourceSymbol) || string.IsNullOrWhiteSpace(targetSymbol))
+        {
+            return;
+        }
+
+        values.TryAdd(SymbolPairKey(sourceIndexId, sourceSymbol!, targetSymbol!), row);
+    }
+
+    private static void AddSymbol(Dictionary<string, RouteFlowRow> values, string sourceIndexId, string? symbol, RouteFlowRow row)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return;
+        }
+
+        values.TryAdd(SymbolKey(sourceIndexId, symbol!), row);
+    }
+
+    private static string SymbolPairKey(string sourceIndexId, string sourceSymbol, string targetSymbol)
+    {
+        return $"{sourceIndexId}\0{sourceSymbol}\0{targetSymbol}";
+    }
+
+    private static string SymbolKey(string sourceIndexId, string symbol)
+    {
+        return $"{sourceIndexId}\0{symbol}";
+    }
+
+    private static async Task<IReadOnlyList<ArgumentFlowProjectionRow>> ReadArgumentFlowProjectionRowsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        command.CommandText = """
+            select flows.combined_fact_id,
+                   flows.source_index_id,
+                   sources.label,
+                   flows.commit_sha,
+                   flows.evidence_tier,
+                   flows.rule_id,
+                   flows.caller_symbol,
+                   flows.callee_symbol,
+                   flows.parameter_ordinal,
+                   flows.parameter_name,
+                   flows.parameter_type,
+                   flows.argument_ordinal,
+                   flows.argument_expression_kind,
+                   flows.argument_expression_hash,
+                   flows.argument_symbol,
+                   flows.argument_symbol_kind,
+                   flows.file_path,
+                   flows.start_line,
+                   flows.end_line
+            from combined_argument_flows flows
+            join index_sources sources on sources.source_index_id = flows.source_index_id
+            where flows.source_index_id in (
+            """ + sourceFilter + """
+            )
+            order by flows.source_index_id, flows.caller_symbol, flows.callee_symbol, flows.parameter_ordinal, flows.combined_fact_id;
+            """;
+        var rows = new List<ArgumentFlowProjectionRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new ArgumentFlowProjectionRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.GetString(7),
+                reader.GetInt32(8),
+                reader.GetString(9),
+                reader.IsDBNull(10) ? null : reader.GetString(10),
+                reader.GetInt32(11),
+                reader.IsDBNull(12) ? null : reader.GetString(12),
+                reader.IsDBNull(13) ? null : reader.GetString(13),
+                reader.IsDBNull(14) ? null : reader.GetString(14),
+                reader.IsDBNull(15) ? null : reader.GetString(15),
+                reader.GetString(16),
+                reader.GetInt32(17),
+                reader.GetInt32(18)));
+        }
+
+        return rows;
+    }
+
+    private static async Task<IReadOnlyList<FactSymbolProjectionRow>> ReadFactSymbolProjectionRowsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        command.CommandText = """
+            select links.combined_fact_id,
+                   links.combined_symbol_id,
+                   links.source_index_id,
+                   sources.label,
+                   facts.commit_sha,
+                   facts.fact_type,
+                   facts.rule_id,
+                   facts.evidence_tier,
+                   facts.source_symbol,
+                   facts.target_symbol,
+                   symbols.display_name,
+                   symbols.symbol_kind,
+                   links.role,
+                   facts.file_path,
+                   facts.start_line,
+                   facts.end_line,
+                   facts.properties_json
+            from combined_fact_symbols links
+            join combined_facts facts on facts.combined_fact_id = links.combined_fact_id
+            join index_sources sources on sources.source_index_id = links.source_index_id
+            left join combined_symbols symbols on symbols.combined_symbol_id = links.combined_symbol_id
+            where links.source_index_id in (
+            """ + sourceFilter + """
+            )
+            order by links.source_index_id, links.combined_symbol_id, links.role, links.combined_fact_id;
+            """;
+        var rows = new List<FactSymbolProjectionRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new FactSymbolProjectionRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                reader.IsDBNull(10) ? reader.GetString(1) : reader.GetString(10),
+                reader.IsDBNull(11) ? "Unknown" : reader.GetString(11),
+                reader.GetString(12),
+                reader.GetString(13),
+                reader.GetInt32(14),
+                reader.GetInt32(15),
+                ParseMetadataProperties(reader.GetString(16))));
+        }
+
+        return rows;
+    }
+
+    private static string AddSourceFilterParameters(SqliteCommand command, IReadOnlyList<string> sourceIndexIds)
+    {
+        var parameterNames = new List<string>();
+        for (var index = 0; index < sourceIndexIds.Count; index++)
+        {
+            var parameterName = $"$source{index}";
+            parameterNames.Add(parameterName);
+            command.Parameters.AddWithValue(parameterName, sourceIndexIds[index]);
+        }
+
+        return string.Join(", ", parameterNames);
+    }
+
+    private static bool ShouldProjectFactSymbol(FactSymbolProjectionRow row)
+    {
+        return row.FactType is FactTypes.ObjectShapeInferred
+            or FactTypes.QueryPatternDetected
+            or FactTypes.SqlTextUsed
+            or FactTypes.SqlCommandDetected
+            or FactTypes.DapperCallDetected
+            or FactTypes.DatabaseColumnMapping
+            or FactTypes.PackageReferenced;
+    }
+
+    private static string FactSymbolLogicKind(FactSymbolProjectionRow row)
+    {
+        return row.FactType switch
+        {
+            FactTypes.ObjectShapeInferred => "object-shape",
+            FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "query-shape",
+            FactTypes.DatabaseColumnMapping => "data-surface",
+            FactTypes.PackageReferenced => "dependency-surface",
+            _ => "fact-symbol-attachment"
+        };
+    }
+
+    private static string FactSymbolDisplayName(FactSymbolProjectionRow row, string kind)
+    {
+        var shapeHash = FirstProperty(row.Properties, "queryShapeHash", "shapeHash", "textHash", "tableHash", "objectShapeHash");
+        if (!string.IsNullOrWhiteSpace(shapeHash))
+        {
+            return $"{kind}:{SafeSelector(shapeHash) ?? CombinedReportHelpers.Hash(shapeHash!, 16)}";
+        }
+
+        return $"{kind}:fact-hash:{CombinedReportHelpers.Hash(row.CombinedFactId, 16)}";
+    }
+
+    private static IReadOnlyDictionary<string, string> FactSymbolMetadata(FactSymbolProjectionRow row)
+    {
+        return Metadata(
+            ("factType", row.FactType),
+            ("symbolKind", row.SymbolKind),
+            ("role", row.Role),
+            ("operationName", FirstProperty(row.Properties, "operationName")),
+            ("sourceKind", FirstProperty(row.Properties, "sqlSourceKind", "sourceKind")),
+            ("shapeHash", FirstProperty(row.Properties, "queryShapeHash", "shapeHash", "objectShapeHash")),
+            ("textHash", FirstProperty(row.Properties, "textHash")),
+            ("tableNameHash", HashProperty(row.Properties, "tableName")),
+            ("targetSymbolHash", string.IsNullOrWhiteSpace(row.TargetSymbol) ? null : CombinedReportHelpers.Hash(row.TargetSymbol!, 16)),
+            ("sourceSymbolHash", string.IsNullOrWhiteSpace(row.SourceSymbol) ? null : CombinedReportHelpers.Hash(row.SourceSymbol!, 16)));
+    }
+
+    private static string SafeParameterName(string value, out bool redacted)
+    {
+        var safe = SafeSelector(value);
+        redacted = safe is null
+            || safe.StartsWith("redacted-hash:", StringComparison.Ordinal)
+            || LooksSensitiveIdentifier(safe);
+        return redacted ? $"parameter-name-hash:{CombinedReportHelpers.Hash(value, 16)}" : safe!;
+    }
+
+    private static bool LooksSensitiveIdentifier(string value)
+    {
+        return value.Contains("password", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("secret", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("token", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("apikey", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("api_key", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("connection", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("connstr", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool FactSymbolRedactionApplied(FactSymbolProjectionRow row)
+    {
+        return !string.IsNullOrWhiteSpace(row.SourceSymbol)
+            || !string.IsNullOrWhiteSpace(row.TargetSymbol)
+            || !string.IsNullOrWhiteSpace(FirstProperty(row.Properties, "tableName"));
+    }
+
+    private static string? FirstProperty(IReadOnlyDictionary<string, string> properties, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? HashProperty(IReadOnlyDictionary<string, string> properties, string key)
+    {
+        return properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? CombinedReportHelpers.Hash(value, 16)
+            : null;
+    }
+
+    private static RouteFlowGap ProjectionUnavailableGap(
+        string scope,
+        string gapKind,
+        string message,
+        string ruleId,
+        IReadOnlyList<string> supportingFactIds)
+    {
+        var support = supportingFactIds
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(20)
+            .ToArray();
+        return new RouteFlowGap(
+            $"gap:projection:{scope}:{CombinedReportHelpers.Hash(string.Join("|", support), 16)}",
+            gapKind,
+            message,
+            GapRuleId,
+            EvidenceTiers.Tier4Unknown,
+            "ReducedCoverage",
+            null,
+            null,
+            support,
+            [$"{ruleId} requires source-local static joins; unjoined projection evidence is reported as a gap, not inferred flow."]);
+    }
+
+    private static RouteFlowEvidenceRef EvidenceFromProjection(
+        string routeRuleId,
+        string evidenceTier,
+        string sourceLabel,
+        string commitSha,
+        string filePath,
+        int startLine,
+        int endLine,
+        string supportingRuleId,
+        IReadOnlyList<string> facts,
+        IReadOnlyList<string> edges,
+        IReadOnlyList<RouteFlowSource> sources,
+        bool redactionApplied = false)
+    {
+        var supportingRuleIds = new[] { routeRuleId, supportingRuleId }
+            .Concat(redactionApplied ? [RedactionRuleId] : [])
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        return new RouteFlowEvidenceRef(
+            routeRuleId,
+            evidenceTier,
+            SafeLabel(sourceLabel),
+            SafeCommitSha(commitSha),
+            CombinedReportHelpers.SafePath(filePath),
+            startLine,
+            endLine,
+            ExtractorName(supportingRuleId),
+            ExtractorVersionFor(sourceLabel, sources),
+            facts.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            edges.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            supportingRuleIds,
+            LimitationsFor(routeRuleId));
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseMetadataProperties(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<SortedDictionary<string, string>>(json, CombinedDependencyReporter.JsonOptions)
+                ?? new SortedDictionary<string, string>(StringComparer.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["propertiesHash"] = CombinedReportHelpers.Hash(json, 32)
+            };
+        }
+    }
+
     private static RouteFlowSummary BuildSummary(
         string reportCoverage,
         IReadOnlyList<RouteFlowEntryEvidence> entries,
@@ -834,7 +1470,7 @@ public static class CombinedRouteFlowReporter
         }
         else if (truncated
             || flowRows.Concat<object>(logicRows).Concat(surfaces).Any(RowNeedsReview)
-            || gaps.Any(gap => gap.GapKind is "RuntimeBindingNotProven" or "ImplementationCandidateUnavailable" or "DynamicClientUrlNeedsReview" or "TruncatedByLimit"))
+            || gaps.Any(gap => gap.GapKind is "RuntimeBindingNotProven" or "ImplementationCandidateUnavailable" or "ArgumentProjectionUnavailable" or "FactSymbolProjectionUnavailable" or "DynamicClientUrlNeedsReview" or "TruncatedByLimit"))
         {
             classification = RouteFlowClassifications.NeedsReviewStaticRouteFlow;
             reasons.Add("Review-tier, weak, implementation-candidate, dynamic, or truncated static evidence is present.");
@@ -1082,17 +1718,6 @@ public static class CombinedRouteFlowReporter
             return "projection-or-object-shape";
         }
 
-        if (node.RuleId?.Contains("async", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            return "async-boundary";
-        }
-
-        if (node.RuleId?.Contains("validation", StringComparison.OrdinalIgnoreCase) == true
-            || node.DisplayName?.Contains("guard", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            return "validation-or-guard";
-        }
-
         return null;
     }
 
@@ -1140,7 +1765,9 @@ public static class CombinedRouteFlowReporter
         };
     }
 
-    private static string MaxClassification(string left, string right)
+    // Lower rank is stronger. This helper intentionally returns the weaker
+    // classification so composed route-flow rows never upgrade source evidence.
+    private static string WeakestClassification(string left, string right)
     {
         return ClassificationRank(left) >= ClassificationRank(right) ? left : right;
     }
@@ -1352,6 +1979,9 @@ public static class CombinedRouteFlowReporter
             InterfaceBridgeRuleId => ["Candidate implementation evidence is not runtime dependency-injection target proof."],
             DependencySurfaceRuleId => ["Dependency/data surface rows are static evidence only and do not prove runtime persistence, traffic, or production use."],
             LogicSurfaceRuleId => ["Business/data logic rows are static path context and do not prove branch feasibility or business impact."],
+            ArgumentProjectionRuleId => ["Argument projection rows are direct static argument evidence only and do not prove full taint, mutation, alias, branch feasibility, or runtime values."],
+            FactSymbolProjectionRuleId => ["Fact-symbol projection rows attach source-local facts to route-flow symbols only and do not prove runtime execution, database schema state, or dependency binding."],
+            RedactionRuleId => ["Redaction records mean unsafe values are hashed or omitted and do not make the output public-approved."],
             _ => ["Route-flow rows are static evidence and do not prove runtime execution."]
         };
     }
@@ -1364,6 +1994,8 @@ public static class CombinedRouteFlowReporter
             "Endpoint alignment does not prove live traffic, deployment, auth, middleware, proxy, CORS, or reachability behavior.",
             "Call edges may miss reflection, dynamic dispatch, delegates, generated code, dependency injection, and branch feasibility.",
             "Candidate implementation rows identify compiler-known candidates only and do not prove runtime dependency-injection targets.",
+            "Argument-flow projection rows describe direct static argument evidence and do not prove full taint, mutation tracking, alias behavior, branch feasibility, or runtime values.",
+            "Fact-symbol projection rows preserve source-local static attachments and do not prove runtime execution, database schema state, or dependency binding.",
             "Query and dependency/data rows do not prove SQL execution, database existence, schema compatibility, persistence, or production use.",
             "Business/data logic rows are static review context, not proof of business intent or business impact.",
             "Reduced coverage, missing extractors, missing schema, unknown commit SHA, truncation, dynamic URLs, and ambiguous candidates cap classifications.",
