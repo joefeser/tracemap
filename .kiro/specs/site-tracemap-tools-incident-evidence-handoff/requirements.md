@@ -250,16 +250,17 @@ Acceptance criteria:
   `/incident-evidence-handoff/` route only, not to the full site build output,
   spec source files, validator source files, neighboring pages, or validator
   comments.
-- The positioning denylist applies to normalized rendered body text for the
-  route and must reject overclaim phrases, at minimum: proves runtime behavior,
-  proves production traffic, endpoint performance proof, proves outage cause,
-  proves release safety, proves operational safety, AI-powered, LLM-powered,
-  AI impact analysis engine, LLM impact analysis engine, complete product
-  coverage, production dependency understanding, replaces telemetry, replaces
-  logs, replaces traces, replaces APM, replaces incident command, replaces
-  incident response, replaces ownership, replaces ownership review, replaces
-  tests, replaces release controls, replaces service-owner judgment, replaces
-  database-owner judgment, and replaces source review.
+- The positioning denylist applies to normalized rendered body text, decoded HTML
+  attributes, and public metadata values for the route and must reject overclaim
+  phrases, at minimum: proves runtime behavior, proves production traffic,
+  endpoint performance proof, proves outage cause, proves release safety, proves
+  operational safety, AI-powered, LLM-powered, AI impact analysis engine, LLM
+  impact analysis engine, complete product coverage, production dependency
+  understanding, replaces telemetry, replaces logs, replaces traces, replaces
+  APM, replaces incident command, replaces incident response, replaces
+  ownership, replaces ownership review, replaces tests, replaces release
+  controls, replaces service-owner judgment, replaces database-owner judgment,
+  and replaces source review.
 - The private/raw artifact denylist applies to the route's raw HTML, decoded
   HTML attributes, metadata values, and rendered body text, and must reject
   exposure phrases, at minimum: raw fact stream, raw SQLite, analyzer log, raw

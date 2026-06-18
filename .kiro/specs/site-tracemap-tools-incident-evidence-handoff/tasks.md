@@ -67,7 +67,8 @@ until a future site implementation branch performs the work.
   readers find the packet without implying runtime proof or release approval.
 - [ ] Add focused validation for required copy, required links, route metadata,
   sitemap/discovery coverage, rendered word count between 400 and 1800 words,
-  forbidden positioning, and forbidden private/raw text.
+  forbidden positioning in rendered text plus public metadata/attributes, and
+  forbidden private/raw text.
 - [ ] Wire the focused validator into the site validation entrypoint.
 - [ ] Add focused tests for the validator, including negative tests for missing
   required copy including both distinction lines, missing links, forbidden
