@@ -346,6 +346,48 @@ grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out
 
 WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 
+## Legacy ASP.NET Route And Navigation Smoke
+
+When changing classic ASP.NET route, config, handler, PageMethod, sitemap, or
+navigation extraction, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Focused fixtures should cover `.aspx`, `.ascx`, `.master`, `.ashx`,
+`Global.asax`, code-behind partial classes, designer files, checked-in
+`web.config` structures, `MapPageRoute`, simple static route registration,
+dynamic route gaps, config handlers/modules/pages/controls/urlMappings,
+PageMethods, ScriptMethods, ScriptService classes, static markup navigation,
+sitemap nodes, C# `Response.Redirect`/`Server.Transfer`, ambiguous or unsafe
+targets, malformed files, reduced semantic coverage, deterministic output, and
+redaction.
+
+Useful inspection queries:
+
+```bash
+sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts where fact_type like 'AspNet%' group by fact_type order by fact_type;"
+sqlite3 <out>/index.sqlite "select fact_type, rule_id, evidence_tier, file_path, start_line, properties_json from facts where fact_type like 'AspNet%' or rule_id like 'legacy.aspnet.%' order by fact_type, file_path, start_line;"
+grep -E "Legacy ASP.NET Static Surface Evidence|Legacy ASP.NET Surface Limitations|route candidate|navigation reference candidate" <out>/report.md
+```
+
+No pinned public route/navigation smoke baseline exists yet beyond checked-in
+synthetic unit fixtures. Any local legacy ASP.NET smoke output must stay
+ignored/local-only, and any future catalog entry must use neutral labels,
+rule IDs, tiers, states, sanitized command templates, and reviewed public or
+synthetic identity metadata only. Do not commit raw scan outputs, local sample
+paths, raw remotes, raw routes, raw endpoint URLs, hostnames, config values,
+query strings, fragments, source snippets, credentials, secrets, or generated
+private outputs. ASP.NET route/navigation evidence is static and does not prove
+runtime route matching, IIS deployment, URL rewriting, authorization, browser
+behavior, JavaScript execution, request handling, page rendering, user
+reachability, or runtime impact.
+
 ## Legacy Remoting Smoke
 
 When changing .NET Remoting API, `MarshalByRefObject`, channel, registration, activation, config, or Remoting report extraction, run:
