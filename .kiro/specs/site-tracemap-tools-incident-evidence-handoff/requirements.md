@@ -67,9 +67,7 @@ Acceptance criteria:
   limits, and next owners that gets carried into the next conversation. The
   page must not restate static triage's locked self-description verbatim.
 - The page includes this exact rendered static-triage distinction line:
-  `Static triage frames the question; the incident evidence handoff packet
-  carries the already-framed evidence, proof paths, limits, and next owners into
-  the next conversation.`
+  `Static triage frames the question; the incident evidence handoff packet carries the already-framed evidence, proof paths, limits, and next owners into the next conversation.`
 - Before implementing the locked static-triage distinction line, the
   implementation agent must verify that `/static-triage/` still uses
   framing-question or checklist-adjacent language. If `/static-triage/` has
@@ -93,8 +91,7 @@ Acceptance criteria:
   `/use-cases/incident-review/` as the bringable evidence packet rather than
   the incident-review orientation narrative.
 - The page includes the exact rendered line:
-  `Incident evidence handoff is the packet of static evidence, proof paths,
-  limits, and next owners; it is not runtime proof or incident command.`
+  `Incident evidence handoff is the packet of static evidence, proof paths, limits, and next owners; it is not runtime proof or incident command.`
 
 ### Requirement 3: Define the handoff packet content model
 
@@ -103,9 +100,8 @@ the handoff packet.
 
 Acceptance criteria:
 
-- The page includes a checklist with the fields `static evidence`, `proof
-  path`, `rule ID/evidence tier`, `coverage label`, `limitation`, and `next
-  owner`.
+- The page includes a checklist with the fields static evidence, proof path,
+  rule ID/evidence tier, coverage label, limitation, and next owner.
 - `static evidence` describes a public-safe static finding or summary, such as
   a route, handler, DTO, package reference, configuration surface, SQL-facing
   reference, cross-app reference, dependency edge, or reducer-backed finding
@@ -211,9 +207,9 @@ Acceptance criteria:
 - Page metadata includes title, description, canonical URL, Open Graph fields,
   and `og:type` consistent with neighboring concept pages.
 - Sitemap metadata includes `/incident-evidence-handoff/`.
-- Focused validation checks the route renders and contains `Public claim
-  level: concept`, `No public conclusion without evidence`, the exact
-  distinction lines from Requirement 2, and the checklist labels from
+- Focused validation checks the route renders and contains
+  `Public claim level: concept`, `No public conclusion without evidence`, the
+  exact distinction lines from Requirement 2, and the checklist labels from
   Requirement 3.
 - Focused validation checks required links and generated internal-link
   resolution.
@@ -245,32 +241,37 @@ Acceptance criteria:
   `preferredProofPath: /proof-paths/`, matching neighboring concept
   validators.
 - Focused validation checks that the ownership split contains at minimum the
-  required static-side rows (`route existence`, `DTO shape`, `package
-  reference`, `dependency edge`, `SQL-facing reference`) and the required
-  runtime/release-side rows (`telemetry`, `logs`, `traces`, `APM`, `release
-  controls`, `tests`, `database ownership`, `service ownership`, `incident
-  command`).
+  required static-side rows route existence, DTO shape, package reference,
+  dependency edge, and SQL-facing reference, plus the required
+  runtime/release-side rows telemetry, logs, traces, APM, release controls,
+  tests, database ownership, service ownership, and incident command.
 - Focused validation rejects forbidden runtime/AI positioning and exposed
-  private or raw-artifact text. Denylist checks must be scoped to the rendered
-  output of `/incident-evidence-handoff/` only, not to the full site build
-  output, spec source files, validator source files, neighboring pages, or
-  validator comments. Required boundary statements may name forbidden
-  categories when phrased as non-claims or artifact-safety limits.
-- The denylist must cover, at minimum: proves runtime behavior, proves
-  production traffic, endpoint performance proof, proves outage cause, proves
-  release safety, proves operational safety, AI impact analysis, LLM analysis,
-  complete product coverage, production dependency understanding, replaces
-  telemetry, replaces logs, replaces traces, replaces APM, replaces incident
-  command, replaces incident response, replaces ownership, replaces ownership
-  review, replaces tests, replaces release controls, replaces service-owner
-  judgment, replaces database-owner judgment, replaces source review, raw fact
-  stream, raw SQLite, analyzer log, raw source snippet, raw SQL, raw config
-  value, credential secret, local absolute path, raw remote, generated scan
-  directory, private sample name, connection string, and credential. The
-  validator must not rely solely on neighboring-validator inheritance for this
-  coverage. Denylist checks should be case-insensitive substring matches
-  against rendered page text, and any match on a denylist phrase should fail
-  validation unless the match is in an explicitly allowed boundary statement.
+  private or raw-artifact text. Denylist checks must be scoped to the
+  `/incident-evidence-handoff/` route only, not to the full site build output,
+  spec source files, validator source files, neighboring pages, or validator
+  comments.
+- The positioning denylist applies to normalized rendered body text for the
+  route and must reject overclaim phrases, at minimum: proves runtime behavior,
+  proves production traffic, endpoint performance proof, proves outage cause,
+  proves release safety, proves operational safety, AI-powered, LLM-powered,
+  AI impact analysis engine, LLM impact analysis engine, complete product
+  coverage, production dependency understanding, replaces telemetry, replaces
+  logs, replaces traces, replaces APM, replaces incident command, replaces
+  incident response, replaces ownership, replaces ownership review, replaces
+  tests, replaces release controls, replaces service-owner judgment, replaces
+  database-owner judgment, and replaces source review.
+- The private/raw artifact denylist applies to the route's raw HTML, decoded
+  HTML attributes, metadata values, and rendered body text, and must reject
+  exposure phrases, at minimum: raw fact stream, raw SQLite, analyzer log, raw
+  source snippet, raw SQL, raw config value, credential secret, local absolute
+  path, raw remote, generated scan directory, private sample name, connection
+  string, and credential. Boundary statements may use category words such as
+  `config values` or `secrets` only when they do not match these exposure
+  phrases.
+- The validator must not rely solely on neighboring-validator inheritance for
+  denylist coverage. Denylist checks should be case-insensitive substring
+  matches, and any match on a denylist phrase in the scoped target should fail
+  validation.
 - The three denylist groups (non-claims, replacement boundaries, and
   private/raw artifacts) are organizational sections, not optional rollout
   phases. All three groups must be active and tested in the same validation
