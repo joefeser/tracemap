@@ -121,6 +121,14 @@ Status: implemented
   - `./scripts/check-private-paths.sh`
   - `git diff --check`
   - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
+- PR-loop Qodo follow-up validation passed after patching XML I/O failures in
+  config/sitemap extraction to emit deterministic `AnalysisGap` facts:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (13 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (477 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
 
 ## Kiro Review State
 
