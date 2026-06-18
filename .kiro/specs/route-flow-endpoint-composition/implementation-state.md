@@ -1,10 +1,10 @@
 # Route Flow Endpoint Composition Implementation State
 
-Status: spec-ready
+Status: implementation-complete
 
-Readiness: ready-for-implementation
+Readiness: ready-for-pr
 
-Branch: `codex/spec-route-flow-endpoint-composition`
+Branch: `codex/implement-route-flow-endpoint-composition`
 
 Base branch: `dev`
 
@@ -12,9 +12,9 @@ Issue: `#201`
 
 ## Scope Decisions
 
-- This branch is spec-only. It adds a future implementation plan for endpoint
-  route-flow composition and does not change runtime scanner, reducer,
-  route-flow, paths, reporting, or static-site code.
+- This branch implements the endpoint route-flow composition slice in the
+  existing .NET route-flow reporter. It does not change scanner extraction,
+  reducer behavior, static-site code, or stored combined-index schema.
 - The current code already has the route-flow report envelope, classifications,
   bounded path rows, implementation candidate rows, argument/fact-symbol
   projection rows, and public gap codes such as `SelectorNoMatch`,
@@ -53,10 +53,10 @@ Issue: `#201`
 - `route-flow-service-data-composition` covers service/data projection work and
   records follow-up tasks for downstream traversal, interface candidates, and
   data-surface attachment.
-- This spec narrows issue `#201` into a concrete endpoint-composition slice so a
-  future branch can implement route root to method-symbol bridges, method call
-  traversal, implementation candidate bridges, downstream method traversal, and
-  better gap reasons without reopening the broader route-flow product design.
+- This spec narrows issue `#201` into a concrete endpoint-composition slice:
+  route root to method-symbol bridges, method call traversal, implementation
+  candidate bridges, downstream method traversal, and better gap reasons
+  without reopening the broader route-flow product design.
 
 ## Privacy Notes
 
@@ -67,6 +67,35 @@ smoke output should remain ignored and local-only unless separately reviewed and
 redacted.
 
 ## Review Notes
+
+### Implementation Review Notes
+
+- Kiro implementation review with Sonnet (`claude-sonnet-4.6`) completed with
+  reduced coverage because Kiro denied shell tool access. Blocking findings
+  patched: safe surface display fallback, dead-end gap logic without
+  name-only interface heuristics, per-root `MissingCallEdge` accounting,
+  no-evidence coverage preconditions, and stable flow row IDs for shared
+  prefixes.
+- Kiro re-review cycle 1 with Sonnet completed with reduced coverage because
+  Kiro denied shell tool access. Blocking findings patched: replaced
+  interface-name heuristic with combined-symbol kind evidence, tightened
+  no-evidence coverage checks, strengthened direct concrete edge and privacy
+  assertions.
+- Kiro re-review cycle 2 with Sonnet completed with reduced coverage because
+  Kiro denied shell tool access. Code blockers were resolved; remaining
+  blockers were stale implementation state and validation task status, patched
+  in this file and `tasks.md`. Non-blocking follow-ups remain listed below.
+- PR review loop found three Gemini null-source handling threads and two Codex
+  P2 route-flow compatibility threads. Patched null `source_index_id` reads,
+  null source-bucket keys, source compatibility checks, client-call path
+  preservation, and `--from-source` scoping for endpoint composition roots.
+- PR review loop later found Qodo action-required threads for route-root gap
+  evidence, composition gap file/line metadata, unrelated same-source
+  `MissingCallEdge` provenance, and generic selector gaps conflicting with
+  `MissingRouteRoot`. Patched each path and added focused assertions for the
+  evidence/provenance behavior.
+
+### Spec Review Notes
 
 - Kiro Opus spec review: completed with full coverage. Blocking findings
   patched: keep existing gap names such as `SchemaMissing`, state additive-only
@@ -93,6 +122,69 @@ redacted.
 
 ## Validation Notes
 
+- `dotnet build src/dotnet/TraceMap.sln`: passed.
+- `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests`:
+  passed with 18 focused route-flow tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed with 464 tests.
+- Public route-flow CLI smoke against `.tracemap-demo/combined/endpoint-stack.sqlite`
+  passed using selector `GET /api/admin/runner/get-by-id/{id}`. Output files
+  were written under ignored `.tmp/route-flow-endpoint-composition-smoke/` and
+  included report type `route-flow`, version `1.0`, entry evidence, static flow
+  rows including `endpoint-method-bridge` / `route-bound-to-symbol`, business/data
+  logic rows, dependency surfaces, and reduced-coverage gaps.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+## Implementation Notes
+
+- Added route-flow-specific endpoint composition over the existing combined path
+  graph inventory. The pass selects endpoint route roots, bridges them to
+  source-local method symbols, traverses bounded static call/context/surface
+  edges, and uses existing route-flow JSON/Markdown output models.
+- Added static interface implementation candidate traversal by reversing
+  source-local relationship evidence as review-tier candidate edges only. The
+  implementation reads combined symbol kind metadata to avoid name-only
+  interface gap attribution.
+- Added additive gaps through `combined.route-flow.gap.v1`:
+  `MissingRouteRoot`, `MissingMethodSymbolBridge`, `MissingCallEdge`,
+  `MissingImplementationBridge`, `ImplementationCandidateUnavailable`,
+  `AmbiguousImplementationCandidates`, `IdentityGap`, and `TraversalBounds`.
+  Existing public gap names such as `SelectorNoMatch`, `SchemaMissing`,
+  `ReducedCoverage`, `ExtractorUnavailable`, and `TruncatedByLimit` were
+  preserved.
+- Candidate-dependent rows and surfaces are capped at
+  `NeedsReviewStaticRouteFlow` or weaker. Syntax/textual route-root bridges and
+  mixed-tier paths also remain capped by the weakest required evidence.
+- Stable flow row IDs now deduplicate shared path prefixes across multiple
+  terminal surfaces. Surface display falls back to safe descriptors such as
+  `shape:` or `text-hash:` rather than raw snippets, SQL, URLs, or config
+  values.
+- Route-flow gap JSON now includes optional safe file path and line-span fields
+  for composition gaps when a concrete static node anchors the gap. This is an
+  additive schema extension.
+- Focused tests cover route-bound-to-symbol rows, semantic and syntax-tier route
+  bridge behavior, missing route roots, missing method-symbol bridges, direct
+  downstream calls, missing call edges, single and multiple interface
+  implementation candidates, no-candidate gaps, direct concrete calls alongside
+  interface bridges, mixed-tier classification caps, clean no-evidence gap
+  preconditions, client-call generic path preservation, source-scoped
+  composition roots, deterministic Markdown/JSON output, rule catalog coverage,
+  and privacy redaction.
+
+## Deferred Follow-Up
+
+- Add explicit traversal-bound regression coverage for `TraversalBounds`.
+- Add syntax-only, name-only, and calibrated high-fan-out implementation
+  candidate variants beyond the multiple-candidate ambiguity test.
+- Add unreachable dependency/data surface variants and near-but-unconnected
+  logic assertions beyond current path-context/projection coverage.
+- Add runtime schema-backward-compatibility tests that physically remove optional
+  route-flow detail tables and assert `SchemaMissing` remains unchanged.
+- Consider tightening `MissingCallEdge` supporting fact IDs to the nearest
+  source-local frontier instead of citing same-source raw call evidence.
+
+## Prior Spec-Only Validation Notes
+
 - `git diff --check`: passed before staging.
 - `./scripts/check-private-paths.sh`: passed.
 - Spec-only scope check: passed. The only changed files are the four new files
@@ -102,14 +194,3 @@ redacted.
   intentional prohibited-value wording in the spec.
 - Post-review selector-gap compatibility patch validation: `git diff --check`
   passed and `./scripts/check-private-paths.sh` passed.
-
-## Follow-Up For Implementation
-
-- Confirm or extend `combined.route-flow.gap.v1` before emitting the new gap
-  codes named by this spec.
-- Implement route-binding to endpoint method-symbol bridge first; without that
-  bridge, downstream call evidence cannot be attributed to a route root.
-- Keep interface implementation candidate rows review-tier until a separate
-  deterministic runtime-binding evidence model exists.
-- Add deterministic output and privacy tests before using private/local smoke
-  results to validate the implementation.
