@@ -354,8 +354,8 @@ public sealed class VaultExportTests
             routeKey: "/api/token-review/{}",
             controller: "Server.TokenReviewController.GetSecretToken(System.Int32)",
             repository: "Server.TokenRepository.UpdateToken(System.Int32)",
-            routeFile: "Controllers/TokenReviewController.cs",
-            callFile: "Controllers/TokenReviewController.cs",
+            routeFile: "Controllers/tmp/TokenReviewController.cs",
+            callFile: "Controllers/tmp/TokenReviewController.cs",
             queryFile: "Infrastructure/TokenRepository.cs");
         var firstOut = Path.Combine(temp.Path, "vault-a");
         var secondOut = Path.Combine(temp.Path, "vault-b");
@@ -367,14 +367,17 @@ public sealed class VaultExportTests
         Assert.Contains(first.Graph.Gaps, gap =>
             gap.RuleId == "vault-export.gap.hidden-safe-context-omitted.v1"
             && gap.EvidenceTier == "Tier4Unknown"
-            && gap.Classification == "HiddenSafeContextAccepted");
+            && gap.Classification == "HiddenSafeContextAccepted"
+            && gap.SourceScope is not null
+            && gap.SourceScope.StartsWith("evidence-location:", StringComparison.Ordinal)
+            && gap.Limitations.Any(limitation => limitation.Contains("Evidence location hash:", StringComparison.Ordinal)));
 
         var graphJson = await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json"));
         var markdown = string.Join('\n', Directory.EnumerateFiles(firstOut, "*.md", SearchOption.AllDirectories)
             .OrderBy(path => path, StringComparer.Ordinal)
             .Select(File.ReadAllText));
-        Assert.Contains("Controllers/TokenReviewController.cs", graphJson);
-        Assert.Contains("Controllers/TokenReviewController.cs", markdown);
+        Assert.Contains("Controllers/tmp/TokenReviewController.cs", graphJson);
+        Assert.Contains("Controllers/tmp/TokenReviewController.cs", markdown);
         Assert.Contains("Infrastructure/TokenRepository.cs", graphJson);
         Assert.DoesNotContain(temp.Path, graphJson, StringComparison.OrdinalIgnoreCase);
         Assert.True(VaultExporter.IsSelfConsistentGraphJson(graphJson));

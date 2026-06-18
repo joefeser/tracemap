@@ -151,6 +151,7 @@ public static class VaultExporter
     private const string UserFileCollisionRuleId = "vault-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "vault-export.validation.unsafe-value-rejected.v1";
     private const string SensitiveWordCategory = "sensitive-word";
+    private const string Tier4Unknown = "Tier4Unknown";
     // Hidden-safe context hashes use lowercase SHA-256 truncated after context validation.
     private const int DisplayNameHashLength = 24;
     private const int RepoRelativePathHashLength = 24;
@@ -215,7 +216,7 @@ public static class VaultExporter
             "hidden-display-name-invalid",
             "UnsafeIdComponentOmitted",
             "HiddenSafeContextAccepted",
-            "Tier4Unknown"
+            Tier4Unknown
         ]);
     }
 
@@ -424,7 +425,7 @@ public static class VaultExporter
                 {
                     if (sourceClaim != "hidden")
                     {
-                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [Tier4Unknown]: {rejectedCategory} at stableIdComponent.");
+                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {rejectedCategory} at stableIdComponent.");
                     }
 
                     safetyOmittedNodeCount++;
@@ -471,7 +472,7 @@ public static class VaultExporter
                         sourceClaim,
                         "SymbolSafetyGap",
                         UnsafeSymbolRuleId,
-                        "Tier4Unknown",
+                        Tier4Unknown,
                         "A symbol evidence node was category-labeled because the source identity is hidden.",
                         pathNode.SourceIndexId));
                 }
@@ -497,7 +498,7 @@ public static class VaultExporter
                 {
                     if (claim != "hidden")
                     {
-                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [Tier4Unknown]: {edgeRejectedCategory} at stableIdComponent.");
+                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {edgeRejectedCategory} at stableIdComponent.");
                     }
 
                     safetyOmittedEdgeCount++;
@@ -528,7 +529,7 @@ public static class VaultExporter
 
             foreach (var warning in inventory.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal))
             {
-                limitations.Add(CreateLimitation("coverage-warning", "hidden", "combined.report.coverage.v1", "Tier4Unknown", SafeDiagnosticMessage(warning)));
+                limitations.Add(CreateLimitation("coverage-warning", "hidden", "combined.report.coverage.v1", Tier4Unknown, SafeDiagnosticMessage(warning)));
             }
 
             foreach (var gap in inventory.Gaps)
@@ -538,7 +539,7 @@ public static class VaultExporter
                     sourceClaimBySourceIndexId.GetValueOrDefault(gap.SourceIndexId ?? string.Empty, "hidden"),
                     gap.Classification,
                     string.IsNullOrWhiteSpace(gap.RuleId) ? SchemaGapRuleId : gap.RuleId,
-                    string.IsNullOrWhiteSpace(gap.EvidenceTier) ? "Tier4Unknown" : gap.EvidenceTier,
+                    string.IsNullOrWhiteSpace(gap.EvidenceTier) ? Tier4Unknown : gap.EvidenceTier,
                     SafeDiagnosticMessage(gap.Message),
                     gap.SourceIndexId));
             }
@@ -559,7 +560,7 @@ public static class VaultExporter
                 "hidden",
                 "ClaimCatalogUnmatched",
                 ClaimUnmatchedRuleId,
-                "Tier4Unknown",
+                Tier4Unknown,
                 "A source claim catalog entry did not match a stable source identity.",
                 null);
             gaps.Add(gap);
@@ -578,7 +579,7 @@ public static class VaultExporter
                 minimumClaimLevel,
                 "HiddenEvidenceOmitted",
                 HiddenOmittedRuleId,
-                "Tier4Unknown",
+                Tier4Unknown,
                 "Hidden evidence was omitted by the requested claim-level filter; the export is partial.",
                 null);
             gaps.Add(omissionGap);
@@ -692,7 +693,7 @@ public static class VaultExporter
                         sourceClaims.GetValueOrDefault(gap.SourceIndexId ?? string.Empty, "hidden"),
                         gap.Classification,
                         string.IsNullOrWhiteSpace(gap.RuleId) ? SchemaGapRuleId : gap.RuleId,
-                        string.IsNullOrWhiteSpace(gap.EvidenceTier) ? "Tier4Unknown" : gap.EvidenceTier,
+                        string.IsNullOrWhiteSpace(gap.EvidenceTier) ? Tier4Unknown : gap.EvidenceTier,
                         SafeDiagnosticMessage(gap.Message),
                         gap.SourceIndexId));
                 }
@@ -705,7 +706,7 @@ public static class VaultExporter
                 }
 
                 inputs.Add(new VaultExportInputSummary("paths-report", inputIdentity, "hidden", "schema-gap", []));
-                gaps.Add(CreateGap($"paths-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A paths report could not be read with the documented schema.", null));
+                gaps.Add(CreateGap($"paths-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, Tier4Unknown, "A paths report could not be read with the documented schema.", null));
             }
         }
 
@@ -780,7 +781,7 @@ public static class VaultExporter
                         sourceClaims.GetValueOrDefault(gap.SourceIndexId ?? string.Empty, "hidden"),
                         gap.Classification,
                         string.IsNullOrWhiteSpace(gap.RuleId) ? SchemaGapRuleId : gap.RuleId,
-                        string.IsNullOrWhiteSpace(gap.EvidenceTier) ? "Tier4Unknown" : gap.EvidenceTier,
+                        string.IsNullOrWhiteSpace(gap.EvidenceTier) ? Tier4Unknown : gap.EvidenceTier,
                         SafeDiagnosticMessage(gap.Message),
                         gap.SourceIndexId));
                 }
@@ -793,7 +794,7 @@ public static class VaultExporter
                 }
 
                 inputs.Add(new VaultExportInputSummary("reverse-report", inputIdentity, "hidden", "schema-gap", []));
-                gaps.Add(CreateGap($"reverse-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A reverse report could not be read with the documented schema.", null));
+                gaps.Add(CreateGap($"reverse-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, Tier4Unknown, "A reverse report could not be read with the documented schema.", null));
             }
         }
 
@@ -1376,7 +1377,7 @@ public static class VaultExporter
                 violation.Value);
             if (decision.Outcome == VaultSafetyOutcome.Reject)
             {
-                throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [Tier4Unknown]: {decision.Category} at {violation.Location}.");
+                throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {decision.Category} at {violation.Location}.");
             }
         }
 
@@ -1396,7 +1397,7 @@ public static class VaultExporter
                         continue;
                     }
 
-                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [Tier4Unknown]: {decision.Category} at markdown line {line}.");
+                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {decision.Category} at markdown line {line}.");
                 }
 
                 line++;
@@ -1612,7 +1613,7 @@ public static class VaultExporter
             || text.Contains("$HOME", StringComparison.OrdinalIgnoreCase)
             || text.Contains("%USERPROFILE%", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("/tmp/", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("/tmp/", StringComparison.OrdinalIgnoreCase)
+            || Regex.IsMatch(text, @"(^|[\s""'`])(/tmp/|/var/tmp/)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
             || text.Contains("\\Temp\\", StringComparison.OrdinalIgnoreCase)
             || Regex.IsMatch(text, @"(^|[\s""'`])\\\\[^\\/\s]+[\\/]", RegexOptions.CultureInvariant)
             || Regex.IsMatch(text, @"(^|[\s""'`])([A-Za-z]:[\\/])", RegexOptions.CultureInvariant)
@@ -1677,7 +1678,7 @@ public static class VaultExporter
 
     private static void ApplyHiddenLocalSafety(List<VaultGraphNode> nodes, List<VaultGraphEdge> edges, List<VaultGraphGap> gaps)
     {
-        var safeContextGapKeys = new SortedSet<string>(StringComparer.Ordinal);
+        var safeContextGaps = new SortedDictionary<string, string>(StringComparer.Ordinal);
 
         for (var i = 0; i < nodes.Count; i++)
         {
@@ -1691,7 +1692,7 @@ public static class VaultExporter
                 EvidenceLocations = NormalizeHiddenEvidenceLocations(
                     locations,
                     $"$/nodes/{i}/evidenceLocations",
-                    safeContextGapKeys)
+                    safeContextGaps)
             };
         }
 
@@ -1707,28 +1708,31 @@ public static class VaultExporter
                 EvidenceLocations = NormalizeHiddenEvidenceLocations(
                     locations,
                     $"$/edges/{i}/evidenceLocations",
-                    safeContextGapKeys)
+                    safeContextGaps)
             };
         }
 
-        foreach (var key in safeContextGapKeys)
+        foreach (var gapEntry in safeContextGaps)
         {
             gaps.Add(new VaultGraphGap(
-                $"gap:{Hash(string.Join('\u001f', ["gap/v1", key, "hidden", "HiddenSafeContextAccepted", HiddenSafeContextRuleId, "Tier4Unknown"]), IdHashLength)}",
+                $"gap:{Hash(string.Join('\u001f', ["gap/v1", gapEntry.Key, "hidden", "HiddenSafeContextAccepted", HiddenSafeContextRuleId, Tier4Unknown]), IdHashLength)}",
                 "hidden",
                 "HiddenSafeContextAccepted",
                 HiddenSafeContextRuleId,
-                "Tier4Unknown",
+                Tier4Unknown,
                 "A hidden safe-context evidence location contains a sensitive word and remains local-only; public and demo exports stay strict.",
-                null,
-                ["Local hidden context preserves navigation evidence but does not prove public safety."]));
+                gapEntry.Value,
+                [
+                    "Local hidden context preserves navigation evidence but does not prove public safety.",
+                    $"Evidence location hash: {gapEntry.Value}."
+                ]));
         }
     }
 
     private static IReadOnlyList<VaultEvidenceLocation> NormalizeHiddenEvidenceLocations(
         IReadOnlyList<VaultEvidenceLocation> locations,
         string pointer,
-        ISet<string> safeContextGapKeys)
+        IDictionary<string, string> safeContextGaps)
     {
         var normalized = new List<VaultEvidenceLocation>(locations.Count);
         for (var i = 0; i < locations.Count; i++)
@@ -1743,7 +1747,9 @@ public static class VaultExporter
 
             if (UnsafeCategory(filePath) == SensitiveWordCategory)
             {
-                safeContextGapKeys.Add($"hidden-safe-evidence-location-{Hash(filePath, EvidenceLocationHashLength)}");
+                var locationHash = Hash(filePath, EvidenceLocationHashLength);
+                var safeScope = $"evidence-location:{locationHash}";
+                safeContextGaps[$"hidden-safe-evidence-location-{locationHash}"] = safeScope;
             }
 
             normalized.Add(location with { FilePath = filePath });
@@ -2289,7 +2295,7 @@ public static class VaultExporter
         var text = value.Trim().ReplaceLineEndings(" ");
         if (UnsafeCategory(text) is { } category)
         {
-            throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [Tier4Unknown]: {category} at displayName.");
+            throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at displayName.");
         }
 
         return IsSafeDisplayText(text) ? text : $"{fallback}-{Hash(text, DisplayNameHashLength)}";
@@ -2336,7 +2342,7 @@ public static class VaultExporter
             limitations.Add("Display values are category-labeled because the source identity is hidden.");
         }
 
-        if (node.EvidenceTier == "Tier4Unknown")
+        if (node.EvidenceTier == Tier4Unknown)
         {
             limitations.Add("Evidence tier is unknown; do not upgrade the conclusion from graph presence.");
         }
@@ -2347,7 +2353,7 @@ public static class VaultExporter
     private static IReadOnlyList<string> EdgeLimitations(CombinedPathEdge edge)
     {
         var limitations = new List<string> { "Static evidence relationship only; this edge does not prove runtime execution." };
-        if (edge.EvidenceTier == "Tier4Unknown")
+        if (edge.EvidenceTier == Tier4Unknown)
         {
             limitations.Add("Unknown evidence tier preserved from source evidence.");
         }
@@ -2364,13 +2370,13 @@ public static class VaultExporter
     private static VaultGraphGap CreateSafetyGap(string key, string classification, string message, string? sourceScope, string? category)
     {
         var safeCategory = string.IsNullOrWhiteSpace(category) ? "unsafe-id-component" : category;
-        var id = $"gap:{Hash(string.Join('\u001f', ["gap/v1", key, "hidden", classification, UnsafeIdComponentRuleId, "Tier4Unknown", sourceScope ?? string.Empty, safeCategory]), IdHashLength)}";
+        var id = $"gap:{Hash(string.Join('\u001f', ["gap/v1", key, "hidden", classification, UnsafeIdComponentRuleId, Tier4Unknown, sourceScope ?? string.Empty, safeCategory]), IdHashLength)}";
         return new VaultGraphGap(
             id,
             "hidden",
             classification,
             UnsafeIdComponentRuleId,
-            "Tier4Unknown",
+            Tier4Unknown,
             message,
             sourceScope,
             [$"Rejected component category: {safeCategory}."]);
