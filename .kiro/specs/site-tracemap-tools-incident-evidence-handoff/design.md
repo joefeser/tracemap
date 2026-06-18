@@ -24,8 +24,8 @@ automation, AI impact analysis, or production proof.
 - Public claim level: `concept`
 - Sitemap metadata: add the route to `site/src/_site/pages.json`
 - Discovery metadata: add the route to `site/src/_site/discovery.json` with
-  `publicClaimLevel: concept`, `hintCategory: use-case`, `sourceType:
-  site-page`, `preferredProofPath: /proof-paths/`, limitations, and non-claims
+  publicClaimLevel concept, hintCategory use-case, sourceType site-page,
+  preferredProofPath `/proof-paths/`, limitations, and non-claims
 - Navigation: reuse the canonical site navigation, but do not add the route to
   top navigation in this phase
 
@@ -44,20 +44,20 @@ routes.
 3. Differentiation band: state how this route differs from `/incident-call/`,
    `/static-triage/`, `/review-room/`, `/manager-faq/`, `/packets/`,
    `/manager-packet/`, `/manager-brief/`, and `/use-cases/incident-review/`.
-4. Handoff checklist: present the fields `static evidence`, `proof path`, `rule
-   ID/evidence tier`, `coverage label`, `limitation`, and `next owner`.
+4. Handoff checklist: present the fields static evidence, proof path,
+   rule ID/evidence tier, coverage label, limitation, and next owner.
 5. Ownership split: map static questions to TraceMap evidence and map runtime,
    release, test, telemetry, database, and service-owner questions to their
    appropriate owners.
 6. Boundaries: list explicit non-claims and artifact safety rules. The
-   non-claims list must include, at minimum: `runtime behavior`, `production
-   traffic`, `endpoint performance`, `outage cause`, `release safety`,
-   `operational safety`, `AI impact analysis`, `LLM analysis`, `complete
-   product coverage`, and `production dependency understanding`.
+   non-claims list must include, at minimum: runtime behavior, production
+   traffic, endpoint performance, outage cause, release safety, operational
+   safety, AI impact analysis, LLM analysis, complete product coverage, and
+   production dependency understanding.
 7. Replacement boundaries: state TraceMap does not replace, at minimum:
-   `telemetry`, `logs`, `traces`, `APM`, `incident command`, `ownership
-   review`, `tests`, `release controls`, `service-owner judgment`,
-   `database-owner judgment`, and `source review`.
+   telemetry, logs, traces, APM, incident command, ownership review, tests,
+   release controls, service-owner judgment, database-owner judgment, and
+   source review.
 8. Link section: send readers to proof paths, validation, limitations, demo
    result, docs or a future public rule catalog when rule/extractor context is
    needed, and neighboring incident/review pages.
@@ -67,17 +67,14 @@ routes.
 The page should include this exact line so validation can lock the route's
 distinct purpose:
 
-`Incident evidence handoff is the packet of static evidence, proof paths,
-limits, and next owners; it is not runtime proof or incident command.`
+`Incident evidence handoff is the packet of static evidence, proof paths, limits, and next owners; it is not runtime proof or incident command.`
 
 The distinction line must render as a single logical line that matches after
 whitespace normalization; the line break in this spec is for readability only.
 
 The page should also include this exact static-triage distinction line:
 
-`Static triage frames the question; the incident evidence handoff packet
-carries the already-framed evidence, proof paths, limits, and next owners into
-the next conversation.`
+`Static triage frames the question; the incident evidence handoff packet carries the already-framed evidence, proof paths, limits, and next owners into the next conversation.`
 
 This line must also render as a single logical line that matches after
 whitespace normalization.
@@ -137,10 +134,9 @@ service.
 - `/incident-evidence-handoff/`: packet/checklist for handing static evidence,
   proof paths, limits, and next owners into the next conversation.
 
-Cross-links should use role-specific anchor text, such as `incident evidence
-handoff packet`, `static triage checklist`, or `review-room agenda`, and must
-not imply runtime proof, incident cause, release approval, or operational
-safety.
+Cross-links should use role-specific anchor text, such as incident evidence
+handoff packet, static triage checklist, or review-room agenda, and must not
+imply runtime proof, incident cause, release approval, or operational safety.
 
 ## Public Safety
 
@@ -174,11 +170,11 @@ concept validator patterns. The validator should check:
   `/`-relative link in the rendered page must have a corresponding
   `routes-index.json` route or `pages.json` sitemap entry unless a documented
   gap in `implementation-state.md` explains the target choice;
-- ownership split contains at minimum the required static-side rows (`route
-  existence`, `DTO shape`, `package reference`, `dependency edge`, `SQL-facing
-  reference`) and runtime/release-side rows (`telemetry`, `logs`, `traces`,
-  `APM`, `release controls`, `tests`, `database ownership`, `service
-  ownership`, `incident command`);
+- ownership split contains at minimum the required static-side rows route
+  existence, DTO shape, package reference, dependency edge, and SQL-facing
+  reference, plus runtime/release-side rows telemetry, logs, traces, APM,
+  release controls, tests, database ownership, service ownership, and incident
+  command;
 - rendered word count stays between 400 and 1800 words; the upper bound is a
   guard against scope drift, not a style target, and a complete,
   non-redundant packet with all required sections should typically land between
@@ -197,28 +193,30 @@ concept validator patterns. The validator should check:
   fail with a clear word-count error. Authors must resolve overage by trimming
   nonmandatory copy, not by removing required distinction lines, checklist
   labels, ownership rows, proof-path links, or boundary statements;
-- denylist checks are scoped to the rendered output of
-  `/incident-evidence-handoff/` only, not to full site output, spec source,
-  validator source, neighboring pages, or validator comments. Required boundary
-  statements may name forbidden categories when phrased as non-claims or
-  artifact-safety limits. The denylist phrase inventory below must be
-  replicated inline in validator source, and the three groups are
-  organizational sections, not optional rollout phases. All groups must be
-  active in the same validator and covered by the same negative test suite.
-- Non-claim denylist phrases: `proves runtime behavior`, `proves production
-  traffic`, `endpoint performance proof`, `proves outage cause`, `proves
-  release safety`, `proves operational safety`, `AI impact analysis`,
-  `LLM analysis`, `complete product coverage`, and `production dependency
-  understanding`.
-- Replacement-boundary denylist phrases: `replaces telemetry`, `replaces logs`,
-  `replaces traces`, `replaces APM`, `replaces incident command`, `replaces
-  incident response`, `replaces ownership`, `replaces ownership review`,
-  `replaces tests`, `replaces release controls`, `replaces service-owner
-  judgment`, `replaces database-owner judgment`, and `replaces source review`.
-- Private/raw artifact denylist phrases: `raw fact stream`, `raw SQLite`,
-  `analyzer log`, `raw source snippet`, `raw SQL`, `raw config value`,
-  `credential secret`, `local absolute path`, `raw remote`, `generated scan
-  directory`, `private sample name`, `connection string`, and `credential`.
+- denylist checks are scoped to the `/incident-evidence-handoff/` route only,
+  not to full site output, spec source, validator source, neighboring pages, or
+  validator comments. The denylist phrase inventory below must be replicated
+  inline in validator source, and the three groups are organizational sections,
+  not optional rollout phases. All groups must be active in the same validator
+  and covered by the same negative test suite.
+- Non-claim overclaim phrases checked against normalized rendered body text:
+  proves runtime behavior, proves production traffic, endpoint performance
+  proof, proves outage cause, proves release safety, proves operational safety,
+  AI-powered, LLM-powered, AI impact analysis engine, LLM impact analysis
+  engine, complete product coverage, and production dependency understanding.
+- Replacement-boundary overclaim phrases checked against normalized rendered
+  body text: replaces telemetry, replaces logs, replaces traces, replaces APM,
+  replaces incident command, replaces incident response, replaces ownership,
+  replaces ownership review, replaces tests, replaces release controls,
+  replaces service-owner judgment, replaces database-owner judgment, and
+  replaces source review.
+- Private/raw artifact exposure phrases checked against raw HTML, decoded HTML
+  attributes, metadata values, and rendered body text: raw fact stream, raw
+  SQLite, analyzer log, raw source snippet, raw SQL, raw config value,
+  credential secret, local absolute path, raw remote, generated scan directory,
+  private sample name, connection string, and credential. Boundary statements
+  may use category words such as config values or secrets only when they do not
+  match these exposure phrases.
 
 Implementation validation should include the standard site checks, private-path
 guard, and desktop/mobile browser sanity checks for layout and overflow.

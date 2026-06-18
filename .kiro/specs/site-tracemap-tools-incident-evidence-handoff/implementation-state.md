@@ -40,15 +40,12 @@ coverage.
   `site/src/incident-evidence-handoff/index.html`.
 - Chosen page shape: handoff packet/checklist, not incident orientation,
   engineer triage checklist, review-room agenda, or manager FAQ.
-- Required packet fields: `static evidence`, `proof path`, `rule ID/evidence
-  tier`, `coverage label`, `limitation`, and `next owner`.
+- Required packet fields: static evidence, proof path, rule ID/evidence tier,
+  coverage label, limitation, and next owner.
 - Required neighboring route distinction line:
-  `Incident evidence handoff is the packet of static evidence, proof paths,
-  limits, and next owners; it is not runtime proof or incident command.`
+  `Incident evidence handoff is the packet of static evidence, proof paths, limits, and next owners; it is not runtime proof or incident command.`
 - Required static-triage distinction line:
-  `Static triage frames the question; the incident evidence handoff packet
-  carries the already-framed evidence, proof paths, limits, and next owners into
-  the next conversation.`
+  `Static triage frames the question; the incident evidence handoff packet carries the already-framed evidence, proof paths, limits, and next owners into the next conversation.`
 - The route should not be added to top navigation in this phase.
 
 ## Spec Review Commands and Results
@@ -68,9 +65,9 @@ Results:
   `.tmp/kiro-reviews/site-tracemap-tools-incident-evidence-handoff/2026-06-18T190744-086Z-spec-claude-sonnet-4.6.clean.md`.
 - Initial review findings patched: neighboring packet route differentiation,
   `/static-triage/` wording separation, required-link reconciliation,
-  `routes-index.json` expected fields, fixed `preferredProofPath:
-  /proof-paths/`, explicit denylist scope, word-count bounds, mandatory copy,
-  ownership split rows, and validator/link-resolution semantics.
+  routes-index expected fields, fixed preferredProofPath `/proof-paths/`,
+  explicit denylist scope, word-count bounds, mandatory copy, ownership split
+  rows, and validator/link-resolution semantics.
 
 Re-review commands, if Medium or higher findings are patched:
 

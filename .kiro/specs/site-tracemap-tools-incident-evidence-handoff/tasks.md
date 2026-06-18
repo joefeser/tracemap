@@ -25,22 +25,17 @@ until a future site implementation branch performs the work.
   follow-ups before changing site code.
 - [ ] Add the concept-level `/incident-evidence-handoff/` page using existing
   static site layout patterns.
-- [ ] Include `Public claim level: concept` and `No public conclusion without
-  evidence` on the page.
+- [ ] Include `Public claim level: concept` and
+  `No public conclusion without evidence` on the page.
 - [ ] Present the page as a handoff packet/checklist, not an incident concept
   overview, review-room agenda, manager FAQ, runtime monitor, or incident
   command workflow.
-- [ ] Include the exact primary distinction line: `Incident evidence handoff is
-  the packet of static evidence, proof paths, limits, and next owners; it is
-  not runtime proof or incident command.` This must render as a single logical
-  line matching after whitespace normalization.
-- [ ] Include the exact static-triage distinction line: `Static triage frames
-  the question; the incident evidence handoff packet carries the already-framed
-  evidence, proof paths, limits, and next owners into the next conversation.`
+- [ ] Include the exact primary distinction line: `Incident evidence handoff is the packet of static evidence, proof paths, limits, and next owners; it is not runtime proof or incident command.` This must render as a single logical line matching after whitespace normalization.
+- [ ] Include the exact static-triage distinction line: `Static triage frames the question; the incident evidence handoff packet carries the already-framed evidence, proof paths, limits, and next owners into the next conversation.`
   This must render as a single logical line matching after whitespace
   normalization.
-- [ ] Include checklist labels for `static evidence`, `proof path`, `rule
-  ID/evidence tier`, `coverage label`, `limitation`, and `next owner`.
+- [ ] Include checklist labels for static evidence, proof path, rule
+  ID/evidence tier, coverage label, limitation, and next owner.
 - [ ] Explain which static evidence can be brought into the conversation and
   which proof path backs each public-safe claim.
 - [ ] Identify what each static evidence item does not prove.
