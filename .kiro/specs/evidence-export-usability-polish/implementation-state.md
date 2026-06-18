@@ -91,6 +91,12 @@ Review results:
   `docs-export.gap.unsupported-family.v1`, plus clarifications around
   weak-evidence question views, generated `README.md` preservation, and additive
   route/chunk surfaces. Patched in requirements, design, and tasks.
+- PR review loop posted/observed the required Codex review and stopped on one
+  unresolved review thread. The thread requested multi-valued question-family
+  membership so canonical chunks can belong to both primary and cross-cutting
+  views without duplication. Patched requirements, design, and tasks to use a
+  deterministic `questionFamilies` array and optional derived view indexes keyed
+  by `chunkId`.
 
 ## Validation Log
 
@@ -103,6 +109,9 @@ git diff --check
 
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- After the PR review-loop patch, reran `./scripts/check-private-paths.sh`:
+  passed.
+- After the PR review-loop patch, reran `git diff --check`: passed.
 
 Implementation validation such as `dotnet build` and `dotnet test` is not
 required for this spec-only PR unless review finds a repository-specific reason

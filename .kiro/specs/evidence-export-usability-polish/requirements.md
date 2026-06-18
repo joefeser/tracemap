@@ -301,9 +301,10 @@ without reinterpreting raw artifacts.
 1. WHEN docs-export chunk families are configured THEN the exporter SHALL
    support or plan additive families for endpoint evidence, code touching data
    surfaces, packages/dependencies, snapshot changes, weak evidence, gaps, and
-   limitations. Question-oriented families MAY be additive `questionFamily`
+   limitations. Question-oriented families MAY be additive `questionFamilies`
    views over existing canonical `chunkFamily` values rather than new physical
-   chunk records.
+   chunk records. A chunk MAY belong to multiple question-family views when a
+   primary question and one or more cross-cutting review views apply.
 2. Endpoint-oriented chunks SHALL answer static questions such as "what evidence
    describes this endpoint or route?" and SHALL include rule IDs, tiers,
    supporting IDs, coverage labels, safe spans, and limitations.
@@ -329,7 +330,7 @@ without reinterpreting raw artifacts.
    schema THEN docs-export SHALL emit the existing
    `docs-export.gap.unsupported-family.v1` gap and record the family as
    unsupported or unavailable, not silently omit it. WHEN a requested additive
-   `questionFamily` view cannot be supported by the input schema THEN
+   `questionFamilies` view cannot be supported by the input schema THEN
    docs-export SHALL emit `docs-export.gap.unsupported-question-family.v1`.
 8. WHEN family names or chunk types are added THEN schema changes SHALL be
    additive and documented.
@@ -452,7 +453,8 @@ exports.
    unsupported-question-family gaps do not both fire for the same unsupported
    input condition.
 9. Tests SHALL prove question-family metadata is additive over existing
-   canonical chunk families and does not change existing chunk identities.
+   canonical chunk families, supports multiple memberships where applicable,
+   and does not change existing chunk identities.
 10. Tests SHALL prove existing vault entry-note contracts such as generated
    `README.md` or `index.md` are preserved or explicitly versioned.
 11. Tests SHALL prove weak-evidence, gap, and limitation question views return
