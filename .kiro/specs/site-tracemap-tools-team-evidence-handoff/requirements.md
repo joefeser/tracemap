@@ -218,14 +218,15 @@ Acceptance criteria:
   before scanning decoded HTML, rendered text, and raw HTML attributes for
   forbidden AI/LLM positioning including `AI-powered`, `AI impact analysis`,
   `LLM-powered`, `LLM analysis`, `machine learning impact analysis`,
-  `artificial intelligence impact analysis`, `intelligent analysis`, and
-  `smart impact`.
+  `artificial intelligence impact analysis`, `intelligent analysis`,
+  `intelligent impact analysis`, and `smart impact`.
 - Validation checks the same sanctioned-region-stripped rendered body copy for
   unsupported overclaim wording using word-boundary matching for `impacted`,
   `safe`, `unsafe`, `approved`, `blocked`, `root cause`, `validated for
-  release`, and `production proven`. The `safe` check must exempt the compound
-  form `public-safe`, for example with `/(?<!public-)\bsafe\b/i`, consistent
-  with neighboring concept-page validators.
+  release`, `production proven`, `operational assurance`, and `production
+  observability tool`. The `safe` check must exempt the compound form
+  `public-safe`, for example with `/(?<!public-)\bsafe\b/i`, consistent with
+  neighboring concept-page validators.
 - Validation checks forbidden private/raw material including local paths, file
   URLs, localhost addresses, raw fact/index/log content, raw SQL/source snippet
   wording, connection strings, secrets, credential-like labels, raw remotes,
