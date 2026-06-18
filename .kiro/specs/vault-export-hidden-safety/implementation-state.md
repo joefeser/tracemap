@@ -1,6 +1,6 @@
 # Vault Export Hidden Safety Implementation State
 
-Status: review-blocked
+Status: implemented-pending-pr-review
 Branch: codex/implement-vault-export-hidden-safety
 Issue: #171
 Public claim level: hidden
@@ -8,7 +8,8 @@ Public claim level: hidden
 ## Scope Decisions
 
 - This branch implements the hidden/local vault export safety fix for issue
-  #171. Site files and site specs remain out of scope.
+  #171 plus the reviewed stable-ID component safety pieces from the approved
+  spec. Site files and site specs remain out of scope.
 - Public-safe and demo-safe validation remain strict. Hidden/local exports get
   deterministic context-aware handling for safe repo-relative evidence
   locations that contain sensitive words.
@@ -19,8 +20,9 @@ Public claim level: hidden
 - The exporter now renders evidence locations in Markdown notes and validates
   generated Markdown plus `graph.json` through a claim-level/context-aware
   classifier before checking output collisions or writing files.
-- The new hidden safe-context limitation reuses the `vault-export.*.v1`
-  namespace and is documented in `rules/rule-catalog.yml`.
+- The new hidden safe-context and unsafe stable-ID component limitations reuse
+  the `vault-export.*.v1` namespace and are documented in
+  `rules/rule-catalog.yml`.
 - No LLMs, embeddings, vector databases, browser execution, runtime proof, or
   prompt classification are allowed.
 - No site files or site specs are in scope.
@@ -31,9 +33,14 @@ Public claim level: hidden
 - Focused tests changed in `src/dotnet/tests/TraceMap.Tests/VaultExportTests.cs`.
 - Documentation changed in `docs/VAULT_EXPORT.md`.
 - Rule catalog changed in `rules/rule-catalog.yml`.
-- Hidden safe-context values are allowed only for normalized safe
-  repo-relative evidence-location file paths. Public/demo output continues to
-  reject the same sensitive-word values.
+- Hidden safe-context values are allowed only after context validation. Safe
+  repo-relative evidence-location file paths can remain visible for local
+  navigation; secret-like display-name components contribute only a context
+  hash/category to stable IDs. Public/demo output continues to reject the same
+  sensitive-word values.
+- Source-derived stable ID components are validated before ID construction.
+  Rejected components omit the affected node or edge and emit a sanitized
+  `vault-export.gap.unsafe-id-component-omitted.v1` safety gap.
 - Raw unsafe categories reject with sanitized `UnsafeValueRejected` diagnostics
   that include category and output location only.
 - Combined-index fixtures may sanitize some absolute source path forms before
@@ -110,17 +117,17 @@ Implementation review:
   bounded display-name normalization with hashed fallback labels, and
   evidence-location safety gap key hashing using the documented 32-hex
   truncation length.
-- Remaining review scope not yet implemented in this branch: node/edge omission
-  for rejected stable-ID components and partial marking for safety omissions
-  that remove graph elements. This branch does not currently omit graph
-  elements for the issue #171 safe evidence-location path; it preserves
-  validated local navigation evidence and records a hidden safe-context
-  limitation gap.
+- Patched after the handoff: source-derived stable ID components are validated
+  before node/edge ID construction, rejected components omit the affected graph
+  element, safety omissions mark the export partial, final validation maps more
+  JSON locations to closed value contexts, and focused tests cover secret-like
+  display-name hashing plus hard-fail ID component rejection.
 - Sonnet implementation re-review completed with reduced coverage because Kiro
   reported denied shell access. It still returned `NOT READY TO MERGE` with
   blocking findings for complete classifier outcomes, display-name context
   transforms, stable-ID component validation/omission, fuller context
-  resolution, and a rule-reuse decision. No second re-review cycle has been run.
+  resolution, and a rule-reuse decision. Those findings were patched locally;
+  PR review loop remains the next merge-readiness gate.
 
 ## Validation State
 

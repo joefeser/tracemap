@@ -284,6 +284,16 @@ rules:
       - Public-safe and demo-safe vault exports still reject or filter the same sensitive-word values unless separately reviewed and promoted.
       - Gap diagnostics use categories and stable IDs only; they must not echo raw secrets, local absolute paths, remotes, URLs, SQL, snippets, or credentials.
 
+  - id: vault-export.gap.unsafe-id-component-omitted.v1
+    name: Vault export unsafe stable identity component gap
+    description: Records when a vault graph node or edge is omitted because a source-derived component failed safety validation before stable ID construction.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe stable identity component omission gap
+    limitations:
+      - The gap proves only that TraceMap refused to construct an output identity from an unsafe component; it does not prove the omitted code is unreachable or unimportant.
+      - Diagnostics include only a closed category and safe output scope; raw values, local absolute paths, remotes, URLs, SQL, snippets, and credentials are never rendered.
+
   - id: public.demo.summary.v1
     name: Public demo summary section
     description: Records public demo workflow section status, coverage labels, artifact references, and deterministic counts produced by checked-in validation scripts.
