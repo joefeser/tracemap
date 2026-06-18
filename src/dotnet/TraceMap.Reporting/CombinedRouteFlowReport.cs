@@ -535,7 +535,9 @@ public static class CombinedRouteFlowReporter
         command.CommandText = """
             select source_index_id, display_name, symbol_kind
             from combined_symbols
-            where display_name is not null and symbol_kind is not null
+            where source_index_id is not null
+              and display_name is not null
+              and symbol_kind is not null
             order by source_index_id, display_name, symbol_kind;
             """;
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -760,7 +762,7 @@ public static class CombinedRouteFlowReporter
         var emittedSequence = 0;
         var rawCallEdgesBySource = inventory.Edges
             .Where(edge => edge.EdgeKind is "calls" or "creates" or "argument-passed" or "parameter-forward")
-            .GroupBy(edge => nodesById.TryGetValue(edge.FromNodeId, out var node) ? node.SourceIndexId : string.Empty, StringComparer.Ordinal)
+            .GroupBy(edge => nodesById.TryGetValue(edge.FromNodeId, out var node) ? node.SourceIndexId ?? string.Empty : string.Empty, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         while (queue.Count > 0 && paths.Count < options.MaxPaths)
@@ -830,7 +832,10 @@ public static class CombinedRouteFlowReporter
                     [.. state.Edges, ReverseImplementationCandidateEdge(relationship, current.NodeId, candidate.NodeId)]));
             }
 
-            if (!expanded && rawCallEdgesBySource.TryGetValue(current.SourceIndexId, out var currentSourceCalls) && currentSourceCalls.Length > 0)
+            if (!expanded
+                && !string.IsNullOrWhiteSpace(current.SourceIndexId)
+                && rawCallEdgesBySource.TryGetValue(current.SourceIndexId, out var currentSourceCalls)
+                && currentSourceCalls.Length > 0)
             {
                 gaps.Add(RouteBridgeGap(
                     "MissingCallEdge",
@@ -863,7 +868,9 @@ public static class CombinedRouteFlowReporter
 
         foreach (var root in roots.Where(root => emittedPathsByRoot.GetValueOrDefault(root.NodeId) == 0))
         {
-            if (rawCallEdgesBySource.TryGetValue(root.SourceIndexId, out var sourceCalls) && sourceCalls.Length > 0)
+            if (!string.IsNullOrWhiteSpace(root.SourceIndexId)
+                && rawCallEdgesBySource.TryGetValue(root.SourceIndexId, out var sourceCalls)
+                && sourceCalls.Length > 0)
             {
                 gaps.Add(RouteBridgeGap(
                     "MissingCallEdge",
@@ -1008,11 +1015,18 @@ public static class CombinedRouteFlowReporter
 
     private static bool EndpointSourcesCompatible(CombinedPathNode left, CombinedPathNode right)
     {
-        return string.Equals(left.SourceIndexId, right.SourceIndexId, StringComparison.Ordinal);
+        return !string.IsNullOrWhiteSpace(left.SourceIndexId)
+            && !string.IsNullOrWhiteSpace(right.SourceIndexId)
+            && string.Equals(left.SourceIndexId, right.SourceIndexId, StringComparison.Ordinal);
     }
 
     private static bool IsInterfaceMemberSymbol(CombinedPathNode node, IReadOnlyDictionary<string, string> symbolKinds)
     {
+        if (string.IsNullOrWhiteSpace(node.SourceIndexId))
+        {
+            return false;
+        }
+
         foreach (var symbol in new[] { node.SymbolId, node.DisplayName }.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!))
         {
             if (symbolKinds.TryGetValue(SymbolKindKey(node.SourceIndexId, symbol), out var kind)
