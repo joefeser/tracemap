@@ -3,6 +3,7 @@ import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
+import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import {
   validateDiscoveryDist,
   validateDiscoveryNotInSitemap,
@@ -64,6 +65,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
     await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
