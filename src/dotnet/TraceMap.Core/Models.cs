@@ -106,6 +106,7 @@ public static class FactTypes
     public const string BuildStatus = nameof(BuildStatus);
     public const string AnalysisGap = nameof(AnalysisGap);
     public const string BuildEnvironmentDiagnostic = nameof(BuildEnvironmentDiagnostic);
+    public const string AnalyzerCapabilityDiagnostic = nameof(AnalyzerCapabilityDiagnostic);
     public const string FileInventoried = nameof(FileInventoried);
     public const string SolutionDeclared = nameof(SolutionDeclared);
     public const string ProjectDeclared = nameof(ProjectDeclared);
@@ -271,6 +272,13 @@ public static class RuleIds
     public const string BuildEnvironmentRestore = "build.environment.restore.v1";
     public const string BuildEnvironmentGeneratedFiles = "build.environment.generated-files.v1";
     public const string BuildEnvironmentWorkspaceDiagnostic = "build.environment.workspace-diagnostic.v1";
+    public const string AnalyzerCapabilitySemantic = "analyzer.capability.semantic.v1";
+    public const string AnalyzerCapabilitySyntaxFallback = "analyzer.capability.syntax-fallback.v1";
+    public const string AnalyzerCapabilityProjectConfig = "analyzer.capability.project-config.v1";
+    public const string AnalyzerCapabilityPackageRestore = "analyzer.capability.package-restore.v1";
+    public const string AnalyzerCapabilityGeneratedDesignTime = "analyzer.capability.generated-design-time.v1";
+    public const string AnalyzerCapabilityLegacyToolchain = "analyzer.capability.legacy-toolchain.v1";
+    public const string AnalyzerCapabilityDownstreamCoverage = "analyzer.capability.downstream-coverage.v1";
     public const string HttpClientInvocation = "http.client.invocation.v1";
     public const string DatabaseEntityFramework = "database.ef.v1";
     public const string DatabaseDapperInvocation = "database.dapper.invocation.v1";
@@ -353,6 +361,7 @@ public static class ScannerVersions
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.1.0";
+    public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
