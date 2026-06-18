@@ -453,6 +453,18 @@ public sealed class VaultExportTests
     }
 
     [Theory]
+    [InlineData("demo-safe")]
+    [InlineData("public-safe")]
+    public void Vault_export_public_identity_components_reject_secret_like_display_names(string claimLevel)
+    {
+        var result = InvokeTryIdentityComponent(claimLevel, "RouteActionModelMemberName", "GetSecretToken");
+
+        Assert.False(result.Accepted);
+        Assert.Equal("sensitive-word", result.Category);
+        Assert.DoesNotContain("GetSecretToken", result.SafeValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
     [InlineData("StableTraceMapId", "C:\\Temp\\TokenReviewController.cs", "local-path")]
     [InlineData("RouteActionModelMemberName", "select id from Orders", "raw-sql")]
     [InlineData("RouteActionModelMemberName", "Authorization: Bearer synthetic-token-value", "credential")]

@@ -422,6 +422,11 @@ public static class VaultExporter
                 var displayName = SafeNodeDisplay(pathNode, sourceClaim);
                 if (!TryNodeIdentity(pathNode, sourceNodeId ?? pathNode.SourceIndexId, sourceClaim, out var identity, out var rejectedCategory))
                 {
+                    if (sourceClaim != "hidden")
+                    {
+                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [Tier4Unknown]: {rejectedCategory} at stableIdComponent.");
+                    }
+
                     safetyOmittedNodeCount++;
                     gaps.Add(CreateSafetyGap(
                         $"unsafe-id-node-{Hash(pathNode.NodeId, 16)}",
@@ -488,8 +493,13 @@ public static class VaultExporter
                 }
 
                 var claim = MinClaim(originalNodeClaims.GetValueOrDefault(from, "hidden"), originalNodeClaims.GetValueOrDefault(to, "hidden"));
-                if (!TryStableEdgeId(pathEdge, from, to, out var edgeId, out var edgeRejectedCategory))
+                if (!TryStableEdgeId(pathEdge, from, to, claim, out var edgeId, out var edgeRejectedCategory))
                 {
+                    if (claim != "hidden")
+                    {
+                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [Tier4Unknown]: {edgeRejectedCategory} at stableIdComponent.");
+                    }
+
                     safetyOmittedEdgeCount++;
                     gaps.Add(CreateSafetyGap(
                         $"unsafe-id-edge-{Hash(pathEdge.EdgeId, 16)}",
@@ -2114,16 +2124,16 @@ public static class VaultExporter
         return true;
     }
 
-    private static bool TryStableEdgeId(CombinedPathEdge edge, string from, string to, out string edgeId, out string rejectedCategory)
+    private static bool TryStableEdgeId(CombinedPathEdge edge, string from, string to, string claimLevel, out string edgeId, out string rejectedCategory)
     {
         edgeId = string.Empty;
         rejectedCategory = "unsafe-id-component";
-        if (!TryIdentityComponent("hidden", VaultValueContext.ClosedVocabulary, edge.EdgeKind, "edge-kind", out var safeKind, out rejectedCategory)
-            || !TryIdentityComponent("hidden", VaultValueContext.StableTraceMapId, from, "from", out var safeFrom, out rejectedCategory)
-            || !TryIdentityComponent("hidden", VaultValueContext.StableTraceMapId, to, "to", out var safeTo, out rejectedCategory)
-            || !TryIdentityComponent("hidden", VaultValueContext.RuleId, edge.RuleId, "rule-id", out var safeRuleId, out rejectedCategory)
-            || !TryIdentityComponent("hidden", VaultValueContext.ClosedVocabulary, edge.EvidenceTier, "evidence-tier", out var safeEvidenceTier, out rejectedCategory)
-            || !TryIdentityComponent("hidden", VaultValueContext.ClosedVocabulary, edge.Classification, "classification", out var safeClassification, out rejectedCategory))
+        if (!TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, edge.EdgeKind, "edge-kind", out var safeKind, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, from, "from", out var safeFrom, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, to, "to", out var safeTo, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.RuleId, edge.RuleId, "rule-id", out var safeRuleId, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, edge.EvidenceTier, "evidence-tier", out var safeEvidenceTier, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, edge.Classification, "classification", out var safeClassification, out rejectedCategory))
         {
             return false;
         }
@@ -2131,7 +2141,7 @@ public static class VaultExporter
         var safeFactIds = new List<string>();
         foreach (var factId in DistinctSorted(edge.SupportingFactIds))
         {
-            if (!TryIdentityComponent("hidden", VaultValueContext.StableTraceMapId, factId, "supporting-fact", out var safeFactId, out rejectedCategory))
+            if (!TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, factId, "supporting-fact", out var safeFactId, out rejectedCategory))
             {
                 return false;
             }
@@ -2142,7 +2152,7 @@ public static class VaultExporter
         var safeEdgeIds = new List<string>();
         foreach (var supportingEdgeId in DistinctSorted(edge.SupportingCombinedEdgeIds))
         {
-            if (!TryIdentityComponent("hidden", VaultValueContext.StableTraceMapId, supportingEdgeId, "supporting-edge", out var safeSupportingEdgeId, out rejectedCategory))
+            if (!TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, supportingEdgeId, "supporting-edge", out var safeSupportingEdgeId, out rejectedCategory))
             {
                 return false;
             }
