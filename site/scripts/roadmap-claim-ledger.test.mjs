@@ -49,6 +49,20 @@ test("validateRoadmapClaimLedgerDist requires every evidence status mapping", as
   assert.match(errors.join("\n"), /missing mapped evidence status: hidden\/internal/);
 });
 
+test("validateRoadmapClaimLedgerDist rejects unexpected mapping labels", async () => {
+  const root = await createRoadmapFixture({
+    roadmapHtml: validRoadmapHtml().replace(
+      '<tr data-mapping-row data-mapping-axis="claim-level" data-ledger-label="hidden"><td>hidden</td></tr>',
+      '<tr data-mapping-row data-mapping-axis="claim-level" data-ledger-label="typo"><td>typo</td></tr>\n          <tr data-mapping-row data-mapping-axis="claim-level" data-ledger-label="hidden"><td>hidden</td></tr>'
+    )
+  });
+  const errors = [];
+
+  await validateRoadmapClaimLedgerDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /invalid claim-level label: typo/);
+});
+
 test("validateRoadmapClaimLedgerDist rejects raw artifact proof links", async () => {
   const root = await createRoadmapFixture({
     roadmapHtml: validRoadmapHtml().replace("/proof-paths/", "/facts.ndjson")

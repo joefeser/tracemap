@@ -234,8 +234,18 @@ function validateMappingRows(html, errors) {
     const label = getAttribute(row.attributes, "data-ledger-label");
 
     if (axis === "claim-level") {
+      if (!claimLevels.has(label)) {
+        errors.push(withEvidence(`Roadmap claim ledger mapping row has invalid claim-level label: ${String(label)}`, "roadmap/index.html"));
+        continue;
+      }
+
       mappedClaimLevels.add(label);
     } else if (axis === "evidence-status") {
+      if (!evidenceStatuses.has(label)) {
+        errors.push(withEvidence(`Roadmap claim ledger mapping row has invalid evidence-status label: ${String(label)}`, "roadmap/index.html"));
+        continue;
+      }
+
       mappedEvidenceStatuses.add(label);
     } else {
       errors.push(withEvidence(`Roadmap claim ledger mapping row has invalid axis: ${String(axis)}`, "roadmap/index.html"));
