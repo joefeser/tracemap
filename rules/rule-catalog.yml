@@ -1164,6 +1164,86 @@ rules:
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
 
+  - id: legacy.aspnet.surface.v1
+    name: Legacy ASP.NET static surface inventory
+    description: Inventories classic ASP.NET application and handler files, directive metadata, and supporting designer-file gaps while reusing WebForms inventory facts for page/control/master evidence.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AspNetSurfaceDeclared
+      - AnalysisGap
+    limitations:
+      - Surface rows are static checked-in file evidence only and do not prove IIS deployment, runtime compilation, page activation, application startup, authorization, reachability, or production usage.
+      - Existing WebFormsPageDeclared, WebFormsControlDeclared, and WebFormsDesignerControlDeclared facts remain authoritative for page/control/master/event evidence; this rule does not duplicate those identities as ASP.NET surface facts.
+      - Designer files are supporting identity/linkage evidence only; orphan designer files are gaps rather than standalone page, control, route, handler, or navigation surfaces.
+      - Directive values are stored only as safe identifiers, safe repository-relative descriptors, context-separated hashes, or omissions; raw local paths, URLs, hostnames, snippets, remotes, config values, credentials, endpoint values, and secrets are forbidden.
+      - Malformed, unreadable, generated, stale, or unsupported files are analysis gaps, not absence findings.
+
+  - id: legacy.aspnet.route.v1
+    name: Legacy ASP.NET static route registration evidence
+    description: Extracts supported classic ASP.NET route registration candidates such as MapPageRoute and simple RouteCollection.Add PageRouteHandler shapes from checked-in C#.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AspNetRouteDeclared
+      - AnalysisGap
+    limitations:
+      - Route rows are static registration candidates and do not prove route table execution, ASP.NET request matching, URL rewriting, deployment, authorization, reachability, handler selection, or runtime impact.
+      - Dynamic route construction, config-backed patterns, reflection, loops over unknown data, custom route subclasses, custom route handlers, and unsupported route registration shapes are review-tier evidence or gaps, not invented endpoints.
+      - Route names, patterns, defaults, constraints, data tokens, and mapped pages are stored only as safe descriptors, presence flags, context-separated hashes, or omissions.
+      - Syntax-only fallback is capped below semantic confidence when compiler-resolved System.Web.Routing symbols are unavailable or coverage is reduced.
+
+  - id: legacy.aspnet.config.v1
+    name: Legacy ASP.NET checked-in config surface evidence
+    description: Extracts safe structures from checked-in ASP.NET config sections for handlers, modules, pages, controls, namespaces, urlMappings, compilation, and location-scoped settings.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AspNetConfigSurfaceDeclared
+      - AnalysisGap
+    limitations:
+      - Config rows describe checked-in XML only and do not prove runtime transform selection, external include loading, machine.config inheritance, IIS pipeline behavior, deployment, authorization, reachability, or production configuration.
+      - Raw config values, connection strings, app settings, machine keys, endpoint addresses, hostnames, local physical paths, URLs, credentials, and secret-looking values are omitted or hashed and never emitted raw.
+      - Encrypted sections, external configSource/file references, transforms, custom sections, machine.config dependencies, runtime mutations, and unsupported providers are gaps.
+      - Matching hashes alone cannot prove page, route, navigation, or runtime reachability.
+
+  - id: legacy.aspnet.handler.v1
+    name: Legacy ASP.NET static handler evidence
+    description: Detects .ashx directives, IHttpHandler/IHttpAsyncHandler implementations, handler factories, and config-backed handler declarations as static handler surface candidates.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AspNetHandlerDeclared
+      - AnalysisGap
+    limitations:
+      - Handler rows are static declarations and do not prove request execution, factory output, pipeline ordering, authorization, deployment, reachability, or production usage.
+      - Handler factories without compiler-resolved static target types remain review-tier evidence with unresolved factory target metadata.
+      - Syntax fallback can confuse framework interfaces or attributes with project-defined lookalikes; ambiguous targets are capped or emitted as gaps.
+      - Handler paths, class names, and config values are stored only as safe identifiers, safe descriptors, context-separated hashes, or omissions.
+
+  - id: legacy.aspnet.page-method.v1
+    name: Legacy ASP.NET PageMethod and ScriptMethod evidence
+    description: Detects WebForms PageMethod, WebMethod, ScriptMethod, and ScriptService attribute evidence from checked-in C# without reclassifying it as ASMX unless independent ASMX host evidence exists.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AspNetPageMethodDeclared
+      - AnalysisGap
+    limitations:
+      - PageMethod rows are static attribute evidence and do not prove AJAX execution, serialization behavior, script generation, authorization, page rendering, deployment, reachability, or runtime impact.
+      - PageMethod and ScriptMethod facts remain distinct from ASMX host/operation facts unless a separate ASMX rule supplies host evidence.
+      - Syntax fallback is capped for framework-attribute lookalikes, non-static methods, missing linked page evidence, generated code, partial classes, and reduced semantic coverage.
+      - Raw source snippets, URLs, hostnames, remotes, config values, endpoint values, credentials, and secrets are forbidden.
+
+  - id: legacy.aspnet.navigation.v1
+    name: Legacy ASP.NET static navigation reference evidence
+    description: Extracts deterministic static navigation references from markup, checked-in sitemap XML, and supported C# APIs, and emits conservative target edges only when non-hash checked-in target evidence exists.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AspNetNavigationReferenceDeclared
+      - AspNetNavigationEdgeDeclared
+      - AnalysisGap
+    limitations:
+      - Navigation rows are static reference candidates and do not prove browser behavior, JavaScript execution, data-bound menu materialization, role trimming, master-page or nested-control composition, authorization, reachability, page rendering, form posting, or runtime impact.
+      - JavaScript-generated, resource-driven, data-bound, database-backed, localized, concatenated, role-filtered, runtime master/control-tree, URL-rewritten, and auth-dependent navigation stays review-tier or gap evidence.
+      - Target edges require checked-in page, route, config, or handler evidence with non-hash support; route/config/navigation hash equality alone cannot synthesize an edge.
+      - Raw URLs, hostnames, query strings, fragments, config values, endpoint values, local paths, remotes, snippets, credentials, and secret-looking values are hashed or omitted.
+
   - id: legacy.flow.input-availability.v1
     name: Legacy flow input availability
     description: Records whether legacy flow composition could read expected WebForms, API, WCF, HTTP, SQL, legacy data, call graph, parameter-forwarding, coverage, and analysis-gap evidence from an index.
