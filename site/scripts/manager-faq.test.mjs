@@ -80,6 +80,28 @@ test("validateManagerFaqDist rejects overclaims outside boundary copy", async (t
   assert.match(errors.join("\n"), /overclaim wording outside sanctioned boundary copy/);
 });
 
+test("validateManagerFaqDist rejects affirmative runtime proof claims", async (t) => {
+  const root = await createManagedManagerFaqDistFixture(t, {
+    managerFaqHtml: managerFaqPage("<p>TraceMap proves runtime behavior and proves production traffic.</p>")
+  });
+  const errors = [];
+
+  await validateManagerFaqDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /affirmative runtime, production, or release proof wording/);
+});
+
+test("validateManagerFaqDist allows negated proof-boundary wording", async (t) => {
+  const root = await createManagedManagerFaqDistFixture(t, {
+    managerFaqHtml: managerFaqPage("<p>TraceMap cannot prove runtime behavior and does not prove production traffic.</p>")
+  });
+  const errors = [];
+
+  await validateManagerFaqDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateManagerFaqDist allows overclaim examples inside boundary copy", async (t) => {
   const root = await createManagedManagerFaqDistFixture(t, {
     managerFaqHtml: managerFaqPage("", {

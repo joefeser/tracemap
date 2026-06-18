@@ -26,6 +26,9 @@ export const managerFaqForbiddenPositioning =
 export const managerFaqOverclaimPattern =
   /\b(impacted|safe|unsafe|approved|blocked|root cause|production proven|validated for release|approved for release|proven behavior|statically proven|deployment[- ]safe|confirmed[- ]safe)\b/i;
 
+export const managerFaqForbiddenProofClaimPattern =
+  /\b(?:TraceMap\s+)?(?:proves?|proven|proof of)\s+(?:runtime behavior|production traffic|production behavior|endpoint performance|outage cause|release safety|operational safety|release approval|complete product coverage)\b/gi;
+
 const managerFaqPageArtifact = "manager-faq/index.html";
 const sitemapArtifact = "sitemap.xml";
 const routesIndexArtifact = "routes-index.json";
@@ -187,6 +190,9 @@ async function validateManagerFaqPage({ pagePath, errors }) {
   if (managerFaqOverclaimPattern.test(overclaimReviewText)) {
     errors.push(withEvidence("Manager FAQ page contains runtime, production, or release overclaim wording outside sanctioned boundary copy.", managerFaqPageArtifact));
   }
+  if (hasUnsanctionedProofClaim(overclaimReviewText)) {
+    errors.push(withEvidence("Manager FAQ page contains affirmative runtime, production, or release proof wording outside sanctioned boundary copy.", managerFaqPageArtifact));
+  }
 
   for (const text of forbiddenText) {
     if (containsForbiddenText(text, html, decodedHtml, pageText)) {
@@ -202,6 +208,17 @@ function extractSanctionedBoundaryText(html) {
 
 function normalizeOverclaimText(value) {
   return value.replace(/\bpublic-safe\b/gi, "public evidence");
+}
+
+function hasUnsanctionedProofClaim(value) {
+  managerFaqForbiddenProofClaimPattern.lastIndex = 0;
+  for (const match of value.matchAll(managerFaqForbiddenProofClaimPattern)) {
+    const prefix = value.slice(Math.max(0, match.index - 32), match.index).toLowerCase();
+    if (!/(?:cannot|can't|does not|do not|not|without)\s+$/.test(prefix)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function withEvidence(message, artifact) {
