@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
@@ -345,6 +346,141 @@ public sealed class VaultExportTests
     }
 
     [Fact]
+    public async Task Vault_export_hidden_allows_safe_secret_like_evidence_locations()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(
+            temp.Path,
+            routeKey: "/api/token-review/{}",
+            controller: "Server.TokenReviewController.GetSecretToken(System.Int32)",
+            repository: "Server.TokenRepository.UpdateToken(System.Int32)",
+            routeFile: "Controllers/tmp/TokenReviewController.cs",
+            callFile: "Controllers/tmp/TokenReviewController.cs",
+            queryFile: "Infrastructure/TokenRepository.cs");
+        var firstOut = Path.Combine(temp.Path, "vault-a");
+        var secondOut = Path.Combine(temp.Path, "vault-b");
+
+        var first = await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, firstOut));
+        await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, secondOut));
+
+        Assert.Equal("hidden", first.Graph.Classification);
+        Assert.Contains(first.Graph.Gaps, gap =>
+            gap.RuleId == "vault-export.gap.hidden-safe-context-omitted.v1"
+            && gap.EvidenceTier == "Tier4Unknown"
+            && gap.Classification == "HiddenSafeContextAccepted"
+            && gap.SourceScope is not null
+            && gap.SourceScope.StartsWith("evidence-location:", StringComparison.Ordinal)
+            && gap.Limitations.Any(limitation => limitation.Contains("Evidence location hash:", StringComparison.Ordinal)));
+
+        var graphJson = await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json"));
+        var markdown = string.Join('\n', Directory.EnumerateFiles(firstOut, "*.md", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .Select(File.ReadAllText));
+        Assert.Contains("Controllers/tmp/TokenReviewController.cs", graphJson);
+        Assert.Contains("Controllers/tmp/TokenReviewController.cs", markdown);
+        Assert.Contains("Infrastructure/TokenRepository.cs", graphJson);
+        Assert.DoesNotContain(temp.Path, graphJson, StringComparison.OrdinalIgnoreCase);
+        Assert.True(VaultExporter.IsSelfConsistentGraphJson(graphJson));
+        Assert.Equal(
+            graphJson,
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "graph.json")));
+    }
+
+    [Theory]
+    [InlineData("demo-safe")]
+    [InlineData("public-safe")]
+    public async Task Vault_export_public_and_demo_keep_rejecting_secret_like_safe_context_names(string claimLevel)
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(
+            temp.Path,
+            routeKey: "/api/token-review/{}",
+            controller: "Server.TokenReviewController.GetSecretToken(System.Int32)",
+            repository: "Server.TokenRepository.UpdateToken(System.Int32)",
+            routeFile: "Controllers/TokenReviewController.cs",
+            callFile: "Controllers/TokenReviewController.cs",
+            queryFile: "Infrastructure/TokenRepository.cs");
+        var sourceIds = await ReadSourceIdsAsync(combinedPath);
+        var catalogPath = WriteClaimCatalog(temp.Path, sourceIds.Values, claimLevel);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            VaultExporter.ExportAsync(new VaultExportOptions(
+                combinedPath,
+                Path.Combine(temp.Path, $"vault-{claimLevel}"),
+                SourceClaimCatalogPath: catalogPath,
+                MinimumClaimLevel: claimLevel,
+                Date: "2026-06")));
+
+        Assert.Contains("UnsafeValueRejected", failure.Message);
+        Assert.DoesNotContain("TokenReviewController", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GetSecretToken", failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("Controllers/../TokenReviewController.cs", "local-path")]
+    [InlineData("C:\\Temp\\TokenReviewController.cs", "local-path")]
+    [InlineData("\\\\server\\share\\TokenReviewController.cs", "local-path")]
+    [InlineData("~/TokenReviewController.cs", "local-path")]
+    [InlineData("$HOME/TokenReviewController.cs", "local-path")]
+    [InlineData("Controllers/Authorization: Bearer synthetic-token-value.cs", "credential")]
+    [InlineData("Controllers/sk_test_abcdefghijklmnop.cs", "credential")]
+    [InlineData("Controllers/Server=example;Database=sample;User ID=user;Password=value;.cs", "connection-string")]
+    [InlineData("Controllers/select id from Orders.cs", "raw-sql")]
+    [InlineData("https://example.invalid/TokenReviewController.cs", "raw-remote-or-url")]
+    public async Task Vault_export_hidden_rejects_raw_unsafe_evidence_locations_without_echoing_values(string filePath, string category)
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(
+            temp.Path,
+            routeKey: "/api/orders/{}",
+            routeFile: filePath);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, Path.Combine(temp.Path, "vault"))));
+
+        Assert.Contains("UnsafeValueRejected", failure.Message);
+        Assert.Contains(category, failure.Message);
+        Assert.DoesNotContain(filePath, failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Vault_export_hidden_identity_components_hash_safe_secret_like_display_names()
+    {
+        var result = InvokeTryIdentityComponent("hidden", "RouteActionModelMemberName", "GetSecretToken");
+
+        Assert.True(result.Accepted);
+        Assert.StartsWith("route-action-model-member-sha256:", result.SafeValue, StringComparison.Ordinal);
+        Assert.Equal("sensitive-word-safe-name", result.Category);
+        Assert.DoesNotContain("Secret", result.SafeValue, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Token", result.SafeValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("demo-safe")]
+    [InlineData("public-safe")]
+    public void Vault_export_public_identity_components_reject_secret_like_display_names(string claimLevel)
+    {
+        var result = InvokeTryIdentityComponent(claimLevel, "RouteActionModelMemberName", "GetSecretToken");
+
+        Assert.False(result.Accepted);
+        Assert.Equal("sensitive-word", result.Category);
+        Assert.DoesNotContain("GetSecretToken", result.SafeValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("StableTraceMapId", "C:\\Temp\\TokenReviewController.cs", "local-path")]
+    [InlineData("RouteActionModelMemberName", "select id from Orders", "raw-sql")]
+    [InlineData("RouteActionModelMemberName", "Authorization: Bearer synthetic-token-value", "credential")]
+    public void Vault_export_identity_components_reject_hard_fail_values(string contextName, string value, string category)
+    {
+        var result = InvokeTryIdentityComponent("hidden", contextName, value);
+
+        Assert.False(result.Accepted);
+        Assert.Equal(category, result.Category);
+        Assert.DoesNotContain(value, result.SafeValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Vault_export_graph_hash_detects_stale_manifest()
     {
         using var temp = new TempDirectory();
@@ -364,24 +500,32 @@ public sealed class VaultExportTests
         Assert.Contains("GeneratedFileStale", failure.Message);
     }
 
-    private static async Task<string> CreateCombinedIndexAsync(string root, bool unsafeEndpoint = false)
+    private static async Task<string> CreateCombinedIndexAsync(
+        string root,
+        bool unsafeEndpoint = false,
+        string? routeKey = null,
+        string? controller = null,
+        string? repository = null,
+        string? routeFile = null,
+        string? callFile = null,
+        string? queryFile = null)
     {
         var clientIndex = Path.Combine(root, unsafeEndpoint ? "unsafe-client.sqlite" : "client.sqlite");
         var serverIndex = Path.Combine(root, unsafeEndpoint ? "unsafe-server.sqlite" : "server.sqlite");
         var combinedPath = Path.Combine(root, unsafeEndpoint ? "unsafe-combined.sqlite" : "combined.sqlite");
         var client = Manifest("client", "tracemap-typescript/0.1.0");
         var server = Manifest("server", "tracemap-milestone15");
-        var routeKey = unsafeEndpoint ? "http://private.example/api/orders/{}" : "/api/orders/{}";
-        var controller = "Server.OrdersController.Get(System.Int32)";
-        var repository = "Server.OrderRepository.Query(System.Int32)";
+        var effectiveRouteKey = routeKey ?? (unsafeEndpoint ? "http://private.example/api/orders/{}" : "/api/orders/{}");
+        var effectiveController = controller ?? "Server.OrdersController.Get(System.Int32)";
+        var effectiveRepository = repository ?? "Server.OrderRepository.Query(System.Int32)";
 
         SqliteIndexWriter.Write(clientIndex, client, [
-            HttpClientFact(client, "GET", "/api/orders/{id}", routeKey, "src/orders.ts", 5)
+            HttpClientFact(client, "GET", "/api/orders/{id}", effectiveRouteKey, "src/orders.ts", 5)
         ]);
         SqliteIndexWriter.Write(serverIndex, server, [
-            RouteFact(server, "GET", "/api/orders/{id}", routeKey, controller, "Controllers/OrdersController.cs", 10),
-            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
-            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+            RouteFact(server, "GET", "/api/orders/{id}", effectiveRouteKey, effectiveController, routeFile ?? "Controllers/OrdersController.cs", 10),
+            CallFact(server, effectiveController, effectiveRepository, callFile ?? routeFile ?? "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, effectiveRepository, queryFile ?? "Infrastructure/OrderRepository.cs", 31)
         ]);
         IReadOnlyList<string> labels = unsafeEndpoint ? ["private.example", "server"] : ["client", "server"];
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, labels));
@@ -407,6 +551,19 @@ public sealed class VaultExportTests
         }, new JsonSerializerOptions { WriteIndented = true }) + "\n";
         File.WriteAllText(path, json);
         return path;
+    }
+
+    private static (bool Accepted, string SafeValue, string Category) InvokeTryIdentityComponent(string claimLevel, string contextName, string value)
+    {
+        var method = typeof(VaultExporter).GetMethod("TryIdentityComponent", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("TryIdentityComponent was not found.");
+        var contextType = typeof(VaultExporter).GetNestedType("VaultValueContext", BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("VaultValueContext was not found.");
+        var context = Enum.Parse(contextType, contextName);
+        object?[] args = [claimLevel, context, value, "fallback", null, null];
+
+        var accepted = (bool)method.Invoke(null, args)!;
+        return (accepted, (string)args[4]!, (string)args[5]!);
     }
 
     private static async Task<Dictionary<string, string>> ReadSourceIdsAsync(string combinedPath)
