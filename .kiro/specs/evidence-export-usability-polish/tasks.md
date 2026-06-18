@@ -20,7 +20,7 @@
   - [ ] Define bounded aliases and closed tag vocabularies for evidence tiers, coverage labels, surface kinds, classifications, needs-review, gaps, and limitations.
   - [ ] Document alias category ordering and tag lexicographic ordering for byte-stable reruns.
   - [ ] Define additive graph `navigationCategory` or equivalent fields without changing evidence identity semantics.
-  - [ ] Define docs-export `questionFamily`, `claim`, `citations`, `redactions`, and `sectionTitle` fields or compatibility aliases.
+  - [ ] Define docs-export `questionFamilies`, `claim`, `citations`, `redactions`, and `sectionTitle` fields or compatibility aliases.
 
 - [ ] 3. Polish vault top-level navigation. Requirements: 1, 2, 3, 4, 11.
   - [ ] Add or improve a generated `Start Here` entry note.
@@ -55,7 +55,8 @@
 - [ ] 7. Polish docs-export chunk titles and section names. Requirements: 7, 8, 9, 10, 11.
   - [ ] Add safe chunk `title` and `sectionTitle` fields.
   - [ ] Render deterministic Markdown headings from structured fields.
-  - [ ] Add question-oriented family or `questionFamily` metadata for endpoints, data surfaces, packages, snapshot changes, weak evidence, gaps, and limitations.
+  - [ ] Add question-oriented family or `questionFamilies` metadata for endpoints, data surfaces, packages, snapshot changes, weak evidence, gaps, and limitations.
+  - [ ] Support multiple `questionFamilies` memberships for canonical chunks that also belong to cross-cutting weak-evidence, gap, or limitation views.
   - [ ] Treat weak-evidence, gap, and limitation question families as additive views over canonical chunks unless a future schema explicitly requires distinct records.
   - [ ] Emit rule-backed gaps when requested families are unsupported by input schema.
   - [ ] Source snapshot-change chunks only from compatible release-review input or a future explicitly supported diff/snapshot input; emit `docs-export.gap.unsupported-question-family.v1` when neither is available.

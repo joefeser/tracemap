@@ -372,14 +372,23 @@ families should map to canonical family IDs:
 | `limitation-question` | What limitations constrain the claim? | Any compatible input with limitations. |
 
 If implementation prefers not to add new family IDs, keep existing IDs and add
-`questionFamily` as an additive field. This reduces schema churn while making
-RAG import easier.
+`questionFamilies` as an additive array field. This reduces schema churn while
+making RAG import easier.
 
 Cross-cutting question families such as `weak-evidence-question`,
 `gap-question`, and `limitation-question` should default to views over existing
 canonical chunks. They should not duplicate chunk records unless a future schema
 explicitly requires distinct records and proves stable identities, citations,
 and byte ordering.
+
+`questionFamilies` SHALL be an ordered array because one canonical chunk can
+belong to both a primary view and one or more cross-cutting views. For example,
+a lower-tier endpoint chunk can carry both `endpoint-question` and
+`weak-evidence-question` while preserving the same `chunkId`. The array sorts
+by family ordinal from the closed table above, then lexicographically for any
+future additive values. Implementations MAY also emit separate view indexes
+keyed by `chunkId`, but those indexes must be derived from the same
+`questionFamilies` memberships and must not duplicate chunks.
 
 ### Claim/Citation-First Record
 
@@ -390,7 +399,7 @@ Recommended chunk shape:
   "schemaVersion": "tracemap-evidence-docs.v1",
   "chunkId": "chunk:...",
   "chunkFamily": "endpoint",
-  "questionFamily": "endpoint-question",
+  "questionFamilies": ["endpoint-question", "weak-evidence-question"],
   "title": "Endpoint evidence: GET route",
   "sectionTitle": "What static evidence describes this endpoint?",
   "claim": {
@@ -527,7 +536,7 @@ Existing docs-export rule to preserve:
 Required for Requirement 8 question-family views:
 
 - `docs-export.gap.unsupported-question-family.v1`: emitted when a requested
-  additive `questionFamily` view cannot be supported by the input schema, such as
+  additive `questionFamilies` view cannot be supported by the input schema, such as
   `snapshot-change-question` without release-review or compatible future
   diff/snapshot input. Evidence tier: `Tier4Unknown`. Limitation: static schema
   limitation or input-combination limitation, not runtime unavailability. It
@@ -547,7 +556,7 @@ Prefer additive schema changes:
 - keep existing `schemaVersion` where fields are additive and backward
   compatible;
 - add `navigationSchemaVersion`, `displayTitle`, `aliases`, `tags`,
-  `navigationCategory`, `questionFamily`, `claim`, or `citations` fields as
+  `navigationCategory`, `questionFamilies`, `claim`, or `citations` fields as
   needed;
 - bump schema version only if existing field meaning changes.
 
@@ -571,14 +580,15 @@ Focused tests should cover:
   enabled, and filtered-only output being labeled partial when explicitly
   requested;
 - chunk title/section rendering;
-- question-oriented chunk families or `questionFamily` fields;
+- question-oriented chunk families or `questionFamilies` fields, including
+  multiple memberships for cross-cutting views;
 - unsupported question families emitting rule-backed gaps rather than being
   silently omitted;
 - canonical `docs-export.gap.unsupported-family.v1` and additive
   `docs-export.gap.unsupported-question-family.v1` not both firing for the same
   unsupported input condition;
 - question-family metadata preserving existing canonical chunk IDs and fields
-  as additive data;
+  as additive data while supporting multiple memberships;
 - generated `README.md` or current entry-note contracts remaining present,
   cross-linked, or explicitly versioned;
 - weak-evidence, gap, and limitation question views returning the same
