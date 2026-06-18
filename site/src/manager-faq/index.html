@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level manager FAQ about TraceMap static evidence, proof boundaries, limitations, ownership, and review follow-up."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Manager FAQ | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/manager-faq/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Manager FAQ | TraceMap">
+    <meta
+      property="og:description"
+      content="Answers for stakeholders reading TraceMap static evidence without turning it into runtime or release proof."
+    >
+    <meta property="og:url" content="https://tracemap.tools/manager-faq/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Manager FAQ</p>
+        <h1>Questions managers should ask before repeating a TraceMap claim.</h1>
+        <p class="hero-subhead">
+          This FAQ is for stakeholders who need plain answers about what
+          deterministic static evidence can support, what it cannot support,
+          and which follow-up still belongs to engineering owners.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          Treat this page as stakeholder orientation, not a runtime,
+          operational, or release decision surface.
+        </p>
+        <nav class="hero-actions" aria-label="Manager FAQ links">
+          <a class="button primary" href="/manager-packet/">Open manager packet</a>
+          <a class="button secondary" href="/manager-brief/">Read problem brief</a>
+          <a class="button secondary" href="/review-room/">Use review room</a>
+        </nav>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">FAQ</p>
+          <h2>Use these answers to keep stakeholder language tied to proof.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>What can TraceMap say from static evidence?</h3>
+            <p>TraceMap can point to deterministic source relationships, generated summaries, rule IDs, evidence tiers, file spans, commit identity, coverage labels, limitations, and proof paths when those fields are available.</p>
+          </article>
+          <article>
+            <h3>What can it not prove by itself?</h3>
+            <p>It cannot prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or complete product coverage. Those questions need other evidence and accountable owners.</p>
+          </article>
+          <article>
+            <h3>Does TraceMap replace telemetry or tests?</h3>
+            <p>No. Telemetry, logs, traces, tests, ownership, human review, and release process remain separate sources of proof. TraceMap helps organize static review questions before those processes answer their part.</p>
+          </article>
+          <article>
+            <h3>What do rule IDs mean for a manager?</h3>
+            <p>A rule ID names the deterministic rule or rule family behind a row. It lets a reviewer ask what the rule can support, what it cannot support, and which limitation belongs beside the summary.</p>
+          </article>
+          <article>
+            <h3>What are evidence tiers?</h3>
+            <p>Evidence tiers separate compiler-resolved semantic support, structural support, syntax or textual support, and unknown analysis gaps. The tier keeps a weak clue from being presented like stronger proof.</p>
+          </article>
+          <article>
+            <h3>What does partial or reduced coverage mean?</h3>
+            <p>It means the static packet still has value, but the label must travel with the conclusion. Partial coverage tells the room where analysis stopped and what needs owner review before stronger language is used.</p>
+          </article>
+          <article>
+            <h3>How should managers use TraceMap in review?</h3>
+            <p>Use it to ask better questions: which source surfaces are nearby, which rule produced the row, which proof path can be inspected, and which limitation or gap still needs follow-up.</p>
+          </article>
+          <article>
+            <h3>How should it support prioritization?</h3>
+            <p>Use repeated surfaces, visible gaps, and named ownership questions to decide where review time belongs. Do not turn a static packet into a broad product statement without matching evidence.</p>
+          </article>
+          <article>
+            <h3>How should it help incident follow-up?</h3>
+            <p>Use static evidence to orient code questions after an event. Production behavior, service health, timelines, and operational conclusions still belong to telemetry, logs, traces, tests, and service owners.</p>
+          </article>
+          <article>
+            <h3>What should be escalated?</h3>
+            <p>Escalate runtime questions to service owners, observability tools, logs, traces, and tests. Escalate release decisions to the normal review and release process. Escalate unclear static gaps to extractor or repository owners.</p>
+          </article>
+          <article>
+            <h3>Why no model-driven scanner claim?</h3>
+            <p>TraceMap core scanning and reduction are deterministic. The core scanner and reducer do not rely on AI systems, LLMs, embeddings, vector databases, or prompt-based classification for evidence claims.</p>
+          </article>
+          <article>
+            <h3>What is a proof path?</h3>
+            <p>A proof path is the public-safe route, demo summary, report family, or documentation link that lets another reviewer inspect the same bounded evidence instead of trusting a prose-only summary.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Manager shorthand</p>
+          <h2>A useful TraceMap summary has evidence, scope, and owner.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>evidence</code><span>Rule ID, evidence tier, proof path, and generated summary family.</span></div>
+          <div><code>scope</code><span>Commit identity, scanned source area, coverage label, and limitation.</span></div>
+          <div><code>gap</code><span>Reduced coverage, syntax fallback, unavailable framework knowledge, or missing owner review.</span></div>
+          <div><code>owner</code><span>The person or process responsible for source review, runtime confirmation, tests, documentation, or release follow-up.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The FAQ keeps the strongest words outside TraceMap's static boundary.</h2>
+        </div>
+        <ul>
+          <li>Do not use TraceMap as proof of runtime behavior, production traffic, endpoint performance, outage cause, release safety, or operational safety.</li>
+          <li>Do not use TraceMap as a replacement for telemetry, logs, traces, tests, ownership, human review, release process, or governance.</li>
+          <li>Do not use TraceMap concept pages to claim complete product coverage or broad absence of dependency concern.</li>
+          <li>Do not publish private scanner material; use public-safe summaries and proof routes.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Public-safe sharing</p>
+          <h2>Managers can share the question shape without sharing internals.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Shareable summary</strong><span>Public routes, sanitized labels, hashes, counts, rule IDs, evidence tiers, coverage labels, limitations, generated summary names, and proof paths.</span></div>
+          <div><strong>Keep private</strong><span>Source excerpts, database text, configuration values, credentials, workstation paths, repository locations, scan folders, local fact streams, local indexes, combined local databases, analyzer diagnostics, and private sample identifiers.</span></div>
+          <div><strong>Keep attached</strong><span>Any stakeholder summary should link back to the proof path and limitation that support it.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Related surfaces</p>
+          <h2>Follow each answer into the existing public evidence pages.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/manager-brief/">Manager problem brief</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/review-room/">Evidence review room</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/docs/">Docs</a>
+          <a href="/demo/">Public demo</a>
+          <a href="/demo/result/">Demo result</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/capabilities/">Capability matrix</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Manager FAQ links the
+        <a href="/manager-brief/">problem brief</a>,
+        <a href="/manager-packet/">manager packet</a>,
+        <a href="/review-room/">review room</a>,
+        and
+        <a href="/proof-paths/">proof paths</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

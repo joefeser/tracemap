@@ -13,6 +13,7 @@ import { validateDeployAuditDist } from "./deploy-audit.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
+import { validateManagerFaqDist } from "./manager-faq.mjs";
 import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
@@ -68,6 +69,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }

@@ -12,6 +12,7 @@ import { createDiscoveryOutputs } from "./discovery.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
+import { managerFaqRoute } from "./manager-faq.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { validateDist } from "./validate.mjs";
@@ -108,6 +109,7 @@ async function createDistFixture({
     adoptionPlaybookRoute,
     incidentCallRoute,
     managerBriefRoute,
+    managerFaqRoute,
     reviewRoomRoute,
     staticTriageRoute
   ].map((route) => `https://tracemap.tools${route}`)
@@ -127,6 +129,7 @@ async function createDistFixture({
     "/examples/",
     incidentCallRoute,
     managerBriefRoute,
+    managerFaqRoute,
     "/manager-packet/",
     reviewRoomRoute,
     staticTriageRoute,
@@ -150,8 +153,10 @@ async function createDistFixture({
           ? adoptionPage()
           : route === incidentCallRoute
             ? incidentCallPage()
-            : route === managerBriefRoute
-              ? managerBriefPage()
+          : route === managerBriefRoute
+            ? managerBriefPage()
+            : route === managerFaqRoute
+              ? managerFaqPage()
               : route === reviewRoomRoute
                 ? reviewRoomPage()
                 : route === staticTriageRoute
@@ -215,6 +220,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "use-case",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture manager brief limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: managerFaqRoute,
+        title: "Manager FAQ",
+        summary: "Fixture manager FAQ route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture manager FAQ limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -332,6 +348,34 @@ function managerBriefPage() {
     <a href="/limitations/">Limitations</a>
     <a href="/demo/">Demo</a>
     <a href="/docs/">Docs</a>
+    <p>${filler}</p>
+  `);
+}
+
+function managerFaqPage() {
+  const filler = Array.from({ length: 100 }, (_, index) => `manager faq evidence boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <h3>What can TraceMap say from static evidence?</h3>
+    <h3>What can it not prove by itself?</h3>
+    <h3>Does TraceMap replace telemetry or tests?</h3>
+    <h3>What do rule IDs mean for a manager?</h3>
+    <h3>What are evidence tiers?</h3>
+    <h3>What does partial or reduced coverage mean?</h3>
+    <h3>How should managers use TraceMap in review?</h3>
+    <h3>How should it support prioritization?</h3>
+    <h3>How should it help incident follow-up?</h3>
+    <h3>What should be escalated?</h3>
+    <h3>Why no model-driven scanner claim?</h3>
+    <h3>What is a proof path?</h3>
+    <meta property="og:type" content="article">
+    <a href="/manager-brief/">Manager brief</a>
+    <a href="/manager-packet/">Manager packet</a>
+    <a href="/review-room/">Review room</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/validation/">Validation</a>
+    <a href="/proof-paths/">Proof paths</a>
     <p>${filler}</p>
   `);
 }
