@@ -440,6 +440,23 @@
     ]
   },
   {
+    "path": "/review-claim-checklist/",
+    "title": "Review Claim Checklist",
+    "summary": "Concept-level repeat-before-reuse checklist for keeping TraceMap claims attached to proof paths, rule IDs, evidence tiers, coverage labels, limitations, non-claims, source status, and owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The checklist is a review ritual and cannot upgrade a claim by process alone.",
+      "Concept checklist rows are not evidence that the underlying product behavior has main-backed or demo-backed support."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, real internal reviewer identities, owner identities, or internal review dates are published."
+    ]
+  },
+  {
     "url": "https://github.com/joefeser/tracemap/blob/main/README.md",
     "title": "Repository README",
     "summary": "Source-of-truth project overview for CLI goals, required scan outputs, demo commands, and product boundaries.",
