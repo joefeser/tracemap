@@ -28,7 +28,7 @@ organize public-safe evidence around reader questions:
 - Did semantic analysis load, or did project load fail and reduce coverage?
 - Which facts came from semantic evidence, structural evidence, syntax/text
   fallback, or unknown/gap evidence?
-- Which service, UI, navigation, config, and data metadata surfaces have
+- Which service, UI, navigation, config, and legacy data metadata surfaces have
   public-safe evidence?
 - Which rows are demo-backed, dev-only, future/concept, hidden, or omitted?
 - What must remain private until sanitized validation exists?
@@ -44,7 +44,7 @@ organize public-safe evidence around reader questions:
    gap evidence without stronger claims than the source supports.
 5. Legacy surface families: include old frameworks/toolchains, project load
    failures, syntax fallback, WCF/service references, ASMX/SOAP, remoting,
-   WinForms, WebForms, config/project metadata, and data metadata.
+   WinForms, WebForms, config/project metadata, and legacy data metadata.
 6. Hidden until sanitized: name abstract categories of material that remain out
    of public copy until sanitized proof exists.
 7. Non-claims: list runtime, production, migration, operational, security,

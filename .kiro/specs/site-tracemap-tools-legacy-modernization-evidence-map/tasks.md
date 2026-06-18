@@ -10,10 +10,6 @@ branch is spec creation only.
 Note: validation tasks must pass before future implementation tasks are checked
 complete.
 
-- [ ] Run re-review with at least one of `claude-opus-4.8` or
-  `claude-sonnet-4.6` after patching Medium or higher findings, and record
-  results in `implementation-state.md`, before advancing `Readiness` to
-  `ready-for-implementation`.
 - [ ] Confirm or update this spec-local `implementation-state.md` with branch,
   scope, route or placement decision, public claim level, validation results,
   review findings, oddities, and follow-up items before changing site code.

@@ -374,8 +374,8 @@ Safe to publish or summarize:
 - Rule IDs, evidence tiers, coverage labels, gap labels, extractor versions,
   commit SHA, line spans, and limitations when backed by public-safe proof.
 - Abstract legacy surface families such as WCF, ASMX, remoting, WinForms,
-  WebForms, project metadata, and data metadata when phrased as concept-level
-  planning context or backed by public-safe proof.
+  WebForms, project metadata, and legacy data metadata when phrased as
+  concept-level planning context or backed by public-safe proof.
 
 Do not publish:
 
