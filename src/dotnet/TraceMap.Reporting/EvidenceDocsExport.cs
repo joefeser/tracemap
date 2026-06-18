@@ -1273,6 +1273,7 @@ public static class EvidenceDocsExporter
 
         if (evidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown)
             || coverageLabels.Any(IsWeakCoverageLabel)
+            || gaps.Count > 0
             || type == "gap")
         {
             values.Add("weak-evidence-question");
