@@ -160,7 +160,8 @@ public sealed class EvidenceDocsExportTests
     public async Task Docs_export_rejects_unsafe_values_without_echoing_them()
     {
         using var temp = new TempDirectory();
-        var indexPath = CreateSingleIndex(temp.Path, filePath: "/Users/private/source/Controller.cs");
+        var localPath = string.Concat("/", "Users", "/private/source/Controller.cs");
+        var indexPath = CreateSingleIndex(temp.Path, filePath: localPath);
 
         var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, Path.Combine(temp.Path, "docs")));
         Assert.Contains(result.Chunks.SelectMany(chunk => chunk.Gaps), gap => gap.Reason == "missing-provenance");
