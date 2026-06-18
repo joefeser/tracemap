@@ -95,6 +95,17 @@ test("validateReviewClaimChecklistDist rejects overclaims outside boundary copy"
   assert.match(errors.join("\n"), /overclaim wording outside sanctioned boundary copy/);
 });
 
+test("validateReviewClaimChecklistDist rejects encoded forbidden positioning in attributes", async (t) => {
+  const root = await createManagedChecklistFixture(t, {
+    checklistHtml: checklistPage('<span data-note="AI&#45;powered release&#45;safe"></span>')
+  });
+  const errors = [];
+
+  await validateReviewClaimChecklistDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden AI, release, or production positioning/);
+});
+
 async function createManagedChecklistFixture(t, options = {}) {
   const root = await createChecklistFixture(options);
   t.after(() => rm(root, { recursive: true, force: true }));
