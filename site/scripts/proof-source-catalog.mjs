@@ -303,11 +303,14 @@ function validateRows(html, errors) {
       }
     }
 
-    if ((route === "hidden" || claimLevel === "hidden" || evidenceStatus === "hidden-or-internal") && id !== hiddenAnchor) {
+    const isHiddenRowCandidate =
+      id === hiddenAnchor || route === "hidden" || claimLevel === "hidden" || evidenceStatus === "hidden-or-internal";
+
+    if (isHiddenRowCandidate && id !== hiddenAnchor) {
       errors.push(withEvidence(`Proof source catalog row ${id} uses hidden route or evidence outside the reserved placeholder.`, "proof-source-catalog/index.html"));
     }
 
-    if (claimLevel === "hidden") {
+    if (isHiddenRowCandidate) {
       hiddenRows += 1;
       validateHiddenRow({ fields, id, errors });
     }
@@ -566,7 +569,7 @@ function validateEvidenceStatusMapping(html, errors) {
 function validateForbiddenProofLinks(html, errors) {
   for (const href of extractHrefs(html)) {
     const lowerHref = href.toLowerCase();
-    if (/\bfacts\.ndjson\b|\bindex\.sqlite\b|\blogs\/analyzer\.log\b|\banalyzer\.log\b/.test(lowerHref)) {
+    if (/\bfacts\.ndjson\b|\bindex\.sqlite\b|\blogs\/analyzer\.log\b|\banalyzer\.log\b|\bscan-manifest\.json\b|\breport\.md\b/.test(lowerHref)) {
       errors.push(withEvidence(`Proof source catalog links to forbidden raw proof artifact: ${href}`, "proof-source-catalog/index.html"));
     }
   }
