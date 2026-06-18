@@ -103,8 +103,10 @@ complete.
   metadata, artifact boundaries, forbidden private text, and overclaims.
 - [ ] Compose forbidden private-text fail-case fixtures at runtime, such as
   with `String.fromCharCode(47)` or a local path-builder helper, instead of
-  embedding literals that would trip `./scripts/check-private-paths.sh` or the
-  Requirement 3 no-local-absolute-path-in-tests rule.
+  embedding literals that would violate Requirement 3 or the focused page/site
+  validators. Treat `./scripts/check-private-paths.sh` as the local absolute
+  path and known-private-token guard unless a separate repo-wide policy change
+  expands it to cover connection-string or raw SQL fragments.
 - [ ] Validate forbidden AI/LLM positioning with a case-insensitive pattern
   that includes `AI-powered`, `AI impact analysis`, `LLM-powered`,
   `LLM analysis`, `machine learning impact analysis`,
