@@ -34,6 +34,33 @@ test("validateEndpointReviewDist accepts wrapped safe wording placeholders", asy
   assert.deepEqual(errors, []);
 });
 
+test("validateEndpointReviewDist accepts sanctioned boundary content on non-section elements", async (t) => {
+  const root = await createManagedEndpointReviewDistFixture(t, {
+    pageHtml: endpointReviewPage()
+      .replace('<section id="artifact-boundary">', '<div id="artifact-boundary">')
+      .replace("</section>\n    <section id=\"claim-safe-language\">", "</div>\n    <section id=\"claim-safe-language\">")
+  });
+  const errors = [];
+
+  await validateEndpointReviewDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateEndpointReviewDist rejects unescaped rule-id placeholder tags", async (t) => {
+  const root = await createManagedEndpointReviewDistFixture(t, {
+    pageHtml: endpointReviewPage().replace(
+      "rule ID &lt;rule-id&gt;, Tier2Structural, partial coverage",
+      "rule ID <rule-id>, Tier2Structural, partial coverage"
+    )
+  });
+  const errors = [];
+
+  await validateEndpointReviewDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing required text: rule ID <rule-id>, Tier2Structural, partial coverage/);
+});
+
 test("validateEndpointReviewDist reports missing required page text", async (t) => {
   const root = await createManagedEndpointReviewDistFixture(t, {
     pageHtml: page("<p>Endpoint review placeholder.</p>")
