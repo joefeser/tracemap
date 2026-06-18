@@ -241,8 +241,9 @@ public sealed class EvidenceDocsExportTests
             SourceClaimCatalogPath: unmatchedCatalog));
         var diagnostic = Assert.Single(unmatched.Diagnostics);
         Assert.Equal("Tier4Unknown", diagnostic.EvidenceTier);
-        Assert.Equal("unknown", diagnostic.CommitSha);
+        Assert.Null(diagnostic.CommitSha);
         Assert.NotEmpty(diagnostic.SupportingIds);
+        Assert.DoesNotContain("unknown", unmatched.Manifest.CommitShas);
     }
 
     [Fact]

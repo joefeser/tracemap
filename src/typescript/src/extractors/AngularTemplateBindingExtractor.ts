@@ -22,13 +22,17 @@ export async function extractAngularTemplateFacts(manifest: ScanManifest, invent
   const owners = await collectTemplateOwners(inventory);
   const facts: CodeFact[] = [];
   for (const item of inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".html")).sort(byPath)) {
-    const text = await fs.readFile(item.absolutePath, "utf8");
     const owner = owners.get(item.relativePath);
+    if (!owner) {
+      continue;
+    }
+
+    const text = await fs.readFile(item.absolutePath, "utf8");
     facts.push(...extractTemplate(manifest, {
       filePath: item.relativePath,
       text,
       origin: "templateUrl",
-      componentClass: owner?.componentClass ?? ""
+      componentClass: owner.componentClass
     }));
   }
 
@@ -154,7 +158,16 @@ function extractTemplate(manifest: ScanManifest, input: TemplateInput, baseLine 
     ));
   }
 
-  for (const match of input.text.matchAll(/(?:\[formControlName\]|formControlName)\s*=\s*(?:"([^"]+)"|'([^']+)')/g)) {
+  for (const match of input.text.matchAll(/\[formControlName\]\s*=\s*(?:"([^"]+)"|'([^']+)')/g)) {
+    const expression = match[1] ?? match[2];
+    const controlName = quotedStaticBindingValue(expression);
+    if (!controlName) {
+      addGap(match.index ?? 0, expression, "dynamic-form-control-name", "Bracketed formControlName binding is not a quoted static control name.");
+      continue;
+    }
+    facts.push(controlFact(manifest, input, starts, baseLine, match.index ?? 0, match[0].length, "form-control", controlName, { formControlName: controlName }));
+  }
+  for (const match of input.text.matchAll(/(?<!\[)formControlName\s*=\s*(?:"([^"]+)"|'([^']+)')/g)) {
     const expression = match[1] ?? match[2];
     const controlName = staticBindingValue(expression);
     if (!controlName) {
@@ -291,6 +304,11 @@ function staticBindingValue(expression: string): string | null {
     return literal[1];
   }
   return /^[A-Za-z_$][\w$-]*$/.test(trimmed) ? trimmed : null;
+}
+
+function quotedStaticBindingValue(expression: string): string | null {
+  const trimmed = expression.trim();
+  return /^['"]([A-Za-z_$][\w$-]*)['"]$/.exec(trimmed)?.[1] ?? null;
 }
 
 function inlineTemplates(text: string): { text: string; index: number; startLine: number }[] {
