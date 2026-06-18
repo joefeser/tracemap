@@ -405,6 +405,71 @@ public sealed class LegacyAspNetExtractorTests
     }
 
     [Fact]
+    public void Scan_scopes_config_candidates_to_aspnet_sections()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <custom>
+                <pages value="not-aspnet" />
+                <compilation value="not-aspnet" />
+                <handlers>
+                  <add name="NotAspNet" path="Fake.aspx" />
+                </handlers>
+              </custom>
+              <system.web>
+                <pages>
+                  <controls>
+                    <add tagPrefix="sample" namespace="Sample.Controls" />
+                  </controls>
+                </pages>
+              </system.web>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var configFacts = result.Facts.Where(fact => fact.FactType == FactTypes.AspNetConfigSurfaceDeclared).ToArray();
+
+        Assert.Equal(2, configFacts.Length);
+        Assert.Contains(configFacts, fact => fact.Properties.GetValueOrDefault("sectionKind") == "system.web/pages");
+        Assert.Contains(configFacts, fact => fact.Properties.GetValueOrDefault("sectionKind") == "system.web/pages/controls");
+        Assert.DoesNotContain(configFacts, fact => fact.Properties.GetValueOrDefault("sectionKind") == "system.webServer/handlers");
+        Assert.DoesNotContain(configFacts, fact => fact.Evidence.StartLine is 3 or 4);
+    }
+
+    [Fact]
+    public void Scan_does_not_duplicate_asmx_operations_as_page_methods()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Legacy.asmx"), """
+            <%@ WebService Language="C#" CodeBehind="Legacy.asmx.cs" Class="Sample.LegacyService" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Legacy.asmx.cs"), """
+            using System.Web.Services;
+            namespace Sample;
+            [WebService]
+            public sealed class LegacyService
+            {
+                [WebMethod]
+                public string Rate(string value) => value;
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AsmxOperationDeclared
+            && fact.ContractElement == "Rate");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetPageMethodDeclared
+            && fact.ContractElement == "Rate");
+    }
+
+    [Fact]
     public void Scan_omits_secret_like_navigation_target_without_edge()
     {
         using var temp = new TempDirectory();

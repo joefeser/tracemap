@@ -45,6 +45,7 @@ public static partial class LegacyAspNetExtractor
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).First(), StringComparer.Ordinal);
         var semanticTypesByFile = BuildSemanticLookup(existingFacts, FactTypes.TypeDeclared);
         var semanticMethodsByFile = BuildSemanticLookup(existingFacts, FactTypes.MethodDeclared);
+        var asmxOperationsByFile = BuildFactLookup(existingFacts, FactTypes.AsmxOperationDeclared);
 
         AddDesignerOrphanGaps(manifest, inventory, pageFacts, facts);
 
@@ -72,7 +73,7 @@ public static partial class LegacyAspNetExtractor
 
         foreach (var item in inventory.Where(item => CSharpKinds.Contains(item.Kind)).OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
-            ExtractCSharpFile(repoPath, manifest, item, semanticTypesByFile, semanticMethodsByFile, facts);
+            ExtractCSharpFile(repoPath, manifest, item, semanticTypesByFile, semanticMethodsByFile, asmxOperationsByFile, facts);
         }
 
         AddNavigationEdges(manifest, pageFacts, facts);
@@ -109,6 +110,17 @@ public static partial class LegacyAspNetExtractor
     {
         return existingFacts
             .Where(fact => fact.FactType == factType && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+            .GroupBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+    }
+
+    private static IReadOnlyDictionary<string, CodeFact[]> BuildFactLookup(IReadOnlyList<CodeFact> existingFacts, string factType)
+    {
+        return existingFacts
+            .Where(fact => fact.FactType == factType)
             .GroupBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
@@ -338,6 +350,7 @@ public static partial class LegacyAspNetExtractor
         FileInventoryItem item,
         IReadOnlyDictionary<string, CodeFact[]> semanticTypesByFile,
         IReadOnlyDictionary<string, CodeFact[]> semanticMethodsByFile,
+        IReadOnlyDictionary<string, CodeFact[]> asmxOperationsByFile,
         List<CodeFact> facts)
     {
         if (!TryRead(repoPath, item.RelativePath, out var text))
@@ -360,7 +373,7 @@ public static partial class LegacyAspNetExtractor
         }
 
         ExtractRoutes(manifest, item, tree, root, facts);
-        ExtractHandlersAndPageMethods(manifest, item, tree, root, semanticTypesByFile, semanticMethodsByFile, facts);
+        ExtractHandlersAndPageMethods(manifest, item, tree, root, semanticTypesByFile, semanticMethodsByFile, asmxOperationsByFile, facts);
         ExtractCodeNavigation(manifest, item, tree, root, facts);
     }
 
@@ -479,6 +492,7 @@ public static partial class LegacyAspNetExtractor
         CompilationUnitSyntax root,
         IReadOnlyDictionary<string, CodeFact[]> semanticTypesByFile,
         IReadOnlyDictionary<string, CodeFact[]> semanticMethodsByFile,
+        IReadOnlyDictionary<string, CodeFact[]> asmxOperationsByFile,
         List<CodeFact> facts)
     {
         foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
@@ -540,6 +554,11 @@ public static partial class LegacyAspNetExtractor
                 var attributeNames = attrs.Select(attribute => AttributeShortName(attribute)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                 var methodName = method.Identifier.ValueText;
                 var symbol = $"{typeName}.{methodName}";
+                if (IsAsmxOperationMethod(asmxOperationsByFile, item.RelativePath, methodName, symbol))
+                {
+                    continue;
+                }
+
                 var properties = BaseProperties(manifest, RuleIds.LegacyAspNetPageMethod, "PageMethod and ScriptMethod evidence is static attribute evidence only and does not prove AJAX execution, serialization behavior, auth, script reachability, or ASMX hosting.");
                 properties["attributeNames"] = string.Join(",", attributeNames);
                 properties["containingTypeName"] = typeName;
@@ -743,10 +762,25 @@ public static partial class LegacyAspNetExtractor
     private static bool IsConfigCandidate(XElement element)
     {
         var name = element.Name.LocalName;
-        return (name.Equals("add", StringComparison.OrdinalIgnoreCase)
-                && element.Parent?.Name.LocalName is "httpHandlers" or "handlers" or "httpModules" or "modules" or "controls" or "namespaces" or "urlMappings")
-            || name.Equals("pages", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("compilation", StringComparison.OrdinalIgnoreCase);
+        if (name.Equals("pages", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("compilation", StringComparison.OrdinalIgnoreCase))
+        {
+            return ParentNameEquals(element, "system.web");
+        }
+
+        if (!name.Equals("add", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return element.Parent?.Name.LocalName switch
+        {
+            "httpHandlers" or "httpModules" => HasAncestorNamed(element, "system.web"),
+            "handlers" or "modules" => HasAncestorNamed(element, "system.webServer"),
+            "controls" or "namespaces" => HasAncestorNamed(element, "pages") && HasAncestorNamed(element, "system.web"),
+            "urlMappings" => HasAncestorNamed(element, "system.web"),
+            _ => false
+        };
     }
 
     private static string SectionKind(XElement element)
@@ -1201,6 +1235,24 @@ public static partial class LegacyAspNetExtractor
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .FirstOrDefault()
             : null;
+    }
+
+    private static bool IsAsmxOperationMethod(IReadOnlyDictionary<string, CodeFact[]> asmxOperationsByFile, string filePath, string methodName, string symbol)
+    {
+        return asmxOperationsByFile.TryGetValue(filePath, out var candidates)
+            && candidates.Any(fact =>
+                fact.ContractElement?.Equals(methodName, StringComparison.Ordinal) == true
+                || fact.TargetSymbol?.Equals(symbol, StringComparison.Ordinal) == true);
+    }
+
+    private static bool ParentNameEquals(XElement element, string name)
+    {
+        return element.Parent?.Name.LocalName.Equals(name, StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool HasAncestorNamed(XElement element, string name)
+    {
+        return element.Ancestors().Any(ancestor => ancestor.Name.LocalName.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string QualifiedTypeName(TypeDeclarationSyntax type)
