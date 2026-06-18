@@ -338,6 +338,23 @@
     ]
   },
   {
+    "path": "/use-cases/endpoint-review/",
+    "title": "Endpoint Review Playbook",
+    "summary": "Concept-level engineer playbook for reviewing endpoint-adjacent static evidence before choosing code review, tests, telemetry questions, or owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This playbook routes human inspection and follow-up questions; it is not endpoint proof.",
+      "Static evidence can show review cues and gaps, but runtime systems and owners remain responsible for operational claims."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, complete product coverage, team blame, vendor blame, consultant blame, or scare framing.",
+      "No raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, private sample names, connection strings, credentials, table dumps, database contents, facts.ndjson, index.sqlite, report.md, scan-manifest.json, or logs/analyzer.log are published."
+    ]
+  },
+  {
     "path": "/adoption/",
     "title": "Adoption Playbook",
     "summary": "Concept-level onboarding workflow for introducing TraceMap through public demo evidence, candidate repositories, scan packets, visible gaps, and owner follow-up.",

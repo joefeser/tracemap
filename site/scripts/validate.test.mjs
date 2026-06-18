@@ -12,6 +12,7 @@ import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
+import { endpointReviewRoute } from "./endpoint-review.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
@@ -115,6 +116,7 @@ async function createDistFixture({
     adoptionPlaybookRoute,
     demoEvidenceTrailRoute,
     demoRunbookRoute,
+    endpointReviewRoute,
     incidentCallRoute,
     managerBriefRoute,
     managerFaqRoute,
@@ -139,6 +141,7 @@ async function createDistFixture({
     "/demo/proof-assets/",
     demoEvidenceTrailRoute,
     demoRunbookRoute,
+    endpointReviewRoute,
     "/evidence/",
     "/examples/",
     incidentCallRoute,
@@ -153,6 +156,7 @@ async function createDistFixture({
     roadmapClaimLedgerRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    "/use-cases/",
     "/outputs/",
     "/use-cases/incident-review/",
     "/workflows/"
@@ -175,6 +179,8 @@ async function createDistFixture({
             ? demoEvidenceTrailPage()
             : route === demoRunbookRoute
               ? demoRunbookPage()
+              : route === endpointReviewRoute
+                ? endpointReviewPage()
               : route === incidentCallRoute
                 ? incidentCallPage()
                 : route === managerBriefRoute
@@ -257,6 +263,20 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture runbook limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: endpointReviewRoute,
+        title: "Endpoint Review Playbook",
+        summary: "Fixture endpoint review playbook route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture endpoint review limitations remain bounded."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+          "No facts.ndjson, index.sqlite, logs/analyzer.log, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, connection strings, credentials, table dumps, or database contents are public."
+        ]
       },
       {
         path: incidentCallRoute,
@@ -498,6 +518,47 @@ function demoRunbookPage() {
     <section data-runbook-section="red-flag">
       <p>AI impact analysis, LLM analysis, runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, and complete product coverage are red flags.</p>
     </section>
+  `);
+}
+
+function endpointReviewPage() {
+  const filler = Array.from({ length: 150 }, (_, index) => `endpoint review boundary ${index}`).join(" ");
+
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>Endpoint review starts with static evidence, not certainty.</p>
+    <meta property="og:type" content="article">
+    <section id="evidence-packet">
+      <p>endpoint-adjacent static paths packages config surfaces SQL-facing surfaces coverage labels limitations</p>
+      <p>rule IDs evidence tiers file paths line spans commit/source context extractor versions gap labels</p>
+    </section>
+    <section id="workflow">
+      <p>Static paths direct structural syntax-only evidence package framework surfaces config surfaces SQL-facing surfaces coverage and limitations.</p>
+    </section>
+    <section id="decisions">
+      <p>deeper code review targeted tests telemetry question owner follow-up</p>
+    </section>
+    <section id="concept-example">
+      <p>static evidence suggests a review candidate</p>
+      <p>rule ID &lt;rule-id&gt;, Tier2Structural, partial coverage</p>
+      <p>gap-labeled packet: review question remains open</p>
+    </section>
+    <section id="artifact-boundary">
+      <p>facts.ndjson index.sqlite report.md scan-manifest.json logs/analyzer.log raw source snippets raw SQL config values secrets local paths raw remotes generated scan directories private sample names connection strings credentials table dumps database contents</p>
+    </section>
+    <section id="claim-safe-language">
+      <p>runtime behavior production traffic endpoint performance outage cause release safety operational safety AI impact analysis LLM analysis complete product coverage team blame vendor blame scare framing</p>
+    </section>
+    <a href="/use-cases/">Use cases</a>
+    <a href="/evidence/">Evidence</a>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/review-room/">Review room</a>
+    <a href="/static-triage/">Static triage</a>
+    <a href="/demo/runbook/">Demo runbook</a>
+    <p>${filler}</p>
   `);
 }
 
