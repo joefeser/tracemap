@@ -1,24 +1,41 @@
 # Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Last verified: 2026-06-18
-Branch: codex/spec-site-endpoint-review-playbook
+Branch: codex/impl-site-endpoint-review-playbook
 Worktree: not recorded (private-text guardrail)
 Worktree path is intentionally omitted to satisfy the private absolute-path
 guardrail in this spec and `check-private-paths.sh`.
-Source of truth: spec files in branch `codex/spec-site-endpoint-review-playbook`
+Source of truth: spec files in branch `codex/impl-site-endpoint-review-playbook`
 Public claim level: concept
 
 ## Summary
 
-This phase creates a spec-only runway for a future public-safe endpoint review
-playbook at `/use-cases/endpoint-review/`. The page should help engineers use
-TraceMap's deterministic static evidence to decide where an endpoint-adjacent
-review needs deeper code review, targeted tests, telemetry questions, or owner
-follow-up.
+This implementation publishes the public-safe endpoint review playbook at
+`/use-cases/endpoint-review/`. The page helps engineers use TraceMap's
+deterministic static evidence to decide where an endpoint-adjacent review needs
+deeper code review, targeted tests, telemetry questions, or owner follow-up.
 
-No site code is implemented in this phase.
+The implementation keeps the page at `Public claim level: concept` and does
+not claim a specific endpoint finding.
+
+## Implementation Results
+
+- Added `/use-cases/endpoint-review/` using the existing static site page,
+  canonical top-navigation, long-form section, grid, and link-section patterns.
+- Added the route to sitemap metadata and discovery metadata with
+  `publicClaimLevel: "concept"`, `sourceType: "site-page"`,
+  `hintCategory: "use-case"`, and `preferredProofPath: "/proof-paths/"`.
+- Linked the page from `/use-cases/` and added minimal inbound links from
+  `/review-room/` and `/static-triage/`.
+- Added `site/scripts/endpoint-review.mjs` and companion tests for required
+  rendered phrases, required links, discovery metadata, artifact boundaries,
+  private-text patterns, forbidden overclaims, blame/scare framing, and
+  unsupported endpoint conclusions.
+- Wired the focused validator into aggregate site validation.
+- Kept artifact-family names on the rendered page inside the sanctioned
+  artifact-boundary section and in discovery output inside `nonClaims`.
 
 ## Scope
 
@@ -129,15 +146,26 @@ Spec phase validation results:
     findings.
   - `git diff --cached --check` was rerun after staging the PR-loop patch.
 
-Future implementation validation:
+Implementation validation results:
 
-- `npm test` from `site/`.
-- `npm run validate` from `site/`.
-- `npm run build` from `site/`.
-- Desktop and mobile browser sanity checks for layout changes.
-- `git diff --check`.
-- `git diff --cached --check` after staging implementation changes.
-- `./scripts/check-private-paths.sh`.
+- `npm test` from `site/` passed on 2026-06-18. Result: 187 tests passed.
+- `npm run validate` from `site/` passed on 2026-06-18. Result: built static
+  site, validated 43 HTML files, 1295 internal references, 42 sitemap URLs,
+  and 1 legacy story safety target.
+- `npm run build` from `site/` passed on 2026-06-18.
+- Desktop browser sanity check passed on 2026-06-18 at 1440px width. The
+  generated route loaded with the expected title, H1, concept/evidence hero
+  note, and no horizontal overflow.
+- Mobile browser sanity check passed on 2026-06-18 at 390px width. The
+  generated route loaded with the expected H1 and concept/evidence hero note,
+  and no horizontal overflow.
+- `git diff --check` passed on 2026-06-18 before spec bookkeeping updates.
+- `./scripts/check-private-paths.sh` passed on 2026-06-18 before spec
+  bookkeeping updates.
+- `git diff --cached --check` passed on 2026-06-18 after staging
+  implementation changes.
+- `./scripts/check-private-paths.sh` passed on 2026-06-18 after spec
+  bookkeeping updates.
 
 ## Review Findings
 
@@ -161,18 +189,28 @@ Future implementation validation:
   discovery `path` coverage in `requirements.md`, `design.md`, and `tasks.md`,
   plus clearer raw-content validation wording that preserves artifact-family
   carve-outs. Patched those findings in the spec files.
+- Implementation self-review found one copy issue: a negated endpoint-impact
+  phrase in the authored concept example was too close to the hard boundary.
+  Reworded it to say the example does not make an impact conclusion.
+- Initial implementation test run found the focused validator needed to check
+  the `<rule-id>` placeholder against decoded HTML because the shared rendered
+  text helper treats angle-bracket placeholders like tags. Patched the
+  validator and companion fixtures.
+- Initial aggregate validation tests needed the new endpoint route and
+  `/use-cases/` route in their generated fixture. Patched the fixture and
+  reran tests.
 
 ## Oddities
 
 - This spec intentionally avoids demo-level endpoint proof because no
-  endpoint-specific public proof packet is introduced by the spec phase.
+  endpoint-specific public proof packet is introduced by this implementation.
 - Existing `/review-room/` and `/static-triage/` pages already cover adjacent
-  review framing. The future page should connect those surfaces, not duplicate
-  their roles.
+  review framing. The implemented page links those surfaces without adding the
+  new route to canonical top navigation.
+- Local site port `4173` was already occupied during browser sanity checks, so
+  the check used an alternate local port. No local port or machine path is
+  recorded here because this state file must stay public-safe.
 
 ## Follow-ups
 
-- Future implementation must add route source, sitemap metadata, discovery
-  metadata, focused validation, tests, and cross-links.
-- Future implementation must run browser sanity checks because the playbook is a
-  content/layout page.
+- Run the required PR review loop after opening the ready PR.

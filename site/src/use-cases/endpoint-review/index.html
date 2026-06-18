@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap playbook for reviewing endpoint-adjacent static evidence, coverage labels, and limitations before deciding the next human review step."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Endpoint Review Playbook | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/use-cases/endpoint-review/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Endpoint Review Playbook">
+    <meta
+      property="og:description"
+      content="How engineers can use public-safe static evidence packets to decide what deserves review, tests, a telemetry question, or owner follow-up."
+    >
+    <meta property="og:url" content="https://tracemap.tools/use-cases/endpoint-review/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Endpoint review playbook</p>
+        <h1>Review endpoint-adjacent evidence before choosing the next step.</h1>
+        <p class="hero-subhead">
+          This engineer-facing playbook helps a reviewer decide whether an
+          endpoint review candidate deserves review because a static packet
+          shows coupling, dependency surfaces, analysis gaps, or repeated
+          review friction.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          Endpoint review starts with static evidence, not certainty.
+        </p>
+        <nav class="hero-actions" aria-label="Endpoint review links">
+          <a class="button primary" href="/proof-paths/">Follow proof paths</a>
+          <a class="button secondary" href="/evidence/">Evidence model</a>
+          <a class="button secondary" href="/limitations/">Review limitations</a>
+          <a class="button secondary" href="/demo/runbook/">Demo runbook</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Review question</p>
+          <h2>Ask whether the packet supports inspection, a gap, or a follow-up.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Bound the subject</strong><span>Name the endpoint review candidate and the source context for the reviewed packet.</span></div>
+          <div><strong>Read the support</strong><span>TraceMap evidence can show static coupling, dependency surfaces, analysis gaps, or repeated review friction only when those cues remain attached to public-safe evidence.</span></div>
+          <div><strong>Keep the boundary</strong><span>This workflow is a pre-review inspection aid, not a production diagnostic, release gate, incident analysis, runtime verification guide, service ownership system, or product coverage claim.</span></div>
+          <div><strong>Stop unsupported claims</strong><span>If the packet lacks rule IDs, evidence tiers, coverage labels, limitations, source context, or a public-safe summary, route the statement to <a href="/limitations/">limitations</a> or a gap outcome.</span></div>
+        </div>
+      </section>
+
+      <section id="evidence-packet" class="section">
+        <div class="section-header">
+          <p class="section-kicker">Evidence packet</p>
+          <h2>Six dimensions keep endpoint review grounded.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>endpoint-adjacent static paths</h3>
+            <p>List the nearby routes, handlers, callers, contracts, and source paths. Separate direct evidence from structural evidence and syntax-only evidence.</p>
+          </article>
+          <article>
+            <h3>packages</h3>
+            <p>Inspect package and framework surfaces as static dependency cues. Do not turn package references into deployed-usage or runtime-behavior claims.</p>
+          </article>
+          <article>
+            <h3>config surfaces</h3>
+            <p>Record public-safe config surface names and gaps without publishing configuration details or environment-specific material.</p>
+          </article>
+          <article>
+            <h3>SQL-facing surfaces</h3>
+            <p>Note database-facing code areas or adapters only as review cues. Do not publish database query text or connection material.</p>
+          </article>
+          <article>
+            <h3>coverage labels</h3>
+            <p>Keep complete, partial, reduced, unavailable, and gap-labeled coverage visible so uncertainty does not become a stronger conclusion.</p>
+          </article>
+          <article>
+            <h3>limitations</h3>
+            <p>Carry documented limitations beside each review cue, especially when semantic analysis, language coverage, or public-safe summary detail is missing.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Verification</p>
+          <h2>Repeat only what the evidence packet can support.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>rule IDs</code><span>Verify the rule ID before repeating any conclusion. If the rule is only a placeholder, keep the wording as authored concept copy.</span></div>
+          <div><code>evidence tiers</code><span>Check whether the row is Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown.</span></div>
+          <div><code>source context</code><span>Verify file paths, line spans, commit/source context, extractor versions, coverage labels, and limitations when those fields exist in the public-safe packet.</span></div>
+          <div><code>gap labels</code><span>Keep partial or unknown coverage visible instead of rewriting it as complete evidence.</span></div>
+          <div><code>source excerpts</code><span>Avoid source snippets by default. Use public-safe path and line-span descriptions or snippet hashes when source context is needed.</span></div>
+        </div>
+      </section>
+
+      <section id="workflow" class="section">
+        <div class="section-header">
+          <p class="section-kicker">Workflow</p>
+          <h2>Move from static packet to bounded review output.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>1. State the review question</h3>
+            <p>Ask whether the endpoint deserves review because the packet shows coupling, dependency surfaces, gaps, or repeated review friction.</p>
+          </article>
+          <article>
+            <h3>2. Sort static paths</h3>
+            <p>List endpoint-adjacent static paths and mark each as direct, structural, syntax-only, or gap-labeled evidence.</p>
+          </article>
+          <article>
+            <h3>3. Inspect package surfaces</h3>
+            <p>Review package and framework surfaces as repository evidence without implying runtime behavior, endpoint performance, or deployed usage.</p>
+          </article>
+          <article>
+            <h3>4. Inspect config surfaces</h3>
+            <p>Use names and safe summaries only. Redact detailed values and environment-specific details before public discussion.</p>
+          </article>
+          <article>
+            <h3>5. Inspect SQL-facing surfaces</h3>
+            <p>Keep database-facing clues at the surface level. Query details and connection material stay outside public copy.</p>
+          </article>
+          <article>
+            <h3>6. Read coverage and limitations</h3>
+            <p>Decide whether the packet supports a bounded conclusion, a gap, or a follow-up question before writing any public-safe summary.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="decisions" class="section split-section">
+        <div>
+          <p class="section-kicker">Decision outputs</p>
+          <h2>The useful result is a next review step, not certainty.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>deeper code review</strong><span>Use when rule-backed static paths or dependency surfaces justify human inspection of nearby source.</span></div>
+          <div><strong>targeted tests</strong><span>Use when static evidence names a surface that should be exercised by deterministic tests or an existing test gap.</span></div>
+          <div><strong>telemetry question</strong><span>Use when the claim requires runtime data outside TraceMap's static packet. Treat it as a question for runtime systems and owners, not as TraceMap proof.</span></div>
+          <div><strong>owner follow-up</strong><span>Use when ownership authority, release policy, incident context, production deployment facts, customer traffic, or source expertise is needed before a conclusion can be made.</span></div>
+        </div>
+      </section>
+
+      <section id="concept-example" class="section callout-section">
+        <h2>Authored concept example</h2>
+        <p>
+          Review packet for Endpoint A: static evidence suggests a review
+          candidate. A safe note might say, "rule ID &lt;rule-id&gt;,
+          Tier2Structural, partial coverage," or "gap-labeled packet: review
+          question remains open." The example is authored concept copy; it is
+          not a real endpoint finding and does not make an impact conclusion.
+        </p>
+      </section>
+
+      <section id="artifact-boundary" class="section split-section">
+        <div>
+          <p class="section-kicker">Artifact boundary</p>
+          <h2>Public summaries are reviewed; local artifacts stay local.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Public-safe summaries</strong><span>Share reviewed reports, proof paths, rule IDs, evidence tiers, file paths, line spans, snippet hashes, commit/source context, extractor versions, coverage labels, and limitations only when derived from checked-in public or explicitly reviewed public-safe material.</span></div>
+          <div><strong>Local-only artifacts</strong><span>Do not publish raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, connection strings, credentials, table dumps, or database contents.</span></div>
+          <div><strong>Artifact family names</strong><span>Families such as facts.ndjson, index.sqlite, report.md, scan-manifest.json, and logs/analyzer.log are useful when explaining the boundary, but raw contents and machine-local paths stay out of public material.</span></div>
+        </div>
+      </section>
+
+      <section id="claim-safe-language" class="section split-section">
+        <div>
+          <p class="section-kicker">Claim-safe language</p>
+          <h2>Use careful wording when the packet is partial.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>safe wording</code><span>Use phrases such as static evidence suggests a review candidate, rule ID &lt;rule-id&gt;, Tier2Structural, partial coverage, and gap-labeled packet: review question remains open.</span></div>
+          <div><code>red flags</code><span>Avoid runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, complete product coverage, team blame, vendor blame, consultant blame, and scare framing.</span></div>
+          <div><code>static limits</code><span>Static evidence can route inspection, but cannot approve a release, diagnose an outage, prove endpoint performance, prove production usage, assign fault, or certify operational safety.</span></div>
+          <div><code>escalation rule</code><span>When a claim requires runtime telemetry, customer traffic, production deployment facts, incident context, ownership authority, or release policy, route to <a href="/limitations/">limitations</a> or the appropriate human review process.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Related routes</p>
+          <h2>Connect this playbook to public-safe proof and boundaries.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/use-cases/">Use cases</a>
+          <a href="/evidence/">Evidence model</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/review-room/">Review room</a>
+          <a href="/static-triage/">Static triage</a>
+          <a href="/demo/runbook/">Demo runbook</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Endpoint review links the
+        <a href="/use-cases/">use-case index</a>,
+        <a href="/review-room/">review room</a>,
+        <a href="/static-triage/">static triage</a>,
+        and
+        <a href="/proof-paths/">proof paths</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
