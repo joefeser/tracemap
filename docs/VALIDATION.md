@@ -158,6 +158,36 @@ test -f <tmp>/release-review/release-review.md
 test -f <tmp>/release-review/release-review.json
 ```
 
+For docs-export changes, run the focused tests plus the normal .NET and safety
+gates:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter EvidenceDocs
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+When validating against a local combined index, generate docs into ignored
+temporary storage only:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- docs-export --index <tmp>/combined.sqlite --out <tmp>/evidence-docs
+test -f <tmp>/evidence-docs/manifest.json
+test -f <tmp>/evidence-docs/chunks.jsonl
+test -f <tmp>/evidence-docs/README.md
+```
+
+Docs-export output must preserve rule IDs, evidence tiers, source labels,
+commit SHAs, coverage labels, supporting IDs, gaps, and limitations. It must
+not contain raw SQL, raw config values, connection strings, raw URLs, endpoint
+addresses, local absolute paths, raw remotes, source snippets, credentials,
+private sample names, production data, prompt text, embeddings, vector database
+configuration, or natural-language answer templates. Demo/public output
+requires reviewed claim metadata plus `--date YYYY-MM`; hidden output without a
+date uses `local-only`.
+
 For property-flow changes, run the focused .NET and TypeScript tests plus the
 normal report safety gates:
 

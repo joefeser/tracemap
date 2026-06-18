@@ -1,4 +1,239 @@
 rules:
+  - id: docs-export.chunk.source-overview.v1
+    name: Docs export source overview chunk
+    description: Packages indexed source identity, commit, coverage, build, language, extractor, artifact, gap, and limitation metadata into deterministic evidence documentation.
+    evidenceTier: Tier2Structural
+    emits:
+      - docs-export source-overview chunk
+    limitations:
+      - Source overview chunks summarize static index metadata only; they do not prove runtime behavior, deployment, release approval, ownership, traffic, vulnerability status, service reachability, or business impact.
+      - Unknown commit identity, reduced coverage, failed build status, or schema gaps remain visible gaps and must not be upgraded by documentation export.
+
+  - id: docs-export.chunk.endpoint.v1
+    name: Docs export endpoint chunk
+    description: Packages existing HTTP route, HTTP client, route template, dynamic selector, and endpoint-alignment evidence into deterministic citation-bearing chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export endpoint chunk
+    limitations:
+      - Endpoint chunks preserve static evidence only and do not prove runtime routing, service reachability, production traffic, authorization, deployment, or ownership.
+      - Raw URLs, hosts, query strings, endpoint addresses, snippets, and credentials are omitted, redacted, or rejected by docs-export safety gates.
+
+  - id: docs-export.chunk.route-flow.v1
+    name: Docs export route-flow chunk
+    description: Packages existing route-flow or compatible path report evidence into static route-centered documentation chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export route-flow chunk
+    limitations:
+      - Route-flow chunks do not prove runtime request execution, branch feasibility, dependency-injection target selection, database execution, production traffic, or service reachability.
+      - Missing stable report IDs, selector gaps, schema gaps, truncation, and reduced coverage remain gaps.
+
+  - id: docs-export.chunk.property-flow.v1
+    name: Docs export property-flow chunk
+    description: Packages existing property/value-origin facts and report rows into deterministic documentation chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export property-flow chunk
+    limitations:
+      - Property-flow chunks do not prove full taint, runtime values, object identity, collection contents, callback execution, serializer behavior, or branch feasibility.
+      - Syntax-only, fallback, ambiguous, reduced-coverage, and high-fan-out evidence is preserved at its weaker tier.
+
+  - id: docs-export.chunk.dependency-surface.v1
+    name: Docs export dependency-surface chunk
+    description: Packages existing dependency surface evidence such as calls, object creation, HTTP, persistence, package, config, event, and message evidence into documentation chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export dependency-surface chunk
+    limitations:
+      - Dependency-surface chunks do not prove runtime topology, compatibility, vulnerability status, ownership, service reachability, deployment, production usage, or business impact.
+      - Unsafe surface values are omitted, redacted, or rejected by safety validation.
+
+  - id: docs-export.chunk.data-surface.v1
+    name: Docs export data-surface chunk
+    description: Packages existing data, project, file, build, and structural surface evidence into deterministic documentation chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export data-surface chunk
+    limitations:
+      - Data-surface chunks describe static evidence availability and do not prove runtime data access, database existence, production data, ownership, or deployment.
+
+  - id: docs-export.chunk.package-config.v1
+    name: Docs export package and config chunk
+    description: Packages existing package, target-framework, config key, and config surface metadata using safe identifiers or redaction records.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export package-config chunk
+    limitations:
+      - Package/config chunks do not prove package compatibility, vulnerability status, license status, runtime loading, deployment, or production configuration.
+      - Raw config values, connection strings, secrets, raw URLs, and credentials are forbidden.
+
+  - id: docs-export.chunk.query-sql-shape.v1
+    name: Docs export query and SQL-shape chunk
+    description: Packages existing query-shape, SQL-shape, persistence, table, column, source-kind, operation, and safe-hash metadata.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export query-sql-shape chunk
+    limitations:
+      - Query/SQL-shape chunks do not prove SQL execution, database existence, query correctness, production usage, or data sensitivity.
+      - Raw SQL and production data are rejected or omitted.
+
+  - id: docs-export.chunk.legacy.v1
+    name: Docs export legacy evidence chunk
+    description: Packages existing WebForms, WinForms, WCF, service-reference, ASMX/SOAP, remoting, legacy data, build diagnostic, baseline, or evidence-pack metadata.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export legacy chunk
+    limitations:
+      - Legacy chunks do not prove runtime UI events, service reachability, deployment, branch feasibility, SQL execution, traffic, or production behavior.
+      - Unsafe service URLs, SOAP actions, schemas, config values, remotes, snippets, and local paths are omitted, redacted, or rejected.
+
+  - id: docs-export.chunk.release-review.v1
+    name: Docs export release-review chunk
+    description: Packages existing release-review report sections, checklist provenance, static classifications, gaps, and limitations into deterministic chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export release-review chunk
+    limitations:
+      - Release-review chunks are static evidence packets and are not release approval, merge approval, risk acceptance, vulnerability conclusions, or business-impact decisions.
+
+  - id: docs-export.chunk.impact-summary.v1
+    name: Docs export impact-summary chunk
+    description: Packages existing static impact or reducer summaries while preserving underlying rule IDs, tiers, classifications, gaps, and limitations.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export impact-summary chunk
+    limitations:
+      - Impact-summary chunks preserve static classifications only and do not prove business impact, runtime impact, deployment impact, or release safety.
+
+  - id: docs-export.chunk.gap.v1
+    name: Docs export gap chunk
+    description: Emits first-class gap chunks for unavailable, reduced, hidden, incompatible, unsupported, truncated, or missing-provenance evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export gap chunk
+    limitations:
+      - Gap chunks preserve uncertainty and must not be read as absence findings or source behavior conclusions.
+
+  - id: docs-export.chunk.limitation.v1
+    name: Docs export limitation chunk
+    description: Emits first-class limitation chunks for rule, schema, safety, claim-level, generated-file, and external-ingestion boundaries.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export limitation chunk
+    limitations:
+      - Limitation chunks document boundaries only and do not add evidence about source behavior.
+
+  - id: docs-export.validation.generated-file-stale.v1
+    name: Docs export stale generated file validation
+    description: Rejects stale, hand-edited, malformed, or hash-invalid generated docs-export files unless force is supplied and all non-overridable safety gates pass.
+    evidenceTier: Tier4Unknown
+    emits:
+      - generated-file stale diagnostic
+    limitations:
+      - This validation protects generated output integrity only; it does not prove anything about source code behavior.
+
+  - id: docs-export.validation.user-file-collision.v1
+    name: Docs export user-file collision validation
+    description: Rejects non-generated files or directories that would be overwritten by docs-export output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - user-file collision diagnostic
+    limitations:
+      - Force does not bypass user-file collisions.
+      - Diagnostics are sanitized and do not echo unsafe file contents.
+
+  - id: docs-export.validation.unsafe-value-rejected.v1
+    name: Docs export unsafe value rejection
+    description: Rejects local paths, raw remotes, raw SQL, raw config values, connection strings, URLs, endpoint addresses, credentials, tokens, snippets, private identifiers, production data, stack traces, and unsafe Markdown in generated output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe-value validation diagnostic
+    limitations:
+      - Diagnostics identify category and output-relative location only; they do not echo the unsafe value.
+
+  - id: docs-export.validation.prohibited-claim-wording.v1
+    name: Docs export prohibited claim wording validation
+    description: Rejects generated wording that claims unsupported runtime execution, production traffic, release approval, vulnerability, ownership, deployment, reachability, or business impact.
+    evidenceTier: Tier4Unknown
+    emits:
+      - prohibited-claim wording diagnostic
+    limitations:
+      - Boundary and limitation text may name prohibited domains when clearly negating or scoping the claim.
+
+  - id: docs-export.gap.schema-incompatible.v1
+    name: Docs export schema compatibility gap
+    description: Records when an input cannot be read through a documented TraceMap index, report, vault, evidence-pack, or claim-catalog schema.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export schema-incompatible gap
+    limitations:
+      - Schema gaps describe export compatibility only and do not prove evidence absence.
+
+  - id: docs-export.gap.claim-level-hidden.v1
+    name: Docs export hidden claim-level gap
+    description: Records when requested demo/public filtering omits hidden evidence or cannot be satisfied by stable source identity proof.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export claim-level-hidden gap
+    limitations:
+      - Display names alone cannot promote evidence.
+      - Hidden claim-level gaps are safety records, not source behavior conclusions.
+
+  - id: docs-export.gap.claim-level-unmatched.v1
+    name: Docs export unmatched claim catalog gap
+    description: Records source-claim catalog entries that do not match a stable source identity in supplied evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export claim-level-unmatched gap
+    limitations:
+      - Unmatched catalog entries do not promote evidence and do not prove absence.
+
+  - id: docs-export.gap.hidden-evidence-omitted.v1
+    name: Docs export hidden evidence omission gap
+    description: Records when explicit claim-level filtering removes hidden chunks, citations, metadata, links, gaps, or summaries that affect interpretation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export hidden-evidence-omitted gap
+    limitations:
+      - Filtered outputs are partial; summary counts are not evidence substitutes.
+
+  - id: docs-export.gap.duplicate-stable-identity.v1
+    name: Docs export duplicate stable identity gap
+    description: Records chunk identity collisions so docs export does not choose an arbitrary winner.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export duplicate-stable-identity gap
+    limitations:
+      - Duplicate identity gaps may omit unsafe details and retain only category-level diagnostics.
+
+  - id: docs-export.gap.unsupported-family.v1
+    name: Docs export unsupported family gap
+    description: Records requested chunk families that are supported by the CLI vocabulary but unavailable or unsupported for the supplied input schema.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export unsupported-family gap
+    limitations:
+      - Unsupported-family gaps describe exporter/input compatibility only; they do not prove source evidence absence.
+
+  - id: docs-export.gap.missing-provenance.v1
+    name: Docs export missing provenance gap
+    description: Records missing stable fact, edge, report, file-span, source, or commit provenance required for stable chunk identity or citation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export missing-provenance gap
+    limitations:
+      - Missing provenance prevents stronger documentation claims and does not prove absence.
+
+  - id: docs-export.gap.unknown-analysis.v1
+    name: Docs export unknown analysis gap
+    description: Records reduced coverage, unknown commit identity, truncation, selector gaps, extractor unavailability, dynamic boundaries, serializer boundaries, reflection boundaries, generated-code boundaries, or other analysis gaps carried into docs export.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export unknown-analysis gap
+    limitations:
+      - Unknown-analysis gaps preserve uncertainty and do not prove no evidence or no impact.
+
   - id: property-flow.root.v1
     name: Property flow selected root
     description: Records deterministic selected root rows for UI field, control, binding, model, DTO, symbol, or fact selectors over a combined index.
