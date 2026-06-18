@@ -10,9 +10,10 @@ phase is spec-only.
 Note: validation tasks must pass before future implementation tasks are checked
 complete.
 
-- [ ] Choose `/claims/` or `/claim-ledger/` as the final route/page placement.
-- [ ] Record the selected route and rejected alternate route in
-  `implementation-state.md`.
+- [ ] Evaluate extending `/roadmap/` as the canonical claim-ledger surface
+  before choosing `/claims/` or `/claim-ledger/` as a standalone route.
+- [ ] Record the selected placement and rejected alternates, including
+  `/roadmap/` if it is not chosen, in `implementation-state.md`.
 - [ ] Add the public claim-ledger page or section using existing site styles and
   static-site patterns.
 - [ ] Add page-level copy that says `Public claim level: concept`.
@@ -22,13 +23,16 @@ complete.
 - [ ] Use stable public claim-level labels such as `shipped`, `demo`,
   `concept`, and `hidden`.
 - [ ] Define one total mapping table for claim-level and evidence-status labels
-  against existing site vocabulary, using real proof-path-index vocabulary such
-  as page claim level `demo`, artifact types, evidence tiers, coverage labels,
-  and the `dev-only` marker rather than invented tokens. Resolve capability
-  matrix `dev` and proof-path index `dev-only` to the same claim-level label,
-  keep `future` publicly shown as `future` distinct from dev-branch maturity
-  publicly shown as `dev-only`, and map evidence-status labels to real
-  evidence-tier and coverage-label vocabulary so automated cross-page review
+  against existing site vocabulary from the roadmap, capability matrix,
+  proof-path index, and route/discovery metadata, using real proof-path-index
+  vocabulary such as page claim level `demo`, artifact types, evidence tiers,
+  coverage labels, and the `dev-only` marker rather than invented tokens.
+  Resolve capability matrix `dev` and proof-path index `dev-only` to the same
+  claim-level label, keep `future` publicly shown as `future` distinct from
+  dev-branch maturity publicly shown as `dev-only`, map roadmap labels such as
+  `shipped navigation`, `demo guidance`, `main/demo`, `future`, and `hidden
+  pending validation`, and map gap labels such as `not_requested` and
+  `unavailable` to evidence-status labels so automated cross-page review
   cannot get contradictory answers for the same claim.
 - [ ] Use evidence-status labels that distinguish evidence-backed,
   partial/reduced coverage, future-only, hidden/internal, and not-yet-backed

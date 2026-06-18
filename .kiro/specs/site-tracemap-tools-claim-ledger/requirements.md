@@ -44,12 +44,17 @@ and documented limitations remain the source of truth.
 
 The claim ledger governs public claim wording: claim level, wording status,
 evidence status, proof-path reference, limitations, and non-claims. It
-references but does not duplicate the proof path index
-(`site-tracemap-tools-proof-path-index`), which organizes evidence trails, or
-the capability matrix (`site-tracemap-tools-capability-matrix`), which maps
-current capability status. Where a claim's proof trail or capability status
-already exists on those surfaces, the ledger row links to them instead of
-restating their evidence.
+must reconcile with the existing `/roadmap/` page, which already presents
+itself as a public claim ledger. Future implementation should either extend
+`/roadmap/` into the canonical claim ledger or create a distinct route with a
+clear relationship to `/roadmap/` so the site does not publish two competing
+claim-governance sources. The ledger references but does not duplicate the
+proof path index (`site-tracemap-tools-proof-path-index`), which organizes
+evidence trails, or the capability matrix
+(`site-tracemap-tools-capability-matrix`), which maps current capability
+status. Where a claim's proof trail or capability status already exists on
+those surfaces, the ledger row links to them instead of restating their
+evidence.
 
 ## Requirements
 
@@ -60,12 +65,16 @@ an explicit route decision.
 
 Acceptance criteria:
 
-- The implementation chooses either `/claims/` or `/claim-ledger/` and records
-  the route decision in `implementation-state.md`.
+- The implementation first evaluates extending `/roadmap/`, because the current
+  roadmap page already describes itself as a claim ledger. If a new standalone
+  route is still chosen, the implementation chooses either `/claims/` or
+  `/claim-ledger/` and records why `/roadmap/` was not extended in
+  `implementation-state.md`.
 - The chosen page says `Public claim level: concept`.
-- The page is discoverable from the proof path index page and/or the capability
-  matrix page where a link helps readers verify public wording. Link text must
-  not imply concept or hidden claims are shipped capabilities.
+- The chosen page or section is discoverable from `/roadmap/`, the proof path
+  index page, and/or the capability matrix page where a link helps readers
+  verify public wording. Link text must not imply concept or hidden claims are
+  shipped capabilities.
 - If the page is implemented as a standalone route, it is included in sitemap
   metadata and any existing static discovery metadata.
 - The route/page placement does not imply that concept or hidden claims are
@@ -73,8 +82,9 @@ Acceptance criteria:
 - The page does not duplicate the proof path index or capability matrix; rows
   link to those surfaces for evidence trails and capability status where they
   already exist.
-- Any alternate route that is not chosen is recorded as a rejected option in
-  `implementation-state.md` with a short reason.
+- Any alternate route or placement that is not chosen, including `/roadmap/`, is
+  recorded as a rejected option in `implementation-state.md` with a short
+  reason.
 
 ### Requirement 2: Publish a claim-level table
 
@@ -176,19 +186,21 @@ Acceptance criteria:
   claim-ledger and existing-surface vocabularies, and resolves each
   existing-surface status to exactly one claim-ledger label. The mapping table
   is defined once and is the single source for cross-page label comparison.
-- The required starting mapping is:
+- The required starting claim-level mapping covers current vocabulary from
+  `/roadmap/`, `/capabilities/`, `/proof-paths/`, and discovery metadata:
 
-  | Claim-ledger label | Capability matrix status | Proof-path index reference |
+  | Existing-surface vocabulary | Claim-ledger claim level | Notes |
   | --- | --- | --- |
-  | `shipped` | `main` | checked-in public artifact or resolvable public proof path |
-  | `demo` | `demo` | checked-in demo artifact or per-entry demo status |
-  | `concept` | `dev`, publicly shown as `dev-only`, or `future`, publicly shown as `future` | `dev-only` marker, `future`-labeled future-only entry, or no proof-path-index entry |
-  | `hidden` | no capability-matrix row; omit or abstract | no proof-path-index entry; omit or abstract |
+  | `shipped`, `shipped navigation`, `main`, repository docs on `main`, `main with maturity caveats` | `shipped` | True on main, but any maturity caveat remains in the limitation field. |
+  | `demo`, `demo guidance`, `main/demo`, `public-demo`, `public-safe generated summary`, route metadata `publicClaimLevel: demo`, proof-path public status `demo` | `demo` | Backed by checked-in demo samples, public-safe summaries, or demo route metadata; `main/demo` keeps both proof notes visible. |
+  | `concept`, `concept-only`, `future`, `future-only`, `dev`, `dev-only`, route metadata `publicClaimLevel: concept`, proof-path public status `future` | `concept` | Future-facing or dev-branch-only wording; do not upgrade until the evidence is true on main or checked-in demo proof exists. |
+  | `hidden`, `hidden pending validation`, no capability-matrix row, no proof-path-index counterpart, internal-only aggregate placeholder | `hidden` | Not suitable for public claim detail; omit or abstract without counts, cadence, sequencing, or unreleased names. |
 
 - The mapping is a function from each existing-surface status to exactly one
-  claim-ledger label, not a bidirectional one-to-one map: `main` resolves to
-  `shipped`, `demo` resolves to `demo`, `future` resolves to `concept`, and
-  `dev` or public `dev-only` resolves to `concept`. `hidden` has no public
+  claim-ledger label, not a bidirectional one-to-one map: `main` and
+  `shipped navigation` resolve to `shipped`; `demo`, `demo guidance`, and
+  public status `demo` resolve to `demo`; `future`, `dev`, `dev-only`, and
+  public status `future` resolve to `concept`. `hidden` has no public
   capability-matrix or proof-path-index counterpart by design.
 - Capability-matrix `future` status and proof-path-index `future` entries are
   publicly shown as `future`, not `dev-only`; both still resolve to
@@ -201,16 +213,17 @@ Acceptance criteria:
   | --- | --- | --- |
   | `evidence-backed` | `Tier1Semantic` or `Tier2Structural` with `Full` or `FullEvidenceAvailable` coverage | Rule IDs, evidence tiers, and proof paths are public-safe and specific. |
   | `partial/reduced coverage` | `Partial`, `Reduced`, or `ReducedCoverage` coverage, or `Tier3SyntaxOrTextual` evidence | Rule-family or proof-path reference exists, but coverage gaps are labeled. |
+  | `gap-labeled demo evidence` | `not_requested`, `unavailable`, `Tier4Unknown`, or explicit gap labels on demo rows | The gap label remains visible; do not restate it as clean coverage or parity. |
   | `future-only` | Proof-path-index `future` entry; no resolvable artifact yet | Proof path is not yet available; row is not evidence-backed. |
   | `hidden/internal` | No capability-matrix or proof-path-index counterpart | Aggregate abstract placeholder; discloses no unreleased detail. |
-  | `not-yet-backed` | `Tier4Unknown`, `UnknownAnalysisGap`, or no cited artifact | No proof path exists; future-facing claim only. |
+  | `not-yet-backed` | `UnknownAnalysisGap`, no cited artifact, or no public-safe proof path | No proof path exists; future-facing claim only. |
 
-- Each capability-matrix status, including `main`, `dev`, `demo`, and `future`,
-  and the proof-path-index `dev-only` marker resolves to exactly one claim-level
-  counterpart before automation relies on the ledger. `dev` and `dev-only`
-  describe the same dev-branch-only maturity and must resolve to `concept`, not
-  split across `concept` and `hidden`. A public claim with no capability-matrix
-  row and no proof-path-index entry maps to `hidden` so the mapping stays total.
+- Each capability-matrix, roadmap, proof-path-index, and discovery metadata
+  status resolves to exactly one claim-level counterpart before automation
+  relies on the ledger. `dev` and `dev-only` describe the same dev-branch-only
+  maturity and must resolve to `concept`, not split across `concept` and
+  `hidden`. A public claim with no capability-matrix row and no proof-path-index
+  entry maps to `hidden` so the mapping stays total.
 - The page links back to relevant public proof surfaces without creating
   circular wording that upgrades a concept or hidden claim.
 - Page-level discovery metadata, including title, description, canonical path,
