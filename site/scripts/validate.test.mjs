@@ -10,6 +10,7 @@ import {
 } from "./adoption-playbook.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
+import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
@@ -111,6 +112,7 @@ async function createDistFixture({
     ...deployAuditRequiredRoutes,
     adoptionPlaybookRoute,
     demoEvidenceTrailRoute,
+    demoRunbookRoute,
     incidentCallRoute,
     managerBriefRoute,
     managerFaqRoute,
@@ -132,6 +134,7 @@ async function createDistFixture({
     "/demo/proof-upgrades/",
     "/demo/proof-assets/",
     demoEvidenceTrailRoute,
+    demoRunbookRoute,
     "/evidence/",
     "/examples/",
     incidentCallRoute,
@@ -164,21 +167,25 @@ async function createDistFixture({
           ? adoptionPage()
           : route === demoEvidenceTrailRoute
             ? demoEvidenceTrailPage()
-            : route === incidentCallRoute
-              ? incidentCallPage()
-              : route === managerBriefRoute
-                ? managerBriefPage()
-                : route === managerFaqRoute
-                  ? managerFaqPage()
-                  : route === proofSourceCatalogRoute
-                    ? await proofSourceCatalogPage()
-                    : route === reviewRoomRoute
-                      ? reviewRoomPage()
-                      : route === roadmapClaimLedgerRoute
-                        ? roadmapClaimLedgerPage()
-                        : route === staticTriageRoute
-                          ? staticTriagePage()
-                          : page(`<p>${path}</p>`),
+            : route === demoRunbookRoute
+              ? demoRunbookPage()
+              : route === incidentCallRoute
+                ? incidentCallPage()
+                : route === managerBriefRoute
+                  ? managerBriefPage()
+                  : route === managerFaqRoute
+                    ? managerFaqPage()
+                    : route === proofSourceCatalogRoute
+                      ? await proofSourceCatalogPage()
+                      : route === reviewRoomRoute
+                        ? reviewRoomPage()
+                        : route === roadmapClaimLedgerRoute
+                          ? roadmapClaimLedgerPage()
+                          : route === staticTriageRoute
+                            ? staticTriagePage()
+                            : page(
+                                `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}`
+                              ),
       "utf8"
     );
   }
@@ -228,6 +235,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "demo",
         preferredProofPath: "/demo/proof-upgrades/",
         limitations: ["Fixture demo evidence trail limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: demoRunbookRoute,
+        title: "Public Demo Runbook",
+        summary: "Fixture runbook route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "demo",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture runbook limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -406,6 +424,7 @@ function demoEvidenceTrailPage() {
     <p>runtime proof production proof release approval complete product coverage</p>
     <meta property="og:type" content="article">
     <a href="/demo/result/">Demo result</a>
+    <a href="/demo/runbook/">Demo runbook</a>
     <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
     <a href="/demo/proof-assets/">Demo proof assets</a>
     <a href="/proof-paths/">Proof paths</a>
@@ -414,6 +433,36 @@ function demoEvidenceTrailPage() {
     <a href="/limitations/">Limitations</a>
     <a href="/packets/">Packets</a>
     <p>${filler}</p>
+  `);
+}
+
+function demoRunbookPage() {
+  return page(`
+    <p>Public claim level: demo</p>
+    <p>No public conclusion without evidence</p>
+    <p>operator checklist</p>
+    <h3>Follow the evidence</h3>
+    <p>&lt;ignored-output-dir&gt; ./scripts/check-private-paths.sh public.demo.summary.v1</p>
+    <p>Tier1Semantic Tier2Structural Tier3SyntaxOrTextual Tier4Unknown PartialAnalysis not_requested unavailable</p>
+    <p>gap-labeled row: partial coverage, no clean reducer conclusion</p>
+    <meta property="og:type" content="article">
+    <a href="/demo/start-here/">Demo walkthrough</a>
+    <a href="/demo/result/">Demo result</a>
+    <a href="/demo/evidence-trail/">Demo evidence trail</a>
+    <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="https://github.com/joefeser/tracemap/blob/main/scripts/demo-public.sh">scripts/demo-public.sh</a>
+    <section data-runbook-section="artifact-boundary">
+      <p>scan-manifest.json facts.ndjson index.sqlite report.md logs/analyzer.log analyzer.log raw SQL config values secrets generated scan directories private sample names raw source snippets raw repository remotes local absolute paths</p>
+    </section>
+    <section data-runbook-section="sharing-guidance">
+      <p>Use static evidence and avoid unsupported impacted wording.</p>
+    </section>
+    <section data-runbook-section="red-flag">
+      <p>AI impact analysis, LLM analysis, runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, and complete product coverage are red flags.</p>
+    </section>
   `);
 }
 
