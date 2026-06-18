@@ -19,7 +19,13 @@ interface TemplateInput {
 }
 
 export async function extractAngularTemplateFacts(manifest: ScanManifest, inventory: readonly FileInventoryItem[]): Promise<CodeFact[]> {
-  const owners = await collectTemplateOwners(inventory);
+  const typeScriptFiles = inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".ts")).sort(byPath);
+  const typeScriptTexts = new Map<string, string>();
+  for (const item of typeScriptFiles) {
+    typeScriptTexts.set(item.relativePath, await fs.readFile(item.absolutePath, "utf8"));
+  }
+
+  const owners = collectTemplateOwners(typeScriptFiles, typeScriptTexts);
   const facts: CodeFact[] = [];
   for (const item of inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".html")).sort(byPath)) {
     const owner = owners.get(item.relativePath);
@@ -36,8 +42,8 @@ export async function extractAngularTemplateFacts(manifest: ScanManifest, invent
     }));
   }
 
-  for (const item of inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".ts")).sort(byPath)) {
-    const text = await fs.readFile(item.absolutePath, "utf8");
+  for (const item of typeScriptFiles) {
+    const text = typeScriptTexts.get(item.relativePath) ?? "";
     for (const inline of inlineTemplates(text)) {
       const componentClass = componentClassNear(text, inline.index) ?? "";
       facts.push(...extractTemplate(manifest, {
@@ -58,10 +64,10 @@ export async function extractAngularTemplateFacts(manifest: ScanManifest, invent
     );
 }
 
-async function collectTemplateOwners(inventory: readonly FileInventoryItem[]): Promise<Map<string, TemplateOwner>> {
+function collectTemplateOwners(inventory: readonly FileInventoryItem[], typeScriptTexts: ReadonlyMap<string, string>): Map<string, TemplateOwner> {
   const owners = new Map<string, TemplateOwner>();
   for (const item of inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".ts")).sort(byPath)) {
-    const text = await fs.readFile(item.absolutePath, "utf8");
+    const text = typeScriptTexts.get(item.relativePath) ?? "";
     const componentClass = componentClassNear(text, 0);
     if (!componentClass) {
       continue;
@@ -315,7 +321,9 @@ function inlineTemplates(text: string): { text: string; index: number; startLine
   const result: { text: string; index: number; startLine: number }[] = [];
   const starts = lineStarts(text);
   for (const match of text.matchAll(/template\s*:\s*`([\s\S]*?)`/g)) {
-    result.push({ text: match[1], index: match.index ?? 0, startLine: lineFor(starts, match.index ?? 0) });
+    const matchStart = match.index ?? 0;
+    const contentStart = matchStart + match[0].indexOf("`") + 1;
+    result.push({ text: match[1], index: matchStart, startLine: lineFor(starts, contentStart) });
   }
   return result;
 }
@@ -328,7 +336,8 @@ function componentClassNear(text: string, index: number): string | null {
 
 function span(filePath: string, starts: readonly number[], baseLine: number, index: number, length: number) {
   const start = baseLine + lineFor(starts, index) - 1;
-  const end = baseLine + lineFor(starts, index + length) - 1;
+  const endIndex = length > 0 ? index + length - 1 : index;
+  const end = baseLine + lineFor(starts, endIndex) - 1;
   return createEvidence(filePath, start, end, "typescript-angular-template", ScannerVersions.TypeScriptAngularTemplateExtractor);
 }
 
