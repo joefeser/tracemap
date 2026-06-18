@@ -127,7 +127,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         if (diagnostics.Any(item => item.CapabilityState is States.Reduced or States.Unavailable or States.Unknown))
         {
             diagnostics.Add(WorkspaceCandidate(
-                manifest,
                 Codes.DownstreamNoEvidenceCoverage,
                 "downstream-coverage",
                 manifest.BuildStatus == "FailedOrPartial" ? States.Reduced : States.Unknown,
@@ -145,14 +144,9 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         }
 
         return diagnostics
-            .Where(item => ShouldEmit(item, manifest, buildEnvironmentFacts))
+            .Where(ShouldEmit)
             .GroupBy(item => CandidateIdentity(item), StringComparer.Ordinal)
             .Select(group => group.First())
-            .OrderBy(item => item.SourceScope, StringComparer.Ordinal)
-            .ThenBy(item => item.CapabilityCode, StringComparer.Ordinal)
-            .ThenBy(item => item.CapabilityState, StringComparer.Ordinal)
-            .ThenBy(item => item.StartLine)
-            .ThenBy(item => item.RuleId, StringComparer.Ordinal)
             .Select(item => CreateFact(manifest, item))
             .OrderBy(fact => fact.Properties.GetValueOrDefault("sourceScope"), StringComparer.Ordinal)
             .ThenBy(fact => fact.Properties.GetValueOrDefault("capabilityCode"), StringComparer.Ordinal)
@@ -196,7 +190,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             ? EvidenceTiers.Tier2Structural
             : EvidenceTiers.Tier4Unknown;
         return WorkspaceCandidate(
-            manifest,
             Codes.CSharpSemanticCompilation,
             "semantic",
             state,
@@ -234,7 +227,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             _ => Effects.UnknownGap
         };
         return WorkspaceCandidate(
-            manifest,
             Codes.MSBuildProjectLoad,
             "semantic",
             state,
@@ -258,7 +250,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         if (referenceGaps.Length > 0)
         {
             yield return WorkspaceCandidate(
-                manifest,
                 Codes.ReferenceAssemblyResolution,
                 "semantic",
                 States.Unavailable,
@@ -272,7 +263,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         else if (semanticResult.Attempted && !semanticResult.ReducedCoverage)
         {
             yield return WorkspaceCandidate(
-                manifest,
                 Codes.ReferenceAssemblyResolution,
                 "semantic",
                 States.Available,
@@ -306,7 +296,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             ? Effects.SyntaxOnly
             : state == States.Available ? Effects.Informational : Effects.UnknownGap;
         return WorkspaceCandidate(
-            manifest,
             Codes.SyntaxFallbackAvailable,
             "syntax-fallback",
             state,
@@ -333,7 +322,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             var hasUnknown = support.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
             var first = support.First();
             yield return CandidateFromSupport(
-                manifest,
                 Codes.LegacyProjectConfigInspection,
                 "project-config",
                 hasUnknown ? States.Reduced : States.Available,
@@ -356,7 +344,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         {
             var frameworkFamily = FrameworkFamily(fact);
             yield return CandidateFromSupport(
-                manifest,
                 Codes.LegacyFrameworkSignalDetected,
                 "legacy-toolchain",
                 States.Available,
@@ -384,7 +371,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             var hasUnknown = support.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
             var first = support.First();
             yield return CandidateFromSupport(
-                manifest,
                 Codes.LegacyMSBuildToolsetSignalDetected,
                 "legacy-toolchain",
                 hasUnknown ? States.Unknown : States.Available,
@@ -411,7 +397,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             var state = hasFailure ? States.Reduced : options.Restore ? States.Available : States.NotRequested;
             var effect = hasFailure ? Effects.ReducedSemantic : Effects.Informational;
             yield return CandidateFromSupport(
-                manifest,
                 Codes.LegacyNuGetRestoreAwareness,
                 "package-restore",
                 state,
@@ -436,7 +421,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             var first = support.First();
             var hasUnknown = support.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
             yield return CandidateFromSupport(
-                manifest,
                 Codes.GeneratedDesignerLinkage,
                 "generated-design-time",
                 hasUnknown ? States.Unknown : States.Reduced,
@@ -467,7 +451,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             var rows = group.OrderBy(SupportFactSortKey, StringComparer.Ordinal).ToArray();
             var first = rows.First();
             yield return CandidateFromSupport(
-                manifest,
                 Codes.LegacyWebStackShape,
                 "legacy-toolchain",
                 States.Available,
@@ -491,7 +474,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             var support = group.OrderBy(SupportFactSortKey, StringComparer.Ordinal).ToArray();
             var first = support.First();
             yield return CandidateFromSupport(
-                manifest,
                 Codes.LegacyRemotingShape,
                 "legacy-toolchain",
                 States.Available,
@@ -506,7 +488,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
     }
 
     private static CapabilityCandidate WorkspaceCandidate(
-        ScanManifest manifest,
         string capabilityCode,
         string capabilityKind,
         string capabilityState,
@@ -539,7 +520,6 @@ public static class AnalyzerCapabilityDiagnosticExtractor
     }
 
     private static CapabilityCandidate CandidateFromSupport(
-        ScanManifest manifest,
         string capabilityCode,
         string capabilityKind,
         string capabilityState,
@@ -733,7 +713,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
                 or "UncategorizedWorkspaceFailure";
     }
 
-    private static bool ShouldEmit(CapabilityCandidate item, ScanManifest manifest, IReadOnlyList<CodeFact> buildEnvironmentFacts)
+    private static bool ShouldEmit(CapabilityCandidate item)
     {
         if (item.CapabilityCode is Codes.CSharpSemanticCompilation or Codes.MSBuildProjectLoad or Codes.ReferenceAssemblyResolution or Codes.SyntaxFallbackAvailable)
         {
