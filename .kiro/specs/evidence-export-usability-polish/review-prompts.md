@@ -3,7 +3,7 @@
 Branch:
 
 ```text
-codex/spec-evidence-export-usability-polish
+codex/implement-evidence-export-usability-polish
 ```
 
 Issue:

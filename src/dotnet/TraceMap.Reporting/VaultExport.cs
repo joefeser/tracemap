@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using TraceMap.Core;
 
 namespace TraceMap.Reporting;
 
@@ -93,7 +94,8 @@ public sealed record VaultGraphNode(
     string FilePath,
     string? ScannerVersion = null,
     string? RepositoryIdentityHash = null,
-    IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null);
+    IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null,
+    string? NavigationCategory = null);
 
 public sealed record VaultGraphEdge(
     string Id,
@@ -108,7 +110,8 @@ public sealed record VaultGraphEdge(
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
     IReadOnlyList<string> Limitations,
-    IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null);
+    IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null,
+    string? NavigationCategory = null);
 
 public sealed record VaultGraphGap(
     string Id,
@@ -241,6 +244,7 @@ public static class VaultExporter
         "evidence_tiers",
         "coverage",
         "limitations",
+        "aliases",
         "tags"
     ];
 
@@ -253,6 +257,7 @@ public static class VaultExporter
         var catalog = await ReadClaimCatalogAsync(options.SourceClaimCatalogPath, cancellationToken);
         var diagnostics = new List<VaultExportDiagnostic>();
         var graph = await BuildGraphAsync(options, formats, minimumClaimLevel, generatedAt, catalog, diagnostics, cancellationToken);
+        graph = WithNavigationCategories(graph);
         graph = WithGraphHash(graph);
 
         var files = BuildGeneratedFiles(options.OutputPath, graph, formats);
@@ -999,8 +1004,23 @@ public static class VaultExporter
 
         if (formats.Contains("markdown", StringComparer.Ordinal))
         {
-            files[Path.Combine(outputRoot, "README.md")] = RenderGeneratedMarkdown("readme", graph.Classification, [], [], [], [], [], RenderReadme(graph));
-            files[Path.Combine(outputRoot, "index.md")] = RenderGeneratedMarkdown("index", graph.Classification, [], [], graph.Settings.Partial ? ["partial"] : [], [], ["tracemap/index", $"tracemap/{graph.Classification}"], RenderIndex(graph));
+            files[Path.Combine(outputRoot, "Start Here.md")] = RenderGeneratedMarkdown("start-here", graph.Classification, [], [], graph.Settings.Partial ? ["partial"] : [], [], ["Start Here", "TraceMap Evidence Vault"], TagsForSummary(graph, "start-here"), RenderStartHere(graph));
+            files[Path.Combine(outputRoot, "README.md")] = RenderGeneratedMarkdown("readme", graph.Classification, [], [], [], [], ["TraceMap Evidence Vault"], TagsForSummary(graph, "readme"), RenderReadme(graph));
+            files[Path.Combine(outputRoot, "index.md")] = RenderGeneratedMarkdown("index", graph.Classification, [], [], graph.Settings.Partial ? ["partial"] : [], [], ["Evidence Index"], TagsForSummary(graph, "index"), RenderIndex(graph));
+            foreach (var group in graph.Nodes.GroupBy(node => DirectoryForNodeKind(node.Kind), StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                files[Path.Combine(outputRoot, group.Key, "index.md")] = RenderGeneratedMarkdown(
+                    $"{group.Key}-index",
+                    graph.Classification,
+                    DistinctSorted(group.SelectMany(node => node.RuleIds)),
+                    DistinctSorted(group.SelectMany(node => node.EvidenceTiers)),
+                    DistinctSorted(group.SelectMany(node => node.Coverage)),
+                    DistinctSorted(group.SelectMany(node => node.Limitations)),
+                    [$"{FolderTitle(group.Key)} Index"],
+                    TagsForFolderIndex(graph, group.Key, group),
+                    RenderFolderIndex(graph, group.Key, group));
+            }
+
             foreach (var node in graph.Nodes)
             {
                 files[Path.Combine(outputRoot, node.FilePath)] = RenderNodeNote(node, graph);
@@ -1010,10 +1030,75 @@ public static class VaultExporter
         return files;
     }
 
+    private static string RenderStartHere(EvidenceGraphVault graph)
+    {
+        var coverage = DistinctSorted(graph.Nodes.SelectMany(node => node.Coverage));
+        var hiddenOmitted = graph.Settings.OmittedHiddenNodeCount + graph.Settings.OmittedHiddenEdgeCount;
+        var builder = new StringBuilder();
+        builder.AppendLine("# Start Here");
+        builder.AppendLine();
+        builder.AppendLine("## Evidence Summary");
+        builder.AppendLine();
+        builder.AppendLine("| Field | Value |");
+        builder.AppendLine("| --- | --- |");
+        builder.AppendLine($"| Classification | {Cell(graph.Classification)} |");
+        builder.AppendLine($"| Input types | {Cell(string.Join(", ", DistinctSorted(graph.Inputs.Select(input => input.Kind))))} |");
+        builder.AppendLine($"| Visible sources | {graph.Nodes.Count(node => node.Kind == "source")} |");
+        builder.AppendLine($"| Non-gap nodes | {graph.Nodes.Count(node => node.Kind != "gap")} |");
+        builder.AppendLine($"| Edges | {graph.Edges.Count} |");
+        builder.AppendLine($"| Gaps | {graph.Gaps.Count} |");
+        builder.AppendLine($"| Limitations | {graph.Limitations.Count} |");
+        builder.AppendLine($"| Omitted hidden evidence | {hiddenOmitted} |");
+        builder.AppendLine();
+        builder.AppendLine("## Coverage And Claim Level");
+        builder.AppendLine();
+        builder.AppendLine($"- Claim level: `{Cell(graph.Classification)}`.");
+        builder.AppendLine($"- Coverage labels: `{Cell(coverage.Count == 0 ? "none" : string.Join(", ", coverage))}`.");
+        builder.AppendLine(graph.Settings.Partial
+            ? "- This export is partial. Hidden, filtered, unsupported, or reduced evidence may be omitted and must not be treated as complete."
+            : "- This export is a deterministic static evidence navigation aid. It does not prove runtime behavior or absence.");
+        builder.AppendLine();
+        builder.AppendLine("## Start With");
+        builder.AppendLine();
+        foreach (var link in StartLinks(graph))
+        {
+            builder.AppendLine($"- [{Cell(link.Title)}]({Cell(link.Path)})");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Review Queues");
+        builder.AppendLine();
+        builder.AppendLine($"- Weak or syntax-only evidence: `{graph.Nodes.Count(node => node.EvidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown))}` nodes.");
+        builder.AppendLine($"- Needs-review or reduced coverage edges: `{graph.Edges.Count(edge => IsReviewClassification(edge.Classification))}` edges.");
+        builder.AppendLine($"- Gaps: `{graph.Gaps.Count}` records.");
+        builder.AppendLine($"- Limitations: `{graph.Limitations.Count}` records.");
+        builder.AppendLine();
+        builder.AppendLine("## Indexes");
+        builder.AppendLine();
+        builder.AppendLine("- [All evidence](index.md)");
+        foreach (var group in graph.Nodes.GroupBy(node => DirectoryForNodeKind(node.Kind), StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- [{Cell(FolderTitle(group.Key))}]({Cell(group.Key + "/index.md")})");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Gaps And Limitations");
+        builder.AppendLine();
+        builder.AppendLine("Gaps and limitations are first-class evidence records. They preserve uncertainty and do not prove clean absence or runtime safety.");
+        builder.AppendLine();
+        builder.AppendLine("## Source Artifacts");
+        builder.AppendLine();
+        builder.AppendLine("- [Machine graph](graph.json)");
+        builder.AppendLine("- [Generated index](index.md)");
+        return builder.ToString();
+    }
+
     private static string RenderReadme(EvidenceGraphVault graph)
     {
         var builder = new StringBuilder();
         builder.AppendLine("# TraceMap Evidence Vault");
+        builder.AppendLine();
+        builder.AppendLine("[Start Here](Start%20Here.md) is the human entry point for coverage, review queues, and category indexes.");
         builder.AppendLine();
         builder.AppendLine("| Field | Value |");
         builder.AppendLine("| --- | --- |");
@@ -1058,9 +1143,54 @@ public static class VaultExporter
         return builder.ToString();
     }
 
+    private static string RenderFolderIndex(EvidenceGraphVault graph, string folder, IEnumerable<VaultGraphNode> nodes)
+    {
+        var orderedNodes = nodes.OrderBy(node => node.Kind, StringComparer.Ordinal).ThenBy(node => node.DisplayName, StringComparer.Ordinal).ThenBy(node => node.Id, StringComparer.Ordinal).ToArray();
+        var nodeIds = orderedNodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
+        var edges = graph.Edges.Where(edge => nodeIds.Contains(edge.From) || nodeIds.Contains(edge.To)).ToArray();
+        var coverage = DistinctSorted(orderedNodes.SelectMany(node => node.Coverage));
+        var builder = new StringBuilder();
+        builder.AppendLine($"# {FolderTitle(folder)} Index");
+        builder.AppendLine();
+        builder.AppendLine("[Start Here](../Start%20Here.md) | [All evidence](../index.md)");
+        builder.AppendLine();
+        builder.AppendLine("| Field | Value |");
+        builder.AppendLine("| --- | --- |");
+        builder.AppendLine($"| Nodes | {orderedNodes.Length} |");
+        builder.AppendLine($"| Related edges | {edges.Length} |");
+        builder.AppendLine($"| Claim level | {Cell(graph.Classification)} |");
+        builder.AppendLine($"| Coverage labels | {Cell(coverage.Count == 0 ? "none" : string.Join(", ", coverage))} |");
+        builder.AppendLine($"| Evidence tiers | {Cell(string.Join(", ", DistinctSorted(orderedNodes.SelectMany(node => node.EvidenceTiers))))} |");
+        builder.AppendLine($"| Primary rule IDs | {Cell(string.Join(", ", DistinctSorted(orderedNodes.SelectMany(node => node.RuleIds))))} |");
+        builder.AppendLine();
+        builder.AppendLine("| Kind | Title | Rule IDs | Evidence tiers | Coverage |");
+        builder.AppendLine("| --- | --- | --- | --- | --- |");
+        if (folder == "surfaces")
+        {
+            foreach (var surfaceGroup in orderedNodes.GroupBy(node => node.SurfaceKind ?? "unknown", StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                builder.AppendLine($"| surface-kind | **{Cell(surfaceGroup.Key)}** | {Cell(string.Join(", ", DistinctSorted(surfaceGroup.SelectMany(node => node.RuleIds))))} | {Cell(string.Join(", ", DistinctSorted(surfaceGroup.SelectMany(node => node.EvidenceTiers))))} | {Cell(string.Join(", ", DistinctSorted(surfaceGroup.SelectMany(node => node.Coverage))))} |");
+                foreach (var node in surfaceGroup)
+                {
+                    builder.AppendLine($"| {Cell(node.Kind)} | [{Cell(node.DisplayName)}]({Cell(RelativePath(Path.Combine(folder, "index.md"), node.FilePath))}) | {Cell(string.Join(", ", node.RuleIds))} | {Cell(string.Join(", ", node.EvidenceTiers))} | {Cell(string.Join(", ", node.Coverage))} |");
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        foreach (var node in orderedNodes)
+        {
+            builder.AppendLine($"| {Cell(node.Kind)} | [{Cell(node.DisplayName)}]({Cell(RelativePath(Path.Combine(folder, "index.md"), node.FilePath))}) | {Cell(string.Join(", ", node.RuleIds))} | {Cell(string.Join(", ", node.EvidenceTiers))} | {Cell(string.Join(", ", node.Coverage))} |");
+        }
+
+        return builder.ToString();
+    }
+
     private static string RenderNodeNote(VaultGraphNode node, EvidenceGraphVault graph)
     {
         var tags = TagsForNode(node);
+        var aliases = AliasesForNode(node);
         var body = new StringBuilder();
         body.AppendLine($"# {node.DisplayName}");
         body.AppendLine();
@@ -1136,6 +1266,7 @@ public static class VaultExporter
             node.EvidenceTiers,
             node.Coverage,
             node.Limitations,
+            aliases,
             tags,
             body.ToString(),
             node.SourceId);
@@ -1148,6 +1279,7 @@ public static class VaultExporter
         IReadOnlyList<string> evidenceTiers,
         IReadOnlyList<string> coverage,
         IReadOnlyList<string> limitations,
+        IReadOnlyList<string> aliases,
         IReadOnlyList<string> tags,
         string body,
         string? sourceId = null)
@@ -1186,6 +1318,11 @@ public static class VaultExporter
             metadata["limitations"] = limitations;
         }
 
+        if (aliases.Count > 0)
+        {
+            metadata["aliases"] = aliases;
+        }
+
         if (tags.Count > 0)
         {
             metadata["tags"] = tags;
@@ -1220,7 +1357,8 @@ public static class VaultExporter
             if (metadata[key] is { } array)
             {
                 builder.AppendLine($"{key}:");
-                foreach (var item in array.OrderBy(value => value, StringComparer.Ordinal))
+                IEnumerable<string> orderedItems = key == "aliases" ? array : array.OrderBy(value => value, StringComparer.Ordinal);
+                foreach (var item in orderedItems)
                 {
                     builder.AppendLine($"  - \"{YamlEscape(item)}\"");
                 }
@@ -1249,6 +1387,15 @@ public static class VaultExporter
         var withoutHash = graph with { ContentHash = string.Empty };
         var contentHash = Hash(SerializeGraph(withoutHash), 64);
         return graph with { ContentHash = contentHash };
+    }
+
+    private static EvidenceGraphVault WithNavigationCategories(EvidenceGraphVault graph)
+    {
+        return graph with
+        {
+            Nodes = graph.Nodes.Select(node => node with { NavigationCategory = NavigationCategoryForNode(node) }).ToArray(),
+            Edges = graph.Edges.Select(edge => edge with { NavigationCategory = NavigationCategoryForEdge(edge) }).ToArray()
+        };
     }
 
     private static string SerializeGraph(EvidenceGraphVault graph)
@@ -2448,24 +2595,190 @@ public static class VaultExporter
     private static IReadOnlyList<string> TagsForNode(VaultGraphNode node)
     {
         return DistinctSorted([
-            $"tracemap/{node.Kind}",
-            $"tracemap/{node.ClaimLevel}",
-            .. node.EvidenceTiers.Select(tier => $"tracemap/{tier.ToLowerInvariant()}"),
-            .. node.Coverage.Select(coverage => $"tracemap/{Slug(coverage)}")
+            $"tracemap/kind/{Slug(node.Kind)}",
+            $"tracemap/claim/{Slug(node.ClaimLevel)}",
+            .. node.EvidenceTiers.Select(tier => $"tracemap/tier/{Slug(tier)}"),
+            .. node.Coverage.Select(coverage => $"tracemap/coverage/{Slug(coverage)}"),
+            .. string.IsNullOrWhiteSpace(node.SurfaceKind) ? [] : new[] { $"tracemap/surface/{Slug(node.SurfaceKind)}" },
+            .. node.Kind == "gap" ? new[] { "tracemap/review/gap" } : [],
+            .. node.EvidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown) || node.Coverage.Any(IsWeakCoverageLabel)
+                ? new[] { "tracemap/review/needs-review" }
+                : []
         ]);
+    }
+
+    private static IReadOnlyList<string> TagsForSummary(EvidenceGraphVault graph, string kind)
+    {
+        return DistinctSorted([
+            $"tracemap/kind/{Slug(kind)}",
+            $"tracemap/claim/{Slug(graph.Classification)}",
+            .. graph.Settings.Partial ? new[] { "tracemap/coverage/partial", "tracemap/review/needs-review" } : []
+        ]);
+    }
+
+    private static IReadOnlyList<string> TagsForFolderIndex(EvidenceGraphVault graph, string folder, IEnumerable<VaultGraphNode> nodes)
+    {
+        var nodeArray = nodes.ToArray();
+        return DistinctSorted([
+            $"tracemap/kind/{Slug(folder)}",
+            $"tracemap/claim/{Slug(graph.Classification)}",
+            .. nodeArray.SelectMany(TagsForNode),
+            .. graph.Settings.Partial ? new[] { "tracemap/coverage/partial" } : []
+        ]);
+    }
+
+    private static IReadOnlyList<string> AliasesForNode(VaultGraphNode node)
+    {
+        var values = new List<(int Category, string Value)>();
+        AddAlias(values, 0, node.DisplayName);
+        AddAlias(values, 1, ShortStableId(node.Id));
+        foreach (var value in node.RuleIds)
+        {
+            AddAlias(values, 2, value);
+        }
+
+        foreach (var value in node.EvidenceTiers)
+        {
+            AddAlias(values, 3, value);
+        }
+
+        foreach (var value in node.Coverage)
+        {
+            AddAlias(values, 4, value);
+        }
+
+        AddAlias(values, 5, node.SurfaceKind);
+        AddAlias(values, 6, node.Kind);
+        return values
+            .GroupBy(value => value.Value, StringComparer.Ordinal)
+            .Select(group => group.OrderBy(value => value.Category).First())
+            .OrderBy(value => value.Category)
+            .ThenBy(value => value.Value, StringComparer.Ordinal)
+            .Select(value => value.Value)
+            .ToArray();
+    }
+
+    private static void AddAlias(List<(int Category, string Value)> values, int category, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            values.Add((category, value.Trim()));
+        }
+    }
+
+    private static string ShortStableId(string id)
+    {
+        var index = id.LastIndexOf(':');
+        return index >= 0 && index < id.Length - 1 ? id[(index + 1)..] : id;
+    }
+
+    private static bool IsWeakCoverageLabel(string value)
+    {
+        return value.Contains("reduced", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("partial", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("unsupported", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("unknown", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("failed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsReviewClassification(string value)
+    {
+        return value.Contains("review", StringComparison.OrdinalIgnoreCase)
+            || IsWeakCoverageLabel(value);
+    }
+
+    private static IReadOnlyList<(string Title, string Path)> StartLinks(EvidenceGraphVault graph)
+    {
+        var links = new List<(string Title, string Path)>();
+        foreach (var (kind, folder, title) in new[]
+                 {
+                     ("endpoint", "endpoints", "Endpoints"),
+                     ("surface", "surfaces", "Dependency surfaces"),
+                     ("package", "packages", "Packages"),
+                     ("gap", "gaps", "Gaps"),
+                     ("limitation", "limitations", "Limitations"),
+                     ("rule", "rules", "Rules")
+                 })
+        {
+            if (graph.Nodes.Any(node => node.Kind == kind))
+            {
+                links.Add((title, $"{folder}/index.md"));
+            }
+        }
+
+        if (links.Count == 0)
+        {
+            links.Add(("All evidence", "index.md"));
+        }
+
+        return links;
+    }
+
+    private static string FolderTitle(string folder)
+    {
+        return folder switch
+        {
+            "endpoints" => "Endpoints",
+            "surfaces" => "Dependency Surfaces",
+            "packages" => "Packages",
+            "symbols" => "Symbols",
+            "rules" => "Rules",
+            "gaps" => "Gaps",
+            "limitations" => "Limitations",
+            "reports" => "Reports",
+            "sources" => "Sources",
+            _ => "Evidence Nodes"
+        };
+    }
+
+    private static string NavigationCategoryForNode(VaultGraphNode node)
+    {
+        return node.Kind switch
+        {
+            "source" => "source",
+            "endpoint" => "endpoint",
+            "surface" => "surface",
+            "package" => "package",
+            "symbol" => "symbol",
+            "rule" => "rule",
+            "gap" => "gap",
+            "limitation" => "limitation",
+            "report" => "report",
+            _ => "source"
+        };
+    }
+
+    private static string NavigationCategoryForEdge(VaultGraphEdge edge)
+    {
+        return edge.Kind switch
+        {
+            "route-flow-evidence" => "route-flow-evidence",
+            "static-path-evidence" => "static-path-evidence",
+            "surface-evidence" => "surface-evidence",
+            "symbol-evidence" => "symbol-evidence",
+            "report-evidence" => "report-evidence",
+            "links-to-rule" => "links-to-rule",
+            "has-limitation" => "has-limitation",
+            "has-gap" => "has-gap",
+            "supports" => "supports",
+            _ => "describes"
+        };
     }
 
     private static string DirectoryForNodeKind(string kind)
     {
         return kind switch
         {
+            "source" => "sources",
             "endpoint" => "endpoints",
+            "route" => "routes",
             "surface" => "surfaces",
             "package" => "packages",
             "symbol" => "symbols",
             "rule" => "rules",
             "gap" => "gaps",
             "limitation" => "limitations",
+            "report" => "reports",
             _ => "nodes"
         };
     }
