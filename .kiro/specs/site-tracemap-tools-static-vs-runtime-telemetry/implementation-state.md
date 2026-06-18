@@ -1,22 +1,23 @@
 # Site TraceMap Tools Static Vs Runtime Telemetry Implementation State
 
-Status: not-started
+Status: completed
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
-Spec branch: `codex/spec-site-static-vs-runtime-telemetry`
+Implementation branch: `codex/impl-site-static-vs-runtime-telemetry`
 Base: `origin/dev`
 
 ## Scope
 
-This branch creates the spec packet for a future public-safe site page or
-section explaining how TraceMap's deterministic static evidence complements,
-but does not replace, runtime observability tools such as logs, traces, APM,
-telemetry, incident dashboards, and production metrics.
+This implementation adds a public-safe concept route explaining how TraceMap's
+deterministic static evidence complements, but does not replace, runtime
+observability tools such as logs, traces, APM, telemetry, incident dashboards,
+and production metrics.
 
-This is spec creation only. It does not implement site code, scanner code,
+It changes site source, route metadata, discovery metadata, focused site
+validation, tests, and spec bookkeeping only. It does not change scanner code,
 reducer behavior, runtime telemetry ingestion, vendor integrations, demo
 artifacts, or generated site output.
 
@@ -33,6 +34,21 @@ claim.
 
 ## Scope Decisions
 
+- Selected placement: standalone `/static-vs-runtime/` concept route.
+- The route is added to sitemap and discovery metadata with
+  `publicClaimLevel: concept`, `sourceType: site-page`, `hintCategory:
+  use-case`, and `preferredProofPath: /proof-paths/`.
+- The route is intentionally not added to primary navigation. Discovery comes
+  through sitemap, LLM/bot-oriented discovery metadata, `/use-cases/`, and
+  adjacent concept pages.
+- Rejected alternate: adding a section to `/limitations/`. That would keep the
+  boundary near existing limitations, but it would bury the comparison and make
+  stable section-level discovery weaker than a standalone concept route.
+- Rejected alternate: adding a section to `/incident-call/` or
+  `/static-triage/`. Those pages are incident-adjacent and narrower; this spec
+  needs a broader static-versus-runtime explanation for review and handoff.
+- Rejected alternate: primary navigation placement. The page is concept-level
+  orientation, not a top-level shipped capability.
 - The spec recommends a future standalone route such as `/static-vs-runtime/`
   or a bounded section on an existing use-case or limitations page, with the
   final placement decided during implementation.
@@ -50,7 +66,11 @@ claim.
 - No `design.md` is included. Design-level guidance is intentionally folded
   into Requirement 5, which defines page structure, and Requirement 6, which
   defines metadata and discovery behavior.
-- Future implementation tasks remain unchecked because this branch is spec-only.
+- Checked route targets at implementation time: `/docs/`, `/validation/`,
+  `/limitations/`, `/outputs/`, `/proof-paths/`, `/capabilities/`, `/demo/`,
+  `/demo/result/`, `/static-triage/`, `/incident-call/`, and
+  `/use-cases/incident-review/` exist in the site source and sitemap metadata.
+- Unavailable or moved route targets: none found during implementation.
 
 ## Spec Review Commands And Results
 
@@ -127,7 +147,11 @@ Medium or higher findings must be patched and re-reviewed where feasible before
 ## Validation
 
 - `git diff --check` passed.
+- `npm test` from `site/` passed: 173 tests.
+- `npm run validate` from `site/` passed: 42 HTML files, 1259 internal references, 41 sitemap URLs, and 1 legacy story safety target.
+- `npm run build` from `site/` passed.
 - `./scripts/check-private-paths.sh` passed: `Private path guard passed.`
+- Browser sanity passed with the terminal Playwright wrapper after the in-app browser blocked local navigation. Desktop width had no document overflow, six required anchors, and the comparison table fit without horizontal document scroll. Mobile width had no document overflow and the comparison table used its own horizontal scroll wrapper. Console errors: none.
 
 ## Oddities
 
@@ -140,9 +164,8 @@ Medium or higher findings must be patched and re-reviewed where feasible before
 
 ## Follow-Ups
 
-- Future implementation should resolve whether the content belongs at a new
-  route or as a section on an existing use-case, documentation, or limitations
-  surface.
-- Future implementation should add focused site validation for concept-level
-  marker text, static-versus-runtime distinction, forbidden operational claims,
-  forbidden AI/LLM claims, and forbidden private/raw material.
+- Placement resolved in this implementation as standalone `/static-vs-runtime/`.
+- Focused validation was added and wired into the site validation workflow.
+- PR-loop review found two Gemini validator-hardening comments; both were patched with safer route metadata text handling and regression tests.
+- PR-loop review then found two Qodo comments; both were patched by removing visible `impacted` wording from the public page and scanning decoded HTML/metadata for operational positioning.
+- Current-head Codex review found metadata overclaim and affirmative AI/LLM validation gaps; patched by scanning decoded HTML/metadata for proof, replacement, and AI/LLM wording with regression coverage.
