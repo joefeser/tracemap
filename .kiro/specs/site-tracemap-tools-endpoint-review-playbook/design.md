@@ -119,8 +119,9 @@ Future implementation should add:
 
 - `site/src/_site/pages.json` entry for `/use-cases/endpoint-review/`.
 - `site/src/_site/discovery.json` entry with
-  `publicClaimLevel: "concept"`, `sourceType: "site-page"`,
-  `hintCategory: "use-case"`, and a public `preferredProofPath`.
+  `path: "/use-cases/endpoint-review/"`, `publicClaimLevel: "concept"`,
+  `sourceType: "site-page"`, `hintCategory: "use-case"`, non-empty `summary`,
+  `limitations`, and `nonClaims`, and a public `preferredProofPath`.
 - Page metadata and social metadata that describe a concept-level endpoint
   review playbook without runtime, production, release, operational,
   endpoint-performance, or AI/LLM claims.

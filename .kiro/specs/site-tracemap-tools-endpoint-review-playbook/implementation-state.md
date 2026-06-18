@@ -123,6 +123,11 @@ Spec phase validation results:
   owned spec folder.
 - Final validation was rerun after the readiness update and recorded before
   commit.
+- PR review-loop patch validation on 2026-06-18:
+  - `git diff --check` passed after patching review-thread findings.
+  - `./scripts/check-private-paths.sh` passed after patching review-thread
+    findings.
+  - `git diff --cached --check` was rerun after staging the PR-loop patch.
 
 Future implementation validation:
 
@@ -152,6 +157,10 @@ Future implementation validation:
 - Added a design note explaining that the dedicated validator is intentionally
   stricter than the closest `/use-cases/incident-review/` sibling, which relies
   on aggregate validation.
+- PR review loop found unresolved review-thread findings requesting explicit
+  discovery `path` coverage in `requirements.md`, `design.md`, and `tasks.md`,
+  plus clearer raw-content validation wording that preserves artifact-family
+  carve-outs. Patched those findings in the spec files.
 
 ## Oddities
 

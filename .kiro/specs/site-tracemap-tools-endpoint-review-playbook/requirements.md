@@ -232,7 +232,8 @@ Acceptance criteria:
 - Add `/use-cases/endpoint-review/` to `site/src/_site/pages.json` with `path`,
   `changefreq`, and `priority`.
 - Add `/use-cases/endpoint-review/` to `site/src/_site/discovery.json` with
-  `sourceType: "site-page"`, `hintCategory: "use-case"`,
+  `path: "/use-cases/endpoint-review/"`, `sourceType: "site-page"`,
+  `hintCategory: "use-case"`,
   `publicClaimLevel: "concept"`, non-empty `title`, non-empty `summary`,
   non-empty `limitations`, non-empty `nonClaims`, and a
   `preferredProofPath` that resolves to an existing public route such as
@@ -307,12 +308,16 @@ Acceptance criteria:
   carve-out. It rejects them in discovery `title`, `summary`, `limitations`, and
   `preferredProofPath`. In rendered page copy, artifact-family names remain
   allowed only in sanctioned artifact-boundary or red-flag sections.
-- Validation rejects pattern-detectable raw or private content everywhere.
+- Validation rejects pattern-detectable raw or private content everywhere while
+  preserving the sanctioned artifact-family carve-outs above. Raw generated
+  artifact contents, local output roots, private paths, source snippets, SQL
+  text, connection strings, credentials, and remotes are never allowed.
 - Validation checks at minimum for `.ndjson` file references, `.sqlite` file
   references, `analyzer.log`, `/Users/`, `/home/`, `C:\Users\`, `file://`,
   `localhost`, `127.0.0.1`, raw repository remote patterns, connection-string
   fragments, and generated scan-directory references in rendered page copy,
-  metadata, and discovery output.
+  metadata, and discovery output, applying the artifact-family carve-outs for
+  sanctioned page sections and discovery `nonClaims`.
 - Delegate non-generic checks for private sample names and raw source snippets
   to `./scripts/check-private-paths.sh`, authoring review, or explicit
   deny-lists rather than attempting open-ended detection.

@@ -102,9 +102,10 @@ complete.
   `path`, `changefreq`, and `priority`.
 - [ ] Verify generated `sitemap.xml` includes `/use-cases/endpoint-review/`.
 - [ ] Add `/use-cases/endpoint-review/` to `site/src/_site/discovery.json` with
-  `sourceType: "site-page"`, `hintCategory: "use-case"`,
-  `publicClaimLevel: "concept"`, non-empty `title`, `summary`, `limitations`,
-  and `nonClaims`, plus a public `preferredProofPath`.
+  `path: "/use-cases/endpoint-review/"`, `sourceType: "site-page"`,
+  `hintCategory: "use-case"`, `publicClaimLevel: "concept"`, non-empty
+  `title`, `summary`, `limitations`, and `nonClaims`, plus a public
+  `preferredProofPath`.
 - [ ] Keep discovery `title` and `summary` free of artifact-family names,
   AI/LLM positioning, private tokens, runtime claims, production claims,
   release claims, and endpoint performance claims.
@@ -155,7 +156,8 @@ complete.
 - [ ] Validate at minimum `.ndjson` file references, `.sqlite` file references,
   `analyzer.log`, `/Users/`, `/home/`, `C:\Users\`, `file://`, `localhost`,
   `127.0.0.1`, raw repository remote patterns, connection-string fragments,
-  and generated scan-directory references.
+  and generated scan-directory references, applying the artifact-family
+  carve-outs for sanctioned page sections and discovery `nonClaims`.
 - [ ] Delegate non-generic checks for private sample names and raw source
   snippets to `./scripts/check-private-paths.sh`, authoring review, or explicit
   deny-lists.
