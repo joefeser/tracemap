@@ -1,25 +1,44 @@
 # Vault Export Hidden Safety Implementation State
 
-Status: spec-drafted
-Branch: codex/spec-vault-export-hidden-safety
+Status: review-blocked
+Branch: codex/implement-vault-export-hidden-safety
 Issue: #171
 Public claim level: hidden
 
 ## Scope Decisions
 
-- This branch is spec-only. It does not implement product code, tests, docs, or
-  rule catalog changes outside `.kiro/specs/vault-export-hidden-safety/`.
-- The spec treats this as a corrective follow-up to the existing
-  `evidence-graph-vault-export` work.
+- This branch implements the hidden/local vault export safety fix for issue
+  #171. Site files and site specs remain out of scope.
 - Public-safe and demo-safe validation remain strict. Hidden/local exports get
-  deterministic context-aware handling only for safe contexts.
-- Hard-fail categories remain hard failures in every mode: raw secrets,
+  deterministic context-aware handling for safe repo-relative evidence
+  locations that contain sensitive words.
+- Hard-fail categories remain hard failures in every mode: raw credentials,
   connection strings, local absolute paths, raw remotes, raw URLs, raw SQL,
   source snippets, captured credentials, private sample identifiers, and
   production data.
+- The exporter now renders evidence locations in Markdown notes and validates
+  generated Markdown plus `graph.json` through a claim-level/context-aware
+  classifier before checking output collisions or writing files.
+- The new hidden safe-context limitation reuses the `vault-export.*.v1`
+  namespace and is documented in `rules/rule-catalog.yml`.
 - No LLMs, embeddings, vector databases, browser execution, runtime proof, or
   prompt classification are allowed.
 - No site files or site specs are in scope.
+
+## Implementation Notes
+
+- Product code changed in `src/dotnet/TraceMap.Reporting/VaultExport.cs`.
+- Focused tests changed in `src/dotnet/tests/TraceMap.Tests/VaultExportTests.cs`.
+- Documentation changed in `docs/VAULT_EXPORT.md`.
+- Rule catalog changed in `rules/rule-catalog.yml`.
+- Hidden safe-context values are allowed only for normalized safe
+  repo-relative evidence-location file paths. Public/demo output continues to
+  reject the same sensitive-word values.
+- Raw unsafe categories reject with sanitized `UnsafeValueRejected` diagnostics
+  that include category and output location only.
+- Combined-index fixtures may sanitize some absolute source path forms before
+  vault export sees them; focused vault tests cover the hard-fail variants that
+  reach the exporter through checked-in synthetic evidence.
 
 ## Review State
 
@@ -80,25 +99,45 @@ Review outcomes:
 
 Patch Medium+ actionable review findings, with at most two re-review cycles.
 
-## Validation Plan For Spec PR
+Implementation review:
 
-Spec-only validation:
+- Sonnet implementation review completed with full coverage. It reported broad
+  spec-completeness blockers around full classifier outcomes, stable-ID
+  component omission, display-name transforms, closed-vocabulary prevalidation,
+  and missing tests for omitted-ID/display-name edge cases.
+- Patched in this branch after review: safe diagnostic category vocabulary,
+  closed-vocabulary prevalidation, explicit hidden-safe hash/display bounds,
+  bounded display-name normalization with hashed fallback labels, and
+  evidence-location safety gap key hashing using the documented 32-hex
+  truncation length.
+- Remaining review scope not yet implemented in this branch: node/edge omission
+  for rejected stable-ID components and partial marking for safety omissions
+  that remove graph elements. This branch does not currently omit graph
+  elements for the issue #171 safe evidence-location path; it preserves
+  validated local navigation evidence and records a hidden safe-context
+  limitation gap.
+- Sonnet implementation re-review completed with reduced coverage because Kiro
+  reported denied shell access. It still returned `NOT READY TO MERGE` with
+  blocking findings for complete classifier outcomes, display-name context
+  transforms, stable-ID component validation/omission, fuller context
+  resolution, and a rule-reuse decision. No second re-review cycle has been run.
+
+## Validation State
+
+Completed:
 
 ```bash
-git diff --check
+dotnet test src/dotnet/TraceMap.sln --filter VaultExport
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
 ./scripts/check-private-paths.sh
+git diff --check
 ```
 
-If a spec validation script is added or discovered, run it before commit.
+## Follow-Ups
 
-Product validation such as `dotnet test` is deferred because this branch does
-not change product code.
-
-## Follow-Ups For Implementation PR
-
-- Update `docs/VAULT_EXPORT.md`.
-- Update `rules/rule-catalog.yml` for any new `vault-export.*.v1` rule IDs.
-- Add focused vault export tests for hidden/local safe secret-like names,
-  public/demo strictness, raw secret rejection, local absolute path rejection,
-  determinism, and generated file collisions.
-- Run focused and broader validation as described in `tasks.md`.
+- Consider a later shared safety helper across vault export and evidence-pack
+  validation if another exporter needs the same context model.
+- Optional future work may transform more source-derived display-name contexts
+  to category/hash fields, but this branch keeps the issue #171 fix scoped to
+  evidence locations and generated-output validation.

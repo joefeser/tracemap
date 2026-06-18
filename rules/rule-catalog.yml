@@ -273,6 +273,17 @@ rules:
       - Redaction validation is conservative and may require category labels or reviewed claim metadata.
       - Rejection diagnostics include category and location only; they must not echo the unsafe value.
 
+  - id: vault-export.gap.hidden-safe-context-omitted.v1
+    name: Vault export hidden safe-context limitation
+    description: Records when hidden/local vault output keeps a bounded safe-context value that contains a sensitive word only for local navigation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - hidden safe-context limitation
+    limitations:
+      - Hidden safe-context handling preserves local navigation evidence only; it does not prove the value is public-safe or demo-safe.
+      - Public-safe and demo-safe vault exports still reject or filter the same sensitive-word values unless separately reviewed and promoted.
+      - Gap diagnostics use categories and stable IDs only; they must not echo raw secrets, local absolute paths, remotes, URLs, SQL, snippets, or credentials.
+
   - id: public.demo.summary.v1
     name: Public demo summary section
     description: Records public demo workflow section status, coverage labels, artifact references, and deterministic counts produced by checked-in validation scripts.
