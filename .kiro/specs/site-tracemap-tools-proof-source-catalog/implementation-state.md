@@ -94,6 +94,17 @@ Finding: hidden aggregate validation built `hiddenText` from `limitation` and
 Fix: patched `hiddenText` to use empty-string fallbacks for missing
 `limitation` and `nonClaims`, then reran validation.
 
+Second PR loop returned `actionable_findings` with `ACTIONABLE_BOT_FINDINGS`
+from Qodo.
+
+Finding: `validateProofPath()` checked for an anchor anywhere in the row, so a
+route-cell link could satisfy proof-path validation even when the `proofPath`
+cell was plain text.
+
+Fix: scoped proof-path link validation to the `proofPath` cell HTML and added a
+regression test that keeps the route cell linked while replacing only the
+proof-path cell with non-link text.
+
 ## Oddities
 
 - Local preview port `4173` was already occupied, so browser sanity used an

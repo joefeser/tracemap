@@ -80,6 +80,20 @@ test("validateProofSourceCatalogDist rejects hidden proof-path prose", async (t)
   assert.match(errors.join("\n"), /expected proofPath hidden/);
 });
 
+test("validateProofSourceCatalogDist rejects non-link proofPath cells even when route cell links", async (t) => {
+  const root = await createManagedProofSourceCatalogDistFixture(t, {
+    catalogHtml: catalogPage().replace(
+      '<td data-field="proofPath"><a href="/docs/">/docs/</a></td>',
+      '<td data-field="proofPath">See docs</td>'
+    )
+  });
+  const errors = [];
+
+  await validateProofSourceCatalogDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /proofPath must be a public-safe link or allowed sentinel/);
+});
+
 test("validateProofSourceCatalogDist rejects forbidden affirmative wording", async (t) => {
   const root = await createManagedProofSourceCatalogDistFixture(t, {
     catalogHtml: catalogPage().replace(
@@ -256,7 +270,7 @@ function catalogPage() {
 
 function catalogRow(fields) {
   return `<tr id="${fields.id}" data-proof-source-row>
-    <td data-field="route">${fields.route}</td>
+    <td data-field="route">${fields.route.startsWith("/") ? `<a href="${fields.route}">${fields.route}</a>` : fields.route}</td>
     <td data-field="claimLabel">${fields.claimLabel}</td>
     <td data-field="allowedPublicWording">${fields.allowedPublicWording}</td>
     <td data-field="publicClaimLevel"><code>${fields.publicClaimLevel}</code></td>
