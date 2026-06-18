@@ -2,15 +2,31 @@
 
 ## Branch
 
-`codex/spec-evidence-export-usability-polish`
+`codex/implement-evidence-export-usability-polish`
 
 ## Scope
 
-Spec-only branch for issue 189. The branch defines requirements, design, tasks,
-implementation notes, and review prompts for vault export navigation polish and
-RAG/evidence-doc usability polish.
+Implementation branch for issue 189. This PR implements the first coherent
+delivery slice for vault export navigation polish and docs-export evidence
+record ergonomics while preserving deterministic evidence boundaries.
 
-This branch must not implement product code.
+Implemented in this branch:
+
+- Added generated `Start Here.md` for vault exports while preserving generated
+  `README.md` and `index.md`.
+- Added deterministic vault folder `index.md` pages for folders that contain
+  generated notes.
+- Added bounded aliases and closed `tracemap/...` tags to vault Markdown
+  frontmatter.
+- Added additive graph `navigationCategory` fields for vault graph nodes and
+  edges without changing canonical evidence IDs or kinds.
+- Grouped dependency-surface folder indexes by closed `surfaceKind`.
+- Added additive docs-export `questionFamilies`, `sectionTitle`, and
+  structured `claim` fields to chunk JSONL records.
+- Rendered docs-export Markdown with claim/citation-first structured sections.
+- Added `docs-export.gap.unsupported-question-family.v1` to the rule catalog
+  and documented its boundary with canonical unsupported families.
+- Updated vault/docs export documentation and focused tests.
 
 ## Source Context
 
@@ -57,13 +73,13 @@ Initial spec files drafted:
 Planned Kiro review commands:
 
 ```bash
-node scripts/kiro-review.mjs --phase evidence-export-usability-polish --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000
-node scripts/kiro-review.mjs --phase evidence-export-usability-polish --kind spec --model claude-sonnet-4.5 --fresh --timeout-ms 600000
+node scripts/kiro-review.mjs --phase evidence-export-usability-polish --kind implementation --model claude-sonnet-4.5 --fresh --timeout-ms 600000 --save-review-text
 ```
 
 Completed Kiro review commands:
 
 ```bash
+node scripts/kiro-review.mjs --phase evidence-export-usability-polish --kind implementation --model claude-sonnet-4.5 --fresh --timeout-ms 600000 --save-review-text
 node scripts/kiro-review.mjs --phase evidence-export-usability-polish --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
 node scripts/kiro-review.mjs --phase evidence-export-usability-polish --kind spec --model claude-sonnet-4.5 --fresh --timeout-ms 600000 --save-review-text
 node scripts/kiro-review.mjs --phase evidence-export-usability-polish --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
@@ -72,6 +88,19 @@ node scripts/kiro-review.mjs --phase evidence-export-usability-polish --kind re-
 
 Review results:
 
+- Sonnet implementation review completed with reduced coverage because Kiro
+  reported denied tool access. It identified additive graph navigation
+  categories, surface-kind grouping, alias category ordering, hidden/local
+  examples, validation-state updates, route-specific indexes, hidden/local
+  title redaction, unsupported question-family request gaps, and review graph
+  mode as issues relative to the full spec.
+- Patched in this PR after implementation review: graph `navigationCategory`
+  fields, surface-kind grouping, alias category ordering, concrete hidden/local
+  examples, test coverage, and validation-state updates.
+- Deferred after implementation review as follow-up scope: dedicated route
+  indexes, a CLI/request surface for unsupported additive question-family gaps,
+  additional title-kind redaction records beyond existing safety behavior, and
+  deterministic review graph mode.
 - Initial Opus spec review completed with full coverage. It found no blocking
   public-safety issues and requested clarifications around vault snapshot-mode
   inputs, docs snapshot-change inputs, `Start Here` link encoding, alias source
@@ -103,20 +132,27 @@ Review results:
 Completed:
 
 ```bash
+dotnet test src/dotnet/TraceMap.sln --filter "VaultExport|EvidenceDocs"
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
 ./scripts/check-private-paths.sh
 git diff --check
 ```
 
+- `dotnet test src/dotnet/TraceMap.sln --filter "VaultExport|EvidenceDocs"`:
+  passed, 40 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed, 0 warnings, 0 errors.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 439 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
-- After the PR review-loop patch, reran `./scripts/check-private-paths.sh`:
-  passed.
-- After the PR review-loop patch, reran `git diff --check`: passed.
-
-Implementation validation such as `dotnet build` and `dotnet test` is not
-required for this spec-only PR unless review finds a repository-specific reason
-to run it.
 
 ## Follow-Up Items
 
-- Keep the final diff limited to the new spec folder.
+- Add deterministic `full|review` vault graph mode or explicitly defer it with
+  a rule-backed limitation.
+- Distinguish route, route-flow, static path, and route gap evidence in
+  dedicated route indexes.
+- Add a CLI/request surface for additive docs-export question-family gaps when
+  a question view is explicitly requested but unsupported by input schema.
+- Extend hidden/local redaction records for any future title/alias value that
+  needs new redaction, hash, category-only, or omission behavior.

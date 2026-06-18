@@ -47,14 +47,46 @@ chunks/<family>/<chunk-id>.md
 ```
 
 Each JSONL line is one chunk object with `schemaVersion`, `chunkId`,
-`chunkFamily`, `chunkType`, `claimLevel`, `sortKey`, `bodyMarkdown`,
-citations, source refs, supporting IDs, rule IDs, evidence tiers, coverage
-labels, gaps, limitations, redactions, and links.
+`chunkFamily`, `questionFamilies`, `chunkType`, `claimLevel`, `title`,
+`sectionTitle`, `sortKey`, structured `claim`, `bodyMarkdown`, citations,
+source refs, supporting IDs, rule IDs, evidence tiers, coverage labels, gaps,
+limitations, redactions, and links. `bodyMarkdown` is rendered from the same
+structured evidence fields and does not become source evidence by itself.
 
 Markdown files start with generated frontmatter containing the schema,
 generator, content hash, chunk or summary identity, claim level, and source
 labels. The manifest content hash is computed with its own `contentHash` field
 blanked.
+
+## Question Families
+
+`questionFamilies` is an additive, deterministic view over canonical
+`chunkFamily` records. A chunk can belong to more than one question family when
+a primary evidence question and a cross-cutting review view both apply. Current
+question-family values are:
+
+- `endpoint-question`
+- `data-surface-question`
+- `package-question`
+- `snapshot-change-question`
+- `weak-evidence-question`
+- `gap-question`
+- `limitation-question`
+
+Snapshot-change question membership is emitted only for compatible
+release-review evidence. Requested canonical CLI families that are unavailable
+continue to use `docs-export.gap.unsupported-family.v1`. Additive
+question-family views that cannot be supported by an input schema use
+`docs-export.gap.unsupported-question-family.v1`.
+
+## Claims And Citations
+
+Each chunk carries a structured `claim` before narrative Markdown. Claim kinds
+are deterministic labels such as `static-evidence`, `weak-static-evidence`,
+`gap-statement`, and `limitation-statement`. Claims include claim level, rule
+IDs, evidence tiers, coverage labels, supporting IDs, and limitation
+references. Lower-tier, reduced-coverage, gap, or review-only evidence remains
+labeled for review and is not promoted by docs-export.
 
 ## Stable IDs
 
@@ -92,6 +124,19 @@ private identifiers, production data, and unsafe Markdown.
 
 Diagnostics use category and output-relative location only. They do not echo
 the unsafe value.
+
+### Hidden/Local Examples
+
+Hidden/local docs-export output may stay useful for local ingestion, but it
+does not relax hard-fail safety categories and it does not make an output
+public/demo safe.
+
+| Category | Hidden/local outcome | Public/demo outcome |
+| --- | --- | --- |
+| Safe source label or repo-relative span such as `src/Api/Controller.cs:10-12` | Render as citation metadata when provenance is stable. | Render only after claim-level review permits the source. |
+| Secret-like safe-context display component | Use a hash, category label, or omission record when supported by the exporter. | Reject or filter under strict validation. |
+| Unsupported or missing citation provenance | Emit a rule-backed gap such as `docs-export.gap.missing-provenance.v1`. | Emit the same gap if the remaining output is claim-level safe. |
+| Raw SQL, config value, credential, token, raw URL, raw remote, local absolute path, source snippet, or analyzer log | Hard fail or omit only when the value is not required for evidence identity; diagnostics stay sanitized. | Hard fail or omit under the same sanitized safety gate. |
 
 ## Collision Behavior
 

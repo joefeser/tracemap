@@ -54,6 +54,7 @@ do not depend on wall-clock time.
 The output directory may contain:
 
 - `graph.json`
+- `Start Here.md`
 - `README.md`
 - `index.md`
 - `sources/`
@@ -68,8 +69,31 @@ The output directory may contain:
 
 Generated Markdown files start with YAML frontmatter containing
 `tracemap_generated`, schema, generator, content hash, kind, claim level, and
-bounded metadata. `graph.json` includes a deterministic `contentHash` computed
-with the hash field empty.
+bounded metadata. `Start Here.md` is the human entry point and summarizes input
+types, visible source count, non-gap node count, edge count, gap count,
+limitation count, coverage labels, omitted hidden evidence counts, and partial
+status. `README.md` remains generated and links to `Start Here.md`; `index.md`
+remains the compact all-evidence index.
+
+Generated folders with note content also receive deterministic `index.md`
+pages. Folder indexes use safe display titles, rule IDs, evidence tiers,
+coverage labels, and relative links. They do not infer runtime relationships or
+absence. `graph.json` includes a deterministic `contentHash` computed with the
+hash field empty.
+
+Frontmatter may include bounded `aliases` and closed-vocabulary tags. Tags are
+lowercase, sorted, and prefixed by purpose, for example
+`tracemap/claim/public-safe`, `tracemap/tier/tier2structural`,
+`tracemap/coverage/partial`, `tracemap/kind/endpoint`,
+`tracemap/surface/sql-query`, and `tracemap/review/needs-review`. Aliases are
+navigation aids only; stable IDs, hashes, rule IDs, tiers, coverage, and
+limitations remain the evidence join keys.
+
+`graph.json` preserves canonical node and edge `kind` values and adds
+`navigationCategory` as a closed presentation vocabulary for browsing. These
+categories describe static evidence relationships only and do not imply runtime
+execution, reachability, ownership, vulnerability, deployment, traffic, or
+release approval.
 
 Existing generated files are replaced only when their sentinels and hashes are
 self-consistent. Stale generated files fail unless `--force` is supplied.
@@ -112,6 +136,19 @@ raw remotes, raw URLs, raw SQL, source snippets, analyzer diagnostics, stack
 traces, private sample identifiers, and production data. `--force` only permits
 replacement of stale generated files after the new content has passed these
 safety checks.
+
+### Hidden/Local Examples
+
+Hidden/local output is still private local output. It may preserve only bounded
+safe-context values and records a gap or limitation when redaction affects
+interpretation.
+
+| Category | Hidden/local outcome | Public/demo outcome |
+| --- | --- | --- |
+| Normalized repo-relative evidence path such as `src/Api/Controller.cs` | Render as a local navigation value. | Render only after claim-level review permits the source. |
+| Secret-like but safe-context display component such as `TokenReview` | Use a context hash or category label in stable identity paths. | Reject or omit unless already filtered by claim level. |
+| Unsafe symbol, route, or title component that can be omitted without losing required identity | Omit and emit a rule-backed gap. | Reject or omit under strict public/demo validation. |
+| Raw credential, connection string, SQL text, absolute path, raw remote, or raw URL | Hard fail with a sanitized category diagnostic. | Hard fail with the same sanitized category diagnostic. |
 
 Obsidian compatibility is plain Markdown compatibility: deterministic relative
 links, stable note names, and safe tags. TraceMap does not require Obsidian and

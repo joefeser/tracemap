@@ -40,20 +40,34 @@ public sealed class VaultExportTests
         Assert.Contains(first.Graph.Nodes, node => node.Kind == "endpoint");
         Assert.Contains(first.Graph.Nodes, node => node.Kind == "surface" && node.SurfaceKind == "sql-query");
         Assert.Contains(first.Graph.Edges, edge => edge.Kind == "surface-evidence");
+        Assert.Contains(first.Graph.Nodes, node => node.Kind == "endpoint" && node.NavigationCategory == "endpoint");
+        Assert.Contains(first.Graph.Edges, edge => edge.Kind == "surface-evidence" && edge.NavigationCategory == "surface-evidence");
         Assert.Contains(first.Graph.Inputs, input => input.SourceProvenance is { Count: > 0 });
         Assert.Contains(first.Graph.Nodes, node => node.Kind == "source" && !string.IsNullOrWhiteSpace(node.ScannerVersion) && !string.IsNullOrWhiteSpace(node.RepositoryIdentityHash));
         Assert.Contains(first.Graph.Nodes, node => node.Kind is "endpoint" or "surface" && node.EvidenceLocations is { Count: > 0 });
         Assert.Contains(first.Graph.Edges, edge => edge.EvidenceLocations is { Count: > 0 });
         Assert.True(VaultExporter.IsSelfConsistentGraphJson(await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json"))));
+        Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "Start Here.md"))));
         Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "index.md"))));
+        Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "endpoints", "index.md"))));
         Assert.Equal(
             await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json")),
             await File.ReadAllTextAsync(Path.Combine(secondOut, "graph.json")));
         Assert.Equal(
             await File.ReadAllTextAsync(Path.Combine(firstOut, "index.md")),
             await File.ReadAllTextAsync(Path.Combine(secondOut, "index.md")));
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstOut, "Start Here.md")),
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "Start Here.md")));
 
         var allText = string.Join('\n', Directory.EnumerateFiles(firstOut, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.Contains("[Start Here](Start%20Here.md)", allText);
+        Assert.Contains("## Review Queues", allText);
+        Assert.Contains("aliases:", allText);
+        Assert.Contains("surface-kind", await File.ReadAllTextAsync(Path.Combine(firstOut, "surfaces", "index.md")));
+        Assert.Contains("tracemap/claim/public-safe", allText);
+        Assert.Contains("tracemap/kind/endpoint", allText);
+        Assert.Contains("tracemap/tier/tier2structural", allText);
         Assert.Contains("sourceProvenance", allText);
         Assert.Contains("evidenceLocations", allText);
         Assert.DoesNotContain(temp.Path, allText, StringComparison.OrdinalIgnoreCase);
