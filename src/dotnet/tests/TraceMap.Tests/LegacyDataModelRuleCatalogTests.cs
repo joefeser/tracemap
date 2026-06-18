@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using TraceMap.Core;
 
 namespace TraceMap.Tests;
@@ -12,6 +13,14 @@ public sealed class LegacyDataModelRuleCatalogTests
         RuleIds.LegacyDataOrmUnsupported,
         RuleIds.LegacyDataModelGeneratedLink,
         RuleIds.LegacyDataModelSurface
+    ];
+
+    private static readonly string[] EvidenceTiers =
+    [
+        "Tier1Semantic",
+        "Tier2Structural",
+        "Tier3SyntaxOrTextual",
+        "Tier4Unknown"
     ];
 
     [Fact]
@@ -35,8 +44,7 @@ public sealed class LegacyDataModelRuleCatalogTests
             var block = RuleBlock(catalog, ruleId);
             Assert.Contains("limitations:", block, StringComparison.Ordinal);
             Assert.Contains("AnalysisGap", block, StringComparison.Ordinal);
-            Assert.Contains("static", block, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("prove", block, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(EvidenceTier(block), EvidenceTiers);
         }
 
         Assert.Contains(FactTypes.LegacyDataMetadataDeclared, RuleBlock(catalog, RuleIds.LegacyDataOrmNHibernate), StringComparison.Ordinal);
@@ -58,10 +66,21 @@ public sealed class LegacyDataModelRuleCatalogTests
 
     private static string RuleBlock(string catalog, string ruleId)
     {
-        var start = catalog.IndexOf($"  - id: {ruleId}", StringComparison.Ordinal);
-        Assert.True(start >= 0, $"Missing rule catalog entry for {ruleId}.");
-        var next = catalog.IndexOf("\n  - id: ", start + 1, StringComparison.Ordinal);
-        return next < 0 ? catalog[start..] : catalog[start..next];
+        var startMatch = Regex.Match(catalog, $@"(?m)^\s*-\s*id:\s*{Regex.Escape(ruleId)}\s*$");
+        Assert.True(startMatch.Success, $"Missing rule catalog entry for {ruleId}.");
+
+        var afterStart = startMatch.Index + startMatch.Length;
+        var nextMatch = Regex.Match(catalog[afterStart..], @"(?m)^\s*-\s*id:\s*\S+\s*$");
+        return nextMatch.Success
+            ? catalog[startMatch.Index..(afterStart + nextMatch.Index)]
+            : catalog[startMatch.Index..];
+    }
+
+    private static string EvidenceTier(string ruleBlock)
+    {
+        var match = Regex.Match(ruleBlock, @"(?m)^\s*evidenceTier:\s*(\S+)\s*$");
+        Assert.True(match.Success, "Rule catalog entry is missing a single evidenceTier value.");
+        return match.Groups[1].Value;
     }
 
     private static string FindRepoRoot()
