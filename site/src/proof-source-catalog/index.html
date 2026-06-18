@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap proof source catalog: a demo-level route-to-source map for public wording, proof paths, rule families, evidence tiers, limitations, and non-claims."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Proof Source Catalog | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/proof-source-catalog/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Proof Source Catalog">
+    <meta
+      property="og:description"
+      content="A public-demo catalog mapping public routes and claim families to the source material that bounds their wording."
+    >
+    <meta property="og:url" content="https://tracemap.tools/proof-source-catalog/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Proof source catalog</p>
+        <h1>Map each public route back to the source material that bounds its wording.</h1>
+        <p class="hero-subhead">
+          The catalog is a public-safe orientation layer for managers, reviewers,
+          and claim-checking bots. It links route wording to proof paths, source
+          artifact families, rule IDs or rule families, evidence tiers, coverage
+          labels, limitations, and non-claims.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. Page-level demo status describes this new
+          catalog surface; it does not downgrade shipped rows or upgrade concept
+          or hidden rows. No public conclusion without evidence.
+        </p>
+        <nav class="hero-actions" aria-label="Proof source catalog links">
+          <a class="button primary" href="#catalog">Open catalog</a>
+          <a class="button secondary" href="/proof-paths/">Proof path index</a>
+          <a class="button secondary" href="/roadmap/">Claim gates</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Placement</p>
+          <h2>This is a route-to-source map, not another claim ledger.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Proof paths</strong><span><a href="/proof-paths/">/proof-paths/</a> remains the evidence-trail index for artifacts, rules, tiers, coverage, public status, and limitations.</span></div>
+          <div><strong>Claim gates</strong><span><a href="/roadmap/">/roadmap/</a> explains how shipped, demo, concept, and hidden wording moves through public gates.</span></div>
+          <div><strong>Claim ledger spec</strong><span>The future <code>site-tracemap-tools-claim-ledger</code> spec governs individual claim wording; this catalog points outward instead of restating that authority.</span></div>
+          <div><strong>Source of truth</strong><span>SQLite indexes, fact streams, reports, rule catalog entries, route metadata, source docs, coverage labels, and documented limitations remain authoritative.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="catalog" aria-labelledby="catalog-heading">
+        <div class="section-header">
+          <p class="section-kicker">Catalog</p>
+          <h2 id="catalog-heading">Public route wording stays attached to bounded proof sources.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <caption>
+              Each row has a stable anchor for automated review. The proof path
+              is a public-safe route, source document, or allowed sentinel.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Route</th>
+                <th scope="col">Claim label</th>
+                <th scope="col">Allowed public wording or claim family</th>
+                <th scope="col">Public claim level</th>
+                <th scope="col">Evidence status</th>
+                <th scope="col">Proof path</th>
+                <th scope="col">Source artifact or document</th>
+                <th scope="col">Rule ID or family</th>
+                <th scope="col">Evidence tier or coverage</th>
+                <th scope="col">Limitation</th>
+                <th scope="col">Non-claims</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="proof-source-docs-repository-doc-navigation" data-proof-source-row>
+                <td data-field="route"><a href="/docs/"><code>/docs/</code></a></td>
+                <td data-field="claimLabel"><strong>Repository doc navigation</strong></td>
+                <td data-field="allowedPublicWording">Repository docs and validation routes are source references for CLI and artifact boundaries.</td>
+                <td data-field="publicClaimLevel"><code>shipped</code></td>
+                <td data-field="evidenceStatus"><code>source-backed</code></td>
+                <td data-field="proofPath"><a href="/docs/">/docs/</a>, <a href="https://github.com/joefeser/tracemap/blob/main/README.md">README</a>, and <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">validation guide</a></td>
+                <td data-field="sourceArtifactOrDoc">Repository docs on main and checked-in docs route metadata.</td>
+                <td data-field="ruleIdOrFamily">Repository documentation and acceptance-rule family.</td>
+                <td data-field="evidenceTierOrCoverage">Source document on main; no generated scan coverage label.</td>
+                <td data-field="limitation">Docs describe expected behavior and boundaries; current local results still require validation evidence.</td>
+                <td data-field="nonClaims">No runtime behavior, production usage, deployment state, endpoint performance, or release approval proof.</td>
+              </tr>
+              <tr id="proof-source-proof-paths-public-evidence-trails" data-proof-source-row>
+                <td data-field="route"><a href="/proof-paths/"><code>/proof-paths/</code></a></td>
+                <td data-field="claimLabel"><strong>Public evidence trails</strong></td>
+                <td data-field="allowedPublicWording">Public pages can route readers to artifact families, rule IDs, tiers, coverage labels, proof paths, and limitations.</td>
+                <td data-field="publicClaimLevel"><code>demo</code></td>
+                <td data-field="evidenceStatus"><code>demo-evidence-backed</code></td>
+                <td data-field="proofPath"><a href="/proof-paths/">/proof-paths/</a> and <a href="/demo/proof-upgrades/">/demo/proof-upgrades/</a></td>
+                <td data-field="sourceArtifactOrDoc">Public-safe demo summary, route metadata, and proof-path index rows.</td>
+                <td data-field="ruleIdOrFamily"><code>public.demo.summary.v1</code> and proof-path indexing family.</td>
+                <td data-field="evidenceTierOrCoverage"><code>Tier2Structural</code>; <code>FullEvidenceAvailable</code> and <code>PartialAnalysis</code> where cited.</td>
+                <td data-field="limitation">The route is an index over public-safe proof surfaces; generated artifacts and rule docs remain the source of truth.</td>
+                <td data-field="nonClaims">No runtime proof, production traffic proof, endpoint performance proof, deployment state proof, release approval proof, or adapter parity claim.</td>
+              </tr>
+              <tr id="proof-source-capabilities-capability-status-map" data-proof-source-row>
+                <td data-field="route"><a href="/capabilities/"><code>/capabilities/</code></a></td>
+                <td data-field="claimLabel"><strong>Capability status map</strong></td>
+                <td data-field="allowedPublicWording">Capability rows can be read with shipped, demo, or concept labels only through the public status mapping.</td>
+                <td data-field="publicClaimLevel"><code>demo</code></td>
+                <td data-field="evidenceStatus"><code>partial-or-reduced</code></td>
+                <td data-field="proofPath"><a href="/capabilities/">/capabilities/</a>, <a href="/proof-paths/">/proof-paths/</a>, and <a href="/roadmap/">/roadmap/</a></td>
+                <td data-field="sourceArtifactOrDoc">Capability route copy, repository docs, and route metadata.</td>
+                <td data-field="ruleIdOrFamily">Capability status and public claim-gate family.</td>
+                <td data-field="evidenceTierOrCoverage">Mixed source-doc and demo coverage; maturity caveats remain visible.</td>
+                <td data-field="limitation">Capability rows are not a product-wide availability promise and must keep adapter and coverage caveats attached.</td>
+                <td data-field="nonClaims">No product completeness, runtime behavior, production traffic, release safety, operational safety, or release approval proof.</td>
+              </tr>
+              <tr id="proof-source-demo-result-public-demo-summary" data-proof-source-row>
+                <td data-field="route"><a href="/demo/result/"><code>/demo/result/</code></a></td>
+                <td data-field="claimLabel"><strong>Public demo summary</strong></td>
+                <td data-field="allowedPublicWording">Demo result rows may summarize checked-in public sample outputs with rule IDs, tiers, coverage labels, counts, and reasons.</td>
+                <td data-field="publicClaimLevel"><code>demo</code></td>
+                <td data-field="evidenceStatus"><code>demo-evidence-backed</code></td>
+                <td data-field="proofPath"><a href="/demo/result/">/demo/result/</a>, <a href="/proof-paths/">/proof-paths/</a>, and <a href="https://github.com/joefeser/tracemap/blob/main/site/src/_data/demo-public-summary.json">public demo summary fixture</a></td>
+                <td data-field="sourceArtifactOrDoc">Checked-in public-safe demo summary and generated report-family names.</td>
+                <td data-field="ruleIdOrFamily"><code>public.demo.summary.v1</code></td>
+                <td data-field="evidenceTierOrCoverage"><code>Tier2Structural</code>; <code>FullEvidenceAvailable</code>, <code>PartialAnalysis</code>, <code>not_requested</code>, and <code>unavailable</code> where cited.</td>
+                <td data-field="limitation">Demo rows are scoped to public samples and public-safe summary data; deeper local artifacts are not published.</td>
+                <td data-field="nonClaims">No runtime behavior, production traffic, endpoint performance, release safety, operational safety, or full-impact proof.</td>
+              </tr>
+              <tr id="proof-source-demo-proof-upgrades-reduced-demo-coverage" data-proof-source-row>
+                <td data-field="route"><a href="/demo/proof-upgrades/"><code>/demo/proof-upgrades/</code></a></td>
+                <td data-field="claimLabel"><strong>Reduced demo coverage</strong></td>
+                <td data-field="allowedPublicWording">Demo proof-upgrade rows can show reproducible public-demo report families with explicit partial or gap labels.</td>
+                <td data-field="publicClaimLevel"><code>demo</code></td>
+                <td data-field="evidenceStatus"><code>partial-or-reduced</code></td>
+                <td data-field="proofPath"><a href="/demo/proof-upgrades/">/demo/proof-upgrades/</a> and <a href="/proof-paths/">/proof-paths/</a></td>
+                <td data-field="sourceArtifactOrDoc">Public-safe generated summary rows and sanitized report-family names.</td>
+                <td data-field="ruleIdOrFamily"><code>public.demo.summary.v1</code> and demo report-family rules.</td>
+                <td data-field="evidenceTierOrCoverage"><code>Tier2Structural</code> with <code>PartialAnalysis</code> and explicit gap labels.</td>
+                <td data-field="limitation">Partial rows remain useful only as partial evidence and cannot be restated as broad success or parity.</td>
+                <td data-field="nonClaims">No release approval, endpoint performance, production dependency understanding, operational safety, or broad absence claim.</td>
+              </tr>
+              <tr id="proof-source-validation-validation-boundaries" data-proof-source-row>
+                <td data-field="route"><a href="/validation/"><code>/validation/</code></a></td>
+                <td data-field="claimLabel"><strong>Validation boundaries</strong></td>
+                <td data-field="allowedPublicWording">Validation pages can name deterministic checks, sample lanes, smoke checks, acceptance criteria, and deferred checks.</td>
+                <td data-field="publicClaimLevel"><code>shipped</code></td>
+                <td data-field="evidenceStatus"><code>source-backed</code></td>
+                <td data-field="proofPath"><a href="/validation/">/validation/</a> and <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">docs/VALIDATION.md</a></td>
+                <td data-field="sourceArtifactOrDoc">Repository validation guide and checked-in validation route.</td>
+                <td data-field="ruleIdOrFamily">Validation and acceptance documentation family.</td>
+                <td data-field="evidenceTierOrCoverage">Source document on main; coverage depends on each named check.</td>
+                <td data-field="limitation">Validation copy names checked scopes; it does not prove external service state, deployment state, or current CI outcome.</td>
+                <td data-field="nonClaims">No production usage, release approval, runtime behavior, endpoint performance, or clean bill of health under reduced coverage.</td>
+              </tr>
+              <tr id="proof-source-roadmap-public-claim-gates" data-proof-source-row>
+                <td data-field="route"><a href="/roadmap/"><code>/roadmap/</code></a></td>
+                <td data-field="claimLabel"><strong>Public claim gates</strong></td>
+                <td data-field="allowedPublicWording">Roadmap rows can explain shipped, demo, concept, and hidden gates without promoting future-facing wording.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="evidenceStatus"><code>future-only</code></td>
+                <td data-field="proofPath"><a href="/roadmap/">/roadmap/</a></td>
+                <td data-field="sourceArtifactOrDoc">Roadmap route copy, route metadata, and future claim-ledger spec context.</td>
+                <td data-field="ruleIdOrFamily">Public claim gate and wording-governance family.</td>
+                <td data-field="evidenceTierOrCoverage">Concept route metadata; no generated scan coverage label.</td>
+                <td data-field="limitation">The roadmap is governance and orientation; concept rows need public-safe proof before promotion.</td>
+                <td data-field="nonClaims">No shipped capability, release approval, runtime behavior, production traffic, operational safety, or complete product coverage proof.</td>
+              </tr>
+              <tr id="proof-source-legacy-validation-legacy-validation-concept" data-proof-source-row>
+                <td data-field="route"><a href="/legacy-validation/"><code>/legacy-validation/</code></a></td>
+                <td data-field="claimLabel"><strong>Legacy validation concept</strong></td>
+                <td data-field="allowedPublicWording">Legacy validation copy may describe a future public-safe validation lane and its promotion requirements.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="evidenceStatus"><code>future-only</code></td>
+                <td data-field="proofPath"><a href="/legacy-validation/">/legacy-validation/</a> and <a href="/limitations/">/limitations/</a></td>
+                <td data-field="sourceArtifactOrDoc">Concept route copy and documented publication rules.</td>
+                <td data-field="ruleIdOrFamily">Legacy validation and public-safe redaction family.</td>
+                <td data-field="evidenceTierOrCoverage">Future-only; public-safe validation artifact is not yet published.</td>
+                <td data-field="limitation">No stronger support claim exists until redacted public-safe evidence shows rule IDs, tiers, coverage, and limitations.</td>
+                <td data-field="nonClaims">No specific legacy capability, private sample, hidden route, runtime behavior, production traffic, or release safety proof.</td>
+              </tr>
+              <tr id="proof-source-hidden-aggregate-placeholder" data-proof-source-row>
+                <td data-field="route"><code>hidden</code></td>
+                <td data-field="claimLabel"><strong>Internal-only aggregate placeholder</strong></td>
+                <td data-field="allowedPublicWording">none</td>
+                <td data-field="publicClaimLevel"><code>hidden</code></td>
+                <td data-field="evidenceStatus"><code>hidden-or-internal</code></td>
+                <td data-field="proofPath"><code>hidden</code></td>
+                <td data-field="sourceArtifactOrDoc">hidden</td>
+                <td data-field="ruleIdOrFamily">none</td>
+                <td data-field="evidenceTierOrCoverage">hidden</td>
+                <td data-field="limitation">Details are not disclosed publicly.</td>
+                <td data-field="nonClaims">This row does not represent any specific capability, route, private sample, count, cadence, sequence, or in-flight work.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="claim-level-mapping" aria-labelledby="claim-level-heading">
+        <div class="section-header">
+          <p class="section-kicker">Claim-level vocabulary</p>
+          <h2 id="claim-level-heading">Existing public status labels resolve to one catalog label.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <thead>
+              <tr>
+                <th scope="col">Existing-surface vocabulary</th>
+                <th scope="col">Catalog public claim level</th>
+                <th scope="col">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="proof-source-map-claim-level-shipped" data-proof-source-claim-level-map data-catalog-level="shipped" data-source-vocabulary="main|shipped|shipped navigation|repository docs on main|main with maturity caveats">
+                <td><code>main</code>, <code>shipped</code>, <code>shipped navigation</code>, repository docs on <code>main</code>, <code>main with maturity caveats</code></td>
+                <td><code>shipped</code></td>
+                <td>Use shipped as the public catalog label while keeping main and maturity caveats as source vocabulary or limitation text.</td>
+              </tr>
+              <tr id="proof-source-map-claim-level-demo" data-proof-source-claim-level-map data-catalog-level="demo" data-source-vocabulary="demo|demo guidance|main/demo|public-demo|checked-in public-safe demo summary|route metadata publicClaimLevel: demo|proof-path public status demo">
+                <td><code>demo</code>, <code>demo guidance</code>, <code>main/demo</code>, <code>public-demo</code>, checked-in public-safe demo summary, route metadata <code>publicClaimLevel: demo</code>, proof-path public status <code>demo</code></td>
+                <td><code>demo</code></td>
+                <td>Backed by public-safe demo summaries, checked-in samples, demo route metadata, or proof-path rows.</td>
+              </tr>
+              <tr id="proof-source-map-claim-level-concept" data-proof-source-claim-level-map data-catalog-level="concept" data-source-vocabulary="concept|concept-only|future|future-only|dev|dev-only|route metadata publicClaimLevel: concept|proof-path public status future">
+                <td><code>concept</code>, <code>concept-only</code>, <code>future</code>, <code>future-only</code>, <code>dev</code>, <code>dev-only</code>, route metadata <code>publicClaimLevel: concept</code>, proof-path public status <code>future</code></td>
+                <td><code>concept</code></td>
+                <td>Visible future or dev vocabulary resolves to concept until main or public-demo proof supports promotion.</td>
+              </tr>
+              <tr id="proof-source-map-claim-level-hidden" data-proof-source-claim-level-map data-catalog-level="hidden" data-source-vocabulary="hidden|hidden pending validation|no public capability row|no public proof-path counterpart|internal-only aggregate placeholder">
+                <td><code>hidden</code>, <code>hidden pending validation</code>, no public capability row, no public proof-path counterpart, internal-only aggregate placeholder</td>
+                <td><code>hidden</code></td>
+                <td>Hidden work has no public capability-matrix or proof-path counterpart by design.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="evidence-status-mapping" aria-labelledby="evidence-status-heading">
+        <div class="section-header">
+          <p class="section-kicker">Evidence-status vocabulary</p>
+          <h2 id="evidence-status-heading">Evidence labels preserve source strength and gaps.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <thead>
+              <tr>
+                <th scope="col">Evidence-status label</th>
+                <th scope="col">Existing source vocabulary</th>
+                <th scope="col">Catalog notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="proof-source-map-evidence-source-backed" data-proof-source-evidence-status-map data-evidence-status="source-backed">
+                <td><code>source-backed</code></td>
+                <td>Repository docs, rule catalog, source code, validation docs, or route metadata on main.</td>
+                <td>Use for source-document claims, not for runtime proof.</td>
+              </tr>
+              <tr id="proof-source-map-evidence-demo-evidence-backed" data-proof-source-evidence-status-map data-evidence-status="demo-evidence-backed">
+                <td><code>demo-evidence-backed</code></td>
+                <td><code>Tier1Semantic</code> or <code>Tier2Structural</code> with <code>Full</code>, <code>FullEvidenceAvailable</code>, or public-safe generated summary evidence.</td>
+                <td>Show rule IDs, tiers, coverage, and proof path when public-safe.</td>
+              </tr>
+              <tr id="proof-source-map-evidence-partial-or-reduced" data-proof-source-evidence-status-map data-evidence-status="partial-or-reduced">
+                <td><code>partial-or-reduced</code></td>
+                <td><code>Partial</code>, <code>PartialAnalysis</code>, <code>Reduced</code>, <code>ReducedCoverage</code>, or <code>Tier3SyntaxOrTextual</code> evidence.</td>
+                <td>Keep coverage gaps visible and do not restate partial rows as broad proof.</td>
+              </tr>
+              <tr id="proof-source-map-evidence-gap-labeled-demo" data-proof-source-evidence-status-map data-evidence-status="gap-labeled-demo">
+                <td><code>gap-labeled-demo</code></td>
+                <td><code>not_requested</code>, <code>unavailable</code>, <code>Tier4Unknown</code>, or explicit gap labels on demo rows.</td>
+                <td>The gap label remains visible and cannot support parity or success claims.</td>
+              </tr>
+              <tr id="proof-source-map-evidence-future-only" data-proof-source-evidence-status-map data-evidence-status="future-only">
+                <td><code>future-only</code></td>
+                <td>Public future or concept row with no resolvable source artifact yet.</td>
+                <td>Future-facing only; not evidence-backed.</td>
+              </tr>
+              <tr id="proof-source-map-evidence-hidden-or-internal" data-proof-source-evidence-status-map data-evidence-status="hidden-or-internal">
+                <td><code>hidden-or-internal</code></td>
+                <td>No public-safe proof path or no public row counterpart.</td>
+                <td>Aggregate only; disclose no unreleased detail.</td>
+              </tr>
+              <tr id="proof-source-map-evidence-not-yet-backed" data-proof-source-evidence-status-map data-evidence-status="not-yet-backed">
+                <td><code>not-yet-backed</code></td>
+                <td>No cited artifact, rule family, or public-safe proof path.</td>
+                <td>Pre-publication blocker only; no published catalog row may use this label.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The catalog does not strengthen the source material it indexes.</h2>
+        </div>
+        <ul>
+          <li>It does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, AI impact analysis, LLM analysis, or complete product coverage.</li>
+          <li>It does not publish raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, or private sample names.</li>
+          <li>Concept rows are not shipped capabilities, demo rows are scoped to public-demo proof, and hidden rows should not be repeated as public claims.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Source material</p>
+          <h2>Follow the catalog into existing proof and boundary pages.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/roadmap/">Claim gates</a>
+          <a href="/capabilities/">Capability matrix</a>
+          <a href="/docs/">Docs map</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/demo/result/">Current demo result</a>
+          <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/rules/rule-catalog.yml">Rule catalog</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Use the catalog with the
+        <a href="/proof-paths/">proof path index</a>,
+        <a href="/roadmap/">claim gates</a>,
+        <a href="/capabilities/">capability matrix</a>,
+        and
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

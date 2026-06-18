@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -14,6 +14,7 @@ import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
+import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
@@ -113,6 +114,7 @@ async function createDistFixture({
     incidentCallRoute,
     managerBriefRoute,
     managerFaqRoute,
+    proofSourceCatalogRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
     staticTriageRoute
@@ -133,8 +135,10 @@ async function createDistFixture({
     "/evidence/",
     "/examples/",
     incidentCallRoute,
+    "/legacy-validation/",
     managerBriefRoute,
     managerFaqRoute,
+    proofSourceCatalogRoute,
     "/manager-packet/",
     "/packets/",
     reviewRoomRoute,
@@ -166,19 +170,23 @@ async function createDistFixture({
                 ? managerBriefPage()
                 : route === managerFaqRoute
                   ? managerFaqPage()
-                  : route === reviewRoomRoute
-                    ? reviewRoomPage()
-                    : route === roadmapClaimLedgerRoute
-                      ? roadmapClaimLedgerPage()
-                      : route === staticTriageRoute
-                        ? staticTriagePage()
-                        : page(`<p>${path}</p>`),
+                  : route === proofSourceCatalogRoute
+                    ? await proofSourceCatalogPage()
+                    : route === reviewRoomRoute
+                      ? reviewRoomPage()
+                      : route === roadmapClaimLedgerRoute
+                        ? roadmapClaimLedgerPage()
+                        : route === staticTriageRoute
+                          ? staticTriagePage()
+                          : page(`<p>${path}</p>`),
       "utf8"
     );
   }
 
   await writeFile(join(dist, "index.html"), indexHtml, "utf8");
   await writeFile(join(dist, "docs", "index.html"), docsHtml, "utf8");
+  await writeFile(join(dist, "favicon.svg"), "<svg></svg>", "utf8");
+  await writeFile(join(dist, "styles.css"), "body { margin: 0; }\n", "utf8");
   await writeFile(join(dist, "robots.txt"), robots, "utf8");
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
   await writeDiscoveryFiles(dist);
@@ -256,6 +264,17 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
+        path: proofSourceCatalogRoute,
+        title: "Proof Source Catalog",
+        summary: "Fixture proof source catalog route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture proof source catalog limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
         path: reviewRoomRoute,
         title: "Review Room",
         summary: "Fixture review room route for validation.",
@@ -325,6 +344,10 @@ function deployAuditPage() {
     <p>This is not live AWS state, not runtime behavior proof, and not deployment success proof.</p>
     <p>sitemap.xml robots.txt llms.txt docs-index.json routes-index.json</p>
   `);
+}
+
+async function proofSourceCatalogPage() {
+  return readFile(new URL("../src/proof-source-catalog/index.html", import.meta.url), "utf8");
 }
 
 function incidentCallPage() {
