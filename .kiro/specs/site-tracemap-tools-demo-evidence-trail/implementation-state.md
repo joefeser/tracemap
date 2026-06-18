@@ -181,7 +181,7 @@ update proof-path links accordingly.
 - Required target-route resolution passed after `npm run build`:
   `/proof-paths/`, `/evidence/`, `/validation/`, and `/limitations/`.
 - `git diff --check` passed.
-- `npm test` from `site/` passed: 128 tests.
+- `npm test` from `site/` passed: 129 tests.
 - `npm run validate` from `site/` passed:
   38 HTML files, 1048 internal references, 37 sitemap URLs, and 1 legacy story
   safety target.
@@ -208,6 +208,12 @@ update proof-path links accordingly.
   The implementation now decodes named `colon`, `sol`, `bsol`, `backslash`, and
   `nbsp` entities used by forbidden public-text checks, and the evidence-trail
   validator has a regression test for `file&colon;&sol;&sol;...`.
+- Codex PR review found that the static-path card needed its own visible
+  rule ID, evidence tier, and coverage label, and that the `impacted` ban
+  should scan metadata and attributes as well as visible rendered text. The
+  static-path card now names `public.demo.summary.v1`, `Tier2Structural`, and
+  `PartialAnalysis`, and the validator scans decoded full HTML plus rendered
+  text with a metadata regression test.
 
 ## Follow-Ups
 
