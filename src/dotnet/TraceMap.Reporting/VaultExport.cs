@@ -1604,7 +1604,7 @@ public static class VaultExporter
             || text.StartsWith("/tmp/", StringComparison.OrdinalIgnoreCase)
             || text.Contains("/tmp/", StringComparison.OrdinalIgnoreCase)
             || text.Contains("\\Temp\\", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("\\\\", StringComparison.Ordinal)
+            || Regex.IsMatch(text, @"(^|[\s""'`])\\\\[^\\/\s]+[\\/]", RegexOptions.CultureInvariant)
             || Regex.IsMatch(text, @"(^|[\s""'`])([A-Za-z]:[\\/])", RegexOptions.CultureInvariant)
             || Regex.IsMatch(text, @"(^|[\\/])\.\.([\\/]|$)", RegexOptions.CultureInvariant))
         {
@@ -2277,6 +2277,11 @@ public static class VaultExporter
         }
 
         var text = value.Trim().ReplaceLineEndings(" ");
+        if (UnsafeCategory(text) is { } category)
+        {
+            throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [Tier4Unknown]: {category} at displayName.");
+        }
+
         return IsSafeDisplayText(text) ? text : $"{fallback}-{Hash(text, DisplayNameHashLength)}";
     }
 
