@@ -102,9 +102,11 @@ Review results:
   additional title-kind redaction records beyond existing safety behavior, and
   deterministic review graph mode.
 - Initial PR review loop stopped on two Qodo review threads. Patched both:
-  replaced a hard-coded tier literal with a local tier constant and changed
+  replaced a hard-coded tier literal with the shared `EvidenceTiers` constant
+  and changed
   structured docs-export claim limitations to reference stable gap/limitation
-  IDs rather than free-text limitation messages.
+  IDs rather than free-text limitation messages. Also applied Qodo's
+  non-blocking folder-index membership optimization.
 - Initial Opus spec review completed with full coverage. It found no blocking
   public-safety issues and requested clarifications around vault snapshot-mode
   inputs, docs snapshot-change inputs, `Start Here` link encoding, alias source
