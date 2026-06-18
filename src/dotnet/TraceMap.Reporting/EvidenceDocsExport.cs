@@ -37,6 +37,7 @@ public sealed record EvidenceDocsExportResult(
 public sealed record EvidenceDocsDiagnostic(
     string Code,
     string RuleId,
+    string EvidenceTier,
     string Location,
     string Category);
 
@@ -73,6 +74,7 @@ public sealed record EvidenceDocsInputSummary(
     IReadOnlyList<string> SourceLabels,
     IReadOnlyList<string> CoverageLabels,
     IReadOnlyList<string> Limitations,
+    IReadOnlyList<EvidenceDocSourceRef> SourceRefs,
     string? SchemaVersion = null);
 
 public sealed record EvidenceDocsOutputSummary(
@@ -135,7 +137,9 @@ public sealed record EvidenceDocSourceRef(
     string? CommitSha,
     string CoverageLabel,
     string? ExtractorName,
-    string? ExtractorVersion);
+    string? ExtractorVersion,
+    IReadOnlyList<string> RuleIds,
+    IReadOnlyList<string> EvidenceTiers);
 
 public sealed record EvidenceDocGap(
     string GapId,
@@ -731,6 +735,11 @@ public static class EvidenceDocsExporter
             chunks.Add(CreateGapChunk("no-facts", UnknownAnalysisRuleId, "missing-provenance", "gap", input.Sources, ["index:facts"], "hidden"));
         }
 
+        if (selectedFamilies.Contains("limitation", StringComparer.Ordinal))
+        {
+            chunks.Add(CreateLimitationChunk(input.Sources));
+        }
+
         return chunks;
     }
 
@@ -749,17 +758,86 @@ public static class EvidenceDocsExporter
         await AddReportChunksAsync(options.ReleaseReviewReportPaths ?? [], "release-review-report", "release-review", ReleaseReviewRuleId, selectedFamilies, sources, chunks, diagnostics, cancellationToken);
         await AddReportChunksAsync(options.EvidencePackPaths ?? [], "evidence-pack", "legacy", LegacyRuleId, selectedFamilies, sources, chunks, diagnostics, cancellationToken);
 
-        foreach (var path in options.VaultGraphPaths ?? [])
-        {
-            if (selectedFamilies.Contains("gap", StringComparer.Ordinal))
-            {
-                chunks.Add(CreateGapChunk($"vault-graph-{Hash(path, 16)}", SchemaGapRuleId, "schema-incompatible", "gap", sources, ["vault-graph"], "hidden"));
-            }
-
-            diagnostics.Add(new EvidenceDocsDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, "/inputs/vault-graph", "schema-incompatible"));
-        }
+        await AddVaultGraphChunksAsync(options.VaultGraphPaths ?? [], selectedFamilies, sources, chunks, diagnostics, cancellationToken);
 
         return chunks;
+    }
+
+    private static async Task AddVaultGraphChunksAsync(
+        IReadOnlyList<string> paths,
+        IReadOnlyList<string> selectedFamilies,
+        IReadOnlyList<DocSource> sources,
+        List<EvidenceDocChunk> chunks,
+        List<EvidenceDocsDiagnostic> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
+        {
+            try
+            {
+                var json = await File.ReadAllTextAsync(path, cancellationToken);
+                using var document = JsonDocument.Parse(json);
+                if (StringProperty(document.RootElement, "schemaVersion") != "evidence-graph-vault-export.v1")
+                {
+                    throw new JsonException("unsupported vault graph schema");
+                }
+
+                if (!selectedFamilies.Contains("dependency-surface", StringComparer.Ordinal))
+                {
+                    continue;
+                }
+
+                var graphId = $"vault-graph:{Hash(json, 24)}";
+                var classification = NormalizeClaimLevel(StringProperty(document.RootElement, "classification") ?? "hidden", "vault graph classification");
+                var nodeCount = document.RootElement.TryGetProperty("nodes", out var nodes) && nodes.ValueKind == JsonValueKind.Array ? nodes.GetArrayLength() : 0;
+                var edgeCount = document.RootElement.TryGetProperty("edges", out var edges) && edges.ValueKind == JsonValueKind.Array ? edges.GetArrayLength() : 0;
+                var gapCount = document.RootElement.TryGetProperty("gaps", out var gaps) && gaps.ValueKind == JsonValueKind.Array ? gaps.GetArrayLength() : 0;
+                var body = $"""
+                    ## Vault graph evidence
+
+                    This chunk records a compatible `evidence-graph-vault-export.v1` graph as supplemental static link metadata.
+
+                    | Field | Value |
+                    | --- | --- |
+                    | Graph ID | `{EscapeInline(graphId)}` |
+                    | Claim level | `{EscapeInline(classification)}` |
+                    | Nodes | `{nodeCount}` |
+                    | Edges | `{edgeCount}` |
+                    | Gaps | `{gapCount}` |
+
+                    Vault graph chunks preserve generated graph metadata and do not reinterpret source evidence.
+                    """;
+                chunks.Add(CreateChunk(
+                    "dependency-surface",
+                    "claim",
+                    classification,
+                    "Vault graph evidence",
+                    "Compatible vault graph metadata supplied to docs export.",
+                    body,
+                    [CreateReportCitation(graphId, "evidence-graph-vault-export.v1", sources)],
+                    sources.Select(ToSourceRef).ToArray(),
+                    [graphId],
+                    [DependencySurfaceRuleId],
+                    [EvidenceTiers.Tier2Structural],
+                    sources.Select(source => source.CoverageLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).DefaultIfEmpty("vault-graph").ToArray(),
+                    [],
+                    [LimitationForFamily("dependency-surface", [graphId])]));
+            }
+            catch
+            {
+                if (selectedFamilies.Contains("gap", StringComparer.Ordinal))
+                {
+                    chunks.Add(CreateGapChunk($"vault-graph-{Hash(path, 16)}", SchemaGapRuleId, "schema-incompatible", "gap", sources, ["vault-graph"], "hidden"));
+                }
+
+                diagnostics.Add(new EvidenceDocsDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, Tier4Unknown, "/inputs/vault-graph", "schema-incompatible"));
+            }
+        }
     }
 
     private static async Task AddReportChunksAsync(
@@ -792,7 +870,7 @@ public static class EvidenceDocsExporter
                 if (string.IsNullOrWhiteSpace(reportType))
                 {
                     chunks.Add(CreateGapChunk($"{inputKind}-{Hash(path, 16)}", MissingProvenanceRuleId, "missing-provenance", family, sources, [inputKind], "hidden"));
-                    diagnostics.Add(new EvidenceDocsDiagnostic("InputMissingProvenance", MissingProvenanceRuleId, $"/inputs/{inputKind}", "missing-provenance"));
+                    diagnostics.Add(new EvidenceDocsDiagnostic("InputMissingProvenance", MissingProvenanceRuleId, Tier4Unknown, $"/inputs/{inputKind}", "missing-provenance"));
                     continue;
                 }
 
@@ -819,7 +897,7 @@ public static class EvidenceDocsExporter
             catch (JsonException)
             {
                 chunks.Add(CreateGapChunk($"{inputKind}-json-{Hash(inputKind, 16)}", SchemaGapRuleId, "schema-incompatible", family, sources, [inputKind], "hidden"));
-                diagnostics.Add(new EvidenceDocsDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, $"/inputs/{inputKind}", "schema-incompatible"));
+                diagnostics.Add(new EvidenceDocsDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, Tier4Unknown, $"/inputs/{inputKind}", "schema-incompatible"));
             }
         }
     }
@@ -997,6 +1075,44 @@ public static class EvidenceDocsExporter
                 gap.SupportingIds)]);
     }
 
+    private static EvidenceDocChunk CreateLimitationChunk(IReadOnlyList<DocSource> sources)
+    {
+        var limitation = new EvidenceDocLimitation(
+            StableId("limitation", "docs-export/limitation/v1", [new("ruleId", LimitationChunkRuleId), new("scope", "docs-export")]),
+            LimitationChunkRuleId,
+            Tier4Unknown,
+            "Docs export packages existing deterministic evidence for external ingestion and does not call models, generate embeddings, write vector databases, rank retrieval results, or answer natural-language questions.",
+            "limitation",
+            ["docs-export"]);
+        var body = $"""
+            ## Docs export limitations
+
+            This chunk records the docs-export boundary as first-class retrieval evidence.
+
+            | Field | Value |
+            | --- | --- |
+            | Rule ID | `{LimitationChunkRuleId}` |
+            | Evidence tier | `{Tier4Unknown}` |
+
+            TraceMap emits deterministic evidence documents. External systems remain responsible for retrieval, embeddings, ranking, answer generation, access controls, and data retention.
+            """;
+        return CreateChunk(
+            "limitation",
+            "limitation",
+            MinClaim(sources.Select(source => source.ClaimLevel).DefaultIfEmpty("hidden")),
+            "Docs export limitations",
+            "Docs-export boundary and limitation evidence.",
+            body,
+            [],
+            sources.Select(ToSourceRef).ToArray(),
+            ["docs-export"],
+            [LimitationChunkRuleId],
+            [Tier4Unknown],
+            sources.Select(source => source.CoverageLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).DefaultIfEmpty("not-applicable").ToArray(),
+            [],
+            [limitation]);
+    }
+
     private static EvidenceDocChunk CreateChunk(
         string family,
         string type,
@@ -1111,7 +1227,8 @@ public static class EvidenceDocsExporter
                 input.Sources.Select(source => source.CoverageLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 input.Kind == "single-index"
                     ? ["Single-source indexes cannot prove combined report families; unavailable combined views are represented as gaps."]
-                    : [])
+                    : [],
+                input.Sources.Select(ToSourceRef).ToArray())
         };
         var chunkCounts = chunks
             .GroupBy(chunk => chunk.ChunkFamily, StringComparer.Ordinal)
@@ -1482,32 +1599,52 @@ public static class EvidenceDocsExporter
         {
             var content = await File.ReadAllTextAsync(path, cancellationToken);
             using var document = JsonDocument.Parse(content);
-            if (StringProperty(document.RootElement, "schemaVersion") != "source-claim-catalog.v1"
-                || !document.RootElement.TryGetProperty("entries", out var entries)
-                || entries.ValueKind != JsonValueKind.Array)
+            if (StringProperty(document.RootElement, "schemaVersion") != "source-claim-catalog.v1")
             {
                 return new SourceClaimCatalog([]);
             }
 
             var claims = new List<SourceClaim>();
-            foreach (var entry in entries.EnumerateArray())
+            if (document.RootElement.TryGetProperty("sources", out var sources) && sources.ValueKind == JsonValueKind.Array)
             {
-                var claimLevel = StringProperty(entry, "claimLevel");
-                if (claimLevel is not ("demo-safe" or "public-safe"))
+                foreach (var source in sources.EnumerateArray())
                 {
-                    continue;
-                }
+                    var claimLevel = StringProperty(source, "claimLevel");
+                    if (claimLevel is not ("demo-safe" or "public-safe")
+                        || string.IsNullOrWhiteSpace(StringProperty(source, "proofId")))
+                    {
+                        continue;
+                    }
 
-                if (!entry.TryGetProperty("sourceIdentity", out var identity) || identity.ValueKind != JsonValueKind.Object)
+                    claims.Add(new SourceClaim(
+                        StringProperty(source, "sourceIndexId"),
+                        StringProperty(source, "scanId"),
+                        CommitOrUnknown(StringProperty(source, "commitSha")),
+                        claimLevel));
+                }
+            }
+
+            if (document.RootElement.TryGetProperty("entries", out var entries) && entries.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in entries.EnumerateArray())
                 {
-                    continue;
-                }
+                    var claimLevel = StringProperty(entry, "claimLevel");
+                    if (claimLevel is not ("demo-safe" or "public-safe") || !HasReviewedProofMetadata(entry))
+                    {
+                        continue;
+                    }
 
-                claims.Add(new SourceClaim(
-                    StringProperty(identity, "sourceIndexId"),
-                    StringProperty(identity, "scanId"),
-                    CommitOrUnknown(StringProperty(identity, "commitSha")),
-                    claimLevel));
+                    if (!entry.TryGetProperty("sourceIdentity", out var identity) || identity.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    claims.Add(new SourceClaim(
+                        StringProperty(identity, "sourceIndexId"),
+                        StringProperty(identity, "scanId"),
+                        CommitOrUnknown(StringProperty(identity, "commitSha")),
+                        claimLevel));
+                }
             }
 
             return new SourceClaimCatalog(claims);
@@ -1516,6 +1653,14 @@ public static class EvidenceDocsExporter
         {
             return new SourceClaimCatalog([]);
         }
+    }
+
+    private static bool HasReviewedProofMetadata(JsonElement entry)
+    {
+        return !string.IsNullOrWhiteSpace(StringProperty(entry, "proofId"))
+            && !string.IsNullOrWhiteSpace(StringProperty(entry, "proofPathCategory"))
+            && !string.IsNullOrWhiteSpace(StringProperty(entry, "reviewer"))
+            && !string.IsNullOrWhiteSpace(StringProperty(entry, "reviewedAt"));
     }
 
     private static void ApplyCatalogClaims(IReadOnlyList<DocSource> sources, SourceClaimCatalog catalog, List<EvidenceDocsDiagnostic> diagnostics)
@@ -1541,7 +1686,7 @@ public static class EvidenceDocsExporter
         foreach (var unmatched in catalog.Unmatched(sources))
         {
             chunks.Add(CreateGapChunk($"claim-unmatched-{Hash(unmatched, 16)}", ClaimUnmatchedRuleId, "claim-level-unmatched", "gap", sources, ["source-claim-catalog"], "hidden"));
-            diagnostics.Add(new EvidenceDocsDiagnostic("InputClaimCatalogUnmatched", ClaimUnmatchedRuleId, "/sourceClaimCatalog/entries", "claim-level"));
+            diagnostics.Add(new EvidenceDocsDiagnostic("InputClaimCatalogUnmatched", ClaimUnmatchedRuleId, Tier4Unknown, "/sourceClaimCatalog/entries", "claim-level"));
         }
     }
 
@@ -1707,7 +1852,9 @@ public static class EvidenceDocsExporter
             source.CommitSha,
             source.CoverageLabel,
             "index-metadata",
-            source.ExtractorVersion);
+            source.ExtractorVersion,
+            [SourceOverviewRuleId],
+            [EvidenceTiers.Tier2Structural]);
     }
 
     private static string FamilyForFact(DocFact fact)

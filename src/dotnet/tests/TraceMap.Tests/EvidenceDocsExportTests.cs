@@ -157,6 +157,83 @@ public sealed class EvidenceDocsExportTests
     }
 
     [Fact]
+    public async Task Docs_export_accepts_vault_claim_catalog_shape_and_requires_reviewed_proof()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = CreateCombinedIndex(temp.Path);
+        var vaultCatalog = Path.Combine(temp.Path, "vault-claims.json");
+        await File.WriteAllTextAsync(vaultCatalog, """
+            {
+              "schemaVersion": "source-claim-catalog.v1",
+              "sources": [
+                {
+                  "sourceIndexId": "source-api",
+                  "claimLevel": "public-safe",
+                  "proofId": "proof-source-api"
+                }
+              ]
+            }
+            """);
+
+        var promoted = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            indexPath,
+            Path.Combine(temp.Path, "vault-catalog-docs"),
+            SourceClaimCatalogPath: vaultCatalog,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-06"));
+        Assert.Contains(promoted.Chunks, chunk => chunk.ChunkType == "claim" && chunk.ClaimLevel == "public-safe");
+
+        var weakCatalog = Path.Combine(temp.Path, "weak-claims.json");
+        await File.WriteAllTextAsync(weakCatalog, """
+            {
+              "schemaVersion": "source-claim-catalog.v1",
+              "entries": [
+                {
+                  "sourceIdentity": { "sourceIndexId": "source-api" },
+                  "claimLevel": "public-safe"
+                }
+              ]
+            }
+            """);
+        var rejected = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+                indexPath,
+                Path.Combine(temp.Path, "weak-catalog-docs"),
+                SourceClaimCatalogPath: weakCatalog,
+                MinimumClaimLevel: "public-safe",
+                Date: "2026-06")));
+        Assert.Contains("NoVisibleEvidenceAfterFiltering", rejected.Message);
+    }
+
+    [Fact]
+    public async Task Docs_export_parses_vault_graph_and_emits_limitation_family_chunks()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = CreateSingleIndex(temp.Path);
+        var graphPath = Path.Combine(temp.Path, "graph.json");
+        await File.WriteAllTextAsync(graphPath, """
+            {
+              "schemaVersion": "evidence-graph-vault-export.v1",
+              "classification": "hidden",
+              "nodes": [{ "id": "node:one" }],
+              "edges": [],
+              "gaps": [],
+              "limitations": []
+            }
+            """);
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            indexPath,
+            Path.Combine(temp.Path, "vault-graph-docs"),
+            VaultGraphPaths: [graphPath],
+            Families: "dependency-surface,limitation,gap"));
+
+        Assert.Contains(result.Chunks, chunk => chunk.ChunkFamily == "dependency-surface" && chunk.SupportingIds.Any(id => id.StartsWith("vault-graph:", StringComparison.Ordinal)));
+        Assert.Contains(result.Chunks, chunk => chunk.ChunkFamily == "limitation");
+        Assert.DoesNotContain(result.Manifest.Gaps, gap => gap.Reason == "schema-incompatible" && gap.SupportingIds.Contains("vault-graph"));
+    }
+
+    [Fact]
     public async Task Docs_export_rejects_unsafe_values_without_echoing_them()
     {
         using var temp = new TempDirectory();
@@ -173,6 +250,10 @@ public sealed class EvidenceDocsExportTests
         Assert.Contains("UnsafeValueRejected", failure.Message);
         Assert.DoesNotContain("Customers", failure.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("secret", failure.Message, StringComparison.OrdinalIgnoreCase);
+
+        var nullPropertiesIndex = CreateSingleIndex(temp.Path, propertiesJson: null);
+        var nullPropertiesResult = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(nullPropertiesIndex, Path.Combine(temp.Path, "null-properties-docs")));
+        Assert.Contains(nullPropertiesResult.Chunks, chunk => chunk.ChunkFamily == "endpoint");
     }
 
     [Fact]
@@ -223,7 +304,7 @@ public sealed class EvidenceDocsExportTests
         Assert.Equal("11:chunkFamily=8:endpoint\n7:missing=0:\n", record);
     }
 
-    private static string CreateSingleIndex(string root, string filePath = "src/Api/Controller.cs", string propertiesJson = """{"method":"GET","route":"/api/orders/{}"}""")
+    private static string CreateSingleIndex(string root, string filePath = "src/Api/Controller.cs", string? propertiesJson = """{"method":"GET","route":"/api/orders/{}"}""")
     {
         var path = Path.Combine(root, $"single-{Guid.NewGuid():N}.sqlite");
         using var connection = new SqliteConnection($"Data Source={path}");
@@ -256,7 +337,7 @@ public sealed class EvidenceDocsExportTests
               start_line integer not null,
               end_line integer not null,
               snippet_hash text,
-              properties_json text not null
+              properties_json text
             );
             insert into scan_manifest values (
               'scan-single',
@@ -288,7 +369,7 @@ public sealed class EvidenceDocsExportTests
             );
             """;
         command.Parameters.AddWithValue("$file_path", filePath);
-        command.Parameters.AddWithValue("$properties_json", propertiesJson);
+        command.Parameters.AddWithValue("$properties_json", (object?)propertiesJson ?? DBNull.Value);
         command.ExecuteNonQuery();
         return path;
     }
