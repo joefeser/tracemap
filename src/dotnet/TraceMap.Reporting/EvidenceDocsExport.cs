@@ -233,10 +233,19 @@ public static class EvidenceDocsExporter
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly Regex YearMonthPattern = new(@"^\d{4}-\d{2}$", RegexOptions.Compiled);
-    private static readonly Regex SafeClosedTextPattern = new(@"^[A-Za-z0-9._:/@,+ \[\]\-]+$", RegexOptions.Compiled);
-    private static readonly Regex SafePathPattern = new(@"^[A-Za-z0-9._/\-]+$", RegexOptions.Compiled);
-    private static readonly Regex Hex40Pattern = new(@"^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+    private static readonly Regex YearMonthPattern = new(@"^\d{4}-\d{2}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex SafeClosedTextPattern = new(@"^[A-Za-z0-9._:/@,+ \[\]\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex SafePathPattern = new(@"^[A-Za-z0-9._/\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex Hex40Pattern = new(@"^[0-9a-fA-F]{40}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex WindowsPathPattern = new(@"[A-Za-z]:\\", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex RawHostPattern = new(@"\b(www\.|[A-Za-z0-9.-]+\.(com|net|org|io|local))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex RawSqlPattern = new(@"\b(select|insert|update|delete|merge)\b.+\b(from|into|set|where|values)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex ConfigSecretPattern = new(@"(password|passwd|pwd|secret|token|apikey|api_key|connectionstring|connection string)\s*[=:]", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex CredentialPattern = new(@"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex SafeMetadataKeyPattern = new(@"^[A-Za-z0-9_.-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex ContentHashLinePattern = new(@"tracemap_content_sha256: [0-9a-f]{64}", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex RepeatedDashPattern = new("-+", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
 
     public static async Task<EvidenceDocsExportResult> ExportAsync(EvidenceDocsExportOptions options, CancellationToken cancellationToken = default)
     {
@@ -297,7 +306,7 @@ public static class EvidenceDocsExporter
 
         var files = BuildGeneratedFiles(options.OutputPath, manifest, chunks, formats);
         ValidateGeneratedStrings(files);
-        ValidateExistingFiles(options.OutputPath, files, options.Force);
+        await ValidateExistingFilesAsync(options.OutputPath, files, options.Force, cancellationToken);
         var outputs = BuildOutputSummaries(options.OutputPath, files);
         manifest = BuildManifest(
             options,
@@ -312,7 +321,7 @@ public static class EvidenceDocsExporter
         manifest = WithManifestHash(manifest);
         files["manifest.json"] = SerializeJson(manifest);
         ValidateGeneratedStrings(files);
-        ValidateExistingFiles(options.OutputPath, files, options.Force);
+        await ValidateExistingFilesAsync(options.OutputPath, files, options.Force, cancellationToken);
 
         if (!options.DryRun)
         {
@@ -589,7 +598,7 @@ public static class EvidenceDocsExporter
                     SafeRelativePathOrNull(StringOrNull(reader, 11)),
                     IntOrNull(reader, 12),
                     IntOrNull(reader, 13),
-                    SafeProperties(reader.GetString(14))));
+                    SafeProperties(StringOrNull(reader, 14))));
             }
         }
 
@@ -662,7 +671,7 @@ public static class EvidenceDocsExporter
                     SafeRelativePathOrNull(StringOrNull(reader, 9)),
                     IntOrNull(reader, 10),
                     IntOrNull(reader, 11),
-                    SafeProperties(reader.GetString(12))));
+                    SafeProperties(StringOrNull(reader, 12))));
             }
         }
 
@@ -1149,7 +1158,13 @@ public static class EvidenceDocsExporter
 
         if (formats.Contains("jsonl", StringComparer.Ordinal))
         {
-            files["chunks.jsonl"] = string.Concat(chunks.Select(chunk => JsonSerializer.Serialize(chunk, JsonLineOptions) + "\n"));
+            var jsonl = new StringBuilder();
+            foreach (var chunk in chunks)
+            {
+                jsonl.Append(JsonSerializer.Serialize(chunk, JsonLineOptions)).Append('\n');
+            }
+
+            files["chunks.jsonl"] = jsonl.ToString();
         }
 
         if (formats.Contains("markdown", StringComparer.Ordinal))
@@ -1348,11 +1363,11 @@ public static class EvidenceDocsExporter
         }
     }
 
-    private static void ValidateExistingFiles(string outputPath, IReadOnlyDictionary<string, string> files, bool force)
+    private static async Task ValidateExistingFilesAsync(string outputPath, IReadOnlyDictionary<string, string> files, bool force, CancellationToken cancellationToken)
     {
         var root = Path.GetFullPath(outputPath);
         var manifestPath = Path.Combine(root, "manifest.json");
-        var existingManifest = File.Exists(manifestPath) ? File.ReadAllText(manifestPath) : null;
+        var existingManifest = File.Exists(manifestPath) ? await File.ReadAllTextAsync(manifestPath, cancellationToken) : null;
         var manifestGenerated = existingManifest is not null && IsSelfConsistentManifest(existingManifest);
         var manifestStale = existingManifest is not null && HasGeneratedManifestMarker(existingManifest) && !manifestGenerated;
 
@@ -1364,7 +1379,7 @@ public static class EvidenceDocsExporter
                 continue;
             }
 
-            var content = File.ReadAllText(path);
+            var content = await File.ReadAllTextAsync(path, cancellationToken);
             if (relativePath == "manifest.json")
             {
                 if (IsSelfConsistentManifest(content) || force && HasGeneratedManifestMarker(content))
@@ -1403,8 +1418,6 @@ public static class EvidenceDocsExporter
             }
         }
     }
-
-    private static IReadOnlyList<EvidenceDocsOutputSummary> BuildManifestOutputSummariesPlaceholder() => [];
 
     private static bool ManifestHasMatchingOutput(string manifestContent, string relativePath, string fileContent)
     {
@@ -1829,7 +1842,7 @@ public static class EvidenceDocsExporter
 
     private static bool IsSafeMetadataKey(string value)
     {
-        return value.Length <= 64 && Regex.IsMatch(value, "^[A-Za-z0-9_.-]+$");
+        return value.Length <= 64 && SafeMetadataKeyPattern.IsMatch(value);
     }
 
     private static bool IsSafeMetadataValue(string value)
@@ -1846,8 +1859,13 @@ public static class EvidenceDocsExporter
         return IsSafeMetadataValue(value) ? value : $"hash:{Hash(value, 16)}";
     }
 
-    private static Dictionary<string, string> SafeProperties(string json)
+    private static Dictionary<string, string> SafeProperties(string? json)
     {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
         try
         {
             var values = JsonSerializer.Deserialize<Dictionary<string, string>>(json, JsonOptions) ?? [];
@@ -1958,29 +1976,29 @@ public static class EvidenceDocsExporter
         if (value.Contains("/Users/", StringComparison.OrdinalIgnoreCase)
             || value.Contains("\\Users\\", StringComparison.OrdinalIgnoreCase)
             || value.Contains("/home/", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(value, @"[A-Za-z]:\\"))
+            || WindowsPathPattern.IsMatch(value))
         {
             return "local-absolute-path";
         }
 
         if (value.Contains("git@", StringComparison.OrdinalIgnoreCase)
             || value.Contains("://", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(value, @"\b(www\.|[A-Za-z0-9.-]+\.(com|net|org|io|local))\b", RegexOptions.IgnoreCase))
+            || RawHostPattern.IsMatch(value))
         {
             return "raw-remote-or-url";
         }
 
-        if (Regex.IsMatch(value, @"\b(select|insert|update|delete|merge)\b.+\b(from|into|set|where|values)\b", RegexOptions.IgnoreCase))
+        if (RawSqlPattern.IsMatch(value))
         {
             return "raw-sql";
         }
 
-        if (Regex.IsMatch(value, @"(password|passwd|pwd|secret|token|apikey|api_key|connectionstring|connection string)\s*[=:]", RegexOptions.IgnoreCase))
+        if (ConfigSecretPattern.IsMatch(value))
         {
             return "credential-or-config";
         }
 
-        if (Regex.IsMatch(value, @"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})"))
+        if (CredentialPattern.IsMatch(value))
         {
             return "credential";
         }
@@ -2037,7 +2055,7 @@ public static class EvidenceDocsExporter
 
     private static string YamlScalar(string value)
     {
-        return Regex.IsMatch(value, "^[A-Za-z0-9._:/@+-]+$") ? value : JsonSerializer.Serialize(value);
+        return SafeClosedTextPattern.IsMatch(value) ? value : JsonSerializer.Serialize(value);
     }
 
     private static string Slug(string value)
@@ -2048,7 +2066,7 @@ public static class EvidenceDocsExporter
             builder.Append(char.IsAsciiLetterOrDigit(character) ? character : '-');
         }
 
-        return Regex.Replace(builder.ToString(), "-+", "-").Trim('-');
+        return RepeatedDashPattern.Replace(builder.ToString(), "-").Trim('-');
     }
 
     private static IReadOnlyList<EvidenceDocChunk> SortChunks(IEnumerable<EvidenceDocChunk> chunks)
@@ -2110,7 +2128,7 @@ public static class EvidenceDocsExporter
     private static string NormalizeMarkdownHashInput(string content)
     {
         var normalized = NormalizeLineEndings(content);
-        return Regex.Replace(normalized, @"tracemap_content_sha256: [0-9a-f]{64}", "tracemap_content_sha256: ", RegexOptions.None);
+        return ContentHashLinePattern.Replace(normalized, "tracemap_content_sha256: ");
     }
 
     private static bool TryReadFrontmatter(string content, out Dictionary<string, string> metadata, out string body)
