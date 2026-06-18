@@ -124,8 +124,13 @@ Acceptance criteria:
 - The `limitation` field is singular per checklist row by design; a row may
   summarize multiple limitations there, but validation treats `limitation` as
   the canonical field label.
-- The public claim level field uses only `shipped`, `demo`, `concept`, or
-  `hidden`.
+- The checklist-row public claim level field uses the claim-ledger vocabulary
+  only: `shipped`, `demo`, `concept`, or `hidden`.
+- Checklist-row claim levels are not discovery metadata values. If the future
+  implementation emits route or discovery metadata, `publicClaimLevel` must use
+  the existing discovery enum (`main`, `demo`, `concept`, `planned`,
+  `dev-only`, `hidden`, or `future`) and map discovery `main` to checklist
+  `shipped` in the rendered checklist or implementation-state note.
 - The decision field uses only these labels: `repeat with proof`,
   `downgrade before repeating`, `owner follow-up needed`, `do not repeat`, and
   `internal only`.

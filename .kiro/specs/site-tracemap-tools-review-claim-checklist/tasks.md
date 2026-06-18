@@ -24,8 +24,12 @@ complete.
   level, proof path, rule ID or rule family, evidence tier, coverage label,
   limitation, non-claims, source branch or main-dev status, owner follow-up,
   reviewer, review date, and decision.
-- [ ] Limit public claim level values to `shipped`, `demo`, `concept`, and
-  `hidden`.
+- [ ] Limit checklist-row public claim level values to the claim-ledger
+  vocabulary: `shipped`, `demo`, `concept`, and `hidden`.
+- [ ] Keep checklist-row claim levels separate from route/discovery metadata:
+  discovery `publicClaimLevel` values must use the existing discovery enum, and
+  discovery `main` maps to checklist `shipped` instead of being emitted as
+  `shipped` metadata.
 - [ ] Use only the canonical review outcome labels: `repeat with proof`,
   `downgrade before repeating`, `owner follow-up needed`, `do not repeat`, and
   `internal only`.
