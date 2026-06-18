@@ -146,7 +146,7 @@ async function validateRoutesIndex({ dist, errors }) {
     }
   }
 
-  const routeText = `${routeEntry.title} ${routeEntry.summary} ${routeEntry.limitations?.join(" ") ?? ""}`;
+  const routeText = routeTextFields(routeEntry).join(" ");
   if (/runtime proof|production traffic proof|endpoint performance proof|release safety proof|operational safety proof/i.test(routeText)) {
     errors.push("Static vs runtime routes-index.json inflates concept metadata into runtime or operational proof.");
   }
@@ -217,10 +217,7 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
     errors.push("Static vs runtime page contains unsupported proof or replacement wording.");
   }
 
-  const impactedScanText = pageText.replace(
-    "TraceMap should not say a surface is impacted unless reducer-backed public-safe evidence supports that wording",
-    ""
-  );
+  const impactedScanText = stripAllowedImpactedBoundary(pageText);
   if (/\b(?:surface|endpoint|route|contract|package|service)\b[^.]{0,80}\bimpacted\b/i.test(impactedScanText)) {
     errors.push("Static vs runtime page contains unsupported impacted wording.");
   }
@@ -230,6 +227,21 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
       errors.push(`Static vs runtime page contains forbidden public text: ${text}`);
     }
   }
+}
+
+function routeTextFields(routeEntry) {
+  return [
+    routeEntry.title,
+    routeEntry.summary,
+    ...(Array.isArray(routeEntry.limitations) ? routeEntry.limitations : [])
+  ].filter((value) => typeof value === "string");
+}
+
+function stripAllowedImpactedBoundary(value) {
+  return value.replace(
+    /\bTraceMap\s+should\s+not\s+say\s+a\s+surface\s+is\s+impacted\s+unless\s+reducer-backed\s+public-safe\s+evidence\s+supports\s+that\s+wording\b\.?/gi,
+    ""
+  );
 }
 
 function containsForbiddenText(text, ...values) {
