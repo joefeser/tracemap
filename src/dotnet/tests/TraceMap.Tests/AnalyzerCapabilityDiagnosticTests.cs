@@ -233,6 +233,45 @@ public sealed class AnalyzerCapabilityDiagnosticTests
         Assert.Contains(review.Report.Gaps, gap => gap.Message.Contains("no-evidence conclusions remain coverage-relative", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Release_review_counts_capability_gaps_as_reduced_source_coverage()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("Level1SemanticAnalysis", "Succeeded") with
+        {
+            ScanId = "scan-before",
+            CommitSha = "1111111111111111111111111111111111111111"
+        };
+        var after = Manifest("Level1SemanticAnalysis", "Succeeded") with
+        {
+            ScanId = "scan-after",
+            CommitSha = "2222222222222222222222222222222222222222"
+        };
+
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [CapabilityFact(after)]);
+
+        var review = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "release-review"),
+            Format: "json"));
+
+        Assert.Equal("Full", review.Report.BeforeSnapshot.Sources.Single().Coverage);
+        Assert.Equal("Reduced", review.Report.AfterSnapshot.Sources.Single().Coverage);
+        Assert.Contains(review.Report.AfterSnapshot.CoverageWarnings, warning =>
+            warning.Contains("reduced analysis coverage", StringComparison.Ordinal));
+        Assert.Contains(review.Report.SourceCoverage, coverage =>
+            coverage.SourceLabel == "single"
+            && coverage.AfterCoverage == "Reduced"
+            && coverage.GapIds.Count > 0);
+        Assert.Contains(review.Report.Gaps, gap =>
+            gap.GapKind == "ToolchainCapabilityReducedCoverage"
+            && gap.SupportingFactIds.Contains("fact-capability-after"));
+    }
+
     private static string CreateLegacyRepo(string root)
     {
         var repo = Path.Combine(root, "repo");
@@ -323,6 +362,35 @@ public sealed class AnalyzerCapabilityDiagnosticTests
                 fact.Properties.GetValueOrDefault("coverageEffect"),
                 fact.Properties.GetValueOrDefault("sourceScope")))
             .ToArray();
+    }
+
+    private static CodeFact CapabilityFact(ScanManifest manifest)
+    {
+        return new CodeFact(
+            "fact-capability-after",
+            manifest.ScanId,
+            manifest.RepoName,
+            manifest.CommitSha,
+            null,
+            FactTypes.AnalyzerCapabilityDiagnostic,
+            RuleIds.AnalyzerCapabilitySemantic,
+            EvidenceTiers.Tier2Structural,
+            null,
+            null,
+            null,
+            new EvidenceSpan(".", 1, 1, null, "AnalyzerCapabilityDiagnosticExtractor", ScannerVersions.AnalyzerCapabilityExtractor),
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["capabilityCode"] = AnalyzerCapabilityDiagnosticExtractor.Codes.CSharpSemanticCompilation,
+                ["capabilityKind"] = "semantic",
+                ["capabilityState"] = AnalyzerCapabilityDiagnosticExtractor.States.Reduced,
+                ["coverageEffect"] = AnalyzerCapabilityDiagnosticExtractor.Effects.ReducedSemantic,
+                ["guidanceCode"] = AnalyzerCapabilityDiagnosticExtractor.GuidanceCodes.TreatAsReducedCoverage,
+                ["limitationCode"] = AnalyzerCapabilityDiagnosticExtractor.LimitationCodes.SemanticStatusDerived,
+                ["schemaVersion"] = AnalyzerCapabilityDiagnosticExtractor.SchemaVersion,
+                ["sourceScope"] = "workspace",
+                ["supportingFactIds"] = string.Empty
+            });
     }
 
     private static async Task RewriteFirstCapabilitySchemaAsync(string indexPath, string schemaVersion)
