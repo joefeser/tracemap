@@ -354,6 +354,7 @@ function validateHiddenRow({ fields, id, errors }) {
 
 function validateProofPath({ fields, id, rowHtml, errors }) {
   const proofPath = normalizeInlineValue(fields.proofPath);
+  const proofPathHtml = extractRowFieldHtml(rowHtml, "proofPath");
 
   if (proofPath === "blocked-pending-validation" || proofPath === "not available") {
     errors.push(withEvidence(`Proof source catalog row ${id} uses forbidden proofPath sentinel: ${proofPath}`, "proof-source-catalog/index.html"));
@@ -364,7 +365,7 @@ function validateProofPath({ fields, id, rowHtml, errors }) {
     return;
   }
 
-  if (!/<a\b[^>]*\bhref\s*=/.test(rowHtml)) {
+  if (!/<a\b[^>]*\bhref\s*=/.test(proofPathHtml)) {
     errors.push(withEvidence(`Proof source catalog row ${id} proofPath must be a public-safe link or allowed sentinel.`, "proof-source-catalog/index.html"));
   }
 }
@@ -585,6 +586,12 @@ function extractRowFields(rowHtml) {
   }
 
   return fields;
+}
+
+function extractRowFieldHtml(rowHtml, field) {
+  const escapedField = escapeRegExp(field);
+  const pattern = new RegExp(`<td\\b(?=[^>]*\\bdata-field\\s*=\\s*["']${escapedField}["'])[^>]*>([\\s\\S]*?)<\\/td>`, "i");
+  return rowHtml.match(pattern)?.[1] ?? "";
 }
 
 function extractHrefs(html) {
