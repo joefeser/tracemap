@@ -231,8 +231,11 @@ Acceptance criteria:
   wording for the static-versus-runtime content and must not imply a shipped
   runtime, telemetry, or observability capability.
 - If the content is implemented as a section, add a stable in-page anchor so
-  cross-links and discovery entries can deep-link to the concept explanation
-  without implying a standalone shipped route.
+  human-facing cross-links can deep-link to the concept explanation without
+  implying a standalone shipped route. Machine-readable discovery entries may
+  deep-link to that anchor only if the current discovery schema and validator
+  support in-page anchors; otherwise keep discovery entries on the validated
+  host-page path and record the anchor-only limitation in implementation state.
 - Discovery metadata, search metadata, social metadata, alt text, captions,
   and generated route summaries carry the same concept-level claim boundaries
   as visible page copy.
