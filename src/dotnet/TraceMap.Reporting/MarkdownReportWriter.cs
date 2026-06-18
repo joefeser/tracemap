@@ -262,6 +262,34 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "WinForms Static Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WinFormsSurfaceDeclared
+                or FactTypes.WinFormsControlDeclared
+                or FactTypes.WinFormsResourceMetadataDeclared),
+            FormatWinFormsFact);
+
+        AddFactSection(
+            lines,
+            "WinForms Events",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WinFormsEventBindingDeclared
+                or FactTypes.WinFormsHandlerResolved),
+            FormatWinFormsFact);
+
+        AddFactSection(
+            lines,
+            "WinForms Navigation And Callbacks",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WinFormsNavigationEdgeDeclared
+                or FactTypes.WinFormsCallbackBoundaryDeclared),
+            FormatWinFormsFact);
+
+        AddFactSection(
+            lines,
+            "WinForms Handler Flow",
+            result.Facts.Where(fact => fact.FactType == FactTypes.WinFormsHandlerFlowProjected),
+            fact => $"- `{fact.Properties.GetValueOrDefault("flowClassification") ?? "UnknownAnalysisGap"}` `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` -> `{fact.Properties.GetValueOrDefault("terminalSurfaceKind") ?? "none"}` ({fact.EvidenceTier}, coverage `{fact.Properties.GetValueOrDefault("coverage") ?? "unknown"}`) at `{CombinedReportHelpers.SafePath(fact.Evidence.FilePath)}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "Legacy ASP.NET Static Surface Evidence",
             result.Facts.Where(fact => fact.FactType is FactTypes.AspNetSurfaceDeclared
                 or FactTypes.AspNetRouteDeclared
@@ -323,6 +351,17 @@ public static class MarkdownReportWriter
             lines.Add("");
             lines.Add("- WebForms event evidence is static markup, code-behind, designer, and direct backend evidence. It does not prove runtime event firing, page lifecycle execution, event bubbling, deployment, service reachability, SQL execution, branch feasibility, or production usage.");
             lines.Add("- Static logic signals and UI-boilerplate signals are deterministic heuristics, not proof of business logic or code quality.");
+        }
+
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("WinForms", StringComparison.Ordinal)
+            || fact.RuleId.StartsWith("legacy.winforms", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## WinForms Limitations");
+            lines.Add("");
+            lines.Add("- WinForms evidence is deterministic static repository evidence from C# designer/code files and safe resource metadata.");
+            lines.Add("- It does not prove runtime event firing, form visibility, user reachability, layout, localization results, auth/role outcome, branch feasibility, scheduling, service reachability, SQL execution, database existence, deployment, or production usage.");
+            lines.Add("- Raw snippets, resource values, SQL, config values, endpoint addresses, URLs, remotes, local absolute paths, and secrets are omitted or hashed.");
         }
 
         if (result.Facts.Any(fact => fact.FactType.StartsWith("AspNet", StringComparison.Ordinal)))
@@ -434,6 +473,22 @@ public static class MarkdownReportWriter
             FactTypes.WebFormsDesignerControlDeclared => $"- designer field `{fact.Properties.GetValueOrDefault("fieldName") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             FactTypes.WebFormsControlDeclared => $"- control `{fact.Properties.GetValueOrDefault("controlId") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             _ => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`"
+        };
+    }
+
+    private static string FormatWinFormsFact(CodeFact fact)
+    {
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return fact.FactType switch
+        {
+            FactTypes.WinFormsSurfaceDeclared => $"- surface `{DisplayCodeValue(fact.Properties.GetValueOrDefault("typeName") ?? DisplayFactName(fact))}` kind `{DisplayCodeValue(fact.Properties.GetValueOrDefault("surfaceKind") ?? "unknown")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsControlDeclared => $"- control `{DisplayCodeValue(fact.Properties.GetValueOrDefault("controlId") ?? DisplayFactName(fact))}` kind `{DisplayCodeValue(fact.Properties.GetValueOrDefault("controlKind") ?? "unknown")}` type `{DisplayCodeValue(fact.Properties.GetValueOrDefault("controlType") ?? "unknown")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsEventBindingDeclared => $"- event `{DisplayCodeValue(fact.Properties.GetValueOrDefault("eventName") ?? "unknown")}` on `{DisplayCodeValue(fact.Properties.GetValueOrDefault("controlId") ?? "unknown")}` -> `{DisplayCodeValue(fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact))}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsHandlerResolved => $"- handler `{DisplayCodeValue(fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact))}` resolved as `{DisplayCodeValue(fact.Properties.GetValueOrDefault("resolutionKind") ?? "unknown")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsNavigationEdgeDeclared => $"- navigation `{DisplayCodeValue(fact.Properties.GetValueOrDefault("navigationKind") ?? DisplayFactName(fact))}` to `{DisplayCodeValue(fact.Properties.GetValueOrDefault("targetFormTypeName") ?? DisplayFactName(fact))}` as `{DisplayCodeValue(fact.Properties.GetValueOrDefault("navigationClassification") ?? "UnknownAnalysisGap")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsCallbackBoundaryDeclared => $"- callback `{DisplayCodeValue(fact.Properties.GetValueOrDefault("boundaryClassification") ?? DisplayFactName(fact))}` event `{DisplayCodeValue(fact.Properties.GetValueOrDefault("eventName") ?? fact.Properties.GetValueOrDefault("callbackKind") ?? "unknown")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsResourceMetadataDeclared => $"- resource metadata `{DisplayCodeValue(fact.Properties.GetValueOrDefault("resourceKind") ?? "unknown")}` keys `{DisplayCodeValue(fact.Properties.GetValueOrDefault("resourceKeyHashes") ?? string.Empty)}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            _ => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`"
         };
     }
 
