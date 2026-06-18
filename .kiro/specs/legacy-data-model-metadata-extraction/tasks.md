@@ -40,19 +40,19 @@
   - [x] Document emitted fact types, evidence tiers, safe properties, and
         limitations in `rules/rule-catalog.yml`.
 
-- [ ] 2. Implement normalized legacy data model identity. Requirements: 1, 2, 7, 8.
-  - [ ] Build a deterministic model identity helper over safe metadata kind,
+- [x] 2. Implement normalized legacy data model identity. Requirements: 1, 2, 7, 8.
+  - [x] Build a deterministic model identity helper over safe metadata kind,
         descriptor role, file path, metadata scope, safe names, and hashes.
-  - [ ] Normalize DBML entity/table/column/association/routine descriptors.
-  - [ ] Normalize EDMX conceptual/storage/property/association/function mapping
+  - [x] Normalize DBML entity/table/column/association/routine descriptors.
+  - [x] Normalize EDMX conceptual/storage/property/association/function mapping
         descriptors.
-  - [ ] Normalize typed DataSet DataSet/DataTable/DataColumn/relation/adapter
+  - [x] Normalize typed DataSet DataSet/DataTable/DataColumn/relation/adapter
         descriptors while preserving unrelated `.xsd` gating.
-  - [ ] Preserve descriptor tier ceilings and avoid upgrading metadata by
+  - [x] Preserve descriptor tier ceilings and avoid upgrading metadata by
         generated-code linkage.
-  - [ ] Include `metadataFormat` in stable keys so DBML, EDMX, typed DataSet,
+  - [x] Include `metadataFormat` in stable keys so DBML, EDMX, typed DataSet,
         and NHibernate descriptors with the same display name remain distinct.
-  - [ ] Add deterministic ordering, stable-key, duplicate-identity, and privacy
+  - [x] Add deterministic ordering, stable-key, duplicate-identity, and privacy
         tests.
 
 - [ ] 3. Add relationship extraction and ambiguity gaps. Requirements: 2, 5, 8.
