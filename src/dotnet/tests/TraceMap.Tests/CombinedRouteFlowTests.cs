@@ -294,7 +294,8 @@ public sealed class CombinedRouteFlowTests
             CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
             QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31),
             ArgumentPassedFact(server, unrelatedCaller, unrelatedCallee, "id", "id", "System.Int32", "Services/Unrelated.cs", 20),
-            QueryPatternFact(server, unrelatedCallee, "Infrastructure/UnrelatedRepository.cs", 41, attachSymbol: true)
+            QueryPatternFact(server, unrelatedCallee, "Infrastructure/UnrelatedRepository.cs", 41, attachSymbol: true),
+            QueryPatternFact(server, unrelatedCallee, "Infrastructure/MisleadingTarget.cs", 42, attachSymbol: true, targetSymbol: repository)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
         return combinedPath;
@@ -413,7 +414,7 @@ public sealed class CombinedRouteFlowTests
             });
     }
 
-    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line, bool attachSymbol = false)
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line, bool attachSymbol = false, string targetSymbol = "orders")
     {
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
@@ -438,7 +439,7 @@ public sealed class CombinedRouteFlowTests
             EvidenceTiers.Tier2Structural,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             sourceSymbol: sourceSymbol,
-            targetSymbol: "orders",
+            targetSymbol: targetSymbol,
             properties: properties);
     }
 

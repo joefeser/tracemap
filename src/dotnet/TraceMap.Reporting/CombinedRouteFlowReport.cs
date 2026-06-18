@@ -942,7 +942,7 @@ public static class CombinedRouteFlowReporter
             var unsupportedAttachedFactIds = new List<string>();
             foreach (var row in factSymbolRows)
             {
-                var attached = pathModel.FlowRowForSymbol(row.SourceIndexId, row.CombinedSymbolId, row.SymbolDisplayName, row.SourceSymbol, row.TargetSymbol);
+                var attached = pathModel.FlowRowForSymbol(row.SourceIndexId, row.CombinedSymbolId, row.SymbolDisplayName, row.SourceSymbol);
                 if (attached is null)
                 {
                     continue;
@@ -1383,7 +1383,7 @@ public static class CombinedRouteFlowReporter
             var symbolParameter = $"$symbol{index}";
             command.Parameters.AddWithValue(sourceParameter, symbolCandidates[index].SourceIndexId);
             command.Parameters.AddWithValue(symbolParameter, symbolCandidates[index].Symbol);
-            clauses.Add($"(links.source_index_id = {sourceParameter} and (links.combined_symbol_id = {symbolParameter} or facts.source_symbol = {symbolParameter} or facts.target_symbol = {symbolParameter} or symbols.display_name = {symbolParameter}))");
+            clauses.Add($"(links.source_index_id = {sourceParameter} and (links.combined_symbol_id = {symbolParameter} or facts.source_symbol = {symbolParameter} or symbols.display_name = {symbolParameter}))");
         }
 
         return clauses.Count == 0
