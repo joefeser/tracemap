@@ -247,7 +247,7 @@ rules:
   - id: property-flow.root.v1
     name: Property flow selected root
     description: Records deterministic selected root rows for UI field, control, binding, model, DTO, symbol, or fact selectors over a combined index.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - property-flow selected root row
     limitations:
@@ -258,7 +258,7 @@ rules:
   - id: property-flow.edge.v1
     name: Property flow derived edge
     description: Records deterministic report-time lineage edges derived from available combined facts and path graph evidence.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - property-flow edge row
       - property-flow root-to-graph gap
