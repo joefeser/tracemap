@@ -274,10 +274,10 @@ Validation executed before PR:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
-- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 19 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 22 tests.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModel`: passed, 3 tests.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 451 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 454 tests.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>`: passed; emitted the required scan artifacts and 23 facts.
 
 Kiro implementation review:
@@ -297,6 +297,15 @@ Kiro implementation review:
   same-name stable-key test and making the tier-ceiling test intent explicit.
   A third Kiro review was intentionally not run to respect the two-review-round
   limit; final local validation passed after the patch.
+
+PR review-loop follow-up:
+
+- Initial PR loop found three unresolved review threads: stale safe labels when
+  hashing reused properties, hardcoded full coverage labels, and line-number
+  based stable-key scopes. Patched by clearing stale safe/hash/redaction keys in
+  `LegacyDataSafeValues`, passing reduced coverage labels when metadata gaps
+  are known, removing line numbers from stable-key scope strings, and adding
+  focused regressions for all three behaviors.
 
 Follow-ups:
 

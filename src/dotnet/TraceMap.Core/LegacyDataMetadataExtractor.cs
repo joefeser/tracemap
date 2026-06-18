@@ -73,6 +73,7 @@ public static class LegacyDataMetadataExtractor
         {
             AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataDbml, "UnsupportedLegacyDataMetadataVersion", "Multiple DBML Database descriptors were present and require a future deterministic mapping rule.", databases[1]);
         }
+        var coverageLabel = databases.Length > 1 ? "reduced" : "full";
 
         var database = databases.FirstOrDefault() ?? document.Root;
         if (database is null)
@@ -90,7 +91,7 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(storageProps, "storageObjectName", "storageObjectHash", tableName);
             storageProps["storageObjectKind"] = "Table";
             AddHashOnly(storageProps, "providerNameHash", provider);
-            AddModelIdentity(storageProps, "Dbml", "storage-object", "storage", item.RelativePath, $"dbml-table:{GetLine(table)}", tableName, null, metadataFact.FactId, Parts(("table", tableName)));
+            AddModelIdentity(storageProps, "Dbml", "storage-object", "storage", item.RelativePath, "dbml-table", tableName, null, metadataFact.FactId, Parts(("table", tableName)), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataStorageObjectDeclared, RuleIds.LegacyDataDbml, item.RelativePath, table, TargetFrom(storageProps, "storageObjectName", "storageObjectHash"), storageProps));
 
             if (!string.IsNullOrWhiteSpace(typeName))
@@ -99,14 +100,14 @@ public static class LegacyDataMetadataExtractor
                 AddSafeName(entityProps, "entityName", "entityHash", typeName);
                 AddSafeName(entityProps, "typeName", "typeHash", typeName);
                 AddGeneratedHints(entityProps, database, item.RelativePath);
-                AddModelIdentity(entityProps, "Dbml", "entity", "conceptual", item.RelativePath, $"dbml-entity:{GetLine(typeElement ?? table)}", typeName, AttributeValue(database, "Class"), metadataFact.FactId, Parts(("type", typeName), ("table", tableName)));
+                AddModelIdentity(entityProps, "Dbml", "entity", "conceptual", item.RelativePath, "dbml-entity", typeName, AttributeValue(database, "Class"), metadataFact.FactId, Parts(("type", typeName), ("table", tableName)), coverageLabel);
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataDbml, item.RelativePath, typeElement ?? table, TargetFrom(entityProps, "typeName", "typeHash"), entityProps));
 
                 var mappingProps = MetadataProperties("Dbml", metadataHash, "entity-table");
                 mappingProps["mappingKind"] = "entity-table";
                 AddSafeName(mappingProps, "entityName", "entityHash", typeName);
                 AddSafeName(mappingProps, "tableName", "tableHash", tableName);
-                AddModelIdentity(mappingProps, "Dbml", "entity", "mapping", item.RelativePath, $"dbml-entity-table:{GetLine(table)}", typeName, tableName, metadataFact.FactId, Parts(("type", typeName), ("table", tableName)));
+                AddModelIdentity(mappingProps, "Dbml", "entity", "mapping", item.RelativePath, "dbml-entity-table", typeName, tableName, metadataFact.FactId, Parts(("type", typeName), ("table", tableName)), coverageLabel);
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataDbml, item.RelativePath, table, TargetFrom(mappingProps, "entityName", "entityHash"), mappingProps));
             }
 
@@ -121,7 +122,7 @@ public static class LegacyDataMetadataExtractor
                 AddOptional(columnProps, "isPrimaryKey", AttributeValue(column, "IsPrimaryKey"));
                 AddOptional(columnProps, "isNullable", AttributeValue(column, "CanBeNull"));
                 AddOptional(columnProps, "isGenerated", AttributeValue(column, "IsDbGenerated"));
-                AddModelIdentity(columnProps, "Dbml", "column", "storage", item.RelativePath, $"dbml-column:{GetLine(column)}", columnName, tableName, metadataFact.FactId, Parts(("table", tableName), ("column", columnName), ("property", memberName)));
+                AddModelIdentity(columnProps, "Dbml", "column", "storage", item.RelativePath, "dbml-column", columnName, tableName, metadataFact.FactId, Parts(("table", tableName), ("column", columnName), ("property", memberName)), coverageLabel);
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyDataDbml, item.RelativePath, column, TargetFrom(columnProps, "propertyName", "propertyHash"), columnProps));
 
                 var mappingProps = MetadataProperties("Dbml", metadataHash, "property-column");
@@ -130,7 +131,7 @@ public static class LegacyDataMetadataExtractor
                 AddSafeName(mappingProps, "propertyName", "propertyHash", memberName);
                 AddSafeName(mappingProps, "tableName", "tableHash", tableName);
                 AddSafeName(mappingProps, "columnName", "columnHash", columnName);
-                AddModelIdentity(mappingProps, "Dbml", "column", "mapping", item.RelativePath, $"dbml-property-column:{GetLine(column)}", memberName, tableName, metadataFact.FactId, Parts(("type", typeName), ("property", memberName), ("table", tableName), ("column", columnName)));
+                AddModelIdentity(mappingProps, "Dbml", "column", "mapping", item.RelativePath, "dbml-property-column", memberName, tableName, metadataFact.FactId, Parts(("type", typeName), ("property", memberName), ("table", tableName), ("column", columnName)), coverageLabel);
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataDbml, item.RelativePath, column, TargetFrom(mappingProps, "propertyName", "propertyHash"), mappingProps));
             }
         }
@@ -143,7 +144,7 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "associationName", "associationHash", associationName);
             AddSafeName(properties, "sourceMemberName", "sourceMemberHash", AttributeValue(association, "ThisKey"));
             AddSafeName(properties, "targetMemberName", "targetMemberHash", AttributeValue(association, "OtherKey"));
-            AddModelIdentity(properties, "Dbml", "relationship", "mapping", item.RelativePath, $"dbml-association:{GetLine(association)}", associationName, null, metadataFact.FactId, Parts(("association", associationName), ("this-key", AttributeValue(association, "ThisKey")), ("other-key", AttributeValue(association, "OtherKey"))));
+            AddModelIdentity(properties, "Dbml", "relationship", "mapping", item.RelativePath, "dbml-association", associationName, null, metadataFact.FactId, Parts(("association", associationName), ("this-key", AttributeValue(association, "ThisKey")), ("other-key", AttributeValue(association, "OtherKey"))), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataDbml, item.RelativePath, association, TargetFrom(properties, "associationName", "associationHash"), properties));
         }
 
@@ -155,7 +156,7 @@ public static class LegacyDataMetadataExtractor
             properties["mappingKind"] = "routine";
             AddSafeName(properties, "storageObjectName", "storageObjectHash", routineName);
             AddSafeName(properties, "methodName", "methodHash", AttributeValue(routine, "Method"));
-            AddModelIdentity(properties, "Dbml", "routine", "storage", item.RelativePath, $"dbml-routine:{GetLine(routine)}", routineName, null, metadataFact.FactId, Parts(("routine", routineName), ("method", AttributeValue(routine, "Method"))));
+            AddModelIdentity(properties, "Dbml", "routine", "storage", item.RelativePath, "dbml-routine", routineName, null, metadataFact.FactId, Parts(("routine", routineName), ("method", AttributeValue(routine, "Method"))), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataStorageObjectDeclared, RuleIds.LegacyDataDbml, item.RelativePath, routine, TargetFrom(properties, "storageObjectName", "storageObjectHash"), properties));
         }
     }
@@ -184,6 +185,9 @@ public static class LegacyDataMetadataExtractor
         {
             AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataEdmx, "AmbiguousEdmxMapping", "Multiple conceptual or storage containers require review.", document.Root);
         }
+        var coverageLabel = csdlSchemas.Length == 0 || ssdlSchemas.Length == 0 || mappingElements.Length == 0 || conceptualContainers.Length > 1 || storageContainers.Length > 1
+            ? "reduced"
+            : "full";
 
         foreach (var entity in csdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")).OrderBy(GetLine).ThenBy(element => AttributeValue(element, "Name"), StringComparer.Ordinal))
         {
@@ -192,7 +196,7 @@ public static class LegacyDataMetadataExtractor
             properties["sourceSection"] = "CSDL";
             AddSafeName(properties, "entityName", "entityHash", name);
             AddSafeName(properties, "typeName", "typeHash", name);
-            AddModelIdentity(properties, "Edmx", "entity", "conceptual", item.RelativePath, $"edmx-csdl-entity:{GetLine(entity)}", name, AttributeValue(entity.Parent, "Namespace"), metadataFact.FactId, Parts(("entity", name), ("namespace", AttributeValue(entity.Parent, "Namespace"))));
+            AddModelIdentity(properties, "Edmx", "entity", "conceptual", item.RelativePath, "edmx-csdl-entity", name, AttributeValue(entity.Parent, "Namespace"), metadataFact.FactId, Parts(("entity", name), ("namespace", AttributeValue(entity.Parent, "Namespace"))), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, entity, TargetFrom(properties, "typeName", "typeHash"), properties));
 
             foreach (var property in entity.Elements().Where(element => element.Name.LocalName is "Property" or "NavigationProperty").OrderBy(GetLine))
@@ -203,7 +207,7 @@ public static class LegacyDataMetadataExtractor
                 AddSafeName(columnProps, "entityName", "entityHash", name);
                 AddSafeName(columnProps, "propertyName", "propertyHash", propertyName);
                 AddOptional(columnProps, "descriptorKind", property.Name.LocalName);
-                AddModelIdentity(columnProps, "Edmx", "column", "conceptual", item.RelativePath, $"edmx-csdl-property:{GetLine(property)}", propertyName, name, metadataFact.FactId, Parts(("entity", name), ("property", propertyName), ("descriptor-kind", property.Name.LocalName)));
+                AddModelIdentity(columnProps, "Edmx", "column", "conceptual", item.RelativePath, "edmx-csdl-property", propertyName, name, metadataFact.FactId, Parts(("entity", name), ("property", propertyName), ("descriptor-kind", property.Name.LocalName)), coverageLabel);
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, property, TargetFrom(columnProps, "propertyName", "propertyHash"), columnProps));
             }
         }
@@ -215,7 +219,7 @@ public static class LegacyDataMetadataExtractor
             properties["sourceSection"] = "CSDL";
             AddSafeName(properties, "entityName", "entityHash", name);
             AddSafeName(properties, "entityTypeName", "entityTypeHash", LocalName(AttributeValue(set, "EntityType")));
-            AddModelIdentity(properties, "Edmx", "entity", "conceptual", item.RelativePath, $"edmx-csdl-entity-set:{GetLine(set)}", name, AttributeValue(set.Parent, "Name"), metadataFact.FactId, Parts(("entity-set", name), ("entity-type", LocalName(AttributeValue(set, "EntityType")))));
+            AddModelIdentity(properties, "Edmx", "entity", "conceptual", item.RelativePath, "edmx-csdl-entity-set", name, AttributeValue(set.Parent, "Name"), metadataFact.FactId, Parts(("entity-set", name), ("entity-type", LocalName(AttributeValue(set, "EntityType"))), ("container", AttributeValue(set.Parent, "Name"))), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, set, TargetFrom(properties, "entityName", "entityHash"), properties));
         }
 
@@ -228,7 +232,7 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "storageObjectName", "storageObjectHash", tableName);
             AddSafeName(properties, "entitySetName", "entitySetHash", AttributeValue(set, "Name"));
             AddHashOnly(properties, "providerNameHash", AttributeValue(set, "Schema"));
-            AddModelIdentity(properties, "Edmx", "storage-object", "storage", item.RelativePath, $"edmx-ssdl-entity-set:{GetLine(set)}", tableName, AttributeValue(set.Parent, "Name"), metadataFact.FactId, Parts(("table", tableName), ("entity-set", AttributeValue(set, "Name"))));
+            AddModelIdentity(properties, "Edmx", "storage-object", "storage", item.RelativePath, "edmx-ssdl-entity-set", tableName, AttributeValue(set.Parent, "Name"), metadataFact.FactId, Parts(("table", tableName), ("entity-set", AttributeValue(set, "Name")), ("container", AttributeValue(set.Parent, "Name"))), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataStorageObjectDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, set, TargetFrom(properties, "storageObjectName", "storageObjectHash"), properties));
         }
 
@@ -242,7 +246,7 @@ public static class LegacyDataMetadataExtractor
                 properties["sourceSection"] = "SSDL";
                 AddSafeName(properties, "storageObjectName", "storageObjectHash", storageType);
                 AddSafeName(properties, "columnName", "columnHash", columnName);
-                AddModelIdentity(properties, "Edmx", "column", "storage", item.RelativePath, $"edmx-ssdl-column:{GetLine(property)}", columnName, storageType, metadataFact.FactId, Parts(("storage-type", storageType), ("column", columnName)));
+                AddModelIdentity(properties, "Edmx", "column", "storage", item.RelativePath, "edmx-ssdl-column", columnName, storageType, metadataFact.FactId, Parts(("storage-type", storageType), ("column", columnName)), coverageLabel);
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, property, TargetFrom(properties, "columnName", "columnHash"), properties));
             }
         }
@@ -254,19 +258,24 @@ public static class LegacyDataMetadataExtractor
             properties["sourceSection"] = IsSsdl(function) ? "SSDL" : "CSDL";
             properties["storageObjectKind"] = "Routine";
             AddSafeName(properties, "storageObjectName", "storageObjectHash", routineName);
-            AddModelIdentity(properties, "Edmx", "routine", "storage", item.RelativePath, $"edmx-routine:{GetLine(function)}", routineName, AttributeValue(function.Parent, "Namespace"), metadataFact.FactId, Parts(("routine", routineName), ("section", properties["sourceSection"])));
+            AddModelIdentity(properties, "Edmx", "routine", "storage", item.RelativePath, "edmx-routine", routineName, AttributeValue(function.Parent, "Namespace"), metadataFact.FactId, Parts(("routine", routineName), ("section", properties["sourceSection"]), ("namespace", AttributeValue(function.Parent, "Namespace"))), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataStorageObjectDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, function, TargetFrom(properties, "storageObjectName", "storageObjectHash"), properties));
         }
 
-        AddEdmxMappings(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, mappingElements);
+        AddEdmxMappings(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, mappingElements);
     }
 
-    private static void AddEdmxMappings(ScanManifest manifest, List<CodeFact> facts, string relativePath, string metadataHash, string sourceMetadataFactId, IReadOnlyList<XElement> mappingElements)
+    private static void AddEdmxMappings(ScanManifest manifest, List<CodeFact> facts, string relativePath, string metadataHash, string sourceMetadataFactId, string coverageLabel, IReadOnlyList<XElement> mappingElements)
     {
-        foreach (var unsupported in mappingElements.SelectMany(mapping => mapping.Descendants()).Where(element => element.Name.LocalName is "Condition" or "ComplexProperty" or "AssociationSetMapping" or "FunctionImportMapping").OrderBy(GetLine))
+        var unsupportedMappings = mappingElements.SelectMany(mapping => mapping.Descendants())
+            .Where(element => element.Name.LocalName is "Condition" or "ComplexProperty" or "AssociationSetMapping" or "FunctionImportMapping")
+            .OrderBy(GetLine)
+            .ToArray();
+        foreach (var unsupported in unsupportedMappings)
         {
             AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "UnsupportedEdmxMappingShape", $"Unsupported EDMX mapping shape: {unsupported.Name.LocalName}.", unsupported);
         }
+        var mappingCoverageLabel = unsupportedMappings.Length > 0 ? "reduced" : coverageLabel;
 
         foreach (var entitySetMapping in mappingElements.SelectMany(mapping => mapping.Descendants().Where(element => element.Name.LocalName == "EntitySetMapping")).OrderBy(GetLine))
         {
@@ -285,7 +294,7 @@ public static class LegacyDataMetadataExtractor
             mappingProps["mappingKind"] = "entity-table";
             AddSafeName(mappingProps, "entityName", "entityHash", entitySetName);
             AddSafeName(mappingProps, "tableName", "tableHash", storeSet);
-            AddModelIdentity(mappingProps, "Edmx", "entity", "mapping", relativePath, $"edmx-msl-entity-table:{GetLine(fragment)}", entitySetName, storeSet, sourceMetadataFactId, Parts(("entity-set", entitySetName), ("store-set", storeSet)));
+            AddModelIdentity(mappingProps, "Edmx", "entity", "mapping", relativePath, "edmx-msl-entity-table", entitySetName, storeSet, sourceMetadataFactId, Parts(("entity-set", entitySetName), ("store-set", storeSet)), mappingCoverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataEdmx, relativePath, fragment, TargetFrom(mappingProps, "entityName", "entityHash"), mappingProps));
 
             foreach (var scalar in fragment.Descendants().Where(element => element.Name.LocalName == "ScalarProperty").OrderBy(GetLine))
@@ -299,7 +308,7 @@ public static class LegacyDataMetadataExtractor
                 AddSafeName(properties, "tableName", "tableHash", storeSet);
                 AddSafeName(properties, "propertyName", "propertyHash", propertyName);
                 AddSafeName(properties, "columnName", "columnHash", columnName);
-                AddModelIdentity(properties, "Edmx", "column", "mapping", relativePath, $"edmx-msl-property-column:{GetLine(scalar)}", propertyName, storeSet, sourceMetadataFactId, Parts(("entity-set", entitySetName), ("property", propertyName), ("store-set", storeSet), ("column", columnName)));
+                AddModelIdentity(properties, "Edmx", "column", "mapping", relativePath, "edmx-msl-property-column", propertyName, storeSet, sourceMetadataFactId, Parts(("entity-set", entitySetName), ("property", propertyName), ("store-set", storeSet), ("column", columnName)), mappingCoverageLabel);
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataEdmx, relativePath, scalar, TargetFrom(properties, "propertyName", "propertyHash"), properties));
             }
         }
@@ -332,7 +341,7 @@ public static class LegacyDataMetadataExtractor
             var properties = MetadataProperties("TypedDataSet", metadataHash, "dataset");
             AddSafeName(properties, "dataSetName", "dataSetHash", dataSetName);
             AddSafeName(properties, "typeName", "typeHash", dataSetName);
-            AddModelIdentity(properties, "TypedDataSet", "mapped-type", "generated", item.RelativePath, $"typed-dataset:{GetLine(dataSet)}", dataSetName, null, metadataFact.FactId, Parts(("dataset", dataSetName)));
+            AddModelIdentity(properties, "TypedDataSet", "mapped-type", "generated", item.RelativePath, "typed-dataset", dataSetName, null, metadataFact.FactId, Parts(("dataset", dataSetName)));
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataTypedDataSet, item.RelativePath, dataSet, TargetFrom(properties, "dataSetName", "dataSetHash"), properties));
         }
 
@@ -352,10 +361,10 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "tableName", "tableHash", tableName);
             AddSafeName(properties, "entityName", "entityHash", rowClass ?? tableName);
             AddSafeName(properties, "typeName", "typeHash", rowClass ?? tableName);
-            AddModelIdentity(properties, "TypedDataSet", "entity", "generated", item.RelativePath, $"typed-dataset-table:{GetLine(table)}", rowClass ?? tableName, tableName, metadataFact.FactId, Parts(("table", tableName), ("row-class", rowClass ?? tableName)));
+            AddModelIdentity(properties, "TypedDataSet", "entity", "generated", item.RelativePath, "typed-dataset-table", rowClass ?? tableName, tableName, metadataFact.FactId, Parts(("table", tableName), ("row-class", rowClass ?? tableName)));
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataTypedDataSet, item.RelativePath, table, TargetFrom(properties, "entityName", "entityHash"), properties));
             var storageProperties = With(properties, ("storageObjectKind", "DataTable"));
-            AddModelIdentity(storageProperties, "TypedDataSet", "storage-object", "generated", item.RelativePath, $"typed-dataset-storage-table:{GetLine(table)}", tableName, null, metadataFact.FactId, Parts(("table", tableName), ("row-class", rowClass ?? tableName)));
+            AddModelIdentity(storageProperties, "TypedDataSet", "storage-object", "generated", item.RelativePath, "typed-dataset-storage-table", tableName, null, metadataFact.FactId, Parts(("table", tableName), ("row-class", rowClass ?? tableName)));
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataStorageObjectDeclared, RuleIds.LegacyDataTypedDataSet, item.RelativePath, table, TargetFrom(storageProperties, "tableName", "tableHash"), storageProperties));
 
             foreach (var column in table.Descendants().Where(element => element.Name.LocalName == "element" && AttributeValue(element, "name") is not null).OrderBy(GetLine))
@@ -370,7 +379,7 @@ public static class LegacyDataMetadataExtractor
                 AddSafeName(columnProps, "tableName", "tableHash", tableName);
                 AddSafeName(columnProps, "columnName", "columnHash", columnName);
                 AddSafeName(columnProps, "propertyName", "propertyHash", columnName);
-                AddModelIdentity(columnProps, "TypedDataSet", "column", "generated", item.RelativePath, $"typed-dataset-column:{GetLine(column)}", columnName, tableName, metadataFact.FactId, Parts(("table", tableName), ("column", columnName)));
+                AddModelIdentity(columnProps, "TypedDataSet", "column", "generated", item.RelativePath, "typed-dataset-column", columnName, tableName, metadataFact.FactId, Parts(("table", tableName), ("column", columnName)));
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyDataTypedDataSet, item.RelativePath, column, TargetFrom(columnProps, "columnName", "columnHash"), columnProps));
             }
         }
@@ -382,7 +391,7 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "relationName", "relationHash", AttributeValue(relation, "name"));
             AddSafeName(properties, "parentTableName", "parentTableHash", AttributeValue(relation, "parent"));
             AddSafeName(properties, "childTableName", "childTableHash", AttributeValue(relation, "child"));
-            AddModelIdentity(properties, "TypedDataSet", "relationship", "generated", item.RelativePath, $"typed-dataset-relation:{GetLine(relation)}", AttributeValue(relation, "name"), null, metadataFact.FactId, Parts(("relation", AttributeValue(relation, "name")), ("parent", AttributeValue(relation, "parent")), ("child", AttributeValue(relation, "child"))));
+            AddModelIdentity(properties, "TypedDataSet", "relationship", "generated", item.RelativePath, "typed-dataset-relation", AttributeValue(relation, "name"), null, metadataFact.FactId, Parts(("relation", AttributeValue(relation, "name")), ("parent", AttributeValue(relation, "parent")), ("child", AttributeValue(relation, "child"))));
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataTypedDataSet, item.RelativePath, relation, TargetFrom(properties, "relationName", "relationHash"), properties));
         }
 
@@ -402,7 +411,8 @@ public static class LegacyDataMetadataExtractor
         AddSafeName(properties, "commandName", "commandHash", commandName);
         AddSafeName(properties, "methodName", "methodHash", AttributeValue(command, "MethodName"));
         properties["mappingKind"] = "adapter-command";
-        AddModelIdentity(properties, "TableAdapter", "adapter", "generated", relativePath, $"typed-dataset-table-adapter-command:{GetLine(command)}", commandName, null, sourceMetadataFactId, Parts(("command", commandName), ("method", AttributeValue(command, "MethodName"))));
+        var coverageLabel = string.IsNullOrWhiteSpace(commandText) ? "reduced" : "full";
+        AddModelIdentity(properties, "TableAdapter", "adapter", "generated", relativePath, "typed-dataset-table-adapter-command", commandName, null, sourceMetadataFactId, Parts(("command", commandName), ("method", AttributeValue(command, "MethodName"))), coverageLabel);
 
         if (string.IsNullOrWhiteSpace(commandText))
         {
@@ -762,7 +772,8 @@ public static class LegacyDataMetadataExtractor
         string? displayName,
         string? containerName,
         string sourceMetadataFactId,
-        IReadOnlyDictionary<string, string> identityParts)
+        IReadOnlyDictionary<string, string> identityParts,
+        string coverageLabel = "full")
     {
         LegacyDataModelIdentity.Apply(
             properties,
@@ -775,7 +786,8 @@ public static class LegacyDataMetadataExtractor
                 displayName,
                 containerName,
                 identityParts,
-                sourceMetadataFactId));
+                sourceMetadataFactId,
+                coverageLabel));
     }
 
     private static IReadOnlyDictionary<string, string> Parts(params (string Key, string? Value)[] values)

@@ -11,7 +11,8 @@ internal readonly record struct LegacyDataModelIdentityDescriptor(
     string? DisplayName,
     string? ContainerName,
     IReadOnlyDictionary<string, string>? IdentityParts = null,
-    string? SourceMetadataFactId = null);
+    string? SourceMetadataFactId = null,
+    string CoverageLabel = "full");
 
 internal static class LegacyDataModelIdentity
 {
@@ -26,7 +27,7 @@ internal static class LegacyDataModelIdentity
         properties["metadataFormat"] = metadataFormat;
         properties["modelKind"] = modelKind;
         properties["descriptorRole"] = descriptorRole;
-        properties["coverageLabel"] = "full";
+        properties["coverageLabel"] = NormalizeCoverageLabel(descriptor.CoverageLabel);
         properties["modelIdentityRuleId"] = RuleIds.LegacyDataModelIdentity;
         properties["modelIdentityEvidenceTier"] = EvidenceTiers.Tier2Structural;
 
@@ -87,6 +88,11 @@ internal static class LegacyDataModelIdentity
     private static string NormalizePath(string relativePath)
     {
         return relativePath.Replace('\\', '/').Trim();
+    }
+
+    private static string NormalizeCoverageLabel(string coverageLabel)
+    {
+        return string.Equals(coverageLabel, "reduced", StringComparison.OrdinalIgnoreCase) ? "reduced" : "full";
     }
 
     private static string NormalizeToken(string value, string fallback)
