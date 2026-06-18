@@ -179,8 +179,11 @@ where available.
    evidence first, then documented syntax/structural fallback only when the
    fallback is unambiguous within the same source and does not use global
    short-name stitching.
-5. Emit `MissingRouteRoot` or `MissingMethodSymbolBridge` gaps when the trace
-   cannot start.
+5. Preserve `SelectorNoMatch` for plain selector misses. Emit additive
+   `MissingRouteRoot` only when selector context exists but endpoint route-root
+   evidence needed for composition is unavailable. Emit
+   `MissingMethodSymbolBridge` when the trace cannot start because the route
+   root cannot bridge to a source-local method symbol.
 6. Traverse outgoing static call, creation-context, argument-flow,
    parameter-forwarding, and dependency edges from endpoint method symbols,
    within max-depth, max-path, max-frontier, max-row, and max-gap caps.

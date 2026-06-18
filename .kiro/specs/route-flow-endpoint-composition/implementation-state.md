@@ -85,6 +85,11 @@ redacted.
   boundaries, no-AI/non-runtime constraints, classification downgrades, gap
   compatibility, traversal defaults, current-baseline scoping, and privacy
   wording.
+- PR review-loop Codex review found one actionable compatibility issue:
+  `MissingRouteRoot` wording could be read as replacing `SelectorNoMatch` for
+  plain selector misses. Patched the requirements, design, and tasks so
+  `SelectorNoMatch` remains the existing selector-miss code and
+  `MissingRouteRoot` is only an additive narrower endpoint route-root gap.
 
 ## Validation Notes
 
@@ -95,6 +100,8 @@ redacted.
   generated artifacts, or static-site files were changed.
 - Focused public-safety scan for URL/path/secret-like patterns found only the
   intentional prohibited-value wording in the spec.
+- Post-review selector-gap compatibility patch validation: `git diff --check`
+  passed and `./scripts/check-private-paths.sh` passed.
 
 ## Follow-Up For Implementation
 
