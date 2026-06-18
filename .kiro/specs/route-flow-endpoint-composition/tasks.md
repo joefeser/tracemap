@@ -65,7 +65,10 @@ implementation branches should check tasks as code lands and keep
   - [ ] Prefer semantic route-to-method symbol evidence.
   - [ ] Add source-local syntax/structural fallback only when unambiguous and
         review-tier.
-  - [ ] Emit `MissingRouteRoot` and `MissingMethodSymbolBridge` gaps.
+  - [ ] Preserve `SelectorNoMatch` for plain selector misses; emit
+        `MissingRouteRoot` only for the narrower endpoint route-root unavailable
+        case, and emit `MissingMethodSymbolBridge` for route roots that cannot
+        bridge to a source-local method symbol.
   - [ ] Preserve source labels, scan IDs, commit SHAs, extractor identities,
         rule IDs, evidence tiers, fact IDs, symbol IDs, file paths, and line
         spans.

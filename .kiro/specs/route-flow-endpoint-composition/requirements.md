@@ -45,8 +45,11 @@ from the correct root.
    A source-local match is ambiguous when two or more method symbols in that
    source share the same short name or fallback key, or when generated, partial,
    overload, or multi-dispatch patterns prevent selecting one unique symbol.
-4. WHEN no route root matches the selector THEN route-flow SHALL emit a
-   `MissingRouteRoot` gap instead of an empty clean result.
+4. WHEN the plain selector-miss case occurs, such as a route selector matching
+   no supported route-flow entry evidence, route-flow SHALL preserve the
+   existing `SelectorNoMatch` gap. WHEN selector context exists but endpoint
+   route-root evidence needed for composition is unavailable THEN route-flow MAY
+   emit the additive `MissingRouteRoot` gap instead of an empty clean result.
 5. WHEN a route root exists but cannot be tied to a source-local method symbol
    THEN route-flow SHALL emit a `MissingMethodSymbolBridge` gap and SHALL NOT
    start traversal from a guessed method name.
