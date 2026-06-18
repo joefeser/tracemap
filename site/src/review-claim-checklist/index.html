@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap reviewer checklist for deciding whether a claim can be repeated with proof, downgraded, held for owner follow-up, kept internal, or not repeated."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Review Claim Checklist | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/review-claim-checklist/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Review Claim Checklist">
+    <meta
+      property="og:description"
+      content="A repeat-before-reuse checklist for keeping TraceMap claims attached to proof paths, rule IDs, evidence tiers, coverage labels, limitations, and non-claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/review-claim-checklist/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Review claim checklist</p>
+        <h1>Check the sentence before anyone repeats it.</h1>
+        <p class="hero-subhead">
+          This concept-level checklist turns TraceMap's public claim boundary
+          into a small review ritual for managers, reviewers, agents, and
+          engineers preparing public or internal summaries.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This checklist is a repeat-before-reuse control; it is not a proof
+          catalog, release gate, operational decision, or impact conclusion.
+        </p>
+        <nav class="hero-actions" aria-label="Review claim checklist links">
+          <a class="button primary" href="#claim-row-template">Open checklist</a>
+          <a class="button secondary" href="/review-room/">Review-room agenda</a>
+          <a class="button secondary" href="/proof-paths/">Proof path index</a>
+          <a class="button secondary" href="/roadmap/#claim-ledger">Claim ledger</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="claim-review-ritual">
+        <div>
+          <p class="section-kicker">Ritual</p>
+          <h2>Every repeatable claim keeps its evidence attached.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Write the exact claim statement</strong><span>Review the sentence as it will be repeated, not a stronger or friendlier paraphrase.</span></div>
+          <div><strong>Attach proof vocabulary</strong><span>Keep the proof path, rule ID or rule family, evidence tier, coverage label, limitation, and non-claims beside the sentence.</span></div>
+          <div><strong>Separate level from outcome</strong><span>Public claim level is <code>shipped</code>, <code>demo</code>, <code>concept</code>, or <code>hidden</code>; review outcome says what the reviewer should do next.</span></div>
+          <div><strong>Record source status and owner</strong><span>Source branch or main-dev status is part of the proof path, and owner follow-up names the responsible role plus requested action.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="claim-row-template" aria-labelledby="claim-row-template-heading">
+        <div class="section-header">
+          <p class="section-kicker">Checklist row</p>
+          <h2 id="claim-row-template-heading">Use one row per claim under review.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <caption>
+              Canonical checklist fields. The singular <code>limitation</code>
+              field is the required row label even when it summarizes several
+              limits.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Allowed or required value</th>
+                <th scope="col">Review check</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="check-claim-statement" data-checklist-field="claim statement">
+                <td><strong>claim statement</strong></td>
+                <td>The exact public claim or internal review statement.</td>
+                <td>Internal statements still need evidence before they move outside their original context.</td>
+              </tr>
+              <tr id="check-public-claim-level" data-checklist-field="public claim level">
+                <td><strong>public claim level</strong></td>
+                <td><code>shipped</code>, <code>demo</code>, <code>concept</code>, or <code>hidden</code>.</td>
+                <td>Discovery metadata may use <code>main</code>, but a checklist row maps that to <code>shipped</code>.</td>
+              </tr>
+              <tr id="check-proof-path" data-checklist-field="proof path">
+                <td><strong>proof path</strong></td>
+                <td>A public-safe page, generated summary, documentation page, rule catalog page, report summary, demo artifact, or proof path entry.</td>
+                <td>No proof path means the claim cannot be upgraded by confidence, seniority, repetition, or manager pressure.</td>
+              </tr>
+              <tr id="check-rule-id" data-checklist-field="rule ID or rule family">
+                <td><strong>rule ID or rule family</strong></td>
+                <td>Specific rule ID when public-safe; otherwise rule family plus a limitation.</td>
+                <td>No evidence without a rule ID or documented rule-family limitation.</td>
+              </tr>
+              <tr id="check-evidence-tier" data-checklist-field="evidence tier">
+                <td><strong>evidence tier</strong></td>
+                <td><code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</td>
+                <td>Do not present syntax-only or unknown evidence as semantic proof.</td>
+              </tr>
+              <tr id="check-coverage-label" data-checklist-field="coverage label">
+                <td><strong>coverage label</strong></td>
+                <td>The label transcribed from the cited public-safe artifact or summary.</td>
+                <td>Reduced, partial, unknown, unavailable, or future-only labels stay visible and force downgrade or owner follow-up unless a public proof surface says otherwise.</td>
+              </tr>
+              <tr id="check-limitation" data-checklist-field="limitation">
+                <td><strong>limitation</strong></td>
+                <td>The row's canonical limitation field.</td>
+                <td>State what the evidence cannot support; do not bury the limit in surrounding prose.</td>
+              </tr>
+              <tr id="check-non-claims" data-checklist-field="non-claims">
+                <td><strong>non-claims</strong></td>
+                <td>What this specific claim must not imply.</td>
+                <td>Page-level non-claims apply to every row; row-level non-claims catch claim-specific overreach.</td>
+              </tr>
+              <tr id="check-source-status" data-checklist-field="source branch or main-dev status">
+                <td><strong>source branch or main-dev status</strong></td>
+                <td><code>main</code>, checked-in public demo, dev-only, future-only, hidden, or local-only.</td>
+                <td><code>main</code> or checked-in public demo evidence can support stronger wording than dev-only, future-only, hidden, or local-only evidence.</td>
+              </tr>
+              <tr id="check-owner-follow-up" data-checklist-field="owner follow-up">
+                <td><strong>owner follow-up</strong></td>
+                <td>Responsible role and requested action.</td>
+                <td>Use <code>owner follow-up needed</code> when the claim cannot be repeated until that owner action happens.</td>
+              </tr>
+              <tr id="check-reviewer" data-checklist-field="reviewer">
+                <td><strong>reviewer</strong></td>
+                <td>Synthetic role label in examples; real reviewer only in private working material.</td>
+                <td>Do not publish real internal reviewer identities in example or template rows.</td>
+              </tr>
+              <tr id="check-review-date" data-checklist-field="review date">
+                <td><strong>review date</strong></td>
+                <td>Synthetic example date or private working date.</td>
+                <td>Do not publish real internal review dates, timing, cadence, or sequencing in examples.</td>
+              </tr>
+              <tr id="check-decision" data-checklist-field="decision">
+                <td><strong>decision</strong></td>
+                <td><code>repeat with proof</code>, <code>downgrade before repeating</code>, <code>owner follow-up needed</code>, <code>do not repeat</code>, or <code>internal only</code>.</td>
+                <td>The outcome controls reuse; it does not upgrade the evidence level.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Some rows cannot be repeated yet.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>missing proof path</code><span>Hold or downgrade the claim until a public-safe proof path exists.</span></div>
+          <div><code>private-only artifact</code><span>Use private evidence for internal follow-up only until a public-safe summary exists.</span></div>
+          <div><code>hidden claim detail</code><span>Abstract or omit hidden detail; do not publish unreleased names, private sample identities, counts, cadence, sequencing, or in-flight status.</span></div>
+          <div><code>unsupported demo claim</code><span>A concept checklist is not evidence that the underlying behavior is shipped or demo-backed.</span></div>
+          <div><code>forbidden wording</code><span>Do not repeat runtime, release, operational, complete-coverage, AI impact, or LLM analysis wording as a TraceMap claim.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="illustrative-examples" aria-labelledby="illustrative-examples-heading">
+        <div class="section-header">
+          <p class="section-kicker">Illustrative examples</p>
+          <h2 id="illustrative-examples-heading">Example rows use synthetic placeholders only.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <caption>
+              Illustrative rows for checklist mechanics. They are not real
+              internal reviews and do not name private samples, owners, or
+              dates.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Claim statement</th>
+                <th scope="col">Level</th>
+                <th scope="col">Proof path</th>
+                <th scope="col">Rule</th>
+                <th scope="col">Tier</th>
+                <th scope="col">Coverage</th>
+                <th scope="col">Limitation</th>
+                <th scope="col">Non-claims</th>
+                <th scope="col">Status</th>
+                <th scope="col">Owner follow-up</th>
+                <th scope="col">Reviewer</th>
+                <th scope="col">Review date</th>
+                <th scope="col">Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="example-repeat-with-proof" data-example-row data-review-outcome="repeat with proof" data-public-claim-level="demo">
+                <td><strong>Public demo summary preserves partial coverage labels.</strong></td>
+                <td><code>demo</code></td>
+                <td><a href="/proof-paths/">Proof path index</a></td>
+                <td><code>public.demo.summary.v1</code></td>
+                <td><code>Tier2Structural</code></td>
+                <td><code>PartialAnalysis</code></td>
+                <td>Demo rows describe checked-in public samples and keep reduced labels visible.</td>
+                <td>Not complete coverage or product-wide parity.</td>
+                <td>checked-in public demo</td>
+                <td>Docs owner role: keep proof link attached.</td>
+                <td>Reviewer role</td>
+                <td>Example date</td>
+                <td><code>repeat with proof</code></td>
+              </tr>
+              <tr id="example-owner-follow-up-needed" data-example-row data-review-outcome="owner follow-up needed" data-public-claim-level="concept">
+                <td><strong>A future review workflow should require owner notes.</strong></td>
+                <td><code>concept</code></td>
+                <td><a href="/review-room/">Review-room agenda</a></td>
+                <td>review-workflow rule family</td>
+                <td><code>Tier2Structural</code></td>
+                <td><code>future-only</code></td>
+                <td>Concept guidance is not shipped product behavior.</td>
+                <td>Not release approval or operational proof.</td>
+                <td>future-only</td>
+                <td>Workflow owner role: publish public-safe proof before upgrade.</td>
+                <td>Reviewer role</td>
+                <td>Example date</td>
+                <td><code>owner follow-up needed</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The checklist does not turn static evidence into operational proof.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage.</li>
+          <li>TraceMap does not replace telemetry, logs, traces, tests, source review, ownership decisions, incident response, or release approval.</li>
+          <li>A successful checklist does not assign impact status or say a system is safe, unsafe, approved, blocked, root cause, validated for release, production proven, or complete.</li>
+          <li>Future agents must not repeat a claim after dropping its rule ID, evidence tier, coverage label, limitation, non-claims, or proof path.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="private-material">
+        <div>
+          <p class="section-kicker">Private material</p>
+          <h2>Name artifact families without publishing raw internals.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Forbidden public page content</strong><span>Raw <code>facts.ndjson</code>, raw <code>index.sqlite</code>, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw repository remotes, generated scan directories, and private sample names.</span></div>
+          <div><strong>Allowed source-of-truth categories</strong><span>Fact streams, SQLite indexes, reports, rule catalog entries, commit metadata, coverage labels, generated summary families, and documented limitations may be named as local or public-safe categories.</span></div>
+          <div><strong>Public proof path rule</strong><span>Raw artifacts are not public proof links; cite reviewed summaries, public pages, docs, rule catalog pages, or demo artifacts instead.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="adjacent-surfaces">
+        <div>
+          <p class="section-kicker">Adjacent surfaces</p>
+          <h2>This checklist answers one narrow question.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/review-room/">Review room</a></strong><span>Meeting agenda for known, partial, and missing evidence; not proof that a claim is repeatable.</span></div>
+          <div><strong><a href="/manager-faq/">Manager FAQ</a></strong><span>Stakeholder explanation of static evidence boundaries; not the source of proof.</span></div>
+          <div><strong><a href="/proof-paths/">Proof path index</a></strong><span>Evidence-trail index for public-safe proof paths; use it to find the cited support.</span></div>
+          <div><strong><a href="/roadmap/#claim-ledger">Claim ledger</a></strong><span>Vocabulary source for claim levels; this checklist applies the vocabulary to a sentence under review.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof-bounded routes</p>
+          <h2>Link out instead of copying adjacent catalogs.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/review-room/">Evidence review room</a>
+          <a href="/manager-faq/">Manager FAQ</a>
+          <a href="/roadmap/#claim-ledger">Claim ledger</a>
+          <a href="/proof-source-catalog/">Proof source catalog</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation</a>
+          <a href="/demo/runbook/">Public demo runbook</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Review claim checklist links the
+        <a href="/proof-paths/">proof path index</a>,
+        <a href="/review-room/">review room</a>,
+        <a href="/manager-faq/">manager FAQ</a>,
+        and
+        <a href="/roadmap/#claim-ledger">claim ledger</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
