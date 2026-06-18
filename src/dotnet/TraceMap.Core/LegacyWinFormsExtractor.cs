@@ -187,7 +187,13 @@ public static class LegacyWinFormsExtractor
         var methods = files.SelectMany(file => file.Methods).Where(method => surfaceNames.Any(surface => SameType(surface, method.TypeName))).ToArray();
         var controls = files.SelectMany(file => file.Controls).Where(control => surfaceNames.Any(surface => SameType(surface, control.TypeName))).ToArray();
         var bindings = files.SelectMany(file => file.Bindings).Where(binding => surfaceNames.Any(surface => SameType(surface, binding.TypeName))).ToArray();
-        var navigation = files.SelectMany(file => file.NavigationEdges).Where(edge => string.IsNullOrWhiteSpace(edge.SourceTypeName) || surfaceNames.Any(surface => SameType(surface, edge.SourceTypeName))).ToArray();
+        var navigation = files
+            .SelectMany(file => file.NavigationEdges)
+            .Where(edge =>
+                string.IsNullOrWhiteSpace(edge.SourceTypeName)
+                || edge.NavigationKind == "Application.Run"
+                || surfaceNames.Any(surface => SameType(surface, edge.SourceTypeName)))
+            .ToArray();
         var controlKeys = controls
             .Select(control => $"{control.TypeName}\0{LastExpressionPart(control.ControlId)}")
             .ToHashSet(StringComparer.Ordinal);

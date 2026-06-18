@@ -47,6 +47,7 @@ public sealed class LegacyWinFormsExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsEventBindingDeclared && fact.Properties.GetValueOrDefault("handlerName") == "SaveButton_Click" && fact.EvidenceTier == EvidenceTiers.Tier2Structural);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsHandlerResolved && fact.ContractElement == "SaveButton_Click");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsNavigationEdgeDeclared && fact.Properties.GetValueOrDefault("targetFormTypeName") == "DetailsForm");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsNavigationEdgeDeclared && fact.Properties.GetValueOrDefault("navigationKind") == "Application.Run" && fact.Properties.GetValueOrDefault("targetFormTypeName") == "MainForm");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsCallbackBoundaryDeclared && fact.Properties.GetValueOrDefault("boundaryClassification") == "TimerCallbackBoundary");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsCallbackBoundaryDeclared && fact.Properties.GetValueOrDefault("boundaryClassification") == "BackgroundWorkerBoundary");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsResourceMetadataDeclared && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("resourceKeyHashes")));
