@@ -107,6 +107,17 @@ test("validateDemoEvidenceTrailDist rejects encoded private text", async (t) => 
   assert.match(errors.join("\n"), /contains forbidden public text: file:\/\//);
 });
 
+test("validateDemoEvidenceTrailDist rejects HTML5 named entity private text", async (t) => {
+  const root = await createManagedDemoEvidenceTrailDistFixture(t, {
+    pageHtml: demoEvidenceTrailPage("<p>file&colon;&sol;&sol;private/report</p>")
+  });
+  const errors = [];
+
+  await validateDemoEvidenceTrailDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /contains forbidden public text: file:\/\//);
+});
+
 async function createManagedDemoEvidenceTrailDistFixture(t, options = {}) {
   const root = await createDemoEvidenceTrailDistFixture(options);
   t.after(() => rm(root, { recursive: true, force: true }));

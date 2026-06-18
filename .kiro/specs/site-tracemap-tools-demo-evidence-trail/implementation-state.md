@@ -181,7 +181,7 @@ update proof-path links accordingly.
 - Required target-route resolution passed after `npm run build`:
   `/proof-paths/`, `/evidence/`, `/validation/`, and `/limitations/`.
 - `git diff --check` passed.
-- `npm test` from `site/` passed: 127 tests.
+- `npm test` from `site/` passed: 128 tests.
 - `npm run validate` from `site/` passed:
   38 HTML files, 1048 internal references, 37 sitemap URLs, and 1 legacy story
   safety target.
@@ -204,6 +204,10 @@ update proof-path links accordingly.
 - The dedicated validator bans the exact rendered word `impacted` for this
   route, per the spec. Existing neighboring pages may still use other
   reducer/report language outside this route's validation scope.
+- Qodo PR review found an HTML5 named-entity bypass in shared entity decoding.
+  The implementation now decodes named `colon`, `sol`, `bsol`, `backslash`, and
+  `nbsp` entities used by forbidden public-text checks, and the evidence-trail
+  validator has a regression test for `file&colon;&sol;&sol;...`.
 
 ## Follow-Ups
 
