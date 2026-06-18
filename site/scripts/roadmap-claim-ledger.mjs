@@ -141,6 +141,8 @@ async function validateRoadmapPage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
   const pageText = normalizeRenderedText(html);
+  const lowerHtml = html.toLowerCase();
+  const lowerDecodedHtml = decodedHtml.toLowerCase();
   const lowerPageText = pageText.toLowerCase();
 
   for (const phrase of requiredText) {
@@ -156,7 +158,8 @@ async function validateRoadmapPage({ pagePath, errors }) {
   }
 
   for (const text of forbiddenPrivateText) {
-    if (html.includes(text) || decodedHtml.includes(text) || pageText.includes(text)) {
+    const lowerText = text.toLowerCase();
+    if (lowerHtml.includes(lowerText) || lowerDecodedHtml.includes(lowerText) || lowerPageText.includes(lowerText)) {
       errors.push(withEvidence(`Roadmap claim ledger page contains forbidden private text: ${text}`, "roadmap/index.html"));
     }
   }

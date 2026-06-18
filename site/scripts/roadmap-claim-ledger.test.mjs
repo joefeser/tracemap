@@ -60,6 +60,17 @@ test("validateRoadmapClaimLedgerDist rejects raw artifact proof links", async ()
   assert.match(errors.join("\n"), /links to forbidden raw proof artifact: \/facts\.ndjson/);
 });
 
+test("validateRoadmapClaimLedgerDist rejects private text case variants", async () => {
+  const root = await createRoadmapFixture({
+    roadmapHtml: validRoadmapHtml().replace("</main>", "<p>LOCALHOST</p></main>")
+  });
+  const errors = [];
+
+  await validateRoadmapClaimLedgerDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /contains forbidden private text: localhost/);
+});
+
 async function createRoadmapFixture({ roadmapHtml = validRoadmapHtml(), routeEntry = discoveryRoute() } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-roadmap-ledger-test-"));
   const dist = join(root, "dist");
