@@ -326,7 +326,7 @@ public static partial class LegacyAspNetExtractor
             {
                 if (NavigationAttributes.Contains(name))
                 {
-                    AddNavigationReference(manifest, facts, item.RelativePath, LineAt(source, tag.Index), $"Markup{name}", pageFact?.FactId ?? item.RelativePath, ResolveMarkupNavigationTarget(item.RelativePath, value));
+                    AddNavigationReference(manifest, facts, item.RelativePath, LineAt(source, tag.Index), $"Markup{name}", pageFact?.FactId ?? item.RelativePath, ResolveSourceRelativeNavigationTarget(item.RelativePath, value));
                 }
             }
         }
@@ -587,7 +587,7 @@ public static partial class LegacyAspNetExtractor
                 }
                 else
                 {
-                    AddNavigationReference(manifest, facts, item.RelativePath, line, $"Code{name}", item.RelativePath, target);
+                    AddNavigationReference(manifest, facts, item.RelativePath, line, $"Code{name}", item.RelativePath, ResolveSourceRelativeNavigationTarget(item.RelativePath, target));
                 }
             }
         }
@@ -610,7 +610,7 @@ public static partial class LegacyAspNetExtractor
             }
             else
             {
-                AddNavigationReference(manifest, facts, item.RelativePath, line, $"Code{leftName}", item.RelativePath, target);
+                AddNavigationReference(manifest, facts, item.RelativePath, line, $"Code{leftName}", item.RelativePath, ResolveSourceRelativeNavigationTarget(item.RelativePath, target));
             }
         }
     }
@@ -717,8 +717,15 @@ public static partial class LegacyAspNetExtractor
             return true;
         }
 
-        return fact.Properties.TryGetValue("pathDescriptor", out var pathDescriptor)
-            && pathDescriptor.Equals(targetPath, StringComparison.Ordinal);
+        return MatchesProperty(fact, "pathDescriptor", targetPath)
+            || MatchesProperty(fact, "urlDescriptor", targetPath)
+            || MatchesProperty(fact, "mappedUrlDescriptor", targetPath);
+    }
+
+    private static bool MatchesProperty(CodeFact fact, string propertyName, string targetPath)
+    {
+        return fact.Properties.TryGetValue(propertyName, out var descriptor)
+            && descriptor.Equals(targetPath, StringComparison.Ordinal);
     }
 
     private static int TargetPriority(CodeFact fact)
@@ -1085,7 +1092,7 @@ public static partial class LegacyAspNetExtractor
         return FileInventory.NormalizeRelativePath(value.Trim().Replace('\\', '/').TrimStart('~', '/'));
     }
 
-    private static string ResolveMarkupNavigationTarget(string sourcePath, string target)
+    private static string ResolveSourceRelativeNavigationTarget(string sourcePath, string target)
     {
         var raw = target.Trim();
         if (raw.StartsWith("~", StringComparison.Ordinal)

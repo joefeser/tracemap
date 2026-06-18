@@ -339,6 +339,72 @@ public sealed class LegacyAspNetExtractorTests
     }
 
     [Fact]
+    public void Scan_resolves_same_directory_code_navigation_targets_before_matching_edges()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Pages"));
+        File.WriteAllText(Path.Combine(repo, "Pages", "List.aspx"), """
+            <%@ Page Language="C#" CodeBehind="List.aspx.cs" Inherits="Sample.Pages.List" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Pages", "List.aspx.cs"), """
+            namespace Sample.Pages;
+            public partial class List
+            {
+                protected void Open()
+                {
+                    Response.Redirect("Details.aspx");
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Pages", "Details.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Details.aspx.cs" Inherits="Sample.Pages.Details" %>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetNavigationReferenceDeclared
+            && fact.Properties.GetValueOrDefault("referenceKind") == "CodeRedirect"
+            && fact.Properties.GetValueOrDefault("targetPath") == "Pages/Details.aspx");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetNavigationEdgeDeclared
+            && fact.Properties.GetValueOrDefault("targetFactType") == FactTypes.WebFormsPageDeclared);
+    }
+
+    [Fact]
+    public void Scan_matches_url_mapping_descriptors_when_creating_navigation_edges()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:HyperLink runat="server" ID="Legacy" NavigateUrl="Legacy.aspx" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "web.config"), """
+            <configuration>
+              <system.web>
+                <urlMappings enabled="true">
+                  <add url="~/Legacy.aspx" mappedUrl="~/Pages/Details.aspx" />
+                </urlMappings>
+              </system.web>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetConfigSurfaceDeclared
+            && fact.Properties.GetValueOrDefault("sectionKind") == "system.web/urlMappings"
+            && fact.Properties.GetValueOrDefault("urlDescriptor") == "Legacy.aspx"
+            && fact.Properties.GetValueOrDefault("mappedUrlDescriptor") == "Pages/Details.aspx");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetNavigationEdgeDeclared
+            && fact.Properties.GetValueOrDefault("targetFactType") == FactTypes.AspNetConfigSurfaceDeclared);
+    }
+
+    [Fact]
     public void Scan_omits_secret_like_navigation_target_without_edge()
     {
         using var temp = new TempDirectory();

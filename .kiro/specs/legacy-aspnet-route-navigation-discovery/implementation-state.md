@@ -129,6 +129,15 @@ Status: implemented
   - `./scripts/check-private-paths.sh`
   - `git diff --check`
   - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
+- Fresh Codex review follow-up validation passed after patching code-behind
+  relative navigation target resolution and `urlMappings` descriptor matching
+  for navigation edges:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (17 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (481 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
 
 ## Kiro Review State
 
