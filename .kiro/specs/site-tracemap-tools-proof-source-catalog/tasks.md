@@ -7,16 +7,17 @@ Public claim level: demo
 These tasks are future implementation work. They remain unchecked because this
 phase is spec-only.
 
-Note: validation tasks must pass before future implementation tasks are checked
-complete.
+## Spec-Only Delivery Validation
 
-- [ ] Validate that this branch is spec-only and that all implementation tasks
-  below remain unchecked before merging this spec branch. CI enforcement for
-  this gate is deferred to a future tooling task; reviewers must verify manually
-  that no implementation task below is checked on this branch.
-- [ ] Confirm or update this spec-local `implementation-state.md` with branch,
+- Before merging this spec branch, validate that the branch is spec-only and
+  that all future implementation tasks below remain unchecked. CI enforcement
+  for this gate is deferred to a future tooling task; reviewers must verify it
+  manually.
+- Confirm or update this spec-local `implementation-state.md` with branch,
   scope, review results, validation results, oddities, and follow-ups before
   changing site code.
+
+## Future Implementation Tasks
 - [ ] Reconfirm that the page-level public claim level remains `demo`; if
   implementation evidence changes, record the justification before changing the
   page-level claim level. Confirm that page-level `demo` is not a ceiling: a
