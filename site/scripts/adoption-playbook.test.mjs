@@ -75,6 +75,16 @@ test("validateAdoptionPlaybookDist reports route metadata regressions", async (t
   assert.match(errors.join("\n"), /expected preferredProofPath \/proof-paths\/, got \/validation\//);
 });
 
+test("validateAdoptionPlaybookDist checks the adoption llms claim line specifically", async (t) => {
+  const root = await createManagedAdoptionDistFixture(t);
+  await rewriteAdoptionLlmsLine(join(root, "dist"), (line) => line.replace("Public claim level: concept", "Public claim level: demo"));
+  const errors = [];
+
+  await validateAdoptionPlaybookDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /llms\.txt route section must preserve concept claim level/);
+});
+
 test("validateAdoptionPlaybookDist reports word count outside bounds", async (t) => {
   const root = await createManagedAdoptionDistFixture(t, {
     adoptionHtml: adoptionPage("", { fillerWords: 0 })
@@ -177,6 +187,16 @@ async function rewriteAdoptionRoutesIndexEntry(dist, fields) {
       : entry
   );
   await writeFile(path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+}
+
+async function rewriteAdoptionLlmsLine(dist, rewrite) {
+  const path = join(dist, "llms.txt");
+  const updated = (await readFile(path, "utf8"))
+    .split(/\r?\n/)
+    .map((line) => (line.includes("[Adoption Playbook](https://tracemap.tools/adoption/)") ? rewrite(line) : line))
+    .join("\n");
+
+  await writeFile(path, updated.endsWith("\n") ? updated : `${updated}\n`, "utf8");
 }
 
 function renderSitemap(routes) {
