@@ -133,7 +133,7 @@ export async function validateDemoEvidenceTrailDist({ baseUrl = "https://tracema
     localErrors.push(withEvidence("Demo evidence trail page contains forbidden AI/LLM positioning.", pageArtifact));
   }
 
-  if (demoEvidenceTrailImpactedPattern.test(pageText)) {
+  if (demoEvidenceTrailImpactedPattern.test(fullText)) {
     localErrors.push(withEvidence("Demo evidence trail page contains banned word: impacted.", pageArtifact));
   }
 

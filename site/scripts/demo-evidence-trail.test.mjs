@@ -84,6 +84,17 @@ test("validateDemoEvidenceTrailDist rejects banned impacted wording", async (t) 
   assert.match(errors.join("\n"), /contains banned word: impacted/);
 });
 
+test("validateDemoEvidenceTrailDist rejects banned impacted wording in metadata", async (t) => {
+  const root = await createManagedDemoEvidenceTrailDistFixture(t, {
+    pageHtml: demoEvidenceTrailPage('<meta name="description" content="impacted surface">')
+  });
+  const errors = [];
+
+  await validateDemoEvidenceTrailDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /contains banned word: impacted/);
+});
+
 test("validateDemoEvidenceTrailDist rejects missing downstream markers", async (t) => {
   const root = await createManagedDemoEvidenceTrailDistFixture(t, {
     pageHtml: demoEvidenceTrailPage("", { includeSqlMarker: false })
