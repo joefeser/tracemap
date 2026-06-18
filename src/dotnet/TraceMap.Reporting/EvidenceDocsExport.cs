@@ -43,7 +43,7 @@ public sealed record EvidenceDocsDiagnostic(
     string FilePath,
     int? StartLine,
     int? EndLine,
-    string CommitSha,
+    string? CommitSha,
     string ExtractorVersion,
     IReadOnlyList<string> SupportingIds);
 
@@ -138,7 +138,7 @@ public sealed record EvidenceDocCitation(
     string? SourceLabel,
     string SourceScope,
     string? ScanId,
-    string CommitSha,
+    string? CommitSha,
     string CoverageLabel,
     string? FilePath,
     int? StartLine,
@@ -156,7 +156,7 @@ public sealed record EvidenceDocSourceRef(
     string SourceLabel,
     string SourceScope,
     string? ScanId,
-    string CommitSha,
+    string? CommitSha,
     string CoverageLabel,
     string? ExtractorName,
     string? ExtractorVersion,
@@ -593,7 +593,7 @@ public static class EvidenceDocsExporter
                     label,
                     "combined-source",
                     StringOrNull(reader, 2),
-                    CommitOrUnknown(StringOrNull(reader, 3)),
+                    CommitOrNull(StringOrNull(reader, 3)),
                     StringOrNull(reader, 5) ?? "unknown",
                     StringOrNull(reader, 4),
                     StringOrNull(reader, 6) ?? "unknown",
@@ -625,7 +625,7 @@ public static class EvidenceDocsExporter
                     StringOrNull(reader, 2),
                     source,
                     StringOrNull(reader, 3),
-                    CommitOrUnknown(StringOrNull(reader, 4)),
+                    CommitOrNull(StringOrNull(reader, 4)),
                     reader.GetString(5),
                     reader.GetString(6),
                     reader.GetString(7),
@@ -667,7 +667,7 @@ public static class EvidenceDocsExporter
                     "single",
                     "single-source",
                     scanId,
-                    CommitOrUnknown(StringOrNull(reader, 1)),
+                    CommitOrNull(StringOrNull(reader, 1)),
                     InferLanguage(StringOrNull(reader, 2)),
                     StringOrNull(reader, 2),
                     StringOrNull(reader, 3) ?? "unknown",
@@ -698,7 +698,7 @@ public static class EvidenceDocsExporter
                     reader.GetString(0),
                     source,
                     StringOrNull(reader, 1),
-                    CommitOrUnknown(StringOrNull(reader, 2)),
+                    CommitOrNull(StringOrNull(reader, 2)),
                     reader.GetString(3),
                     reader.GetString(4),
                     reader.GetString(5),
@@ -953,7 +953,7 @@ public static class EvidenceDocsExporter
             source.Label,
             source.Scope,
             source.ScanId,
-            source.CommitSha ?? "unknown",
+            source.CommitSha,
             source.CoverageLabel,
             null,
             null,
@@ -975,7 +975,7 @@ public static class EvidenceDocsExporter
             | --- | --- |
             | Source scope | `{EscapeInline(source.Scope)}` |
             | Scan ID | `{EscapeInline(source.ScanId ?? "unknown")}` |
-            | Commit SHA | `{EscapeInline(source.CommitSha ?? "unknown")}` |
+            | Commit SHA | `{EscapeInline(DisplayCommitSha(source.CommitSha))}` |
             | Language | `{EscapeInline(source.Language)}` |
             | Coverage label | `{EscapeInline(source.CoverageLabel)}` |
             | Build status | `{EscapeInline(source.BuildStatus)}` |
@@ -1014,7 +1014,7 @@ public static class EvidenceDocsExporter
             | Field | Value |
             | --- | --- |
             | Source | `{EscapeInline(fact.Source.Label)}` |
-            | Commit SHA | `{EscapeInline(fact.CommitSha ?? "unknown")}` |
+            | Commit SHA | `{EscapeInline(DisplayCommitSha(fact.CommitSha))}` |
             | Coverage label | `{EscapeInline(fact.Source.CoverageLabel)}` |
             | Fact type | `{EscapeInline(fact.FactType)}` |
             | Rule IDs | `{EscapeInline(string.Join(", ", DistinctSorted([fact.RuleId, packagingRuleId])))}` |
@@ -1429,7 +1429,12 @@ public static class EvidenceDocsExporter
             gaps,
             limitations,
             input.Sources.Select(source => $"repo:{Hash(source.SourceId, 24)}").Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            input.Sources.Select(source => source.CommitSha ?? "unknown").Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            input.Sources.Select(source => source.CommitSha)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray());
     }
 
     private static EvidenceDocsManifest WithManifestHash(EvidenceDocsManifest manifest)
@@ -1830,7 +1835,7 @@ public static class EvidenceDocsExporter
                     claims.Add(new SourceClaim(
                         StringProperty(source, "sourceIndexId"),
                         StringProperty(source, "scanId"),
-                        CommitOrUnknown(StringProperty(source, "commitSha")),
+                        CommitOrNull(StringProperty(source, "commitSha")),
                         claimLevel));
                 }
             }
@@ -1853,7 +1858,7 @@ public static class EvidenceDocsExporter
                     claims.Add(new SourceClaim(
                         StringProperty(identity, "sourceIndexId"),
                         StringProperty(identity, "scanId"),
-                        CommitOrUnknown(StringProperty(identity, "commitSha")),
+                        CommitOrNull(StringProperty(identity, "commitSha")),
                         claimLevel));
                 }
             }
@@ -2017,7 +2022,7 @@ public static class EvidenceDocsExporter
             fact.Source.Label,
             fact.Source.Scope,
             fact.ScanId ?? fact.Source.ScanId,
-            fact.CommitSha ?? fact.Source.CommitSha ?? "unknown",
+            fact.CommitSha ?? fact.Source.CommitSha,
             fact.Source.CoverageLabel,
             fact.FilePath,
             fact.StartLine,
@@ -2039,7 +2044,7 @@ public static class EvidenceDocsExporter
             source?.Label,
             source?.Scope ?? "report",
             source?.ScanId,
-            source?.CommitSha ?? "unknown",
+            source?.CommitSha,
             source?.CoverageLabel ?? "report-input",
             null,
             null,
@@ -2060,7 +2065,7 @@ public static class EvidenceDocsExporter
             source.Label,
             source.Scope,
             source.ScanId,
-            source.CommitSha ?? "unknown",
+            source.CommitSha,
             source.CoverageLabel,
             "index-metadata",
             source.ExtractorVersion,
@@ -2079,9 +2084,14 @@ public static class EvidenceDocsExporter
             "unknown",
             null,
             null,
-            "unknown",
+            null,
             SchemaVersion,
             [supportingId]);
+    }
+
+    private static string DisplayCommitSha(string? commitSha)
+    {
+        return string.IsNullOrWhiteSpace(commitSha) ? "not-recorded" : commitSha;
     }
 
     private static string FamilyForFact(DocFact fact)
@@ -2299,14 +2309,14 @@ public static class EvidenceDocsExporter
         };
     }
 
-    private static string CommitOrUnknown(string? value)
+    private static string? CommitOrNull(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Equals("unknown", StringComparison.OrdinalIgnoreCase))
         {
-            return "unknown";
+            return null;
         }
 
-        return Hex40Pattern.IsMatch(value) ? value.ToLowerInvariant() : "unknown";
+        return Hex40Pattern.IsMatch(value) ? value.ToLowerInvariant() : null;
     }
 
     private static string SafeSourceLabel(string value, string claimLevel)

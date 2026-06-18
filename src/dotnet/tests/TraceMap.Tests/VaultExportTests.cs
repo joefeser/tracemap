@@ -340,6 +340,44 @@ public sealed class VaultExportTests
     }
 
     [Fact]
+    public async Task Vault_export_diagnostics_include_auditable_metadata()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var catalogPath = Path.Combine(temp.Path, "claims.json");
+        await File.WriteAllTextAsync(catalogPath, """
+            {
+              "schemaVersion": "source-claim-catalog.v1",
+              "sources": [
+                {
+                  "sourceIndexId": "missing-source",
+                  "claimLevel": "public-safe",
+                  "proofId": "proof-missing"
+                }
+              ]
+            }
+            """);
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "vault"),
+            SourceClaimCatalogPath: catalogPath));
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("InputClaimCatalogUnmatched", diagnostic.Code);
+        Assert.Equal("vault-export.gap.claim-level-unmatched.v1", diagnostic.RuleId);
+        Assert.Equal("Tier4Unknown", diagnostic.EvidenceTier);
+        Assert.Equal("/sourceClaimCatalog/sources", diagnostic.Location);
+        Assert.Equal("claim-level", diagnostic.Category);
+        Assert.Null(diagnostic.FilePath);
+        Assert.Null(diagnostic.StartLine);
+        Assert.Null(diagnostic.EndLine);
+        Assert.Null(diagnostic.CommitSha);
+        Assert.Equal("evidence-graph-vault-export.v1", diagnostic.ExtractorVersion);
+        Assert.Contains("source-claim-catalog", diagnostic.SupportingIds);
+    }
+
+    [Fact]
     public async Task Vault_export_rejects_unsafe_public_values_without_echoing_them()
     {
         using var temp = new TempDirectory();

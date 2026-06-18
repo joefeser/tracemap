@@ -37,9 +37,14 @@ describe("Angular template binding extraction", () => {
       <input [value]="user.email" (change)="save()" [(ngModel)]="user.email" name="email" ngModel #emailModel="ngModel">
       <input formControlName="email" />
       <input [formControlName]="'secondaryEmail'" />
+      <input [formControlName]="selectedField" />
       <section [formGroup]="'profileForm'"></section>
       <section>{{ user.email }}</section>
       <section>{{ format(user.email) }}</section>
+    `);
+    await fsp.writeFile(path.join(repo, "src", "app", "docs.html"), `
+      <article>{{ ordinary.docs }}</article>
+      <button (click)="notAngular()">Save</button>
     `);
     initGitRepo(repo);
 
@@ -84,6 +89,11 @@ describe("Angular template binding extraction", () => {
       ruleId: RuleIds.TypeScriptAngularFormBinding,
       targetSymbol: "secondaryEmail"
     }));
+    expect(result.facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.UiFormControlBinding,
+      ruleId: RuleIds.TypeScriptAngularFormBinding,
+      targetSymbol: "selectedField"
+    }));
     expect(result.facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.UiFormControlBinding,
       ruleId: RuleIds.TypeScriptAngularFormBinding,
@@ -100,7 +110,18 @@ describe("Angular template binding extraction", () => {
       evidenceTier: "Tier4Unknown",
       properties: expect.objectContaining({ gapKind: "dynamic-template-expression" })
     }));
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.UiBindingGap,
+      ruleId: RuleIds.TypeScriptAngularBindingGap,
+      evidenceTier: "Tier4Unknown",
+      properties: expect.objectContaining({ gapKind: "dynamic-form-control-name" })
+    }));
     expect(JSON.stringify(result.facts)).not.toContain("format(user.email)");
+    const angularUiFacts = result.facts.filter((fact) =>
+      fact.ruleId.startsWith("typescript.angular.")
+      || fact.factType.startsWith("Ui")
+    );
+    expect(angularUiFacts.some((fact) => fact.evidence.filePath.endsWith("docs.html"))).toBe(false);
     expect(fs.existsSync(path.join(out, "index.sqlite"))).toBe(true);
   });
 });

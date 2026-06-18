@@ -29,8 +29,15 @@ public sealed record VaultExportResult(
 public sealed record VaultExportDiagnostic(
     string Code,
     string RuleId,
+    string EvidenceTier,
     string Location,
-    string Category);
+    string Category,
+    string? FilePath,
+    int? StartLine,
+    int? EndLine,
+    string? CommitSha,
+    string ExtractorVersion,
+    IReadOnlyList<string> SupportingIds);
 
 public sealed record VaultSourceProvenance(
     string SourceIndexId,
@@ -569,7 +576,7 @@ public static class VaultExporter
                 "A source claim catalog entry did not match a stable source identity.",
                 null);
             gaps.Add(gap);
-            diagnostics.Add(new VaultExportDiagnostic("InputClaimCatalogUnmatched", ClaimUnmatchedRuleId, "/sourceClaimCatalog/sources", "claim-level"));
+            diagnostics.Add(CreateDiagnostic("InputClaimCatalogUnmatched", ClaimUnmatchedRuleId, "/sourceClaimCatalog/sources", "claim-level", "source-claim-catalog"));
         }
 
         var unfilteredNodeCount = nodes.Count(node => node.Kind is not "rule" and not "gap" and not "limitation");
@@ -2186,6 +2193,22 @@ public static class VaultExporter
     {
         var fileName = string.IsNullOrWhiteSpace(path) ? "unknown" : Path.GetFileName(path);
         return $"{context}:unavailable:{Hash(fileName, 24)}";
+    }
+
+    private static VaultExportDiagnostic CreateDiagnostic(string code, string ruleId, string location, string category, string supportingId)
+    {
+        return new VaultExportDiagnostic(
+            code,
+            ruleId,
+            Tier4Unknown,
+            location,
+            category,
+            null,
+            null,
+            null,
+            null,
+            SchemaVersion,
+            [supportingId]);
     }
 
     private static void RemovePathDerivedIdentityFields(JsonNode node)
