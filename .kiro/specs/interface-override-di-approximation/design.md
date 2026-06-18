@@ -253,10 +253,11 @@ and fixture calibration before shipping.
 
 ### Base Type Relationship
 
-Type-level `inherits` and `implements` relationships can support candidate
-search, but they should not substitute for member-level evidence when the
-member relationship is available. Type-level bridging without member evidence
-is weaker and should be capped or emitted as a gap.
+Type-level `InheritsFrom`, `ImplementsInterface`, and `ExtendsInterface`
+relationships can support candidate search, but they should not substitute for
+member-level evidence when the member relationship is available. Type-level
+bridging without member evidence is weaker and should be capped or emitted as a
+gap.
 
 ## Classification Policy
 
