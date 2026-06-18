@@ -104,10 +104,10 @@ implementation candidates without pretending TraceMap knows the runtime binding.
 3. Candidate rows SHALL NOT claim runtime dependency injection resolution,
    service locator binding, configuration binding, container registration,
    dynamic dispatch target selection, or production execution.
-4. WHEN exactly one static candidate is found, the row MAY be classified no
-   stronger than the weakest static evidence permits; it still SHALL use wording
-   that says "candidate" unless there is direct non-interface call evidence to
-   the implementation method.
+4. WHEN exactly one static candidate is found through interface relationship
+   evidence, the candidate row SHALL be capped at `NeedsReviewStaticRouteFlow`
+   or lower and SHALL use wording that says "candidate"; a stronger row requires
+   separate direct non-interface call evidence to the implementation method.
 5. WHEN multiple candidates are found, candidates SHALL be sorted
    deterministically and capped at `NeedsReviewStaticRouteFlow` or lower.
 6. WHEN candidate relationships are name-only, syntax-only, ambiguous, high
