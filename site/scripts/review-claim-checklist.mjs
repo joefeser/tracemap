@@ -225,7 +225,7 @@ async function validateChecklistPage({ pagePath, errors }) {
   validateChecklistFieldRows(html, errors);
   validateExampleRows(html, errors);
   validateProofLinks(html, errors);
-  validateClaimBoundaryText({ html, pageText, errors });
+  validateClaimBoundaryText({ decodedHtml, html, pageText, errors });
 }
 
 function validateChecklistFieldRows(html, errors) {
@@ -305,10 +305,10 @@ function validateProofLinks(html, errors) {
   }
 }
 
-function validateClaimBoundaryText({ html, pageText, errors }) {
+function validateClaimBoundaryText({ decodedHtml, html, pageText, errors }) {
   const sanctionedText = normalizeRenderedText(extractSanctionedBoundaryHtml(html));
   const reviewText = normalizeRenderedText(stripSanctionedBoundaryHtml(html)).replace(/\bpublic-safe\b/gi, "public evidence");
-  const positioningText = `${html} ${pageText}`;
+  const positioningText = `${html} ${decodedHtml} ${pageText}`;
 
   if (forbiddenPositioning.test(positioningText)) {
     errors.push(withEvidence("Review claim checklist contains forbidden AI, release, or production positioning.", "review-claim-checklist/index.html"));

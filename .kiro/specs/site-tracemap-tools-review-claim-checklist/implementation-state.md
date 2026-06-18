@@ -109,6 +109,10 @@ Implementation validation run on 2026-06-18:
 - Follow-up PR-loop pass found one Qodo rule violation for the exact word
   `impacted` in public non-claim copy. The page now says the checklist does not
   assign impact status, avoiding reducer-governed wording without evidence.
+- Codex review then found one validator gap: encoded metadata or attribute
+  values were not decoded before forbidden-positioning checks. The validator
+  now scans decoded HTML as well as raw HTML and rendered text, with a
+  regression test for entity-encoded attribute wording.
 
 ## Oddities
 
