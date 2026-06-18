@@ -17,8 +17,9 @@
         implementation slices begin.
   - [ ] Commit and review rule catalog entries before any implementation emits
         `MessagePublisherSurface`, `MessageConsumerSurface`,
-        `MessageBindingDeclared`, `MessageSurfaceGap`, `message-publish-consume`,
-        or any `message.surface.*` rule-backed fact or row.
+        `MessageBindingDeclared`, message-specific `AnalysisGap` facts,
+        `message-publish-consume`, or any `message.surface.*` rule-backed fact
+        or row.
   - [ ] Add rule catalog entries for publisher, consumer, binding, identity,
         combine, candidate-edge, paths, reducer, and gap rules before emitting
         facts.

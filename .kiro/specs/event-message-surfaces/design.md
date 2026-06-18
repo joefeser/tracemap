@@ -55,7 +55,7 @@ Add or reuse deterministic fact types:
 | `MessagePublisherSurface` | Static publish/send/produce/enqueue evidence. |
 | `MessageConsumerSurface` | Static consume/subscribe/handle/dequeue evidence. |
 | `MessageBindingDeclared` | Static framework binding, config, annotation, or manifest evidence. |
-| `MessageSurfaceGap` | Analysis gap for dynamic, unsupported, ambiguous, or unsafe evidence. |
+| `AnalysisGap` | Canonical gap fact with message-surface properties for dynamic, unsupported, ambiguous, unsafe, or reduced-coverage evidence. |
 
 Destination metadata that is neither clearly publisher nor consumer should be
 represented as `MessageBindingDeclared` with `operationDirection = declare` or
@@ -125,12 +125,12 @@ Recommended safe metadata fields:
 | `surfaceKind` | One of the message surface kinds above. |
 | `destinationIdentityStatus` | `static`, `hashed`, `dynamic`, `unknown`, `ambiguous`, or `unsafe-omitted`. |
 | `normalizedDestinationKey` | Safe normalized identity when renderable. |
-| `destinationHash` | Deterministic hash when the raw destination cannot be rendered. |
+| `destinationHash` | Full 64-character lowercase hex SHA-256 hash when the raw destination cannot be rendered. |
 | `eventTypeIdentity` | Safe type/symbol/event identity where a framework exposes event type instead of destination name. |
 | `handlerSymbolId` | Stable handler symbol identity where available. |
 | `publisherSymbolId` | Stable publisher symbol identity where available. |
 | `subscriptionIdentityStatus` | Safe status for group/subscription/channel identity when present. |
-| `safeMetadataHash` | Hash over sorted safe metadata fields for stable keys. |
+| `safeMetadataHash` | Full 64-character lowercase hex SHA-256 hash over sorted safe metadata fields for stable keys. |
 
 `handlerSymbolId` and `publisherSymbolId` are message-specific role extensions.
 The first implementation slice must decide in `docs/LANGUAGE_ADAPTER_CONTRACT.md`
@@ -138,10 +138,12 @@ whether they participate in `fact_symbols` role rows or remain properties-only.
 Until that contract is updated, they should be treated as safe metadata, not as
 portable graph edges.
 
-`safeMetadataHash` should be SHA-256 over UTF-8 bytes of sorted
+`safeMetadataHash` should be stored as the full 64-character lowercase hex
+SHA-256 over UTF-8 bytes of sorted
 `key=value` pairs from the safe metadata allowlist, joined with newline
 characters and using lowercase keys. Unsafe raw values are omitted or replaced
-by their approved hashes before this computation.
+by their approved hashes before this computation. Reports may display a shorter
+prefix, but stable keys and persisted safe metadata should use the full digest.
 
 Do not store raw source snippets by default. Do not render raw config values,
 hostnames, URLs, connection strings, secrets, local absolute paths, raw remotes,
@@ -172,10 +174,11 @@ Do not resolve:
 - wildcard subscriptions or pattern topics beyond a labeled pattern fact;
 - broker topology aliases learned only at runtime.
 
-Wildcard or pattern subscriptions should be emitted as `MessageSurfaceGap`
-under `message.surface.gap.v1` with `destinationIdentityStatus = dynamic` and a
-safe gap reason such as `wildcard-pattern-destination`. They must not become a
-consumer surface with a guessed destination.
+Wildcard or pattern subscriptions should be emitted as `AnalysisGap` facts under
+`message.surface.gap.v1` with message-surface properties,
+`destinationIdentityStatus = dynamic`, and a safe gap reason such as
+`wildcard-pattern-destination`. They must not become a consumer surface with a
+guessed destination.
 
 Event type identity follows the same safety posture but a different resolution
 path. Compiler-resolved message/event type symbols may reach Tier1 when the
@@ -186,11 +189,12 @@ treated as payload compatibility evidence.
 
 When raw destination text cannot be rendered but is available to the extractor,
 `destinationHash` used in a stable key must be derived from the full raw value
-with the project's shared SHA-256-style hash helper and must not be truncated in
-the stable-key input. Rendered reports may show shortened hashes, but the stable
-identity must use collision-resistant full input. If duplicate stable keys still
-occur, downstream projection must emit a duplicate-identity gap rather than
-silently merging rows.
+with the project's shared SHA-256-style hash helper and stored as a full
+64-character lowercase hex digest. It must not be truncated in the stable-key
+input. Rendered reports may show shortened hashes, but the stable identity must
+use collision-resistant full input. If duplicate stable keys still occur,
+downstream projection must emit a duplicate-identity gap rather than silently
+merging rows.
 
 Stable key input should be:
 
@@ -220,7 +224,7 @@ occurrence discriminator formed as the first 16 lowercase hex characters of
 SHA-256 over:
 
 ```text
-safeRepoRelativePath|startLine|endLine|ruleFamilyId|safeMetadataHash
+safeRepoRelativePath|startLine|endLine|ruleId|safeMetadataHash
 ```
 
 A handler rename must not churn the stable key for a single static-destination
