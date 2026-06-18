@@ -98,6 +98,13 @@ home, temp, drive-root, UNC, or empty path segments. The exporter records a
 `vault-export.gap.hidden-safe-context-omitted.v1` limitation so the output
 remains local-only and does not imply public/demo safety.
 
+Stable vault graph IDs are also safety-gated. Source-derived components are
+validated under their context before ID construction. Safe hidden display-name
+components may contribute only a context hash or closed category; hard-fail
+components omit the affected node or edge and emit
+`vault-export.gap.unsafe-id-component-omitted.v1` without rendering the raw
+value.
+
 Hard-fail categories reject in every claim level before files are written:
 raw credentials, API keys, access tokens, authorization headers, private keys,
 passwords, captured secret values, connection strings, local absolute paths,

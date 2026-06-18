@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
@@ -440,6 +441,31 @@ public sealed class VaultExportTests
     }
 
     [Fact]
+    public void Vault_export_hidden_identity_components_hash_safe_secret_like_display_names()
+    {
+        var result = InvokeTryIdentityComponent("hidden", "RouteActionModelMemberName", "GetSecretToken");
+
+        Assert.True(result.Accepted);
+        Assert.StartsWith("route-action-model-member-sha256:", result.SafeValue, StringComparison.Ordinal);
+        Assert.Equal("sensitive-word-safe-name", result.Category);
+        Assert.DoesNotContain("Secret", result.SafeValue, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Token", result.SafeValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("StableTraceMapId", "C:\\Temp\\TokenReviewController.cs", "local-path")]
+    [InlineData("RouteActionModelMemberName", "select id from Orders", "raw-sql")]
+    [InlineData("RouteActionModelMemberName", "Authorization: Bearer synthetic-token-value", "credential")]
+    public void Vault_export_identity_components_reject_hard_fail_values(string contextName, string value, string category)
+    {
+        var result = InvokeTryIdentityComponent("hidden", contextName, value);
+
+        Assert.False(result.Accepted);
+        Assert.Equal(category, result.Category);
+        Assert.DoesNotContain(value, result.SafeValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Vault_export_graph_hash_detects_stale_manifest()
     {
         using var temp = new TempDirectory();
@@ -510,6 +536,19 @@ public sealed class VaultExportTests
         }, new JsonSerializerOptions { WriteIndented = true }) + "\n";
         File.WriteAllText(path, json);
         return path;
+    }
+
+    private static (bool Accepted, string SafeValue, string Category) InvokeTryIdentityComponent(string claimLevel, string contextName, string value)
+    {
+        var method = typeof(VaultExporter).GetMethod("TryIdentityComponent", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("TryIdentityComponent was not found.");
+        var contextType = typeof(VaultExporter).GetNestedType("VaultValueContext", BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("VaultValueContext was not found.");
+        var context = Enum.Parse(contextType, contextName);
+        object?[] args = [claimLevel, context, value, "fallback", null, null];
+
+        var accepted = (bool)method.Invoke(null, args)!;
+        return (accepted, (string)args[4]!, (string)args[5]!);
     }
 
     private static async Task<Dictionary<string, string>> ReadSourceIdsAsync(string combinedPath)
