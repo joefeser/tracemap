@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace TraceMap.Reporting;
 
@@ -144,9 +145,72 @@ public static class VaultExporter
     private const string ClaimUnmatchedRuleId = "vault-export.gap.claim-level-unmatched.v1";
     private const string HiddenOmittedRuleId = "vault-export.gap.hidden-evidence-omitted.v1";
     private const string UnsafeSymbolRuleId = "vault-export.gap.unsafe-symbol-omitted.v1";
+    private const string HiddenSafeContextRuleId = "vault-export.gap.hidden-safe-context-omitted.v1";
     private const string GeneratedFileStaleRuleId = "vault-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "vault-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "vault-export.validation.unsafe-value-rejected.v1";
+    private const string SensitiveWordCategory = "sensitive-word";
+    // Hidden-safe context hashes use lowercase SHA-256 truncated after context validation.
+    private const int DisplayNameHashLength = 24;
+    private const int RepoRelativePathHashLength = 24;
+    private const int EvidenceLocationHashLength = 32;
+    // Display text is local navigation metadata, not source proof.
+    private const int MaxDisplayNameLength = 256;
+    private const int MaxRepoRelativePathLength = 260;
+
+    private enum VaultValueContext
+    {
+        RepoRelativePath,
+        GeneratedMetadata,
+        EvidenceLocation,
+        SymbolDisplayName,
+        RouteActionModelMemberName,
+        StableTraceMapId,
+        RuleId,
+        ClosedVocabulary,
+        DiagnosticCategory,
+        RawExternalOrDataValue,
+        MarkdownEvidenceLocation
+    }
+
+    private enum VaultSafetyOutcome
+    {
+        AllowRaw,
+        AllowHash,
+        AllowCategory,
+        OmitWithGap,
+        Reject
+    }
+
+    private sealed record VaultSafetyDecision(VaultSafetyOutcome Outcome, string? Category);
+
+    static VaultExporter()
+    {
+        PreValidateClosedVocabulary([
+            SchemaVersion,
+            GeneratorName,
+            ClaimHiddenRuleId,
+            ClaimUnmatchedRuleId,
+            HiddenOmittedRuleId,
+            UnsafeSymbolRuleId,
+            HiddenSafeContextRuleId,
+            GeneratedFileStaleRuleId,
+            UserFileCollisionRuleId,
+            UnsafeRejectedRuleId,
+            "hidden",
+            "demo-safe",
+            "public-safe",
+            "local-path",
+            "raw-remote-or-url",
+            "raw-sql",
+            "connection-string",
+            "credential",
+            SensitiveWordCategory,
+            "unsafe-evidence-location",
+            "HiddenSafeContextAccepted",
+            "Tier4Unknown"
+        ]);
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -452,9 +516,6 @@ public static class VaultExporter
             diagnostics.Add(new VaultExportDiagnostic("InputClaimCatalogUnmatched", ClaimUnmatchedRuleId, "/sourceClaimCatalog/sources", "claim-level"));
         }
 
-        AddRuleNodes(nodes, edges, gaps, limitations);
-        AddGapAndLimitationNodes(nodes, gaps, limitations);
-
         var unfilteredNodeCount = nodes.Count(node => node.Kind is not "rule" and not "gap" and not "limitation");
         var unfilteredEdgeCount = edges.Count;
         ApplyClaimFilter(minimumClaimLevel, nodes, edges, gaps);
@@ -471,7 +532,6 @@ public static class VaultExporter
                 "Hidden evidence was omitted by the requested claim-level filter; the export is partial.",
                 null);
             gaps.Add(omissionGap);
-            AddGapAndLimitationNodes(nodes, [omissionGap], []);
         }
 
         if (minimumClaimLevel != "hidden" && !nodes.Any(node => node.Kind is not "rule" and not "gap" and not "limitation"))
@@ -483,6 +543,14 @@ public static class VaultExporter
         {
             throw new InvalidOperationException("InputClaimLevelHidden: requested claim-level filter cannot be satisfied by the supplied source claim catalog.");
         }
+
+        if (minimumClaimLevel == "hidden")
+        {
+            ApplyHiddenLocalSafety(nodes, edges, gaps);
+        }
+
+        AddRuleNodes(nodes, edges, gaps, limitations);
+        AddGapAndLimitationNodes(nodes, gaps, limitations);
 
         var classification = ClassificationFor(nodes, edges, gaps);
         return new EvidenceGraphVault(
@@ -958,6 +1026,21 @@ public static class VaultExporter
         body.AppendLine($"| Supporting facts | {Cell(string.Join(", ", node.SupportingFactIds))} |");
         body.AppendLine($"| Supporting edges | {Cell(string.Join(", ", node.SupportingEdgeIds))} |");
 
+        if (node.EvidenceLocations is { Count: > 0 })
+        {
+            body.AppendLine();
+            body.AppendLine("## Evidence Locations");
+            body.AppendLine();
+            body.AppendLine("| File | Span |");
+            body.AppendLine("| --- | --- |");
+            foreach (var location in node.EvidenceLocations.OrderBy(location => location.FilePath, StringComparer.Ordinal)
+                         .ThenBy(location => location.StartLine ?? 0)
+                         .ThenBy(location => location.EndLine ?? 0))
+            {
+                body.AppendLine($"| {Cell(location.FilePath)} | {Cell(LineSpan(location))} |");
+            }
+        }
+
         if (node.Limitations.Count > 0)
         {
             body.AppendLine();
@@ -1226,11 +1309,24 @@ public static class VaultExporter
 
     private static void ValidateGeneratedStrings(EvidenceGraphVault graph, IReadOnlyDictionary<string, string> files)
     {
+        var hiddenEvidenceLocations = graph.Classification == "hidden"
+            ? graph.Nodes.SelectMany(node => node.EvidenceLocations ?? [])
+                .Concat(graph.Edges.SelectMany(edge => edge.EvidenceLocations ?? []))
+                .Select(location => location.FilePath)
+                .Where(path => UnsafeCategory(path) == SensitiveWordCategory && IsSafeRepoRelativePath(path))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+            : [];
+
         foreach (var violation in JsonStringLeaves(JsonSerializer.SerializeToNode(graph, JsonOptions)!, "$"))
         {
-            if (UnsafeCategory(violation.Value) is { } category)
+            var decision = ClassifyGeneratedValue(
+                graph.Classification,
+                JsonValueContext(violation.Location),
+                violation.Value);
+            if (decision.Outcome == VaultSafetyOutcome.Reject)
             {
-                throw new InvalidOperationException($"UnsafeValueRejected: {category} at {violation.Location}.");
+                throw new InvalidOperationException($"UnsafeValueRejected: {decision.Category} at {violation.Location}.");
             }
         }
 
@@ -1239,14 +1335,54 @@ public static class VaultExporter
             var line = 1;
             foreach (var textLine in file.Value.Split('\n'))
             {
-                if (UnsafeCategory(textLine) is { } category)
+                var decision = ClassifyGeneratedValue(graph.Classification, VaultValueContext.MarkdownEvidenceLocation, textLine);
+                if (decision.Outcome == VaultSafetyOutcome.Reject)
                 {
-                    throw new InvalidOperationException($"UnsafeValueRejected: {category} at markdown line {line}.");
+                    if (graph.Classification == "hidden"
+                        && decision.Category == SensitiveWordCategory
+                        && hiddenEvidenceLocations.Any(path => textLine.Contains(path, StringComparison.Ordinal)))
+                    {
+                        line++;
+                        continue;
+                    }
+
+                    throw new InvalidOperationException($"UnsafeValueRejected: {decision.Category} at markdown line {line}.");
                 }
 
                 line++;
             }
         }
+    }
+
+    private static VaultSafetyDecision ClassifyGeneratedValue(string claimLevel, VaultValueContext context, string? value)
+    {
+        var category = UnsafeCategory(value);
+        if (category is null)
+        {
+            return new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null);
+        }
+
+        if (claimLevel == "hidden"
+            && category == SensitiveWordCategory
+            && context == VaultValueContext.EvidenceLocation
+            && IsSafeRepoRelativePath(value))
+        {
+            return new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null);
+        }
+
+        return new VaultSafetyDecision(VaultSafetyOutcome.Reject, category);
+    }
+
+    private static VaultValueContext JsonValueContext(string pointer)
+    {
+        return IsEvidenceLocationPointer(pointer)
+            ? VaultValueContext.EvidenceLocation
+            : VaultValueContext.GeneratedMetadata;
+    }
+
+    private static bool IsEvidenceLocationPointer(string pointer)
+    {
+        return Regex.IsMatch(pointer, @"/evidenceLocations/\d+/filePath$", RegexOptions.CultureInvariant);
     }
 
     private static IEnumerable<(string Location, string Value)> JsonStringLeaves(JsonNode node, string path)
@@ -1298,7 +1434,17 @@ public static class VaultExporter
             || text.Contains("\\Users\\", StringComparison.Ordinal)
             || text.Contains("/home/", StringComparison.Ordinal)
             || text.Contains("file://", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("C:\\", StringComparison.OrdinalIgnoreCase))
+            || text.Contains("C:\\", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("~/", StringComparison.Ordinal)
+            || text.StartsWith("//", StringComparison.Ordinal)
+            || text.Contains("$HOME", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("%USERPROFILE%", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("/tmp/", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("/tmp/", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("\\Temp\\", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("\\\\", StringComparison.Ordinal)
+            || Regex.IsMatch(text, @"(^|[\s""'`])([A-Za-z]:[\\/])", RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"(^|[\\/])\.\.([\\/]|$)", RegexOptions.CultureInvariant))
         {
             return "local-path";
         }
@@ -1311,10 +1457,25 @@ public static class VaultExporter
             return "raw-remote-or-url";
         }
 
-        if (text.Contains("select ", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("insert ", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("update ", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("delete ", StringComparison.OrdinalIgnoreCase))
+        if (Regex.IsMatch(text, @"\b(server|data source|database|initial catalog|user id|uid|password|pwd)\s*=[^;\r\n]+;", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\b(connectionstring|connection string)\b\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return "connection-string";
+        }
+
+        if (Regex.IsMatch(text, @"-----BEGIN [A-Z ]*PRIVATE KEY-----", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\bAuthorization\s*:\s*(Bearer|Basic)\s+\S+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\b(api[-_ ]?key|access[-_ ]?token|session[-_ ]?id|password|secret)\s*[:=]\s*\S+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\b(sk|pk)_(live|test)_[A-Za-z0-9]{16,}\b", RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b", RegexOptions.CultureInvariant))
+        {
+            return "credential";
+        }
+
+        if (Regex.IsMatch(text, @"\bselect\b.+\bfrom\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
+            || Regex.IsMatch(text, @"\binsert\b.+\binto\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
+            || Regex.IsMatch(text, @"\bupdate\b.+\bset\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
+            || Regex.IsMatch(text, @"\bdelete\b.+\bfrom\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline))
         {
             return "raw-sql";
         }
@@ -1325,10 +1486,160 @@ public static class VaultExporter
             || text.Contains("connectionstring", StringComparison.OrdinalIgnoreCase)
             || text.Contains("connection string", StringComparison.OrdinalIgnoreCase))
         {
-            return "secret-like";
+            return SensitiveWordCategory;
         }
 
         return null;
+    }
+
+    private static void PreValidateClosedVocabulary(IEnumerable<string> values)
+    {
+        foreach (var value in values)
+        {
+            if (UnsafeCategory(value) is { } category)
+            {
+                throw new InvalidOperationException($"VaultExportClosedVocabularyUnsafe: {category}.");
+            }
+        }
+    }
+
+    private static void ApplyHiddenLocalSafety(List<VaultGraphNode> nodes, List<VaultGraphEdge> edges, List<VaultGraphGap> gaps)
+    {
+        var safeContextGapKeys = new SortedSet<string>(StringComparer.Ordinal);
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i].EvidenceLocations is not { Count: > 0 } locations)
+            {
+                continue;
+            }
+
+            nodes[i] = nodes[i] with
+            {
+                EvidenceLocations = NormalizeHiddenEvidenceLocations(
+                    locations,
+                    $"$/nodes/{i}/evidenceLocations",
+                    safeContextGapKeys)
+            };
+        }
+
+        for (var i = 0; i < edges.Count; i++)
+        {
+            if (edges[i].EvidenceLocations is not { Count: > 0 } locations)
+            {
+                continue;
+            }
+
+            edges[i] = edges[i] with
+            {
+                EvidenceLocations = NormalizeHiddenEvidenceLocations(
+                    locations,
+                    $"$/edges/{i}/evidenceLocations",
+                    safeContextGapKeys)
+            };
+        }
+
+        foreach (var key in safeContextGapKeys)
+        {
+            gaps.Add(new VaultGraphGap(
+                $"gap:{Hash(string.Join('\u001f', ["gap/v1", key, "hidden", "HiddenSafeContextAccepted", HiddenSafeContextRuleId, "Tier4Unknown"]), IdHashLength)}",
+                "hidden",
+                "HiddenSafeContextAccepted",
+                HiddenSafeContextRuleId,
+                "Tier4Unknown",
+                "A hidden safe-context evidence location contains a sensitive word and remains local-only; public and demo exports stay strict.",
+                null,
+                ["Local hidden context preserves navigation evidence but does not prove public safety."]));
+        }
+    }
+
+    private static IReadOnlyList<VaultEvidenceLocation> NormalizeHiddenEvidenceLocations(
+        IReadOnlyList<VaultEvidenceLocation> locations,
+        string pointer,
+        ISet<string> safeContextGapKeys)
+    {
+        var normalized = new List<VaultEvidenceLocation>(locations.Count);
+        for (var i = 0; i < locations.Count; i++)
+        {
+            var location = locations[i];
+            var filePath = NormalizeRepoRelativePath(location.FilePath);
+            if (!IsSafeRepoRelativePath(filePath))
+            {
+                var category = UnsafeCategory(location.FilePath) ?? "unsafe-evidence-location";
+                throw new InvalidOperationException($"UnsafeValueRejected: {category} at {pointer}/{i}/filePath.");
+            }
+
+            if (UnsafeCategory(filePath) == SensitiveWordCategory)
+            {
+                safeContextGapKeys.Add($"hidden-safe-evidence-location-{Hash(filePath, EvidenceLocationHashLength)}");
+            }
+
+            normalized.Add(location with { FilePath = filePath });
+        }
+
+        return normalized
+            .Distinct()
+            .OrderBy(location => location.FilePath, StringComparer.Ordinal)
+            .ThenBy(location => location.StartLine ?? 0)
+            .ThenBy(location => location.EndLine ?? 0)
+            .ToArray();
+    }
+
+    private static string NormalizeRepoRelativePath(string value)
+    {
+        return value.Trim().Replace('\\', '/');
+    }
+
+    private static bool IsSafeRepoRelativePath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var text = NormalizeRepoRelativePath(value);
+        if (text.Length > MaxRepoRelativePathLength
+            || text.StartsWith("/", StringComparison.Ordinal)
+            || text.StartsWith("~/", StringComparison.Ordinal)
+            || text.StartsWith("$HOME", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("%USERPROFILE%", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("://", StringComparison.OrdinalIgnoreCase)
+            || Regex.IsMatch(text, @"^[A-Za-z]:/", RegexOptions.CultureInvariant)
+            || text.StartsWith("//", StringComparison.Ordinal)
+            || text.Any(char.IsControl))
+        {
+            return false;
+        }
+
+        var segments = text.Split('/');
+        if (segments.Length == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            if (string.IsNullOrWhiteSpace(segment)
+                || segment == "."
+                || segment == "..")
+            {
+                return false;
+            }
+
+            if (i == 0
+                && (segment.Equals("users", StringComparison.OrdinalIgnoreCase)
+                    || segment.Equals("home", StringComparison.OrdinalIgnoreCase)
+                    || segment.Equals("tmp", StringComparison.OrdinalIgnoreCase)
+                    || segment.Equals("temp", StringComparison.OrdinalIgnoreCase)
+                    || segment.Equals("var", StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+        }
+
+        var category = UnsafeCategory(text);
+        return category is null or SensitiveWordCategory;
     }
 
     private static async Task<SourceClaimCatalog> ReadClaimCatalogAsync(string? path, CancellationToken cancellationToken)
@@ -1670,7 +1981,16 @@ public static class VaultExporter
             return fallback;
         }
 
-        return value.Trim().ReplaceLineEndings(" ");
+        var text = value.Trim().ReplaceLineEndings(" ");
+        return IsSafeDisplayText(text) ? text : $"{fallback}-{Hash(text, DisplayNameHashLength)}";
+    }
+
+    private static bool IsSafeDisplayText(string value)
+    {
+        return value.Length <= MaxDisplayNameLength
+            && !value.Any(char.IsControl)
+            && !value.Contains('\t', StringComparison.Ordinal)
+            && !Regex.IsMatch(value, @" {2,}", RegexOptions.CultureInvariant);
     }
 
     private static IReadOnlyList<string> SourceLimitations(CombinedReportSource source)
@@ -1826,6 +2146,17 @@ public static class VaultExporter
         var fromDirectory = Path.GetDirectoryName(fromFile.Replace('\\', '/')) ?? string.Empty;
         var prefix = string.IsNullOrWhiteSpace(fromDirectory) ? string.Empty : "../";
         return prefix + toFile.Replace('\\', '/');
+    }
+
+    private static string LineSpan(VaultEvidenceLocation location)
+    {
+        return (location.StartLine, location.EndLine) switch
+        {
+            ({ } start, { } end) when start == end => start.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ({ } start, { } end) => $"{start.ToString(System.Globalization.CultureInfo.InvariantCulture)}-{end.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            ({ } start, null) => start.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => "line-span-unavailable"
+        };
     }
 
     private static string Cell(string? value)

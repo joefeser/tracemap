@@ -82,6 +82,30 @@ raw remotes, raw URLs, raw SQL/config values, credentials, secret-like strings,
 snippets, analyzer diagnostics, and unsafe generated metadata. Diagnostics use
 category and location only; unsafe values are not echoed.
 
+Public-safe and demo-safe vault exports keep this validation strict. A
+secret-like word in a path, route, symbol, model, member, action, or evidence
+location is rejected unless the value was already removed by claim-level
+filtering or represented only by a reviewed safe category. If filtering removes
+all visible non-gap evidence, the export fails instead of falling back to hidden
+content.
+
+Hidden/local vault exports may keep bounded safe-context values when they are
+needed for local navigation. A repo-relative evidence path such as
+`Controllers/TokenReviewController.cs` may remain visible in hidden output when
+it is printable, normalized to forward slashes, not absolute, not a URL or
+remote, not SQL/config text, not credential material, and has no traversal,
+home, temp, drive-root, UNC, or empty path segments. The exporter records a
+`vault-export.gap.hidden-safe-context-omitted.v1` limitation so the output
+remains local-only and does not imply public/demo safety.
+
+Hard-fail categories reject in every claim level before files are written:
+raw credentials, API keys, access tokens, authorization headers, private keys,
+passwords, captured secret values, connection strings, local absolute paths,
+raw remotes, raw URLs, raw SQL, source snippets, analyzer diagnostics, stack
+traces, private sample identifiers, and production data. `--force` only permits
+replacement of stale generated files after the new content has passed these
+safety checks.
+
 Obsidian compatibility is plain Markdown compatibility: deterministic relative
 links, stable note names, and safe tags. TraceMap does not require Obsidian and
 this workflow does not publish site content.
