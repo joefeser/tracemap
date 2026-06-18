@@ -87,7 +87,10 @@ const forbiddenPrivatePatterns = [
   { label: "connection string Password fragment", pattern: /\bPassword\s*=/i },
   { label: "connection string User Id fragment", pattern: /\bUser\s+Id\s*=/i },
   { label: "connection string keyword", pattern: /\bConnectionString\b/i },
-  { label: "raw SQL statement", pattern: /\bSELECT\s+.+\s+FROM\b/i },
+  {
+    label: "raw SQL statement",
+    pattern: /\bSELECT\s+(?:\*|[A-Z_][\w."]*(?:\s*,\s*[A-Z_][\w."]*)*)\s+FROM\s+[A-Z_][\w."]*\b/i
+  },
   { label: "raw SQL statement", pattern: /\b(?:INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/i },
   { label: "raw git remote", pattern: /\bgit@[\w.-]+:/i },
   { label: "raw ssh remote", pattern: /\bssh:\/\/[^\s<>"']+/i },
@@ -283,7 +286,7 @@ async function validateInboundLinks({ dist, errors }) {
 
 function stripSanctionedSections(html) {
   return html.replace(
-    /<section\b(?=[^>]*\bdata-runbook-section\s*=\s*["'](?:artifact-boundary|sharing-guidance|red-flag)["'])[^>]*>[\s\S]*?<\/section>/gi,
+    /<([a-z][a-z0-9:-]*)\b(?=[^>]*\bdata-runbook-section\s*=\s*["'](?:artifact-boundary|sharing-guidance|red-flag)["'])[^>]*>[\s\S]*?<\/\1>/gi,
     " "
   );
 }

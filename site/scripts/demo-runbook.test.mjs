@@ -72,6 +72,21 @@ test("validateDemoRunbookDist rejects artifact vocabulary outside sanctioned sec
   assert.match(errors.join("\n"), /artifact-boundary vocabulary outside sanctioned sections: facts\.ndjson/);
 });
 
+test("validateDemoRunbookDist allows sanctioned warning vocabulary on non-section elements", async (t) => {
+  const root = await createManagedDemoRunbookDistFixture(t, {
+    pageHtml: demoRunbookPage(`
+      <article data-runbook-section="red-flag">
+        <p>AI-powered smart impact and complete product coverage are red flags, not positioning.</p>
+      </article>
+    `)
+  });
+  const errors = [];
+
+  await validateDemoRunbookDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateDemoRunbookDist rejects forbidden private and raw values composed at runtime", async (t) => {
   const slash = String.fromCharCode(47);
   const backslash = String.fromCharCode(92);
