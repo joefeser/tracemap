@@ -99,17 +99,15 @@ test("validateStaticVsRuntimeDist rejects forbidden positioning", async (t) => {
   assert.match(errors.join("\n"), /forbidden runtime or AI\/LLM positioning/);
 });
 
-test("validateStaticVsRuntimeDist accepts flexible impacted boundary disclaimer", async (t) => {
+test("validateStaticVsRuntimeDist rejects operational positioning in metadata", async (t) => {
   const root = await createManagedStaticVsRuntimeDistFixture(t, {
-    pageHtml: staticVsRuntimePage(
-      "<p>TraceMap should   not say a surface is impacted unless reducer-backed public-safe evidence supports that wording.</p>"
-    )
+    pageHtml: staticVsRuntimePage('<meta name="description" content="TraceMap ships a runtime agent.">')
   });
   const errors = [];
 
   await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
 
-  assert.deepEqual(errors, []);
+  assert.match(errors.join("\n"), /forbidden runtime or AI\/LLM positioning/);
 });
 
 test("validateStaticVsRuntimeDist rejects unsupported impacted wording", async (t) => {
@@ -232,7 +230,7 @@ function staticVsRuntimePage(extra = "", { fillerWordCount = 700 } = {}) {
     <p>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, incident root cause, service ownership, production dependency understanding, test sufficiency, or complete product coverage.</p>
     <p>TraceMap does not replace logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.</p>
     <p>TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis.</p>
-    <p>TraceMap should not say a surface is impacted unless reducer-backed public-safe evidence supports that wording.</p>
+    <p>TraceMap should not use impact wording for a surface unless reducer-backed public-safe evidence supports that wording.</p>
     ${staticVsRuntimeRequiredLinks.map((route) => `<a href="${route}">${route}</a>`).join("\n")}
     <p>${filler}</p>
     ${extra}

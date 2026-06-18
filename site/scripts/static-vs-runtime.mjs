@@ -46,7 +46,7 @@ const requiredText = [
   "TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, incident root cause, service ownership, production dependency understanding, test sufficiency, or complete product coverage",
   "TraceMap does not replace logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment",
   "TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis",
-  "TraceMap should not say a surface is impacted unless reducer-backed public-safe evidence supports that wording"
+  "TraceMap should not use impact wording for a surface unless reducer-backed public-safe evidence supports that wording"
 ];
 
 const requiredAnchors = [
@@ -209,7 +209,7 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
     errors.push("Static vs runtime page contains forbidden runtime or AI/LLM positioning.");
   }
 
-  if (forbiddenOperationalPositioning.test(pageText)) {
+  if (forbiddenOperationalPositioning.test(positioningText)) {
     errors.push("Static vs runtime page contains forbidden runtime or AI/LLM positioning.");
   }
 
@@ -217,8 +217,7 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
     errors.push("Static vs runtime page contains unsupported proof or replacement wording.");
   }
 
-  const impactedScanText = stripAllowedImpactedBoundary(pageText);
-  if (/\b(?:surface|endpoint|route|contract|package|service)\b[^.]{0,80}\bimpacted\b/i.test(impactedScanText)) {
+  if (/\b(?:surface|endpoint|route|contract|package|service)\b[^.]{0,80}\bimpacted\b/i.test(pageText)) {
     errors.push("Static vs runtime page contains unsupported impacted wording.");
   }
 
@@ -237,12 +236,6 @@ function routeTextFields(routeEntry) {
   ].filter((value) => typeof value === "string");
 }
 
-function stripAllowedImpactedBoundary(value) {
-  return value.replace(
-    /\bTraceMap\s+should\s+not\s+say\s+a\s+surface\s+is\s+impacted\s+unless\s+reducer-backed\s+public-safe\s+evidence\s+supports\s+that\s+wording\b\.?/gi,
-    ""
-  );
-}
 
 function containsForbiddenText(text, ...values) {
   const normalizedText = text.toLowerCase();
