@@ -1,5 +1,7 @@
 # Parameter and Value-Origin Flow Implementation State
 
+Status: implemented
+
 ## Current Branch
 
 `codex/value-origin-adapter-alignment`

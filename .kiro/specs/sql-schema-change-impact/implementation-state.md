@@ -1,12 +1,16 @@
 # SQL Schema Change Impact Implementation State
 
-Status: PR 3 implemented
+Status: implemented
 
 ## Branch
 
 `codex/sql-schema-combined-surfaces`
 
 ## Current State
+
+Status normalized during spec-state cleanup. The prior `PR 3 implemented`
+wording referred to the last precision slice, and the state file records SQL
+schema impact v1 plus combined SQL/schema matching as implemented in `dev`.
 
 Implemented SQL/schema impact v1 in `dev`. This branch adds the deferred PR 3 precision slice for combined `sql-query` and `sql-persistence` matching.
 

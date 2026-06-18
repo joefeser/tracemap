@@ -287,6 +287,23 @@
     ]
   },
   {
+    "path": "/adoption/",
+    "title": "Adoption Playbook",
+    "summary": "Concept-level onboarding workflow for introducing TraceMap through public demo evidence, candidate repositories, scan packets, visible gaps, and owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a concept-level onboarding workflow, not a product-completeness claim.",
+      "Static evidence can organize review questions but cannot replace owners, tests, telemetry, or release controls."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, deployment state, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
+      "No private source excerpts, database query text, config values, credentials, workstation paths, repository locations, scan folders, local fact streams, local indexes, or analyzer diagnostics are published."
+    ]
+  },
+  {
     "path": "/incident-call/",
     "title": "Incident Call Static Dependency Evidence",
     "summary": "Concept-level use case for using static dependency evidence and proof paths during a production incident or P1 call without claiming runtime proof.",
@@ -335,6 +352,23 @@
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
       "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, generated scan directories, AI impact analysis, LLM analysis, or complete product coverage claim."
+    ]
+  },
+  {
+    "path": "/manager-faq/",
+    "title": "Manager FAQ",
+    "summary": "Concept-level stakeholder FAQ for reading TraceMap deterministic static evidence, proof boundaries, limitations, and owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The FAQ is stakeholder orientation, not a product-completeness or release decision surface.",
+      "Static evidence can shape review questions but cannot replace owners, telemetry, tests, or release process."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
+      "No source excerpts, database text, config values, credentials, workstation paths, repository locations, scan folders, local fact streams, local indexes, combined local databases, or analyzer diagnostics are published."
     ]
   },
   {

@@ -61,7 +61,7 @@ Current default behavior:
 - combines a mixed stack with labels `public-dotnet-modern`, `public-dotnet-server`, `public-ts-modern`, and `public-ts-client`
 - combines before/after public-demo snapshots with label `public-demo-api`
 - runs the combined dependency report and asserts endpoint evidence from the combined report
-- runs targeted `tracemap paths` and `tracemap reverse` over the generated endpoint stack
+- runs targeted `tracemap paths`, `tracemap route-flow`, and `tracemap reverse` over the generated endpoint stack
 - generates `portfolio-manifest.json` from generated combined indexes and runs `tracemap portfolio`
 - runs `tracemap diff`, `tracemap impact`, and `tracemap release-review` over the generated public-demo before/after snapshots
 - writes `demo-summary.md` and `demo-summary.json`
@@ -117,7 +117,7 @@ neutral labels/counts only; do not commit raw facts, SQLite indexes, analyzer
 logs, raw SQL, connection strings, config values, raw remotes, private sample
 names, local absolute paths, or source snippets.
 
-For combined dependency report, path-query, reverse-query, diff, contract-diff, or snapshot-diff changes, run a combine/report/paths/reverse/diff/contract-diff/snapshot-diff smoke over any two existing local scan outputs:
+For combined dependency report, path-query, route-flow, reverse-query, diff, contract-diff, or snapshot-diff changes, run a combine/report/paths/route-flow/reverse/diff/contract-diff/snapshot-diff smoke over any two existing local scan outputs:
 For combined change-impact changes, include the `impact` command in the same smoke.
 For release-review changes, include `release-review` in the same smoke and verify `release-review.md` plus `release-review.json` are produced.
 
@@ -128,6 +128,8 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --out <tmp>/combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sqlite --out <tmp>/combined-report
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
+dotnet run --project src/dotnet/TraceMap.Cli -- route-flow --index <tmp>/combined.sqlite --from-source first --out <tmp>/route-flow
+dotnet run --project src/dotnet/TraceMap.Cli -- property-flow --index <tmp>/combined.sqlite --property fact:<combinedFactId> --out <tmp>/property-flow
 dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index <tmp>/combined.sqlite --surface sql-query --to endpoints --out <tmp>/combined-reverse
 dotnet run --project src/dotnet/TraceMap.Cli -- diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/combined-diff
 dotnet run --project src/dotnet/TraceMap.Cli -- contract-diff --before <tmp>/combined.sqlite --after <tmp>/combined.sqlite --out <tmp>/contract-diff
@@ -138,6 +140,10 @@ test -f <tmp>/combined-report/dependency-report.md
 test -f <tmp>/combined-report/dependency-report.json
 test -f <tmp>/combined-paths/paths-report.md
 test -f <tmp>/combined-paths/paths-report.json
+test -f <tmp>/route-flow/route-flow-report.md
+test -f <tmp>/route-flow/route-flow-report.json
+test -f <tmp>/property-flow/property-flow-report.md
+test -f <tmp>/property-flow/property-flow-report.json
 test -f <tmp>/combined-reverse/reverse-report.md
 test -f <tmp>/combined-reverse/reverse-report.json
 test -f <tmp>/combined-diff/diff-report.md
@@ -151,6 +157,57 @@ test -f <tmp>/combined-impact/impact-report.json
 test -f <tmp>/release-review/release-review.md
 test -f <tmp>/release-review/release-review.json
 ```
+
+For docs-export changes, run the focused tests plus the normal .NET and safety
+gates:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter EvidenceDocs
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+When validating against a local combined index, generate docs into ignored
+temporary storage only:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- docs-export --index <tmp>/combined.sqlite --out <tmp>/evidence-docs
+test -f <tmp>/evidence-docs/manifest.json
+test -f <tmp>/evidence-docs/chunks.jsonl
+test -f <tmp>/evidence-docs/README.md
+```
+
+Docs-export output must preserve rule IDs, evidence tiers, source labels,
+commit SHAs, coverage labels, supporting IDs, gaps, and limitations. It must
+not contain raw SQL, raw config values, connection strings, raw URLs, endpoint
+addresses, local absolute paths, raw remotes, source snippets, credentials,
+private sample names, production data, prompt text, embeddings, vector database
+configuration, or natural-language answer templates. Demo/public output
+requires reviewed claim metadata plus `--date YYYY-MM`; hidden output without a
+date uses `local-only`.
+
+For property-flow changes, run the focused .NET and TypeScript tests plus the
+normal report safety gates:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests
+npm run check --prefix src/typescript
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Expected behavior: Angular template fixtures emit `UiTemplateBinding`,
+`UiFormControlBinding`, `UiEventBinding`, `UiTemplateVariable`, and
+`UiBindingGap` facts with rule IDs and safe metadata only; Razor fixtures emit
+`RazorBinding`, `RazorFormTarget`, and `RazorBindingGap` facts; property-flow
+reports reject single-language indexes, keep input SQLite files read-only, emit
+route-flow/schema gaps where needed, and write deterministic Markdown/JSON
+without source snippets, raw SQL, raw URLs, connection strings, secrets, remotes,
+or local absolute paths.
 
 For value-origin flow changes, also inspect the source `parameter_forward_edges` table from a semantic .NET sample or focused fixture:
 

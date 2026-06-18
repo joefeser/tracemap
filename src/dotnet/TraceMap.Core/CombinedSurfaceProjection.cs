@@ -117,6 +117,7 @@ public static class CombinedSurfaceProjection
         var redactionReason = FirstValue(fact.Properties, "redactionReason")
             ?? (unsafeVersion ? "unsafe-package-version" : null);
         var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "environmentVariableName");
+        var asmxName = FirstValue(fact.Properties, "serviceClassName", "operationName", "clientName", "metadataFileName", "configKey");
         var ecosystem = FirstValue(fact.Properties, "ecosystem", "packageEcosystem", "packageManager");
         var manifestKind = FirstValue(fact.Properties, "manifestKind", "metadataSource", "sourceFormat", "type");
         var dependencyScope = FirstValue(fact.Properties, "dependencyScope", "scope");
@@ -128,6 +129,7 @@ public static class CombinedSurfaceProjection
             "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash, sqlResourceName),
             "sql-persistence" => SqlPersistenceDisplayName(fact, tableName, columns, mappedName),
             "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
+            "asmx-service" or "asmx-operation" or "asmx-client" or "asmx-config" or "asmx-metadata" => asmxName ?? $"unknown-{surfaceKind}:{fact.CombinedFactId}",
             _ => $"unknown-surface:{fact.CombinedFactId}"
         };
 

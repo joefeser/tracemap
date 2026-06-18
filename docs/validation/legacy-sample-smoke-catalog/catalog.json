@@ -1,0 +1,1028 @@
+{
+  "catalogId": "legacy-sample-smoke-catalog",
+  "entries": [
+    {
+      "claimLevel": "public-safe",
+      "displayName": "Large public dotnet client",
+      "families": [
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier4Unknown"
+          ],
+          "expectedRuleIds": [
+            "build.environment.workspace-diagnostic.v1",
+            "legacy.flow.gap-propagation.v1"
+          ],
+          "extractorGapCodes": [
+            "extractor-reduced-coverage"
+          ],
+          "familyId": "analysis-gap-reporting",
+          "limitations": [
+            {
+              "code": "gap-is-not-absence",
+              "message": "Analysis gaps preserve reduced coverage without claiming absence."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "reduced",
+            "truncated"
+          ]
+        },
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "Reduced",
+            "SyntaxFallback"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier3SyntaxOrTextual",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "csharp.syntax"
+          ],
+          "expectedRuleIds": [
+            "csharp.syntax.declarations.v1",
+            "csharp.syntax.invocation.v1"
+          ],
+          "familyId": "fallback-syntax-scan",
+          "limitations": [
+            {
+              "code": "syntax-fallback-review-tier",
+              "message": "Syntax fallback remains review-tier evidence and is not upgraded to semantic proof."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced"
+          ]
+        },
+        {
+          "artifactSizeBucket": "extra-large",
+          "expectation": "exploratory",
+          "expectedCoverageLabels": [
+            "Reduced",
+            "Truncated"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier4Unknown"
+          ],
+          "expectedRuleIds": [
+            "legacy.validation.bounds.v1",
+            "legacy.validation.summary.v1"
+          ],
+          "extractorGapCodes": [
+            "extractor-reduced-coverage"
+          ],
+          "familyId": "large-repo-stress",
+          "limitations": [
+            {
+              "code": "bounded-stress-only",
+              "message": "Stress expectations use timeout and artifact-size buckets without raw file lists or identifying counts."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced",
+            "truncated"
+          ],
+          "timeoutBucket": "extra-large"
+        }
+      ],
+      "limitations": [
+        {
+          "code": "catalog-not-raw-output",
+          "message": "This entry records expected smoke coverage only; raw artifacts stay out of tracked catalog files."
+        }
+      ],
+      "relationships": [
+        {
+          "artifactKind": "redacted-validation-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "large-public-dotnet-client-summary",
+          "schemaVersion": "legacy-codebase-validation-summary.v1",
+          "spec": "legacy-codebase-validation",
+          "validationStatus": "observed"
+        },
+        {
+          "artifactKind": "evidence-pack-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "large-public-dotnet-client-pack",
+          "schemaVersion": "legacy-sample-evidence-pack-summary.v1",
+          "spec": "legacy-sample-evidence-pack",
+          "validationStatus": "observed"
+        }
+      ],
+      "sampleLabel": "large-public-dotnet-client",
+      "source": {
+        "classification": "synthetic-fixture",
+        "commitIdentity": {
+          "kind": "fixture-version",
+          "limitations": [],
+          "shaPresent": false,
+          "value": "large-dotnet-client-fixture@2026-06"
+        },
+        "identityKind": "neutral-label",
+        "reviewed": true,
+        "safeSourceAlias": "tracemap-fixture"
+      },
+      "validation": {
+        "commandTemplates": [
+          {
+            "artifactSizeBucket": "small",
+            "expectedArtifacts": [
+              "evidence-pack-reference",
+              "redacted-summary"
+            ],
+            "mode": "redacted-artifact-only",
+            "name": "create-evidence-pack",
+            "template": "tracemap evidence-pack create --input <redacted-summary> --input-kind legacy-validation-summary --label <sample-label> --claim-level <claim-level> --date <YYYY-MM> --out <pack-output>",
+            "timeoutBucket": "small"
+          },
+          {
+            "artifactSizeBucket": "extra-large",
+            "expectedArtifacts": [
+              "analyzer-log-present",
+              "facts-ndjson-present",
+              "index-sqlite-present",
+              "report-md-present",
+              "scan-manifest"
+            ],
+            "mode": "checked-in-sample",
+            "name": "scan-sample",
+            "template": "tracemap scan --repo <sample-root> --out <scan-output>",
+            "timeoutBucket": "extra-large"
+          }
+        ],
+        "gates": [
+          "./scripts/check-private-paths.sh",
+          "catalog validate",
+          "git diff --check"
+        ]
+      }
+    },
+    {
+      "claimLevel": "public-safe",
+      "displayName": "Legacy build diagnostics synthetic",
+      "families": [
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier4Unknown"
+          ],
+          "expectedRuleIds": [
+            "build.environment.workspace-diagnostic.v1",
+            "legacy.flow.gap-propagation.v1"
+          ],
+          "extractorGapCodes": [
+            "extractor-reduced-coverage"
+          ],
+          "familyId": "analysis-gap-reporting",
+          "limitations": [
+            {
+              "code": "gap-is-not-absence",
+              "message": "Analysis gaps preserve reduced coverage without claiming absence."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "reduced"
+          ]
+        },
+        {
+          "expectation": "optional",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "xml.config"
+          ],
+          "expectedRuleIds": [
+            "build.environment.project-format.v1",
+            "legacy.validation.environment.v1"
+          ],
+          "familyId": "binding-redirects",
+          "limitations": [
+            {
+              "code": "binding-redirect-shape-only",
+              "message": "Binding redirect expectations use shape and count buckets only."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed"
+          ]
+        },
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "project.file",
+            "xml.config"
+          ],
+          "expectedRuleIds": [
+            "build.environment.project-format.v1",
+            "build.environment.restore.v1",
+            "build.environment.toolset.v1"
+          ],
+          "familyId": "build-environment-diagnostics",
+          "limitations": [
+            {
+              "code": "environment-static-only",
+              "message": "Environment diagnostics are static project and config indicators."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced"
+          ]
+        },
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier4Unknown"
+          ],
+          "expectedRuleIds": [
+            "build.environment.workspace-diagnostic.v1",
+            "csharp.semantic.workspace.v1"
+          ],
+          "extractorGapCodes": [
+            "extractor-reduced-coverage"
+          ],
+          "familyId": "msbuild-project-load-failure",
+          "limitations": [
+            {
+              "code": "failed-build-reduced-coverage",
+              "message": "Failed project load is reduced coverage and is not treated as clean analysis."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "reduced"
+          ]
+        },
+        {
+          "expectation": "optional",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "project.file"
+          ],
+          "expectedRuleIds": [
+            "build.environment.restore.v1",
+            "project.file.v1"
+          ],
+          "familyId": "packages-config",
+          "limitations": [
+            {
+              "code": "package-shape-only",
+              "message": "Package metadata is a static declaration and not a restore result."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed"
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "code": "catalog-not-raw-output",
+          "message": "This entry records expected smoke coverage only; raw artifacts stay out of tracked catalog files."
+        }
+      ],
+      "relationships": [
+        {
+          "artifactKind": "redacted-comparison-report",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-build-diagnostics-synthetic-comparison",
+          "schemaVersion": "legacy-baseline-comparison.v1",
+          "spec": "legacy-baseline-regression-artifacts",
+          "validationStatus": "observed"
+        },
+        {
+          "artifactKind": "redacted-validation-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-build-diagnostics-synthetic-summary",
+          "schemaVersion": "legacy-codebase-validation-summary.v1",
+          "spec": "legacy-codebase-validation",
+          "validationStatus": "observed"
+        }
+      ],
+      "sampleLabel": "legacy-build-diagnostics-synthetic",
+      "source": {
+        "classification": "synthetic-fixture",
+        "commitIdentity": {
+          "kind": "fixture-version",
+          "limitations": [],
+          "shaPresent": false,
+          "value": "legacy-build-diagnostics-fixture@2026-06"
+        },
+        "identityKind": "neutral-label",
+        "reviewed": true,
+        "safeSourceAlias": "tracemap-fixture"
+      },
+      "validation": {
+        "commandTemplates": [
+          {
+            "artifactSizeBucket": "medium",
+            "expectedArtifacts": [
+              "analyzer-log-present",
+              "facts-ndjson-present",
+              "index-sqlite-present",
+              "report-md-present",
+              "scan-manifest"
+            ],
+            "mode": "checked-in-sample",
+            "name": "scan-sample",
+            "template": "tracemap scan --repo <sample-root> --out <scan-output>",
+            "timeoutBucket": "medium"
+          },
+          {
+            "artifactSizeBucket": "small",
+            "expectedArtifacts": [
+              "catalog-json",
+              "catalog-md"
+            ],
+            "mode": "redacted-artifact-only",
+            "name": "validate-catalog",
+            "template": "catalog validate --catalog <catalog-json> --expected-claim-level <claim-level>",
+            "timeoutBucket": "small"
+          }
+        ],
+        "gates": [
+          "./scripts/check-private-paths.sh",
+          "catalog validate",
+          "git diff --check"
+        ]
+      }
+    },
+    {
+      "claimLevel": "public-safe",
+      "displayName": "Legacy data metadata public fixture",
+      "families": [
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "xml.dbml"
+          ],
+          "expectedRuleIds": [
+            "legacy.data.dbml.v1",
+            "legacy.data.metadata.inventory.v1"
+          ],
+          "familyId": "dbml-linq-to-sql",
+          "limitations": [
+            {
+              "code": "dbml-static-metadata",
+              "message": "DBML rows catalog descriptor shape without raw metadata content."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed"
+          ]
+        },
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "xml.edmx"
+          ],
+          "expectedRuleIds": [
+            "legacy.data.edmx.v1",
+            "legacy.data.metadata.inventory.v1"
+          ],
+          "familyId": "edmx-entity-framework",
+          "limitations": [
+            {
+              "code": "edmx-static-metadata",
+              "message": "EDMX rows catalog descriptor shape without raw metadata content."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed"
+          ]
+        },
+        {
+          "expectation": "optional",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier3SyntaxOrTextual",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "csharp.syntax",
+            "sql.shape"
+          ],
+          "expectedRuleIds": [
+            "csharp.syntax.querypattern.v1",
+            "database.sql.shape.v1"
+          ],
+          "familyId": "legacy-sql-or-query-surface",
+          "limitations": [
+            {
+              "code": "query-shape-no-raw-sql",
+              "message": "Query surface expectations use safe shape categories and omit raw query text."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced"
+          ]
+        },
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "xml.typed-dataset"
+          ],
+          "expectedRuleIds": [
+            "legacy.data.metadata.inventory.v1",
+            "legacy.data.typed-dataset.v1"
+          ],
+          "familyId": "typed-dataset",
+          "limitations": [
+            {
+              "code": "dataset-static-metadata",
+              "message": "Typed DataSet rows catalog descriptor shape without raw metadata content."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed"
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "code": "catalog-not-raw-output",
+          "message": "This entry records expected smoke coverage only; raw artifacts stay out of tracked catalog files."
+        }
+      ],
+      "relationships": [
+        {
+          "artifactKind": "redacted-baseline-snapshot",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-data-metadata-public-fixture-baseline",
+          "schemaVersion": "legacy-baseline-snapshot.v1",
+          "spec": "legacy-baseline-regression-artifacts",
+          "validationStatus": "observed"
+        },
+        {
+          "artifactKind": "evidence-pack-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-data-metadata-public-fixture-pack",
+          "schemaVersion": "legacy-sample-evidence-pack-summary.v1",
+          "spec": "legacy-sample-evidence-pack",
+          "validationStatus": "observed"
+        }
+      ],
+      "sampleLabel": "legacy-data-metadata-public-fixture",
+      "source": {
+        "classification": "synthetic-fixture",
+        "commitIdentity": {
+          "kind": "fixture-version",
+          "limitations": [],
+          "shaPresent": false,
+          "value": "legacy-data-metadata-fixture@2026-06"
+        },
+        "identityKind": "neutral-label",
+        "reviewed": true,
+        "safeSourceAlias": "tracemap-fixture"
+      },
+      "validation": {
+        "commandTemplates": [
+          {
+            "artifactSizeBucket": "small",
+            "expectedArtifacts": [
+              "evidence-pack-reference",
+              "redacted-summary"
+            ],
+            "mode": "redacted-artifact-only",
+            "name": "create-evidence-pack",
+            "template": "tracemap evidence-pack create --input <redacted-summary> --input-kind legacy-validation-summary --label <sample-label> --claim-level <claim-level> --date <YYYY-MM> --out <pack-output>",
+            "timeoutBucket": "small"
+          },
+          {
+            "artifactSizeBucket": "medium",
+            "expectedArtifacts": [
+              "analyzer-log-present",
+              "facts-ndjson-present",
+              "index-sqlite-present",
+              "report-md-present",
+              "scan-manifest"
+            ],
+            "mode": "checked-in-sample",
+            "name": "scan-sample",
+            "template": "tracemap scan --repo <sample-root> --out <scan-output>",
+            "timeoutBucket": "medium"
+          }
+        ],
+        "gates": [
+          "./scripts/check-private-paths.sh",
+          "catalog validate",
+          "git diff --check"
+        ]
+      }
+    },
+    {
+      "claimLevel": "public-safe",
+      "displayName": "Legacy Remoting demo sample",
+      "families": [
+        {
+          "expectation": "optional",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier3SyntaxOrTextual",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "csharp.syntax",
+            "xml.config"
+          ],
+          "expectedRuleIds": [
+            "legacy.remoting.channel.v1",
+            "legacy.remoting.config.v1"
+          ],
+          "familyId": "remoting-channel-config",
+          "limitations": [
+            {
+              "code": "channel-values-omitted",
+              "message": "Channel names, ports, object identifiers, and config values are omitted or summarized."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced"
+          ]
+        },
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier3SyntaxOrTextual",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "csharp.syntax"
+          ],
+          "expectedRuleIds": [
+            "legacy.remoting.api.v1",
+            "legacy.remoting.registration.v1"
+          ],
+          "familyId": "remoting-registration",
+          "limitations": [
+            {
+              "code": "registration-static-only",
+              "message": "Registration calls are static code evidence only."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced"
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "code": "catalog-not-raw-output",
+          "message": "This entry records expected smoke coverage only; raw artifacts stay out of tracked catalog files."
+        }
+      ],
+      "relationships": [
+        {
+          "artifactKind": "redacted-validation-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-remoting-demo-sample-summary",
+          "schemaVersion": "legacy-codebase-validation-summary.v1",
+          "spec": "legacy-codebase-validation",
+          "validationStatus": "observed"
+        },
+        {
+          "artifactKind": "evidence-pack-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-remoting-demo-sample-pack",
+          "schemaVersion": "legacy-sample-evidence-pack-summary.v1",
+          "spec": "legacy-sample-evidence-pack",
+          "validationStatus": "observed"
+        }
+      ],
+      "sampleLabel": "legacy-remoting-demo-sample",
+      "source": {
+        "classification": "synthetic-fixture",
+        "commitIdentity": {
+          "kind": "fixture-version",
+          "limitations": [],
+          "shaPresent": false,
+          "value": "legacy-remoting-fixture@2026-06"
+        },
+        "identityKind": "neutral-label",
+        "reviewed": true,
+        "safeSourceAlias": "tracemap-fixture"
+      },
+      "validation": {
+        "commandTemplates": [
+          {
+            "artifactSizeBucket": "small",
+            "expectedArtifacts": [
+              "evidence-pack-reference",
+              "redacted-summary"
+            ],
+            "mode": "redacted-artifact-only",
+            "name": "create-evidence-pack",
+            "template": "tracemap evidence-pack create --input <redacted-summary> --input-kind legacy-validation-summary --label <sample-label> --claim-level <claim-level> --date <YYYY-MM> --out <pack-output>",
+            "timeoutBucket": "small"
+          },
+          {
+            "artifactSizeBucket": "medium",
+            "expectedArtifacts": [
+              "analyzer-log-present",
+              "facts-ndjson-present",
+              "index-sqlite-present",
+              "report-md-present",
+              "scan-manifest"
+            ],
+            "mode": "checked-in-sample",
+            "name": "scan-sample",
+            "template": "tracemap scan --repo <sample-root> --out <scan-output>",
+            "timeoutBucket": "medium"
+          }
+        ],
+        "gates": [
+          "./scripts/check-private-paths.sh",
+          "catalog validate",
+          "git diff --check"
+        ]
+      }
+    },
+    {
+      "claimLevel": "public-safe",
+      "displayName": "Legacy WCF public fixture",
+      "families": [
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "xml.config"
+          ],
+          "expectedRuleIds": [
+            "legacy.wcf.config.v1"
+          ],
+          "familyId": "wcf-config-endpoint-shape",
+          "limitations": [
+            {
+              "code": "endpoint-values-omitted",
+              "message": "Endpoint addresses and config values are omitted from catalog metadata."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed"
+          ]
+        },
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "Level1SemanticAnalysisReduced",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier3SyntaxOrTextual"
+          ],
+          "expectedExtractors": [
+            "csharp.syntax",
+            "xml.service-reference"
+          ],
+          "expectedRuleIds": [
+            "legacy.wcf.mapping.v1",
+            "legacy.wcf.metadata.v1"
+          ],
+          "familyId": "wcf-service-reference",
+          "limitations": [
+            {
+              "code": "static-service-reference-only",
+              "message": "Service-reference metadata is static validation evidence only."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced"
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "code": "catalog-not-raw-output",
+          "message": "This entry records expected smoke coverage only; raw artifacts stay out of tracked catalog files."
+        }
+      ],
+      "relationships": [
+        {
+          "artifactKind": "redacted-validation-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-wcf-public-fixture-summary",
+          "schemaVersion": "legacy-codebase-validation-summary.v1",
+          "spec": "legacy-codebase-validation",
+          "validationStatus": "observed"
+        },
+        {
+          "artifactKind": "evidence-pack-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-wcf-public-fixture-pack",
+          "schemaVersion": "legacy-sample-evidence-pack-summary.v1",
+          "spec": "legacy-sample-evidence-pack",
+          "validationStatus": "observed"
+        }
+      ],
+      "sampleLabel": "legacy-wcf-public-fixture",
+      "source": {
+        "classification": "synthetic-fixture",
+        "commitIdentity": {
+          "kind": "fixture-version",
+          "limitations": [],
+          "shaPresent": false,
+          "value": "legacy-wcf-fixture@2026-06"
+        },
+        "identityKind": "neutral-label",
+        "reviewed": true,
+        "safeSourceAlias": "tracemap-fixture"
+      },
+      "validation": {
+        "commandTemplates": [
+          {
+            "artifactSizeBucket": "medium",
+            "expectedArtifacts": [
+              "analyzer-log-present",
+              "facts-ndjson-present",
+              "index-sqlite-present",
+              "report-md-present",
+              "scan-manifest"
+            ],
+            "mode": "checked-in-sample",
+            "name": "scan-sample",
+            "template": "tracemap scan --repo <sample-root> --out <scan-output>",
+            "timeoutBucket": "medium"
+          },
+          {
+            "artifactSizeBucket": "small",
+            "expectedArtifacts": [
+              "catalog-json",
+              "catalog-md"
+            ],
+            "mode": "redacted-artifact-only",
+            "name": "validate-catalog",
+            "template": "catalog validate --catalog <catalog-json> --expected-claim-level <claim-level>",
+            "timeoutBucket": "small"
+          }
+        ],
+        "gates": [
+          "./scripts/check-private-paths.sh",
+          "catalog validate",
+          "git diff --check"
+        ]
+      }
+    },
+    {
+      "claimLevel": "public-safe",
+      "displayName": "Legacy WebForms public app",
+      "families": [
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier3SyntaxOrTextual",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "aspx.markup",
+            "csharp.syntax"
+          ],
+          "expectedRuleIds": [
+            "legacy.webforms.event-binding.v1",
+            "legacy.webforms.handler-resolution.v1"
+          ],
+          "familyId": "webforms-event-binding",
+          "limitations": [
+            {
+              "code": "event-binding-static-only",
+              "message": "Event binding rows are static markup and code-behind evidence only."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced"
+          ]
+        },
+        {
+          "expectation": "required",
+          "expectedCoverageLabels": [
+            "AnalysisGap",
+            "Reduced"
+          ],
+          "expectedEvidenceTiers": [
+            "Tier2Structural",
+            "Tier3SyntaxOrTextual",
+            "Tier4Unknown"
+          ],
+          "expectedExtractors": [
+            "aspx.markup",
+            "csharp.syntax"
+          ],
+          "expectedRuleIds": [
+            "legacy.webforms.designer-control.v1",
+            "legacy.webforms.inventory.v1"
+          ],
+          "familyId": "webforms-markup-codebehind",
+          "limitations": [
+            {
+              "code": "markup-linkage-static-only",
+              "message": "Markup and code-behind linkage is cataloged without source snippets."
+            }
+          ],
+          "statesAllowed": [
+            "analysis-gap",
+            "observed",
+            "reduced"
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "code": "catalog-not-raw-output",
+          "message": "This entry records expected smoke coverage only; raw artifacts stay out of tracked catalog files."
+        }
+      ],
+      "relationships": [
+        {
+          "artifactKind": "redacted-validation-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-webforms-public-app-summary",
+          "schemaVersion": "legacy-codebase-validation-summary.v1",
+          "spec": "legacy-codebase-validation",
+          "validationStatus": "observed"
+        },
+        {
+          "artifactKind": "evidence-pack-summary",
+          "claimLevel": "public-safe",
+          "safeArtifactId": "legacy-webforms-public-app-pack",
+          "schemaVersion": "legacy-sample-evidence-pack-summary.v1",
+          "spec": "legacy-sample-evidence-pack",
+          "validationStatus": "observed"
+        }
+      ],
+      "sampleLabel": "legacy-webforms-public-app",
+      "source": {
+        "classification": "synthetic-fixture",
+        "commitIdentity": {
+          "kind": "fixture-version",
+          "limitations": [],
+          "shaPresent": false,
+          "value": "legacy-webforms-fixture@2026-06"
+        },
+        "identityKind": "neutral-label",
+        "reviewed": true,
+        "safeSourceAlias": "tracemap-fixture"
+      },
+      "validation": {
+        "commandTemplates": [
+          {
+            "artifactSizeBucket": "medium",
+            "expectedArtifacts": [
+              "analyzer-log-present",
+              "facts-ndjson-present",
+              "index-sqlite-present",
+              "report-md-present",
+              "scan-manifest"
+            ],
+            "mode": "checked-in-sample",
+            "name": "scan-sample",
+            "template": "tracemap scan --repo <sample-root> --out <scan-output>",
+            "timeoutBucket": "medium"
+          },
+          {
+            "artifactSizeBucket": "small",
+            "expectedArtifacts": [
+              "redacted-summary"
+            ],
+            "mode": "redacted-artifact-only",
+            "name": "summarize-validation",
+            "template": "tracemap legacy-codebase-validation summarize --input <scan-output> --out <redacted-summary>",
+            "timeoutBucket": "small"
+          }
+        ],
+        "gates": [
+          "./scripts/check-private-paths.sh",
+          "catalog validate",
+          "git diff --check"
+        ]
+      }
+    }
+  ],
+  "generatedFrom": {
+    "generatedAt": "2026-06",
+    "kind": "manual-reviewed-metadata",
+    "toolVersion": "legacy-sample-smoke-catalog.v1"
+  },
+  "safety": {
+    "classification": "public-safe",
+    "limitations": [
+      {
+        "code": "catalog-is-not-proof",
+        "message": "Catalog entries describe expected static evidence families; downstream validated artifacts provide proof."
+      },
+      {
+        "code": "static-metadata-only",
+        "message": "Static catalog expectations do not prove execution, reachability, safety, release approval, customer effect, or reducer outcome."
+      }
+    ],
+    "redactionProfile": "catalog-metadata-only",
+    "validatorVersion": "legacy-sample-smoke-catalog-validator.v1"
+  },
+  "schemaVersion": "legacy-sample-smoke-catalog.v1"
+}

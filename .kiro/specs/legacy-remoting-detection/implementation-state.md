@@ -1,11 +1,15 @@
 # Legacy Remoting Detection Implementation State
 
-Status: implemented-awaiting-pr-review
+Status: implemented
 Branch: codex/legacy-remoting-detection
 Base: dev at abb174db91112ea0d7a9817cd05a9ccc4f4803ba
 Public claim level: hidden
 
 ## Scope
+
+Status normalized during spec-state cleanup. The Remoting detector, sample,
+rule IDs, reports, focused tests, and validation notes are present on `dev`;
+remaining public smoke and richer semantic support are tracked as follow-ups.
 
 Implemented deterministic static .NET Remoting evidence extraction as a sibling
 detector to WCF/SVC. The implementation adds Remoting-specific fact types, rule

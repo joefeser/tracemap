@@ -1,6 +1,6 @@
 # Python Indexer Implementation State
 
-Status: implemented MVP with post-MVP backlog open.
+Status: implemented-mvp
 
 Branch/PR:
 
@@ -32,4 +32,3 @@ Open Follow-Ups:
 - Cross-module route/include expansion and additional frameworks.
 - Lockfile parsing and richer business-logic/flow facts.
 - Public OSS smoke target automation beyond the committed samples.
-

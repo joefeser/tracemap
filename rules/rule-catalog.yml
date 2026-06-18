@@ -1,4 +1,544 @@
 rules:
+  - id: docs-export.chunk.source-overview.v1
+    name: Docs export source overview chunk
+    description: Packages indexed source identity, commit, coverage, build, language, extractor, artifact, gap, and limitation metadata into deterministic evidence documentation.
+    evidenceTier: Tier2Structural
+    emits:
+      - docs-export source-overview chunk
+    limitations:
+      - Source overview chunks summarize static index metadata only; they do not prove runtime behavior, deployment, release approval, ownership, traffic, vulnerability status, service reachability, or business impact.
+      - Unknown commit identity, reduced coverage, failed build status, or schema gaps remain visible gaps and must not be upgraded by documentation export.
+
+  - id: docs-export.chunk.endpoint.v1
+    name: Docs export endpoint chunk
+    description: Packages existing HTTP route, HTTP client, route template, dynamic selector, and endpoint-alignment evidence into deterministic citation-bearing chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export endpoint chunk
+    limitations:
+      - Endpoint chunks preserve static evidence only and do not prove runtime routing, service reachability, production traffic, authorization, deployment, or ownership.
+      - Raw URLs, hosts, query strings, endpoint addresses, snippets, and credentials are omitted, redacted, or rejected by docs-export safety gates.
+
+  - id: docs-export.chunk.route-flow.v1
+    name: Docs export route-flow chunk
+    description: Packages existing route-flow or compatible path report evidence into static route-centered documentation chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export route-flow chunk
+    limitations:
+      - Route-flow chunks do not prove runtime request execution, branch feasibility, dependency-injection target selection, database execution, production traffic, or service reachability.
+      - Missing stable report IDs, selector gaps, schema gaps, truncation, and reduced coverage remain gaps.
+
+  - id: docs-export.chunk.property-flow.v1
+    name: Docs export property-flow chunk
+    description: Packages existing property/value-origin facts and report rows into deterministic documentation chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export property-flow chunk
+    limitations:
+      - Property-flow chunks do not prove full taint, runtime values, object identity, collection contents, callback execution, serializer behavior, or branch feasibility.
+      - Syntax-only, fallback, ambiguous, reduced-coverage, and high-fan-out evidence is preserved at its weaker tier.
+
+  - id: docs-export.chunk.dependency-surface.v1
+    name: Docs export dependency-surface chunk
+    description: Packages existing dependency surface evidence such as calls, object creation, HTTP, persistence, package, config, event, and message evidence into documentation chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export dependency-surface chunk
+    limitations:
+      - Dependency-surface chunks do not prove runtime topology, compatibility, vulnerability status, ownership, service reachability, deployment, production usage, or business impact.
+      - Unsafe surface values are omitted, redacted, or rejected by safety validation.
+
+  - id: docs-export.chunk.data-surface.v1
+    name: Docs export data-surface chunk
+    description: Packages existing data, project, file, build, and structural surface evidence into deterministic documentation chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export data-surface chunk
+    limitations:
+      - Data-surface chunks describe static evidence availability and do not prove runtime data access, database existence, production data, ownership, or deployment.
+
+  - id: docs-export.chunk.package-config.v1
+    name: Docs export package and config chunk
+    description: Packages existing package, target-framework, config key, and config surface metadata using safe identifiers or redaction records.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export package-config chunk
+    limitations:
+      - Package/config chunks do not prove package compatibility, vulnerability status, license status, runtime loading, deployment, or production configuration.
+      - Raw config values, connection strings, secrets, raw URLs, and credentials are forbidden.
+
+  - id: docs-export.chunk.query-sql-shape.v1
+    name: Docs export query and SQL-shape chunk
+    description: Packages existing query-shape, SQL-shape, persistence, table, column, source-kind, operation, and safe-hash metadata.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export query-sql-shape chunk
+    limitations:
+      - Query/SQL-shape chunks do not prove SQL execution, database existence, query correctness, production usage, or data sensitivity.
+      - Raw SQL and production data are rejected or omitted.
+
+  - id: docs-export.chunk.legacy.v1
+    name: Docs export legacy evidence chunk
+    description: Packages existing WebForms, WinForms, WCF, service-reference, ASMX/SOAP, remoting, legacy data, build diagnostic, baseline, or evidence-pack metadata.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export legacy chunk
+    limitations:
+      - Legacy chunks do not prove runtime UI events, service reachability, deployment, branch feasibility, SQL execution, traffic, or production behavior.
+      - Unsafe service URLs, SOAP actions, schemas, config values, remotes, snippets, and local paths are omitted, redacted, or rejected.
+
+  - id: docs-export.chunk.release-review.v1
+    name: Docs export release-review chunk
+    description: Packages existing release-review report sections, checklist provenance, static classifications, gaps, and limitations into deterministic chunks.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export release-review chunk
+    limitations:
+      - Release-review chunks are static evidence packets and are not release approval, merge approval, risk acceptance, vulnerability conclusions, or business-impact decisions.
+
+  - id: docs-export.chunk.impact-summary.v1
+    name: Docs export impact-summary chunk
+    description: Packages existing static impact or reducer summaries while preserving underlying rule IDs, tiers, classifications, gaps, and limitations.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - docs-export impact-summary chunk
+    limitations:
+      - Impact-summary chunks preserve static classifications only and do not prove business impact, runtime impact, deployment impact, or release safety.
+
+  - id: docs-export.chunk.gap.v1
+    name: Docs export gap chunk
+    description: Emits first-class gap chunks for unavailable, reduced, hidden, incompatible, unsupported, truncated, or missing-provenance evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export gap chunk
+    limitations:
+      - Gap chunks preserve uncertainty and must not be read as absence findings or source behavior conclusions.
+
+  - id: docs-export.chunk.limitation.v1
+    name: Docs export limitation chunk
+    description: Emits first-class limitation chunks for rule, schema, safety, claim-level, generated-file, and external-ingestion boundaries.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export limitation chunk
+    limitations:
+      - Limitation chunks document boundaries only and do not add evidence about source behavior.
+
+  - id: docs-export.validation.generated-file-stale.v1
+    name: Docs export stale generated file validation
+    description: Rejects stale, hand-edited, malformed, or hash-invalid generated docs-export files unless force is supplied and all non-overridable safety gates pass.
+    evidenceTier: Tier4Unknown
+    emits:
+      - generated-file stale diagnostic
+    limitations:
+      - This validation protects generated output integrity only; it does not prove anything about source code behavior.
+
+  - id: docs-export.validation.user-file-collision.v1
+    name: Docs export user-file collision validation
+    description: Rejects non-generated files or directories that would be overwritten by docs-export output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - user-file collision diagnostic
+    limitations:
+      - Force does not bypass user-file collisions.
+      - Diagnostics are sanitized and do not echo unsafe file contents.
+
+  - id: docs-export.validation.unsafe-value-rejected.v1
+    name: Docs export unsafe value rejection
+    description: Rejects local paths, raw remotes, raw SQL, raw config values, connection strings, URLs, endpoint addresses, credentials, tokens, snippets, private identifiers, production data, stack traces, and unsafe Markdown in generated output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe-value validation diagnostic
+    limitations:
+      - Diagnostics identify category and output-relative location only; they do not echo the unsafe value.
+
+  - id: docs-export.validation.prohibited-claim-wording.v1
+    name: Docs export prohibited claim wording validation
+    description: Rejects generated wording that claims unsupported runtime execution, production traffic, release approval, vulnerability, ownership, deployment, reachability, or business impact.
+    evidenceTier: Tier4Unknown
+    emits:
+      - prohibited-claim wording diagnostic
+    limitations:
+      - Boundary and limitation text may name prohibited domains when clearly negating or scoping the claim.
+
+  - id: docs-export.gap.schema-incompatible.v1
+    name: Docs export schema compatibility gap
+    description: Records when an input cannot be read through a documented TraceMap index, report, vault, evidence-pack, or claim-catalog schema.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export schema-incompatible gap
+    limitations:
+      - Schema gaps describe export compatibility only and do not prove evidence absence.
+
+  - id: docs-export.gap.claim-level-hidden.v1
+    name: Docs export hidden claim-level gap
+    description: Records when requested demo/public filtering omits hidden evidence or cannot be satisfied by stable source identity proof.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export claim-level-hidden gap
+    limitations:
+      - Display names alone cannot promote evidence.
+      - Hidden claim-level gaps are safety records, not source behavior conclusions.
+
+  - id: docs-export.gap.claim-level-unmatched.v1
+    name: Docs export unmatched claim catalog gap
+    description: Records source-claim catalog entries that do not match a stable source identity in supplied evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export claim-level-unmatched gap
+    limitations:
+      - Unmatched catalog entries do not promote evidence and do not prove absence.
+
+  - id: docs-export.gap.hidden-evidence-omitted.v1
+    name: Docs export hidden evidence omission gap
+    description: Records when explicit claim-level filtering removes hidden chunks, citations, metadata, links, gaps, or summaries that affect interpretation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export hidden-evidence-omitted gap
+    limitations:
+      - Filtered outputs are partial; summary counts are not evidence substitutes.
+
+  - id: docs-export.gap.duplicate-stable-identity.v1
+    name: Docs export duplicate stable identity gap
+    description: Records chunk identity collisions so docs export does not choose an arbitrary winner.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export duplicate-stable-identity gap
+    limitations:
+      - Duplicate identity gaps may omit unsafe details and retain only category-level diagnostics.
+
+  - id: docs-export.gap.unsupported-family.v1
+    name: Docs export unsupported family gap
+    description: Records requested chunk families that are supported by the CLI vocabulary but unavailable or unsupported for the supplied input schema.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export unsupported-family gap
+    limitations:
+      - Unsupported-family gaps describe exporter/input compatibility only; they do not prove source evidence absence.
+
+  - id: docs-export.gap.unsupported-question-family.v1
+    name: Docs export unsupported question-family gap
+    description: Records additive question-oriented docs-export views that cannot be generated from the supplied input schema without synthesizing unsupported evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export unsupported-question-family gap
+    limitations:
+      - Unsupported question-family gaps apply only to additive presentation views such as snapshot-change, weak-evidence, gap, or limitation views; unsupported canonical CLI chunk families remain covered by docs-export.gap.unsupported-family.v1.
+      - The gap describes exporter/input compatibility only and does not prove source evidence absence or runtime behavior.
+
+  - id: docs-export.gap.missing-provenance.v1
+    name: Docs export missing provenance gap
+    description: Records missing stable fact, edge, report, file-span, source, or commit provenance required for stable chunk identity or citation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export missing-provenance gap
+    limitations:
+      - Missing provenance prevents stronger documentation claims and does not prove absence.
+
+  - id: docs-export.gap.unknown-analysis.v1
+    name: Docs export unknown analysis gap
+    description: Records reduced coverage, unknown commit identity, truncation, selector gaps, extractor unavailability, dynamic boundaries, serializer boundaries, reflection boundaries, generated-code boundaries, or other analysis gaps carried into docs export.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export unknown-analysis gap
+    limitations:
+      - Unknown-analysis gaps preserve uncertainty and do not prove no evidence or no impact.
+
+  - id: property-flow.root.v1
+    name: Property flow selected root
+    description: Records deterministic selected root rows for UI field, control, binding, model, DTO, symbol, or fact selectors over a combined index.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - property-flow selected root row
+    limitations:
+      - Selected roots are static evidence anchors; they do not prove runtime UI visibility, submission, authorization, feature-flag state, or production use.
+      - Generic or ambiguous names such as id, name, value, state, or status remain review-tier unless narrowed by source, type, symbol, or fact identity.
+      - Root rows preserve source fact rule IDs and tiers; derived root classification does not replace source evidence.
+
+  - id: property-flow.edge.v1
+    name: Property flow derived edge
+    description: Records deterministic report-time lineage edges derived from available combined facts and path graph evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - property-flow edge row
+      - property-flow root-to-graph gap
+    limitations:
+      - Derived edges are bounded static composition and do not prove runtime mutation, callback execution, dependency-injection target selection, reflection behavior, serializer configuration, branch feasibility, or SQL execution.
+      - Syntax-only and same-name edges are review-tier unless a stronger rule-backed source fact supports the hop.
+      - Missing edges are analysis gaps under reduced coverage, not proof that no lineage exists.
+
+  - id: property-flow.path.v1
+    name: Property flow static path classification
+    description: Classifies bounded property-lineage paths as strong, probable, or needs-review static evidence.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - property-flow path row
+    limitations:
+      - Path classifications are evidence-strength labels, not model judgment and not runtime proof.
+      - A path does not prove a field is rendered, visible to every user, submitted, validated successfully, persisted, executed in production, or authorized.
+      - Dynamic UI, callbacks, async boundaries, mutation, runtime DI, serializer behavior, reflection, and branch feasibility can downgrade or stop traversal.
+
+  - id: property-flow.selector.v1
+    name: Property flow selector result
+    description: Records selector parsing, no-match, ambiguity, and unsafe-selector outcomes for property-flow queries.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - selector no-match gap
+      - ambiguous selector gap
+      - unsafe selector rejection
+    limitations:
+      - Selector matching is deterministic and coverage-relative; no match does not prove absence when contributing evidence is reduced or unsupported.
+      - Unsafe selector diagnostics are sanitized and must not echo local paths, raw URLs, snippets, secrets, credentials, connection strings, or private values.
+
+  - id: property-flow.coverage.v1
+    name: Property flow coverage conclusion
+    description: Records coverage-relative no-lineage or unknown-analysis conclusions for property-flow reports.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - no-lineage evidence gap
+      - reduced coverage gap
+    limitations:
+      - Reduced coverage, unknown commit identity, failed build, missing optional evidence, or source analysis gaps prevent clean absence conclusions.
+      - No-lineage evidence is scoped to available deterministic static evidence and does not prove a property is unused, unsubmitted, unmapped, unvalidated, or not persisted at runtime.
+
+  - id: property-flow.schema.v1
+    name: Property flow schema availability
+    description: Records required and optional combined-index schema availability for property-flow.
+    evidenceTier: Tier4Unknown
+    emits:
+      - missing required schema rejection
+      - missing optional schema gap
+      - route-flow unavailable gap
+    limitations:
+      - Schema gaps describe evidence availability only; they do not prove source behavior or source evidence absence.
+      - Missing optional route-flow schema prevents route-flow-specific promotion but does not discard existing combined path evidence.
+
+  - id: property-flow.truncation.v1
+    name: Property flow truncation
+    description: Records deterministic root, path, depth, frontier, inventory, or gap cap truncation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - truncation gap
+    limitations:
+      - Truncated reports are partial and must not be read as exhaustive lineage or absence evidence.
+      - Caps are report bounds, not evidence about repository complexity or runtime behavior.
+
+  - id: property-flow.observed-evidence.v1
+    name: Property flow optional observed evidence boundary
+    description: Reserved rule for optional browser/computer-use observed evidence metadata that may accompany property-flow reports.
+    evidenceTier: Tier4Unknown
+    emits:
+      - observed evidence metadata row
+      - observed evidence discrepancy gap
+    limitations:
+      - Observed DOM/browser metadata is demo validation metadata only and cannot upgrade static lineage classifications by itself.
+      - Workflows requiring credentials, production login, private data capture, live secret-bearing HTTP, or captured secrets are rejected for public/default artifacts.
+
+  - id: typescript.angular.template-binding.v1
+    name: Angular template binding evidence
+    description: Extracts safe Angular interpolation, property binding, and two-way binding property-path metadata from checked-in templates and inline component templates.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - UiTemplateBinding
+      - UiBindingGap
+    limitations:
+      - Template binding evidence does not prove runtime rendering, visibility, change-detection outcome, user access, submitted values, handler execution, auth, role, feature-flag state, or production use.
+      - Function calls, pipes, bracket notation, dynamic property names, unsupported directive semantics, and ambiguous expressions are gaps or review-tier evidence.
+      - Raw template snippets are not stored; expression hashes and safe property paths are stored instead.
+
+  - id: typescript.angular.form-binding.v1
+    name: Angular form binding evidence
+    description: Extracts safe Angular form-control metadata such as formControlName, formGroup/formArrayName, template-driven name/ngModel controls, and control names.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - UiFormControlBinding
+      - UiBindingGap
+    limitations:
+      - Form-control evidence is static structure only and does not prove a value is submitted, enabled, visible, validated, or reachable in every runtime state.
+      - Same-name control/property links remain review-tier unless value-origin or assignment facts support the hop.
+
+  - id: typescript.angular.event-binding.v1
+    name: Angular event binding evidence
+    description: Extracts safe Angular event-binding metadata and static handler names when visible in templates.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - UiEventBinding
+      - UiBindingGap
+    limitations:
+      - Event binding evidence does not prove runtime event firing, handler execution, browser state, authorization, or branch feasibility.
+      - Dynamic handler expressions and unsupported callback semantics are gaps or review-tier evidence.
+
+  - id: typescript.angular.template-variable.v1
+    name: Angular template variable evidence
+    description: Extracts safe Angular template variable names and export aliases where statically visible.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - UiTemplateVariable
+    limitations:
+      - Template variables are syntax-visible evidence and do not by themselves prove property identity, runtime rendering, directive semantics, or submitted values.
+
+  - id: typescript.angular.binding-gap.v1
+    name: Angular binding analysis gap
+    description: Records unsupported or dynamic Angular template expressions encountered by the template binding extractor.
+    evidenceTier: Tier4Unknown
+    emits:
+      - UiBindingGap
+    limitations:
+      - Binding gaps identify unsupported static analysis boundaries only; they do not prove that a field, binding, event, or property is absent.
+      - Diagnostics store expression hashes and category labels, not raw snippets or unsafe literal values.
+
+  - id: csharp.razor.binding.v1
+    name: Razor binding evidence
+    description: Extracts safe Razor asp-for and Html.*For model-property binding metadata from checked-in .cshtml files.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - RazorBinding
+      - RazorBindingGap
+    limitations:
+      - Razor binding evidence does not prove runtime rendering, route selection, model-binding success, auth, role visibility, feature flags, validation outcome, or browser submission.
+      - Dynamic models, ViewBag/ViewData, partial templates, custom tag helpers, and generated Razor uncertainty remain gaps or review-tier evidence.
+
+  - id: csharp.razor.form-target.v1
+    name: Razor form target evidence
+    description: Extracts safe static Razor form target metadata from asp-action, asp-controller, asp-page, asp-page-handler, and method attributes.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - RazorFormTarget
+    limitations:
+      - Form target evidence is static markup metadata and does not prove runtime routing, handler execution, antiforgery behavior, auth, model binding success, or submitted values.
+      - Page paths and unsafe target-like values are hashed or omitted rather than rendered raw.
+
+  - id: csharp.razor.model-binding.v1
+    name: Razor model-binding target evidence
+    description: Reserved rule for static Razor Pages/MVC model-binding target evidence such as handlers, action parameters, BindProperty, FromBody, and FromForm metadata.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - RazorModelBindingTarget
+    limitations:
+      - Model-binding target evidence does not prove runtime binding success, serializer behavior, validation outcome, route selection, auth, or branch feasibility.
+      - Convention-only or syntax-only model-binding evidence remains review-tier unless semantic facts support the link.
+
+  - id: csharp.razor.binding-gap.v1
+    name: Razor binding analysis gap
+    description: Records dynamic Razor model/view-data/partial/template constructs that prevent precise static field/property lineage.
+    evidenceTier: Tier4Unknown
+    emits:
+      - RazorBindingGap
+    limitations:
+      - Razor binding gaps are static analysis boundaries and do not prove that a binding, form, handler, or model property is absent.
+      - Diagnostics are sanitized and must not render source snippets, raw form values, raw URLs, local paths, secrets, or private data.
+
+  - id: vault-export.gap.schema-incompatible.v1
+    name: Vault export schema compatibility gap
+    description: Records when a vault export input cannot be read through a documented combined-index, paths-report, reverse-report, or claim-catalog schema.
+    evidenceTier: Tier4Unknown
+    emits:
+      - vault export schema gap
+    limitations:
+      - Schema gaps describe export compatibility only; they do not prove that source evidence is absent.
+      - Diagnostics are category-based and must not echo local paths, raw report internals, SQL/config values, snippets, remotes, or secrets.
+
+  - id: vault-export.gap.claim-level-hidden.v1
+    name: Vault export hidden claim-level gap
+    description: Records when requested demo/public filtering cannot be satisfied by stable source identity proof.
+    evidenceTier: Tier4Unknown
+    emits:
+      - hidden claim-level gap
+    limitations:
+      - Hidden claim-level gaps are safety gates, not conclusions about repository behavior or business impact.
+      - Display names alone cannot promote source evidence; stable source identity proof is required.
+
+  - id: vault-export.gap.claim-level-unmatched.v1
+    name: Vault export unmatched claim catalog entry
+    description: Records reviewed claim catalog entries that do not match a stable source identity in the supplied evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unmatched claim catalog gap
+    limitations:
+      - Unmatched catalog entries do not promote evidence and do not prove the referenced source is absent from other artifacts.
+      - The emitted diagnostic is sanitized and does not render the unmatched raw catalog value.
+
+  - id: vault-export.gap.hidden-evidence-omitted.v1
+    name: Vault export hidden evidence omission gap
+    description: Records when explicit claim-level filtering omits hidden nodes or edges from a generated vault.
+    evidenceTier: Tier4Unknown
+    emits:
+      - hidden evidence omission gap
+    limitations:
+      - Omission gaps make filtered graph interpretation partial; summary counts are not evidence substitutes.
+      - The gap does not identify hidden source labels, file paths, endpoints, symbols, SQL, config values, snippets, or remotes.
+
+  - id: vault-export.gap.duplicate-stable-identity.v1
+    name: Vault export duplicate stable identity gap
+    description: Reserved rule for duplicate or ambiguous vault export node or edge identities.
+    evidenceTier: Tier4Unknown
+    emits:
+      - duplicate stable identity gap
+    limitations:
+      - Duplicate identity gaps prevent arbitrary merging and do not choose a winner.
+      - The exporter may omit unsafe duplicate details and retain only category-level diagnostics.
+
+  - id: vault-export.gap.unsafe-symbol-omitted.v1
+    name: Vault export unsafe symbol gap
+    description: Records when symbol evidence is category-labeled or omitted because source identity is hidden or symbol display is not safe to expose.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe symbol gap
+    limitations:
+      - Symbol safety gaps are redaction decisions and do not prove the symbol is unreachable, unused, or impacted.
+      - Private namespaces and source-derived identifiers are not rendered without explicit demo/public proof.
+
+  - id: vault-export.validation.generated-file-stale.v1
+    name: Vault export generated file stale validation
+    description: Validates generated Markdown and graph manifests using TraceMap sentinels and deterministic content hashes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - stale generated file rejection
+    limitations:
+      - Stale-file validation protects generated output integrity; it does not validate source repository completeness.
+      - The `--force` option may replace stale generated files only after all other safety validations pass.
+
+  - id: vault-export.validation.user-file-collision.v1
+    name: Vault export user file collision validation
+    description: Rejects overwriting non-generated user-authored files in a vault export directory.
+    evidenceTier: Tier4Unknown
+    emits:
+      - user file collision rejection
+    limitations:
+      - Collision diagnostics are path-category based and must not leak local absolute output paths.
+      - User-authored notes are never overwritten by this validation rule.
+
+  - id: vault-export.validation.unsafe-value-rejected.v1
+    name: Vault export unsafe value validation
+    description: Rejects generated Markdown or graph JSON string leaves that contain unsafe local paths, remotes, SQL/config values, endpoint URLs, credentials, snippets, diagnostics, or secret-like values.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe value rejection
+    limitations:
+      - Redaction validation is conservative and may require category labels or reviewed claim metadata.
+      - Rejection diagnostics include category and location only; they must not echo the unsafe value.
+
+  - id: vault-export.gap.hidden-safe-context-omitted.v1
+    name: Vault export hidden safe-context limitation
+    description: Records when hidden/local vault output keeps a bounded safe-context value that contains a sensitive word only for local navigation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - hidden safe-context limitation
+    limitations:
+      - Hidden safe-context handling preserves local navigation evidence only; it does not prove the value is public-safe or demo-safe.
+      - Public-safe and demo-safe vault exports still reject or filter the same sensitive-word values unless separately reviewed and promoted.
+      - Gap diagnostics use categories and stable IDs only; they must not echo raw secrets, local absolute paths, remotes, URLs, SQL, snippets, or credentials.
+
+  - id: vault-export.gap.unsafe-id-component-omitted.v1
+    name: Vault export unsafe stable identity component gap
+    description: Records when a vault graph node or edge is omitted because a source-derived component failed safety validation before stable ID construction.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe stable identity component omission gap
+    limitations:
+      - The gap proves only that TraceMap refused to construct an output identity from an unsafe component; it does not prove the omitted code is unreachable or unimportant.
+      - Diagnostics include only a closed category and safe output scope; raw values, local absolute paths, remotes, URLs, SQL, snippets, and credentials are never rendered.
+
   - id: public.demo.summary.v1
     name: Public demo summary section
     description: Records public demo workflow section status, coverage labels, artifact references, and deterministic counts produced by checked-in validation scripts.
@@ -59,6 +599,80 @@ rules:
       - Output-size and duration limits are validation harness bounds, not repository complexity conclusions.
       - Bounded failure preserves available evidence but must not be interpreted as complete scan coverage.
 
+  - id: legacy.sample-smoke-catalog.entry.v1
+    name: Legacy sample smoke catalog entry
+    description: Validates neutral legacy sample catalog rows with safe sample labels, claim levels, source classification, pinned identity category, and documented limitations.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - catalog entry validation row
+      - duplicate label rejection
+    limitations:
+      - Catalog entries describe expected static evidence families and do not replace scan evidence, evidence packs, baselines, or reducer findings.
+      - Hidden, private, local, or unreviewed samples cannot support public claims through catalog metadata alone.
+      - Validation failures are sanitized categories and pointers; unsafe planted values are not echoed.
+
+  - id: legacy.sample-smoke-catalog.source-identity.v1
+    name: Legacy sample smoke catalog source identity
+    description: Validates source classification, safe aliases, tracked commit identity kind, reviewed public SHA rules, fixture versions, and category-only SHA presence flags.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - source identity validation row
+      - claim-level cap rejection
+      - tracked commit identity rejection
+    limitations:
+      - Private, local, unknown, or category-only identities stay redacted and are not hashed into tracked output.
+      - Public SHA values are allowed only for reviewed public repository or archive sources.
+      - Fixture versions are deterministic catalog pins, not source-control remotes.
+
+  - id: legacy.sample-smoke-catalog.family-expectation.v1
+    name: Legacy sample smoke catalog family expectation
+    description: Validates closed evidence family IDs, expected exact rule IDs, evidence tiers, coverage labels, extractor IDs or gap codes, allowed states, and family limitations.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - family expectation validation row
+      - unknown family or rule rejection
+    limitations:
+      - Family expectations are smoke coverage targets and do not prove feature absence when unsupported, deferred, reduced, truncated, or blocked by an analysis gap.
+      - Syntax fallback expectations remain review-tier unless a separate semantic extractor emits compiler-resolved evidence.
+      - Large-repository expectations use timeout and artifact-size buckets rather than raw file lists or identifying counts.
+
+  - id: legacy.sample-smoke-catalog.validation-command.v1
+    name: Legacy sample smoke catalog validation command
+    description: Validates sanitized validation command templates, placeholders, command modes, closed command input kinds, expected artifact classes, gates, timeout buckets, and artifact-size buckets.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - validation command template row
+      - unsafe command template rejection
+    limitations:
+      - Command templates show reproducible shape only; operator-specific paths, labels, branches, remotes, dates, and artifact identifiers must use placeholders.
+      - Literal option values are limited to fixed booleans and documented closed vocabularies.
+      - Operator-local commands remain hidden unless reviewed public or demo-safe substitutes exist.
+
+  - id: legacy.sample-smoke-catalog.relationship.v1
+    name: Legacy sample smoke catalog relationship
+    description: Validates safe references to related legacy validation, baseline, comparison, and evidence-pack summaries using schema names, neutral artifact IDs, claim levels, and validation status.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - relationship validation row
+      - raw artifact reference rejection
+    limitations:
+      - Relationship rows do not copy raw artifacts, raw summaries, raw baselines, raw evidence packs, analyzer logs, SQLite indexes, reports, or file lists.
+      - Deferred references coordinate future workflows and cannot serve as public-safe proof by themselves.
+      - Relationship validation does not require sibling schemas or artifacts to exist in the current checkout.
+
+  - id: legacy.sample-smoke-catalog.safety-validation.v1
+    name: Legacy sample smoke catalog safety validation
+    description: Validates catalog redaction, prohibited claim wording, deterministic canonical JSON, generated Markdown hash sentinels, top-level claim floor, tracked-root promotion, and ignored local scratch boundaries.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - redaction validation row
+      - generated Markdown sentinel rejection
+      - tracked-root rejection
+    limitations:
+      - Safety validation is a catalog metadata gate and does not inspect raw sample repositories or raw scan outputs.
+      - Redaction scanning is conservative and may require operators to recast identity-bearing values as categories or placeholders.
+      - Deterministic hashes are used only for catalog JSON generation and stale Markdown detection, not for private or source-derived secret-like values.
+
   - id: legacy.wcf.config.v1
     name: Legacy WCF serviceModel config evidence
     description: Extracts WCF client and service endpoint declarations from local config files using safe endpoint metadata and hashed addresses.
@@ -87,8 +701,8 @@ rules:
       - Missing generated files or unsupported service-reference shapes are analysis gaps, not proof that no service dependency exists.
 
   - id: legacy.wcf.host.v1
-    name: Legacy WCF and ASMX service host evidence
-    description: Extracts safe service host declarations from .svc and ASMX directive-style files.
+    name: Legacy WCF service host evidence
+    description: Extracts safe WCF ServiceHost declarations from .svc directive-style files. Older indexes may contain historical ASMX WebService directive evidence under WcfServiceHostDeclared; new indexes use legacy.asmx.host.v1 for .asmx hosts.
     evidenceTier: Tier2Structural or Tier4Unknown
     emits:
       - WcfServiceHostDeclared
@@ -96,6 +710,7 @@ rules:
     limitations:
       - Host declarations are static file evidence and do not prove IIS configuration, deployment, route reachability, service activation, or runtime factory behavior.
       - Malformed or unsupported host declarations are emitted as gaps rather than absence of service evidence.
+      - Historical ASMX-under-WCF rows require a migration limitation and must not be interpreted as clean ASMX absence in older indexes.
 
   - id: legacy.wcf.metadata.v1
     name: Legacy WCF checked-in metadata evidence
@@ -138,6 +753,92 @@ rules:
       - Metadata-backed normalized mappings require generated client contract, normalized operation name, connected WSDL operation metadata, and service contract evidence; a random repository-level WSDL operation name is not sufficient.
       - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
       - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
+
+  - id: legacy.asmx.host.v1
+    name: Legacy ASMX host directive evidence
+    description: Extracts checked-in .asmx WebService directive candidates with safe service class, language, and code-behind metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AsmxHostDeclared
+      - AnalysisGap
+    limitations:
+      - ASMX host declarations are static checked-in file evidence only and do not prove ASP.NET hosting, IIS configuration, route availability, deployment, service activation, SOAP execution, authentication, authorization, reachability, or impact.
+      - Directive values that are paths, URLs, config-like values, unsupported expressions, credentials, tokens, or unsafe text are reduced to safe basenames, omitted, or represented by context-separated non-secret hashes where allowed; raw snippets are not stored.
+      - Malformed, missing, generated, or unsupported directives are emitted as AnalysisGap rows rather than clean absence.
+
+  - id: legacy.asmx.service.v1
+    name: Legacy ASMX service class evidence
+    description: Extracts C# ASMX/SOAP service class attributes such as WebService, WebServiceBinding, ScriptService, SoapDocumentService, and SoapRpcService.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AsmxServiceClassDeclared
+      - AnalysisGap
+    limitations:
+      - Service class evidence is static attribute evidence only and does not prove service activation, WSDL compatibility, endpoint deployment, runtime calls, authorization, or impact.
+      - Syntax-only rows are review-tier because aliases, project-defined lookalike attributes, inactive build configurations, and unresolved framework references can reduce confidence without semantic resolution.
+      - Comments, string literals, XML docs, arbitrary source text, and disabled preprocessor regions are not ASMX service evidence.
+
+  - id: legacy.asmx.operation.v1
+    name: Legacy ASMX and SOAP operation evidence
+    description: Extracts C# WebMethod declarations and SOAP operation-shape attributes such as SoapDocumentMethod and SoapRpcMethod while keeping public operation and SOAP binding evidence distinct.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AsmxOperationDeclared
+      - AsmxSoapOperationDeclared
+      - AnalysisGap
+    limitations:
+      - Operation rows are static declarations only and do not prove a SOAP request was sent, a method is reachable, a binding is compatible, auth succeeds, endpoint configuration is selected, deployment exists, or runtime impact occurred.
+      - SOAP action, namespace, binding, endpoint, config, credential, token, local path, and source-snippet values are hashed or omitted; credential-like values are omitted rather than hashed.
+      - Syntax-only rows remain review-tier when compiler symbols cannot disambiguate framework attributes from aliases or project-defined lookalikes.
+
+  - id: legacy.asmx.client.v1
+    name: Legacy ASMX generated SOAP client evidence
+    description: Extracts generated SOAP proxy/client classes and operations from SoapHttpClientProtocol inheritance, generated web-reference files, SOAP method attributes, and Invoke/BeginInvoke/EndInvoke wrapper patterns.
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AsmxGeneratedClientDeclared
+      - AsmxClientOperationDeclared
+      - AnalysisGap
+    limitations:
+      - Generated client evidence is static proxy-shape evidence only and does not prove runtime endpoint selection, generated proxy freshness, service reachability, deployment, authentication, authorization, or impact.
+      - Dynamic proxy factories, runtime URL assignment, custom base classes, unsupported generated formats, and missing checked-in metadata are gaps or review-tier evidence.
+      - Raw endpoint addresses, SOAP actions, config values, namespaces, local paths, source snippets, credentials, and tokens are omitted or hashed according to ASMX redaction rules.
+
+  - id: legacy.asmx.metadata.v1
+    name: Legacy ASMX checked-in SOAP metadata evidence
+    description: Extracts safe structural evidence from checked-in ASMX/SOAP web-reference metadata such as WSDL, DISCO, DISCOMAP, and proxy map files when owned by old Web References-style paths.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AsmxProxyMetadataDeclared
+      - AnalysisGap
+    limitations:
+      - Metadata rows describe checked-in design-time metadata only; TraceMap does not fetch remote WSDL, follow external imports, resolve schemas, activate services, or prove runtime reachability.
+      - .svcmap-gated WCF service-reference metadata remains WCF-owned; ambiguous generic .map or source-map files are ignored or emitted as gaps rather than duplicated across families.
+      - Endpoint addresses, SOAP actions, target namespaces, import locations, schema locations, hostnames, local paths, raw XML snippets, credentials, and tokens are omitted or represented by context-separated non-secret hashes where allowed; credential-like values are omitted.
+
+  - id: legacy.asmx.config.v1
+    name: Legacy ASMX/SOAP config evidence
+    description: Extracts ASMX/SOAP-relevant checked-in config structures such as system.web/webServices and generated proxy URL appSettings keys with sanitized values.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AsmxConfigDeclared
+      - AnalysisGap
+    limitations:
+      - Config rows are checked-in static configuration evidence only and do not prove transform selection, machine.config state, runtime mutation, endpoint reachability, credential validity, or impact.
+      - Credentials, tokens, connection strings, secret-like values, local operator paths, raw endpoint URLs, and raw config values are omitted; allowed non-secret endpoint-ish values may be context-hashed.
+      - Config evidence can support review-tier mapping only when aligned with static proxy or metadata identifiers; hash equality alone does not prove client-to-server reachability.
+
+  - id: legacy.asmx.mapping.v1
+    name: Legacy ASMX service-reference mapping evidence
+    description: Emits probable static generated SOAP client-to-ASMX operation mappings when operation names, checked-in metadata, or service operation declarations align without ambiguity.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AsmxServiceReferenceMapping
+      - AnalysisGap
+    limitations:
+      - Mappings are probable static evidence only and do not prove SOAP request execution, endpoint selection, deployment, reachability, authorization, generated proxy freshness, or backend impact.
+      - Name-only or metadata-backed mappings without stronger semantic/config evidence remain review-tier and are capped by the weakest required evidence leg.
+      - Duplicate operation candidates, missing metadata, dynamic proxy factories, and ambiguous service-reference ownership emit gaps rather than choosing an arbitrary backend.
 
   - id: legacy.remoting.api.v1
     name: Legacy .NET Remoting API evidence
@@ -868,6 +1569,166 @@ rules:
     limitations:
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
+
+  - id: combined.route-flow.selector.v1
+    name: Route-flow selector handling
+    description: Selects route-centered entry evidence from combined HTTP route, HTTP client call, WebForms, symbol, or source selectors using normalized static evidence.
+    evidenceTier: Tier4Unknown for selector gaps; otherwise inherits weakest selected evidence
+    emits:
+      - route-flow query metadata
+      - route-flow entry selector gap
+    limitations:
+      - Route and client-call selectors are normalized method/path aliases over existing combined endpoint evidence; they do not prove runtime routing, traffic, deployment, auth, middleware, proxy, CORS, or reachability behavior.
+      - Overlapping selectors reuse the paths selector grammar where supported. Route-flow additions are --route, --client-call, --classification, --max-logic-rows, and --max-gaps.
+      - Unsupported or unknown surface kinds fail validation or emit selector gaps rather than guessed route-flow rows.
+      - Percent-encoded selectors are normalized only for safe ordinary path characters; encoded slashes, traversal-like material, host material, and unsafe raw selectors must not be rendered.
+
+  - id: combined.route-flow.entry.v1
+    name: Route-flow entry evidence
+    description: Emits route-centered entry evidence for selected HTTP route bindings, HTTP client calls, endpoint roots, WebForms roots, symbols, sources, and aligned route/client pairs.
+    evidenceTier: Inherits weakest supporting route, client-call, or endpoint-alignment evidence
+    emits:
+      - route-flow entry evidence row
+    limitations:
+      - Entry evidence is static source evidence only and does not prove runtime execution, request reachability, live traffic, or handler activation.
+      - Missing client or server side evidence is a coverage-relative gap and must not be treated as clean absence under reduced coverage.
+      - File spans, extractor versions, and commit SHA values may be unavailable in older indexes; route-flow must preserve explicit unavailable placeholders.
+
+  - id: combined.route-flow.path.v1
+    name: Route-flow static path evidence
+    description: Projects bounded combined dependency paths into route-centered static flow rows while preserving supporting fact IDs, edge IDs, rule IDs, evidence tiers, files, and line spans.
+    evidenceTier: Inherits weakest required path-edge evidence
+    emits:
+      - route-flow static flow row
+    limitations:
+      - Path rows are static evidence trails, not runtime execution, dynamic dispatch certainty, dependency-injection binding proof, branch feasibility, generated-code freshness proof, serializer runtime proof, or production use.
+      - Bounded breadth-first traversal can omit possible static paths when depth, path, cycle, or frontier caps are reached.
+      - Syntax-only, textual, fallback, ambiguous, high fan-out, generated-code uncertain, or reduced-coverage links remain review-tier and cannot be upgraded by composition.
+
+  - id: combined.route-flow.interface-bridge.v1
+    name: Route-flow interface implementation candidate bridge
+    description: Emits candidate interface-to-implementation bridge rows only when combined symbol-relationship evidence supports the candidate.
+    evidenceTier: Inherits relationship evidence and caps classification at NeedsReviewStaticRouteFlow
+    emits:
+      - interface-implementation-candidate row
+      - RuntimeBindingNotProven gap
+      - ImplementationCandidateUnavailable gap
+    limitations:
+      - Candidate implementation evidence is not runtime dependency-injection target proof and must not select one runtime implementation.
+      - Name-only, syntax-only, fallback, cross-source, or cross-language implementation guesses are not strong bridge evidence in v1.
+      - Reflection, factories, service locators, configuration-driven bindings, and dynamic dispatch remain analysis gaps unless a future deterministic rule covers them.
+
+  - id: combined.route-flow.logic-surface.v1
+    name: Route-flow business and data logic surface
+    description: Emits projection, object-shape, query-shape, validation, guard, branch, async, serializer, contract, and flow-boundary rows as path-context evidence.
+    evidenceTier: Inherits weakest supporting logic or surface evidence
+    emits:
+      - route-flow business/data logic row
+    limitations:
+      - Business/data logic rows are static review context and do not prove branch feasibility, authorization result, business intent, business impact, query execution, persistence, or production use.
+      - Adjacent context requires shared symbol, method/member span, supporting fact or edge ID, or argument-flow linkage; same-file evidence alone is not adjacent in v1.
+      - Raw snippets, raw SQL, URLs, literals, config values, connection strings, and secret-like values must be omitted or hashed.
+
+  - id: combined.route-flow.dependency-surface.v1
+    name: Route-flow dependency and data surface evidence
+    description: Emits terminal dependency/data surface rows reached from route-flow path evidence, including SQL/query, persistence, package/config, HTTP client, WCF/service, remoting, legacy data, storage, queue/event, or generic dependency surfaces.
+    evidenceTier: Inherits weakest supporting dependency/data evidence
+    emits:
+      - route-flow dependency/data surface row
+    limitations:
+      - Dependency/data surface rows do not prove runtime traffic, SQL execution, database existence, schema compatibility, persistence, package loading, queue activity, service hosting, or production use.
+      - Stable keys use safe source-scoped identity fields and must not include scan-specific fact IDs, raw SQL, raw URLs, config values, snippets, connection strings, local paths, remotes, or secrets.
+      - Duplicate stable surface identities are review-tier identity gaps rather than proof of one unique terminal surface.
+
+  - id: combined.route-flow.argument-projection.v1
+    name: Route-flow argument evidence projection
+    description: Projects direct combined_argument_flows rows into route-flow logic rows only when the caller and callee are already connected by selected static route-flow path evidence.
+    evidenceTier: Inherits argument-flow evidence and caps strongest projection at ProbableStaticRouteFlow
+    emits:
+      - route-flow argument-flow logic row
+      - ArgumentProjectionUnavailable gap
+    limitations:
+      - Argument projection rows are direct static argument evidence only; they do not prove full taint, aliasing, mutation tracking, branch feasibility, serializer behavior, repository translation, runtime values, or production data.
+      - Projection requires a source-local static call or path bridge already selected by route-flow; unjoined argument rows are reported as gaps rather than inferred flows.
+      - Parameter names, type descriptors, ordinals, expression kinds, and hashes may be rendered when safe; literal values, raw source expressions, source snippets, local paths, URLs, SQL/config values, and secrets must not be rendered.
+
+  - id: combined.route-flow.fact-symbol-projection.v1
+    name: Route-flow fact-symbol evidence projection
+    description: Projects combined_fact_symbols attachments into route-flow logic rows by joining to combined_facts and selected source-local route-flow symbols.
+    evidenceTier: Inherits attached fact evidence and caps strongest projection at ProbableStaticRouteFlow unless weaker evidence requires NeedsReview or UnknownAnalysisGap
+    emits:
+      - route-flow fact-symbol projection logic row
+      - FactSymbolProjectionUnavailable gap
+    limitations:
+      - Fact-symbol projection rows preserve source-local static attachments only; they do not prove runtime request execution, dependency injection binding, dynamic dispatch target selection, SQL execution, database existence, schema compatibility, package loading, or production use.
+      - Projection requires source-local symbol identity already present in the selected route-flow path; global short-name stitching and cross-source symbol guesses are not evidence in this rule.
+      - Query, data, config, package, and object-shape metadata must use safe descriptors and hashes; raw SQL, config values, connection strings, URLs, remotes, source snippets, local paths, private labels, and secrets must not be rendered.
+
+  - id: combined.route-flow.classification.v1
+    name: Route-flow summary classification
+    description: Stamps the overall route-flow summary classification from selected entry evidence, path rows, dependency/data surfaces, coverage, source identity, schema availability, truncation, and gaps.
+    evidenceTier: Derived report rule over supporting evidence
+    emits:
+      - StrongStaticRouteFlow summary
+      - ProbableStaticRouteFlow summary
+      - NeedsReviewStaticRouteFlow summary
+      - NoRouteFlowEvidence summary
+      - UnknownAnalysisGap summary
+    limitations:
+      - StrongStaticRouteFlow and NoRouteFlowEvidence require full route-flow coverage, known commit SHA, verified source identity, compatible extractor availability, and no blocking gaps.
+      - NeedsReviewStaticRouteFlow is required for syntax-only, textual, dynamic URL, fallback, ambiguous, implementation-candidate, generated-code uncertain, high fan-out, or truncated evidence.
+      - UnknownAnalysisGap is required when selector matching, schema, extractor availability, source identity, commit SHA, reduced coverage, or caps prevent a clean conclusion.
+      - The v1 high-fan-out threshold is 10 or more candidates, or more than one candidate for generic terminal keys status, id, name, value, result, or response. This conservative threshold requires future calibration against redacted validation data.
+      - This rule stamps the overall summary classification; it does not classify business impact or runtime behavior.
+
+  - id: combined.route-flow.gap.v1
+    name: Route-flow analysis gap
+    description: Emits route-flow gaps for selector misses, missing schema, extractor unavailability, implementation candidate gaps, runtime binding uncertainty, dynamic dispatch boundaries, reduced coverage, unknown commit SHA, no route-flow evidence, unknown analysis, truncation, and unsafe value omission.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SelectorNoMatch gap
+      - SchemaMissing gap
+      - ExtractorUnavailable gap
+      - ImplementationCandidateUnavailable gap
+      - RuntimeBindingNotProven gap
+      - DynamicDispatchBoundary gap
+      - DynamicClientUrlNeedsReview gap
+      - ArgumentProjectionUnavailable gap
+      - FactSymbolProjectionUnavailable gap
+      - ReducedCoverage gap
+      - UnknownCommitSha gap
+      - NoRouteFlowEvidence gap
+      - UnknownAnalysisGap gap
+      - TruncatedByLimit gap
+      - UnsafeValueOmitted gap
+    limitations:
+      - Gaps are coverage-relative explanations of missing or weak static evidence and must not be rendered as clean absence under reduced coverage.
+      - Truncation gaps mean the report is partial.
+      - Gap messages must not echo unsafe selectors, local paths, raw remotes, raw SQL/config values, snippets, connection strings, private labels, or secret-like values.
+
+  - id: combined.route-flow.redaction.v1
+    name: Route-flow public artifact redaction
+    description: Documents route-flow output redaction for Markdown, JSON, query metadata, row metadata, source labels, paths, and diagnostic-like strings.
+    evidenceTier: Tier4Unknown
+    emits:
+      - UnsafeValueOmitted gap
+      - redacted route-flow metadata value
+    limitations:
+      - Raw local absolute paths, private repository names, raw remotes, URLs, endpoint addresses, WSDL/SOAP addresses, raw SQL, config values, connection strings, source snippets, analyzer diagnostics, and secret-like values are omitted or hashed.
+      - Redaction preserves deterministic public-safe identity only where safe source-scoped fields exist.
+      - Redaction does not prove an artifact is public-approved; generated artifacts still require review and private-path guard validation.
+
+  - id: combined.route-flow.report.v1
+    name: Route-flow report envelope
+    description: Stamps the route-flow Markdown and JSON report envelope, output-format metadata, deterministic ordering, coverage labels, limitations, and byte-stable rendering contract.
+    evidenceTier: Derived report rule over supporting evidence
+    emits:
+      - route-flow-report.md
+      - route-flow-report.json
+    limitations:
+      - The report envelope is a deterministic view over existing combined-index evidence and does not mutate the combined index.
+      - Markdown and JSON must use static-evidence wording and must not say impacted, executed, called at runtime, authorized, used in production, proves DI target, query runs, or business impact.
+      - Directory outputs write both Markdown and JSON; file outputs default to Markdown unless JSON format is requested.
 
   - id: repo.manifest.v1
     name: Repository manifest
