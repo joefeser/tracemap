@@ -265,7 +265,9 @@ public static class CombinedRouteFlowReporter
         var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
         var selectedPaths = FilterPathsForSelectorSide(pathReport.Paths, routeSelector, clientSelector).ToArray();
         var symbolKinds = await ReadCombinedSymbolKindsAsync(options.IndexPath, cancellationToken);
-        var endpointComposition = BuildEndpointCompositionPaths(options, routeSelector, clientSelector, endpointSelector, inventory, symbolKinds);
+        var endpointComposition = clientSelector is null
+            ? BuildEndpointCompositionPaths(options, routeSelector, clientSelector, endpointSelector, inventory, symbolKinds)
+            : new EndpointCompositionResult([], [], false);
         var routePaths = endpointComposition.Paths.Count > 0
             ? endpointComposition.Paths
             : selectedPaths;
@@ -667,6 +669,7 @@ public static class CombinedRouteFlowReporter
         var parsed = ParseNormalizedEndpoint(selector);
         var roots = inventory.Nodes
             .Where(node => node.NodeKind is "EndpointRoute" or "EndpointClient")
+            .Where(node => SourceMatches(node, options.FromSource))
             .Where(node => requiredNodeKind is null || node.NodeKind == requiredNodeKind)
             .Where(node => string.Equals(node.NormalizedPathKey, parsed.PathKey, StringComparison.Ordinal)
                 && CombinedDependencyReporter.MethodsCompatible(parsed.Method, node.HttpMethod ?? "ANY"))
@@ -680,6 +683,7 @@ public static class CombinedRouteFlowReporter
         {
             var matchedOppositeEndpoint = requiredNodeKind is not null
                 && inventory.Nodes.Any(node => node.NodeKind is "EndpointRoute" or "EndpointClient"
+                    && SourceMatches(node, options.FromSource)
                     && node.NodeKind != requiredNodeKind
                     && string.Equals(node.NormalizedPathKey, parsed.PathKey, StringComparison.Ordinal)
                     && CombinedDependencyReporter.MethodsCompatible(parsed.Method, node.HttpMethod ?? "ANY"));
@@ -903,6 +907,12 @@ public static class CombinedRouteFlowReporter
     private static string EndpointEdgeSortKey(CombinedPathEdge edge)
     {
         return $"{EndpointEdgeRank(edge.EdgeKind):000}|{edge.FilePath}|{edge.StartLine:000000}|{edge.ToNodeId}|{edge.EdgeId}";
+    }
+
+    private static bool SourceMatches(CombinedPathNode node, string? sourceFilter)
+    {
+        return string.IsNullOrWhiteSpace(sourceFilter)
+            || string.Equals(node.SourceLabel, sourceFilter.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     private static int EndpointEdgeRank(string edgeKind)
