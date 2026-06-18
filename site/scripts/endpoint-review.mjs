@@ -238,7 +238,6 @@ function validateDiscoveryBoundary(routeEntry, errors) {
 async function validateEndpointReviewPage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
-  const decodedHtmlText = collapseWhitespace(decodedHtml);
   const pageText = normalizeRenderedText(html);
   const decodedText = normalizeRenderedText(decodedHtml);
   const unsanctionedHtml = removeSectionsById(decodedHtml, sanctionedSectionIds);
@@ -246,8 +245,8 @@ async function validateEndpointReviewPage({ pagePath, errors }) {
   const wordCount = countWords(pageText);
 
   for (const phrase of requiredText) {
-    const haystack = phrase.includes("<rule-id>") ? decodedHtmlText : pageText;
-    if (!haystack.includes(phrase)) {
+    const found = phrase.includes("<rule-id>") ? hasEscapedRuleIdPhrase(html) : pageText.includes(phrase);
+    if (!found) {
       errors.push(withEvidence(`Endpoint review page is missing required text: ${phrase}`, pageArtifact));
     }
   }
@@ -314,7 +313,7 @@ function removeSectionsById(html, ids) {
   let result = html;
   for (const id of ids) {
     const escaped = escapeRegExp(id);
-    result = result.replace(new RegExp(`<section\\b(?=[^>]*\\bid\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/section>`, "gi"), "");
+    result = result.replace(new RegExp(`<([a-z][\\w:-]*)\\b(?=[^>]*\\bid\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/\\1>`, "gi"), "");
   }
   return result;
 }
@@ -337,8 +336,13 @@ function countWords(value) {
   return (value.match(/\b[\w'-]+\b/g) ?? []).length;
 }
 
-function collapseWhitespace(value) {
-  return String(value).replace(/\s+/g, " ");
+function hasEscapedRuleIdPhrase(html) {
+  const escapedLt = "(?:&lt;|&#0*60;|&#x0*3c;)";
+  const escapedGt = "(?:&gt;|&#0*62;|&#x0*3e;)";
+  return new RegExp(
+    `rule\\s+ID\\s+${escapedLt}rule-id${escapedGt}\\s*,\\s*Tier2Structural,\\s*partial\\s+coverage`,
+    "i"
+  ).test(html);
 }
 
 function withEvidence(message, artifact) {

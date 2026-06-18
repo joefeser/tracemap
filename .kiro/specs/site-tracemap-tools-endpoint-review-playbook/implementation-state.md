@@ -174,6 +174,14 @@ Implementation validation results:
   - `npm run build` from `site/` passed.
   - `git diff --check` passed.
   - `./scripts/check-private-paths.sh` passed.
+- Qodo review patch validation on 2026-06-18:
+  - `npm test` from `site/` passed. Result: 190 tests passed.
+  - `npm run validate` from `site/` passed after rerunning sequentially.
+    Result: built static site, validated 43 HTML files, 1295 internal
+    references, 42 sitemap URLs, and 1 legacy story safety target.
+  - `npm run build` from `site/` passed.
+  - `git diff --check` passed.
+  - `./scripts/check-private-paths.sh` passed.
 
 ## Review Findings
 
@@ -212,6 +220,13 @@ Implementation validation results:
   `<rule-id>` placeholder phrase check used decoded HTML without normalizing
   source whitespace. Patched the validator to collapse whitespace before the
   placeholder check and added a regression test for wrapped safe wording.
+- Qodo review found two still-actionable validator hardening issues. First,
+  checking the placeholder phrase against decoded HTML could pass an unescaped
+  `<rule-id>` tag that would not render as text. Second, sanctioned content
+  removal only stripped `<section>` tags while required-id validation accepted
+  any element. Patched the placeholder check to require escaped literal
+  placeholder HTML and generalized sanctioned element removal to matching
+  elements by id.
 
 ## Oddities
 
