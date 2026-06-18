@@ -292,6 +292,12 @@ public static class RuleIds
     public const string LegacyDataTypedDataSet = "legacy.data.typed-dataset.v1";
     public const string LegacyDataConfig = "legacy.data.config.v1";
     public const string LegacyDataGeneratedLink = "legacy.data.generated-link.v1";
+    public const string LegacyDataModelIdentity = "legacy.data.model.identity.v1";
+    public const string LegacyDataModelRelationship = "legacy.data.model.relationship.v1";
+    public const string LegacyDataOrmNHibernate = "legacy.data.orm.nhibernate.v1";
+    public const string LegacyDataOrmUnsupported = "legacy.data.orm.unsupported.v1";
+    public const string LegacyDataModelGeneratedLink = "legacy.data.model.generated-link.v1";
+    public const string LegacyDataModelSurface = "legacy.data.model.surface.v1";
     public const string LegacyFlowInputAvailability = "legacy.flow.input-availability.v1";
     public const string LegacyFlowRootSelection = "legacy.flow.root-selection.v1";
     public const string LegacyFlowStaticTraversal = "legacy.flow.static-traversal.v1";

@@ -1,7 +1,8 @@
 # Legacy Data Model Metadata Extraction Implementation State
 
-Status: spec-ready
-Branch: codex/spec-legacy-data-model-metadata-extraction
+Status: implementation-slice-in-progress
+Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
+Current implementation branch: codex/implement-legacy-data-model-metadata-extraction
 Public claim level: hidden
 
 ## Why This Spec Exists
@@ -139,3 +140,80 @@ git diff --check
   query parsing, formulas, filters, inheritance, composite IDs, and custom SQL
   should stay gaps unless deterministic tests and redaction rules are added.
 - Add public-safe synthetic fixtures before making public coverage claims.
+
+## Implementation Slice 1 State
+
+Branch: `codex/implement-legacy-data-model-metadata-extraction`
+
+Selected scope: Task 1 only. This slice establishes the rule/catalog and code
+constant contract that later extractor, projection, graph, and export tasks must
+target before they emit model-level conclusions.
+
+Implemented:
+
+- Added `RuleIds` constants for `legacy.data.model.identity.v1`,
+  `legacy.data.model.relationship.v1`, `legacy.data.orm.nhibernate.v1`,
+  `legacy.data.orm.unsupported.v1`, `legacy.data.model.generated-link.v1`, and
+  `legacy.data.model.surface.v1`.
+- Added rule catalog entries documenting emitted fact types, evidence tiers,
+  safe properties, and limitations for the model identity, relationship,
+  NHibernate, unsupported ORM, generated-link, and surface projection rules.
+- Reserved `legacy.data.model.generated-link.v1` for future model-normalized
+  generated-code links while leaving existing generated-code extractor
+  provenance under `legacy.data.generated-link.v1`. Decision rationale:
+  existing DBML, EDMX, and typed DataSet generated-code links keep correct
+  provenance under the original source rule; future tasks should use the model
+  rule only when they add model-normalized linkage semantics beyond that source
+  rule.
+- Kept `legacy.data.model.surface.v1` as a report/export projection rule only.
+  No `LegacyDataModelSurfaceProjected` scan fact or new `legacy-data-model`
+  surface kind was added.
+- Added focused catalog/constant tests in
+  `LegacyDataModelRuleCatalogTests`.
+
+Oddities and scope decisions:
+
+- This is a first implementation PR slice because the full spec spans scanner
+  extraction, NHibernate XML parsing, relationship normalization, combined
+  report/path/reverse/diff/impact integration, graph/vault export, fixtures,
+  and smoke guidance. Implementing all of that in one PR would be too broad to
+  review safely.
+- No scanner behavior changes are included in this slice, so no new facts are
+  emitted yet. Existing DBML, EDMX, typed DataSet, config, and generated-link
+  source facts retain their existing rule IDs.
+- Public claim level remains hidden. No site files, generated scan outputs,
+  private samples, raw SQL, snippets, remotes, local absolute paths, secrets, or
+  local/private artifact labels are in scope.
+
+Validation executed before PR:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModelRuleCatalogTests`: passed, 3 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 11 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 443 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>`: passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- `node scripts/kiro-review.mjs --phase legacy-data-model-metadata-extraction --kind implementation --model claude-sonnet-4.5 --fresh --timeout-ms 600000`: reduced coverage because the review harness reported denied shell access for one command, but no blocking or Medium+ findings. The only actionable review recommendation was to record validation results here, now done.
+
+PR review-loop follow-up:
+
+- Initial PR loop found one required Qodo thread on nonstandard compound
+  `evidenceTier` strings in the new catalog entries. Patched the new entries to
+  use single fixed tier values and hardened `LegacyDataModelRuleCatalogTests` so
+  it verifies that contract with whitespace-tolerant rule lookup. Reran
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModelRuleCatalogTests`, `./scripts/check-private-paths.sh`, and `git diff --check`: all passed.
+
+Follow-ups:
+
+- Task 2 should add deterministic model identity helpers and additive safe
+  metadata fields over existing source extractors.
+- Task 3 should add relationship semantics and ambiguity gaps while preserving
+  existing source `mappingKind` values.
+- Task 4 should add the narrow NHibernate `.hbm.xml` MVP using the existing
+  legacy data safe XML parser bounds and gap classifications.
+- Tasks 7-9 should project model-enriched `legacy-data` surfaces, excluding
+  `AnalysisGap` facts from terminal projection and avoiding double projection.
