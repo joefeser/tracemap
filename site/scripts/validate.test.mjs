@@ -16,6 +16,7 @@ import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
+import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
@@ -117,6 +118,7 @@ async function createDistFixture({
     managerBriefRoute,
     managerFaqRoute,
     proofSourceCatalogRoute,
+    reviewClaimChecklistRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
     staticTriageRoute
@@ -144,6 +146,7 @@ async function createDistFixture({
     proofSourceCatalogRoute,
     "/manager-packet/",
     "/packets/",
+    reviewClaimChecklistRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
     staticTriageRoute,
@@ -177,6 +180,8 @@ async function createDistFixture({
                     ? managerFaqPage()
                     : route === proofSourceCatalogRoute
                       ? await proofSourceCatalogPage()
+                      : route === reviewClaimChecklistRoute
+                        ? reviewClaimChecklistPage()
                       : route === reviewRoomRoute
                         ? reviewRoomPage()
                         : route === roadmapClaimLedgerRoute
@@ -184,7 +189,7 @@ async function createDistFixture({
                           : route === staticTriageRoute
                             ? staticTriagePage()
                             : page(
-                                `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}`
+                                `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
                               ),
       "utf8"
     );
@@ -291,6 +296,17 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture proof source catalog limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: reviewClaimChecklistRoute,
+        title: "Review Claim Checklist",
+        summary: "Fixture review claim checklist route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture review claim checklist limitations remain bounded."],
+        nonClaims: ["No runtime behavior, production usage, AI impact analysis, or LLM analysis proof."]
       },
       {
         path: reviewRoomRoute,
@@ -504,6 +520,7 @@ function managerFaqPage() {
     <a href="/manager-brief/">Manager brief</a>
     <a href="/manager-packet/">Manager packet</a>
     <a href="/review-room/">Review room</a>
+    <a href="/review-claim-checklist/">Review claim checklist</a>
     <a href="/limitations/">Limitations</a>
     <a href="/validation/">Validation</a>
     <a href="/proof-paths/">Proof paths</a>
@@ -527,6 +544,66 @@ function reviewRoomPage() {
     <a href="/manager-packet/">Manager packet</a>
     <a href="/incident-call/">Incident call</a>
     <a href="/use-cases/incident-review/">Incident review</a>
+    <a href="/review-claim-checklist/">Review claim checklist</a>
+    <p>${filler}</p>
+  `);
+}
+
+function reviewClaimChecklistPage() {
+  const fieldRows = [
+    "claim statement",
+    "public claim level",
+    "proof path",
+    "rule ID or rule family",
+    "evidence tier",
+    "coverage label",
+    "limitation",
+    "non-claims",
+    "source branch or main-dev status",
+    "owner follow-up",
+    "reviewer",
+    "review date",
+    "decision"
+  ]
+    .map((field) => `<tr data-checklist-field="${field}"><td>${field}</td></tr>`)
+    .join("\n");
+  const filler = Array.from({ length: 140 }, (_, index) => `claim proof limitation boundary ${index}`).join(" ");
+
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <meta property="og:type" content="article">
+    <a href="/review-room/">Review-room agenda</a>
+    <a href="/manager-faq/">Manager FAQ</a>
+    <a href="/proof-paths/">Proof path index</a>
+    <a href="/roadmap/#claim-ledger">Claim ledger</a>
+    <section id="claim-row-template">
+      <table><tbody>${fieldRows}</tbody></table>
+      <p>shipped demo concept hidden main maps to shipped</p>
+      <p>Tier1Semantic Tier2Structural Tier3SyntaxOrTextual Tier4Unknown</p>
+      <p>repeat with proof downgrade before repeating owner follow-up needed do not repeat internal only</p>
+      <p>claim statement public claim level proof path rule ID or rule family evidence tier coverage label limitation non-claims source branch or main-dev status owner follow-up reviewer review date decision</p>
+    </section>
+    <section id="stop-conditions">
+      <p>missing proof path private-only artifact hidden claim detail unsupported demo claim forbidden wording</p>
+    </section>
+    <section id="illustrative-examples">
+      <h2>Illustrative examples</h2>
+      <table>
+        <tbody>
+          <tr data-example-row data-review-outcome="repeat with proof" data-public-claim-level="demo"><td>Tier2Structural Reviewer role Example date repeat with proof</td></tr>
+          <tr data-example-row data-review-outcome="owner follow-up needed" data-public-claim-level="concept"><td>Tier2Structural Reviewer role Example date owner follow-up needed</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section id="non-claims">
+      <p>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage.</p>
+      <p>TraceMap does not replace telemetry, logs, traces, tests, source review, ownership decisions, incident response, or release approval.</p>
+      <p>A successful checklist does not say a system is impacted, safe, unsafe, approved, blocked, root cause, validated for release, production proven, or complete.</p>
+    </section>
+    <section id="private-material">
+      <p>Raw facts.ndjson, raw index.sqlite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw repository remotes, generated scan directories, and private sample names stay out of public proof links.</p>
+    </section>
     <p>${filler}</p>
   `);
 }
@@ -545,6 +622,7 @@ function roadmapClaimLedgerPage() {
     <a href="/capabilities/">Capabilities</a>
     <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
     <a href="/limitations/">Limitations</a>
+    <a href="/review-claim-checklist/">Review claim checklist</a>
     <table>
       <tbody>
         <tr id="claim-shipped" data-claim-row data-claim-level="shipped" data-evidence-status="evidence-backed" data-wording-status="live"><td>shipped</td></tr>
