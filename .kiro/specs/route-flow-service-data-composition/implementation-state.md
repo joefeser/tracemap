@@ -77,6 +77,9 @@ Review artifacts were saved under the ignored Kiro review artifact directory.
   `FactTypes.QueryPatternDetected`.
 - Treat `combined_fact_symbols` as a linking table; join to `combined_facts` for
   rule ID, evidence tier, file path, and line-span provenance.
+- Parameter-forward bridge coverage is not deferred; implementation Task 10 and
+  Requirement 7 require focused coverage for `combined_parameter_forward_edges`
+  or an explicit future deferral with rationale.
 - Repository-like rows are derived from method/symbol plus surface evidence;
   there is no dedicated repository table in this spec.
 - Keep implementation PRs small and update this file as each slice lands.

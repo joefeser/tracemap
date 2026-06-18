@@ -349,7 +349,7 @@ Stable ID tuples by new row kind:
 | `RepositoryEvidence` | source label, route root safe key, repository-like method symbol ID, supporting edge IDs, supporting fact IDs, rule ID, file path, start line |
 | `DataSurface` | source label, route root safe key, attached method symbol ID, dependency/data fact ID, safe surface key/hash, rule ID, file path, start line |
 | `ImplementationCandidate` | source label, route root safe key, interface symbol ID, candidate symbol ID, relationship fact or edge ID, rule ID, file path, start line |
-| `AmbiguousImplementationCandidates` gap | source label, route root safe key, interface symbol ID, sorted candidate symbol IDs, sorted relationship fact or edge IDs, rule ID |
+| `Gap` with code `AmbiguousImplementationCandidates` | source label, route root safe key, interface symbol ID, sorted candidate symbol IDs, sorted relationship fact or edge IDs, rule ID |
 
 ## Gap Semantics
 

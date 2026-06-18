@@ -34,8 +34,7 @@
 Task 4 must land before Tasks 5-11 begin. The rule catalog and emitted gap codes
 are the contract that later implementation and tests validate.
 
-- [ ] 4. Extend route-flow rule catalog entries and limitations. Requirements:
-      4.
+- [ ] 4. Extend route-flow rule catalog entries and limitations. Requirements: 4.
   - [ ] Reuse existing `combined.route-flow.*` rules for selector, entry, path,
         interface bridge, logic surface, dependency surface, classification,
         redaction, and report envelope behavior.
