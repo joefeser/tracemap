@@ -80,7 +80,7 @@ Passed on 2026-06-18:
 - `git diff --check`
 - `./scripts/check-private-paths.sh`
 - `npm test` from `site/`:
-  133 tests passed.
+  134 tests passed after the Qodo patch.
 - `npm run validate` from `site/`:
   built static output and validated 38 HTML files, 1063 internal references,
   37 sitemap URLs, and 1 legacy story safety target.
@@ -103,8 +103,11 @@ Oddity:
 
 ## Review Findings
 
-No PR-loop review findings yet. Post-PR review-loop results should be recorded
-by the publishing worker if actionable findings require a follow-up patch.
+- PR loop stopped on one Qodo unresolved review thread for
+  `site/scripts/roadmap-claim-ledger.mjs`: the private-text guard compared
+  forbidden text with case-sensitive checks. Patched the validator to compare
+  HTML, decoded HTML, and rendered text case-insensitively, and added a
+  `LOCALHOST` regression test.
 
 ## Follow-Ups
 
