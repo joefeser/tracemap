@@ -410,14 +410,14 @@ public static class LegacyWinFormsExtractor
                     }
                     else if (name is "Run" && SafeExpressionName(memberAccess.Expression) is "Application" or "System.Windows.Forms.Application")
                     {
-                        var target = invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression switch
+                        var (target, classification) = invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression switch
                         {
-                            ObjectCreationExpressionSyntax creation => NormalizeTypeName(creation.Type.ToString()),
-                            IdentifierNameSyntax identifier when localCreations.TryGetValue(identifier.Identifier.ValueText, out var createdType) => createdType,
-                            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-                            _ => "ApplicationContext"
+                            ObjectCreationExpressionSyntax creation => (NormalizeTypeName(creation.Type.ToString()), "StrongStaticNavigation"),
+                            IdentifierNameSyntax identifier when localCreations.TryGetValue(identifier.Identifier.ValueText, out var createdType) => (createdType, "StrongStaticNavigation"),
+                            IdentifierNameSyntax identifier => (identifier.Identifier.ValueText, "NeedsReviewNavigation"),
+                            _ => ("ApplicationContext", "NeedsReviewNavigation")
                         };
-                        yield return Navigation(tree, filePath, invocation, method, target, "Application.Run", target == "ApplicationContext" ? "NeedsReviewNavigation" : "StrongStaticNavigation");
+                        yield return Navigation(tree, filePath, invocation, method, target, "Application.Run", classification);
                     }
                 }
             }
@@ -471,16 +471,16 @@ public static class LegacyWinFormsExtractor
         {
             var name = InvocationName(invocation.Expression);
             var line = LineAt(tree, invocation.SpanStart);
-            if (name.Contains("Create", StringComparison.OrdinalIgnoreCase) && invocation.Ancestors().OfType<BaseMethodDeclarationSyntax>().Any())
+            if (IsReflectionInvocation(invocation.Expression))
+            {
+                yield return new WinFormsGap(filePath, line, "WinFormsReflectionBoundary", "Reflection blocks deterministic WinForms target resolution.", RuleIds.LegacyWinFormsNavigation);
+            }
+            else if (name.Contains("Create", StringComparison.OrdinalIgnoreCase) && invocation.Ancestors().OfType<BaseMethodDeclarationSyntax>().Any())
             {
                 if (IsInsideInitializeComponent(invocation) && invocation.Parent is AssignmentExpressionSyntax or EqualsValueClauseSyntax)
                 {
                     yield return new WinFormsGap(filePath, line, "DynamicWinFormsControlCreation", "Factory-like control creation may require runtime state; TraceMap did not infer generated controls.", RuleIds.LegacyWinFormsControl);
                 }
-            }
-            else if (name is "InvokeMember" || name.Contains("Activator", StringComparison.Ordinal))
-            {
-                yield return new WinFormsGap(filePath, line, "WinFormsReflectionBoundary", "Reflection blocks deterministic WinForms target resolution.", RuleIds.LegacyWinFormsNavigation);
             }
         }
     }
@@ -488,13 +488,25 @@ public static class LegacyWinFormsExtractor
     private static IReadOnlyList<WinFormsResource> ParseResourceFile(string repoPath, FileInventoryItem item, IReadOnlyList<WinFormsType> surfaces)
     {
         var baseName = Path.GetFileNameWithoutExtension(item.RelativePath);
-        var owningSurface = surfaces.FirstOrDefault(surface => SameType(surface.ShortName, ResourceOwnerName(baseName)));
-        if (owningSurface is null)
+        var ownerName = ResourceOwnerName(baseName);
+        var owningSurfaces = surfaces
+            .Where(surface => SameType(surface.ShortName, ownerName))
+            .OrderBy(surface => surface.TypeName, StringComparer.Ordinal)
+            .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
+            .ToArray();
+        if (owningSurfaces.Length == 0)
         {
             return [];
         }
 
         var gaps = new List<WinFormsGap>();
+        if (owningSurfaces.Length > 1)
+        {
+            gaps.Add(new WinFormsGap(item.RelativePath, 1, "AmbiguousWinFormsResourceOwner", "WinForms resource metadata matched multiple surfaces with the same short name; TraceMap did not choose an arbitrary owner.", RuleIds.LegacyWinFormsResourceMetadata));
+            return [new WinFormsResource(item.RelativePath, ownerName, CultureSuffix(baseName), [], "unsupported", 1, gaps)];
+        }
+
+        var owningSurface = owningSurfaces[0];
         try
         {
             var document = SafeXml.LoadDocument(Path.Combine(repoPath, item.RelativePath));
@@ -903,6 +915,18 @@ public static class LegacyWinFormsExtractor
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
             _ => expression.ToString()
+        };
+    }
+
+    private static bool IsReflectionInvocation(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            IdentifierNameSyntax { Identifier.ValueText: "InvokeMember" } => true,
+            MemberAccessExpressionSyntax { Name.Identifier.ValueText: "InvokeMember" } => true,
+            MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CreateInstance" } member
+                when SafeExpressionName(member.Expression) is "Activator" or "System.Activator" => true,
+            _ => false
         };
     }
 

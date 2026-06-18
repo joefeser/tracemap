@@ -53,7 +53,7 @@ Implemented the static WinForms event/navigation discovery slice on
 - `dotnet test src/dotnet/TraceMap.sln --filter LegacyWinFormsExtractorTests`
   passed: 11 tests.
 - `dotnet build src/dotnet/TraceMap.sln` passed.
-- `dotnet test src/dotnet/TraceMap.sln` passed: 498 tests.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 501 tests.
 - `python3 -m unittest scripts.tests.test_legacy_codebase_validation` passed:
   12 tests.
 - Temporary synthetic WinForms CLI smoke passed twice, produced
