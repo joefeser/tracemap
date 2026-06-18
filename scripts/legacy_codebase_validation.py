@@ -398,11 +398,18 @@ def probe_ui_events(facts: list[dict[str, Any]], enabled: bool = True) -> dict[s
             ],
         }
 
+    precise_ui_event_fact_types = {
+        "WebFormsEventBindingDeclared",
+        "WebFormsHandlerResolved",
+        "WebFormsEventFlowProjected",
+        "WinFormsEventBindingDeclared",
+        "WinFormsHandlerResolved",
+        "WinFormsHandlerFlowProjected",
+    }
     precise_ui_facts = [
         fact
         for fact in facts
-        if str(fact.get("factType", "")).startswith("WebForms")
-        or str(fact.get("factType", "")).startswith("WinForms")
+        if str(fact.get("factType", "")) in precise_ui_event_fact_types
     ]
     if precise_ui_facts:
         tiers = sorted({str(fact.get("evidenceTier", "Tier4Unknown")) for fact in precise_ui_facts})

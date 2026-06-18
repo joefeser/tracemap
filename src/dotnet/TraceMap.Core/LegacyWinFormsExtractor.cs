@@ -320,8 +320,9 @@ public static class LegacyWinFormsExtractor
         }
     }
 
-    private static IEnumerable<WinFormsBinding> ExtractBindings(SyntaxTree tree, string filePath, CompilationUnitSyntax root, bool isDesigner, List<WinFormsGap> gaps)
+    private static IReadOnlyList<WinFormsBinding> ExtractBindings(SyntaxTree tree, string filePath, CompilationUnitSyntax root, bool isDesigner, List<WinFormsGap> gaps)
     {
+        var bindings = new List<WinFormsBinding>();
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>().Where(node => node.IsKind(SyntaxKind.AddAssignmentExpression)))
         {
             if (assignment.Left is not MemberAccessExpressionSyntax memberAccess)
@@ -332,7 +333,7 @@ public static class LegacyWinFormsExtractor
 
             var handler = HandlerName(assignment.Right);
             var span = tree.GetLineSpan(assignment.Span);
-            yield return new WinFormsBinding(
+            bindings.Add(new WinFormsBinding(
                 filePath,
                 QualifiedClassName(assignment.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault()),
                 SafeExpressionName(memberAccess.Expression) ?? "unknown",
@@ -343,20 +344,26 @@ public static class LegacyWinFormsExtractor
                 IsInsideInitializeComponent(assignment),
                 span.StartLinePosition.Line + 1,
                 Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
-                isDesigner);
+                isDesigner));
         }
+
+        return bindings;
     }
 
     private static IEnumerable<WinFormsNavigationEdge> ExtractNavigation(SyntaxTree tree, string filePath, CompilationUnitSyntax root)
     {
         foreach (var method in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
         {
-            var localCreations = method.DescendantNodes().OfType<VariableDeclaratorSyntax>()
-                .Where(variable => variable.Initializer?.Value is ObjectCreationExpressionSyntax)
-                .ToDictionary(
-                    variable => variable.Identifier.ValueText,
-                    variable => NormalizeTypeName(((ObjectCreationExpressionSyntax)variable.Initializer!.Value).Type.ToString()),
-                    StringComparer.Ordinal);
+            var localCreations = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var variable in method.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Where(variable => variable.Initializer?.Value is ObjectCreationExpressionSyntax))
+            {
+                var name = variable.Identifier.ValueText;
+                if (!localCreations.ContainsKey(name))
+                {
+                    localCreations[name] = NormalizeTypeName(((ObjectCreationExpressionSyntax)variable.Initializer!.Value).Type.ToString());
+                }
+            }
 
             foreach (var assignment in method.DescendantNodes().OfType<AssignmentExpressionSyntax>())
             {
@@ -695,7 +702,7 @@ public static class LegacyWinFormsExtractor
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
         var terminals = directFacts.Where(fact => TerminalFactTypes.Contains(fact.FactType)).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
-        var supporting = directFacts.Concat(terminals).Append(handler).DistinctBy(fact => fact.FactId).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
+        var supporting = directFacts.Append(handler).DistinctBy(fact => fact.FactId).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
         var hasReducedCoverage = manifest.BuildStatus != "Succeeded";
         var classification = terminals.Length > 0
             ? handler.EvidenceTier == EvidenceTiers.Tier1Semantic && terminals.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic) ? "StrongStaticHandlerFlow"

@@ -201,6 +201,20 @@ class LegacyCodebaseValidationTests(unittest.TestCase):
         self.assertEqual("gap-no-current-event-evidence", result["classification"])
         self.assertEqual(0, result["structuralMatches"])
 
+    def test_ui_probe_does_not_treat_surface_inventory_as_event_wiring(self) -> None:
+        result = legacy.probe_ui_events(
+            [
+                {
+                    "factType": "WinFormsSurfaceDeclared",
+                    "ruleId": "legacy.winforms.inventory.v1",
+                    "evidenceTier": "Tier2Structural",
+                }
+            ]
+        )
+
+        self.assertEqual("gap-no-current-event-evidence", result["classification"])
+        self.assertEqual(0, result["structuralMatches"])
+
     def test_ui_probe_reconciles_precise_winforms_and_webforms_without_divergent_counts(self) -> None:
         result = legacy.probe_ui_events(
             [
