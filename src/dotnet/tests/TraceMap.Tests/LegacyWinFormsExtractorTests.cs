@@ -96,6 +96,38 @@ public sealed class LegacyWinFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_downgrades_application_run_identifier_without_local_creation()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        WriteMainForm(repo, "");
+        File.WriteAllText(Path.Combine(repo, "Program.cs"), """
+            using System;
+            using System.Windows.Forms;
+            namespace Sample;
+            internal static class Program
+            {
+                private static MainForm _mainForm;
+                [STAThread]
+                private static void Main()
+                {
+                    Application.Run(_mainForm);
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WinFormsNavigationEdgeDeclared
+            && fact.Properties.GetValueOrDefault("navigationKind") == "Application.Run"
+            && fact.Properties.GetValueOrDefault("targetFormTypeName") == "_mainForm"
+            && fact.Properties.GetValueOrDefault("navigationClassification") == "NeedsReviewNavigation"
+            && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+    }
+
+    [Fact]
     public void Scan_extracts_code_subscription_as_syntax_tier_binding()
     {
         using var temp = new TempDirectory();
@@ -215,6 +247,36 @@ public sealed class LegacyWinFormsExtractorTests
             fact.FactType == FactTypes.WinFormsResourceMetadataDeclared
             && fact.Evidence.FilePath == "MainForm.NotCulture.resx"
             && fact.Properties.GetValueOrDefault("cultureSuffix") == string.Empty);
+    }
+
+    [Fact]
+    public void Scan_emits_gap_for_ambiguous_resx_owner_short_names()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "FirstMainForm.cs"), """
+            using System.Windows.Forms;
+            namespace First;
+            public partial class MainForm : Form { }
+            """);
+        File.WriteAllText(Path.Combine(repo, "SecondMainForm.cs"), """
+            using System.Windows.Forms;
+            namespace Second;
+            public partial class MainForm : Form { }
+            """);
+        File.WriteAllText(Path.Combine(repo, "MainForm.resx"), """
+            <root>
+              <data name="Title"><value>Safe synthetic title</value></data>
+            </root>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWinFormsResourceMetadata
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousWinFormsResourceOwner");
     }
 
     [Fact]
@@ -389,6 +451,34 @@ public sealed class LegacyWinFormsExtractorTests
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("classification") is "DynamicWinFormsControlCreation" or "WinFormsReflectionBoundary");
+    }
+
+    [Fact]
+    public void Scan_emits_reflection_gap_for_activator_createinstance()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "MainForm.cs"), """
+            using System;
+            using System.Windows.Forms;
+            namespace Sample;
+            public partial class MainForm : Form
+            {
+                public void Work()
+                {
+                    Activator.CreateInstance(typeof(DetailsForm));
+                }
+            }
+            public partial class DetailsForm : Form { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWinFormsNavigation
+            && fact.Properties.GetValueOrDefault("classification") == "WinFormsReflectionBoundary");
     }
 
     [Fact]
