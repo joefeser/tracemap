@@ -43,6 +43,7 @@ public sealed class LegacyWinFormsExtractorTests
 
         Assert.Contains(result.Inventory, item => item is { RelativePath: "MainForm.Designer.cs", Kind: "WinFormsDesigner" });
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsSurfaceDeclared && fact.TargetSymbol == "Sample.MainForm");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WinFormsSurfaceDeclared && fact.Evidence.FilePath == "MainForm.Designer.cs");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsControlDeclared && fact.Properties.GetValueOrDefault("controlId") == "saveButton");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsEventBindingDeclared && fact.Properties.GetValueOrDefault("handlerName") == "SaveButton_Click" && fact.EvidenceTier == EvidenceTiers.Tier2Structural);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WinFormsHandlerResolved && fact.ContractElement == "SaveButton_Click");
@@ -64,6 +65,34 @@ public sealed class LegacyWinFormsExtractorTests
         Assert.Contains("## WinForms Navigation And Callbacks", report);
         Assert.Contains("## WinForms Handler Flow", report);
         Assert.Contains("## WinForms Limitations", report);
+    }
+
+    [Fact]
+    public void Scan_projects_handler_flow_to_wcf_service_reference_mapping()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        WriteProgram(repo);
+        WriteMainForm(repo, """
+            var client = new Sample.Clients.RatingServiceClient();
+            client.Rate(new Sample.Contracts.RatingRequest());
+            """);
+        WriteDesigner(repo, """
+            this.saveButton = new System.Windows.Forms.Button();
+            this.saveButton.Click += new System.EventHandler(this.SaveButton_Click);
+            """);
+        WriteWcfClientEndpoint(repo);
+        WriteWcfContract(repo);
+        WriteWcfGeneratedClient(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var mapping = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
+        var flow = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WinFormsHandlerFlowProjected);
+        Assert.Equal("wcf-operation", flow.Properties.GetValueOrDefault("terminalSurfaceKind"));
+        Assert.Contains(mapping.FactId, flow.Properties.GetValueOrDefault("supportingFactIds"));
+        Assert.Contains(RuleIds.LegacyWcfMapping, flow.Properties.GetValueOrDefault("ruleIds"));
     }
 
     [Fact]
@@ -394,6 +423,58 @@ public sealed class LegacyWinFormsExtractorTests
                 private static void Main()
                 {
                     Application.Run(new MainForm());
+                }
+            }
+            """);
+    }
+
+    private static void WriteWcfClientEndpoint(string repo)
+    {
+        File.WriteAllText(Path.Combine(repo, "App.config"), """
+            <configuration>
+              <system.serviceModel>
+                <client>
+                  <endpoint address="" binding="basicHttpBinding" contract="Sample.Contracts.IRatingService" />
+                </client>
+              </system.serviceModel>
+            </configuration>
+            """);
+    }
+
+    private static void WriteWcfContract(string repo)
+    {
+        File.WriteAllText(Path.Combine(repo, "Contracts.cs"), """
+            using System.ServiceModel;
+
+            namespace Sample.Contracts;
+
+            [ServiceContract]
+            public interface IRatingService
+            {
+                [OperationContract]
+                string Rate(RatingRequest request);
+            }
+
+            public sealed class RatingRequest { }
+            """);
+    }
+
+    private static void WriteWcfGeneratedClient(string repo)
+    {
+        var serviceRef = Path.Combine(repo, "Service References", "Rating");
+        Directory.CreateDirectory(serviceRef);
+        File.WriteAllText(Path.Combine(serviceRef, "Reference.cs"), """
+            using System.CodeDom.Compiler;
+            using System.ServiceModel;
+
+            namespace Sample.Clients;
+
+            [GeneratedCode("svcutil", "4.0")]
+            public partial class RatingServiceClient : ClientBase<Sample.Contracts.IRatingService>
+            {
+                public string Rate(Sample.Contracts.RatingRequest request)
+                {
+                    return string.Empty;
                 }
             }
             """);
