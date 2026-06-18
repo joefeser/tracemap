@@ -199,6 +199,13 @@ Kiro implementation review:
 
 - `node scripts/kiro-review.mjs --phase legacy-data-model-metadata-extraction --kind implementation --model claude-sonnet-4.5 --fresh --timeout-ms 600000`: reduced coverage because the review harness reported denied shell access for one command, but no blocking or Medium+ findings. The only actionable review recommendation was to record validation results here, now done.
 
+PR review-loop follow-up:
+
+- Initial PR loop found one required Qodo thread on nonstandard comma-separated
+  `evidenceTier` strings in the new model generated-link and surface catalog
+  entries. Patched those entries to use the plain `or` form and reran
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModelRuleCatalogTests`, `./scripts/check-private-paths.sh`, and `git diff --check`: all passed.
+
 Follow-ups:
 
 - Task 2 should add deterministic model identity helpers and additive safe
