@@ -27,7 +27,7 @@ export function normalizeRenderedText(html) {
 }
 
 export function decodeHtmlEntities(value) {
-  return String(value).replace(/&(#x[0-9a-f]+|#[0-9]+|amp|apos|gt|lt|quot);/gi, (entity, token) => {
+  return String(value).replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z][a-z0-9]+);/gi, (entity, token) => {
     const normalized = token.toLowerCase();
     if (normalized.startsWith("#x")) {
       return decodeCodePoint(Number.parseInt(normalized.slice(2), 16), entity);
@@ -41,9 +41,14 @@ export function decodeHtmlEntities(value) {
       {
         amp: "&",
         apos: "'",
+        backslash: "\\",
+        bsol: "\\",
+        colon: ":",
         gt: ">",
         lt: "<",
-        quot: "\""
+        nbsp: " ",
+        quot: "\"",
+        sol: "/"
       }[normalized] ?? entity
     );
   });
