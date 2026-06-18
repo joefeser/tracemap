@@ -285,9 +285,12 @@ Acceptance criteria:
   connection-string fragments, and raw SQL, using runtime string composition
   rather than embedded literals. The implementation should follow existing
   repository patterns such as `String.fromCharCode(47)` or a local path-builder
-  helper, so the test proves rejection without introducing a literal that
-  `./scripts/check-private-paths.sh` flags or that violates the Requirement 3
-  no-local-absolute-path-in-tests rule.
+  helper, so the test proves rejection without introducing literals that violate
+  Requirement 3 or the focused page/site validators. `./scripts/check-private-paths.sh`
+  remains the repository guard for local absolute paths and known private
+  tokens; it must not be described as the validator for connection-string or raw
+  SQL fragments unless that script is explicitly expanded in a separate
+  repo-wide policy change.
 - The validator checks required labels, required route links, discovery
   metadata, artifact sharing boundaries, and forbidden private/raw text.
 - The validator checks forbidden AI/LLM positioning with a pattern that
