@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using TraceMap.Core;
 
 namespace TraceMap.Reporting;
 
@@ -153,7 +154,6 @@ public static class VaultExporter
     private const string UserFileCollisionRuleId = "vault-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "vault-export.validation.unsafe-value-rejected.v1";
     private const string SensitiveWordCategory = "sensitive-word";
-    private const string Tier3SyntaxOrTextual = "Tier3SyntaxOrTextual";
     private const string Tier4Unknown = "Tier4Unknown";
     // Hidden-safe context hashes use lowercase SHA-256 truncated after context validation.
     private const int DisplayNameHashLength = 24;
@@ -1068,7 +1068,7 @@ public static class VaultExporter
         builder.AppendLine();
         builder.AppendLine("## Review Queues");
         builder.AppendLine();
-        builder.AppendLine($"- Weak or syntax-only evidence: `{graph.Nodes.Count(node => node.EvidenceTiers.Any(tier => tier is Tier3SyntaxOrTextual or Tier4Unknown))}` nodes.");
+        builder.AppendLine($"- Weak or syntax-only evidence: `{graph.Nodes.Count(node => node.EvidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown))}` nodes.");
         builder.AppendLine($"- Needs-review or reduced coverage edges: `{graph.Edges.Count(edge => IsReviewClassification(edge.Classification))}` edges.");
         builder.AppendLine($"- Gaps: `{graph.Gaps.Count}` records.");
         builder.AppendLine($"- Limitations: `{graph.Limitations.Count}` records.");
@@ -1146,7 +1146,8 @@ public static class VaultExporter
     private static string RenderFolderIndex(EvidenceGraphVault graph, string folder, IEnumerable<VaultGraphNode> nodes)
     {
         var orderedNodes = nodes.OrderBy(node => node.Kind, StringComparer.Ordinal).ThenBy(node => node.DisplayName, StringComparer.Ordinal).ThenBy(node => node.Id, StringComparer.Ordinal).ToArray();
-        var edges = graph.Edges.Where(edge => orderedNodes.Any(node => node.Id == edge.From || node.Id == edge.To)).ToArray();
+        var nodeIds = orderedNodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
+        var edges = graph.Edges.Where(edge => nodeIds.Contains(edge.From) || nodeIds.Contains(edge.To)).ToArray();
         var coverage = DistinctSorted(orderedNodes.SelectMany(node => node.Coverage));
         var builder = new StringBuilder();
         builder.AppendLine($"# {FolderTitle(folder)} Index");
@@ -2600,7 +2601,7 @@ public static class VaultExporter
             .. node.Coverage.Select(coverage => $"tracemap/coverage/{Slug(coverage)}"),
             .. string.IsNullOrWhiteSpace(node.SurfaceKind) ? [] : new[] { $"tracemap/surface/{Slug(node.SurfaceKind)}" },
             .. node.Kind == "gap" ? new[] { "tracemap/review/gap" } : [],
-            .. node.EvidenceTiers.Any(tier => tier is Tier3SyntaxOrTextual or Tier4Unknown) || node.Coverage.Any(IsWeakCoverageLabel)
+            .. node.EvidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown) || node.Coverage.Any(IsWeakCoverageLabel)
                 ? new[] { "tracemap/review/needs-review" }
                 : []
         ]);
