@@ -60,6 +60,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/static-vs-runtime/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/legacy-validation/",
     "changefreq": "monthly",
     "priority": "0.7"
