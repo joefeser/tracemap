@@ -2,94 +2,92 @@
 
 ## Status
 
-not-started
+implemented
 
 ## Current Branch
 
-`codex/spec-rag-import-evidence-docs`
+`codex/issue-172-rag-evidence-docs`
 
 ## Scope
 
-This branch is spec-only for TraceMap issue #172. It adds the Kiro spec for
-RAG-import-ready evidence documentation under
-`.kiro/specs/rag-import-evidence-docs/`.
+This branch implements TraceMap issue #172 as `tracemap docs-export`.
 
-No product code, site files, generated output, docs pages, rule catalog entries,
-or implementation tests are intentionally changed in this PR.
+Implemented product areas:
+
+- `TraceMap.Reporting.EvidenceDocsExporter`
+- `tracemap docs-export` CLI command and help
+- `tracemap-evidence-docs.v1` manifest, JSONL chunk, and Markdown output
+- generated frontmatter sentinels and content hashes
+- stable length-prefixed ID inputs with 24-hex displayed IDs
+- read-only single-index and combined-index projection
+- bounded report-input projection for compatible JSON report metadata
+- explicit schema, unsupported-family, missing-provenance, unknown-analysis,
+  hidden-filter, duplicate-identity, and claim-catalog gaps
+- hidden/demo/public claim filtering with source-claim catalog promotion
+- hidden `local-only` date sentinel and demo/public `--date YYYY-MM` gate
+- generated-file collision handling with `--force` limits
+- redaction and prohibited wording validation
+- docs-export rule catalog entries and user documentation
+- focused docs-export tests
 
 ## Scope Decisions
 
-- Preferred command shape is `tracemap docs-export --index <index-or-combined.sqlite> --out <path>`.
-- The CLI deliberately avoids `rag` in the command name because TraceMap emits
-  deterministic evidence documents and does not implement a RAG stack.
-- `--index` is required for v1 so every export remains anchored to a scan or
-  combined index with source identity and commit provenance.
-- Optional report inputs enrich chunks but do not replace the index root.
-- Output schema is `tracemap-evidence-docs.v1`.
-- Primary machine-ingestion output is `chunks.jsonl`; Markdown is the
-  human-inspectable companion output.
-- Hidden outputs without `--date` use the fixed generated-date sentinel
-  `local-only` and remain byte-stable; demo/public date metadata requires
+- The command shape is `tracemap docs-export --index <index-or-combined.sqlite>
+  --out <path>`.
+- `--index` is required for v1 so every export is anchored to scan or combined
+  source identity.
+- Raw indexes and report JSON default to `hidden`.
+- Demo/public promotion requires stable source identity from
+  `source-claim-catalog.v1`; display names alone do not promote evidence.
+- Hidden outputs without `--date` use `local-only`; demo/public outputs require
   `--date YYYY-MM`.
-- Claim levels reuse the vault/evidence-pack vocabulary:
-  `hidden`, `demo-safe`, and `public-safe`.
-- Evidence-pack `local-only` maps to docs-export `hidden`; only demo/public pack
-  metadata can promote chunks when matched by stable source identity.
-- `--exit-code` is not planned for docs-export v1; public/demo no-visible-
-  evidence failure is unconditional.
-- Raw snippets remain out of v1 by default and any future snippet option needs a
-  separate safety update.
+- Single-source indexes emit available source/fact chunks and schema gaps for
+  combined-only views.
+- Report JSON inputs are consumed as bounded report metadata chunks when they
+  expose documented schema/type markers; row-level report chunking remains
+  constrained to fields with stable IDs.
+- Vault graph claim promotion is not assumed beyond compatible schema evidence;
+  incompatible supplied vault graph inputs emit schema gaps.
+- Raw snippets remain out of scope.
 - No LLM calls, embeddings, vector database writes, prompt-based
-  classification, natural-language Q&A, or RAG-stack integration belong in
-  TraceMap core.
-
-## Alignment Notes
-
-- Vault export supplied the generated-file sentinel, stable hash, collision,
-  claim-level, and safety model pattern.
-- Evidence packs supplied promotion and public/demo claim-level constraints.
-- Route-flow supplied static path wording, route-centered provenance, and
-  report composition boundaries.
-- Parameter/value-origin flow supplied the property-flow/value-origin boundary
-  and non-taint limitations.
-- Release review supplied section-status, checklist provenance, and no-release-
-  approval language.
-- Combined dependency reporting supplied source, endpoint, surface, SQL/query,
-  package/config, and edge provenance patterns.
+  classification, retrieval API calls, natural-language Q&A, or RAG-stack
+  integration were added.
 
 ## Validation
 
-Spec-only validation to run before PR:
+Completed during implementation:
 
-- `git diff --check`
+- `dotnet restore src/dotnet/TraceMap.sln`
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`
+- `dotnet test src/dotnet/TraceMap.sln --filter EvidenceDocs`
+- `dotnet build src/dotnet/TraceMap.sln`
+- `dotnet test src/dotnet/TraceMap.sln`
 - `./scripts/check-private-paths.sh`
-- Kiro CLI Opus and Sonnet reviews when locally available, or documented
-  self-review if unavailable.
+- `git diff --check`
 
-Implementation validation is listed in `tasks.md` and should run when product
-code changes.
+Relevant pinned smoke checks from `docs/VALIDATION.md` are explicitly deferred
+unless review requests a local combined-index smoke: this branch adds a new
+downstream export and focused synthetic SQLite fixtures, but does not change
+scanner, reducer, combined-report, route-flow, release-review, evidence-pack,
+vault, or language-adapter analysis behavior.
 
-## Pre-Implementation Gates
+## Oddities
 
-- Rule catalog entries must land in `rules/rule-catalog.yml` in the first commit
-  of implementation PR 1 before any implementation code emits a
-  `docs-export.*.v1` rule ID.
-- Confirm that `source-claim-catalog.v1` field requirements are stable in the
-  vault export workflow before implementing task 2 input readers. If the vault
-  schema is still evolving, defer catalog-based promotion to PR 4 and emit
-  claim-level-unmatched gaps in the interim.
-- Confirm `evidence-graph-vault-export.v1` is locked before implementing vault
-  graph claim promotion. If not locked, supplied vault graph inputs should emit
-  schema gaps and claim promotion should remain deferred.
-- Audit route-flow, release-review, combined dependency report, paths, and
-  reverse report JSON for stable row/finding/section IDs before implementing
-  report-derived chunk readers. If IDs are unavailable, emit missing-provenance
-  or identity gaps rather than unstable chunks.
+- The shared CLI parser splits comma-separated values. `docs-export` therefore
+  adds pre-parse checks for repeated `--format` and empty `--format` or
+  `--families` raw values before using the shared parser.
+- Hidden source labels are category-safe hashed labels in generated output. A
+  public/demo claim catalog can promote the source claim level, but labels are
+  still safety-normalized.
+- Unsafe file paths become missing-provenance gaps; raw SQL/config/credential
+  values in metadata are rejected with sanitized diagnostics.
 
 ## Follow-Ups
 
-- Decide whether shared vault/evidence-pack validators should move to a common
-  reporting safety package before implementation.
-- Confirm compatible report JSON schemas for route-flow, release-review,
-  combined dependency report, vault graph, and evidence packs before writing
-  readers.
+- Expand compatible report readers to row-level chunks for every report section
+  after each report schema exposes stable row/finding IDs for the requested
+  family.
+- Share more generated-file and redaction helpers with vault export once both
+  exporters settle on a common utility shape.
+- Add public/demo fixture packs that exercise source-claim promotion across
+  combined report, vault, and evidence-pack inputs together.
