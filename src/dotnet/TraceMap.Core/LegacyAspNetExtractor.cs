@@ -238,6 +238,11 @@ public static partial class LegacyAspNetExtractor
             facts.Add(CreateGap(manifest, item.RelativePath, 1, RuleIds.LegacyAspNetConfig, $"ConfigXml{ex.FailureKind}", "Unable to parse checked-in ASP.NET config with the safe XML parser.", null));
             return;
         }
+        catch (Exception ex) when (IsXmlIoException(ex))
+        {
+            facts.Add(CreateGap(manifest, item.RelativePath, 1, RuleIds.LegacyAspNetConfig, "ConfigXmlIoFailure", "Unable to read checked-in ASP.NET config for safe XML parsing.", null));
+            return;
+        }
 
         var elements = document.Descendants().Where(element => IsConfigCandidate(element)).OrderBy(LineNumber).ThenBy(element => element.Name.LocalName, StringComparer.Ordinal).ToArray();
         foreach (var element in elements)
@@ -278,6 +283,11 @@ public static partial class LegacyAspNetExtractor
         catch (SafeXmlException ex)
         {
             facts.Add(CreateGap(manifest, item.RelativePath, 1, RuleIds.LegacyAspNetNavigation, $"SiteMapXml{ex.FailureKind}", "Unable to parse checked-in sitemap with the safe XML parser.", null));
+            return;
+        }
+        catch (Exception ex) when (IsXmlIoException(ex))
+        {
+            facts.Add(CreateGap(manifest, item.RelativePath, 1, RuleIds.LegacyAspNetNavigation, "SiteMapXmlIoFailure", "Unable to read checked-in sitemap for safe XML parsing.", null));
             return;
         }
 
@@ -1110,6 +1120,11 @@ public static partial class LegacyAspNetExtractor
     private static bool LooksSecretLike(string value)
     {
         return SecretLikeRegex().IsMatch(value);
+    }
+
+    private static bool IsXmlIoException(Exception ex)
+    {
+        return ex is IOException or UnauthorizedAccessException;
     }
 
     private static bool IsHandlerInterfaceOrFactory(string value)

@@ -157,6 +157,30 @@ public sealed class LegacyAspNetExtractorTests
     }
 
     [Fact]
+    public void Extract_emits_gaps_when_config_or_sitemap_xml_cannot_be_read()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var inventory = new[]
+        {
+            new FileInventoryItem("web.config", "Config", 0),
+            new FileInventoryItem("Web.sitemap", "AspNetSiteMap", 0)
+        };
+
+        var facts = LegacyAspNetExtractor.Extract(repo, TestManifest(), inventory, Array.Empty<CodeFact>());
+
+        Assert.Contains(facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetConfig
+            && fact.Properties.GetValueOrDefault("gapKind") == "ConfigXmlIoFailure");
+        Assert.Contains(facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetNavigation
+            && fact.Properties.GetValueOrDefault("gapKind") == "SiteMapXmlIoFailure");
+    }
+
+    [Fact]
     public void Scan_does_not_emit_handler_fact_for_malformed_ashx_directive()
     {
         using var temp = new TempDirectory();
@@ -481,5 +505,23 @@ public sealed class LegacyAspNetExtractorTests
     private static string SerializeFacts(IEnumerable<CodeFact> facts)
     {
         return JsonSerializer.Serialize(facts, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static ScanManifest TestManifest()
+    {
+        return new ScanManifest(
+            "scan-test",
+            "synthetic",
+            null,
+            "main",
+            "abc123",
+            "test/1.0.0",
+            DateTimeOffset.UnixEpoch,
+            "Level0SyntaxFallback",
+            "Succeeded",
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>());
     }
 }
