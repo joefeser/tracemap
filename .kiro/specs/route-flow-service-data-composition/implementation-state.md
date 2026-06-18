@@ -101,6 +101,10 @@ implements the first suggested PR boundary:
 - Unsupported fact-symbol rows attached to the selected route-flow path now emit
   a scoped projection gap even when other fact-symbol rows on that path are
   projected.
+- After the fresh Codex PR review on the updated head, removed
+  `facts.target_symbol` as a fact-symbol projection join key because it can be a
+  data target rather than a code symbol; added a regression fixture for that
+  false-attachment shape.
 - Hashed dependency-surface `tableName`, `columnNames`, and `configKey`
   metadata in route-flow output and added regression assertions for those
   fields.
@@ -143,6 +147,12 @@ implements the first suggested PR boundary:
   `dotnet test src/dotnet/TraceMap.sln` passed with 439 tests;
   `git diff --check` passed after whitespace cleanup;
   `./scripts/check-private-paths.sh` passed.
+- Fresh Codex review on the updated head found one remaining false-attachment
+  risk around matching `facts.target_symbol` as though it were always a code
+  symbol. Patched and validated with focused route-flow tests; final full
+  validation passed: focused route-flow tests, full `dotnet test` with 439 tests,
+  `git diff --check`, private path guard, checked-in combined paths/reverse
+  smoke, and direct route-flow CLI smoke.
 - Ran the checked-in combined path/reverse smoke via
   `./scripts/smoke-combined-paths.sh <tmp>` after installing local TypeScript
   dependencies with `npm --prefix src/typescript ci`, then ran a direct
