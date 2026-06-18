@@ -31,6 +31,9 @@ export const forbiddenStaticVsRuntimePositioning =
 const forbiddenOperationalPositioning =
   /\bTraceMap\b[^.]{0,80}\b(?:ships|collects|ingests|provides|runs|includes|offers|has)\b[^.]{0,80}\b(?:runtime agent|telemetry ingestion|live dashboard|incident automation)\b/i;
 
+const forbiddenAffirmativeAiPositioning =
+  /\bTraceMap\b[^.]{0,80}\b(?:performs|provides|uses|runs|offers|adds|includes)\b[^.]{0,80}\b(?:AI impact analysis|LLM analysis|prompt-based classification|embedding search|vector database analysis)\b/i;
+
 const requiredText = [
   "Public claim level: concept",
   "No public conclusion without evidence",
@@ -210,6 +213,10 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
   }
 
   if (forbiddenOperationalPositioning.test(positioningText)) {
+    errors.push("Static vs runtime page contains forbidden runtime or AI/LLM positioning.");
+  }
+
+  if (forbiddenAffirmativeAiPositioning.test(positioningText)) {
     errors.push("Static vs runtime page contains forbidden runtime or AI/LLM positioning.");
   }
 
