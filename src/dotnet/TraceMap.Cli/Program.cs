@@ -41,6 +41,8 @@ public static class TraceMapCommand
                 "endpoints" => EndpointsHelp(),
                 "combine" => CombineHelp(),
                 "paths" => PathsHelp(),
+                "route-flow" => RouteFlowHelp(),
+                "property-flow" => PropertyFlowHelp(),
                 "diff" => DiffHelp(),
                 "snapshot-diff" => SnapshotDiffHelp(),
                 "impact" => ImpactHelp(),
@@ -48,12 +50,14 @@ public static class TraceMapCommand
                 "release-review" => ReleaseReviewHelp(),
                 "portfolio" => PortfolioHelp(),
                 "package-impact" => PackageImpactHelp(),
+                "vault" => VaultHelp(),
+                "docs-export" => DocsExportHelp(),
                 "contract-diff" => ContractDiffHelp(),
                 "baseline" => BaselineHelp(),
                 "evidence-pack" => EvidencePackHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
         }
 
         try
@@ -69,6 +73,8 @@ public static class TraceMapCommand
                 "endpoints" => await RunEndpointsAsync(rest, output, error, cancellationToken),
                 "combine" => await RunCombineAsync(rest, output, error, cancellationToken),
                 "paths" => await RunPathsAsync(rest, output, error, cancellationToken),
+                "route-flow" => await RunRouteFlowAsync(rest, output, error, cancellationToken),
+                "property-flow" => await RunPropertyFlowAsync(rest, output, error, cancellationToken),
                 "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
                 "snapshot-diff" => await RunSnapshotDiffAsync(rest, output, error, cancellationToken),
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
@@ -76,6 +82,8 @@ public static class TraceMapCommand
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
                 "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
+                "vault" => await RunVaultAsync(rest, output, error, cancellationToken),
+                "docs-export" => await RunDocsExportAsync(rest, output, error, cancellationToken),
                 "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
                 "baseline" => await RunBaselineAsync(rest, output, error, cancellationToken),
                 "evidence-pack" => await RunEvidencePackAsync(rest, output, error, cancellationToken),
@@ -299,6 +307,118 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Graph edges: {result.Report.Summary.GraphEdgeCount}");
         await output.WriteLineAsync($"Paths: {result.Report.Summary.PathCount}");
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return 0;
+    }
+
+    private static async Task<int> RunRouteFlowAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: route-flow requires --index <combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: route-flow requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: route-flow --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(
+            new CombinedRouteFlowOptions(
+                indexPath,
+                outputPath,
+                format,
+                values.GetValueOrDefault("--route"),
+                values.GetValueOrDefault("--client-call"),
+                values.GetValueOrDefault("--from-endpoint"),
+                values.GetValueOrDefault("--from-webforms-event"),
+                values.GetValueOrDefault("--from-symbol"),
+                values.GetValueOrDefault("--from-source"),
+                values.GetValueOrDefault("--to-surface"),
+                values.GetValueOrDefault("--surface-name"),
+                values.GetValueOrDefault("--classification"),
+                ParsePositiveInt(values, "--max-depth", 8),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-logic-rows", 200),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                values.HasFlag("--exit-code")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap route-flow completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Classification: {result.Report.Summary.Classification}");
+        await output.WriteLineAsync($"Entry evidence: {result.Report.Summary.EntryEvidenceCount}");
+        await output.WriteLineAsync($"Static flow rows: {result.Report.Summary.FlowRowCount}");
+        await output.WriteLineAsync($"Business/data logic rows: {result.Report.Summary.LogicRowCount}");
+        await output.WriteLineAsync($"Dependency surfaces: {result.Report.Summary.DependencySurfaceCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return values.HasFlag("--exit-code") && result.ExitCodeWouldBeNonZero ? 1 : 0;
+    }
+
+    private static async Task<int> RunPropertyFlowAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: property-flow requires --index <combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--property", out var propertySelector) || string.IsNullOrWhiteSpace(propertySelector))
+        {
+            await error.WriteLineAsync("error: property-flow requires --property <selector>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: property-flow requires --out <path>.");
+            return 1;
+        }
+
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("md", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: property-flow --format must be markdown or json.");
+            return 1;
+        }
+
+        var result = await PropertyFlowReporter.WriteAsync(
+            new PropertyFlowOptions(
+                indexPath,
+                outputPath,
+                propertySelector,
+                format,
+                values.GetValueOrDefault("--source"),
+                values.GetValueOrDefault("--framework") ?? "any",
+                ParsePositiveInt(values, "--max-roots", 25),
+                ParsePositiveInt(values, "--max-depth", 10),
+                ParsePositiveInt(values, "--max-paths", 100),
+                ParsePositiveInt(values, "--max-frontier", 10000),
+                ParsePositiveInt(values, "--max-inventory", 1000),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap property-flow completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Selected roots: {result.Report.Summary.SelectedRootCount} of {result.Report.Summary.TotalCandidateCount}");
+        await output.WriteLineAsync($"Paths: {result.Report.Summary.PathCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        await output.WriteLineAsync($"Truncated: {result.Report.Summary.Truncated}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return 0;
     }
@@ -791,6 +911,125 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.HasFindings ? 1 : 0;
+    }
+
+    private static async Task<int> RunVaultAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0 || IsHelp(args[0]))
+        {
+            await output.WriteLineAsync(VaultHelp());
+            return 0;
+        }
+
+        var subcommand = args[0].ToLowerInvariant();
+        if (subcommand != "export")
+        {
+            await error.WriteLineAsync("error: vault supports only the export subcommand.");
+            return 1;
+        }
+
+        var values = ParseOptions(args.Skip(1).ToArray(), "--dry-run", "--force");
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: vault export requires --out <vault-output>.");
+            return 1;
+        }
+
+        var format = values.GetMany("--format").Count == 0
+            ? "markdown,json"
+            : string.Join(',', values.GetMany("--format"));
+        var result = await VaultExporter.ExportAsync(
+            new VaultExportOptions(
+                values.GetValueOrDefault("--combined-index"),
+                outputPath,
+                values.GetMany("--paths-report"),
+                values.GetMany("--reverse-report"),
+                values.GetValueOrDefault("--source-claim-catalog"),
+                values.GetValueOrDefault("--minimum-claim-level"),
+                values.GetValueOrDefault("--date"),
+                format,
+                values.HasFlag("--dry-run"),
+                values.HasFlag("--force")),
+            cancellationToken);
+
+        await output.WriteLineAsync(values.HasFlag("--dry-run")
+            ? $"TraceMap vault export dry run: {Path.GetFullPath(outputPath)}"
+            : $"TraceMap vault export completed: {Path.GetFullPath(outputPath)}");
+        await output.WriteLineAsync($"Classification: {result.Graph.Classification}");
+        await output.WriteLineAsync($"Nodes: {result.Graph.Nodes.Count}");
+        await output.WriteLineAsync($"Edges: {result.Graph.Edges.Count}");
+        await output.WriteLineAsync($"Gaps: {result.Graph.Gaps.Count}");
+        await output.WriteLineAsync($"Files: {result.PlannedFiles.Count}");
+        return 0;
+    }
+
+    private static async Task<int> RunDocsExportAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0 || IsHelp(args[0]))
+        {
+            await output.WriteLineAsync(DocsExportHelp());
+            return 0;
+        }
+
+        if (args.Count(arg => arg == "--format") > 1)
+        {
+            await error.WriteLineAsync("error: docs-export accepts one --format value.");
+            return 1;
+        }
+
+        if (OptionHasEmptyRawValue(args, "--format"))
+        {
+            await error.WriteLineAsync("error: docs-export --format must contain markdown, jsonl, or markdown,jsonl.");
+            return 1;
+        }
+
+        if (OptionHasEmptyRawValue(args, "--families"))
+        {
+            await error.WriteLineAsync("error: docs-export --families must contain one or more closed family tokens.");
+            return 1;
+        }
+
+        var values = ParseOptions(args, "--dry-run", "--force");
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: docs-export requires --index <index-or-combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: docs-export requires --out <path>.");
+            return 1;
+        }
+
+        var result = await EvidenceDocsExporter.ExportAsync(
+            new EvidenceDocsExportOptions(
+                indexPath,
+                outputPath,
+                values.GetMany("--route-flow-report"),
+                values.GetMany("--paths-report"),
+                values.GetMany("--reverse-report"),
+                values.GetMany("--combined-report"),
+                values.GetMany("--release-review-report"),
+                values.GetMany("--vault-graph"),
+                values.GetMany("--evidence-pack"),
+                values.GetValueOrDefault("--source-claim-catalog"),
+                values.GetValueOrDefault("--minimum-claim-level"),
+                values.GetMany("--families").Count == 0 ? null : string.Join(',', values.GetMany("--families")),
+                values.GetMany("--format").Count == 0 ? null : string.Join(',', values.GetMany("--format")),
+                values.GetValueOrDefault("--date"),
+                values.HasFlag("--dry-run"),
+                values.HasFlag("--force")),
+            cancellationToken);
+
+        await output.WriteLineAsync(values.HasFlag("--dry-run")
+            ? $"TraceMap docs-export dry run: {Path.GetFullPath(outputPath)}"
+            : $"TraceMap docs-export completed: {Path.GetFullPath(outputPath)}");
+        await output.WriteLineAsync($"Claim level: {result.Manifest.ClaimLevel}");
+        await output.WriteLineAsync($"Chunks: {result.Chunks.Count}");
+        await output.WriteLineAsync($"Gaps: {result.Manifest.Gaps.Count}");
+        await output.WriteLineAsync($"Files: {result.PlannedFiles.Count}");
+        return 0;
     }
 
     private static async Task<int> RunBaselineAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -1353,6 +1592,19 @@ public static class TraceMapCommand
         return arg is "-h" or "--help" or "help";
     }
 
+    private static bool OptionHasEmptyRawValue(string[] args, string option)
+    {
+        for (var index = 0; index < args.Length; index++)
+        {
+            if (args[index] == option && (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]) || args[index + 1].StartsWith("--", StringComparison.Ordinal)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private sealed class ParsedOptions(
         Dictionary<string, List<string>> values,
         HashSet<string> flags)
@@ -1420,6 +1672,8 @@ public static class TraceMapCommand
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
               tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
+              tracemap vault export --combined-index <combined.sqlite> --out <vault-output>
+              tracemap docs-export --index <index-or-combined.sqlite> --out <docs-output>
               tracemap baseline create --scan-output <path> --label <neutral-slug> --purpose <neutral-slug> --out <path>
               tracemap evidence-pack create --input <path> --input-kind <kind> --label <neutral-slug> --purpose <neutral-slug> --claim-level <level> --date <yyyy-MM> --out <path>
 
@@ -1433,6 +1687,7 @@ public static class TraceMapCommand
               endpoints Align client HTTP calls with server HTTP route bindings.
               combine   Combine multiple TraceMap indexes into one queryable SQLite database.
               paths     Trace deterministic dependency paths through a combined index.
+              route-flow Report static route-centered call flow evidence from a combined index.
               diff      Compare two combined indexes and report static evidence changes.
               snapshot-diff Compare two TraceMap snapshots by source, coverage, and extractor evidence.
               contract-diff Compare API/DTO static contract evidence between two indexes.
@@ -1441,6 +1696,8 @@ public static class TraceMapCommand
               release-review Assemble a deterministic before/after release evidence packet.
               portfolio Summarize dependency evidence across many TraceMap indexes.
               package-impact Report static package upgrade evidence from indexed package declarations.
+              vault    Export deterministic Markdown evidence notes and graph.json from existing TraceMap evidence.
+              docs-export Generate deterministic Markdown and JSONL evidence docs for external ingestion.
               baseline Create, validate, and compare redacted legacy baseline summaries.
               evidence-pack Create, validate, and promote redacted legacy evidence packs.
             """;
@@ -1525,6 +1782,87 @@ public static class TraceMapCommand
 
             Outputs:
               paths-report.md and/or paths-report.json
+            """;
+    }
+
+    private static string RouteFlowHelp()
+    {
+        return """
+            Usage:
+              tracemap route-flow --index <combined.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --index <path>             Combined TraceMap index from tracemap combine.
+              --out <path>               Output directory or file path.
+
+            Selectors:
+              --route "<M> <P>"          Select server HTTP route evidence.
+              --client-call "<M> <P>"    Select client HTTP call evidence.
+              --from-endpoint "<M> <P>"  Reuse paths endpoint selector grammar.
+              --from-webforms-event <id> Reuse paths WebForms root selector grammar.
+              --from-symbol <symbol>     Reuse paths symbol selector grammar.
+              --from-source <label>      Constrain entry evidence to a source label.
+              --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
+                                          package-config, wcf-operation, remoting endpoint/object/API,
+                                          legacy-data, or dependency-surface.
+              --surface-name <text>      Exact name, or leading/trailing * wildcard.
+              --classification <value>   StrongStaticRouteFlow, ProbableStaticRouteFlow,
+                                          NeedsReviewStaticRouteFlow, NoRouteFlowEvidence,
+                                          or UnknownAnalysisGap.
+
+            Bounds:
+              --max-depth <n>            Default: 8.
+              --max-paths <n>            Default: 100.
+              --max-frontier <n>         Default: 10000.
+              --max-logic-rows <n>       Default: 200.
+              --max-gaps <n>             Default: 1000.
+              --exit-code                Return 1 for review, no-evidence, unknown, or blocking-gap results.
+
+            Outputs:
+              route-flow-report.md and/or route-flow-report.json
+
+            Notes:
+              Route-flow reports are static evidence only. They do not prove runtime execution, traffic, auth, dependency-injection target selection, SQL execution, or production use.
+            """;
+    }
+
+    private static string PropertyFlowHelp()
+    {
+        return """
+            Usage:
+              tracemap property-flow --index <combined.sqlite> --property <selector> --out <path> [--format <markdown|json>]
+
+            Required:
+              --index <path>             Combined TraceMap index from tracemap combine.
+              --property <selector>      field:, control:, binding:, model:, dto:, symbol:, or fact: selector.
+              --out <path>               Output directory or file path.
+
+            Selectors:
+              field:<name>               UI field or safe visible field/control name.
+              control:<name>             Form control name such as formControlName or HTML name.
+              binding:<name>             Template binding expression or property path.
+              model:<type>.<property>    Model or view-model property evidence.
+              dto:<type>.<property>      DTO/serializer contract property evidence.
+              symbol:<id-or-display>     Source-local symbol identity or safe display name.
+              fact:<combinedFactId>      Exact combined_facts.combined_fact_id.
+
+            Filters:
+              --source <label>           Case-insensitive exact source label filter.
+              --framework <value>        angular, razor, or any. Default: any.
+
+            Bounds:
+              --max-roots <n>            Default: 25.
+              --max-depth <n>            Default: 10.
+              --max-paths <n>            Default: 100.
+              --max-frontier <n>         Default: 10000.
+              --max-inventory <n>        Default: 1000.
+              --max-gaps <n>             Default: 1000.
+
+            Outputs:
+              property-flow-report.md and/or property-flow-report.json
+
+            Notes:
+              Property-flow reports are static evidence only. They do not prove runtime UI visibility, submitted values, branch feasibility, auth, dependency-injection target selection, SQL execution, or production use.
             """;
     }
 
@@ -1788,6 +2126,70 @@ public static class TraceMapCommand
 
             Outputs:
               package-impact-report.md and/or package-impact-report.json
+            """;
+    }
+
+    private static string VaultHelp()
+    {
+        return """
+            Usage:
+              tracemap vault export --combined-index <combined.sqlite> --out <vault-output> [--format <markdown|json|markdown,json>]
+              tracemap vault export --paths-report <paths-report.json> --out <vault-output>
+              tracemap vault export --reverse-report <reverse-report.json> --out <vault-output>
+
+            Inputs:
+              --combined-index <path>          Existing combined TraceMap SQLite index. Read-only.
+              --paths-report <path>            Existing paths-report.json. Repeatable.
+              --reverse-report <path>          Existing reverse-report.json. Repeatable.
+              --source-claim-catalog <path>    source-claim-catalog.v1 JSON for demo/public promotion.
+
+            Options:
+              --out <path>                     Output vault directory.
+              --minimum-claim-level <value>    hidden, demo-safe, or public-safe. Default: hidden.
+              --date <yyyy-MM>                 Required for demo-safe and public-safe deterministic output.
+              --format <value>                 markdown, json, or markdown,json. Default: markdown,json.
+              --dry-run                        Validate and list planned files without writing.
+              --force                          Replace stale generated files after validation.
+
+            Outputs:
+              graph.json, README.md, index.md, and deterministic Markdown notes.
+
+            Notes:
+              The vault is a local navigation aid over static evidence. It does not prove runtime behavior, deployment, release safety, vulnerabilities, production traffic, or impact.
+            """;
+    }
+
+    private static string DocsExportHelp()
+    {
+        return """
+            Usage:
+              tracemap docs-export --index <index-or-combined.sqlite> --out <docs-output> [--format <markdown|jsonl|markdown,jsonl>]
+
+            Inputs:
+              --index <path>                    Existing TraceMap scan or combined SQLite index. Read-only.
+              --route-flow-report <path>        Existing route-flow JSON report. Repeatable.
+              --paths-report <path>             Existing paths-report JSON. Repeatable.
+              --reverse-report <path>           Existing reverse-report JSON. Repeatable.
+              --combined-report <path>          Existing combined dependency report JSON. Repeatable.
+              --release-review-report <path>    Existing release-review JSON. Repeatable.
+              --vault-graph <path>              Existing vault graph JSON. Schema gaps are emitted unless compatible.
+              --evidence-pack <path>            Existing evidence-pack JSON. Repeatable.
+              --source-claim-catalog <path>     source-claim-catalog.v1 JSON for demo/public promotion.
+
+            Options:
+              --out <path>                      Output docs directory.
+              --minimum-claim-level <value>     hidden, demo-safe, or public-safe. Default: hidden.
+              --families <value>                Comma-separated closed family list.
+              --format <value>                  markdown, jsonl, or markdown,jsonl. Default: markdown,jsonl.
+              --date <yyyy-MM>                  Required for demo-safe and public-safe deterministic output.
+              --dry-run                         Validate and list planned files without writing.
+              --force                           Replace stale generated files after validation.
+
+            Outputs:
+              manifest.json, chunks.jsonl, README.md, index.md, and chunk Markdown files depending on --format.
+
+            Notes:
+              Docs export emits deterministic evidence documents for external systems. TraceMap does not call LLMs, generate embeddings, write vector databases, prompt-classify claims, rank retrieval, or answer questions.
             """;
     }
 

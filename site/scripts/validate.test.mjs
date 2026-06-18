@@ -4,10 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import {
+  adoptionPartialAnalysisSentence,
+  adoptionPlaybookRoute
+} from "./adoption-playbook.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
+import { managerFaqRoute } from "./manager-faq.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { validateDist } from "./validate.mjs";
@@ -101,8 +106,10 @@ async function createDistFixture({
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
   sitemapUrls = [
     ...deployAuditRequiredRoutes,
+    adoptionPlaybookRoute,
     incidentCallRoute,
     managerBriefRoute,
+    managerFaqRoute,
     reviewRoomRoute,
     staticTriageRoute
   ].map((route) => `https://tracemap.tools${route}`)
@@ -112,6 +119,7 @@ async function createDistFixture({
 
   const fixtureRoutes = new Set([
     ...deployAuditRequiredRoutes,
+    adoptionPlaybookRoute,
     "/blog/",
     "/capabilities/",
     "/demo/start-here/",
@@ -121,6 +129,7 @@ async function createDistFixture({
     "/examples/",
     incidentCallRoute,
     managerBriefRoute,
+    managerFaqRoute,
     "/manager-packet/",
     reviewRoomRoute,
     staticTriageRoute,
@@ -140,15 +149,19 @@ async function createDistFixture({
       join(dist, path, "index.html"),
       route === "/deploy-audit/"
         ? deployAuditPage()
-        : route === incidentCallRoute
-          ? incidentCallPage()
+        : route === adoptionPlaybookRoute
+          ? adoptionPage()
+          : route === incidentCallRoute
+            ? incidentCallPage()
           : route === managerBriefRoute
             ? managerBriefPage()
-            : route === reviewRoomRoute
-              ? reviewRoomPage()
-              : route === staticTriageRoute
-                ? staticTriagePage()
-                : page(`<p>${path}</p>`),
+            : route === managerFaqRoute
+              ? managerFaqPage()
+              : route === reviewRoomRoute
+                ? reviewRoomPage()
+                : route === staticTriageRoute
+                  ? staticTriagePage()
+                  : page(`<p>${path}</p>`),
       "utf8"
     );
   }
@@ -177,6 +190,17 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: ["No runtime behavior or production usage proof."]
       })),
       {
+        path: adoptionPlaybookRoute,
+        title: "Adoption Playbook",
+        summary: "Fixture adoption playbook route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture adoption limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
         path: incidentCallRoute,
         title: "Incident Call",
         summary: "Fixture incident call route for validation.",
@@ -196,6 +220,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "use-case",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture manager brief limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: managerFaqRoute,
+        title: "Manager FAQ",
+        summary: "Fixture manager FAQ route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture manager FAQ limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -277,6 +312,29 @@ function incidentCallPage() {
   `);
 }
 
+function adoptionPage() {
+  const filler = Array.from({ length: 95 }, (_, index) => `adoption evidence workflow boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>not a product promise or replacement for engineering judgment</p>
+    <p>start with the public demo</p>
+    <p>repository owners runtime owners test owners documentation owners future extractor work</p>
+    <p>${adoptionPartialAnalysisSentence}</p>
+    <p>The playbook is not runtime proof or release approval</p>
+    <meta property="og:type" content="article">
+    <a href="/demo/">Public demo</a>
+    <a href="/demo/result/">Demo result</a>
+    <a href="/docs/">Docs</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/review-room/">Review room</a>
+    <a href="/static-triage/">Static triage</a>
+    <p>${filler}</p>
+  `);
+}
+
 function managerBriefPage() {
   const filler = Array.from({ length: 90 }, (_, index) => `evidence packet review boundary ${index}`).join(" ");
   return page(`
@@ -290,6 +348,34 @@ function managerBriefPage() {
     <a href="/limitations/">Limitations</a>
     <a href="/demo/">Demo</a>
     <a href="/docs/">Docs</a>
+    <p>${filler}</p>
+  `);
+}
+
+function managerFaqPage() {
+  const filler = Array.from({ length: 100 }, (_, index) => `manager faq evidence boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <h3>What can TraceMap say from static evidence?</h3>
+    <h3>What can it not prove by itself?</h3>
+    <h3>Does TraceMap replace telemetry or tests?</h3>
+    <h3>What do rule IDs mean for a manager?</h3>
+    <h3>What are evidence tiers?</h3>
+    <h3>What does partial or reduced coverage mean?</h3>
+    <h3>How should managers use TraceMap in review?</h3>
+    <h3>How should it support prioritization?</h3>
+    <h3>How should it help incident follow-up?</h3>
+    <h3>What should be escalated?</h3>
+    <h3>Why no model-driven scanner claim?</h3>
+    <h3>What is a proof path?</h3>
+    <meta property="og:type" content="article">
+    <a href="/manager-brief/">Manager brief</a>
+    <a href="/manager-packet/">Manager packet</a>
+    <a href="/review-room/">Review room</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/validation/">Validation</a>
+    <a href="/proof-paths/">Proof paths</a>
     <p>${filler}</p>
   `);
 }

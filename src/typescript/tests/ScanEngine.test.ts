@@ -394,5 +394,10 @@ async function writeMiniRepo(repo: string): Promise<void> {
 function initGitRepo(repo: string): void {
   expect(spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
   expect(spawnSync("git", ["add", "."], { cwd: repo, encoding: "utf8" }).status).toBe(0);
-  expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "initial"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z",
+    GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z"
+  };
+  expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "initial"], { cwd: repo, env, encoding: "utf8" }).status).toBe(0);
 }

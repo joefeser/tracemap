@@ -2,7 +2,7 @@
 
 Public claim level: demo
 Status: completed
-Readiness: ready-for-implementation
+Readiness: implemented
 
 - [x] 1. Add the static discovery entry point. Requirements: 1, 3, 4.
   - [x] Add `llms.txt` to the published site using existing static site
