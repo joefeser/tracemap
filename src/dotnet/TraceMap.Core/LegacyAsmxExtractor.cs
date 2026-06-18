@@ -136,6 +136,10 @@ public static partial class LegacyAsmxExtractor
             {
                 var typeName = GetTypeName(type);
                 var serviceAttributes = MatchedAttributeNames(type.AttributeLists, ServiceAttributeNames).ToArray();
+                var hasAsmxHost = facts.Any(fact =>
+                    fact.FactType == FactTypes.AsmxHostDeclared
+                    && fact.TargetSymbol?.Equals(typeName, StringComparison.Ordinal) == true);
+                var isAsmxServiceContext = serviceAttributes.Length > 0 || hasAsmxHost;
                 if (serviceAttributes.Length > 0)
                 {
                     facts.Add(FactFactory.Create(
@@ -184,7 +188,7 @@ public static partial class LegacyAsmxExtractor
                 {
                     var methodName = method.Identifier.ValueText;
                     var methodSymbol = $"{typeName}.{methodName}";
-                    if (HasAttribute(method.AttributeLists, "WebMethod"))
+                    if (isAsmxServiceContext && HasAttribute(method.AttributeLists, "WebMethod"))
                     {
                         facts.Add(FactFactory.Create(
                             manifest,

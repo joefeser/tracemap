@@ -1,6 +1,6 @@
 # Legacy ASP.NET Route And Navigation Discovery Implementation State
 
-Status: not-started
+Status: implemented
 
 ## Spec Metadata
 
@@ -8,7 +8,8 @@ Status: not-started
 - Spec path: `.kiro/specs/legacy-aspnet-route-navigation-discovery/`
 - Current scope: spec-only branch for requirements, design, implementation
   tasks, and handoff notes.
-- Product code status: not implemented in this branch.
+- Implementation branch: `codex/implement-legacy-aspnet-route-navigation-discovery`
+- Product code status: implemented in this branch.
 
 ## Scope Decisions
 
@@ -27,6 +28,20 @@ Status: not-started
   secrets, or private sample identifiers in committed artifacts.
 - Rule catalog edits are intentionally deferred to implementation slices that
   first emit the corresponding facts or report rows.
+- Rule catalog entries now exist for `legacy.aspnet.surface.v1`,
+  `legacy.aspnet.route.v1`, `legacy.aspnet.config.v1`,
+  `legacy.aspnet.handler.v1`, `legacy.aspnet.page-method.v1`, and
+  `legacy.aspnet.navigation.v1`.
+- Scanner fact constants now include `AspNetSurfaceDeclared`,
+  `AspNetRouteDeclared`, `AspNetConfigSurfaceDeclared`,
+  `AspNetHandlerDeclared`, `AspNetPageMethodDeclared`,
+  `AspNetNavigationReferenceDeclared`, and
+  `AspNetNavigationEdgeDeclared`.
+- File inventory now recognizes `.ashx`, `Global.asax`/`.asax`, and
+  `.sitemap` as ASP.NET legacy inputs.
+- Route, config, and navigation unsafe values use the canonical
+  `legacy.aspnet.<family>|<propertyRole>|<normalizedValue>` hash input and a
+  32-character lowercase hex stored value. Credential-like values are omitted.
 
 ## Flow Rule Decision
 
@@ -37,6 +52,26 @@ Status: not-started
   only if an implementation slice determines existing flow rules cannot express
   the needed route/page/navigation semantics safely. That decision must be
   recorded here before the implementation emits any row that cites the new rule.
+- Implementation decision: no `legacy.aspnet.flow.v1` rule or
+  `AspNetSurfaceFlowProjected` fact was added. New `AspNet*` facts are
+  preserved in `facts.ndjson`, `index.sqlite`, generic combined facts, report
+  counts, and docs/vault-style generic fact export surfaces. Existing path and
+  reverse selectors were not given new ASP.NET-specific roots because their
+  current surface vocabulary cannot represent route/page/navigation roots
+  without implying runtime reachability. The scanner instead emits static
+  navigation edges only when non-hash checked-in page/route/config/handler
+  evidence supports the link.
+- Route tier decision: this slice emits supported route registrations as
+  conservative `Tier3SyntaxOrTextual` syntax evidence. `Tier1Semantic`
+  compiler-resolved route evidence and `Tier2Structural` route-collection
+  scoping are deferred until legacy extractors can consume live semantic model
+  route-call resolution without reshaping the scanner pipeline.
+- Combined/index compatibility decision: no SQLite schema version bump was
+  required because `AspNet*` facts use the existing generic `facts` table and
+  JSON property payload. Older indexes that predate `legacy-aspnet/0.1.0` will
+  naturally have zero `AspNet*` rows; commands that need ASP.NET-specific roots
+  should treat that as unavailable evidence rather than absence until a future
+  selector/report slice adds explicit availability gaps.
 
 ## Review And Validation Notes
 
@@ -62,9 +97,107 @@ Status: not-started
 - `node scripts/kiro-review.mjs --self-test` passed.
 - Product build/test/smoke validation is intentionally deferred because this
   branch is spec-only and does not implement scanner or reducer product code.
+- Focused ASP.NET route/navigation tests passed:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests`.
+- Product build/test/private-path/diff validation passed:
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (473 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+- Local-only CLI smoke passed against a synthetic temporary classic ASP.NET
+  fixture. It produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`, and emitted `AspNetRouteDeclared`,
+  `AspNetConfigSurfaceDeclared`, `AspNetHandlerDeclared`,
+  `AspNetPageMethodDeclared`, and `AspNetNavigationReferenceDeclared` facts.
+- Pinned public route/navigation smoke is explicitly deferred because no
+  reviewed public route/navigation smoke baseline exists yet; `docs/VALIDATION.md`
+  now documents the focused synthetic test command and local-only smoke rules.
+- PR-loop follow-up validation passed after patching review findings for
+  malformed `.ashx` directives, commented markup navigation, and local C#
+  variables named like navigation properties:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (12 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (476 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
+- PR-loop Qodo follow-up validation passed after patching XML I/O failures in
+  config/sitemap extraction to emit deterministic `AnalysisGap` facts:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (13 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (477 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
+- Fresh Codex review follow-up validation passed after patching code-behind
+  relative navigation target resolution and `urlMappings` descriptor matching
+  for navigation edges:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (17 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (481 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
+- Second fresh Codex review follow-up validation passed after scoping config
+  candidates to ASP.NET sections and suppressing duplicate PageMethod facts for
+  ASMX-owned service methods:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (19 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (483 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
+- Third fresh Codex review follow-up validation passed after tightening ASMX
+  PageMethod suppression to type+method identity so same-named PageMethods in
+  other types are preserved:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyAspNetExtractorTests` (20 tests)
+  - `dotnet build src/dotnet/TraceMap.sln`
+  - `dotnet test src/dotnet/TraceMap.sln` (484 tests)
+  - `./scripts/check-private-paths.sh`
+  - `git diff --check`
+  - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-legacy-aspnet-smoke`
 
 ## Kiro Review State
 
+- Implementation review completed on 2026-06-18:
+  - Sonnet `claude-sonnet-4.6`, session
+    `bf073695-736c-41e4-b56b-9489458f59d5`, reduced coverage because the
+    wrapper reported denied MCP/tool access.
+  - Required findings patched:
+    - leading-slash `CodeBehind`/navigation paths are now checked before
+      normalization so absolute paths are hashed instead of rendered as safe
+      descriptors;
+    - navigation edge tests now assert weakest-tier capping at
+      `Tier3SyntaxOrTextual`;
+    - PageMethod tests now assert `[WebMethod]` on a WebForms page is not
+      reclassified as `AsmxOperationDeclared` without ASMX host evidence.
+  - Non-blocking notes recorded: route semantic tiers are deferred, and generic
+    combined/index compatibility is documented above.
+- Re-review cycle 1 completed on 2026-06-18:
+  - Sonnet `claude-sonnet-4.6`, session
+    `bf9230f9-0bcb-45f6-b949-66f6bb7a0bd1`, full coverage.
+  - Required findings patched:
+    - `location path` values now use stricter config-location safety, hashing
+      route-template-shaped values such as `Reports/{year}`;
+    - sitemap nodes with no `url` attribute now emit
+      `SiteMapNodeMissingUrl` gaps;
+    - tests now prove navigation/config hash-only evidence does not synthesize
+      navigation edges.
+- Re-review cycle 2 completed on 2026-06-18:
+  - Sonnet `claude-sonnet-4.6`, session
+    `ae7718ab-ed3c-4d3f-b3b3-b015e433b392`, reduced coverage because the
+    wrapper reported denied MCP/tool access.
+  - Required findings patched after the final allowed Kiro cycle:
+    - removed unused `IsAspNetEvidenceFact`;
+    - added a test documenting the chosen secret-like navigation behavior:
+      emit a navigation-reference fact with `targetOmitted=secret-like`, no
+      target path/hash/symbol, no raw secret, and no edge;
+    - added class-level `[ScriptService]` evidence for classes without
+      per-method PageMethod attributes.
+  - No third Kiro review cycle was run because the spec caps implementation
+    re-review at two cycles. Post-final-review patches were validated locally
+    with focused tests, full solution build/test, private-path guard, diff
+    check, and local-only CLI smoke.
 - Initial Kiro spec reviews completed with full coverage on 2026-06-17:
   - Opus: `claude-opus-4.8`, session
     `e929e8d6-8b0a-4b78-9326-4fa9adeb77be`
@@ -118,14 +251,10 @@ Status: not-started
 
 ## Follow-Up Items
 
-- In implementation slice 1, add rule catalog entries for
-  `legacy.aspnet.surface.v1`, `legacy.aspnet.route.v1`, and any emitted route
-  gaps before facts or report rows ship.
-- If an implementation slice needs route/page/navigation path rows beyond
-  existing `legacy.flow.*` semantics, record that decision under
-  `Flow Rule Decision` before adding `legacy.aspnet.flow.v1`.
-- Add focused fixtures for `Global.asax`, `MapPageRoute`, `web.config`
-  handlers/modules/pages, `.ashx`, PageMethods, static navigation, ambiguous
-  navigation, and redaction.
-- Extend legacy smoke catalog only after checked-in fixtures or reviewed public
-  summaries exist.
+- Add a reviewed public-safe route/navigation smoke baseline before promoting
+  any public claims beyond checked-in synthetic fixtures.
+- Consider a future ASP.NET-specific flow selector/report slice only if path
+  and reverse models can represent route/page/navigation roots without implying
+  runtime reachability.
+- Add deeper semantic-symbol route resolution if the scanner exposes live
+  Roslyn semantic models to legacy extractors in a later architecture slice.

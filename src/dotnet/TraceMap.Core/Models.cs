@@ -203,6 +203,13 @@ public static class FactTypes
     public const string WebFormsHandlerResolved = nameof(WebFormsHandlerResolved);
     public const string WebFormsEventFlowProjected = nameof(WebFormsEventFlowProjected);
     public const string WebFormsLogicSignalDetected = nameof(WebFormsLogicSignalDetected);
+    public const string AspNetSurfaceDeclared = nameof(AspNetSurfaceDeclared);
+    public const string AspNetRouteDeclared = nameof(AspNetRouteDeclared);
+    public const string AspNetConfigSurfaceDeclared = nameof(AspNetConfigSurfaceDeclared);
+    public const string AspNetHandlerDeclared = nameof(AspNetHandlerDeclared);
+    public const string AspNetPageMethodDeclared = nameof(AspNetPageMethodDeclared);
+    public const string AspNetNavigationReferenceDeclared = nameof(AspNetNavigationReferenceDeclared);
+    public const string AspNetNavigationEdgeDeclared = nameof(AspNetNavigationEdgeDeclared);
     public const string LegacyDataMetadataDeclared = nameof(LegacyDataMetadataDeclared);
     public const string LegacyDataEntityDeclared = nameof(LegacyDataEntityDeclared);
     public const string LegacyDataStorageObjectDeclared = nameof(LegacyDataStorageObjectDeclared);
@@ -286,6 +293,12 @@ public static class RuleIds
     public const string LegacyWebFormsDesignerControl = "legacy.webforms.designer-control.v1";
     public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
+    public const string LegacyAspNetSurface = "legacy.aspnet.surface.v1";
+    public const string LegacyAspNetRoute = "legacy.aspnet.route.v1";
+    public const string LegacyAspNetConfig = "legacy.aspnet.config.v1";
+    public const string LegacyAspNetHandler = "legacy.aspnet.handler.v1";
+    public const string LegacyAspNetPageMethod = "legacy.aspnet.page-method.v1";
+    public const string LegacyAspNetNavigation = "legacy.aspnet.navigation.v1";
     public const string LegacyDataMetadataInventory = "legacy.data.metadata.inventory.v1";
     public const string LegacyDataDbml = "legacy.data.dbml.v1";
     public const string LegacyDataEdmx = "legacy.data.edmx.v1";
@@ -335,6 +348,7 @@ public static class ScannerVersions
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.1.0";
+    public const string LegacyAspNetExtractor = "legacy-aspnet/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
     public const string RazorBindingExtractor = "csharp-razor-binding/0.1.0";
