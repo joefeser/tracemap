@@ -52,6 +52,10 @@ Status: spec-ready
   gates, clarifying stable-key rules, adding binding-only acceptance criteria,
   and naming the required implementation tests. No third Kiro re-review was run
   because this loop is capped at two re-review cycles.
+- PR-loop Qodo findings were patched by standardizing message gaps on
+  `AnalysisGap`, replacing an undefined discriminator token with `ruleId`, and
+  pinning message hash fields to full 64-character lowercase hex SHA-256 for
+  persisted/stable-key use.
 - `git diff --check -- .kiro/specs/event-message-surfaces` passed.
 - `./scripts/check-private-paths.sh` passed.
 
