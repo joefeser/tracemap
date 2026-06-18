@@ -719,7 +719,7 @@ function staticVsRuntimePage() {
     <p>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, incident root cause, service ownership, production dependency understanding, test sufficiency, or complete product coverage.</p>
     <p>TraceMap does not replace logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.</p>
     <p>TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis.</p>
-    <p>TraceMap should not say a surface is impacted unless reducer-backed public-safe evidence supports that wording.</p>
+    <p>TraceMap should not use impact wording for a surface unless reducer-backed public-safe evidence supports that wording.</p>
     <a href="/docs/">Docs</a>
     <a href="/validation/">Validation</a>
     <a href="/limitations/">Limitations</a>

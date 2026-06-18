@@ -166,4 +166,5 @@ Medium or higher findings must be patched and re-reviewed where feasible before
 
 - Placement resolved in this implementation as standalone `/static-vs-runtime/`.
 - Focused validation was added and wired into the site validation workflow.
-- PR-loop review found two Gemini validator-hardening comments; both were patched with safer route metadata text handling, flexible impacted-boundary stripping, and regression tests.
+- PR-loop review found two Gemini validator-hardening comments; both were patched with safer route metadata text handling and regression tests.
+- PR-loop review then found two Qodo comments; both were patched by removing visible `impacted` wording from the public page and scanning decoded HTML/metadata for operational positioning.
