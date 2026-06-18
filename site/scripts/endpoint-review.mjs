@@ -238,6 +238,7 @@ function validateDiscoveryBoundary(routeEntry, errors) {
 async function validateEndpointReviewPage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
+  const decodedHtmlText = collapseWhitespace(decodedHtml);
   const pageText = normalizeRenderedText(html);
   const decodedText = normalizeRenderedText(decodedHtml);
   const unsanctionedHtml = removeSectionsById(decodedHtml, sanctionedSectionIds);
@@ -245,7 +246,7 @@ async function validateEndpointReviewPage({ pagePath, errors }) {
   const wordCount = countWords(pageText);
 
   for (const phrase of requiredText) {
-    const haystack = phrase.includes("<rule-id>") ? decodedHtml : pageText;
+    const haystack = phrase.includes("<rule-id>") ? decodedHtmlText : pageText;
     if (!haystack.includes(phrase)) {
       errors.push(withEvidence(`Endpoint review page is missing required text: ${phrase}`, pageArtifact));
     }
@@ -334,6 +335,10 @@ function hasOgTypeArticle(html) {
 
 function countWords(value) {
   return (value.match(/\b[\w'-]+\b/g) ?? []).length;
+}
+
+function collapseWhitespace(value) {
+  return String(value).replace(/\s+/g, " ");
 }
 
 function withEvidence(message, artifact) {
