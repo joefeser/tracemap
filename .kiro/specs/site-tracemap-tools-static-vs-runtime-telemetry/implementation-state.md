@@ -147,7 +147,7 @@ Medium or higher findings must be patched and re-reviewed where feasible before
 ## Validation
 
 - `git diff --check` passed.
-- `npm test` from `site/` passed: 171 tests.
+- `npm test` from `site/` passed: 172 tests.
 - `npm run validate` from `site/` passed: 42 HTML files, 1259 internal references, 41 sitemap URLs, and 1 legacy story safety target.
 - `npm run build` from `site/` passed.
 - `./scripts/check-private-paths.sh` passed: `Private path guard passed.`
@@ -168,3 +168,4 @@ Medium or higher findings must be patched and re-reviewed where feasible before
 - Focused validation was added and wired into the site validation workflow.
 - PR-loop review found two Gemini validator-hardening comments; both were patched with safer route metadata text handling and regression tests.
 - PR-loop review then found two Qodo comments; both were patched by removing visible `impacted` wording from the public page and scanning decoded HTML/metadata for operational positioning.
+- Current-head Codex review found a metadata overclaim validation gap; patched by scanning decoded HTML/metadata for proof and replacement wording with regression coverage.

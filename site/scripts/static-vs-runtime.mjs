@@ -213,7 +213,7 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
     errors.push("Static vs runtime page contains forbidden runtime or AI/LLM positioning.");
   }
 
-  if (/\b(?:TraceMap|static evidence)\b[^.]{0,80}\b(?:confirms|certifies|guarantees|proves|replaces)\b/i.test(pageText)) {
+  if (/\b(?:TraceMap|static evidence)\b[^.]{0,80}\b(?:confirms|certifies|guarantees|proves|replaces)\b/i.test(positioningText)) {
     errors.push("Static vs runtime page contains unsupported proof or replacement wording.");
   }
 
