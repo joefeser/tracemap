@@ -173,8 +173,8 @@ and machine-readable.
    and JSON output SHALL be byte-stable, excluding intentionally external build
    metadata already present in the index.
 2. Results SHALL sort deterministically by classification rank, route identity
-   safe key, source label, path length, downstream kind, file path, line span,
-   stable symbol or fact ID, and stable row ID.
+   safe key, source label, path length, detail row kind, downstream safe display
+   label, file path, start line, stable symbol or fact ID, and stable row ID.
 3. Stable row IDs SHALL be derived from ordered safe source labels, route-flow
    root identity, supporting fact IDs, supporting edge IDs, symbol IDs, file
    paths, and line spans.
