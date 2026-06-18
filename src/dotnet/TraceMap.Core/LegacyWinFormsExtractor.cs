@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -9,6 +10,8 @@ namespace TraceMap.Core;
 
 public static class LegacyWinFormsExtractor
 {
+    private static readonly Regex ResourceCultureSuffixPattern = new(@"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private static readonly HashSet<string> SurfaceBaseNames = new(StringComparer.Ordinal)
     {
         "Form",
@@ -998,7 +1001,7 @@ public static class LegacyWinFormsExtractor
     private static string CultureSuffix(string baseName)
     {
         var parts = baseName.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length > 2 ? parts[^1] : string.Empty;
+        return parts.Length >= 2 && ResourceCultureSuffixPattern.IsMatch(parts[^1]) ? parts[^1] : string.Empty;
     }
 
     private static string ResourceKind(XDocument document)

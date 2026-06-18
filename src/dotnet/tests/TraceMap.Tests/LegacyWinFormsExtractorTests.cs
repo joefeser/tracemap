@@ -188,6 +188,36 @@ public sealed class LegacyWinFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_records_localized_resx_culture_suffix_without_inventing_one_for_dotted_names()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        WriteMainForm(repo, "");
+        File.WriteAllText(Path.Combine(repo, "MainForm.en-US.resx"), """
+            <root>
+              <data name="Title"><value>Safe synthetic title</value></data>
+            </root>
+            """);
+        File.WriteAllText(Path.Combine(repo, "MainForm.NotCulture.resx"), """
+            <root>
+              <data name="Title"><value>Safe synthetic title</value></data>
+            </root>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WinFormsResourceMetadataDeclared
+            && fact.Evidence.FilePath == "MainForm.en-US.resx"
+            && fact.Properties.GetValueOrDefault("cultureSuffix") == "en-US");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WinFormsResourceMetadataDeclared
+            && fact.Evidence.FilePath == "MainForm.NotCulture.resx"
+            && fact.Properties.GetValueOrDefault("cultureSuffix") == string.Empty);
+    }
+
+    [Fact]
     public void Scan_produces_stable_winforms_fact_ids_for_same_commit_and_inputs()
     {
         using var temp = new TempDirectory();
