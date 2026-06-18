@@ -106,9 +106,11 @@ const forbiddenPrivateText = [
   "Password="
 ];
 const forbiddenPositioning = /\b(AI[- ]?powered|LLM[- ]?powered|machine learning impact analysis|artificial intelligence impact analysis|embedding-backed|prompt-classified|automated release approval|operational assurance|runtime-safe|release-safe|production-proven)\b/i;
-const overclaimPattern = /\b(impacted|safe|unsafe|approved|blocked|root cause|validated for release|production proven|complete coverage|complete product coverage)\b/i;
+const overclaimPattern = /\b(impacted|safe|unsafe|approved|blocked|root cause|validated for release|production proven|complete coverage|complete product coverage)\b/gi;
 const affirmativeProofPattern =
   /\b(?:TraceMap\s+)?(?:proves?|proven|proof of)\s+(?:runtime behavior|production traffic|production behavior|endpoint performance|outage cause|release safety|operational safety|release approval|complete product coverage)\b/gi;
+const sanctionedBoundarySectionPattern =
+  /<section\b(?=[^>]*\bid\s*=\s*["'](?:non-claims|stop-conditions|private-material)["'])[^>]*>[\s\S]*?<\/section>/gi;
 
 export async function validateReviewClaimChecklistDist({ baseUrl = "https://tracemap.tools", dist, errors }) {
   const localErrors = [];
@@ -323,17 +325,12 @@ function validateClaimBoundaryText({ html, pageText, errors }) {
 }
 
 function extractSanctionedBoundaryHtml(html) {
-  const matches = html.match(
-    /<section\b(?=[^>]*\bid=["'](?:non-claims|stop-conditions|private-material)["'])[^>]*>[\s\S]*?<\/section>/gi
-  );
+  const matches = html.match(sanctionedBoundarySectionPattern);
   return matches?.join(" ") ?? "";
 }
 
 function stripSanctionedBoundaryHtml(html) {
-  return html.replace(
-    /<section\b(?=[^>]*\bid=["'](?:non-claims|stop-conditions|private-material)["'])[^>]*>[\s\S]*?<\/section>/gi,
-    " "
-  );
+  return html.replace(sanctionedBoundarySectionPattern, " ");
 }
 
 async function validateInboundLinks({ dist, errors }) {
@@ -369,7 +366,7 @@ function hasUnsanctionedProofClaim(value) {
 
 function hasUnsanctionedOverclaim(value) {
   overclaimPattern.lastIndex = 0;
-  for (const match of value.matchAll(new RegExp(overclaimPattern.source, "gi"))) {
+  for (const match of value.matchAll(overclaimPattern)) {
     const prefix = value.slice(Math.max(0, match.index - 32), match.index).toLowerCase();
     if (!/(?:cannot|can't|does not|do not|not|no|without)\s+$/.test(prefix)) {
       return true;
