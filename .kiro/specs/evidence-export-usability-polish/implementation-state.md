@@ -107,6 +107,10 @@ Review results:
   structured docs-export claim limitations to reference stable gap/limitation
   IDs rather than free-text limitation messages. Also applied Qodo's
   non-blocking folder-index membership optimization.
+- A later PR review-loop run surfaced two Codex review threads from the first
+  reviewed head. Patched both: `Start Here` coverage labels no longer mix edge
+  classifications, and gap-backed docs-export chunks now join the
+  `weak-evidence-question` view.
 - Initial Opus spec review completed with full coverage. It found no blocking
   public-safety issues and requested clarifications around vault snapshot-mode
   inputs, docs snapshot-change inputs, `Start Here` link encoding, alias source

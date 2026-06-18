@@ -1032,7 +1032,7 @@ public static class VaultExporter
 
     private static string RenderStartHere(EvidenceGraphVault graph)
     {
-        var coverage = DistinctSorted(graph.Nodes.SelectMany(node => node.Coverage).Concat(graph.Edges.Select(edge => edge.Classification)));
+        var coverage = DistinctSorted(graph.Nodes.SelectMany(node => node.Coverage));
         var hiddenOmitted = graph.Settings.OmittedHiddenNodeCount + graph.Settings.OmittedHiddenEdgeCount;
         var builder = new StringBuilder();
         builder.AppendLine("# Start Here");
