@@ -106,6 +106,9 @@ Implementation validation run on 2026-06-18:
   `site/scripts/review-claim-checklist.mjs`: make `overclaimPattern` global,
   reuse it directly in `hasUnsanctionedOverclaim`, and allow whitespace around
   `=` in sanctioned-section regexes. All three were patched.
+- Follow-up PR-loop pass found one Qodo rule violation for the exact word
+  `impacted` in public non-claim copy. The page now says the checklist does not
+  assign impact status, avoiding reducer-governed wording without evidence.
 
 ## Oddities
 
