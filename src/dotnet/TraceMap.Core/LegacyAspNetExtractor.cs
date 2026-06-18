@@ -43,6 +43,8 @@ public static partial class LegacyAspNetExtractor
             .Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared)
             .GroupBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).First(), StringComparer.Ordinal);
+        var semanticTypesByFile = BuildSemanticLookup(existingFacts, FactTypes.TypeDeclared);
+        var semanticMethodsByFile = BuildSemanticLookup(existingFacts, FactTypes.MethodDeclared);
 
         AddDesignerOrphanGaps(manifest, inventory, pageFacts, facts);
 
@@ -70,7 +72,7 @@ public static partial class LegacyAspNetExtractor
 
         foreach (var item in inventory.Where(item => CSharpKinds.Contains(item.Kind)).OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
-            ExtractCSharpFile(repoPath, manifest, item, existingFacts, facts);
+            ExtractCSharpFile(repoPath, manifest, item, semanticTypesByFile, semanticMethodsByFile, facts);
         }
 
         AddNavigationEdges(manifest, pageFacts, facts);
@@ -101,6 +103,17 @@ public static partial class LegacyAspNetExtractor
     private static bool HasAspNetCandidateInventory(IReadOnlyList<FileInventoryItem> inventory)
     {
         return inventory.Any(item => item.Kind is "WebFormsMarkup" or "WebFormsCodeBehind" or "WebFormsDesigner" or "AspNetApplication" or "AspNetHandler" or "AspNetSiteMap" or "Config");
+    }
+
+    private static IReadOnlyDictionary<string, CodeFact[]> BuildSemanticLookup(IReadOnlyList<CodeFact> existingFacts, string factType)
+    {
+        return existingFacts
+            .Where(fact => fact.FactType == factType && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+            .GroupBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
     }
 
     private static void AddDesignerOrphanGaps(
@@ -310,7 +323,8 @@ public static partial class LegacyAspNetExtractor
         string repoPath,
         ScanManifest manifest,
         FileInventoryItem item,
-        IReadOnlyList<CodeFact> existingFacts,
+        IReadOnlyDictionary<string, CodeFact[]> semanticTypesByFile,
+        IReadOnlyDictionary<string, CodeFact[]> semanticMethodsByFile,
         List<CodeFact> facts)
     {
         if (!TryRead(repoPath, item.RelativePath, out var text))
@@ -333,7 +347,7 @@ public static partial class LegacyAspNetExtractor
         }
 
         ExtractRoutes(manifest, item, tree, root, facts);
-        ExtractHandlersAndPageMethods(manifest, item, tree, root, existingFacts, facts);
+        ExtractHandlersAndPageMethods(manifest, item, tree, root, semanticTypesByFile, semanticMethodsByFile, facts);
         ExtractCodeNavigation(manifest, item, tree, root, facts);
     }
 
@@ -344,7 +358,7 @@ public static partial class LegacyAspNetExtractor
         CompilationUnitSyntax root,
         List<CodeFact> facts)
     {
-        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>().OrderBy(node => SpanLine(tree, node)))
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var name = InvocationName(invocation);
             if (name.Equals("MapPageRoute", StringComparison.Ordinal))
@@ -450,10 +464,11 @@ public static partial class LegacyAspNetExtractor
         FileInventoryItem item,
         SyntaxTree tree,
         CompilationUnitSyntax root,
-        IReadOnlyList<CodeFact> existingFacts,
+        IReadOnlyDictionary<string, CodeFact[]> semanticTypesByFile,
+        IReadOnlyDictionary<string, CodeFact[]> semanticMethodsByFile,
         List<CodeFact> facts)
     {
-        foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>().OrderBy(node => SpanLine(tree, node)))
+        foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
         {
             var typeName = QualifiedTypeName(type);
             var baseNames = type.BaseList?.Types.Select(baseType => baseType.Type.ToString()).ToArray() ?? [];
@@ -474,7 +489,7 @@ public static partial class LegacyAspNetExtractor
                     manifest,
                     FactTypes.AspNetHandlerDeclared,
                     RuleIds.LegacyAspNetHandler,
-                    FindSemanticType(existingFacts, item.RelativePath, typeName) is not null ? EvidenceTiers.Tier1Semantic : EvidenceTiers.Tier3SyntaxOrTextual,
+                    FindSemanticType(semanticTypesByFile, item.RelativePath, typeName) is not null ? EvidenceTiers.Tier1Semantic : EvidenceTiers.Tier3SyntaxOrTextual,
                     Evidence(item.RelativePath, SpanLine(tree, type), EndLine(tree, type)),
                     targetSymbol: typeName,
                     contractElement: handlerBase.Split('.').Last(),
@@ -494,14 +509,14 @@ public static partial class LegacyAspNetExtractor
                     manifest,
                     FactTypes.AspNetPageMethodDeclared,
                     RuleIds.LegacyAspNetPageMethod,
-                    FindSemanticType(existingFacts, item.RelativePath, typeName) is not null ? EvidenceTiers.Tier1Semantic : EvidenceTiers.Tier3SyntaxOrTextual,
+                    FindSemanticType(semanticTypesByFile, item.RelativePath, typeName) is not null ? EvidenceTiers.Tier1Semantic : EvidenceTiers.Tier3SyntaxOrTextual,
                     Evidence(item.RelativePath, SpanLine(tree, type), SpanLine(tree, type)),
                     targetSymbol: typeName,
                     contractElement: type.Identifier.ValueText,
                     properties: properties));
             }
 
-            foreach (var method in type.Members.OfType<MethodDeclarationSyntax>().OrderBy(method => SpanLine(tree, method)))
+            foreach (var method in type.Members.OfType<MethodDeclarationSyntax>())
             {
                 var attrs = method.AttributeLists.SelectMany(list => list.Attributes).Where(IsPageMethodAttribute).ToArray();
                 if (attrs.Length == 0)
@@ -527,7 +542,7 @@ public static partial class LegacyAspNetExtractor
                     manifest,
                     FactTypes.AspNetPageMethodDeclared,
                     RuleIds.LegacyAspNetPageMethod,
-                    FindSemanticMethod(existingFacts, item.RelativePath, methodName) is not null ? EvidenceTiers.Tier1Semantic : EvidenceTiers.Tier3SyntaxOrTextual,
+                    FindSemanticMethod(semanticMethodsByFile, item.RelativePath, methodName) is not null ? EvidenceTiers.Tier1Semantic : EvidenceTiers.Tier3SyntaxOrTextual,
                     Evidence(item.RelativePath, SpanLine(tree, method), EndLine(tree, method)),
                     sourceSymbol: typeName,
                     targetSymbol: symbol,
@@ -544,7 +559,7 @@ public static partial class LegacyAspNetExtractor
         CompilationUnitSyntax root,
         List<CodeFact> facts)
     {
-        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>().OrderBy(node => SpanLine(tree, node)))
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var expression = invocation.Expression.ToString();
             var name = InvocationName(invocation);
@@ -564,7 +579,7 @@ public static partial class LegacyAspNetExtractor
             }
         }
 
-        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>().OrderBy(node => SpanLine(tree, node)))
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
             var leftName = assignment.Left switch
             {
@@ -682,19 +697,18 @@ public static partial class LegacyAspNetExtractor
 
     private static bool StaticTargetMatches(CodeFact fact, string targetPath)
     {
-        var normalized = NormalizeAspNetPath(targetPath);
-        if (fact.Evidence.FilePath.Equals(normalized, StringComparison.Ordinal))
+        if (fact.Evidence.FilePath.Equals(targetPath, StringComparison.Ordinal))
         {
             return true;
         }
 
-        if (fact.Properties.TryGetValue("mappedPagePath", out var mappedPagePath) && NormalizeAspNetPath(mappedPagePath).Equals(normalized, StringComparison.Ordinal))
+        if (fact.Properties.TryGetValue("mappedPagePath", out var mappedPagePath) && mappedPagePath.Equals(targetPath, StringComparison.Ordinal))
         {
             return true;
         }
 
         return fact.Properties.TryGetValue("pathDescriptor", out var pathDescriptor)
-            && NormalizeAspNetPath(pathDescriptor).Equals(normalized, StringComparison.Ordinal);
+            && pathDescriptor.Equals(targetPath, StringComparison.Ordinal);
     }
 
     private static int TargetPriority(CodeFact fact)
@@ -1119,27 +1133,25 @@ public static partial class LegacyAspNetExtractor
         return name.EndsWith("Attribute", StringComparison.Ordinal) ? name[..^"Attribute".Length] : name;
     }
 
-    private static CodeFact? FindSemanticType(IReadOnlyList<CodeFact> existingFacts, string filePath, string typeName)
+    private static CodeFact? FindSemanticType(IReadOnlyDictionary<string, CodeFact[]> semanticTypesByFile, string filePath, string typeName)
     {
-        return existingFacts
-            .Where(fact => fact.FactType == FactTypes.TypeDeclared
-                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
-                && fact.Evidence.FilePath.Equals(filePath, StringComparison.Ordinal)
-                && (fact.TargetSymbol?.EndsWith(typeName, StringComparison.Ordinal) ?? false))
+        return semanticTypesByFile.TryGetValue(filePath, out var candidates)
+            ? candidates
+            .Where(fact => fact.TargetSymbol?.EndsWith(typeName, StringComparison.Ordinal) ?? false)
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
-            .FirstOrDefault();
+            .FirstOrDefault()
+            : null;
     }
 
-    private static CodeFact? FindSemanticMethod(IReadOnlyList<CodeFact> existingFacts, string filePath, string methodName)
+    private static CodeFact? FindSemanticMethod(IReadOnlyDictionary<string, CodeFact[]> semanticMethodsByFile, string filePath, string methodName)
     {
-        return existingFacts
-            .Where(fact => fact.FactType == FactTypes.MethodDeclared
-                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
-                && fact.Evidence.FilePath.Equals(filePath, StringComparison.Ordinal)
-                && (fact.ContractElement?.Equals(methodName, StringComparison.Ordinal) == true
-                    || fact.TargetSymbol?.Contains("." + methodName + "(", StringComparison.Ordinal) == true))
+        return semanticMethodsByFile.TryGetValue(filePath, out var candidates)
+            ? candidates
+            .Where(fact => fact.ContractElement?.Equals(methodName, StringComparison.Ordinal) == true
+                || fact.TargetSymbol?.Contains("." + methodName + "(", StringComparison.Ordinal) == true)
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
-            .FirstOrDefault();
+            .FirstOrDefault()
+            : null;
     }
 
     private static string QualifiedTypeName(TypeDeclarationSyntax type)
