@@ -1335,7 +1335,7 @@ public static class EvidenceDocsExporter
             evidenceTiers.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             coverageLabels.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             supportingIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            limitations.Select(limitation => limitation.LimitationId).Concat(gaps.SelectMany(gap => gap.Limitations)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            limitations.Select(limitation => limitation.LimitationId).Concat(gaps.Select(gap => gap.GapId)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
     private static List<EvidenceDocChunk> ApplyClaimFilter(List<EvidenceDocChunk> chunks, string minimumClaimLevel, IReadOnlyList<string> selectedFamilies, IReadOnlyList<DocSource> sources)

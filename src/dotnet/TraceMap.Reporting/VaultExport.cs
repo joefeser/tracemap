@@ -153,6 +153,7 @@ public static class VaultExporter
     private const string UserFileCollisionRuleId = "vault-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "vault-export.validation.unsafe-value-rejected.v1";
     private const string SensitiveWordCategory = "sensitive-word";
+    private const string Tier3SyntaxOrTextual = "Tier3SyntaxOrTextual";
     private const string Tier4Unknown = "Tier4Unknown";
     // Hidden-safe context hashes use lowercase SHA-256 truncated after context validation.
     private const int DisplayNameHashLength = 24;
@@ -1067,7 +1068,7 @@ public static class VaultExporter
         builder.AppendLine();
         builder.AppendLine("## Review Queues");
         builder.AppendLine();
-        builder.AppendLine($"- Weak or syntax-only evidence: `{graph.Nodes.Count(node => node.EvidenceTiers.Any(tier => tier is "Tier3SyntaxOrTextual" or Tier4Unknown))}` nodes.");
+        builder.AppendLine($"- Weak or syntax-only evidence: `{graph.Nodes.Count(node => node.EvidenceTiers.Any(tier => tier is Tier3SyntaxOrTextual or Tier4Unknown))}` nodes.");
         builder.AppendLine($"- Needs-review or reduced coverage edges: `{graph.Edges.Count(edge => IsReviewClassification(edge.Classification))}` edges.");
         builder.AppendLine($"- Gaps: `{graph.Gaps.Count}` records.");
         builder.AppendLine($"- Limitations: `{graph.Limitations.Count}` records.");
@@ -2599,7 +2600,7 @@ public static class VaultExporter
             .. node.Coverage.Select(coverage => $"tracemap/coverage/{Slug(coverage)}"),
             .. string.IsNullOrWhiteSpace(node.SurfaceKind) ? [] : new[] { $"tracemap/surface/{Slug(node.SurfaceKind)}" },
             .. node.Kind == "gap" ? new[] { "tracemap/review/gap" } : [],
-            .. node.EvidenceTiers.Any(tier => tier is "Tier3SyntaxOrTextual" or Tier4Unknown) || node.Coverage.Any(IsWeakCoverageLabel)
+            .. node.EvidenceTiers.Any(tier => tier is Tier3SyntaxOrTextual or Tier4Unknown) || node.Coverage.Any(IsWeakCoverageLabel)
                 ? new[] { "tracemap/review/needs-review" }
                 : []
         ]);
