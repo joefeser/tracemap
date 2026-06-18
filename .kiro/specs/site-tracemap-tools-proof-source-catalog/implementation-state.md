@@ -190,8 +190,8 @@ spec-only branch.
 
 ## Follow-Ups
 
-- Patch Medium or higher findings from Kiro spec review before setting
-  readiness to `ready-for-implementation`.
+- If new Medium or higher Kiro findings are introduced, patch them before
+  keeping readiness at `ready-for-implementation` or merging this spec branch.
 - Keep implementation tasks unchecked until a future site implementation branch
   changes site code.
 - Future implementation must verify `site/package.json` includes the expected
