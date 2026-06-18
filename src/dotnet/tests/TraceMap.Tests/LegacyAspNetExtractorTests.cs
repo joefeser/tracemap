@@ -290,6 +290,55 @@ public sealed class LegacyAspNetExtractorTests
     }
 
     [Fact]
+    public void Scan_hashes_backslash_rooted_paths_before_normalizing()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="\inetpub\site\Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:HyperLink runat="server" ID="Absolute" NavigateUrl="\inetpub\site\Target.aspx" />
+            <asp:HyperLink runat="server" ID="Unc" PostBackUrl="\\server\share\Target.aspx" />
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var serialized = SerializeFacts(result.Facts);
+
+        Assert.DoesNotContain("inetpub/site/Default.aspx.cs", serialized);
+        Assert.DoesNotContain("inetpub/site/Target.aspx", serialized);
+        Assert.DoesNotContain("server/share/Target.aspx", serialized);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AspNetNavigationReferenceDeclared && fact.Properties.GetValueOrDefault("targetPath") == "inetpub/site/Target.aspx");
+        Assert.Equal(2, result.Facts.Count(fact =>
+            fact.FactType == FactTypes.AspNetNavigationReferenceDeclared
+            && fact.Properties.ContainsKey("targetPathHash")
+            && !fact.Properties.ContainsKey("targetPath")));
+    }
+
+    [Fact]
+    public void Scan_resolves_same_directory_markup_navigation_targets_before_matching_edges()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Pages"));
+        File.WriteAllText(Path.Combine(repo, "Pages", "List.aspx"), """
+            <%@ Page Language="C#" CodeBehind="List.aspx.cs" Inherits="Sample.Pages.List" %>
+            <asp:HyperLink runat="server" ID="Details" NavigateUrl="Details.aspx" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Pages", "Details.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Details.aspx.cs" Inherits="Sample.Pages.Details" %>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetNavigationReferenceDeclared
+            && fact.Properties.GetValueOrDefault("targetPath") == "Pages/Details.aspx");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetNavigationEdgeDeclared
+            && fact.Properties.GetValueOrDefault("targetFactType") == FactTypes.WebFormsPageDeclared);
+    }
+
+    [Fact]
     public void Scan_omits_secret_like_navigation_target_without_edge()
     {
         using var temp = new TempDirectory();

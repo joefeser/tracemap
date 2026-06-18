@@ -326,7 +326,7 @@ public static partial class LegacyAspNetExtractor
             {
                 if (NavigationAttributes.Contains(name))
                 {
-                    AddNavigationReference(manifest, facts, item.RelativePath, LineAt(source, tag.Index), $"Markup{name}", pageFact?.FactId ?? item.RelativePath, value);
+                    AddNavigationReference(manifest, facts, item.RelativePath, LineAt(source, tag.Index), $"Markup{name}", pageFact?.FactId ?? item.RelativePath, ResolveMarkupNavigationTarget(item.RelativePath, value));
                 }
             }
         }
@@ -986,6 +986,7 @@ public static partial class LegacyAspNetExtractor
 
         var raw = value.Trim();
         if (raw.StartsWith("/", StringComparison.Ordinal)
+            || raw.StartsWith("\\", StringComparison.Ordinal)
             || raw.StartsWith("//", StringComparison.Ordinal))
         {
             return null;
@@ -1019,6 +1020,7 @@ public static partial class LegacyAspNetExtractor
 
         var raw = value.Trim();
         if (raw.StartsWith("/", StringComparison.Ordinal)
+            || raw.StartsWith("\\", StringComparison.Ordinal)
             || raw.StartsWith("//", StringComparison.Ordinal))
         {
             return null;
@@ -1081,6 +1083,26 @@ public static partial class LegacyAspNetExtractor
     private static string NormalizeAspNetPath(string value)
     {
         return FileInventory.NormalizeRelativePath(value.Trim().Replace('\\', '/').TrimStart('~', '/'));
+    }
+
+    private static string ResolveMarkupNavigationTarget(string sourcePath, string target)
+    {
+        var raw = target.Trim();
+        if (raw.StartsWith("~", StringComparison.Ordinal)
+            || raw.StartsWith("/", StringComparison.Ordinal)
+            || raw.StartsWith("\\", StringComparison.Ordinal)
+            || raw.Contains("://", StringComparison.Ordinal))
+        {
+            return raw;
+        }
+
+        var sourceDirectory = Path.GetDirectoryName(sourcePath)?.Replace('\\', '/');
+        if (string.IsNullOrWhiteSpace(sourceDirectory))
+        {
+            return raw;
+        }
+
+        return $"{sourceDirectory}/{raw}";
     }
 
     private static bool ContainsUnsafeValueShape(string value)
