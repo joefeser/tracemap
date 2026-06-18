@@ -216,6 +216,16 @@ rules:
     limitations:
       - Unsupported-family gaps describe exporter/input compatibility only; they do not prove source evidence absence.
 
+  - id: docs-export.gap.unsupported-question-family.v1
+    name: Docs export unsupported question-family gap
+    description: Records additive question-oriented docs-export views that cannot be generated from the supplied input schema without synthesizing unsupported evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - docs-export unsupported-question-family gap
+    limitations:
+      - Unsupported question-family gaps apply only to additive presentation views such as snapshot-change, weak-evidence, gap, or limitation views; unsupported canonical CLI chunk families remain covered by docs-export.gap.unsupported-family.v1.
+      - The gap describes exporter/input compatibility only and does not prove source evidence absence or runtime behavior.
+
   - id: docs-export.gap.missing-provenance.v1
     name: Docs export missing provenance gap
     description: Records missing stable fact, edge, report, file-span, source, or commit provenance required for stable chunk identity or citation.
