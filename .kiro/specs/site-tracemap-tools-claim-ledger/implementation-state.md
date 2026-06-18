@@ -80,7 +80,7 @@ Passed on 2026-06-18:
 - `git diff --check`
 - `./scripts/check-private-paths.sh`
 - `npm test` from `site/`:
-  134 tests passed after the Qodo patch.
+  135 tests passed after the Qodo patches.
 - `npm run validate` from `site/`:
   built static output and validated 38 HTML files, 1063 internal references,
   37 sitemap URLs, and 1 legacy story safety target.
@@ -108,6 +108,10 @@ Oddity:
   forbidden text with case-sensitive checks. Patched the validator to compare
   HTML, decoded HTML, and rendered text case-insensitively, and added a
   `LOCALHOST` regression test.
+- Qodo also recommended tightening mapping-row correctness because unexpected
+  `data-ledger-label` values were not rejected when required labels were still
+  present. Patched per-axis label validation and added a typo-row regression
+  test.
 
 ## Follow-Ups
 
