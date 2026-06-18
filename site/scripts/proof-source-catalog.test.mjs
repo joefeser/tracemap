@@ -80,6 +80,23 @@ test("validateProofSourceCatalogDist rejects hidden proof-path prose", async (t)
   assert.match(errors.join("\n"), /expected proofPath hidden/);
 });
 
+test("validateProofSourceCatalogDist enforces reserved hidden row schema even when claim fields are changed", async (t) => {
+  const root = await createManagedProofSourceCatalogDistFixture(t, {
+    catalogHtml: catalogPage()
+      .replace('<td data-field="publicClaimLevel"><code>hidden</code></td>', '<td data-field="publicClaimLevel"><code>demo</code></td>')
+      .replace(
+        '<td data-field="evidenceStatus"><code>hidden-or-internal</code></td>',
+        '<td data-field="evidenceStatus"><code>demo-evidence-backed</code></td>'
+      )
+  });
+  const errors = [];
+
+  await validateProofSourceCatalogDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /hidden row proof-source-hidden-aggregate-placeholder expected publicClaimLevel hidden/);
+  assert.match(errors.join("\n"), /hidden row proof-source-hidden-aggregate-placeholder expected evidenceStatus hidden-or-internal/);
+});
+
 test("validateProofSourceCatalogDist rejects non-link proofPath cells even when route cell links", async (t) => {
   const root = await createManagedProofSourceCatalogDistFixture(t, {
     catalogHtml: catalogPage().replace(
@@ -92,6 +109,23 @@ test("validateProofSourceCatalogDist rejects non-link proofPath cells even when 
   await validateProofSourceCatalogDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /proofPath must be a public-safe link or allowed sentinel/);
+});
+
+test("validateProofSourceCatalogDist rejects raw scan-manifest and report proof links", async (t) => {
+  const root = await createManagedProofSourceCatalogDistFixture(t, {
+    catalogHtml: catalogPage()
+      .replace('<td data-field="proofPath"><a href="/docs/">/docs/</a></td>', '<td data-field="proofPath"><a href="/scan-manifest.json">manifest</a></td>')
+      .replace(
+        '<td data-field="proofPath"><a href="/roadmap/">/roadmap/</a></td>',
+        '<td data-field="proofPath"><a href="/reports/report.md">report</a></td>'
+      )
+  });
+  const errors = [];
+
+  await validateProofSourceCatalogDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /links to forbidden raw proof artifact: \/scan-manifest\.json/);
+  assert.match(errors.join("\n"), /links to forbidden raw proof artifact: \/reports\/report\.md/);
 });
 
 test("validateProofSourceCatalogDist rejects forbidden affirmative wording", async (t) => {
