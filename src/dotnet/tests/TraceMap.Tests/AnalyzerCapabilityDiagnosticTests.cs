@@ -101,6 +101,30 @@ public sealed class AnalyzerCapabilityDiagnosticTests
     }
 
     [Fact]
+    public void Full_semantic_state_does_not_turn_missing_syntax_fallback_into_coverage_gap()
+    {
+        var manifest = Manifest("Level1SemanticAnalysis", "Succeeded");
+        var inventory = new[]
+        {
+            new FileInventoryItem("src/Modern/Modern.csproj", "Project", 1),
+            new FileInventoryItem("src/Modern/Empty.cs", "CSharp", 0)
+        };
+        var semantic = new SemanticExtractionResult([], [], Attempted: true, ReducedCoverage: false);
+
+        var capabilities = AnalyzerCapabilityDiagnosticExtractor.Extract(
+            manifest,
+            inventory,
+            semantic,
+            [],
+            new ScanOptions("repo", "out"));
+
+        AssertCapability(capabilities, AnalyzerCapabilityDiagnosticExtractor.Codes.SyntaxFallbackAvailable, "not-requested", "informational");
+        Assert.DoesNotContain(capabilities, fact =>
+            fact.Properties.GetValueOrDefault("capabilityCode") == AnalyzerCapabilityDiagnosticExtractor.Codes.DownstreamNoEvidenceCoverage);
+        Assert.All(capabilities, fact => Assert.NotEqual("unknown-gap", fact.Properties.GetValueOrDefault("coverageEffect")));
+    }
+
+    [Fact]
     public void Reference_assembly_resolution_gap_is_unavailable_and_tier4()
     {
         var manifest = Manifest("Level1SemanticAnalysisReduced", "FailedOrPartial");
@@ -239,6 +263,8 @@ public sealed class AnalyzerCapabilityDiagnosticTests
         using var temp = new TempDirectory();
         var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
         var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
         var before = Manifest("Level1SemanticAnalysis", "Succeeded") with
         {
             ScanId = "scan-before",
@@ -270,6 +296,23 @@ public sealed class AnalyzerCapabilityDiagnosticTests
         Assert.Contains(review.Report.Gaps, gap =>
             gap.GapKind == "ToolchainCapabilityReducedCoverage"
             && gap.SupportingFactIds.Contains("fact-capability-after"));
+
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeIndex], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterIndex], afterCombined, ["api"]));
+
+        var combinedReview = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "combined-release-review"),
+            Format: "json"));
+
+        Assert.Equal("Full", combinedReview.Report.BeforeSnapshot.Sources.Single().Coverage);
+        Assert.Equal("Reduced", combinedReview.Report.AfterSnapshot.Sources.Single().Coverage);
+        Assert.Contains(combinedReview.Report.AfterSnapshot.CoverageWarnings, warning =>
+            warning.Contains("reduced analysis coverage", StringComparison.Ordinal));
+        Assert.Contains(combinedReview.Report.Gaps, gap =>
+            gap.GapKind == "ToolchainCapabilityReducedCoverage"
+            && gap.SourceLabel == "api");
     }
 
     private static string CreateLegacyRepo(string root)

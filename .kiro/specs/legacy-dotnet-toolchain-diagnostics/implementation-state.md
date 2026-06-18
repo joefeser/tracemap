@@ -54,7 +54,7 @@ coverage-relative context.
 ## Validation Log
 
 - Passed: `dotnet test src/dotnet/TraceMap.sln --filter AnalyzerCapabilityDiagnosticTests`
-  after PR-loop coverage fix (7 tests).
+  after PR-loop coverage and syntax-fallback fixes (8 tests).
 - Passed: `dotnet test src/dotnet/TraceMap.sln` after rebasing onto current
   `origin/dev` (507 tests).
 - Passed: synthetic legacy CLI smoke using a generated non-SDK-style Web
@@ -69,6 +69,11 @@ coverage-relative context.
   extractor parameters, and release-review capability gaps not contributing to
   source coverage. Re-ran `dotnet build src/dotnet/TraceMap.sln`,
   `dotnet test src/dotnet/TraceMap.sln` (508 tests),
+  `./scripts/check-private-paths.sh`, and `git diff --check`.
+- Completed: follow-up PR review-loop patch for treating missing syntax
+  fallback as non-gap when full semantic coverage is available, plus combined
+  release-review coverage regression. Re-ran `dotnet build
+  src/dotnet/TraceMap.sln`, `dotnet test src/dotnet/TraceMap.sln` (509 tests),
   `./scripts/check-private-paths.sh`, and `git diff --check`.
 - Completed: Kiro CLI Sonnet implementation review with
   `node scripts/kiro-review.mjs --phase legacy-dotnet-toolchain-diagnostics --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`.

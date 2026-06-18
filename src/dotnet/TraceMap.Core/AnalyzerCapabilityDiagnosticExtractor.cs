@@ -291,19 +291,32 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             .ToArray();
         var state = syntaxSupport.Length > 0
             ? States.Available
-            : projectScopes.Count == 0 && csharpFiles.Count == 0 ? States.NotApplicable : States.Unknown;
-        var effect = state == States.Available && semanticResult.ReducedCoverage
-            ? Effects.SyntaxOnly
-            : state == States.Available ? Effects.Informational : Effects.UnknownGap;
+            : csharpFiles.Count == 0 ? States.NotApplicable
+            : semanticResult.Attempted && !semanticResult.ReducedCoverage ? States.NotRequested
+            : projectScopes.Count == 0 ? States.NotApplicable : States.Unknown;
+        var effect = state switch
+        {
+            States.Available when semanticResult.ReducedCoverage => Effects.SyntaxOnly,
+            States.Available or States.NotRequested or States.NotApplicable => Effects.Informational,
+            _ => Effects.UnknownGap
+        };
+        var tier = state switch
+        {
+            States.Available => EvidenceTiers.Tier3SyntaxOrTextual,
+            States.Unknown => EvidenceTiers.Tier4Unknown,
+            _ => EvidenceTiers.Tier2Structural
+        };
         return WorkspaceCandidate(
             Codes.SyntaxFallbackAvailable,
             "syntax-fallback",
             state,
             effect,
             RuleIds.AnalyzerCapabilitySyntaxFallback,
-            state == States.Available ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown,
-            state == States.Available ? GuidanceCodes.UseSyntaxFallbackEvidence : GuidanceCodes.ReviewUnknownCapabilityGap,
-            state == States.Available ? LimitationCodes.SyntaxFallbackOnly : LimitationCodes.UnknownToolchainGap,
+            tier,
+            state == States.Available ? GuidanceCodes.UseSyntaxFallbackEvidence
+                : state == States.Unknown ? GuidanceCodes.ReviewUnknownCapabilityGap : GuidanceCodes.UseSemanticEvidenceWhenAvailable,
+            state == States.Available ? LimitationCodes.SyntaxFallbackOnly
+                : state == States.Unknown ? LimitationCodes.UnknownToolchainGap : LimitationCodes.SemanticStatusDerived,
             syntaxSupport.Concat(analysisGaps).ToArray(),
             strongestSupportingEvidenceTier: StrongestTier(syntaxSupport));
     }
