@@ -48,6 +48,10 @@ internal static partial class LegacyDataSafeValues
         }
 
         var trimmed = value.Trim();
+        properties.Remove(clearKey);
+        properties.Remove(hashKey);
+        properties.Remove($"{clearKey}Redaction");
+
         if (IsSafeIdentifier(trimmed))
         {
             properties[clearKey] = trimmed;

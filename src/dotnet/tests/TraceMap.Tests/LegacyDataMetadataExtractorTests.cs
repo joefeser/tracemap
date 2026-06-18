@@ -578,6 +578,89 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_clears_stale_safe_display_when_reused_properties_become_unsafe()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "UnsafeTable.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop">
+              <xs:element name="OrdersDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="OrdersDataSet">
+                <xs:complexType>
+                  <xs:choice maxOccurs="unbounded">
+                    <xs:element name="Orders" msprop:Generator_UserTableName="Server=prod;Database=Secret" msprop:Generator_RowClassName="OrdersRow" />
+                  </xs:choice>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var storage = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataStorageObjectDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet);
+        Assert.False(storage.Properties.ContainsKey("displayName"));
+        Assert.True(storage.Properties.ContainsKey("displayNameHash"));
+        Assert.Equal("hashed-unsafe-identifier", storage.Properties.GetValueOrDefault("displayNameRedaction"));
+        Assert.DoesNotContain("OrdersRow", storage.Properties.GetValueOrDefault("displayName") ?? string.Empty);
+    }
+
+    [Fact]
+    public void Scan_marks_model_identity_coverage_reduced_when_metadata_gaps_exist()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Reduced.dbml"), """
+            <Root xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Database Name="First">
+                <Table Name="Customers" Member="Customers"><Type Name="Customer" /></Table>
+              </Database>
+              <Database Name="Second" />
+            </Root>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyDataMetadataVersion");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("coverageLabel") == "reduced");
+    }
+
+    [Fact]
+    public void Scan_keeps_stable_model_key_across_line_only_metadata_changes()
+    {
+        using var temp = new TempDirectory();
+        var modelPath = Path.Combine(temp.Path, "Model.dbml");
+        File.WriteAllText(modelPath, """
+            <Database Name="Store" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers"><Type Name="Customer" /></Table>
+            </Database>
+            """);
+        var first = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out1")));
+
+        File.WriteAllText(modelPath, """
+            <Database Name="Store" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+
+
+              <Table Name="Customers" Member="Customers">
+                <Type Name="Customer" />
+              </Table>
+            </Database>
+            """);
+        var second = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out2")));
+
+        var firstKey = Assert.Single(first.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("displayName") == "Customer").Properties.GetValueOrDefault("stableModelKey");
+        var secondKey = Assert.Single(second.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("displayName") == "Customer").Properties.GetValueOrDefault("stableModelKey");
+
+        Assert.Equal(firstKey, secondKey);
+    }
+
+    [Fact]
     public void Scan_does_not_upgrade_descriptor_tier_above_tier2_for_generated_code_link()
     {
         using var temp = new TempDirectory();
