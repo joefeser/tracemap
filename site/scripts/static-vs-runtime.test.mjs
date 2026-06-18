@@ -110,6 +110,17 @@ test("validateStaticVsRuntimeDist rejects operational positioning in metadata", 
   assert.match(errors.join("\n"), /forbidden runtime or AI\/LLM positioning/);
 });
 
+test("validateStaticVsRuntimeDist rejects affirmative AI and LLM analysis wording", async (t) => {
+  const root = await createManagedStaticVsRuntimeDistFixture(t, {
+    pageHtml: staticVsRuntimePage("<p>TraceMap performs AI impact analysis and LLM analysis.</p>")
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden runtime or AI\/LLM positioning/);
+});
+
 test("validateStaticVsRuntimeDist rejects proof or replacement wording in metadata", async (t) => {
   const root = await createManagedStaticVsRuntimeDistFixture(t, {
     pageHtml: staticVsRuntimePage('<meta name="description" content="TraceMap proves runtime behavior and replaces telemetry.">')
