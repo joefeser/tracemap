@@ -1,8 +1,8 @@
 # Site TraceMap Tools LLM Discovery Pack Design
 
 Public claim level: demo
-Status: not-started
-Readiness: ready-for-implementation
+Status: completed
+Readiness: implemented
 
 ## Overview
 
