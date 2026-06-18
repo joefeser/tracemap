@@ -306,13 +306,17 @@ Acceptance criteria:
   secrets, generated scan directories, and private sample names, may appear
   only inside sanctioned artifact-boundary, red-flag, or sharing-guidance
   sections and never beside an actual value.
-- The validator rejects pattern-detectable raw/private content anywhere on the
+- The validator rejects pattern-detectable raw/private values anywhere on the
   page, including machine-local absolute paths, `file://`, `localhost`,
-  `127.0.0.1`, `.tracemap` generated-scan roots, `.ndjson` and `.sqlite`
-  references, `analyzer.log`, connection-string fragments such as `Server=`,
-  `Password=`, and `User Id=`, raw SQL statement patterns, and
-  repository-remote patterns such as `git@`, `ssh://`, and
+  `127.0.0.1`, `.tracemap` generated-scan roots, connection-string fragments
+  such as `Server=`, `Password=`, and `User Id=`, raw SQL statement patterns,
+  and repository-remote patterns such as `git@`, `ssh://`, and
   `https://<host>/<org>/<repo>.git`.
+- The validator treats literal artifact-family names such as `.ndjson`,
+  `.sqlite`, and `analyzer.log` as allowed only inside sanctioned
+  artifact-boundary, red-flag, or sharing-guidance sections. The same literal
+  names outside those sections are rejected, and actual artifact values or
+  paths remain forbidden everywhere.
 - Private sample/app names and raw source snippets are not generically
   pattern-detectable. Their rejection is delegated to
   `./scripts/check-private-paths.sh` known-private-token checks plus authoring
@@ -323,7 +327,8 @@ Acceptance criteria:
   references, `analyzer.log` text, home-directory path patterns such as
   `/Users/` and `/home/`, Windows user-directory patterns such as `C:\Users\`,
   and `.tracemap` directory references in rendered page copy, metadata, and
-  discovery output.
+  discovery output, while applying the sanctioned-section exception for
+  artifact-family names only.
 - The validator confirms generated `sitemap.xml` includes `/demo/runbook/`.
 - The focused validator or a companion check wired into `npm run validate`
   confirms that each required inbound link to `/demo/runbook/` is present in
