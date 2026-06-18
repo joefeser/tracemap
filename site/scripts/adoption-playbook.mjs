@@ -161,12 +161,16 @@ async function validateLlmsRouteSection({ dist, errors }) {
 
   const llmsText = await readFile(llmsPath, "utf8");
   const limitationsSection = splitLlmsSections(llmsText).get("Limitations") ?? "";
+  const adoptionLine = limitationsSection
+    .split(/\r?\n/)
+    .find((line) => line.includes("[Adoption Playbook](https://tracemap.tools/adoption/)"));
 
-  if (!limitationsSection.includes("[Adoption Playbook](https://tracemap.tools/adoption/)")) {
+  if (!adoptionLine) {
     errors.push(withEvidence("Adoption playbook is missing from the llms.txt Limitations route section.", llmsArtifact));
+    return;
   }
 
-  if (!limitationsSection.includes("Public claim level: concept")) {
+  if (!adoptionLine.includes("Public claim level: concept")) {
     errors.push(withEvidence("Adoption playbook llms.txt route section must preserve concept claim level.", llmsArtifact));
   }
 }

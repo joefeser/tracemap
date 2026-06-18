@@ -80,6 +80,8 @@ Implementation validation completed on 2026-06-18:
   overflow.
 - Mobile browser sanity check for `/adoption/` at 390px width confirmed no
   horizontal overflow.
+- After Qodo PR review, `npm test`, `npm run validate`, `npm run build`,
+  `git diff --check`, and `./scripts/check-private-paths.sh` passed again.
 
 Oddity: an initial parallel run of `npm run validate` and `npm run build`
 failed because both commands mutate generated site output. The commands passed
@@ -126,6 +128,10 @@ when rerun sequentially.
 - Final Sonnet re-review ran with full coverage and reported no Medium or
   higher findings. Remaining Low notes were informational. Saved output:
   `.tmp/kiro-reviews/site-tracemap-tools-adoption-playbook/2026-06-18T033453-840Z-re-review-claude-sonnet-4.6.clean.md`.
+- Qodo PR review found that the `llms.txt` claim-level assertion was too broad
+  because it checked the whole section instead of the Adoption Playbook bullet.
+  Patched the validator to inspect the specific adoption line and added a
+  regression test.
 
 ## Follow-Ups
 
