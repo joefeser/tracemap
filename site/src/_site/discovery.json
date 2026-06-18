@@ -185,6 +185,23 @@
     ]
   },
   {
+    "path": "/demo/runbook/",
+    "title": "Public Demo Runbook",
+    "summary": "Operator checklist for running the public demo, reviewing shareable summaries, following proof paths, and keeping demo claims bounded.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The runbook is a checklist over existing public demo routes, not a new evidence source.",
+      "Shareable wording must stay attached to cited summaries, proof paths, coverage labels, and limitations."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or complete product coverage proof.",
+      "No AI impact analysis, LLM analysis, raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, or private sample names are published."
+    ]
+  },
+  {
     "path": "/demo/proof-upgrades/",
     "title": "Demo Proof Upgrades",
     "summary": "Evidence ledger for demo rows that moved from deferred to reproducible public-demo proof with coverage labels.",
