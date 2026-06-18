@@ -108,6 +108,8 @@ Implementation validation completed on 2026-06-18:
   overflow.
 - Mobile browser sanity check for `/manager-faq/` at 390px width confirmed no
   horizontal overflow.
+- After Codex PR review, `npm test`, `npm run validate`, `npm run build`,
+  `git diff --check`, and `./scripts/check-private-paths.sh` passed again.
 
 Manual overclaim review: the rendered FAQ uses "proof" only to describe proof
 boundaries and proof paths. Strong runtime, production, approval, and release
@@ -123,6 +125,11 @@ phrases appear only in sanctioned non-claim/boundary framing or are avoided.
   "Safe to discuss" and "private sample names". Both were patched to
   "Shareable summary" and "private sample identifiers" before final validation
   passed.
+- Codex PR review found that the overclaim validator caught status words but
+  missed affirmative proof phrases such as "TraceMap proves runtime behavior".
+  Patched the validator with a contextual proof-claim check and regression
+  tests that reject affirmative proof phrases while allowing negated boundary
+  wording such as "cannot prove runtime behavior".
 
 ## Follow-Up Items
 
