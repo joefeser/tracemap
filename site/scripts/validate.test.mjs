@@ -9,6 +9,7 @@ import {
   adoptionPlaybookRoute
 } from "./adoption-playbook.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
+import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
@@ -107,6 +108,7 @@ async function createDistFixture({
   sitemapUrls = [
     ...deployAuditRequiredRoutes,
     adoptionPlaybookRoute,
+    demoEvidenceTrailRoute,
     incidentCallRoute,
     managerBriefRoute,
     managerFaqRoute,
@@ -125,12 +127,14 @@ async function createDistFixture({
     "/demo/start-here/",
     "/demo/proof-upgrades/",
     "/demo/proof-assets/",
+    demoEvidenceTrailRoute,
     "/evidence/",
     "/examples/",
     incidentCallRoute,
     managerBriefRoute,
     managerFaqRoute,
     "/manager-packet/",
+    "/packets/",
     reviewRoomRoute,
     staticTriageRoute,
     "/outputs/",
@@ -151,17 +155,19 @@ async function createDistFixture({
         ? deployAuditPage()
         : route === adoptionPlaybookRoute
           ? adoptionPage()
-          : route === incidentCallRoute
-            ? incidentCallPage()
-          : route === managerBriefRoute
-            ? managerBriefPage()
-            : route === managerFaqRoute
-              ? managerFaqPage()
-              : route === reviewRoomRoute
-                ? reviewRoomPage()
-                : route === staticTriageRoute
-                  ? staticTriagePage()
-                  : page(`<p>${path}</p>`),
+          : route === demoEvidenceTrailRoute
+            ? demoEvidenceTrailPage()
+            : route === incidentCallRoute
+              ? incidentCallPage()
+              : route === managerBriefRoute
+                ? managerBriefPage()
+                : route === managerFaqRoute
+                  ? managerFaqPage()
+                  : route === reviewRoomRoute
+                    ? reviewRoomPage()
+                    : route === staticTriageRoute
+                      ? staticTriagePage()
+                      : page(`<p>${path}</p>`),
       "utf8"
     );
   }
@@ -198,6 +204,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "use-case",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture adoption limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: demoEvidenceTrailRoute,
+        title: "Demo Evidence Trail",
+        summary: "Fixture demo evidence trail route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "demo",
+        preferredProofPath: "/demo/proof-upgrades/",
+        limitations: ["Fixture demo evidence trail limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -331,6 +348,32 @@ function adoptionPage() {
     <a href="/proof-paths/">Proof paths</a>
     <a href="/review-room/">Review room</a>
     <a href="/static-triage/">Static triage</a>
+    <p>${filler}</p>
+  `);
+}
+
+function demoEvidenceTrailPage() {
+  const filler = Array.from({ length: 80 }, (_, index) => `demo evidence trail boundary ${index}`).join(" ");
+  return page(`
+    <p>Public claim level: demo</p>
+    <p>No public conclusion without evidence</p>
+    <p>What static evidence connects a changed demo surface to a route and downstream surfaces?</p>
+    <p>This is the same evidence packet made easier to follow, not stronger.</p>
+    <p>site/src/_data/demo-public-summary.json public.demo.summary.v1 Tier2Structural Tier4Unknown PartialAnalysis</p>
+    <p>12 changed demo surfaces 14 endpoint findings 12 paths 25 reverse paths 37 path gaps</p>
+    <article data-trail-surface-type="package" data-trail-gap="package"><h3>Package evidence</h3><p>missing-public-item</p></article>
+    <article data-trail-surface-type="config" data-trail-gap="config"><h3>Configuration evidence</h3><p>missing-public-item</p></article>
+    <article data-trail-surface-type="sql-facing" data-trail-gap="sql-facing"><h3>SQL-facing evidence</h3><p>missing-public-item</p></article>
+    <p>runtime proof production proof release approval complete product coverage</p>
+    <meta property="og:type" content="article">
+    <a href="/demo/result/">Demo result</a>
+    <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+    <a href="/demo/proof-assets/">Demo proof assets</a>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/evidence/">Evidence</a>
+    <a href="/validation/">Validation</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/packets/">Packets</a>
     <p>${filler}</p>
   `);
 }

@@ -1,19 +1,21 @@
 # Site TraceMap Tools Demo Evidence Trail Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: ready-for-review
 Public claim level: demo
 
 ## Branch
 
 Spec branch: `codex/spec-site-demo-evidence-trail`
+Implementation branch: `codex/impl-site-demo-evidence-trail`
 Base: `origin/dev`
 
 ## Scope
 
-This branch adds a spec-only public site phase for a future demo evidence trail.
-It does not implement site code, routes, styles, validation scripts, or
-generated assets.
+This implementation branch adds a public site page for the demo evidence trail.
+It implements a bounded route, route metadata, discovery metadata, cross-links,
+focused dist validation, tests, and spec bookkeeping. It does not change
+scanner, reducer, generated demo artifacts, or public demo summary generation.
 
 The future implementation should define a demo page or section that walks one
 public-safe question through a static evidence trail:
@@ -28,28 +30,26 @@ coverage.
 
 ## Current State
 
-- Spec files added:
-  `.kiro/specs/site-tracemap-tools-demo-evidence-trail/requirements.md`,
-  `.kiro/specs/site-tracemap-tools-demo-evidence-trail/tasks.md`,
-  `.kiro/specs/site-tracemap-tools-demo-evidence-trail/implementation-state.md`,
-  and `.kiro/specs/site-tracemap-tools-demo-evidence-trail/review-packet.md`.
-- Tasks remain unchecked because implementation is future work.
-- No site source, generated output, scanner code, or reducer code has been
-  changed.
+- Selected route: `/demo/evidence-trail/`.
+- Selected proof source: `site/src/_data/demo-public-summary.json`.
+- Selected question: `What static evidence connects a changed demo surface to a
+  route and downstream surfaces?`
+- Site code is implemented on `codex/impl-site-demo-evidence-trail`.
 
 ## Scope Decisions
 
 - Claim level is `demo`, not concept and not production proof.
-- The route or section placement is intentionally left to the future
-  implementation, but it must be recorded here before site code changes.
+- The route is `/demo/evidence-trail/` because it is demo-level, adjacent to
+  `/demo/result/`, `/demo/start-here/`, `/demo/proof-upgrades/`, and
+  `/demo/proof-assets/`, and does not require changing the canonical top
+  navigation.
 - Proof sources must be checked-in samples, checked-in public demo summaries,
   or public-safe generated summaries. If none exists, implementation should
   stop and record the gap.
-- No proof source has been selected or verified yet. The future implementation
-  may consider `site/src/_data/demo-public-summary.json` as a candidate, but
-  must run the full public-safety checklist before selecting any candidate and
-  must record the result of each checklist item in this file before changing
-  site code.
+- `site/src/_data/demo-public-summary.json` is selected as the only proof
+  source. It is a checked-in public demo summary with demo-level rows, rule IDs,
+  evidence tiers, coverage labels, counts, generated report-family paths, and a
+  public output-root hash.
 - The checklist requires confirming the resolved proof source is checked in,
   contains no local absolute paths, raw remotes, connection-string tokens,
   private sample names, secrets, raw SQL, raw source snippets, or config
@@ -64,60 +64,74 @@ coverage.
   discovery validator's separate sitemap-exclusion rules.
 - If top navigation changes are needed, update the shared navigation source
   consistently so generated pages keep the canonical navigation pattern.
-- Before site implementation starts, record the resolved required target routes
-  for `/proof-paths/`, `/evidence/`, `/validation/`, and `/limitations/`, or
-  record renamed equivalents or coverage gaps.
+- Downstream package, config, and SQL-facing surfaces are rendered as explicit
+  coverage gaps in this slice. The selected summary contains dependency surface
+  counts and endpoint/path report families, but it does not expose public-safe
+  per-package, per-config, or per-SQL surface items with separate rule IDs and
+  evidence tiers. The validator asserts each in-scope downstream surface type
+  is present as either an evidence item or a gap.
+- Stable marker scheme: each downstream surface uses
+  `data-trail-surface-type="package"`, `data-trail-surface-type="config"`, or
+  `data-trail-surface-type="sql-facing"` and each explicit gap uses
+  `data-trail-gap="package"`, `data-trail-gap="config"`, or
+  `data-trail-gap="sql-facing"`.
 
 ## Public-Safety Checklist for Candidate Proof Source
 
-Candidate: `site/src/_data/demo-public-summary.json` may be evaluated at
-implementation time, but no candidate is selected until every applicable check
-below is completed.
+Candidate: `site/src/_data/demo-public-summary.json`.
 
-- [ ] File is checked into the repository.
-- [ ] Contains no local absolute paths.
-- [ ] Contains no raw repository remotes.
-- [ ] Contains no connection-string tokens.
-- [ ] Contains no private sample names.
-- [ ] Contains no secrets.
-- [ ] Contains no raw SQL.
-- [ ] Contains no raw source snippets.
-- [ ] Contains no config values.
-- [ ] `./scripts/check-private-paths.sh` passes for the candidate.
-- [ ] Candidate passes forbidden-copy patterns in the dedicated dist validator.
+- [x] File is checked into the repository.
+- [x] Contains no local absolute paths.
+- [x] Contains no raw repository remotes.
+- [x] Contains no connection-string tokens.
+- [x] Contains no private sample names.
+- [x] Contains no secrets.
+- [x] Contains no raw SQL.
+- [x] Contains no raw source snippets.
+- [x] Contains no config values.
+- [x] `./scripts/check-private-paths.sh` passes for the candidate.
+- [x] Candidate passes forbidden-copy patterns in the dedicated dist validator.
 
-Result: _pending; complete before any site code is written._
+Result: passed before site code was written. Commands:
+`git ls-files --error-unmatch site/src/_data/demo-public-summary.json`,
+targeted `rg` forbidden-pattern scan of the candidate, and
+`./scripts/check-private-paths.sh`.
 
 ## Evidence-Sufficiency Check
 
 Complete before selecting a proof source or changing site code.
 
-- [ ] Changed surface present.
-- [ ] Endpoint or route present.
-- [ ] Static path present, or explicit static-path coverage gap available.
-- [ ] Package surface item present with rule ID and evidence tier, or explicit
+- [x] Changed surface present.
+- [x] Endpoint or route present.
+- [x] Static path present, or explicit static-path coverage gap available.
+- [x] Package surface item present with rule ID and evidence tier, or explicit
   package coverage gap available.
-- [ ] Config surface item present with rule ID and evidence tier, or explicit
+- [x] Config surface item present with rule ID and evidence tier, or explicit
   config coverage gap available.
-- [ ] SQL-facing surface item present with rule ID and evidence tier, or
+- [x] SQL-facing surface item present with rule ID and evidence tier, or
   explicit SQL-facing coverage gap available.
-- [ ] Per-surface coverage labels and limitation notes available.
-- [ ] Marker scheme chosen for downstream surface types and coverage gaps.
+- [x] Per-surface coverage labels and limitation notes available.
+- [x] Marker scheme chosen for downstream surface types and coverage gaps.
 
-Result: _pending; complete before any site code is written._
+Result: sufficient for a bounded demo trail. The selected source supplies
+`diff.surfaceDiffs = 12`, `combine-and-dependency-report.endpointFindings = 14`,
+`paths-and-reverse.paths = 12`, `paths-and-reverse.pathGaps = 37`,
+`public.demo.summary.v1`, `Tier2Structural`, and `PartialAnalysis`. Package,
+config, and SQL-facing surfaces are explicit gaps because the public summary
+does not expose per-type item rows.
 
 ## Required Target Route Resolution
 
 Confirm against built `site/dist/` output before site code is written.
 
-- [ ] `/proof-paths/` - source: `site/src/proof-paths/index.html` - resolved
-  dist path: _pending_.
-- [ ] `/evidence/` - source: `site/src/evidence/index.html` - resolved dist
-  path: _pending_.
-- [ ] `/validation/` - source: `site/src/validation/index.html` - resolved
-  dist path: _pending_.
-- [ ] `/limitations/` - source: `site/src/limitations/index.html` - resolved
-  dist path: _pending_.
+- [x] `/proof-paths/` - source: `site/src/proof-paths/index.html` - resolved
+  dist path: `site/dist/proof-paths/index.html`.
+- [x] `/evidence/` - source: `site/src/evidence/index.html` - resolved dist
+  path: `site/dist/evidence/index.html`.
+- [x] `/validation/` - source: `site/src/validation/index.html` - resolved
+  dist path: `site/dist/validation/index.html`.
+- [x] `/limitations/` - source: `site/src/limitations/index.html` - resolved
+  dist path: `site/dist/limitations/index.html`.
 
 If any route is renamed before implementation, record the renamed path here and
 update proof-path links accordingly.
@@ -160,19 +174,43 @@ update proof-path links accordingly.
 
 ## Validation
 
-- `git diff --check` passed for this spec branch.
+- Pre-code proof-source checks passed:
+  `git ls-files --error-unmatch site/src/_data/demo-public-summary.json`,
+  targeted `rg` forbidden-pattern scan of the candidate source, and
+  `./scripts/check-private-paths.sh`.
+- Required target-route resolution passed after `npm run build`:
+  `/proof-paths/`, `/evidence/`, `/validation/`, and `/limitations/`.
+- `git diff --check` passed.
+- `npm test` from `site/` passed: 127 tests.
+- `npm run validate` from `site/` passed:
+  38 HTML files, 1048 internal references, 37 sitemap URLs, and 1 legacy story
+  safety target.
+- `npm run build` from `site/` passed.
 - `./scripts/check-private-paths.sh` passed.
-- Site implementation validation is future work and is listed in
-  `tasks.md`.
+- Desktop browser sanity passed at 1440x1100:
+  title `Demo Evidence Trail | TraceMap`, expected H1, no horizontal overflow
+  (`scrollWidth=1440`, `clientWidth=1440`).
+- Mobile browser sanity passed at 390x900 with no horizontal overflow
+  (`scrollWidth=390`, `clientWidth=390`).
+
+## Oddities
+
+- The selected public summary is intentionally aggregate-level. It can support
+  the changed-surface, endpoint, and static-path trail steps with counts and
+  report-family proof paths, but it does not expose public-safe per-package,
+  per-configuration, or per-SQL-facing item rows. The page renders those three
+  downstream surface types as explicit gaps with stable markers instead of
+  inventing stronger evidence.
+- The dedicated validator bans the exact rendered word `impacted` for this
+  route, per the spec. Existing neighboring pages may still use other
+  reducer/report language outside this route's validation scope.
 
 ## Follow-Ups
 
-- Future implementation must update this file with the selected route or
-  section, selected public-safe proof source, validation commands and results,
-  review findings, oddities, and follow-up items.
-- Future implementation should keep the demo focused on one question so the
-  evidence trail remains readable and bounded.
-- A partial or interrupted implementation must record, at minimum: the branch
-  name, chosen route or section anchor, selected proof source with checklist
-  result, completed implementation tasks, validation commands run and their
-  outcomes, and any blocking gaps or oddities before stopping.
+- If future demo summaries add sanitized per-package, per-configuration, or
+  per-SQL-facing items with their own rule IDs and evidence tiers, promote the
+  corresponding downstream gap card into a bounded evidence item and extend the
+  validator fixture.
+- Keep `/demo/evidence-trail/` focused on one question; add additional trails
+  as future routes or sections only when each has its own public-safe proof
+  source and validation contract.

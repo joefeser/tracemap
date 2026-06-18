@@ -219,6 +219,23 @@
     ]
   },
   {
+    "path": "/demo/evidence-trail/",
+    "title": "Demo Evidence Trail",
+    "summary": "Demo-level walkthrough of one public-safe static evidence question using checked-in summary rows, proof paths, coverage labels, and explicit downstream gaps.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "The walkthrough uses checked-in public summary counts and labels, not raw local report rows.",
+      "Package, configuration, and SQL-facing surface details are explicit public-summary gaps until sanitized per-item rows exist."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, operational safety, release approval, or complete product coverage proof.",
+      "No raw facts, SQLite indexes, analyzer logs, local output roots, database text, source excerpts, credentials, workstation paths, or generated local internals are published."
+    ]
+  },
+  {
     "path": "/proof-paths/",
     "title": "Proof Path Index",
     "summary": "Public-demo index that maps TraceMap public routes and demo sections to artifact type, rule ID or rule family, evidence tier, coverage label, proof path, limitation, and public status.",
