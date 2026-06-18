@@ -82,6 +82,12 @@ implements the first suggested PR boundary:
   `combined_argument_flows` and `combined_fact_symbols`.
 - Added a read-only route-flow projection reader for `combined_argument_flows`
   and `combined_fact_symbols`.
+- After PR review-loop feedback, bounded the projection SQL reads to selected
+  route-flow caller/callee pairs and selected source-local symbols, with bounded
+  fact-ID probes for projection-unavailable gaps instead of full row buffering.
+- Added combined-index lookup indexes for future indexes on fact-symbol
+  source/symbol, fact-symbol source/fact, and argument-flow source/caller/callee
+  access patterns.
 - Projected joined argument-flow rows into existing `LogicRows` as
   `argument-flow` rows only when caller/callee symbols are already connected by
   selected route-flow path evidence.
@@ -92,6 +98,9 @@ implements the first suggested PR boundary:
   the selected route-flow path.
 - Added a scoped fact-symbol projection gap when the table exists but this first
   slice does not project the observed fact types directly.
+- Unsupported fact-symbol rows attached to the selected route-flow path now emit
+  a scoped projection gap even when other fact-symbol rows on that path are
+  projected.
 - Hashed dependency-surface `tableName`, `columnNames`, and `configKey`
   metadata in route-flow output and added regression assertions for those
   fields.
@@ -127,6 +136,13 @@ implements the first suggested PR boundary:
   `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests` passed;
   `dotnet test src/dotnet/TraceMap.sln` passed with 439 tests;
   `git diff --check` passed; `./scripts/check-private-paths.sh` passed.
+- PR review-loop remediation patched the actionable Qodo performance finding for
+  buffered large projection reads, the optional repeated-sort finding, and the
+  Codex inline unsupported fact-symbol gap finding. Validation after that patch:
+  `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests` passed;
+  `dotnet test src/dotnet/TraceMap.sln` passed with 439 tests;
+  `git diff --check` passed after whitespace cleanup;
+  `./scripts/check-private-paths.sh` passed.
 - Ran the checked-in combined path/reverse smoke via
   `./scripts/smoke-combined-paths.sh <tmp>` after installing local TypeScript
   dependencies with `npm --prefix src/typescript ci`, then ran a direct

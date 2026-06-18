@@ -55,6 +55,8 @@ are the contract that later implementation and tests validate.
         route-flow detail rows.
   - [x] Read `combined_fact_symbols` and project fact-to-symbol attachments into
         route-flow detail rows.
+  - [x] Bound projection reads to selected route-flow caller/callee pairs and
+        source-local symbols, with combined-index lookup indexes for new scans.
   - [ ] Read call edges, object creations, parameter-forwarding edges, symbol
         relationships, `FactTypes.ObjectShapeInferred`,
         `FactTypes.QueryPatternDetected`, dependency/data facts in
