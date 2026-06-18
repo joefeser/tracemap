@@ -34,16 +34,16 @@
 Task 4 must land before Tasks 5-11 begin. The rule catalog and emitted gap codes
 are the contract that later implementation and tests validate.
 
-- [ ] 4. Extend route-flow rule catalog entries and limitations. Requirements: 4.
-  - [ ] Reuse existing `combined.route-flow.*` rules for selector, entry, path,
+- [x] 4. Extend route-flow rule catalog entries and limitations. Requirements: 4.
+  - [x] Reuse existing `combined.route-flow.*` rules for selector, entry, path,
         interface bridge, logic surface, dependency surface, classification,
         redaction, and report envelope behavior.
-  - [ ] Add `combined.route-flow.argument-projection.v1`.
-  - [ ] Add `combined.route-flow.fact-symbol-projection.v1`.
-  - [ ] Extend `combined.route-flow.gap.v1` emits for any new gap codes.
-  - [ ] Add a test or catalog assertion that every emitted rule ID resolves and
+  - [x] Add `combined.route-flow.argument-projection.v1`.
+  - [x] Add `combined.route-flow.fact-symbol-projection.v1`.
+  - [x] Extend `combined.route-flow.gap.v1` emits for any new gap codes.
+  - [x] Add a test or catalog assertion that every emitted rule ID resolves and
         no parallel `route.flow.*` family is introduced.
-  - [ ] Document limitations for static composition, route reachability,
+  - [x] Document limitations for static composition, route reachability,
         runtime DI, dynamic dispatch, argument flow, query/data surfaces,
         reduced coverage, missing extractors, and redaction.
 
@@ -51,23 +51,25 @@ are the contract that later implementation and tests validate.
       2, 5.
   - [ ] Detect and read route entry evidence attached to controller or handler
         symbols.
-  - [ ] Read `combined_argument_flows` and project direct argument evidence into
+  - [x] Read `combined_argument_flows` and project direct argument evidence into
         route-flow detail rows.
-  - [ ] Read `combined_fact_symbols` and project fact-to-symbol attachments into
+  - [x] Read `combined_fact_symbols` and project fact-to-symbol attachments into
         route-flow detail rows.
+  - [x] Bound projection reads to selected route-flow caller/callee pairs and
+        source-local symbols, with combined-index lookup indexes for new scans.
   - [ ] Read call edges, object creations, parameter-forwarding edges, symbol
         relationships, `FactTypes.ObjectShapeInferred`,
         `FactTypes.QueryPatternDetected`, dependency/data facts in
         `combined_facts`, `combined_dependency_edges`, coverage metadata, and
         `AnalysisGap` facts.
-  - [ ] Remove or conditionally suppress the current present-but-unprojected
+  - [x] Remove or conditionally suppress the current present-but-unprojected
         `ExtractorUnavailable` gaps for `combined_argument_flows` and
         `combined_fact_symbols` once projection is active.
-  - [ ] Tolerate missing optional tables and emit availability gaps.
-  - [ ] Preserve source labels, source index IDs, scan IDs, commit SHAs,
+  - [x] Tolerate missing optional tables and emit availability gaps.
+  - [x] Preserve source labels, source index IDs, scan IDs, commit SHAs,
         extractor identities, supporting fact IDs, supporting edge IDs, rule
         IDs, evidence tiers, file paths, and line spans.
-  - [ ] Keep SQLite inputs read-only.
+  - [x] Keep SQLite inputs read-only.
 
 - [ ] 6. Compose route entry to downstream method evidence. Requirements: 2, 4,
       5.
@@ -126,43 +128,43 @@ are the contract that later implementation and tests validate.
         limitations in every result and gap.
 
 - [ ] 10. Extend Markdown and JSON output safely. Requirements: 5, 6.
-  - [ ] Extend the existing `route-flow-report.json` contract
+  - [x] Extend the existing `route-flow-report.json` contract
         backward-compatibly, preserving `reportType = "route-flow"` and the
         existing version unless a future breaking schema spec changes it.
-  - [ ] Align Markdown with the existing route-flow renderer and add new rows to
+  - [x] Align Markdown with the existing route-flow renderer and add new rows to
         compatible sections or narrowly named subsections.
-  - [ ] Sort rows deterministically and generate stable row IDs.
+  - [x] Sort rows deterministically and generate stable row IDs.
   - [ ] Use explicit nulls, empty arrays, and closed-set gap codes for missing
         values.
-  - [ ] Ensure wording says static evidence and avoids runtime proof claims.
-  - [ ] Add byte-stability tests for JSON output.
-  - [ ] Add tests proving projected argument/fact-symbol rows suppress the old
+  - [x] Ensure wording says static evidence and avoids runtime proof claims.
+  - [x] Add byte-stability tests for JSON output.
+  - [x] Add tests proving projected argument/fact-symbol rows suppress the old
         present-but-unprojected `ExtractorUnavailable` gap for that route/table,
         while unjoinable rows emit the narrower projection-unavailable gap.
   - [ ] Add or explicitly defer focused coverage for
         `combined_parameter_forward_edges` as a bridge in route-flow traversal.
 
 - [ ] 11. Enforce privacy and redaction. Requirements: 6, 7.
-  - [ ] Reuse shared safe path, hashing, display, and redaction helpers where
+  - [x] Reuse shared safe path, hashing, display, and redaction helpers where
         practical.
-  - [ ] Add or extend report-output guards for local absolute paths, private
+  - [x] Add or extend report-output guards for local absolute paths, private
         sample names, private repository names, private route strings, raw SQL,
         raw config values, raw URLs, raw remotes, source snippets, connection
         strings, and secrets.
   - [ ] Ensure logs do not echo unsafe selector or display values.
-  - [ ] Include `combined.route-flow.redaction.v1` in rows where unsafe values
+  - [x] Include `combined.route-flow.redaction.v1` in rows where unsafe values
         are hashed or omitted.
-  - [ ] Add negative privacy tests for Markdown, JSON, logs, and
+  - [x] Add negative privacy tests for Markdown, JSON, logs, and
         SQLite-derived display fields.
 
 - [ ] 12. Validate implementation. Requirements: 7.
-  - [ ] Run `dotnet test` for the implementation slice.
-  - [ ] Run relevant pinned smoke checks from `docs/VALIDATION.md`, or document
+  - [x] Run `dotnet test` for the implementation slice.
+  - [x] Run relevant pinned smoke checks from `docs/VALIDATION.md`, or document
         a deferral with rationale.
-  - [ ] Run `git diff --check`.
-  - [ ] Run the private path guard if available.
-  - [ ] Run any route-flow/reporting privacy guard or forbidden-wording tests.
-  - [ ] Run non-regression tests for existing route-flow CLI wiring, rule IDs,
+  - [x] Run `git diff --check`.
+  - [x] Run the private path guard if available.
+  - [x] Run any route-flow/reporting privacy guard or forbidden-wording tests.
+  - [x] Run non-regression tests for existing route-flow CLI wiring, rule IDs,
         classifications, JSON report type/version, and Markdown compatibility.
   - [ ] Run an ignored local smoke against a private legacy ASP.NET smoke sample
         using generic labels only; do not commit private outputs.

@@ -1630,6 +1630,30 @@ rules:
       - Stable keys use safe source-scoped identity fields and must not include scan-specific fact IDs, raw SQL, raw URLs, config values, snippets, connection strings, local paths, remotes, or secrets.
       - Duplicate stable surface identities are review-tier identity gaps rather than proof of one unique terminal surface.
 
+  - id: combined.route-flow.argument-projection.v1
+    name: Route-flow argument evidence projection
+    description: Projects direct combined_argument_flows rows into route-flow logic rows only when the caller and callee are already connected by selected static route-flow path evidence.
+    evidenceTier: Inherits argument-flow evidence and caps strongest projection at ProbableStaticRouteFlow
+    emits:
+      - route-flow argument-flow logic row
+      - ArgumentProjectionUnavailable gap
+    limitations:
+      - Argument projection rows are direct static argument evidence only; they do not prove full taint, aliasing, mutation tracking, branch feasibility, serializer behavior, repository translation, runtime values, or production data.
+      - Projection requires a source-local static call or path bridge already selected by route-flow; unjoined argument rows are reported as gaps rather than inferred flows.
+      - Parameter names, type descriptors, ordinals, expression kinds, and hashes may be rendered when safe; literal values, raw source expressions, source snippets, local paths, URLs, SQL/config values, and secrets must not be rendered.
+
+  - id: combined.route-flow.fact-symbol-projection.v1
+    name: Route-flow fact-symbol evidence projection
+    description: Projects combined_fact_symbols attachments into route-flow logic rows by joining to combined_facts and selected source-local route-flow symbols.
+    evidenceTier: Inherits attached fact evidence and caps strongest projection at ProbableStaticRouteFlow unless weaker evidence requires NeedsReview or UnknownAnalysisGap
+    emits:
+      - route-flow fact-symbol projection logic row
+      - FactSymbolProjectionUnavailable gap
+    limitations:
+      - Fact-symbol projection rows preserve source-local static attachments only; they do not prove runtime request execution, dependency injection binding, dynamic dispatch target selection, SQL execution, database existence, schema compatibility, package loading, or production use.
+      - Projection requires source-local symbol identity already present in the selected route-flow path; global short-name stitching and cross-source symbol guesses are not evidence in this rule.
+      - Query, data, config, package, and object-shape metadata must use safe descriptors and hashes; raw SQL, config values, connection strings, URLs, remotes, source snippets, local paths, private labels, and secrets must not be rendered.
+
   - id: combined.route-flow.classification.v1
     name: Route-flow summary classification
     description: Stamps the overall route-flow summary classification from selected entry evidence, path rows, dependency/data surfaces, coverage, source identity, schema availability, truncation, and gaps.
@@ -1659,6 +1683,8 @@ rules:
       - RuntimeBindingNotProven gap
       - DynamicDispatchBoundary gap
       - DynamicClientUrlNeedsReview gap
+      - ArgumentProjectionUnavailable gap
+      - FactSymbolProjectionUnavailable gap
       - ReducedCoverage gap
       - UnknownCommitSha gap
       - NoRouteFlowEvidence gap
