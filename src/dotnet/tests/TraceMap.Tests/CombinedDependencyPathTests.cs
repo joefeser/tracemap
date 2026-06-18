@@ -103,6 +103,32 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Legacy_paths_report_labels_missing_winforms_precision_as_availability_gap_for_older_indexes()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "old.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "legacy-paths");
+        var manifest = Manifest("legacy", "tracemap-before-winforms");
+
+        SqliteIndexWriter.Write(index, manifest, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["legacy"]));
+
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                outDir,
+                View: LegacyFlowReportConstants.View));
+
+        Assert.Empty(report.Paths);
+        Assert.Contains(report.Gaps, gap =>
+            gap.GapKind == "NoRootsFound"
+            && gap.Message.Contains("WinForms", StringComparison.Ordinal)
+            && gap.RuleId == RuleIds.LegacyFlowInputAvailability);
+        Assert.False(Directory.Exists(outDir));
+    }
+
+    [Fact]
     public async Task Paths_adds_deterministic_value_origin_notes_without_replacing_canonical_classification()
     {
         using var temp = new TempDirectory();

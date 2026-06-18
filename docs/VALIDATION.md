@@ -346,6 +346,38 @@ grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out
 
 WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 
+## Legacy WinForms Event Navigation Smoke
+
+When changing WinForms form/control inventory, designer parsing, event binding,
+handler resolution, navigation, callback, resource metadata, or handler-flow
+projection, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyWinFormsExtractorTests
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+python3 -m unittest scripts.tests.test_legacy_codebase_validation
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Useful inspection queries:
+
+```bash
+sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts where fact_type like 'WinForms%' group by fact_type order by fact_type;"
+sqlite3 <out>/index.sqlite "select fact_type, rule_id, evidence_tier, file_path, start_line, properties_json from facts where fact_type like 'WinForms%' order by fact_type, file_path, start_line;"
+grep -E "WinForms Static Evidence|WinForms Events|WinForms Navigation And Callbacks|WinForms Handler Flow" <out>/report.md
+```
+
+WinForms smoke summaries must remain hidden public-claim level until reviewed.
+Use checked-in or temporary synthetic fixtures only. Do not commit local sample
+paths, private sample names, raw remotes, raw source snippets, raw SQL, config
+values, resource values, endpoint URLs, hostnames, secrets, or generated private
+outputs. WinForms evidence is static and does not prove runtime event firing,
+form visibility, user reachability, branch feasibility, auth/role outcome,
+scheduling, service reachability, SQL execution, database existence, deployment,
+or production usage.
+
 ## Legacy ASP.NET Route And Navigation Smoke
 
 When changing classic ASP.NET route, config, handler, PageMethod, sitemap, or

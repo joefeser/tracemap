@@ -591,9 +591,9 @@ public static class CombinedDependencyPathReporter
                 graph.AddNode(ToEndpointNode(fact));
             }
 
-            if (includeLegacyRoots && fact.FactType == FactTypes.WebFormsHandlerResolved)
+            if (includeLegacyRoots && fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsHandlerResolved)
             {
-                graph.AddNode(ToWebFormsRootNode(fact));
+                graph.AddNode(fact.FactType == FactTypes.WinFormsHandlerResolved ? ToWinFormsRootNode(fact) : ToWebFormsRootNode(fact));
                 continue;
             }
 
@@ -1012,9 +1012,9 @@ public static class CombinedDependencyPathReporter
             .GroupBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
-        foreach (var handler in facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        foreach (var handler in facts.Where(fact => fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsHandlerResolved).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
-            var root = ToWebFormsRootNode(handler);
+            var root = handler.FactType == FactTypes.WinFormsHandlerResolved ? ToWinFormsRootNode(handler) : ToWebFormsRootNode(handler);
             graph.AddNode(root);
             var handlerSymbol = HandlerSymbol(handler);
             if (!string.IsNullOrWhiteSpace(handlerSymbol))
@@ -1085,7 +1085,7 @@ public static class CombinedDependencyPathReporter
             }
         }
 
-        foreach (var projection in facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        foreach (var projection in facts.Where(fact => fact.FactType is FactTypes.WebFormsEventFlowProjected or FactTypes.WinFormsHandlerFlowProjected).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             AddProjectionEdge(graph, projection, factsBySourceOriginalId, surfacesByKind);
         }
@@ -1096,20 +1096,20 @@ public static class CombinedDependencyPathReporter
     private static void AddUnresolvedRootGaps(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
         var resolvedBindingIds = facts
-            .Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
+            .Where(fact => fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsHandlerResolved)
             .SelectMany(fact => SplitList(CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds"))
                 .Select(id => SourceFactKey(fact.SourceIndexId, id)))
             .ToHashSet(StringComparer.Ordinal);
         var resolvedHandlerKeys = facts
-            .Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
-            .Select(fact => WebFormsBindingKey(fact))
+            .Where(fact => fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsHandlerResolved)
+            .Select(fact => UiBindingKey(fact))
             .Where(key => key is not null)
             .Select(key => key!)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var binding in facts.Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        foreach (var binding in facts.Where(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WinFormsEventBindingDeclared).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
-            var bindingKey = WebFormsBindingKey(binding);
+            var bindingKey = UiBindingKey(binding);
             if (resolvedBindingIds.Contains(SourceFactKey(binding.SourceIndexId, binding.OriginalFactId))
                 || (bindingKey is not null && resolvedHandlerKeys.Contains(bindingKey)))
             {
@@ -1120,7 +1120,7 @@ public static class CombinedDependencyPathReporter
                 $"gap:legacy-root:unresolved:{binding.CombinedFactId}",
                 "UnresolvedRoot",
                 CombinedDependencyPathClassifications.AnalysisGap,
-                "WebForms event binding evidence had no resolved handler under available static evidence.",
+                "Legacy UI event binding evidence had no resolved handler under available static evidence.",
                 binding.SourceIndexId,
                 binding.SourceLabel,
                 null,
@@ -1136,13 +1136,13 @@ public static class CombinedDependencyPathReporter
     private static void AddLegacyAvailabilityGaps(EvidenceGraph graph, CombinedReadResult read)
     {
         var first = read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).FirstOrDefault();
-        if (!read.Facts.Any(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsHandlerResolved or FactTypes.HttpRouteBinding or FactTypes.WcfServiceHostDeclared or FactTypes.WcfOperationContractDeclared))
+        if (!read.Facts.Any(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsEventBindingDeclared or FactTypes.WinFormsHandlerResolved or FactTypes.HttpRouteBinding or FactTypes.WcfServiceHostDeclared or FactTypes.WcfOperationContractDeclared))
         {
             graph.Gaps.Add(new CombinedPathGap(
                 "gap:legacy:no-roots-found",
                 "NoRootsFound",
                 CombinedDependencyPathClassifications.AnalysisGap,
-                "No credible WebForms, API, or service root evidence was available in the index.",
+                "No credible WinForms, WebForms, API, or service root evidence was available in the index.",
                 first?.SourceIndexId,
                 first?.Label,
                 null,
@@ -1391,7 +1391,7 @@ public static class CombinedDependencyPathReporter
 
         graph.AddEdge(new GraphEdge(
             $"legacy-projection:{projection.CombinedFactId}:{terminal.NodeId}",
-            "webforms-event-flow-projection",
+            projection.FactType == FactTypes.WinFormsHandlerFlowProjected ? "winforms-handler-flow-projection" : "webforms-event-flow-projection",
             source.NodeId,
             terminal.NodeId,
             "EvidenceEdge",
@@ -1417,6 +1417,43 @@ public static class CombinedDependencyPathReporter
         return new GraphNode(
             FactNodeId(fact.CombinedFactId),
             isLifecycle ? "webforms-lifecycle" : "webforms-event",
+            label,
+            fact.SourceIndexId,
+            SafeSourceLabel(fact.SourceLabel),
+            fact.ScanId,
+            fact.CommitSha,
+            HandlerSymbol(fact),
+            fact.CombinedFactId,
+            RuleIds.LegacyFlowRootSelection,
+            fact.EvidenceTier,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    }
+
+    private static GraphNode ToWinFormsRootNode(CombinedFactRow fact)
+    {
+        var handlerName = CombinedDependencyReporter.FirstValue(fact.Properties, "handlerName") ?? fact.ContractElement ?? fact.TargetSymbol ?? "handler";
+        var eventName = CombinedDependencyReporter.FirstValue(fact.Properties, "eventName") ?? "event";
+        var controlId = CombinedDependencyReporter.FirstValue(fact.Properties, "controlId") ?? "control";
+        var form = CombinedDependencyReporter.FirstValue(fact.Properties, "formTypeName") ?? fact.SourceSymbol ?? "form";
+        var label = $"winforms-event {SafeDisplay(form)}/{SafeDisplay(controlId)}/{SafeDisplay(eventName)}";
+        return new GraphNode(
+            FactNodeId(fact.CombinedFactId),
+            "winforms-event",
             label,
             fact.SourceIndexId,
             SafeSourceLabel(fact.SourceLabel),
@@ -1583,7 +1620,7 @@ public static class CombinedDependencyPathReporter
             fact.CommitSha,
             null,
             fact.CombinedFactId,
-            RuleIds.LegacyWebFormsEventFlow,
+            fact.RuleId,
             fact.EvidenceTier,
             SafePath(fact.FilePath),
             fact.StartLine,
@@ -1647,7 +1684,7 @@ public static class CombinedDependencyPathReporter
             ?? fact.ContractElement;
     }
 
-    private static string? WebFormsBindingKey(CombinedFactRow fact)
+    private static string? UiBindingKey(CombinedFactRow fact)
     {
         var controlId = CombinedDependencyReporter.FirstValue(fact.Properties, "controlId");
         var eventName = CombinedDependencyReporter.FirstValue(fact.Properties, "eventName");
@@ -2351,7 +2388,7 @@ public static class CombinedDependencyPathReporter
                 .ToHashSet(StringComparer.Ordinal);
             candidates = graph.Nodes.Values.Where(node =>
                 matchedClientIds.Contains(node.NodeId)
-                || (legacyMode && node.NodeKind is "webforms-event" or "webforms-lifecycle" or "EndpointRoute"));
+                || (legacyMode && node.NodeKind is "webforms-event" or "webforms-lifecycle" or "winforms-event" or "EndpointRoute"));
         }
 
         if (!string.IsNullOrWhiteSpace(sourceFilter))
