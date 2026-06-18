@@ -1001,6 +1001,95 @@ rules:
       - Safe reducer-facing properties include linkKind, symbolRole, typeName, generatedCodeFileName, supportingFactIds, metadataPath, and hash variants for unsafe identifiers.
       - Linkage tier is recorded separately and does not upgrade the descriptor tier of the metadata evidence.
 
+  - id: legacy.data.model.identity.v1
+    name: Legacy data model identity projection
+    description: Documents normalized identity semantics for legacy data model descriptors derived from existing DBML, EDMX, typed DataSet, TableAdapter, generated-code, or old ORM source evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - This rule owns derived identity semantics and availability gaps; existing DBML, EDMX, typed DataSet, config, and generated-link source facts keep their source rule IDs.
+      - Model identities are static checked-in metadata evidence and do not prove runtime data access, query execution, database schema existence, generated-code freshness, deployment, provider compatibility, lazy loading, change tracking, migrations, or production usage.
+      - Descriptor conclusions are capped at the weakest supporting source evidence and are not upgraded by generated-code linkage.
+      - Safe properties include modelKind, metadataFormat, descriptorRole, stableModelKey, safe display labels or hashes, sourceMetadataFactId, supportingFactIds, coverageLabel, and limitation codes.
+      - Ambiguous, duplicate, unsupported, reduced-coverage, malformed, parser-rejected, or too-large metadata is emitted as a gap rather than an inferred identity.
+      - Raw SQL, source snippets, connection strings, config values, URLs, remotes, local absolute paths, schema/catalog/provider values, private labels, and secrets are hashed or omitted.
+
+  - id: legacy.data.model.relationship.v1
+    name: Legacy data model relationship projection
+    description: Documents deterministic relationship semantics derived from legacy data mapping evidence while preserving source mapping rule IDs and mappingKind values.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - This rule owns derived relationship semantics and availability gaps; source extractors continue to emit LegacyDataMappingDeclared under their source rule IDs.
+      - Relationship evidence is static descriptor metadata and does not prove database constraints, runtime navigation, lazy loading, cascade behavior, query execution, schema existence, deployment, provider compatibility, or production usage.
+      - Existing source mappingKind values such as association, relation, entity-storage, property-column, adapter-command, orm-class, and orm-property remain stable; model relationship semantics are additive.
+      - Bidirectional relationships require deterministic endpoints; unidirectional, ambiguous, duplicate, inherited, split, conditional, many-to-many, provider-specific, or unsupported shapes are gaps or needs-review evidence.
+      - Descriptor conclusions are capped at the weakest supporting source evidence and are not upgraded by generated-code linkage.
+      - Unsafe endpoint names, SQL-like text, config values, source snippets, connection strings, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
+
+  - id: legacy.data.orm.nhibernate.v1
+    name: Legacy NHibernate mapping metadata
+    description: Extracts safe static descriptor evidence from checked-in NHibernate hbm.xml mapping files without loading NHibernate or provider runtimes.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataMetadataDeclared
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - AnalysisGap
+    limitations:
+      - NHibernate mapping evidence is checked-in XML metadata only and does not prove session factory loading, runtime mapping validity, lazy loading, cascade behavior, dirty tracking, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - XML parsing uses the legacy data safe parser bounds and rejects DTDs, external entities, malformed input, oversized input, excessive node count, and excessive depth as reduced-coverage gaps.
+      - Safe properties include metadataFormat, modelKind, descriptorRole, stableModelKey, mappingKind, modelRelationshipKind when deterministic, safe display labels or hashes, supportingFactIds, coverageLabel, and limitation codes.
+      - Schema, catalog, formula, filter, SQL, query, dialect, connection, provider-specific values, raw mapping content, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
+      - Inheritance, joined or union subclass mappings, composite IDs, dynamic components, custom SQL, filters, named queries, custom user types, provider extensions, and ambiguous mapping shapes are gaps unless a future rule documents deterministic handling.
+      - Per-class descriptor and relationship emission is capped deterministically; skipped descriptors produce too-large or truncation gaps rather than clean absence.
+
+  - id: legacy.data.orm.unsupported.v1
+    name: Unsupported legacy ORM descriptor gap
+    description: Records safe gaps for recognized old ORM descriptor families outside the deterministic MVP parser scope.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Unsupported ORM evidence is a static coverage gap and does not prove data access, runtime mapping validity, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - Recognized family labels are public-safe descriptors only; raw mapping content, SQL, config values, connection strings, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
+      - LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, Castle ActiveRecord, Fluent-only mappings, and project-local mapping DSLs remain unsupported unless a future rule defines deterministic parser behavior.
+      - Unsupported descriptors produce gaps, not invented entity, table, column, relationship, or generated-code facts.
+
+  - id: legacy.data.model.generated-link.v1
+    name: Legacy data model generated-code linkage
+    description: Reserves model-normalized generated-code linkage semantics for deterministic descriptor-to-symbol evidence beyond the existing source generated-link rule.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - LegacyDataGeneratedCodeLinked
+      - AnalysisGap
+    limitations:
+      - Existing generated-code linkage remains under legacy.data.generated-link.v1 unless a model-normalized link needs this distinct rule ID.
+      - Linkage is static repository evidence and does not prove generated files are fresh, runtime code paths execute, database access occurs, query execution occurs, deployment, provider compatibility, or production usage.
+      - Global short-name matching is not allowed; semantic links require scoped compiler-resolved symbols, structural links require scoped metadata/file evidence, and syntax fallback remains reduced coverage.
+      - Ambiguous, stale, missing, duplicate, or reduced-coverage generated-code candidates are gaps rather than arbitrary links.
+      - Linkage tier is recorded separately and does not upgrade descriptor facts above their descriptor tier ceiling.
+      - Safe properties include linkKind, symbolRole, metadataFormat, stableModelKey, generatedCodeFileName, supportingFactIds, coverageLabel, and hash variants for unsafe identifiers; source snippets, raw paths, URLs, remotes, config values, and secrets are omitted.
+
+  - id: legacy.data.model.surface.v1
+    name: Legacy data model surface projection
+    description: Owns derived legacy-data report and export surface rows for safe model descriptors and availability gaps; it is not a scan-time source fact rule.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - This rule projects the existing legacy-data surface kind with surfaceSubtype data-model; it does not introduce a LegacyDataModelSurfaceProjected scan fact or a parallel legacy-data-model surface kind.
+      - Surface rows are static report/export context and do not prove runtime database use, query execution, schema existence, reachability, dependency impact, deployment, provider compatibility, or production usage.
+      - AnalysisGap facts under legacy.data.* rules are excluded from terminal surface projection and remain gaps, caveats, or limitations.
+      - Already-derived projection rows are not re-consumed by prefix-based legacy data fact readers.
+      - Safe properties include surfaceKind, surfaceSubtype, modelKind, metadataFormat, stableSurfaceKey, safeDisplayName or hash label, sourceRuleIds, supportingFactIds, supportingEdgeIds, coverageLabel, and limitations.
+      - Surface classification is capped for syntax-only, ambiguous, high fan-out, missing generated-code, unsupported, or reduced-coverage evidence.
+      - Raw SQL, source snippets, connection strings, config values, URLs, remotes, local absolute paths, schema/catalog/provider values, private labels, and secrets are hashed or omitted.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, and safe page linkage metadata.
