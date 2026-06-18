@@ -1,37 +1,39 @@
 # Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: ready-for-review
 Public claim level: concept
 
 ## Summary
 
-This spec-only phase defines a future manager FAQ page for `tracemap.tools`.
-The future page should answer skeptical stakeholder questions about what
-TraceMap can and cannot say from deterministic static evidence, while keeping
-runtime, production, release-safety, operational-safety, and AI/LLM impact
-analysis claims out of scope.
-
-No site implementation is included in this phase.
+This implementation adds a manager FAQ page for `tracemap.tools`. The page
+answers skeptical stakeholder questions about what TraceMap can and cannot say
+from deterministic static evidence, while keeping runtime, production,
+release-safety, operational-safety, and model-driven impact claims out of
+scope.
 
 ## Branch
 
 Spec branch: `codex/spec-site-manager-faq`
+Implementation branch: `codex/impl-site-manager-faq`
 Target PR base: `dev`
 
 ## Scope Decisions
 
-- Keep this phase spec-only under
-  `.kiro/specs/site-tracemap-tools-manager-faq/`.
-- Leave all implementation tasks unchecked because page work is future work.
-- Define two allowed future routes, `/manager-faq/` and `/faq/manager/`, and
-  require the implementation phase to record the final choice.
+- Add `/manager-faq/` as the public route.
+- Reject `/faq/manager/` because the existing manager-facing route family uses
+  top-level routes such as `/manager-brief/` and `/manager-packet/`.
 - Set public claim level to `concept` because the FAQ explains claim
   boundaries and intended stakeholder use, not a new scanner/reducer
   capability or production proof.
-- Require links to `/manager-brief/`, `/manager-packet/`, `/review-room/`,
+- Link to `/manager-brief/`, `/manager-packet/`, `/review-room/`,
   `/limitations/`, `/validation/`, and `/proof-paths/` so the FAQ connects to
   existing manager and evidence-boundary surfaces.
+- Add optional supporting links to `/docs/`, `/demo/`, `/demo/result/`,
+  `/packets/`, and `/capabilities/` where the FAQ points to supporting public
+  context.
+- Add sitemap metadata, discovery metadata, safe cross-links from manager
+  pages, and a dedicated validator/test pair.
 - Keep raw artifacts, private identifiers, local paths, generated scan
   directories, and private sample names out of future public copy.
 
@@ -94,13 +96,24 @@ Spec authoring validation:
 
 Future implementation validation:
 
-- Run `git diff --check`.
-- Run `./scripts/check-private-paths.sh`.
-- Run `npm test` from `site/`.
-- Run `npm run validate` from `site/`.
-- Run `npm run build` from `site/`.
-- Run desktop and mobile browser sanity checks if layout or interaction
-  changes.
+Implementation validation completed on 2026-06-18:
+
+- `git diff --check` passed.
+- `./scripts/check-private-paths.sh` passed.
+- `npm test` from `site/` passed.
+- `npm run validate` from `site/` passed.
+- `npm run build` from `site/` passed.
+- Desktop browser sanity check for `/manager-faq/` at 1440px width confirmed
+  expected title, H1, claim-level text, shared principle, and no horizontal
+  overflow.
+- Mobile browser sanity check for `/manager-faq/` at 390px width confirmed no
+  horizontal overflow.
+- After Codex PR review, `npm test`, `npm run validate`, `npm run build`,
+  `git diff --check`, and `./scripts/check-private-paths.sh` passed again.
+
+Manual overclaim review: the rendered FAQ uses "proof" only to describe proof
+boundaries and proof paths. Strong runtime, production, approval, and release
+phrases appear only in sanctioned non-claim/boundary framing or are avoided.
 
 ## Oddities
 
@@ -108,11 +121,17 @@ Future implementation validation:
   reduced coverage because a shell tool request was denied by the review
   wrapper. The reviewer still read the spec files and verified assumptions
   through allowed file and grep tools.
+- Initial `npm run validate` caught two copy issues in the rendered page:
+  "Safe to discuss" and "private sample names". Both were patched to
+  "Shareable summary" and "private sample identifiers" before final validation
+  passed.
+- Codex PR review found that the overclaim validator caught status words but
+  missed affirmative proof phrases such as "TraceMap proves runtime behavior".
+  Patched the validator with a contextual proof-claim check and regression
+  tests that reject affirmative proof phrases while allowing negated boundary
+  wording such as "cannot prove runtime behavior".
 
 ## Follow-Up Items
 
-- Patch any Medium or higher Kiro review findings before opening the PR.
-- Record exact Kiro review command failures here if either requested model is
-  unavailable or denied.
-- During the future implementation phase, update route choice, validation
-  results, review-loop outcomes, and task checkboxes as work completes.
+- Consider adding `/manager-faq/` to top-level navigation only if future reader
+  feedback shows the manager route family needs direct nav exposure.
