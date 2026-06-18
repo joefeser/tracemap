@@ -32,6 +32,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "aligned-route-pair");
         Assert.DoesNotContain(result.Report.FlowRows, row => row.EdgeKind == "client-server-alignment");
+        Assert.Contains(result.Report.FlowRows, row => row.RowKind == "endpoint-method-bridge" && row.EdgeKind == "route-bound-to-symbol");
         Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call" && row.SourceSymbol.Contains(controller, StringComparison.Ordinal));
         Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-filter-sort-selection");
@@ -60,6 +61,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("candidate implementation", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Server=private", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Password=secret", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Server=private", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Password=secret", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("generatedAt", json, StringComparison.OrdinalIgnoreCase);
@@ -106,6 +109,257 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "route-flow-report.md")));
         Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "route-flow-report.json")));
     }
+
+    [Fact]
+    public async Task Route_flow_emits_missing_method_symbol_bridge_for_route_roots_without_source_local_handler_symbol()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFactWithoutMethodSymbol(server, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10),
+            CallFact(server, "Server.Unrelated.Start(System.Int32)", "Server.OrderRepository.Query(System.Int32)", "Services/Unrelated.cs", 20),
+            QueryPatternFact(server, "Server.OrderRepository.Query(System.Int32)", "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
+        Assert.Empty(result.Report.FlowRows);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge" && gap.RuleId == "combined.route-flow.gap.v1");
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_emits_missing_route_root_when_only_matching_client_endpoint_context_exists()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+
+        SqliteIndexWriter.Write(clientIndex, client, [
+            HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5, "Client.OrderService.loadOrder(System.Int32)")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex], combinedPath, ["client"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}"));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingRouteRoot");
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_bridges_interface_call_to_static_implementation_candidate_and_downstream_surface()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14, targetSymbolKind: "InterfaceMember"),
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            CallFact(server, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.FlowRows, row => row.RowKind == "endpoint-method-bridge" && row.EdgeKind == "route-bound-to-symbol");
+        Assert.Contains(result.Report.FlowRows, row => row.RowKind == "interface-implementation-candidate"
+            && row.SourceSymbol.Contains(service, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(implementation, StringComparison.Ordinal) == true
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow
+            && row.Evidence.RuleId == "combined.route-flow.interface-bridge.v1");
+        Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
+            && row.SourceSymbol.Contains(implementation, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(repository, StringComparison.Ordinal) == true
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query"
+            && surface.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MissingImplementationBridge");
+    }
+
+    [Fact]
+    public async Task Route_flow_marks_multiple_interface_candidates_ambiguous_but_keeps_direct_concrete_edge_stronger()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var alternate = "Server.CachedOrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14, targetSymbolKind: "InterfaceMember"),
+            CallFact(server, controller, implementation, "Controllers/OrdersController.cs", 15),
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            SymbolRelationshipFact(server, alternate, service, "Services/CachedOrderService.cs", 19),
+            CallFact(server, implementation, repository, "Services/OrderService.cs", 21),
+            CallFact(server, alternate, repository, "Services/CachedOrderService.cs", 22),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "AmbiguousImplementationCandidates");
+        Assert.True(result.Report.FlowRows.Count(row => row.RowKind == "interface-implementation-candidate") >= 2);
+        Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
+            && row.SourceSymbol.Contains(controller, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(implementation, StringComparison.Ordinal) == true
+            && row.Classification == RouteFlowClassifications.ProbableStaticRouteFlow);
+        Assert.All(result.Report.FlowRows.Where(row => row.RowKind == "interface-implementation-candidate"),
+            row => Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, row.Classification));
+    }
+
+    [Fact]
+    public async Task Route_flow_caps_mixed_tier_call_edges_at_needs_review()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14, EvidenceTiers.Tier3SyntaxOrTextual),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.NotEqual(RouteFlowClassifications.ProbableStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_preserves_interface_call_and_emits_candidate_unavailable_gap()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14, targetSymbolKind: "InterfaceMember"),
+            QueryPatternFact(server, "Server.Unrelated.Query(System.Int32)", "Infrastructure/UnrelatedRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingImplementationBridge");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ImplementationCandidateUnavailable");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingCallEdge");
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_caps_syntax_route_root_bridge_even_with_stronger_downstream_edges()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier3SyntaxOrTextual),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14, EvidenceTiers.Tier1Semantic),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.FlowRows, row => row.RowKind == "endpoint-method-bridge"
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+        Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+    }
+
+    [Fact]
+    public async Task Route_flow_emits_no_route_flow_evidence_only_after_clean_bridge_checks()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            QueryPatternFact(server, "Server.OtherRepository.Query(System.Int32)", "Infrastructure/OtherRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
+        Assert.Empty(result.Report.FlowRows);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "MissingRouteRoot" or "MissingMethodSymbolBridge" or "MissingCallEdge");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
 
     [Fact]
     public async Task Route_flow_json_file_output_and_classification_filter_empty_rows_yields_selector_gap()
@@ -250,6 +504,9 @@ public sealed class CombinedRouteFlowTests
         }
 
         Assert.DoesNotContain("- id: route.flow.", catalog, StringComparison.Ordinal);
+        Assert.Contains("- MissingMethodSymbolBridge gap", catalog);
+        Assert.Contains("- MissingCallEdge gap", catalog);
+        Assert.Contains("- TraversalBounds gap", catalog);
     }
 
     private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp, string serverBuildStatus = "Succeeded")
@@ -344,13 +601,13 @@ public sealed class CombinedRouteFlowTests
             });
     }
 
-    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string methodSymbol, string file, int line)
+    private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string methodSymbol, string file, int line, string evidenceTier = EvidenceTiers.Tier3SyntaxOrTextual)
     {
         return FactFactory.Create(
             manifest,
             FactTypes.HttpRouteBinding,
             RuleIds.CSharpSyntaxAspNetRoute,
-            EvidenceTiers.Tier3SyntaxOrTextual,
+            evidenceTier,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             sourceSymbol: methodSymbol,
             targetSymbol: methodSymbol,
@@ -365,19 +622,72 @@ public sealed class CombinedRouteFlowTests
             });
     }
 
-    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    private static CodeFact RouteFactWithoutMethodSymbol(ScanManifest manifest, string method, string template, string key, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["routeTemplates"] = template
+            });
+    }
+
+    private static CodeFact SymbolRelationshipFact(ScanManifest manifest, string implementationMethodSymbol, string interfaceMethodSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: implementationMethodSymbol,
+            targetSymbol: interfaceMethodSymbol,
+            contractElement: "ImplementsInterfaceMember",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["relationshipKind"] = "ImplementsInterfaceMember",
+                ["relationshipSource"] = "InterfaceImplementation",
+                ["sourceSymbolDisplayName"] = implementationMethodSymbol,
+                ["sourceSymbolId"] = implementationMethodSymbol,
+                ["sourceSymbolKind"] = "Method",
+                ["sourceSymbolLanguage"] = "csharp",
+                ["targetSymbolDisplayName"] = interfaceMethodSymbol,
+                ["targetSymbolId"] = interfaceMethodSymbol,
+                ["targetSymbolKind"] = "Method",
+                ["targetSymbolLanguage"] = "csharp"
+            });
+    }
+
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line, string evidenceTier = EvidenceTiers.Tier1Semantic, string targetSymbolKind = "Method")
     {
         return FactFactory.Create(
             manifest,
             FactTypes.CallEdge,
             RuleIds.CSharpSemanticCallGraph,
-            EvidenceTiers.Tier1Semantic,
+            evidenceTier,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             sourceSymbol: caller,
             targetSymbol: callee,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["callKind"] = "method"
+                ["callKind"] = "method",
+                ["sourceSymbolDisplayName"] = caller,
+                ["sourceSymbolId"] = caller,
+                ["sourceSymbolKind"] = "Method",
+                ["sourceSymbolLanguage"] = "csharp",
+                ["targetSymbolDisplayName"] = callee,
+                ["targetSymbolId"] = callee,
+                ["targetSymbolKind"] = targetSymbolKind,
+                ["targetSymbolLanguage"] = "csharp"
             });
     }
 
