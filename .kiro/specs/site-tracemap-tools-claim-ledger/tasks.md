@@ -31,9 +31,10 @@ complete.
   claim-level label, keep `future` publicly shown as `future` distinct from
   dev-branch maturity publicly shown as `dev-only`, map roadmap labels such as
   `shipped navigation`, `demo guidance`, `main/demo`, `future`, and `hidden
-  pending validation`, and map gap labels such as `not_requested` and
-  `unavailable` to evidence-status labels so automated cross-page review
-  cannot get contradictory answers for the same claim.
+  pending validation`, map coverage labels such as `PartialAnalysis`, and map
+  gap labels such as `not_requested` and `unavailable` to evidence-status
+  labels so automated cross-page review cannot get contradictory answers for
+  the same claim.
 - [ ] Use evidence-status labels that distinguish evidence-backed,
   partial/reduced coverage, future-only, hidden/internal, and not-yet-backed
   wording.

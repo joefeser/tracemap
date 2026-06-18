@@ -126,7 +126,7 @@ does not change site source.
   `requirements.md`, `tasks.md`, `review-packet.md`, and this file so future
   implementation evaluates `/roadmap/` first and maps labels such as `shipped
   navigation`, `demo guidance`, `main/demo`, `future`, `dev-only`, `hidden
-  pending validation`, `not_requested`, and `unavailable`.
+  pending validation`, `PartialAnalysis`, `not_requested`, and `unavailable`.
 - Opus found Low consistency issues for the missing readiness header and generic
   discoverability wording. Patched with the readiness header and explicit
   proof-path/capability matrix relationship.
