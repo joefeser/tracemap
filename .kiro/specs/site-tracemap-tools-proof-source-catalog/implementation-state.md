@@ -83,8 +83,16 @@ must map to the catalog claim-level mapping.
 
 ## Review Findings
 
-Pre-PR review findings: none yet. PR review-loop findings will be recorded
-after the pull request gate runs.
+PR loop on PR #205 returned `actionable_findings` with
+`UNRESOLVED_REVIEW_THREADS` for one Gemini thread in
+`site/scripts/proof-source-catalog.mjs`.
+
+Finding: hidden aggregate validation built `hiddenText` from `limitation` and
+`nonClaims` without nullish coalescing, which could interpolate the string
+`undefined` if a field failed to extract.
+
+Fix: patched `hiddenText` to use empty-string fallbacks for missing
+`limitation` and `nonClaims`, then reran validation.
 
 ## Oddities
 

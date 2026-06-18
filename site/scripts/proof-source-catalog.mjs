@@ -342,7 +342,7 @@ function validateHiddenRow({ fields, id, errors }) {
     }
   }
 
-  const hiddenText = `${fields.limitation} ${fields.nonClaims}`.toLowerCase();
+  const hiddenText = `${fields.limitation ?? ""} ${fields.nonClaims ?? ""}`.toLowerCase();
   if (/\b\d+\s+(hidden|internal|private|in-flight)\b/.test(hiddenText)) {
     errors.push(withEvidence("Proof source catalog hidden row discloses hidden/internal counts.", "proof-source-catalog/index.html"));
   }
