@@ -39,7 +39,13 @@ public sealed record EvidenceDocsDiagnostic(
     string RuleId,
     string EvidenceTier,
     string Location,
-    string Category);
+    string Category,
+    string FilePath,
+    int? StartLine,
+    int? EndLine,
+    string CommitSha,
+    string ExtractorVersion,
+    IReadOnlyList<string> SupportingIds);
 
 public sealed record EvidenceDocsManifest(
     string SchemaVersion,
@@ -54,7 +60,9 @@ public sealed record EvidenceDocsManifest(
     IReadOnlyList<EvidenceDocsCount> ChunkCounts,
     IReadOnlyList<EvidenceDocsCount> OmittedCounts,
     IReadOnlyList<EvidenceDocGap> Gaps,
-    IReadOnlyList<EvidenceDocLimitation> Limitations);
+    IReadOnlyList<EvidenceDocLimitation> Limitations,
+    IReadOnlyList<string> RepositoryIdentifiers,
+    IReadOnlyList<string> CommitShas);
 
 public sealed record EvidenceDocsGenerator(
     string Name,
@@ -116,7 +124,7 @@ public sealed record EvidenceDocCitation(
     string? SourceLabel,
     string SourceScope,
     string? ScanId,
-    string? CommitSha,
+    string CommitSha,
     string CoverageLabel,
     string? FilePath,
     int? StartLine,
@@ -134,7 +142,7 @@ public sealed record EvidenceDocSourceRef(
     string SourceLabel,
     string SourceScope,
     string? ScanId,
-    string? CommitSha,
+    string CommitSha,
     string CoverageLabel,
     string? ExtractorName,
     string? ExtractorVersion,
@@ -835,7 +843,7 @@ public static class EvidenceDocsExporter
                     chunks.Add(CreateGapChunk($"vault-graph-{Hash(path, 16)}", SchemaGapRuleId, "schema-incompatible", "gap", sources, ["vault-graph"], "hidden"));
                 }
 
-                diagnostics.Add(new EvidenceDocsDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, Tier4Unknown, "/inputs/vault-graph", "schema-incompatible"));
+                diagnostics.Add(CreateDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, "/inputs/vault-graph", "schema-incompatible", "vault-graph"));
             }
         }
     }
@@ -870,7 +878,7 @@ public static class EvidenceDocsExporter
                 if (string.IsNullOrWhiteSpace(reportType))
                 {
                     chunks.Add(CreateGapChunk($"{inputKind}-{Hash(path, 16)}", MissingProvenanceRuleId, "missing-provenance", family, sources, [inputKind], "hidden"));
-                    diagnostics.Add(new EvidenceDocsDiagnostic("InputMissingProvenance", MissingProvenanceRuleId, Tier4Unknown, $"/inputs/{inputKind}", "missing-provenance"));
+                    diagnostics.Add(CreateDiagnostic("InputMissingProvenance", MissingProvenanceRuleId, $"/inputs/{inputKind}", "missing-provenance", inputKind));
                     continue;
                 }
 
@@ -897,7 +905,7 @@ public static class EvidenceDocsExporter
             catch (JsonException)
             {
                 chunks.Add(CreateGapChunk($"{inputKind}-json-{Hash(inputKind, 16)}", SchemaGapRuleId, "schema-incompatible", family, sources, [inputKind], "hidden"));
-                diagnostics.Add(new EvidenceDocsDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, Tier4Unknown, $"/inputs/{inputKind}", "schema-incompatible"));
+                diagnostics.Add(CreateDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, $"/inputs/{inputKind}", "schema-incompatible", inputKind));
             }
         }
     }
@@ -920,7 +928,7 @@ public static class EvidenceDocsExporter
             source.Label,
             source.Scope,
             source.ScanId,
-            source.CommitSha,
+            source.CommitSha ?? "unknown",
             source.CoverageLabel,
             null,
             null,
@@ -1257,7 +1265,9 @@ public static class EvidenceDocsExporter
             chunkCounts,
             omittedCounts,
             gaps,
-            limitations);
+            limitations,
+            input.Sources.Select(source => $"repo:{Hash(source.SourceId, 24)}").Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            input.Sources.Select(source => source.CommitSha ?? "unknown").Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
     private static EvidenceDocsManifest WithManifestHash(EvidenceDocsManifest manifest)
@@ -1485,12 +1495,14 @@ public static class EvidenceDocsExporter
         var root = Path.GetFullPath(outputPath);
         var manifestPath = Path.Combine(root, "manifest.json");
         var existingManifest = File.Exists(manifestPath) ? await File.ReadAllTextAsync(manifestPath, cancellationToken) : null;
+        var manifestHasGeneratedMarker = existingManifest is not null && HasGeneratedManifestMarker(existingManifest);
         var manifestGenerated = existingManifest is not null && IsSelfConsistentManifest(existingManifest);
-        var manifestStale = existingManifest is not null && HasGeneratedManifestMarker(existingManifest) && !manifestGenerated;
+        var manifestStale = manifestHasGeneratedMarker && !manifestGenerated;
 
         foreach (var relativePath in files.Keys)
         {
             var path = Path.Combine(root, relativePath);
+            ValidateOutputPathShape(root, relativePath, path);
             if (!File.Exists(path))
             {
                 continue;
@@ -1512,12 +1524,12 @@ public static class EvidenceDocsExporter
             if (relativePath == "chunks.jsonl")
             {
                 if (manifestGenerated && ManifestHasMatchingOutput(existingManifest!, relativePath, content)
-                    || force && manifestStale)
+                    || force && manifestHasGeneratedMarker)
                 {
                     continue;
                 }
 
-                throw new InvalidOperationException(manifestStale
+                throw new InvalidOperationException(manifestHasGeneratedMarker
                     ? $"GeneratedFileStale: {GeneratedFileStaleRuleId} [{Tier4Unknown}]: chunks-jsonl."
                     : $"UserFileCollision: {UserFileCollisionRuleId} [{Tier4Unknown}]: chunks-jsonl.");
             }
@@ -1532,6 +1544,25 @@ public static class EvidenceDocsExporter
                 throw new InvalidOperationException(HasGeneratedMarkdownMarker(content)
                     ? $"GeneratedFileStale: {GeneratedFileStaleRuleId} [{Tier4Unknown}]: markdown."
                     : $"UserFileCollision: {UserFileCollisionRuleId} [{Tier4Unknown}]: markdown.");
+            }
+        }
+    }
+
+    private static void ValidateOutputPathShape(string root, string relativePath, string fullPath)
+    {
+        if (Directory.Exists(fullPath))
+        {
+            throw new InvalidOperationException($"UserFileCollision: {UserFileCollisionRuleId} [{Tier4Unknown}]: output-path-directory.");
+        }
+
+        var parts = relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var current = root;
+        for (var index = 0; index < parts.Length - 1; index++)
+        {
+            current = Path.Combine(current, parts[index]);
+            if (File.Exists(current))
+            {
+                throw new InvalidOperationException($"UserFileCollision: {UserFileCollisionRuleId} [{Tier4Unknown}]: output-parent-file.");
             }
         }
     }
@@ -1686,7 +1717,7 @@ public static class EvidenceDocsExporter
         foreach (var unmatched in catalog.Unmatched(sources))
         {
             chunks.Add(CreateGapChunk($"claim-unmatched-{Hash(unmatched, 16)}", ClaimUnmatchedRuleId, "claim-level-unmatched", "gap", sources, ["source-claim-catalog"], "hidden"));
-            diagnostics.Add(new EvidenceDocsDiagnostic("InputClaimCatalogUnmatched", ClaimUnmatchedRuleId, Tier4Unknown, "/sourceClaimCatalog/entries", "claim-level"));
+            diagnostics.Add(CreateDiagnostic("InputClaimCatalogUnmatched", ClaimUnmatchedRuleId, "/sourceClaimCatalog/entries", "claim-level", "source-claim-catalog"));
         }
     }
 
@@ -1806,7 +1837,7 @@ public static class EvidenceDocsExporter
             fact.Source.Label,
             fact.Source.Scope,
             fact.ScanId ?? fact.Source.ScanId,
-            fact.CommitSha ?? fact.Source.CommitSha,
+            fact.CommitSha ?? fact.Source.CommitSha ?? "unknown",
             fact.Source.CoverageLabel,
             fact.FilePath,
             fact.StartLine,
@@ -1828,7 +1859,7 @@ public static class EvidenceDocsExporter
             source?.Label,
             source?.Scope ?? "report",
             source?.ScanId,
-            source?.CommitSha,
+            source?.CommitSha ?? "unknown",
             source?.CoverageLabel ?? "report-input",
             null,
             null,
@@ -1849,12 +1880,28 @@ public static class EvidenceDocsExporter
             source.Label,
             source.Scope,
             source.ScanId,
-            source.CommitSha,
+            source.CommitSha ?? "unknown",
             source.CoverageLabel,
             "index-metadata",
             source.ExtractorVersion,
             [SourceOverviewRuleId],
             [EvidenceTiers.Tier2Structural]);
+    }
+
+    private static EvidenceDocsDiagnostic CreateDiagnostic(string code, string ruleId, string location, string category, string supportingId)
+    {
+        return new EvidenceDocsDiagnostic(
+            code,
+            ruleId,
+            Tier4Unknown,
+            location,
+            category,
+            "unknown",
+            null,
+            null,
+            "unknown",
+            SchemaVersion,
+            [supportingId]);
     }
 
     private static string FamilyForFact(DocFact fact)

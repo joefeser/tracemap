@@ -182,6 +182,8 @@ public sealed class EvidenceDocsExportTests
             MinimumClaimLevel: "public-safe",
             Date: "2026-06"));
         Assert.Contains(promoted.Chunks, chunk => chunk.ChunkType == "claim" && chunk.ClaimLevel == "public-safe");
+        Assert.NotEmpty(promoted.Manifest.RepositoryIdentifiers);
+        Assert.Contains(promoted.Manifest.CommitShas, sha => sha == "1111111111111111111111111111111111111111");
 
         var weakCatalog = Path.Combine(temp.Path, "weak-claims.json");
         await File.WriteAllTextAsync(weakCatalog, """
@@ -203,6 +205,28 @@ public sealed class EvidenceDocsExportTests
                 MinimumClaimLevel: "public-safe",
                 Date: "2026-06")));
         Assert.Contains("NoVisibleEvidenceAfterFiltering", rejected.Message);
+
+        var unmatchedCatalog = Path.Combine(temp.Path, "unmatched-claims.json");
+        await File.WriteAllTextAsync(unmatchedCatalog, """
+            {
+              "schemaVersion": "source-claim-catalog.v1",
+              "sources": [
+                {
+                  "sourceIndexId": "missing-source",
+                  "claimLevel": "public-safe",
+                  "proofId": "proof-missing"
+                }
+              ]
+            }
+            """);
+        var unmatched = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            indexPath,
+            Path.Combine(temp.Path, "unmatched-catalog-docs"),
+            SourceClaimCatalogPath: unmatchedCatalog));
+        var diagnostic = Assert.Single(unmatched.Diagnostics);
+        Assert.Equal("Tier4Unknown", diagnostic.EvidenceTier);
+        Assert.Equal("unknown", diagnostic.CommitSha);
+        Assert.NotEmpty(diagnostic.SupportingIds);
     }
 
     [Fact]
@@ -274,12 +298,26 @@ public sealed class EvidenceDocsExportTests
         await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, outDir, Force: true));
         Assert.True(EvidenceDocsExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(readme)));
 
+        var chunksJsonl = Path.Combine(outDir, "chunks.jsonl");
+        await File.AppendAllTextAsync(chunksJsonl, "\nmanual edit\n");
+        var staleJsonl = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, outDir)));
+        Assert.Contains("GeneratedFileStale", staleJsonl.Message);
+        await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, outDir, Force: true));
+
         var userOut = Path.Combine(temp.Path, "user-docs");
         Directory.CreateDirectory(userOut);
         await File.WriteAllTextAsync(Path.Combine(userOut, "README.md"), "# user file\n");
         var collision = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, userOut, Force: true)));
         Assert.Contains("UserFileCollision", collision.Message);
+
+        var parentCollisionOut = Path.Combine(temp.Path, "parent-collision-docs");
+        Directory.CreateDirectory(parentCollisionOut);
+        await File.WriteAllTextAsync(Path.Combine(parentCollisionOut, "chunks"), "user file\n");
+        var parentCollision = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, parentCollisionOut, Force: true)));
+        Assert.Contains("UserFileCollision", parentCollision.Message);
     }
 
     [Fact]
