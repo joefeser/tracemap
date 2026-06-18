@@ -60,9 +60,10 @@
           safety, or AI impact analysis.
         </p>
         <nav class="hero-actions" aria-label="Roadmap links">
+          <a class="button primary" href="#claim-ledger">Open claim ledger</a>
           <a class="button primary" href="/demo/result/">Current demo result</a>
           <a class="button secondary" href="/demo/proof-upgrades/">Demo proof upgrades</a>
-          <a class="button secondary" href="/demo/proof-assets/">Demo proof assets</a>
+          <a class="button secondary" href="/proof-paths/">Proof path index</a>
         </nav>
       </section>
 
@@ -76,6 +77,187 @@
           <div><strong>Demo</strong><span>Reproducible from checked-in samples or public-safe generated summaries, with the limits visible in the output.</span></div>
           <div><strong>Concept</strong><span>Future-facing or planning copy that names the desired workflow without implying it exists yet.</span></div>
           <div><strong>Hidden</strong><span>Not suitable for public copy yet, usually because the proof is local-only, private, raw, unredacted, or still not validated.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="claim-ledger" aria-labelledby="claim-ledger-heading">
+        <div class="section-header">
+          <p class="section-kicker">Claim ledger</p>
+          <h2 id="claim-ledger-heading">Public wording stays tied to proof paths and limitations.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <caption>
+              Public claim level, evidence status, and public wording status are separate axes.
+              A stronger label is not earned by repetition; it is earned only when the proof path changes.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Claim label</th>
+                <th scope="col">Public claim level</th>
+                <th scope="col">Evidence status</th>
+                <th scope="col">Proof path</th>
+                <th scope="col">Limitation</th>
+                <th scope="col">Source-of-truth artifact family</th>
+                <th scope="col">Public wording status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="claim-shipped-repository-docs" data-claim-row data-claim-level="shipped" data-evidence-status="evidence-backed" data-wording-status="live">
+                <td><strong>Repository docs and main-backed CLI surfaces</strong></td>
+                <td><code>shipped</code></td>
+                <td><code>evidence-backed</code></td>
+                <td><a href="/docs/">Docs map</a>, <a href="/capabilities/">capability matrix</a>, and repository docs on <code>main</code>.</td>
+                <td>True on main does not remove maturity caveats, coverage labels, or rule limitations.</td>
+                <td>Repository docs, validation guide, rule catalog, checked-in CLI source, and test commands.</td>
+                <td><code>live</code></td>
+              </tr>
+              <tr id="claim-demo-proof-rows" data-claim-row data-claim-level="demo" data-evidence-status="partial/reduced coverage" data-wording-status="demo-only">
+                <td><strong>Public demo proof rows</strong></td>
+                <td><code>demo</code></td>
+                <td><code>partial/reduced coverage</code></td>
+                <td><a href="/demo/proof-upgrades/">Demo proof upgrades</a>, <a href="/demo/result/">demo result</a>, and <a href="/proof-paths/">proof path index</a>.</td>
+                <td>Demo evidence comes from checked-in public samples and keeps partial analysis labels visible.</td>
+                <td>Public-safe demo summary, generated report families, rule IDs, evidence tiers, coverage labels, and limitations.</td>
+                <td><code>demo-only</code></td>
+              </tr>
+              <tr id="claim-demo-gap-rows" data-claim-row data-claim-level="demo" data-evidence-status="gap-labeled demo evidence" data-wording-status="demo-only">
+                <td><strong>Optional adapter and unavailable demo rows</strong></td>
+                <td><code>demo</code></td>
+                <td><code>gap-labeled demo evidence</code></td>
+                <td><a href="/proof-paths/">Proof path index</a> rows with <code>not_requested</code>, <code>unavailable</code>, or <code>Tier4Unknown</code> labels.</td>
+                <td>Gap labels stay visible and must not be restated as parity, success, or clean coverage.</td>
+                <td>Public-safe demo summary fixture and proof path rows that preserve explicit gap labels.</td>
+                <td><code>demo-only</code></td>
+              </tr>
+              <tr id="claim-concept-use-cases" data-claim-row data-claim-level="concept" data-evidence-status="future-only" data-wording-status="future-facing">
+                <td><strong>Incident, review-room, manager, and adoption concepts</strong></td>
+                <td><code>concept</code></td>
+                <td><code>future-only</code></td>
+                <td><a href="/use-cases/incident-review/">Incident review orientation</a>, <a href="/review-room/">review room</a>, and <a href="/manager-brief/">manager brief</a>.</td>
+                <td>Concept pages orient future workflows; they are not shipped capability pages and need public-safe proof before promotion.</td>
+                <td>Concept route copy, discovery metadata, proof-path links, and documented non-claims.</td>
+                <td><code>future-facing</code></td>
+              </tr>
+              <tr id="claim-legacy-validation-concept" data-claim-row data-claim-level="concept" data-evidence-status="not-yet-backed" data-wording-status="future-facing">
+                <td><strong>Legacy validation and legacy evidence story</strong></td>
+                <td><code>concept</code></td>
+                <td><code>not-yet-backed</code></td>
+                <td><a href="/legacy-validation/">Legacy validation concept</a>, <a href="/legacy-evidence/">legacy evidence story</a>, and <a href="/limitations/">limitations</a>.</td>
+                <td>No stronger support claim exists until a redacted public-safe artifact can show rule IDs, tiers, coverage, and limitations.</td>
+                <td>Concept pages, validation notes, route metadata, and future sanitized summary requirements.</td>
+                <td><code>future-facing</code></td>
+              </tr>
+              <tr id="claim-hidden-internal-aggregate" data-claim-row data-claim-level="hidden" data-evidence-status="hidden/internal" data-wording-status="hidden-from-public-navigation">
+                <td><strong>Internal-only public wording bucket</strong></td>
+                <td><code>hidden</code></td>
+                <td><code>hidden/internal</code></td>
+                <td>No public proof-path or capability-matrix row; this aggregate exists only to keep hidden wording out of public claims.</td>
+                <td>Do not disclose unreleased capability names, internal route names, private samples, export specifics, counts, cadence, sequencing, or in-flight status.</td>
+                <td>Local-only validation material until a public-safe summary is reviewed and intentionally published.</td>
+                <td><code>hidden from public navigation</code></td>
+              </tr>
+              <tr id="claim-forbidden-overclaims" data-claim-row data-claim-level="hidden" data-evidence-status="not-yet-backed" data-wording-status="forbidden">
+                <td><strong>Unsupported public overclaims</strong></td>
+                <td><code>hidden</code></td>
+                <td><code>not-yet-backed</code></td>
+                <td><a href="/limitations/">Limitations</a> and this ledger's non-claims section.</td>
+                <td>Runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, and complete product coverage wording is forbidden.</td>
+                <td>Public non-claims, validation guards, and documented limitations.</td>
+                <td><code>forbidden</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="claim-ledger-note">
+          The source of truth remains SQLite indexes, fact streams, reports, rule catalog entries,
+          commit metadata, coverage labels, and documented limitations. This ledger is a
+          presentation and governance layer over those deterministic outputs.
+        </p>
+      </section>
+
+      <section class="section" id="claim-vocabulary" aria-labelledby="claim-vocabulary-heading">
+        <div class="section-header">
+          <p class="section-kicker">Vocabulary mapping</p>
+          <h2 id="claim-vocabulary-heading">Every public status resolves to one ledger label.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <caption>
+              This mapping is the single source for comparing roadmap, capability matrix,
+              proof path index, and discovery metadata labels against ledger labels.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Axis</th>
+                <th scope="col">Existing-surface vocabulary</th>
+                <th scope="col">Claim-ledger label</th>
+                <th scope="col">Resolution note</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="map-claim-level-shipped" data-mapping-row data-mapping-axis="claim-level" data-ledger-label="shipped">
+                <td><code>claim-level</code></td>
+                <td><code>shipped</code>, <code>shipped navigation</code>, <code>main</code>, repository docs on <code>main</code>, <code>main with maturity caveats</code></td>
+                <td><code>shipped</code></td>
+                <td>Main-backed wording remains limited by maturity caveats and row-specific limitations.</td>
+              </tr>
+              <tr id="map-claim-level-demo" data-mapping-row data-mapping-axis="claim-level" data-ledger-label="demo">
+                <td><code>claim-level</code></td>
+                <td><code>demo</code>, <code>demo guidance</code>, <code>main/demo</code>, <code>public-demo</code>, <code>public-safe generated summary</code>, route metadata <code>publicClaimLevel: demo</code>, proof-path public status <code>demo</code></td>
+                <td><code>demo</code></td>
+                <td>Demo wording must keep checked-in samples, generated summaries, and proof notes visible.</td>
+              </tr>
+              <tr id="map-claim-level-concept" data-mapping-row data-mapping-axis="claim-level" data-ledger-label="concept">
+                <td><code>claim-level</code></td>
+                <td><code>concept</code>, <code>concept-only</code>, <code>future</code>, <code>future-only</code>, <code>dev</code>, <code>dev-only</code>, route metadata <code>publicClaimLevel: concept</code>, proof-path public status <code>future</code></td>
+                <td><code>concept</code></td>
+                <td>Future-facing and dev-branch-only wording is not upgraded until main or demo proof exists.</td>
+              </tr>
+              <tr id="map-claim-level-hidden" data-mapping-row data-mapping-axis="claim-level" data-ledger-label="hidden">
+                <td><code>claim-level</code></td>
+                <td><code>hidden</code>, <code>hidden pending validation</code>, no capability-matrix row, no proof-path-index counterpart, internal-only aggregate placeholder</td>
+                <td><code>hidden</code></td>
+                <td>Hidden rows are omitted or abstracted without counts, cadence, sequencing, or unreleased names.</td>
+              </tr>
+              <tr id="map-evidence-backed" data-mapping-row data-mapping-axis="evidence-status" data-ledger-label="evidence-backed">
+                <td><code>evidence-status</code></td>
+                <td><code>Tier1Semantic</code> or <code>Tier2Structural</code> with <code>Full</code> or <code>FullEvidenceAvailable</code> coverage</td>
+                <td><code>evidence-backed</code></td>
+                <td>Rule IDs, evidence tiers, and proof paths are public-safe and specific.</td>
+              </tr>
+              <tr id="map-partial-reduced" data-mapping-row data-mapping-axis="evidence-status" data-ledger-label="partial/reduced coverage">
+                <td><code>evidence-status</code></td>
+                <td><code>Partial</code>, <code>PartialAnalysis</code>, <code>Reduced</code>, <code>ReducedCoverage</code>, or <code>Tier3SyntaxOrTextual</code></td>
+                <td><code>partial/reduced coverage</code></td>
+                <td>Rule-family or proof-path references exist, but coverage gaps remain labeled.</td>
+              </tr>
+              <tr id="map-gap-labeled-demo" data-mapping-row data-mapping-axis="evidence-status" data-ledger-label="gap-labeled demo evidence">
+                <td><code>evidence-status</code></td>
+                <td><code>not_requested</code>, <code>unavailable</code>, <code>Tier4Unknown</code>, or explicit gap labels on demo rows</td>
+                <td><code>gap-labeled demo evidence</code></td>
+                <td>Gap labels remain visible and are not restated as clean coverage or parity.</td>
+              </tr>
+              <tr id="map-future-only" data-mapping-row data-mapping-axis="evidence-status" data-ledger-label="future-only">
+                <td><code>evidence-status</code></td>
+                <td>Proof-path-index <code>future</code> entry with no resolvable artifact yet</td>
+                <td><code>future-only</code></td>
+                <td>Proof path is not available yet, so the row is not evidence-backed.</td>
+              </tr>
+              <tr id="map-hidden-internal" data-mapping-row data-mapping-axis="evidence-status" data-ledger-label="hidden/internal">
+                <td><code>evidence-status</code></td>
+                <td>No capability-matrix row and no proof-path-index counterpart</td>
+                <td><code>hidden/internal</code></td>
+                <td>Use one aggregate placeholder and disclose no unreleased detail.</td>
+              </tr>
+              <tr id="map-not-yet-backed" data-mapping-row data-mapping-axis="evidence-status" data-ledger-label="not-yet-backed">
+                <td><code>evidence-status</code></td>
+                <td><code>UnknownAnalysisGap</code>, no cited artifact, or no public-safe proof path</td>
+                <td><code>not-yet-backed</code></td>
+                <td>No proof path exists; the claim remains future-facing or forbidden.</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -173,7 +355,9 @@
           <h2>The roadmap keeps several tempting claims out of public copy.</h2>
         </div>
         <ul>
+          <li>No public conclusion without evidence.</li>
           <li>TraceMap does not prove runtime behavior, production traffic, deployment state, endpoint performance, or release safety.</li>
+          <li>Runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, and complete product coverage wording is forbidden.</li>
           <li>TraceMap site copy should not refer to the scanner or reducer as AI analysis.</li>
           <li>Concept pages do not make a feature shipped, and hidden local validation does not make a public demo.</li>
           <li>Public pages must not publish raw source snippets, SQL, config values, secrets, local absolute paths, raw repository remotes, or private sample identities.</li>

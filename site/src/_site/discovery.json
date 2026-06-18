@@ -254,19 +254,19 @@
   },
   {
     "path": "/roadmap/",
-    "title": "Roadmap Gates",
-    "summary": "Explains how public copy moves from concept to demo only when public-safe evidence and limitations exist.",
+    "title": "Roadmap Claim Ledger",
+    "summary": "Canonical concept-level ledger for public claim wording, proof paths, evidence status, wording status, and limitations.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "roadmap",
-    "preferredProofPath": "/limitations/",
+    "preferredProofPath": "/proof-paths/",
     "limitations": [
-      "Roadmap entries are planning notes, not proof.",
+      "The ledger is a presentation and governance layer, not a replacement for deterministic scanner or reducer outputs.",
       "Concept rows need checked-in samples, generated summaries, and visible limitations before promotion."
     ],
     "nonClaims": [
-      "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, or AI impact analysis proof.",
-      "No LLM calls, embeddings, vector databases, or prompt-based classification in core TraceMap."
+      "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No LLM calls, embeddings, vector databases, prompt-based classification, raw facts, SQLite indexes, analyzer logs, source snippets, SQL, config values, secrets, local paths, raw remotes, generated scan directories, or private sample names are published."
     ]
   },
   {

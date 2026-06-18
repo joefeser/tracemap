@@ -407,6 +407,71 @@ h3 {
   min-height: 170px;
 }
 
+.claim-ledger-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.claim-ledger-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.claim-ledger-table caption {
+  padding: 18px 20px 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+  text-align: left;
+}
+
+.claim-ledger-table th,
+.claim-ledger-table td {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 16px 18px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.claim-ledger-table th {
+  color: var(--accent-strong);
+  font-size: 0.76rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.claim-ledger-table td {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.claim-ledger-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.claim-ledger-table strong {
+  display: block;
+  color: var(--ink);
+}
+
+.claim-ledger-table a {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.claim-ledger-table code {
+  display: inline-block;
+  margin: 1px 0;
+}
+
+.claim-ledger-note {
+  max-width: 840px;
+  margin: 18px 0 0;
+  color: var(--muted);
+}
+
 .proof-visual-grid article {
   display: grid;
   gap: 16px;
