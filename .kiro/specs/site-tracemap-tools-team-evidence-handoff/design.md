@@ -47,8 +47,8 @@ Preferred route: `/team-evidence-handoff/`
 
 Metadata should describe the page as a concept guide for sharing deterministic
 static evidence with another receiver. Titles and descriptions should avoid
-runtime, production, release-safety, operational-safety, AI/LLM, and
-complete-coverage claims.
+runtime, production, endpoint-performance, outage-cause, release-safety,
+operational-safety, AI/LLM, and complete-coverage claims.
 
 Discovery metadata should use:
 
@@ -58,8 +58,8 @@ Discovery metadata should use:
 - `sourceType`: site page or the closest existing value
 - `preferredProofPath`: `/proof-paths/`
 - `limitations`: static-evidence and public-safety boundaries
-- `nonClaims`: runtime, production, release, operational, AI/LLM, and complete
-  coverage non-claims
+- `nonClaims`: runtime, production, endpoint-performance, outage-cause,
+  release-safety, operational-safety, AI/LLM, and complete-coverage non-claims
 
 ## Content Model
 
