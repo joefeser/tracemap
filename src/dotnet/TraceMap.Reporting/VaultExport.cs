@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace TraceMap.Reporting;
 
@@ -144,9 +145,80 @@ public static class VaultExporter
     private const string ClaimUnmatchedRuleId = "vault-export.gap.claim-level-unmatched.v1";
     private const string HiddenOmittedRuleId = "vault-export.gap.hidden-evidence-omitted.v1";
     private const string UnsafeSymbolRuleId = "vault-export.gap.unsafe-symbol-omitted.v1";
+    private const string HiddenSafeContextRuleId = "vault-export.gap.hidden-safe-context-omitted.v1";
+    private const string UnsafeIdComponentRuleId = "vault-export.gap.unsafe-id-component-omitted.v1";
     private const string GeneratedFileStaleRuleId = "vault-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "vault-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "vault-export.validation.unsafe-value-rejected.v1";
+    private const string SensitiveWordCategory = "sensitive-word";
+    private const string Tier4Unknown = "Tier4Unknown";
+    // Hidden-safe context hashes use lowercase SHA-256 truncated after context validation.
+    private const int DisplayNameHashLength = 24;
+    private const int RepoRelativePathHashLength = 24;
+    private const int EvidenceLocationHashLength = 32;
+    // Display text is local navigation metadata, not source proof.
+    private const int MaxDisplayNameLength = 256;
+    private const int MaxRepoRelativePathLength = 260;
+
+    private enum VaultValueContext
+    {
+        RepoRelativePath,
+        GeneratedMetadata,
+        EvidenceLocation,
+        SymbolDisplayName,
+        RouteActionModelMemberName,
+        StableTraceMapId,
+        RuleId,
+        ClosedVocabulary,
+        DiagnosticCategory,
+        RawExternalOrDataValue,
+        MarkdownEvidenceLocation
+    }
+
+    private enum VaultSafetyOutcome
+    {
+        AllowRaw,
+        AllowHash,
+        AllowCategory,
+        OmitWithGap,
+        Reject
+    }
+
+    private sealed record VaultSafetyDecision(VaultSafetyOutcome Outcome, string? Category);
+
+    static VaultExporter()
+    {
+        PreValidateClosedVocabulary([
+            SchemaVersion,
+            GeneratorName,
+            ClaimHiddenRuleId,
+            ClaimUnmatchedRuleId,
+            HiddenOmittedRuleId,
+            UnsafeSymbolRuleId,
+            HiddenSafeContextRuleId,
+            UnsafeIdComponentRuleId,
+            GeneratedFileStaleRuleId,
+            UserFileCollisionRuleId,
+            UnsafeRejectedRuleId,
+            "hidden",
+            "demo-safe",
+            "public-safe",
+            "local-path",
+            "raw-remote-or-url",
+            "raw-sql",
+            "connection-string",
+            "credential",
+            SensitiveWordCategory,
+            "unsafe-evidence-location",
+            "unsafe-id-component",
+            "unsafe-display-name",
+            "empty-value",
+            "hidden-display-name-invalid",
+            "UnsafeIdComponentOmitted",
+            "HiddenSafeContextAccepted",
+            Tier4Unknown
+        ]);
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -281,6 +353,8 @@ public static class VaultExporter
         var nodeIdByPathNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
         var sourceNodeIdBySourceIndexId = new Dictionary<string, string>(StringComparer.Ordinal);
         var sourceClaimBySourceIndexId = new Dictionary<string, string>(StringComparer.Ordinal);
+        var safetyOmittedNodeCount = 0;
+        var safetyOmittedEdgeCount = 0;
         var compatibleInputCount = 0;
 
         if (!string.IsNullOrWhiteSpace(options.CombinedIndexPath))
@@ -347,7 +421,24 @@ public static class VaultExporter
                 var evidenceTiers = DistinctSorted([pathNode.EvidenceTier]);
                 var coverage = string.IsNullOrWhiteSpace(pathNode.SourceLabel) ? Array.Empty<string>() : new[] { "static-evidence" };
                 var displayName = SafeNodeDisplay(pathNode, sourceClaim);
-                var nodeId = StableNodeId(nodeKind, NodeIdentity(pathNode, sourceNodeId ?? pathNode.SourceIndexId, sourceClaim));
+                if (!TryNodeIdentity(pathNode, sourceNodeId ?? pathNode.SourceIndexId, sourceClaim, out var identity, out var rejectedCategory))
+                {
+                    if (sourceClaim != "hidden")
+                    {
+                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {rejectedCategory} at stableIdComponent.");
+                    }
+
+                    safetyOmittedNodeCount++;
+                    gaps.Add(CreateSafetyGap(
+                        $"unsafe-id-node-{Hash(pathNode.NodeId, 16)}",
+                        "UnsafeIdComponentOmitted",
+                        "A graph node was omitted because a source-derived stable-ID component failed vault export safety validation.",
+                        pathNode.SourceIndexId,
+                        rejectedCategory));
+                    continue;
+                }
+
+                var nodeId = StableNodeId(nodeKind, identity);
                 nodeIdByPathNodeId[pathNode.NodeId] = nodeId;
                 nodes.Add(new VaultGraphNode(
                     nodeId,
@@ -381,7 +472,7 @@ public static class VaultExporter
                         sourceClaim,
                         "SymbolSafetyGap",
                         UnsafeSymbolRuleId,
-                        "Tier4Unknown",
+                        Tier4Unknown,
                         "A symbol evidence node was category-labeled because the source identity is hidden.",
                         pathNode.SourceIndexId));
                 }
@@ -392,12 +483,36 @@ public static class VaultExporter
                 if (!nodeIdByPathNodeId.TryGetValue(pathEdge.FromNodeId, out var from)
                     || !nodeIdByPathNodeId.TryGetValue(pathEdge.ToNodeId, out var to))
                 {
+                    safetyOmittedEdgeCount++;
+                    gaps.Add(CreateSafetyGap(
+                        $"unsafe-id-edge-missing-node-{Hash(pathEdge.EdgeId, 16)}",
+                        "UnsafeIdComponentOmitted",
+                        "A graph edge was omitted because one of its endpoint nodes was omitted by vault export safety validation.",
+                        null,
+                        "unsafe-id-component"));
                     continue;
                 }
 
                 var claim = MinClaim(originalNodeClaims.GetValueOrDefault(from, "hidden"), originalNodeClaims.GetValueOrDefault(to, "hidden"));
+                if (!TryStableEdgeId(pathEdge, from, to, claim, out var edgeId, out var edgeRejectedCategory))
+                {
+                    if (claim != "hidden")
+                    {
+                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {edgeRejectedCategory} at stableIdComponent.");
+                    }
+
+                    safetyOmittedEdgeCount++;
+                    gaps.Add(CreateSafetyGap(
+                        $"unsafe-id-edge-{Hash(pathEdge.EdgeId, 16)}",
+                        "UnsafeIdComponentOmitted",
+                        "A graph edge was omitted because a source-derived stable-ID component failed vault export safety validation.",
+                        null,
+                        edgeRejectedCategory));
+                    continue;
+                }
+
                 edges.Add(new VaultGraphEdge(
-                    StableEdgeId(pathEdge.EdgeKind, from, to, pathEdge.RuleId, pathEdge.EvidenceTier, pathEdge.Classification, pathEdge.SupportingFactIds, pathEdge.SupportingCombinedEdgeIds),
+                    edgeId,
                     NormalizeEdgeKind(pathEdge.EdgeKind),
                     from,
                     to,
@@ -414,7 +529,7 @@ public static class VaultExporter
 
             foreach (var warning in inventory.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal))
             {
-                limitations.Add(CreateLimitation("coverage-warning", "hidden", "combined.report.coverage.v1", "Tier4Unknown", SafeDiagnosticMessage(warning)));
+                limitations.Add(CreateLimitation("coverage-warning", "hidden", "combined.report.coverage.v1", Tier4Unknown, SafeDiagnosticMessage(warning)));
             }
 
             foreach (var gap in inventory.Gaps)
@@ -424,7 +539,7 @@ public static class VaultExporter
                     sourceClaimBySourceIndexId.GetValueOrDefault(gap.SourceIndexId ?? string.Empty, "hidden"),
                     gap.Classification,
                     string.IsNullOrWhiteSpace(gap.RuleId) ? SchemaGapRuleId : gap.RuleId,
-                    string.IsNullOrWhiteSpace(gap.EvidenceTier) ? "Tier4Unknown" : gap.EvidenceTier,
+                    string.IsNullOrWhiteSpace(gap.EvidenceTier) ? Tier4Unknown : gap.EvidenceTier,
                     SafeDiagnosticMessage(gap.Message),
                     gap.SourceIndexId));
             }
@@ -445,15 +560,12 @@ public static class VaultExporter
                 "hidden",
                 "ClaimCatalogUnmatched",
                 ClaimUnmatchedRuleId,
-                "Tier4Unknown",
+                Tier4Unknown,
                 "A source claim catalog entry did not match a stable source identity.",
                 null);
             gaps.Add(gap);
             diagnostics.Add(new VaultExportDiagnostic("InputClaimCatalogUnmatched", ClaimUnmatchedRuleId, "/sourceClaimCatalog/sources", "claim-level"));
         }
-
-        AddRuleNodes(nodes, edges, gaps, limitations);
-        AddGapAndLimitationNodes(nodes, gaps, limitations);
 
         var unfilteredNodeCount = nodes.Count(node => node.Kind is not "rule" and not "gap" and not "limitation");
         var unfilteredEdgeCount = edges.Count;
@@ -467,11 +579,10 @@ public static class VaultExporter
                 minimumClaimLevel,
                 "HiddenEvidenceOmitted",
                 HiddenOmittedRuleId,
-                "Tier4Unknown",
+                Tier4Unknown,
                 "Hidden evidence was omitted by the requested claim-level filter; the export is partial.",
                 null);
             gaps.Add(omissionGap);
-            AddGapAndLimitationNodes(nodes, [omissionGap], []);
         }
 
         if (minimumClaimLevel != "hidden" && !nodes.Any(node => node.Kind is not "rule" and not "gap" and not "limitation"))
@@ -483,6 +594,14 @@ public static class VaultExporter
         {
             throw new InvalidOperationException("InputClaimLevelHidden: requested claim-level filter cannot be satisfied by the supplied source claim catalog.");
         }
+
+        if (minimumClaimLevel == "hidden")
+        {
+            ApplyHiddenLocalSafety(nodes, edges, gaps);
+        }
+
+        AddRuleNodes(nodes, edges, gaps, limitations);
+        AddGapAndLimitationNodes(nodes, gaps, limitations);
 
         var classification = ClassificationFor(nodes, edges, gaps);
         return new EvidenceGraphVault(
@@ -498,9 +617,9 @@ public static class VaultExporter
             new VaultExportSettings(
                 minimumClaimLevel,
                 formats,
-                omittedNodes > 0 || omittedEdges > 0,
-                omittedNodes,
-                omittedEdges));
+                omittedNodes > 0 || omittedEdges > 0 || safetyOmittedNodeCount > 0 || safetyOmittedEdgeCount > 0,
+                omittedNodes + safetyOmittedNodeCount,
+                omittedEdges + safetyOmittedEdgeCount));
     }
 
     private static async Task<int> AddPathReportsAsync(
@@ -574,7 +693,7 @@ public static class VaultExporter
                         sourceClaims.GetValueOrDefault(gap.SourceIndexId ?? string.Empty, "hidden"),
                         gap.Classification,
                         string.IsNullOrWhiteSpace(gap.RuleId) ? SchemaGapRuleId : gap.RuleId,
-                        string.IsNullOrWhiteSpace(gap.EvidenceTier) ? "Tier4Unknown" : gap.EvidenceTier,
+                        string.IsNullOrWhiteSpace(gap.EvidenceTier) ? Tier4Unknown : gap.EvidenceTier,
                         SafeDiagnosticMessage(gap.Message),
                         gap.SourceIndexId));
                 }
@@ -587,7 +706,7 @@ public static class VaultExporter
                 }
 
                 inputs.Add(new VaultExportInputSummary("paths-report", inputIdentity, "hidden", "schema-gap", []));
-                gaps.Add(CreateGap($"paths-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A paths report could not be read with the documented schema.", null));
+                gaps.Add(CreateGap($"paths-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, Tier4Unknown, "A paths report could not be read with the documented schema.", null));
             }
         }
 
@@ -662,7 +781,7 @@ public static class VaultExporter
                         sourceClaims.GetValueOrDefault(gap.SourceIndexId ?? string.Empty, "hidden"),
                         gap.Classification,
                         string.IsNullOrWhiteSpace(gap.RuleId) ? SchemaGapRuleId : gap.RuleId,
-                        string.IsNullOrWhiteSpace(gap.EvidenceTier) ? "Tier4Unknown" : gap.EvidenceTier,
+                        string.IsNullOrWhiteSpace(gap.EvidenceTier) ? Tier4Unknown : gap.EvidenceTier,
                         SafeDiagnosticMessage(gap.Message),
                         gap.SourceIndexId));
                 }
@@ -675,7 +794,7 @@ public static class VaultExporter
                 }
 
                 inputs.Add(new VaultExportInputSummary("reverse-report", inputIdentity, "hidden", "schema-gap", []));
-                gaps.Add(CreateGap($"reverse-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, "Tier4Unknown", "A reverse report could not be read with the documented schema.", null));
+                gaps.Add(CreateGap($"reverse-schema-{Hash(inputIdentity, 16)}", "hidden", "InputSchemaUnsupported", SchemaGapRuleId, Tier4Unknown, "A reverse report could not be read with the documented schema.", null));
             }
         }
 
@@ -958,6 +1077,21 @@ public static class VaultExporter
         body.AppendLine($"| Supporting facts | {Cell(string.Join(", ", node.SupportingFactIds))} |");
         body.AppendLine($"| Supporting edges | {Cell(string.Join(", ", node.SupportingEdgeIds))} |");
 
+        if (node.EvidenceLocations is { Count: > 0 })
+        {
+            body.AppendLine();
+            body.AppendLine("## Evidence Locations");
+            body.AppendLine();
+            body.AppendLine("| File | Span |");
+            body.AppendLine("| --- | --- |");
+            foreach (var location in node.EvidenceLocations.OrderBy(location => location.FilePath, StringComparer.Ordinal)
+                         .ThenBy(location => location.StartLine ?? 0)
+                         .ThenBy(location => location.EndLine ?? 0))
+            {
+                body.AppendLine($"| {Cell(location.FilePath)} | {Cell(LineSpan(location))} |");
+            }
+        }
+
         if (node.Limitations.Count > 0)
         {
             body.AppendLine();
@@ -1226,11 +1360,24 @@ public static class VaultExporter
 
     private static void ValidateGeneratedStrings(EvidenceGraphVault graph, IReadOnlyDictionary<string, string> files)
     {
+        var hiddenEvidenceLocations = graph.Classification == "hidden"
+            ? graph.Nodes.SelectMany(node => node.EvidenceLocations ?? [])
+                .Concat(graph.Edges.SelectMany(edge => edge.EvidenceLocations ?? []))
+                .Select(location => location.FilePath)
+                .Where(path => UnsafeCategory(path) == SensitiveWordCategory && IsSafeRepoRelativePath(path))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+            : [];
+
         foreach (var violation in JsonStringLeaves(JsonSerializer.SerializeToNode(graph, JsonOptions)!, "$"))
         {
-            if (UnsafeCategory(violation.Value) is { } category)
+            var decision = ClassifyGeneratedValue(
+                graph.Classification,
+                JsonValueContext(violation.Location),
+                violation.Value);
+            if (decision.Outcome == VaultSafetyOutcome.Reject)
             {
-                throw new InvalidOperationException($"UnsafeValueRejected: {category} at {violation.Location}.");
+                throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {decision.Category} at {violation.Location}.");
             }
         }
 
@@ -1239,14 +1386,176 @@ public static class VaultExporter
             var line = 1;
             foreach (var textLine in file.Value.Split('\n'))
             {
-                if (UnsafeCategory(textLine) is { } category)
+                var decision = ClassifyGeneratedValue(graph.Classification, VaultValueContext.MarkdownEvidenceLocation, textLine);
+                if (decision.Outcome == VaultSafetyOutcome.Reject)
                 {
-                    throw new InvalidOperationException($"UnsafeValueRejected: {category} at markdown line {line}.");
+                    if (graph.Classification == "hidden"
+                        && decision.Category == SensitiveWordCategory
+                        && hiddenEvidenceLocations.Any(path => textLine.Contains(path, StringComparison.Ordinal)))
+                    {
+                        line++;
+                        continue;
+                    }
+
+                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {decision.Category} at markdown line {line}.");
                 }
 
                 line++;
             }
         }
+    }
+
+    private static VaultSafetyDecision ClassifySourceValue(string claimLevel, VaultValueContext context, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new VaultSafetyDecision(VaultSafetyOutcome.AllowCategory, "empty-value");
+        }
+
+        var normalized = NormalizeSafetyValue(context, value);
+        var category = UnsafeCategory(normalized);
+        if (category is not null && category != SensitiveWordCategory)
+        {
+            return new VaultSafetyDecision(VaultSafetyOutcome.Reject, category);
+        }
+
+        if (context is VaultValueContext.RepoRelativePath or VaultValueContext.EvidenceLocation)
+        {
+            if (IsSafeRepoRelativePath(normalized))
+            {
+                return category == SensitiveWordCategory && claimLevel == "hidden"
+                    ? new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null)
+                    : new VaultSafetyDecision(category is null ? VaultSafetyOutcome.AllowRaw : VaultSafetyOutcome.Reject, category);
+            }
+
+            return new VaultSafetyDecision(VaultSafetyOutcome.Reject, category ?? "local-path");
+        }
+
+        if (context is VaultValueContext.SymbolDisplayName or VaultValueContext.RouteActionModelMemberName)
+        {
+            if (!IsSafeDisplayText(normalized))
+            {
+                return claimLevel == "hidden"
+                    ? new VaultSafetyDecision(VaultSafetyOutcome.OmitWithGap, "hidden-display-name-invalid")
+                    : new VaultSafetyDecision(VaultSafetyOutcome.Reject, category ?? "unsafe-display-name");
+            }
+
+            if (category == SensitiveWordCategory)
+            {
+                return claimLevel == "hidden"
+                    ? new VaultSafetyDecision(VaultSafetyOutcome.AllowHash, "sensitive-word-safe-name")
+                    : new VaultSafetyDecision(VaultSafetyOutcome.Reject, category);
+            }
+
+            return new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null);
+        }
+
+        if (context == VaultValueContext.StableTraceMapId)
+        {
+            if (!IsSafeStableTraceMapId(normalized))
+            {
+                return new VaultSafetyDecision(VaultSafetyOutcome.Reject, category ?? "unsafe-id-component");
+            }
+
+            if (category == SensitiveWordCategory)
+            {
+                return claimLevel == "hidden"
+                    ? new VaultSafetyDecision(VaultSafetyOutcome.AllowHash, "sensitive-word-safe-name")
+                    : new VaultSafetyDecision(VaultSafetyOutcome.Reject, category);
+            }
+
+            return new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null);
+        }
+
+        if (context is VaultValueContext.RuleId or VaultValueContext.ClosedVocabulary or VaultValueContext.DiagnosticCategory)
+        {
+            return category is null
+                ? new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null)
+                : new VaultSafetyDecision(VaultSafetyOutcome.Reject, category);
+        }
+
+        return category is null
+            ? new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null)
+            : new VaultSafetyDecision(VaultSafetyOutcome.Reject, category);
+    }
+
+    private static VaultSafetyDecision ClassifyGeneratedValue(string claimLevel, VaultValueContext context, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null);
+        }
+
+        var normalized = NormalizeSafetyValue(context, value);
+        var category = UnsafeCategory(normalized);
+        if (category is null)
+        {
+            if (context is VaultValueContext.SymbolDisplayName or VaultValueContext.RouteActionModelMemberName
+                && !IsSafeDisplayText(normalized))
+            {
+                return new VaultSafetyDecision(VaultSafetyOutcome.Reject, "unsafe-display-name");
+            }
+
+            if (context == VaultValueContext.StableTraceMapId && !IsSafeStableTraceMapId(normalized))
+            {
+                return new VaultSafetyDecision(VaultSafetyOutcome.Reject, "unsafe-id-component");
+            }
+
+            return new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null);
+        }
+
+        if (claimLevel == "hidden"
+            && category == SensitiveWordCategory
+            && context is VaultValueContext.EvidenceLocation or VaultValueContext.RepoRelativePath
+            && IsSafeRepoRelativePath(normalized))
+        {
+            return new VaultSafetyDecision(VaultSafetyOutcome.AllowRaw, null);
+        }
+
+        return new VaultSafetyDecision(VaultSafetyOutcome.Reject, category);
+    }
+
+    private static VaultValueContext JsonValueContext(string pointer)
+    {
+        if (IsEvidenceLocationPointer(pointer))
+        {
+            return VaultValueContext.EvidenceLocation;
+        }
+
+        if (Regex.IsMatch(pointer, @"/(id|from|to|identity|sourceId)$", RegexOptions.CultureInvariant)
+            || Regex.IsMatch(pointer, @"/(supportingFactIds|supportingEdgeIds)/\d+$", RegexOptions.CultureInvariant))
+        {
+            return VaultValueContext.StableTraceMapId;
+        }
+
+        if (Regex.IsMatch(pointer, @"/(ruleId)$", RegexOptions.CultureInvariant)
+            || Regex.IsMatch(pointer, @"/ruleIds/\d+$", RegexOptions.CultureInvariant))
+        {
+            return VaultValueContext.RuleId;
+        }
+
+        if (Regex.IsMatch(pointer, @"/displayName$", RegexOptions.CultureInvariant))
+        {
+            return VaultValueContext.SymbolDisplayName;
+        }
+
+        if (Regex.IsMatch(pointer, @"/filePath$", RegexOptions.CultureInvariant))
+        {
+            return VaultValueContext.RepoRelativePath;
+        }
+
+        if (Regex.IsMatch(pointer, @"/(classification|claimLevel|kind|surfaceKind|language|analysisLevel|buildStatus|compatibility|minimumClaimLevel|generatedAt|schemaVersion|name|version)$", RegexOptions.CultureInvariant)
+            || Regex.IsMatch(pointer, @"/(coverage|evidenceTiers|formats)/\d+$", RegexOptions.CultureInvariant))
+        {
+            return VaultValueContext.ClosedVocabulary;
+        }
+
+        return VaultValueContext.GeneratedMetadata;
+    }
+
+    private static bool IsEvidenceLocationPointer(string pointer)
+    {
+        return Regex.IsMatch(pointer, @"/evidenceLocations/\d+/filePath$", RegexOptions.CultureInvariant);
     }
 
     private static IEnumerable<(string Location, string Value)> JsonStringLeaves(JsonNode node, string path)
@@ -1298,7 +1607,17 @@ public static class VaultExporter
             || text.Contains("\\Users\\", StringComparison.Ordinal)
             || text.Contains("/home/", StringComparison.Ordinal)
             || text.Contains("file://", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("C:\\", StringComparison.OrdinalIgnoreCase))
+            || text.Contains("C:\\", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("~/", StringComparison.Ordinal)
+            || text.StartsWith("//", StringComparison.Ordinal)
+            || text.Contains("$HOME", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("%USERPROFILE%", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("/tmp/", StringComparison.OrdinalIgnoreCase)
+            || Regex.IsMatch(text, @"(^|[\s""'`])(/tmp/|/var/tmp/)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || text.Contains("\\Temp\\", StringComparison.OrdinalIgnoreCase)
+            || Regex.IsMatch(text, @"(^|[\s""'`])\\\\[^\\/\s]+[\\/]", RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"(^|[\s""'`])([A-Za-z]:[\\/])", RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"(^|[\\/])\.\.([\\/]|$)", RegexOptions.CultureInvariant))
         {
             return "local-path";
         }
@@ -1311,10 +1630,25 @@ public static class VaultExporter
             return "raw-remote-or-url";
         }
 
-        if (text.Contains("select ", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("insert ", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("update ", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("delete ", StringComparison.OrdinalIgnoreCase))
+        if (Regex.IsMatch(text, @"\b(server|data source|database|initial catalog|user id|uid|password|pwd)\s*=[^;\r\n]+;", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\b(connectionstring|connection string)\b\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return "connection-string";
+        }
+
+        if (Regex.IsMatch(text, @"-----BEGIN [A-Z ]*PRIVATE KEY-----", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\bAuthorization\s*:\s*(Bearer|Basic)\s+\S+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\b(api[-_ ]?key|access[-_ ]?token|session[-_ ]?id|password|secret)\s*[:=]\s*\S+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\b(sk|pk)_(live|test)_[A-Za-z0-9]{16,}\b", RegexOptions.CultureInvariant)
+            || Regex.IsMatch(text, @"\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b", RegexOptions.CultureInvariant))
+        {
+            return "credential";
+        }
+
+        if (Regex.IsMatch(text, @"\bselect\b.+\bfrom\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
+            || Regex.IsMatch(text, @"\binsert\b.+\binto\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
+            || Regex.IsMatch(text, @"\bupdate\b.+\bset\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
+            || Regex.IsMatch(text, @"\bdelete\b.+\bfrom\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline))
         {
             return "raw-sql";
         }
@@ -1325,10 +1659,165 @@ public static class VaultExporter
             || text.Contains("connectionstring", StringComparison.OrdinalIgnoreCase)
             || text.Contains("connection string", StringComparison.OrdinalIgnoreCase))
         {
-            return "secret-like";
+            return SensitiveWordCategory;
         }
 
         return null;
+    }
+
+    private static void PreValidateClosedVocabulary(IEnumerable<string> values)
+    {
+        foreach (var value in values)
+        {
+            if (UnsafeCategory(value) is { } category)
+            {
+                throw new InvalidOperationException($"VaultExportClosedVocabularyUnsafe: {category}.");
+            }
+        }
+    }
+
+    private static void ApplyHiddenLocalSafety(List<VaultGraphNode> nodes, List<VaultGraphEdge> edges, List<VaultGraphGap> gaps)
+    {
+        var safeContextGaps = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i].EvidenceLocations is not { Count: > 0 } locations)
+            {
+                continue;
+            }
+
+            nodes[i] = nodes[i] with
+            {
+                EvidenceLocations = NormalizeHiddenEvidenceLocations(
+                    locations,
+                    $"$/nodes/{i}/evidenceLocations",
+                    safeContextGaps)
+            };
+        }
+
+        for (var i = 0; i < edges.Count; i++)
+        {
+            if (edges[i].EvidenceLocations is not { Count: > 0 } locations)
+            {
+                continue;
+            }
+
+            edges[i] = edges[i] with
+            {
+                EvidenceLocations = NormalizeHiddenEvidenceLocations(
+                    locations,
+                    $"$/edges/{i}/evidenceLocations",
+                    safeContextGaps)
+            };
+        }
+
+        foreach (var gapEntry in safeContextGaps)
+        {
+            gaps.Add(new VaultGraphGap(
+                $"gap:{Hash(string.Join('\u001f', ["gap/v1", gapEntry.Key, "hidden", "HiddenSafeContextAccepted", HiddenSafeContextRuleId, Tier4Unknown]), IdHashLength)}",
+                "hidden",
+                "HiddenSafeContextAccepted",
+                HiddenSafeContextRuleId,
+                Tier4Unknown,
+                "A hidden safe-context evidence location contains a sensitive word and remains local-only; public and demo exports stay strict.",
+                gapEntry.Value,
+                [
+                    "Local hidden context preserves navigation evidence but does not prove public safety.",
+                    $"Evidence location hash: {gapEntry.Value}."
+                ]));
+        }
+    }
+
+    private static IReadOnlyList<VaultEvidenceLocation> NormalizeHiddenEvidenceLocations(
+        IReadOnlyList<VaultEvidenceLocation> locations,
+        string pointer,
+        IDictionary<string, string> safeContextGaps)
+    {
+        var normalized = new List<VaultEvidenceLocation>(locations.Count);
+        for (var i = 0; i < locations.Count; i++)
+        {
+            var location = locations[i];
+            var filePath = NormalizeRepoRelativePath(location.FilePath);
+            if (!IsSafeRepoRelativePath(filePath))
+            {
+                var category = UnsafeCategory(location.FilePath) ?? "unsafe-evidence-location";
+                throw new InvalidOperationException($"UnsafeValueRejected: {category} at {pointer}/{i}/filePath.");
+            }
+
+            if (UnsafeCategory(filePath) == SensitiveWordCategory)
+            {
+                var locationHash = Hash(filePath, EvidenceLocationHashLength);
+                var safeScope = $"evidence-location:{locationHash}";
+                safeContextGaps[$"hidden-safe-evidence-location-{locationHash}"] = safeScope;
+            }
+
+            normalized.Add(location with { FilePath = filePath });
+        }
+
+        return normalized
+            .Distinct()
+            .OrderBy(location => location.FilePath, StringComparer.Ordinal)
+            .ThenBy(location => location.StartLine ?? 0)
+            .ThenBy(location => location.EndLine ?? 0)
+            .ToArray();
+    }
+
+    private static string NormalizeRepoRelativePath(string value)
+    {
+        return value.Trim().Replace('\\', '/');
+    }
+
+    private static bool IsSafeRepoRelativePath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var text = NormalizeRepoRelativePath(value);
+        if (text.Length > MaxRepoRelativePathLength
+            || text.StartsWith("/", StringComparison.Ordinal)
+            || text.StartsWith("~/", StringComparison.Ordinal)
+            || text.StartsWith("$HOME", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("%USERPROFILE%", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("://", StringComparison.OrdinalIgnoreCase)
+            || Regex.IsMatch(text, @"^[A-Za-z]:/", RegexOptions.CultureInvariant)
+            || text.StartsWith("//", StringComparison.Ordinal)
+            || text.Any(char.IsControl))
+        {
+            return false;
+        }
+
+        var segments = text.Split('/');
+        if (segments.Length == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            if (string.IsNullOrWhiteSpace(segment)
+                || segment == "."
+                || segment == "..")
+            {
+                return false;
+            }
+
+            if (i == 0
+                && (segment.Equals("users", StringComparison.OrdinalIgnoreCase)
+                    || segment.Equals("home", StringComparison.OrdinalIgnoreCase)
+                    || segment.Equals("tmp", StringComparison.OrdinalIgnoreCase)
+                    || segment.Equals("temp", StringComparison.OrdinalIgnoreCase)
+                    || segment.Equals("var", StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+        }
+
+        var category = UnsafeCategory(text);
+        return category is null or SensitiveWordCategory;
     }
 
     private static async Task<SourceClaimCatalog> ReadClaimCatalogAsync(string? path, CancellationToken cancellationToken)
@@ -1597,16 +2086,149 @@ public static class VaultExporter
         return $"edge:{NormalizeEdgeKind(kind)}:{Hash(string.Join('\u001f', ["edge/v1", kind, from, to, ruleId, evidenceTier, classification, string.Join('|', DistinctSorted(factIds)), string.Join('|', DistinctSorted(edgeIds))]), IdHashLength)}";
     }
 
-    private static string NodeIdentity(CombinedPathNode node, string sourceNodeId, string claimLevel)
+    private static bool TryNodeIdentity(
+        CombinedPathNode node,
+        string sourceNodeId,
+        string claimLevel,
+        out string identity,
+        out string rejectedCategory)
     {
-        return string.Join('\u001f',
+        identity = string.Empty;
+        rejectedCategory = "unsafe-id-component";
+        if (!TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, sourceNodeId, "source-id", out var safeSourceNodeId, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, NormalizeNodeKind(node), "node-kind", out var safeNodeKind, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, NormalizeSurfaceKind(node) ?? "none", "surface-kind", out var safeSurfaceKind, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.RuleId, node.RuleId ?? "none", "rule-id", out var safeRuleId, out rejectedCategory))
+        {
+            return false;
+        }
+
+        var endpointComponent = node.NodeKind is "endpoint" && claimLevel != "hidden"
+            ? $"{node.HttpMethod} {node.NormalizedPathKey}"
+            : $"internal-node:{Hash(node.NodeId, 16)}";
+        if (!TryIdentityComponent(claimLevel, VaultValueContext.RouteActionModelMemberName, endpointComponent, "endpoint", out var safeEndpointComponent, out rejectedCategory))
+        {
+            return false;
+        }
+
+        var evidenceComponent = node.NodeKind is "surface" or "endpoint"
+            ? node.ShapeHash ?? node.TextHash ?? node.SurfaceName ?? node.DisplayName ?? $"internal-node:{Hash(node.NodeId, 16)}"
+            : $"internal-node:{Hash(node.NodeId, 16)}";
+        if (!TryIdentityComponent(claimLevel, VaultValueContext.RouteActionModelMemberName, evidenceComponent, "evidence", out var safeEvidenceComponent, out rejectedCategory))
+        {
+            return false;
+        }
+
+        identity = string.Join('\u001f',
             "node/evidence/v1",
-            sourceNodeId,
-            NormalizeNodeKind(node),
-            NormalizeSurfaceKind(node) ?? "none",
-            node.RuleId ?? "none",
-            node.NodeKind is "endpoint" && claimLevel != "hidden" ? $"{node.HttpMethod} {node.NormalizedPathKey}" : Hash(node.NodeId, 16),
-            node.NodeKind is "surface" or "endpoint" ? node.ShapeHash ?? node.TextHash ?? node.SurfaceName ?? node.DisplayName : Hash(node.NodeId, 16));
+            safeSourceNodeId,
+            safeNodeKind,
+            safeSurfaceKind,
+            safeRuleId,
+            safeEndpointComponent,
+            safeEvidenceComponent);
+        return true;
+    }
+
+    private static bool TryStableEdgeId(CombinedPathEdge edge, string from, string to, string claimLevel, out string edgeId, out string rejectedCategory)
+    {
+        edgeId = string.Empty;
+        rejectedCategory = "unsafe-id-component";
+        if (!TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, edge.EdgeKind, "edge-kind", out var safeKind, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, from, "from", out var safeFrom, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, to, "to", out var safeTo, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.RuleId, edge.RuleId, "rule-id", out var safeRuleId, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, edge.EvidenceTier, "evidence-tier", out var safeEvidenceTier, out rejectedCategory)
+            || !TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, edge.Classification, "classification", out var safeClassification, out rejectedCategory))
+        {
+            return false;
+        }
+
+        var safeFactIds = new List<string>();
+        foreach (var factId in DistinctSorted(edge.SupportingFactIds))
+        {
+            if (!TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, factId, "supporting-fact", out var safeFactId, out rejectedCategory))
+            {
+                return false;
+            }
+
+            safeFactIds.Add(safeFactId);
+        }
+
+        var safeEdgeIds = new List<string>();
+        foreach (var supportingEdgeId in DistinctSorted(edge.SupportingCombinedEdgeIds))
+        {
+            if (!TryIdentityComponent(claimLevel, VaultValueContext.StableTraceMapId, supportingEdgeId, "supporting-edge", out var safeSupportingEdgeId, out rejectedCategory))
+            {
+                return false;
+            }
+
+            safeEdgeIds.Add(safeSupportingEdgeId);
+        }
+
+        edgeId = StableEdgeId(safeKind, safeFrom, safeTo, safeRuleId, safeEvidenceTier, safeClassification, safeFactIds, safeEdgeIds);
+        return true;
+    }
+
+    private static bool TryIdentityComponent(
+        string claimLevel,
+        VaultValueContext context,
+        string? value,
+        string fallback,
+        out string safeValue,
+        out string rejectedCategory)
+    {
+        safeValue = fallback;
+        rejectedCategory = "unsafe-id-component";
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        var normalized = NormalizeSafetyValue(context, value);
+        var decision = ClassifySourceValue(claimLevel, context, normalized);
+        rejectedCategory = decision.Category ?? "unsafe-id-component";
+        switch (decision.Outcome)
+        {
+            case VaultSafetyOutcome.AllowRaw:
+                safeValue = normalized;
+                return true;
+            case VaultSafetyOutcome.AllowHash:
+                safeValue = $"{ContextLabel(context)}-sha256:{Hash($"vault-export/identity/v1/{context}/{normalized}", DisplayNameHashLength)}";
+                return true;
+            case VaultSafetyOutcome.AllowCategory:
+            case VaultSafetyOutcome.OmitWithGap:
+                safeValue = decision.Category ?? ContextLabel(context);
+                return true;
+            case VaultSafetyOutcome.Reject:
+            default:
+                return false;
+        }
+    }
+
+    private static string NormalizeSafetyValue(VaultValueContext context, string value)
+    {
+        var trimmed = value.Trim();
+        return context is VaultValueContext.RepoRelativePath or VaultValueContext.EvidenceLocation
+            ? NormalizeRepoRelativePath(trimmed)
+            : trimmed.ReplaceLineEndings(" ");
+    }
+
+    private static string ContextLabel(VaultValueContext context)
+    {
+        return context switch
+        {
+            VaultValueContext.RepoRelativePath => "repo-relative-path",
+            VaultValueContext.EvidenceLocation => "evidence-location",
+            VaultValueContext.SymbolDisplayName => "symbol-display",
+            VaultValueContext.RouteActionModelMemberName => "route-action-model-member",
+            VaultValueContext.StableTraceMapId => "stable-tracemap-id",
+            VaultValueContext.RuleId => "rule-id",
+            VaultValueContext.ClosedVocabulary => "closed-vocabulary",
+            VaultValueContext.DiagnosticCategory => "diagnostic-category",
+            VaultValueContext.MarkdownEvidenceLocation => "markdown-evidence-location",
+            _ => "generated-metadata"
+        };
     }
 
     private static string NormalizeNodeKind(CombinedPathNode node)
@@ -1670,7 +2292,30 @@ public static class VaultExporter
             return fallback;
         }
 
-        return value.Trim().ReplaceLineEndings(" ");
+        var text = value.Trim().ReplaceLineEndings(" ");
+        if (UnsafeCategory(text) is { } category)
+        {
+            throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at displayName.");
+        }
+
+        return IsSafeDisplayText(text) ? text : $"{fallback}-{Hash(text, DisplayNameHashLength)}";
+    }
+
+    private static bool IsSafeDisplayText(string value)
+    {
+        return value.Length <= MaxDisplayNameLength
+            && !value.Any(char.IsControl)
+            && !value.Contains('\t', StringComparison.Ordinal)
+            && !Regex.IsMatch(value, @" {2,}", RegexOptions.CultureInvariant);
+    }
+
+    private static bool IsSafeStableTraceMapId(string value)
+    {
+        return value.Length <= MaxDisplayNameLength
+            && value.Length > 0
+            && !value.Any(char.IsControl)
+            && !Regex.IsMatch(value, @"\s", RegexOptions.CultureInvariant)
+            && UnsafeCategory(value) is null or SensitiveWordCategory;
     }
 
     private static IReadOnlyList<string> SourceLimitations(CombinedReportSource source)
@@ -1697,7 +2342,7 @@ public static class VaultExporter
             limitations.Add("Display values are category-labeled because the source identity is hidden.");
         }
 
-        if (node.EvidenceTier == "Tier4Unknown")
+        if (node.EvidenceTier == Tier4Unknown)
         {
             limitations.Add("Evidence tier is unknown; do not upgrade the conclusion from graph presence.");
         }
@@ -1708,7 +2353,7 @@ public static class VaultExporter
     private static IReadOnlyList<string> EdgeLimitations(CombinedPathEdge edge)
     {
         var limitations = new List<string> { "Static evidence relationship only; this edge does not prove runtime execution." };
-        if (edge.EvidenceTier == "Tier4Unknown")
+        if (edge.EvidenceTier == Tier4Unknown)
         {
             limitations.Add("Unknown evidence tier preserved from source evidence.");
         }
@@ -1720,6 +2365,21 @@ public static class VaultExporter
     {
         var id = $"gap:{Hash(string.Join('\u001f', ["gap/v1", key, claimLevel, classification, ruleId, evidenceTier, sourceScope ?? ""]), IdHashLength)}";
         return new VaultGraphGap(id, claimLevel, classification, ruleId, evidenceTier, message, sourceScope, []);
+    }
+
+    private static VaultGraphGap CreateSafetyGap(string key, string classification, string message, string? sourceScope, string? category)
+    {
+        var safeCategory = string.IsNullOrWhiteSpace(category) ? "unsafe-id-component" : category;
+        var id = $"gap:{Hash(string.Join('\u001f', ["gap/v1", key, "hidden", classification, UnsafeIdComponentRuleId, Tier4Unknown, sourceScope ?? string.Empty, safeCategory]), IdHashLength)}";
+        return new VaultGraphGap(
+            id,
+            "hidden",
+            classification,
+            UnsafeIdComponentRuleId,
+            Tier4Unknown,
+            message,
+            sourceScope,
+            [$"Rejected component category: {safeCategory}."]);
     }
 
     private static VaultGraphLimitation CreateLimitation(string key, string claimLevel, string ruleId, string evidenceTier, string message)
@@ -1826,6 +2486,17 @@ public static class VaultExporter
         var fromDirectory = Path.GetDirectoryName(fromFile.Replace('\\', '/')) ?? string.Empty;
         var prefix = string.IsNullOrWhiteSpace(fromDirectory) ? string.Empty : "../";
         return prefix + toFile.Replace('\\', '/');
+    }
+
+    private static string LineSpan(VaultEvidenceLocation location)
+    {
+        return (location.StartLine, location.EndLine) switch
+        {
+            ({ } start, { } end) when start == end => start.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ({ } start, { } end) => $"{start.ToString(System.Globalization.CultureInfo.InvariantCulture)}-{end.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            ({ } start, null) => start.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => "line-span-unavailable"
+        };
     }
 
     private static string Cell(string? value)
