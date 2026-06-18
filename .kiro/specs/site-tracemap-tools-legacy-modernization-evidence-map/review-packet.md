@@ -78,8 +78,8 @@ Review focus:
   leaking private sample names, counts, cadence, raw artifacts, or unreleased
   sequencing?
 - Does the spec connect old framework/toolchain clues, project-load failures,
-  syntax fallback, WCF, ASMX, remoting, WinForms, WebForms, and data metadata
-  to reviewer questions without claiming completeness?
+  syntax fallback, WCF, ASMX, remoting, WinForms, WebForms, and legacy data
+  metadata to reviewer questions without claiming completeness?
 - Does the spec treat failed build or project load as reduced coverage, not a
   clean repository?
 - Does the spec avoid claims about runtime behavior, production traffic,
