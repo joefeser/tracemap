@@ -18,113 +18,113 @@ phase is spec-only.
   changing site code.
 
 ## Future Implementation Tasks
-- [ ] Reconfirm that the page-level public claim level remains `demo`; if
+- [x] Reconfirm that the page-level public claim level remains `demo`; if
   implementation evidence changes, record the justification before changing the
   page-level claim level. Confirm that page-level `demo` is not a ceiling: a
   row-level `shipped` row is not downgraded by the page label, and a row-level
   `concept` or `hidden` row is not upgraded by it.
-- [ ] Evaluate adding the catalog as a section of `/proof-paths/` before
+- [x] Evaluate adding the catalog as a section of `/proof-paths/` before
   choosing the standalone `/proof-source-catalog/` route.
-- [ ] Record the selected placement and rejected alternatives in
+- [x] Record the selected placement and rejected alternatives in
   `implementation-state.md`, including why `/proof-paths/` was or was not
   extended.
-- [ ] Add the proof source catalog page or section using existing static-site
+- [x] Add the proof source catalog page or section using existing static-site
   layout and metadata patterns.
-- [ ] Add visible copy that says `Public claim level: demo`.
-- [ ] Add a catalog table or equivalent scannable layout with route, claim
+- [x] Add visible copy that says `Public claim level: demo`.
+- [x] Add a catalog table or equivalent scannable layout with route, claim
   label, allowed public wording or claim family, `Public claim level`, proof
   path, source artifact or source document, rule ID or rule family, evidence
   tier or coverage label, limitation, and non-claims.
-- [ ] Ensure every row includes the required `Public claim level` field with
+- [x] Ensure every row includes the required `Public claim level` field with
   exactly one of `shipped`, `demo`, `concept`, or `hidden`.
-- [ ] Define one claim-level mapping table from existing site vocabulary to
+- [x] Define one claim-level mapping table from existing site vocabulary to
   `shipped`, `demo`, `concept`, and `hidden`, covering route metadata,
   capability matrix statuses, roadmap wording, proof-path public statuses, and
   repository-doc source entries.
-- [ ] Map existing `main`, `shipped`, `shipped navigation`, repository docs on
+- [x] Map existing `main`, `shipped`, `shipped navigation`, repository docs on
   `main`, and `main with maturity caveats` to catalog `shipped`, while keeping
   maturity caveats in row limitations.
-- [ ] Map existing `demo`, `demo guidance`, `main/demo`, `public-demo`,
+- [x] Map existing `demo`, `demo guidance`, `main/demo`, `public-demo`,
   checked-in public-safe demo summary, route metadata `publicClaimLevel: demo`,
   and proof-path public status `demo` to catalog `demo`.
-- [ ] Map existing `concept`, `concept-only`, `future`, `future-only`, `dev`,
+- [x] Map existing `concept`, `concept-only`, `future`, `future-only`, `dev`,
   `dev-only`, route metadata `publicClaimLevel: concept`, and proof-path public
   status `future` to catalog `concept`.
-- [ ] Map hidden or internal-only placeholders to catalog `hidden` without
+- [x] Map hidden or internal-only placeholders to catalog `hidden` without
   disclosing unreleased names, route names, private samples, counts, cadence,
   sequencing, or in-flight status.
-- [ ] Define one evidence-status mapping table using only
+- [x] Define one evidence-status mapping table using only
   `source-backed`, `demo-evidence-backed`, `partial-or-reduced`,
   `gap-labeled-demo`, `future-only`, `hidden-or-internal`, and
   `not-yet-backed`.
-- [ ] Ensure no published catalog row uses `not-yet-backed`; any candidate row
+- [x] Ensure no published catalog row uses `not-yet-backed`; any candidate row
   that requires `not-yet-backed` must be removed or rewritten before the page
   publishes. Publishing is blocked until this task passes.
-- [ ] Validate that the published claim-level mapping table matches the
+- [x] Validate that the published claim-level mapping table matches the
   required starting mapping in Requirement 3, or record approved divergence
   with rationale in `implementation-state.md`.
-- [ ] Enumerate the status vocabulary currently used by `/capabilities/`,
+- [x] Enumerate the status vocabulary currently used by `/capabilities/`,
   `/roadmap/`, and `/proof-paths/` source and assert each token maps to exactly
   one catalog claim level; fail on any unmapped token.
-- [ ] Validate that the published evidence-status mapping table matches the
+- [x] Validate that the published evidence-status mapping table matches the
   required starting mapping in Requirement 4, or record approved divergence
   with rationale in `implementation-state.md`.
-- [ ] Validate that every published row's claim-level and evidence-status pair
+- [x] Validate that every published row's claim-level and evidence-status pair
   matches the allowed matrix from Requirement 4, and reject hidden evidence
   status on non-hidden rows.
-- [ ] Preserve public-safe rule IDs where available and use rule-family labels
+- [x] Preserve public-safe rule IDs where available and use rule-family labels
   with limitations where rule IDs are unavailable or too specific to publish.
-- [ ] Preserve evidence tier names `Tier1Semantic`, `Tier2Structural`,
+- [x] Preserve evidence tier names `Tier1Semantic`, `Tier2Structural`,
   `Tier3SyntaxOrTextual`, and `Tier4Unknown` when cited by source material.
-- [ ] Transcribe coverage labels from cited source material, including labels
+- [x] Transcribe coverage labels from cited source material, including labels
   such as `FullEvidenceAvailable`, `PartialAnalysis`, `not_requested`, and
   `unavailable`, instead of normalizing them into stronger wording.
-- [ ] Distinguish source-of-truth artifact family from proof-path link for each
+- [x] Distinguish source-of-truth artifact family from proof-path link for each
   row.
-- [ ] Link proof paths only to public routes, checked-in public-safe repository
+- [x] Link proof paths only to public routes, checked-in public-safe repository
   docs, rule catalog entries, public-safe generated summaries, or sanitized
   public-demo report summaries.
-- [ ] For local-only scanner facts, SQLite indexes, scan reports, analyzer
+- [x] For local-only scanner facts, SQLite indexes, scan reports, analyzer
   logs, or generated scan directories, name only the artifact family and link to
   a public-safe summary or route.
-- [ ] Ensure no row publishes raw `facts.ndjson`, raw `index.sqlite`, analyzer
+- [x] Ensure no row publishes raw `facts.ndjson`, raw `index.sqlite`, analyzer
   logs, raw source snippets, raw SQL, config values, secrets, local absolute
   paths, raw remotes, generated scan directories, private sample names, or
   hidden private-work details.
-- [ ] Add row-level limitations and non-claims for demo-only, concept-only,
+- [x] Add row-level limitations and non-claims for demo-only, concept-only,
   partial, reduced, gap-labeled, hidden, or unsupported wording.
-- [ ] Add a global non-claims section rejecting runtime behavior, production
+- [x] Add a global non-claims section rejecting runtime behavior, production
   traffic, endpoint performance, outage cause, release safety, operational
   safety, AI impact analysis, LLM analysis, and complete product coverage
   claims.
-- [ ] Add stable row identifiers or anchors for future automated claim review.
-- [ ] If implemented as `/proof-source-catalog/`, add route metadata, sitemap
+- [x] Add stable row identifiers or anchors for future automated claim review.
+- [x] If implemented as `/proof-source-catalog/`, add route metadata, sitemap
   metadata, and discovery metadata with `publicClaimLevel: demo`.
-- [ ] Add safe cross-links from `/proof-paths/`, `/roadmap/`,
+- [x] Add safe cross-links from `/proof-paths/`, `/roadmap/`,
   `/capabilities/`, `/docs/`, `/validation/`, and `/limitations/` only where
   the link helps readers verify public wording.
-- [ ] Add focused validation for required labels, allowed claim levels, allowed
+- [x] Add focused validation for required labels, allowed claim levels, allowed
   evidence-status labels, required links, stable row anchors, route metadata,
   forbidden private/raw text, and forbidden overclaiming.
-- [ ] Validate the forbidden public wording pattern list from `design.md`; if
+- [x] Validate the forbidden public wording pattern list from `design.md`; if
   the implementation extends the list, preserve all existing entries or record
   the reason for any approved change in `implementation-state.md`.
-- [ ] Add validation that every row includes all required Requirement 2 fields
+- [x] Add validation that every row includes all required Requirement 2 fields
   and that limitation and non-claims are non-empty.
-- [ ] Add validation that hidden rows collapse to at most one aggregate
+- [x] Add validation that hidden rows collapse to at most one aggregate
   placeholder and reject any count, cadence, sequencing, in-flight status, or
   per-capability hidden naming.
-- [ ] Add validation that the hidden aggregate placeholder's `proofPath` is the
+- [x] Add validation that the hidden aggregate placeholder's `proofPath` is the
   bare sentinel `hidden`.
-- [ ] Add validation that any row whose primary content duplicates a
+- [x] Add validation that any row whose primary content duplicates a
   `/proof-paths/` evidence trail links to that trail rather than restating it
   inline.
-- [ ] Add validation that every catalog row anchor either equals the reserved
+- [x] Add validation that every catalog row anchor either equals the reserved
   hidden anchor `proof-source-hidden-aggregate-placeholder` or conforms to the
   format `proof-source-{route-slug}-{claim-slug}` derived from `route` and
   `claimLabel`.
-- [ ] Add validation that every catalog row anchor is unique.
-- [ ] Record the future implementation's chosen word-count bound in
+- [x] Add validation that every catalog row anchor is unique.
+- [x] Record the future implementation's chosen word-count bound in
   `implementation-state.md` before checking word-count validation complete.
 
 ## Final Validation Gate
@@ -133,16 +133,16 @@ Note: these tasks are implementation-phase gate checks. They are not runnable
 on this spec-only branch. Do not mark them complete until a site implementation
 branch changes site code.
 
-- [ ] Run `git diff --check`.
-- [ ] Run `npm test` from `site/` after implementation changes.
-- [ ] Run `npm run validate` from `site/` after implementation changes.
-- [ ] Run `npm run build` from `site/` after implementation changes.
-- [ ] Run `./scripts/check-private-paths.sh`.
-- [ ] Run desktop and mobile browser sanity checks if layout or interaction
+- [x] Run `git diff --check`.
+- [x] Run `npm test` from `site/` after implementation changes.
+- [x] Run `npm run validate` from `site/` after implementation changes.
+- [x] Run `npm run build` from `site/` after implementation changes.
+- [x] Run `./scripts/check-private-paths.sh`.
+- [x] Run desktop and mobile browser sanity checks if layout or interaction
   changes are made.
-- [ ] Update this spec's `implementation-state.md` with placement decisions,
+- [x] Update this spec's `implementation-state.md` with placement decisions,
   validation results, review findings, claim-boundary decisions, oddities, and
   follow-up items.
-- [ ] Keep `implementation-state.md` free of local absolute paths, raw remotes,
+- [x] Keep `implementation-state.md` free of local absolute paths, raw remotes,
   secrets, raw facts, raw SQLite index paths, raw analyzer log content, private
   sample names, and hidden private-work details.
