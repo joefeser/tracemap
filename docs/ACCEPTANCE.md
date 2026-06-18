@@ -324,6 +324,8 @@ Minimum checks:
 - WCF metadata-backed mappings and operation-name normalization remain static evidence and do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
 - legacy WebForms facts expose static page/control/event/handler/flow evidence with rule IDs, evidence tiers, supporting fact IDs, coverage labels, and limitations; they do not prove runtime page lifecycle execution, postbacks, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 - WebForms generated reports and validation summaries must not include raw source snippets, raw SQL, config values, raw URLs, local absolute paths, raw remotes, private sample identifiers, or secrets.
+- legacy WinForms facts expose static form/control/component/resource/event/handler/navigation/callback/handler-flow evidence with rule IDs, evidence tiers, supporting fact IDs, coverage labels, and limitations; they do not prove runtime event firing, form visibility, user reachability, branch feasibility, auth/role outcome, scheduling, service reachability, SQL execution, database existence, deployment, or production usage.
+- WinForms generated reports and validation summaries must not include raw source snippets, raw resource values, raw SQL, config values, raw URLs, endpoint addresses, hostnames, local absolute paths, raw remotes, private sample identifiers, or secrets.
 
 ## Endpoint Alignment Acceptance
 

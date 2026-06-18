@@ -141,6 +141,30 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 
 These facts are static evidence only. They do not prove runtime page lifecycle execution, postbacks, event bubbling, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
 
+### Legacy WinForms Event Navigation Facts
+
+The .NET adapter emits WinForms-specific static evidence for desktop UI entry
+points and direct backend context:
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `WinFormsSurfaceDeclared` | Inventories form, user-control, control, component, and application-context classes. | `typeName`, `surfaceKind`, `baseTypes` |
+| `WinFormsControlDeclared` | Records static control/component fields and object creations. | `formTypeName`, `controlId`, `controlType`, `controlKind` |
+| `WinFormsEventBindingDeclared` | Records explicit static event subscriptions. | `formTypeName`, `controlId`, `eventName`, `handlerName`, `bindingKind` |
+| `WinFormsHandlerResolved` | Links event bindings to scoped partial-class handler methods. | `formTypeName`, `handlerName`, `handlerSymbol`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
+| `WinFormsNavigationEdgeDeclared` | Records static `Application.Run`, `Show`, `ShowDialog`, owner/parent, or MDI navigation evidence. | `formTypeName`, `sourceMethodName`, `targetFormTypeName`, `navigationKind`, `navigationClassification` |
+| `WinFormsCallbackBoundaryDeclared` | Records timer, background worker, UI marshal, async/delegate, or callback boundaries. | `controlId`, `eventName`, `handlerName`, `boundaryClassification` |
+| `WinFormsHandlerFlowProjected` | Projects resolved handlers to direct WCF, ASMX, remoting, legacy data, SQL/query, HTTP, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverage` |
+| `WinFormsResourceMetadataDeclared` | Records conservative `.resx` presence, culture suffix, key hashes, and resource kind labels. | `formTypeName`, `cultureSuffix`, `resourceKeyHashes`, `resourceKind` |
+
+These facts are static evidence only. They do not prove runtime event firing,
+form visibility, user reachability, layout, localization results, auth/role
+outcomes, branch feasibility, callback scheduling, service reachability, SQL
+execution, database existence, deployment, or production usage. Source snippets,
+raw resource values, raw SQL, config values, endpoint addresses, URLs, hostnames,
+local absolute paths, repository remotes, and private sample names must not
+appear in properties or reports.
+
 ### Legacy ASP.NET Route And Navigation Facts
 
 The .NET adapter also emits deterministic classic ASP.NET surface evidence

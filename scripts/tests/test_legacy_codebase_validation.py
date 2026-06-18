@@ -201,6 +201,52 @@ class LegacyCodebaseValidationTests(unittest.TestCase):
         self.assertEqual("gap-no-current-event-evidence", result["classification"])
         self.assertEqual(0, result["structuralMatches"])
 
+    def test_ui_probe_reconciles_precise_winforms_and_webforms_without_divergent_counts(self) -> None:
+        result = legacy.probe_ui_events(
+            [
+                {
+                    "factType": "WebFormsEventBindingDeclared",
+                    "ruleId": "legacy.webforms.event-binding.v1",
+                    "evidenceTier": "Tier2Structural",
+                },
+                {
+                    "factType": "WebFormsEventFlowProjected",
+                    "ruleId": "legacy.webforms.event-flow.v1",
+                    "evidenceTier": "Tier2Structural",
+                },
+                {
+                    "factType": "WinFormsEventBindingDeclared",
+                    "ruleId": "legacy.winforms.event-binding.v1",
+                    "evidenceTier": "Tier2Structural",
+                },
+                {
+                    "factType": "WinFormsHandlerFlowProjected",
+                    "ruleId": "legacy.winforms.handler-flow.v1",
+                    "evidenceTier": "Tier3SyntaxOrTextual",
+                },
+                {
+                    "factType": "MethodDeclared",
+                    "ruleId": "csharp.syntax.declarations.v1",
+                    "evidenceTier": "Tier3SyntaxOrTextual",
+                    "targetSymbol": "Click",
+                },
+            ]
+        )
+
+        self.assertEqual("structural-static-wiring", result["classification"])
+        self.assertEqual(3, result["structuralMatches"])
+        self.assertEqual(1, result["syntaxOrTextMatches"])
+        self.assertEqual(2, result["downstreamEvidenceMatches"])
+        self.assertEqual(
+            [
+                "WebFormsEventBindingDeclared",
+                "WebFormsEventFlowProjected",
+                "WinFormsEventBindingDeclared",
+                "WinFormsHandlerFlowProjected",
+            ],
+            result["factTypes"],
+        )
+
     def test_collects_wcf_counts_from_fact_rows(self) -> None:
         counts = legacy.collect_wcf_counts(
             {},
