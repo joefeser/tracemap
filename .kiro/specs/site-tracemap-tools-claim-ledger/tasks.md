@@ -33,10 +33,11 @@ complete.
 - [ ] Use evidence-status labels that distinguish evidence-backed,
   partial/reduced coverage, future-only, hidden/internal, and not-yet-backed
   wording.
-- [ ] Ensure hidden/internal rows use abstract placeholder labels and do not
-  disclose unreleased capability names, internal routes, private sample
-  identities, hidden-export specifics, counts, cadence, sequencing, or in-flight
-  status; prefer a single aggregate row over one row per hidden item.
+- [ ] Ensure `hidden` claim rows and `hidden/internal` evidence-status rows use
+  abstract placeholder labels and do not disclose unreleased capability names,
+  internal routes, private sample identities, hidden-export specifics, counts,
+  cadence, sequencing, or in-flight status; prefer a single aggregate row over
+  one row per hidden item.
 - [ ] Link proof paths only to public-safe routes, generated summaries,
   documentation, rule catalog pages, reports, or demo artifacts.
 - [ ] For local-only SQLite, facts, reports, or rule catalog source material,

@@ -44,9 +44,10 @@ Review focus:
 - Are future implementation tasks unchecked?
 - Does the claim-level table requirement help managers, reviewers, bots, and
   future agents distinguish shipped, demo, concept, and hidden wording?
-- Does the spec prevent hidden/internal rows from disclosing unreleased
-  capability names, internal routes, private sample identities, hidden-export
-  specifics, counts, cadence, sequencing, or in-flight status?
+- Does the spec prevent `hidden` claim rows and `hidden/internal`
+  evidence-status rows from disclosing unreleased capability names, internal
+  routes, private sample identities, hidden-export specifics, counts, cadence,
+  sequencing, or in-flight status?
 - Does the spec define how the ledger relates to existing proof path index and
   capability matrix surfaces without duplicating them?
 - Does the spec map any new claim-level or evidence-status vocabulary to

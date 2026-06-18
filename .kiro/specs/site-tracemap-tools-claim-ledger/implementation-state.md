@@ -26,10 +26,10 @@ No site code is implemented in this phase.
 - Require the ledger to link to the proof path index and capability matrix where
   those existing surfaces already provide evidence trails or capability status.
 - Require claim-level vocabulary to be reconciled with existing site labels.
-- Require hidden/internal rows to use abstract placeholders instead of
-  disclosing unreleased capability names, internal routes, private sample
-  identities, hidden-export specifics, counts, cadence, sequencing, or
-  in-flight status.
+- Require `hidden` claim rows and `hidden/internal` evidence-status rows to use
+  abstract placeholders instead of disclosing unreleased capability names,
+  internal routes, private sample identities, hidden-export specifics, counts,
+  cadence, sequencing, or in-flight status.
 - Require explicit non-claims and private-text safeguards.
 - Keep SQLite indexes, fact streams, reports, analyzer logs, rule catalog
   entries, commit metadata, coverage labels, and documented limitations as the
@@ -110,6 +110,10 @@ does not change site source.
 - Final focused Sonnet review found no Medium or higher findings. Low cleanup
   patched review-packet orientation, the worktree field, and the task wording
   for `future` versus `dev-only`.
+- Qodo PR review found that `internal` was ambiguously described as if it were
+  a public claim-level token. Patched wording so public claim levels remain
+  `shipped`, `demo`, `concept`, and `hidden`, while `internal` appears only as
+  part of the `hidden/internal` evidence-status axis.
 - Opus found Low consistency issues for the missing readiness header and generic
   discoverability wording. Patched with the readiness header and explicit
   proof-path/capability matrix relationship.

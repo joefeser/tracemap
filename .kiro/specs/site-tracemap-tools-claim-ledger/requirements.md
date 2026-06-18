@@ -28,10 +28,11 @@ and documented limitations remain the source of truth.
   secrets, local absolute paths, raw repository remotes, generated scan
   directories, private sample names, raw `facts.ndjson`, raw `index.sqlite`, or
   raw analyzer logs.
-- Rows for hidden or internal wording must not disclose unreleased or internal
-  capability names, route names, private sample identities, or hidden-export
-  specifics, and must not disclose the count, cadence, sequencing, or in-flight
-  status of hidden or internal capabilities. Prefer a single aggregate
+- Rows for `hidden` claim-level wording or `hidden/internal` evidence-status
+  wording must not disclose unreleased or internal capability names, route
+  names, private sample identities, or hidden-export specifics, and must not
+  disclose the count, cadence, sequencing, or in-flight status of hidden or
+  internal capabilities. Prefer a single aggregate
   statement, such as `internal-only capabilities exist and are not publicly
   described`, over per-capability hidden rows. Represent hidden/internal claims
   abstractly or omit them entirely.
@@ -96,14 +97,14 @@ Acceptance criteria:
   agents can quickly distinguish shipped/demo/concept/hidden wording.
 - Rows whose proof path is unavailable or future-only are labeled as such and
   are not described as evidence-backed.
-- Rows whose public claim level or evidence status is `hidden` or `internal` do
-  not name the underlying unreleased capability, internal route, private sample,
-  or hidden-export detail; they use an abstract placeholder label and a
-  limitation instead, and the ledger does not reveal the number or release
-  cadence of hidden/internal capabilities.
-- A `hidden` or `internal` claim row has no capability-matrix or proof-path
-  index counterpart; a `dev-only` capability already shown publicly on those
-  surfaces is `concept`, not `hidden`.
+- Rows whose public claim level is `hidden` or whose evidence status is
+  `hidden/internal` do not name the underlying unreleased capability, internal
+  route, private sample, or hidden-export detail; they use an abstract
+  placeholder label and a limitation instead, and the ledger does not reveal
+  the number or release cadence of hidden/internal capabilities.
+- A `hidden` claim row or `hidden/internal` evidence-status row has no
+  capability-matrix or proof-path index counterpart; a `dev-only` capability
+  already shown publicly on those surfaces is `concept`, not `hidden`.
 - The three row axes are orthogonal: public claim level says how strongly the
   public site may present the claim, evidence status says what public-safe proof
   exists, and public wording status says where the wording appears or whether it
