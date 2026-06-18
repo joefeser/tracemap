@@ -166,6 +166,14 @@ Implementation validation results:
   implementation changes.
 - `./scripts/check-private-paths.sh` passed on 2026-06-18 after spec
   bookkeeping updates.
+- PR review-loop patch validation on 2026-06-18:
+  - `npm test` from `site/` passed. Result: 188 tests passed.
+  - `npm run validate` from `site/` passed. Result: built static site,
+    validated 43 HTML files, 1295 internal references, 42 sitemap URLs, and 1
+    legacy story safety target.
+  - `npm run build` from `site/` passed.
+  - `git diff --check` passed.
+  - `./scripts/check-private-paths.sh` passed.
 
 ## Review Findings
 
@@ -199,6 +207,11 @@ Implementation validation results:
 - Initial aggregate validation tests needed the new endpoint route and
   `/use-cases/` route in their generated fixture. Patched the fixture and
   reran tests.
+- PR review loop for PR #217 found one unresolved Gemini review thread in the
+  focused endpoint-review validator. The finding was valid: the required
+  `<rule-id>` placeholder phrase check used decoded HTML without normalizing
+  source whitespace. Patched the validator to collapse whitespace before the
+  placeholder check and added a regression test for wrapped safe wording.
 
 ## Oddities
 

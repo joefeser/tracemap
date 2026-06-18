@@ -20,6 +20,20 @@ test("validateEndpointReviewDist accepts the endpoint review route", async (t) =
   assert.deepEqual(errors, []);
 });
 
+test("validateEndpointReviewDist accepts wrapped safe wording placeholders", async (t) => {
+  const root = await createManagedEndpointReviewDistFixture(t, {
+    pageHtml: endpointReviewPage().replace(
+      "rule ID &lt;rule-id&gt;, Tier2Structural, partial coverage",
+      "rule ID &lt;rule-id&gt;,\n          Tier2Structural, partial coverage"
+    )
+  });
+  const errors = [];
+
+  await validateEndpointReviewDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateEndpointReviewDist reports missing required page text", async (t) => {
   const root = await createManagedEndpointReviewDistFixture(t, {
     pageHtml: page("<p>Endpoint review placeholder.</p>")
