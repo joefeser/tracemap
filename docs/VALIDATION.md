@@ -110,10 +110,11 @@ git diff --check
 ```
 
 Focused validation should cover DBML, EDMX, typed DataSet/TableAdapter, config
-provider metadata, generated-code linkage, unrelated XSD gating, malformed XML,
-DTD/entity rejection, deterministic fact IDs, report redaction, and SQLite
-property redaction. Any local legacy smoke must stay ignored/local-only and use
-neutral labels/counts only; do not commit raw facts, SQLite indexes, analyzer
+provider metadata, generated-code linkage, legacy data model identity keys,
+unrelated XSD gating, malformed XML, DTD/entity rejection, deterministic fact
+IDs, report redaction, and SQLite property redaction. Any local legacy smoke
+must stay ignored/local-only and use neutral labels/counts only; do not commit
+raw facts, SQLite indexes, analyzer
 logs, raw SQL, connection strings, config values, raw remotes, private sample
 names, local absolute paths, or source snippets.
 
@@ -393,7 +394,7 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
-Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, config provider/connection metadata, generated-code links, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite.
+Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, normalized model identity keys, config provider/connection metadata, generated-code links, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite.
 
 Useful inspection queries:
 

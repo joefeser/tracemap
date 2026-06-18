@@ -98,6 +98,45 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_rejects_excessive_legacy_metadata_node_count()
+    {
+        using var temp = new TempDirectory();
+        var nodes = string.Concat(Enumerable.Repeat("<Column />", 100_001));
+        File.WriteAllText(Path.Combine(temp.Path, "TooManyNodes.dbml"), $"""
+            <Database xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers"><Type Name="Customer">{nodes}</Type></Table>
+            </Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataMetadataInventory
+            && fact.Evidence.FilePath == "TooManyNodes.dbml"
+            && fact.Properties.GetValueOrDefault("classification") == "LegacyDataMetadataTooLarge");
+    }
+
+    [Fact]
+    public void Scan_rejects_excessive_legacy_metadata_depth()
+    {
+        using var temp = new TempDirectory();
+        var opening = string.Concat(Enumerable.Repeat("<Level>", 140));
+        var closing = string.Concat(Enumerable.Repeat("</Level>", 140));
+        File.WriteAllText(Path.Combine(temp.Path, "TooDeep.dbml"), $"""
+            <Database xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              {opening}{closing}
+            </Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataMetadataInventory
+            && fact.Evidence.FilePath == "TooDeep.dbml"
+            && fact.Properties.GetValueOrDefault("classification") == "LegacyDataMetadataTooLarge");
+    }
+
+    [Fact]
     public void Scan_skips_oversized_generated_designer_candidates_with_gap()
     {
         using var temp = new TempDirectory();
@@ -293,6 +332,277 @@ public sealed class LegacyDataMetadataExtractorTests
         var firstIds = first.Facts.Where(fact => fact.RuleId.StartsWith("legacy.data.", StringComparison.Ordinal)).Select(fact => fact.FactId).Order().ToArray();
         var secondIds = second.Facts.Where(fact => fact.RuleId.StartsWith("legacy.data.", StringComparison.Ordinal)).Select(fact => fact.FactId).Order().ToArray();
         Assert.Equal(firstIds, secondIds);
+    }
+
+    [Fact]
+    public void Scan_adds_normalized_legacy_data_model_identity_to_dbml_descriptors()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.dbml"), """
+            <Database Name="Store" Class="StoreContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers">
+                <Type Name="Customer">
+                  <Column Name="CustomerId" Member="CustomerId" IsPrimaryKey="true" />
+                  <Association Name="CustomerOrders" ThisKey="CustomerId" OtherKey="CustomerId" />
+                </Type>
+              </Table>
+              <Function Name="GetCustomers" Method="GetCustomers" />
+            </Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var entity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("entityName") == "Customer");
+        Assert.Equal("dbml", entity.Properties.GetValueOrDefault("metadataFormat"));
+        Assert.Equal("entity", entity.Properties.GetValueOrDefault("modelKind"));
+        Assert.Equal("conceptual", entity.Properties.GetValueOrDefault("descriptorRole"));
+        Assert.Equal(RuleIds.LegacyDataModelIdentity, entity.Properties.GetValueOrDefault("modelIdentityRuleId"));
+        Assert.Equal(EvidenceTiers.Tier2Structural, entity.Properties.GetValueOrDefault("modelIdentityEvidenceTier"));
+        Assert.Equal("Customer", entity.Properties.GetValueOrDefault("displayName"));
+        Assert.StartsWith("ldm:", entity.Properties.GetValueOrDefault("stableModelKey"));
+        Assert.False(string.IsNullOrWhiteSpace(entity.Properties.GetValueOrDefault("sourceMetadataFactId")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("modelKind") == "column"
+            && fact.Properties.GetValueOrDefault("descriptorRole") == "storage"
+            && fact.Properties.GetValueOrDefault("containerName") == "Customers");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("mappingKind") == "association"
+            && fact.Properties.GetValueOrDefault("modelKind") == "relationship");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataStorageObjectDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("modelKind") == "routine"
+            && fact.Properties.GetValueOrDefault("displayName") == "GetCustomers");
+    }
+
+    [Fact]
+    public void Scan_adds_normalized_identity_to_edmx_and_typed_dataset_descriptors()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.edmx"), """
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer"><EntitySet Name="Customers" EntityType="Model.Customer" /></EntityContainer>
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer"><EntitySet Name="Customers" EntityType="Store.Customers" Table="Customers" /></EntityContainer>
+                    <EntityType Name="Customers"><Property Name="CustomerId" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="Model.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="CustomerId" ColumnName="CustomerId" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Orders.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop">
+              <xs:element name="OrdersDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="OrdersDataSet">
+                <xs:complexType>
+                  <xs:choice maxOccurs="unbounded">
+                    <xs:element name="Customers" msprop:Generator_UserTableName="Customers" msprop:Generator_RowClassName="CustomersRow">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="CustomerId" type="xs:int" />
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:choice>
+                </xs:complexType>
+              </xs:element>
+              <xs:annotation>
+                <xs:appinfo>
+                  <TableAdapterCommand Name="FillCustomers" CommandText="SELECT CustomerId FROM Customers" />
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:schema>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("metadataFormat") == "edmx"
+            && fact.Properties.GetValueOrDefault("modelKind") == "entity"
+            && fact.Properties.GetValueOrDefault("stableModelKey")?.StartsWith("ldm:", StringComparison.Ordinal) == true);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("descriptorRole") == "mapping"
+            && fact.Properties.GetValueOrDefault("modelIdentityRuleId") == RuleIds.LegacyDataModelIdentity);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("metadataFormat") == "typed-dataset"
+            && fact.Properties.GetValueOrDefault("modelKind") == "mapped-type"
+            && fact.Properties.GetValueOrDefault("displayName") == "OrdersDataSet");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("metadataFormat") == "tableadapter"
+            && fact.Properties.GetValueOrDefault("modelKind") == "adapter"
+            && fact.Properties.GetValueOrDefault("displayName") == "FillCustomers");
+    }
+
+    [Fact]
+    public void Scan_keeps_duplicate_display_names_distinct_by_format_and_source()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "A.dbml"), """
+            <Database Name="A" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers"><Type Name="Customer" /></Table>
+            </Database>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "B.dbml"), """
+            <Database Name="B" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers"><Type Name="Customer" /></Table>
+            </Database>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "C.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop">
+              <xs:element name="CustomerDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="CustomerDataSet">
+                <xs:complexType>
+                  <xs:choice maxOccurs="unbounded">
+                    <xs:element name="Customers" msprop:Generator_UserTableName="Customers" msprop:Generator_RowClassName="Customer" />
+                  </xs:choice>
+                </xs:complexType>
+              </xs:element>
+            </xs:schema>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out1")));
+        var second = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out2")));
+
+        var customerEntityKeys = result.Facts
+            .Where(fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+                && fact.Properties.GetValueOrDefault("displayName") == "Customer")
+            .Select(fact => fact.Properties.GetValueOrDefault("stableModelKey"))
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .ToArray();
+
+        Assert.Equal(3, customerEntityKeys.Length);
+        Assert.Equal(customerEntityKeys.Length, customerEntityKeys.Distinct(StringComparer.Ordinal).Count());
+
+        var secondCustomerEntityKeys = second.Facts
+            .Where(fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+                && fact.Properties.GetValueOrDefault("displayName") == "Customer")
+            .Select(fact => fact.Properties.GetValueOrDefault("stableModelKey"))
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(customerEntityKeys.Order(StringComparer.Ordinal), secondCustomerEntityKeys);
+    }
+
+    [Fact]
+    public void Scan_keeps_distinct_stable_keys_for_same_name_across_metadata_formats()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Store.dbml"), """
+            <Database Name="Store" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers">
+                <Type Name="Customer"><Column Name="CustomerId" Member="CustomerId" /></Type>
+              </Table>
+            </Database>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Store.edmx"), """
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var dbmlCustomer = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("entityName") == "Customer");
+        var edmxCustomer = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("entityName") == "Customer");
+
+        Assert.Equal("dbml", dbmlCustomer.Properties.GetValueOrDefault("metadataFormat"));
+        Assert.Equal("edmx", edmxCustomer.Properties.GetValueOrDefault("metadataFormat"));
+        Assert.NotEqual(dbmlCustomer.Properties.GetValueOrDefault("stableModelKey"), edmxCustomer.Properties.GetValueOrDefault("stableModelKey"));
+    }
+
+    [Fact]
+    public async Task Scan_hashes_unsafe_model_display_names_in_facts_and_sqlite()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Unsafe.dbml"), """
+            <Database Name="Store" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Server=prod;Database=Secret" Member="Customers">
+                <Type Name="Customer"><Column Name="CustomerId" Member="CustomerId" /></Type>
+              </Table>
+            </Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var storage = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataStorageObjectDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml);
+        var indexPath = Path.Combine(temp.Path, "out", "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+        var allProperties = await ReadAllPropertiesAsync(indexPath);
+
+        Assert.False(storage.Properties.ContainsKey("displayName"));
+        Assert.True(storage.Properties.ContainsKey("displayNameHash"));
+        Assert.Equal("hashed-unsafe-identifier", storage.Properties.GetValueOrDefault("displayNameRedaction"));
+        Assert.StartsWith("ldm:", storage.Properties.GetValueOrDefault("stableModelKey"));
+        Assert.DoesNotContain("Server=prod", allProperties);
+        Assert.DoesNotContain("Database=Secret", allProperties);
+    }
+
+    [Fact]
+    public void Scan_does_not_upgrade_descriptor_tier_above_tier2_for_generated_code_link()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.dbml"), """
+            <Database Name="Store" Class="StoreContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers"><Type Name="Customer" /></Table>
+            </Database>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Model.designer.cs"), """
+            namespace Store;
+            public partial class Customer { }
+            public partial class StoreContext { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var entity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("displayName") == "Customer");
+        var link = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.TargetSymbol == "Customer");
+
+        Assert.Equal(EvidenceTiers.Tier2Structural, entity.EvidenceTier);
+        Assert.Equal(EvidenceTiers.Tier2Structural, entity.Properties.GetValueOrDefault("modelIdentityEvidenceTier"));
+        Assert.Equal(EvidenceTiers.Tier2Structural, link.EvidenceTier);
     }
 
     private static async Task<string> ReadAllPropertiesAsync(string sqlitePath)

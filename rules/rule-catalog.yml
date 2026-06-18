@@ -1011,6 +1011,7 @@ rules:
       - This rule owns derived identity semantics and availability gaps; existing DBML, EDMX, typed DataSet, config, and generated-link source facts keep their source rule IDs.
       - Model identities are static checked-in metadata evidence and do not prove runtime data access, query execution, database schema existence, generated-code freshness, deployment, provider compatibility, lazy loading, change tracking, migrations, or production usage.
       - Descriptor conclusions are capped at the weakest supporting source evidence and are not upgraded by generated-code linkage.
+      - Descriptor tier ceilings are enforced; Tier1Semantic generated-code links do not upgrade Tier2Structural metadata descriptor facts or downstream classifications by themselves.
       - Safe properties include modelKind, metadataFormat, descriptorRole, stableModelKey, safe display labels or hashes, sourceMetadataFactId, supportingFactIds, coverageLabel, and limitation codes.
       - Ambiguous, duplicate, unsupported, reduced-coverage, malformed, parser-rejected, or too-large metadata is emitted as a gap rather than an inferred identity.
       - Raw SQL, source snippets, connection strings, config values, URLs, remotes, local absolute paths, schema/catalog/provider values, private labels, and secrets are hashed or omitted.
