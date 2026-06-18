@@ -48,7 +48,23 @@ public sealed class EvidenceDocsExportTests
             using var document = JsonDocument.Parse(line);
             Assert.Equal("tracemap-evidence-docs.v1", document.RootElement.GetProperty("schemaVersion").GetString());
             Assert.True(document.RootElement.TryGetProperty("bodyMarkdown", out _));
+            Assert.True(document.RootElement.TryGetProperty("sectionTitle", out var sectionTitle));
+            Assert.False(string.IsNullOrWhiteSpace(sectionTitle.GetString()));
+            Assert.True(document.RootElement.TryGetProperty("questionFamilies", out var questionFamilies));
+            Assert.Equal(JsonValueKind.Array, questionFamilies.ValueKind);
+            Assert.True(document.RootElement.TryGetProperty("claim", out var claim));
+            Assert.True(claim.TryGetProperty("kind", out _));
+            Assert.True(claim.TryGetProperty("text", out _));
+            Assert.True(claim.TryGetProperty("ruleIds", out _));
+            Assert.True(claim.TryGetProperty("evidenceTiers", out _));
         });
+
+        Assert.Contains(first.Chunks, chunk => chunk.ChunkFamily == "endpoint" && chunk.QuestionFamilies.Contains("endpoint-question"));
+        Assert.Contains(first.Chunks, chunk => chunk.ChunkFamily == "query-sql-shape" && chunk.QuestionFamilies.Contains("data-surface-question"));
+        Assert.Contains(first.Chunks, chunk => chunk.QuestionFamilies.Contains("weak-evidence-question") && chunk.Claim.Kind is "weak-static-evidence" or "gap-statement");
+        var chunkMarkdown = string.Join('\n', Directory.EnumerateFiles(firstOut, "chunks/*.md", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.Contains("Question families", chunkMarkdown);
+        Assert.Contains("Claim kind", chunkMarkdown);
 
         var allText = string.Join('\n', Directory.EnumerateFiles(firstOut, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         var rawSqlMarker = string.Concat("sel", "ect *");

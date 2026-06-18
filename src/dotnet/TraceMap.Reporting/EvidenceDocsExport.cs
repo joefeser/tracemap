@@ -103,10 +103,13 @@ public sealed record EvidenceDocChunk(
     string ChunkId,
     string ChunkType,
     string ChunkFamily,
+    IReadOnlyList<string> QuestionFamilies,
     string ClaimLevel,
     string Title,
+    string SectionTitle,
     string SortKey,
     string Summary,
+    EvidenceDocClaim Claim,
     string BodyMarkdown,
     IReadOnlyList<EvidenceDocCitation> Citations,
     IReadOnlyList<EvidenceDocSourceRef> SourceRefs,
@@ -118,6 +121,17 @@ public sealed record EvidenceDocChunk(
     IReadOnlyList<EvidenceDocLimitation> Limitations,
     IReadOnlyList<EvidenceDocRedaction> Redactions,
     IReadOnlyList<EvidenceDocLink> Links);
+
+public sealed record EvidenceDocClaim(
+    string Kind,
+    string Text,
+    string? Classification,
+    string ClaimLevel,
+    IReadOnlyList<string> RuleIds,
+    IReadOnlyList<string> EvidenceTiers,
+    IReadOnlyList<string> CoverageLabels,
+    IReadOnlyList<string> SupportingIds,
+    IReadOnlyList<string> Limitations);
 
 public sealed record EvidenceDocCitation(
     string CitationId,
@@ -227,6 +241,17 @@ public static class EvidenceDocsExporter
         "impact-summary",
         "gap",
         "limitation"
+    ];
+
+    private static readonly string[] QuestionFamilyOrder =
+    [
+        "endpoint-question",
+        "data-surface-question",
+        "package-question",
+        "snapshot-change-question",
+        "weak-evidence-question",
+        "gap-question",
+        "limitation-question"
     ];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -1155,15 +1180,21 @@ public static class EvidenceDocsExporter
             new("title", title)
         ]);
         var sortKey = $"{Array.IndexOf(AllFamilies, family):D2}|{family}|{string.Join('|', orderedCoverage)}|{string.Join('|', orderedRules)}|{id}|{title}";
+        var sectionTitle = SectionTitleFor(family, type);
+        var questionFamilies = QuestionFamiliesFor(family, type, orderedTiers, orderedCoverage, gaps, limitations);
+        var claim = ClaimFor(type, family, claimLevel, orderedRules.Length == 0 ? [GapChunkRuleId] : orderedRules, orderedTiers.Length == 0 ? [Tier4Unknown] : orderedTiers, orderedCoverage, orderedSupportingIds, gaps, limitations);
         return new EvidenceDocChunk(
             SchemaVersion,
             id,
             type,
             family,
+            questionFamilies,
             claimLevel,
             title,
+            sectionTitle,
             sortKey,
             summary,
+            claim,
             NormalizeMarkdownBody(bodyMarkdown),
             citations.OrderBy(citation => citation.CitationId, StringComparer.Ordinal).ToArray(),
             sourceRefs.OrderBy(source => source.SourceLabel, StringComparer.Ordinal).ThenBy(source => source.SourceId, StringComparer.Ordinal).ToArray(),
@@ -1175,6 +1206,137 @@ public static class EvidenceDocsExporter
             limitations.OrderBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
             [],
             []);
+    }
+
+    private static string SectionTitleFor(string family, string type)
+    {
+        if (type == "gap")
+        {
+            return "What could TraceMap not prove or export?";
+        }
+
+        if (type == "limitation")
+        {
+            return "What limitations constrain this evidence?";
+        }
+
+        return family switch
+        {
+            "endpoint" or "route-flow" => "What static evidence describes this endpoint or route?",
+            "dependency-surface" or "data-surface" or "query-sql-shape" or "property-flow" => "What code has static evidence of touching this surface?",
+            "package-config" => "What package or configuration metadata is present?",
+            "release-review" => "What changed in the supplied release-review evidence?",
+            "gap" => "What could TraceMap not prove or export?",
+            "limitation" => "What limitations constrain this evidence?",
+            _ => "What static evidence does this chunk cite?"
+        };
+    }
+
+    private static IReadOnlyList<string> QuestionFamiliesFor(
+        string family,
+        string type,
+        IReadOnlyList<string> evidenceTiers,
+        IReadOnlyList<string> coverageLabels,
+        IReadOnlyList<EvidenceDocGap> gaps,
+        IReadOnlyList<EvidenceDocLimitation> limitations)
+    {
+        var values = new List<string>();
+        switch (family)
+        {
+            case "endpoint":
+            case "route-flow":
+                values.Add("endpoint-question");
+                break;
+            case "dependency-surface":
+            case "data-surface":
+            case "query-sql-shape":
+            case "property-flow":
+                values.Add("data-surface-question");
+                break;
+            case "package-config":
+                values.Add("package-question");
+                break;
+            case "release-review":
+                values.Add("snapshot-change-question");
+                break;
+        }
+
+        if (type == "gap" || gaps.Count > 0)
+        {
+            values.Add("gap-question");
+        }
+
+        if (type == "limitation" || limitations.Count > 0)
+        {
+            values.Add("limitation-question");
+        }
+
+        if (evidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown)
+            || coverageLabels.Any(IsWeakCoverageLabel)
+            || gaps.Count > 0
+            || type == "gap")
+        {
+            values.Add("weak-evidence-question");
+        }
+
+        return values
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value =>
+            {
+                var index = Array.IndexOf(QuestionFamilyOrder, value);
+                return index < 0 ? int.MaxValue : index;
+            })
+            .ThenBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsWeakCoverageLabel(string value)
+    {
+        return value.Contains("reduced", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("partial", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("unsupported", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("unknown", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("failed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static EvidenceDocClaim ClaimFor(
+        string type,
+        string family,
+        string claimLevel,
+        IReadOnlyList<string> ruleIds,
+        IReadOnlyList<string> evidenceTiers,
+        IReadOnlyList<string> coverageLabels,
+        IReadOnlyList<string> supportingIds,
+        IReadOnlyList<EvidenceDocGap> gaps,
+        IReadOnlyList<EvidenceDocLimitation> limitations)
+    {
+        var kind = type switch
+        {
+            "gap" => "gap-statement",
+            "limitation" => "limitation-statement",
+            _ when evidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown)
+                || coverageLabels.Any(IsWeakCoverageLabel)
+                || gaps.Count > 0 => "weak-static-evidence",
+            _ => "static-evidence"
+        };
+        var text = kind switch
+        {
+            "gap-statement" => $"TraceMap recorded a rule-backed evidence gap for {family}.",
+            "limitation-statement" => $"TraceMap recorded deterministic limitations for {family}.",
+            "weak-static-evidence" => $"TraceMap has lower-tier or reduced-coverage static evidence for {family}.",
+            _ => $"TraceMap has deterministic static evidence for {family}."
+        };
+        var classification = kind == "weak-static-evidence" || kind == "gap-statement" ? "NeedsReview" : null;
+        return new EvidenceDocClaim(
+            kind,
+            text,
+            classification,
+            claimLevel,
+            ruleIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            evidenceTiers.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            coverageLabels.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            supportingIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            limitations.Select(limitation => limitation.LimitationId).Concat(gaps.Select(gap => gap.GapId)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
     private static List<EvidenceDocChunk> ApplyClaimFilter(List<EvidenceDocChunk> chunks, string minimumClaimLevel, IReadOnlyList<string> selectedFamilies, IReadOnlyList<DocSource> sources)
@@ -1367,6 +1529,22 @@ public static class EvidenceDocsExporter
         builder.Append(ChunkFrontmatter(chunk, sourceLabels, ""));
         builder.AppendLine($"# {EscapeHeading(chunk.Title)}");
         builder.AppendLine();
+        builder.AppendLine($"## {EscapeHeading(chunk.SectionTitle)}");
+        builder.AppendLine();
+        builder.AppendLine("| Field | Value |");
+        builder.AppendLine("| --- | --- |");
+        builder.AppendLine($"| Claim kind | `{EscapeInline(chunk.Claim.Kind)}` |");
+        builder.AppendLine($"| Claim | {EscapeText(chunk.Claim.Text)} |");
+        builder.AppendLine($"| Claim level | `{EscapeInline(chunk.Claim.ClaimLevel)}` |");
+        builder.AppendLine($"| Evidence tiers | `{EscapeInline(string.Join(", ", chunk.Claim.EvidenceTiers))}` |");
+        builder.AppendLine($"| Rule IDs | `{EscapeInline(string.Join(", ", chunk.Claim.RuleIds))}` |");
+        builder.AppendLine($"| Question families | `{EscapeInline(string.Join(", ", chunk.QuestionFamilies))}` |");
+        if (!string.IsNullOrWhiteSpace(chunk.Claim.Classification))
+        {
+            builder.AppendLine($"| Classification | `{EscapeInline(chunk.Claim.Classification)}` |");
+        }
+
+        builder.AppendLine();
         builder.AppendLine(chunk.BodyMarkdown.TrimEnd());
         builder.AppendLine();
         builder.AppendLine("## Citations");
@@ -1431,7 +1609,9 @@ public static class EvidenceDocsExporter
         builder.AppendLine($"tracemap_content_sha256: {hash}");
         builder.AppendLine($"chunk_id: {chunk.ChunkId}");
         builder.AppendLine($"chunk_family: {chunk.ChunkFamily}");
+        AppendYamlArray(builder, "question_families", chunk.QuestionFamilies);
         builder.AppendLine($"claim_level: {chunk.ClaimLevel}");
+        builder.AppendLine($"section_title: {YamlScalar(chunk.SectionTitle)}");
         AppendYamlArray(builder, "source_labels", sourceLabels);
         builder.AppendLine("---");
         builder.AppendLine();
