@@ -201,9 +201,10 @@ Kiro implementation review:
 
 PR review-loop follow-up:
 
-- Initial PR loop found one required Qodo thread on nonstandard comma-separated
-  `evidenceTier` strings in the new model generated-link and surface catalog
-  entries. Patched those entries to use the plain `or` form and reran
+- Initial PR loop found one required Qodo thread on nonstandard compound
+  `evidenceTier` strings in the new catalog entries. Patched the new entries to
+  use single fixed tier values and hardened `LegacyDataModelRuleCatalogTests` so
+  it verifies that contract with whitespace-tolerant rule lookup. Reran
   `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModelRuleCatalogTests`, `./scripts/check-private-paths.sh`, and `git diff --check`: all passed.
 
 Follow-ups:
