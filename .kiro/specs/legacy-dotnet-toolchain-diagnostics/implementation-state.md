@@ -31,8 +31,8 @@ coverage-relative context.
 - Stored capability diagnostics in the existing `facts` table rather than
   adding an MVP SQLite table or manifest schema expansion.
 - Release review preserves `AnalyzerCapabilityDiagnostic` in the single-index
-  comparable fact loader, adds source coverage gaps for reduced/unknown
-  capability, and emits a schema compatibility gap for unrecognized
+  comparable fact loader, counts reduced/unknown capability gaps as reduced
+  source coverage, and emits a schema compatibility gap for unrecognized
   `schemaVersion` values.
 - Combined indexes preserve raw capability facts via `combined_facts`; combined
   dependency reports additionally roll reduced/unknown capability into
@@ -53,7 +53,8 @@ coverage-relative context.
 
 ## Validation Log
 
-- Passed: `dotnet test src/dotnet/TraceMap.sln --filter AnalyzerCapabilityDiagnosticTests`.
+- Passed: `dotnet test src/dotnet/TraceMap.sln --filter AnalyzerCapabilityDiagnosticTests`
+  after PR-loop coverage fix (7 tests).
 - Passed: `dotnet test src/dotnet/TraceMap.sln` after rebasing onto current
   `origin/dev` (507 tests).
 - Passed: synthetic legacy CLI smoke using a generated non-SDK-style Web
@@ -64,6 +65,11 @@ coverage-relative context.
   `origin/dev`.
 - Passed: `./scripts/check-private-paths.sh`.
 - Passed: `git diff --check`.
+- Completed: PR review-loop patches for redundant extractor sorting, unused
+  extractor parameters, and release-review capability gaps not contributing to
+  source coverage. Re-ran `dotnet build src/dotnet/TraceMap.sln`,
+  `dotnet test src/dotnet/TraceMap.sln` (508 tests),
+  `./scripts/check-private-paths.sh`, and `git diff --check`.
 - Completed: Kiro CLI Sonnet implementation review with
   `node scripts/kiro-review.mjs --phase legacy-dotnet-toolchain-diagnostics --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`.
   Coverage was reduced because Kiro reported denied shell/tool access. Patched
