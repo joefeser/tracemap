@@ -2,7 +2,7 @@
 
 Status: implementation-slice-in-progress
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
-Current implementation branch: codex/implement-legacy-data-model-metadata-extraction
+Current implementation branch: codex/implement-legacy-data-model-metadata-extraction-slice2
 Public claim level: hidden
 
 ## Why This Spec Exists
@@ -217,3 +217,103 @@ Follow-ups:
   legacy data safe XML parser bounds and gap classifications.
 - Tasks 7-9 should project model-enriched `legacy-data` surfaces, excluding
   `AnalysisGap` facts from terminal projection and avoiding double projection.
+
+## Implementation Slice 2 State
+
+Branch: `codex/implement-legacy-data-model-metadata-extraction-slice2`
+
+Selected scope: Task 2 only. This slice adds normalized model identity metadata
+to existing DBML, EDMX, and typed DataSet/TableAdapter source facts while
+leaving NHibernate parsing, unsupported ORM gaps, generated-code hardening,
+relationship ambiguity gaps, and downstream surface/report/export integration
+for later tasks.
+
+Implemented:
+
+- Added a deterministic legacy data model identity helper that derives
+  `stableModelKey` from metadata format, model kind, descriptor role,
+  repo-relative file path, metadata-local scope, safe display/container names,
+  and hashes for unsafe identity parts.
+- Added additive model identity properties to existing DBML entity, storage
+  object, column, association, routine, and mapping descriptor facts.
+- Added additive model identity properties to existing EDMX CSDL/SSDL/MSL
+  entity, storage object, column, routine, and mapping descriptor facts.
+- Added additive model identity properties to existing typed DataSet DataSet,
+  DataTable, DataColumn, relation, and TableAdapter command descriptor facts
+  while preserving unrelated XSD gating.
+- Preserved source rule provenance and descriptor tier ceilings. Existing
+  source facts still emit under `legacy.data.dbml.v1`,
+  `legacy.data.edmx.v1`, or `legacy.data.typed-dataset.v1`; model identity is
+  recorded through properties such as `modelIdentityRuleId`,
+  `modelIdentityEvidenceTier`, `metadataFormat`, `modelKind`,
+  `descriptorRole`, `coverageLabel`, `sourceMetadataFactId`, and
+  `stableModelKey`.
+- Added focused tests for DBML identity fields, EDMX and typed DataSet identity
+  fields, distinct stable keys for duplicate display names across formats and
+  files, parser node/depth bounds, descriptor tier-ceiling preservation, and
+  unsafe display-name hashing through SQLite persistence.
+- Removed an unused parallel `LegacyDataXml` parser so legacy data model work
+  continues to use the shared `SafeXml` parser bounds and classifications.
+- Updated acceptance, language-adapter contract, validation guidance, and the
+  model identity rule limitation text for the new additive identity properties.
+
+Oddities and scope decisions:
+
+- `review-prompts.md` is still absent for this spec. This matches the prior
+  implementation-state note from spec authoring; no new prompt file was added
+  in this implementation slice.
+- This slice intentionally does not introduce new scan fact types, runtime
+  model loading, NHibernate parsing, generated-code semantic upgrades, derived
+  `legacy-data` surfaces, graph/vault export behavior, or public site claims.
+- TableAdapter command descriptors keep the typed DataSet source rule while
+  using `metadataFormat = tableadapter` for model identity so downstream
+  readers can distinguish adapter command metadata without changing source
+  rule ownership.
+
+Validation executed before PR:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 22 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModel`: passed, 3 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 454 tests.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>`: passed; emitted the required scan artifacts and 23 facts.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review had reduced coverage because the review
+  harness reported denied shell access. It found one blocking issue around an
+  unused parallel XML parser helper and several Important test/catalog
+  improvements.
+- Patched by removing the unused `LegacyDataXml` parser, moving safe-value
+  helpers to a non-parser utility, adding node-count/depth parser-bound tests,
+  strengthening duplicate-name stable-key determinism tests, adding a
+  descriptor tier-ceiling test, and documenting the tier-ceiling limitation in
+  `rules/rule-catalog.yml`.
+- One Sonnet re-review also had reduced coverage due to denied shell access. It
+  found no remaining blocking issue, but requested explicit same-name
+  cross-format and tier-ceiling tests. Patched by adding a DBML-vs-EDMX
+  same-name stable-key test and making the tier-ceiling test intent explicit.
+  A third Kiro review was intentionally not run to respect the two-review-round
+  limit; final local validation passed after the patch.
+
+PR review-loop follow-up:
+
+- Initial PR loop found three unresolved review threads: stale safe labels when
+  hashing reused properties, hardcoded full coverage labels, and line-number
+  based stable-key scopes. Patched by clearing stale safe/hash/redaction keys in
+  `LegacyDataSafeValues`, passing reduced coverage labels when metadata gaps
+  are known, removing line numbers from stable-key scope strings, and adding
+  focused regressions for all three behaviors.
+
+Follow-ups:
+
+- Task 3 should add relationship semantics and ambiguity gaps while preserving
+  existing `mappingKind` values.
+- Task 4 should add the narrow NHibernate `.hbm.xml` MVP using the shared
+  legacy data safe XML parser bounds and gap classifications.
+- Task 5 should add unsupported old ORM descriptor gaps.
+- Tasks 7-9 should project model-enriched `legacy-data` surfaces, exclude
+  `AnalysisGap` facts from terminal projection, and verify graph/vault export
+  redaction.
