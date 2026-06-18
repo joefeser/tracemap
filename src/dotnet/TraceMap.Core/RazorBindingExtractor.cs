@@ -151,7 +151,8 @@ public static class RazorBindingExtractor
     private static EvidenceSpan Span(string filePath, IReadOnlyList<int> lineStarts, int index, int length)
     {
         var start = LineFor(lineStarts, index);
-        var end = LineFor(lineStarts, index + length);
+        var endIndex = length > 0 ? index + length - 1 : index;
+        var end = LineFor(lineStarts, endIndex);
         return new EvidenceSpan(filePath, start, end, null, "RazorBindingExtractor", ScannerVersions.RazorBindingExtractor);
     }
 

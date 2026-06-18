@@ -33,6 +33,8 @@ public sealed class PropertyFlowTests
         Assert.Equal("asp-for", binding.Properties["bindingKind"]);
         Assert.Equal("Email", binding.Properties["propertyPath"]);
         Assert.Equal("ProfileViewModel", binding.Properties["modelType"]);
+        Assert.Equal(3, binding.Evidence.StartLine);
+        Assert.Equal(3, binding.Evidence.EndLine);
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.RazorFormTarget
             && fact.RuleId == RuleIds.RazorFormTarget

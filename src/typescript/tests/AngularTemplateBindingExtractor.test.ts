@@ -46,6 +46,20 @@ describe("Angular template binding extraction", () => {
       <article>{{ ordinary.docs }}</article>
       <button (click)="notAngular()">Save</button>
     `);
+    await fsp.writeFile(path.join(repo, "src", "app", "inline.component.ts"), [
+      `import { Component } from "@angular/core";`,
+      "",
+      "@Component({",
+      `  selector: "app-inline",`,
+      "  template: `",
+      `    <input [value]="user.name">`,
+      "  `",
+      "})",
+      "export class InlineComponent {",
+      `  user = { name: "" };`,
+      "}",
+      ""
+    ].join("\n"));
     initGitRepo(repo);
 
     const out = await tempDir();
@@ -73,6 +87,15 @@ describe("Angular template binding extraction", () => {
         })
       })
     ]));
+    expect(templateFacts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.UiTemplateBinding,
+      targetSymbol: "user.name",
+      evidence: expect.objectContaining({
+        filePath: "src/app/inline.component.ts",
+        startLine: 6,
+        endLine: 6
+      })
+    }));
     expect(templateFacts.filter((fact) => fact.properties.bindingKind === "two-way")).toHaveLength(2);
     expect(result.facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.UiEventBinding,
