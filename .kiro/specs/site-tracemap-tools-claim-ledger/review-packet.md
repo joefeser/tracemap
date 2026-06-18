@@ -21,12 +21,12 @@ Remaining open questions: none.
 
 ## Scope
 
-The future page would define a public `/claims/` or `/claim-ledger/` claim
-ledger that lists major public site claims, public claim level, proof path,
-evidence status, limitations, and explicit non-claims. The ledger is
-presentation and claim governance only. SQLite indexes, fact streams, reports,
-analyzer logs, rule catalog entries, commit metadata, coverage labels, and
-documented limitations remain the source of truth.
+The future page would extend `/roadmap/` or define a public `/claims/` or
+`/claim-ledger/` claim ledger that lists major public site claims, public claim
+level, proof path, evidence status, limitations, and explicit non-claims. The
+ledger is presentation and claim governance only. SQLite indexes, fact streams,
+reports, analyzer logs, rule catalog entries, commit metadata, coverage labels,
+and documented limitations remain the source of truth.
 
 Please inspect:
 
@@ -37,8 +37,9 @@ Please inspect:
 
 Review focus:
 
-- Does the spec define a bounded future route/page decision for `/claims/` or
-  `/claim-ledger/` without implementing site code?
+- Does the spec define a bounded future route/page decision that evaluates
+  extending the existing `/roadmap/` claim-ledger surface before choosing
+  `/claims/` or `/claim-ledger/` without implementing site code?
 - Are `Status: not-started`, `Readiness: ready-for-implementation`, and
   `Public claim level: concept` present and consistent?
 - Are future implementation tasks unchecked?
@@ -48,10 +49,11 @@ Review focus:
   evidence-status rows from disclosing unreleased capability names, internal
   routes, private sample identities, hidden-export specifics, counts, cadence,
   sequencing, or in-flight status?
-- Does the spec define how the ledger relates to existing proof path index and
-  capability matrix surfaces without duplicating them?
+- Does the spec define how the ledger relates to existing roadmap, proof path
+  index, and capability matrix surfaces without duplicating them?
 - Does the spec map any new claim-level or evidence-status vocabulary to
-  existing site labels used by related public surfaces?
+  existing labels used by roadmap, capability, proof-path, and discovery
+  surfaces?
 - Does every claim-level and evidence-status label resolve through one mapping
   table before automated cross-page review depends on it?
 - Are proof paths tied to public-safe summaries, routes, documentation, rule

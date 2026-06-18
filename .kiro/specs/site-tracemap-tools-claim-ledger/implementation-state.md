@@ -19,12 +19,16 @@ No site code is implemented in this phase.
 
 ## Scope
 
-- Define requirements for a future `/claims/` or `/claim-ledger/` public page.
+- Define requirements for a future `/roadmap/` extension or `/claims/` /
+  `/claim-ledger/` public page.
 - Define future implementation tasks, leaving all tasks unchecked.
 - Require claim-level rows with proof paths, evidence status, limitations,
   source-of-truth artifact families, and wording status.
-- Require the ledger to link to the proof path index and capability matrix where
-  those existing surfaces already provide evidence trails or capability status.
+- Require future implementation to evaluate extending `/roadmap/` first because
+  the current roadmap already describes itself as a public claim ledger.
+- Require the ledger to link to roadmap, proof path index, and capability
+  matrix surfaces where those existing surfaces already provide evidence trails
+  or capability status.
 - Require claim-level vocabulary to be reconciled with existing site labels.
 - Require `hidden` claim rows and `hidden/internal` evidence-status rows to use
   abstract placeholders instead of disclosing unreleased capability names,
@@ -51,9 +55,11 @@ No site code is implemented in this phase.
 ## Route Decision
 
 - Pending future implementation.
-- Candidate routes: `/claims/` and `/claim-ledger/`.
-- The future implementer must choose one route, record the rejected route, and
-  avoid implying concept or hidden claims are shipped capabilities.
+- Candidate placements: extend `/roadmap/`, create `/claims/`, or create
+  `/claim-ledger/`.
+- The future implementer must evaluate `/roadmap/` first, choose one placement,
+  record rejected alternates, and avoid implying concept or hidden claims are
+  shipped capabilities.
 
 ## Validation
 
@@ -114,6 +120,13 @@ does not change site source.
   a public claim-level token. Patched wording so public claim levels remain
   `shipped`, `demo`, `concept`, and `hidden`, while `internal` appears only as
   part of the `hidden/internal` evidence-status axis.
+- Codex PR review found that `/roadmap/` already describes itself as a public
+  claim ledger and that the mapping table was incomplete for current roadmap,
+  capability, proof-path, and discovery vocabulary. Patched
+  `requirements.md`, `tasks.md`, `review-packet.md`, and this file so future
+  implementation evaluates `/roadmap/` first and maps labels such as `shipped
+  navigation`, `demo guidance`, `main/demo`, `future`, `dev-only`, `hidden
+  pending validation`, `not_requested`, and `unavailable`.
 - Opus found Low consistency issues for the missing readiness header and generic
   discoverability wording. Patched with the readiness header and explicit
   proof-path/capability matrix relationship.
@@ -123,7 +136,8 @@ does not change site source.
 
 ## Follow-ups
 
-- Future implementation must choose `/claims/` or `/claim-ledger/`.
+- Future implementation must evaluate extending `/roadmap/` first, then choose
+  `/roadmap/`, `/claims/`, or `/claim-ledger/`.
 - Future implementation must create public-safe claim rows and proof paths.
 - Future implementation must wire metadata, sitemap, discovery links, and
   validation before checking off tasks.
