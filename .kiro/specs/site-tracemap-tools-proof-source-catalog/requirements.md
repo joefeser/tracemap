@@ -125,8 +125,9 @@ claim labels to their allowed proof sources.
 Acceptance criteria:
 
 - Each row includes route, claim label, allowed public wording or claim family,
-  `Public claim level`, proof path, source artifact or source document, rule ID
-  or rule family, evidence tier or coverage label, limitation, and non-claims.
+  `Public claim level`, evidence status, proof path, source artifact or source
+  document, rule ID or rule family, evidence tier or coverage label,
+  limitation, and non-claims.
 - `Public claim level` is a required row field and uses exactly one of
   `shipped`, `demo`, `concept`, or `hidden`.
 - The catalog distinguishes source-of-truth artifact family from proof-path
@@ -134,10 +135,12 @@ Acceptance criteria:
   public-safe demo summary, checked-in route metadata, public-safe report
   family, or local-only scanner artifact family; the proof path must be a
   public-safe route or source document link.
-- Where no public-safe proof path exists, `proofPath` uses exactly one sentinel
-  from the design schema: `future-only`, `hidden`, or
-  `blocked-pending-validation`. The row carries a matching limitation. Free-text
-  `not available` is not permitted.
+- Where no public-safe proof path exists for a publishable row, `proofPath`
+  uses exactly one public-safe sentinel from the design schema:
+  `future-only` or `hidden`. Free-text `not available` is not permitted.
+  `blocked-pending-validation` is a pre-publication candidate state only; a row
+  with that value must be removed, rewritten, or linked to a public-safe proof
+  path before the catalog page publishes.
 - Rows group or filter by route and by `Public claim level` so managers,
   reviewers, and bots can quickly answer whether wording is shipped, demo,
   concept, or hidden.
@@ -313,8 +316,9 @@ Acceptance criteria:
   the required row field text `Public claim level`.
 - Validation asserts every catalog row contains all required fields from
   Requirement 2: route, claim label, allowed public wording or claim family,
-  `Public claim level`, proof path, source artifact or source document, rule ID
-  or rule family, evidence tier or coverage label, limitation, and non-claims.
+  `Public claim level`, evidence status, proof path, source artifact or source
+  document, rule ID or rule family, evidence tier or coverage label,
+  limitation, and non-claims.
 - Validation asserts each row's limitation and non-claims fields are non-empty.
 - Validation asserts every row uses one of `shipped`, `demo`, `concept`, or
   `hidden` for `Public claim level`.
@@ -326,9 +330,11 @@ Acceptance criteria:
   pair is outside the allowed matrix from Requirement 4. Validation also rejects
   any non-hidden row using route `hidden` or evidence status
   `hidden-or-internal`.
-- Validation asserts every row's `proofPath` is either a resolvable public-safe
-  link or exactly one of `future-only`, `hidden`, or
-  `blocked-pending-validation`.
+- Validation asserts every published row's `proofPath` is either a resolvable
+  public-safe link or exactly one of `future-only` or `hidden`.
+- Validation rejects `blocked-pending-validation` in published output; that
+  value may appear only in pre-publication candidate data before the row is
+  removed, rewritten, or linked to a public-safe proof path.
 - Validation asserts hidden-level rows collapse to at most one aggregate
   placeholder and that no row discloses unreleased capability names, hidden
   route names, private sample identities, or the count, cadence, sequencing, or
