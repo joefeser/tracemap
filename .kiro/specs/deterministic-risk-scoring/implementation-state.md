@@ -17,10 +17,11 @@ This branch is spec-only. It defines requirements, design, tasks, and review sta
 - The feature should prioritize review attention over existing TraceMap evidence rather than claim runtime, production, security, compliance, or business risk.
 - Release-review is the recommended first implementation target because it already composes diff, impact, path/reverse, portfolio-adjacent context, gaps, and checklist evidence.
 - The first implementation slice should use an explicit opt-in flag unless implementation review decides default scoring is safer and fully versioned.
-- Numeric scoring is allowed only if every component and aggregation rule is visible, documented, deterministic, and tested. Ordinal-only priority is acceptable for v1.
-- The ordinal-vs-numeric choice is a hard implementation gate before component values or aggregation are coded.
+- V1 scoring is ordinal-only. Numeric `priorityScore` weights are deferred to a future scoring model version.
+- V1 should emit `priorityScore: null` where the schema includes that field.
 - Release-review scoring should prefer opt-in sidecar JSON so `--include-priority` opt-out output can remain byte-identical; an always-present additive section requires an explicit version or compatibility decision.
 - Scoring must emit downgrade and unknown components rather than hiding uncertainty.
+- Public-surface and cross-repo reach components must derive only from existing static TraceMap evidence and must not infer runtime exposure, deployment topology, ownership, or business reach.
 - Release-review v1 should use the existing status vocabulary and defer `not_supported` until a workflow has a real unsupported-scoring path.
 - Scoring output should reuse shared helpers such as `CombinedReportHelpers.Cell`, `SafePath`, and `SortedMetadata` or refactored equivalents.
 

@@ -135,6 +135,8 @@ Scoring should consume normalized report evidence, not raw database rows, where 
 | Coverage/build status | Unknown and downgrade components |
 | Analysis gaps | Uncertainty and attention components |
 | Changed facts, surfaces, endpoints, edges | Static change components |
+| Public-surface evidence | Existing static route, API/DTO, SQL/schema, package, route-flow, reverse, or portfolio surface rows that identify reviewer-visible boundaries without claiming runtime exposure |
+| Cross-repo reach evidence | Existing combined or portfolio source labels, source identity hashes, shared surface groups, endpoint alignment rows, path/reverse roots across sources, and manifest comparison rows |
 | Path and reverse summaries | Bounded reachability context components |
 | Caps and omitted counts | Truncation components |
 | Limitations | Explanation and Markdown/JSON safety |
@@ -246,35 +248,33 @@ truncated
 
 ## Scoring Strategy
 
-Use ordinal priority first. Numeric score can be included only when fully explainable. If numeric scoring is included, use a fixed range such as `0..100` and expose all components.
+V1 scoring is ordinal-only. It emits `severityHint`, `attentionLevel`, `complete`, component directions, rule IDs, and limitations; it does not emit numeric weights. Where the JSON schema includes `priorityScore`, v1 emits `null`.
 
-The ordinal-vs-numeric decision is a hard gate before implementing component and aggregation rules. If v1 is ordinal-only, `priorityScore` should be `null` or absent according to the versioned schema and all cap behavior is expressed through `severityHint`, `attentionLevel`, `complete`, and downgrade components. If numeric scoring is chosen, caps must be implemented as a documented function such as `effectiveScore = min(rawScore, capScore)` after positive components are summed, with unknown components setting `priorityScore: null` when the score would imply false completeness.
+Numeric scoring is deferred to a future scoring model version. If numeric scoring is later introduced, caps must be implemented as a documented function such as `effectiveScore = min(rawScore, capScore)` after positive components are summed, with unknown components setting `priorityScore: null` when the score would imply false completeness.
 
-Decision required before implementation: Task 1 must resolve ordinal-only versus numeric scoring and the result must be documented in the rule catalog before component-value or aggregation code is written. This decision is not a hidden implementation detail; it determines JSON semantics, tests, and model versioning.
+V1 ordinal row severity is a deterministic function:
 
-Suggested deterministic aggregation:
+1. Start every row at `info`.
+2. If any row-level component has direction `unknown` for an unresolvable gap, set the row `severityHint` to `unknown` and `complete` to `false`.
+3. Otherwise, apply positive candidate components in precedence order: `critical_review`, `high_review`, `medium_review`, `low_review`, `info`.
+4. `critical_review` is allowed only for documented Tier1/Tier2 strong static change evidence on a public surface with credible coverage and source identity, plus either cross-repo reach or bounded path/reverse fan-out evidence.
+5. `high_review` is allowed for documented Tier1/Tier2 strong static change evidence on a public surface under credible coverage and identity, or for broad deterministic fan-out under full evidence.
+6. `medium_review` is the ceiling for review-tier, Tier3, syntax/textual, hash-only, ambiguous, duplicate, name-only, fallback, coverage-relative, noisy high-fan-out, or optional-schema-limited evidence.
+7. `low_review` is used for low-priority static evidence under credible coverage when no stronger component applies.
+8. `info` is used for no-actionable-evidence and selector metadata under credible coverage.
+9. Apply caps after positive candidates. A cap can only lower a row to its documented ceiling and must remain visible as a component.
+10. Sort rows and components deterministically after severity and completeness are assigned.
 
-1. Adapt report rows and gaps into `ScorableEvidence` records.
-2. Apply base evidence rules from underlying classification and evidence tier.
-3. Apply fan-out rules from deterministic counts.
-4. Apply context rules from path/reverse evidence when present.
-5. Apply gap rules from coverage, identity, commit SHA, schema, unavailable workflow, and truncation.
-6. Apply downgrade caps.
-7. Aggregate row severity by capped score band or ordinal precedence.
-8. Aggregate report attention from row severities, gap components, and section completeness.
-9. Sort rows and components deterministically.
+V1 report attention is also deterministic:
 
-Suggested score bands if numeric scoring is used:
+1. If any requested scoring section is materially incomplete because of unavailable workflow, truncation, missing required schema, source identity conflict, or coverage gaps that block section conclusions, report `attentionLevel` is `unknown`.
+2. Otherwise, if any row is `critical_review`, report `highest_attention`.
+3. Otherwise, if any row is `high_review`, report `high_attention`.
+4. Otherwise, if any row is `medium_review` or any non-blocking gap remains, report `moderate_attention`.
+5. Otherwise, if any row is `low_review`, report `low_attention`.
+6. Otherwise, report `informational`.
 
-| Score range | Row severity |
-| --- | --- |
-| `80..100` | `critical_review` |
-| `60..79` | `high_review` |
-| `35..59` | `medium_review` |
-| `10..34` | `low_review` |
-| `0..9` | `info` |
-
-`unknown` is not a score band. It is selected by limiting evidence and should carry `priorityScore: null` unless the implementation can prove a partial numeric score is not misleading.
+Every candidate, cap, downgrade, unknown, and report aggregation rule must be documented in the rule catalog before output is enabled.
 
 ## Component Kinds
 
@@ -284,6 +284,8 @@ Initial component kinds:
 | --- | --- | --- |
 | `static_change_evidence` | `increase` | Changed endpoint, surface, edge, DTO, SQL, package, or source evidence |
 | `evidence_tier_strength` | `increase` | Tier1/Tier2 can raise priority under full coverage |
+| `public_surface` | `increase` | Existing static public-surface evidence such as routes, API/DTO rows, package surfaces, route-flow roots, reverse selected surfaces, or portfolio shared surfaces |
+| `cross_repo_reach` | `increase` | Existing combined/portfolio evidence spanning multiple source labels or source identity hashes |
 | `review_tier_evidence` | `cap` | Tier3, syntax/textual, hash-only, or ambiguous evidence caps priority |
 | `fan_out` | `increase` | Deterministic affected-source, surface, root, path, or edge counts |
 | `path_context` | `increase` | Bounded path evidence, with traversal limits cited |
@@ -298,9 +300,7 @@ Initial component kinds:
 | `selector_no_match_uncertain` | `unknown` | Selector matched nothing but coverage or identity prevents a clean informational result |
 | `no_actionable_evidence` | `decrease` | Only under credible full requested coverage |
 
-The first implementation PR should document exact values in code and rule catalog. The spec intentionally avoids final hidden weights.
-
-If numeric scoring is selected, the rule catalog and tests must document each component value, cap value, and unknown behavior. If ordinal-only scoring is selected, the rule catalog and tests must document precedence instead of weights.
+The first implementation PR should document exact ordinal candidates, caps, precedence, and unknown behavior in code and rule catalog. Numeric component values and hidden weights are not part of v1.
 
 ## Downgrade Rules
 
