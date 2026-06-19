@@ -39,22 +39,19 @@ prLoopPacket:
       requirement: optional
       waitUntilReturnedBeforeProcessing: false
   branchPolicy:
-    # These target lists intentionally mirror requiredReviewerNonReturnPolicy
-    # so branch policy and non-return handoff remain explicit at each decision
-    # point without relying on YAML anchors or alias support in downstream tools.
-    overnightAllowedMergeTargets:
+    overnightAllowedMergeTargets: &overnight_allowed_targets
       - dev
       - integration/**
       - feature/**
-    overnightForbiddenMergeTargets:
+    overnightForbiddenMergeTargets: &overnight_forbidden_targets
       - main
       - master
       - release/**
-    ownerOverrideEligibleTargets:
+    ownerOverrideEligibleTargets: &owner_override_eligible_targets
       - dev
       - integration/**
       - feature/**
-    ownerOverrideDeniedTargets:
+    ownerOverrideDeniedTargets: &owner_override_denied_targets
       - main
       - master
       - release/**
@@ -77,23 +74,9 @@ reviewerReturnPolicy:
 
 requiredReviewerNonReturnPolicy:
   stopReason: HUMAN_DECISION_REQUIRED_REVIEW_NON_RETURN
-  # Keep these lists explicit instead of YAML aliases; they are readback
-  # evidence for humans as much as machine config.
-  overnightAllowedTargets:
-    - dev
-    - integration/**
-    - feature/**
-  ownerOverrideEligibleTargets:
-    - dev
-    - integration/**
-    - feature/**
-  ownerOverrideDeniedTargets:
-    - main
-    - master
-    - release/**
-  overnightForbiddenTargets:
-    - main
-    - master
-    - release/**
+  overnightAllowedTargets: *overnight_allowed_targets
+  ownerOverrideEligibleTargets: *owner_override_eligible_targets
+  ownerOverrideDeniedTargets: *owner_override_denied_targets
+  overnightForbiddenTargets: *overnight_forbidden_targets
   mainPromotionRequiresSeparatePr: true
   noSquashByDefault: true
