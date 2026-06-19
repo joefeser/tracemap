@@ -411,7 +411,7 @@ rules:
   - id: csharp.razor.model-binding.v1
     name: Razor model-binding target evidence
     description: Reserved rule for static Razor Pages/MVC model-binding target evidence such as handlers, action parameters, BindProperty, FromBody, and FromForm metadata.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - RazorModelBindingTarget
     limitations:
@@ -577,7 +577,7 @@ rules:
   - id: legacy.validation.ui-events.v1
     name: Legacy UI event static evidence probe
     description: Summarizes whether current facts expose WinForms/WebForms-style event wiring, handler-like symbols, call edges, or dependency surfaces without rendering source snippets.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - UI event evidence summary
       - UI event evidence gap
@@ -991,7 +991,7 @@ rules:
   - id: legacy.data.generated-link.v1
     name: Legacy data generated-code linkage
     description: Links DBML, EDMX, and typed DataSet metadata descriptors to checked-in generated files or compiler-resolved generated symbols when deterministic evidence exists.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - LegacyDataGeneratedCodeLinked
       - AnalysisGap
@@ -1119,7 +1119,7 @@ rules:
   - id: legacy.webforms.handler-resolution.v1
     name: Legacy WebForms code-behind handler resolution
     description: Resolves markup event handlers to linked code-behind partial methods by semantic source-symbol evidence when available, otherwise by scoped structural or syntax fallback.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WebFormsHandlerResolved
       - AnalysisGap
@@ -1143,7 +1143,7 @@ rules:
   - id: legacy.webforms.event-flow.v1
     name: Legacy WebForms event-to-backend static flow projection
     description: Projects resolved WebForms handlers to directly connected call, WCF/service-reference, HTTP, SQL/query, config, or dependency-surface evidence while preserving supporting fact IDs and coverage labels.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WebFormsEventFlowProjected
       - AnalysisGap
@@ -1167,7 +1167,7 @@ rules:
   - id: legacy.winforms.inventory.v1
     name: Legacy WinForms file and surface inventory
     description: Inventories static WinForms form, user-control, control, component, application-context, designer, startup, and linked resource surface evidence from checked-in files.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WinFormsSurfaceDeclared
       - AnalysisGap
@@ -1179,7 +1179,7 @@ rules:
   - id: legacy.winforms.control.v1
     name: Legacy WinForms control and component evidence
     description: Extracts deterministic static WinForms control and component field/object-creation evidence from designer and code files.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WinFormsControlDeclared
       - AnalysisGap
@@ -1191,7 +1191,7 @@ rules:
   - id: legacy.winforms.event-binding.v1
     name: Legacy WinForms static event binding evidence
     description: Extracts explicit static WinForms event subscriptions such as Click, grid events, BackgroundWorker callbacks, and Timer ticks from designer and code files.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WinFormsEventBindingDeclared
       - AnalysisGap
@@ -1203,7 +1203,7 @@ rules:
   - id: legacy.winforms.handler-resolution.v1
     name: Legacy WinForms handler resolution
     description: Resolves static WinForms event bindings to scoped partial-class handler methods using semantic evidence when available and structural or syntax fallback when not.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WinFormsHandlerResolved
       - AnalysisGap
@@ -1215,7 +1215,7 @@ rules:
   - id: legacy.winforms.navigation.v1
     name: Legacy WinForms static navigation evidence
     description: Records deterministic static Application.Run, Show, ShowDialog, owner/parent, and MDI navigation or containment evidence from checked-in C#.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WinFormsNavigationEdgeDeclared
       - AnalysisGap
@@ -1227,7 +1227,7 @@ rules:
   - id: legacy.winforms.callback-boundary.v1
     name: Legacy WinForms callback boundary evidence
     description: Records static BackgroundWorker, timer, UI marshalling, async/delegate, and callback-boundary evidence linked to WinForms event handlers where possible.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WinFormsCallbackBoundaryDeclared
       - AnalysisGap
@@ -1238,7 +1238,7 @@ rules:
   - id: legacy.winforms.handler-flow.v1
     name: Legacy WinForms handler-to-backend static flow projection
     description: Projects resolved WinForms handlers to directly connected call, object-creation, WCF, ASMX, remoting, legacy data, SQL/query, HTTP, config, or dependency-surface evidence from the same scan.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WinFormsHandlerFlowProjected
       - AnalysisGap
@@ -1261,7 +1261,7 @@ rules:
   - id: legacy.aspnet.surface.v1
     name: Legacy ASP.NET static surface inventory
     description: Inventories classic ASP.NET application and handler files, directive metadata, and supporting designer-file gaps while reusing WebForms inventory facts for page/control/master evidence.
-    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - AspNetSurfaceDeclared
       - AnalysisGap
@@ -1275,7 +1275,7 @@ rules:
   - id: legacy.aspnet.route.v1
     name: Legacy ASP.NET static route registration evidence
     description: Extracts supported classic ASP.NET route registration candidates such as MapPageRoute and simple RouteCollection.Add PageRouteHandler shapes from checked-in C#.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - AspNetRouteDeclared
       - AnalysisGap
@@ -1301,7 +1301,7 @@ rules:
   - id: legacy.aspnet.handler.v1
     name: Legacy ASP.NET static handler evidence
     description: Detects .ashx directives, IHttpHandler/IHttpAsyncHandler implementations, handler factories, and config-backed handler declarations as static handler surface candidates.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - AspNetHandlerDeclared
       - AnalysisGap
@@ -1314,7 +1314,7 @@ rules:
   - id: legacy.aspnet.page-method.v1
     name: Legacy ASP.NET PageMethod and ScriptMethod evidence
     description: Detects WebForms PageMethod, WebMethod, ScriptMethod, and ScriptService attribute evidence from checked-in C# without reclassifying it as ASMX unless independent ASMX host evidence exists.
-    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - AspNetPageMethodDeclared
       - AnalysisGap
@@ -1327,7 +1327,7 @@ rules:
   - id: legacy.aspnet.navigation.v1
     name: Legacy ASP.NET static navigation reference evidence
     description: Extracts deterministic static navigation references from markup, checked-in sitemap XML, and supported C# APIs, and emits conservative target edges only when non-hash checked-in target evidence exists.
-    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - AspNetNavigationReferenceDeclared
       - AspNetNavigationEdgeDeclared

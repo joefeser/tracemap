@@ -85,7 +85,7 @@ export async function validateStaticVsRuntimeDist({ baseUrl = "https://tracemap.
   const pagePath = resolve(dist, "static-vs-runtime", "index.html");
 
   if (!(await fileExists(pagePath))) {
-    localErrors.push("Static vs runtime page is missing required public route: /static-vs-runtime/");
+    localErrors.push(withEvidence("Static vs runtime page is missing required public route: /static-vs-runtime/", "static-vs-runtime/index.html"));
     errors.push(...localErrors);
     return;
   }
@@ -107,7 +107,7 @@ async function validateSitemap({ baseUrl, dist, errors }) {
 
   const sitemapUrls = await readSitemapLocSet(sitemapPath);
   if (!sitemapUrls.has(`${baseUrl}${staticVsRuntimeRoute}`)) {
-    errors.push(`Static vs runtime sitemap is missing required route: ${baseUrl}${staticVsRuntimeRoute}`);
+    errors.push(withEvidence(`Static vs runtime sitemap is missing required route: ${baseUrl}${staticVsRuntimeRoute}`, "sitemap.xml"));
   }
 }
 
@@ -121,18 +121,18 @@ async function validateRoutesIndex({ dist, errors }) {
   try {
     parsed = JSON.parse(await readFile(indexPath, "utf8"));
   } catch (error) {
-    errors.push(`Static vs runtime could not parse routes-index.json: ${error.message}`);
+    errors.push(withEvidence(`Static vs runtime could not parse routes-index.json: ${error.message}`, "routes-index.json"));
     return;
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.entries)) {
-    errors.push("Static vs runtime routes-index.json is invalid: expected entries array");
+    errors.push(withEvidence("Static vs runtime routes-index.json is invalid: expected entries array", "routes-index.json"));
     return;
   }
 
   const routeEntry = parsed.entries.find((entry) => entry?.path === staticVsRuntimeRoute);
   if (!routeEntry) {
-    errors.push(`Static vs runtime routes-index.json is missing required route: ${staticVsRuntimeRoute}`);
+    errors.push(withEvidence(`Static vs runtime routes-index.json is missing required route: ${staticVsRuntimeRoute}`, "routes-index.json"));
     return;
   }
 
@@ -145,13 +145,13 @@ async function validateRoutesIndex({ dist, errors }) {
 
   for (const [field, expected] of Object.entries(expectedFields)) {
     if (routeEntry[field] !== expected) {
-      errors.push(`Static vs runtime routes-index.json expected ${field} ${expected}, got ${String(routeEntry[field])}`);
+      errors.push(withEvidence(`Static vs runtime routes-index.json expected ${field} ${expected}, got ${String(routeEntry[field])}`, "routes-index.json"));
     }
   }
 
   const routeText = routeTextFields(routeEntry).join(" ");
   if (/runtime proof|production traffic proof|endpoint performance proof|release safety proof|operational safety proof/i.test(routeText)) {
-    errors.push("Static vs runtime routes-index.json inflates concept metadata into runtime or operational proof.");
+    errors.push(withEvidence("Static vs runtime routes-index.json inflates concept metadata into runtime or operational proof.", "routes-index.json"));
   }
 
   const nonClaimsText = Array.isArray(routeEntry.nonClaims) ? routeEntry.nonClaims.join(" ") : "";
@@ -170,7 +170,7 @@ async function validateRoutesIndex({ dist, errors }) {
     "test sufficiency"
   ]) {
     if (!nonClaimsText.includes(phrase)) {
-      errors.push(`Static vs runtime routes-index.json nonClaims are missing boundary phrase: ${phrase}`);
+      errors.push(withEvidence(`Static vs runtime routes-index.json nonClaims are missing boundary phrase: ${phrase}`, "routes-index.json"));
     }
   }
 }
@@ -184,53 +184,53 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
 
   for (const phrase of requiredText) {
     if (!pageText.toLowerCase().includes(phrase.toLowerCase())) {
-      errors.push(`Static vs runtime page is missing required text: ${phrase}`);
+      errors.push(withEvidence(`Static vs runtime page is missing required text: ${phrase}`, "static-vs-runtime/index.html"));
     }
   }
 
   for (const anchor of requiredAnchors) {
     if (!hasId(html, anchor)) {
-      errors.push(`Static vs runtime page is missing required anchor: ${anchor}`);
+      errors.push(withEvidence(`Static vs runtime page is missing required anchor: ${anchor}`, "static-vs-runtime/index.html"));
     }
   }
 
   for (const link of staticVsRuntimeRequiredLinks) {
     if (!hasHref(html, link)) {
-      errors.push(`Static vs runtime page is missing required link: ${link}`);
+      errors.push(withEvidence(`Static vs runtime page is missing required link: ${link}`, "static-vs-runtime/index.html"));
     }
   }
 
   if (!/<table\b[\s\S]*?<th\b[^>]*scope=["']col["'][\s\S]*?Static evidence question[\s\S]*?<\/table>/i.test(html)) {
-    errors.push("Static vs runtime page is missing an accessible comparison table with column headers.");
+    errors.push(withEvidence("Static vs runtime page is missing an accessible comparison table with column headers.", "static-vs-runtime/index.html"));
   }
 
   if (wordCount < 650 || wordCount > 1900) {
-    errors.push(`Static vs runtime page word count must be between 650 and 1900 words, got ${wordCount}`);
+    errors.push(withEvidence(`Static vs runtime page word count must be between 650 and 1900 words, got ${wordCount}`, "static-vs-runtime/index.html"));
   }
 
   if (forbiddenStaticVsRuntimePositioning.test(positioningText)) {
-    errors.push("Static vs runtime page contains forbidden runtime or AI/LLM positioning.");
+    errors.push(withEvidence("Static vs runtime page contains forbidden runtime or AI/LLM positioning.", "static-vs-runtime/index.html"));
   }
 
   if (forbiddenOperationalPositioning.test(positioningText)) {
-    errors.push("Static vs runtime page contains forbidden runtime or AI/LLM positioning.");
+    errors.push(withEvidence("Static vs runtime page contains forbidden runtime or AI/LLM positioning.", "static-vs-runtime/index.html"));
   }
 
   if (forbiddenAffirmativeAiPositioning.test(positioningText)) {
-    errors.push("Static vs runtime page contains forbidden runtime or AI/LLM positioning.");
+    errors.push(withEvidence("Static vs runtime page contains forbidden runtime or AI/LLM positioning.", "static-vs-runtime/index.html"));
   }
 
   if (/\b(?:TraceMap|static evidence)\b[^.]{0,80}\b(?:confirms|certifies|guarantees|proves|replaces)\b/i.test(positioningText)) {
-    errors.push("Static vs runtime page contains unsupported proof or replacement wording.");
+    errors.push(withEvidence("Static vs runtime page contains unsupported proof or replacement wording.", "static-vs-runtime/index.html"));
   }
 
   if (/\b(?:surface|endpoint|route|contract|package|service)\b[^.]{0,80}\bimpacted\b/i.test(pageText)) {
-    errors.push("Static vs runtime page contains unsupported impacted wording.");
+    errors.push(withEvidence("Static vs runtime page contains unsupported impacted wording.", "static-vs-runtime/index.html"));
   }
 
   for (const text of forbiddenText) {
     if (containsForbiddenText(text, html, decodedHtml, pageText)) {
-      errors.push(`Static vs runtime page contains forbidden public text: ${text}`);
+      errors.push(withEvidence(`Static vs runtime page contains forbidden public text: ${text}`, "static-vs-runtime/index.html"));
     }
   }
 }
@@ -257,6 +257,10 @@ function hasHref(html, href) {
 function hasId(html, id) {
   const escaped = escapeRegExp(id);
   return new RegExp(`\\bid\\s*=\\s*["']${escaped}["']`, "i").test(html);
+}
+
+function withEvidence(message, artifact) {
+  return `${message} Evidence: ${artifact}.`;
 }
 
 function countWords(value) {

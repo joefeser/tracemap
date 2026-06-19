@@ -1111,7 +1111,8 @@ public static class ReleaseReviewReporter
         var capabilitiesBySource = await ReadCombinedCapabilitySummariesAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            select label,
+            select source_index_id,
+                   label,
                    language,
                    scan_id,
                    commit_sha,
@@ -1130,25 +1131,26 @@ public static class ReleaseReviewReporter
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var manifest = DeserializeManifest(StringOrNull(reader, 11));
-            var label = StringOrDefault(reader, 0, "unknown");
-            var scannerVersion = StringOrDefault(reader, 10, "unknown");
+            var manifest = DeserializeManifest(StringOrNull(reader, 12));
+            var sourceIndexId = StringOrDefault(reader, 0, "unknown");
+            var label = StringOrDefault(reader, 1, "unknown");
+            var scannerVersion = StringOrDefault(reader, 11, "unknown");
             extractorVersions[$"{label}:{scannerVersion}"] = scannerVersion;
             var gaps = manifest?.KnownGaps ?? [];
-            var analysisLevel = StringOrDefault(reader, 8, "unknown");
-            var buildStatus = StringOrDefault(reader, 9, "unknown");
-            capabilitiesBySource.TryGetValue(label, out var capabilities);
+            var analysisLevel = StringOrDefault(reader, 9, "unknown");
+            var buildStatus = StringOrDefault(reader, 10, "unknown");
+            capabilitiesBySource.TryGetValue(sourceIndexId, out var capabilities);
             var sourceGaps = gaps
                 .Concat(CapabilityGapCodes(capabilities ?? []))
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
             sources.Add(new ReleaseReviewSourceInfo(
                 label,
-                StringOrNull(reader, 1) ?? InferLanguage(scannerVersion),
-                StringOrNull(reader, 2),
-                NullIfUnknown(StringOrNull(reader, 3)),
-                RepositoryIdentityHash(StringOrNull(reader, 5), StringOrNull(reader, 4)),
-                StringOrNull(reader, 6),
+                StringOrNull(reader, 2) ?? InferLanguage(scannerVersion),
+                StringOrNull(reader, 3),
+                NullIfUnknown(StringOrNull(reader, 4)),
+                RepositoryIdentityHash(StringOrNull(reader, 6), StringOrNull(reader, 5)),
+                StringOrNull(reader, 7),
                 CoverageFrom(analysisLevel, buildStatus, sourceGaps),
                 buildStatus,
                 analysisLevel,
@@ -1212,7 +1214,7 @@ public static class ReleaseReviewReporter
         var result = new SortedDictionary<string, List<ReleaseReviewCapabilitySummary>>(StringComparer.Ordinal);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            select sources.label,
+            select facts.source_index_id,
                    facts.original_fact_id,
                    facts.rule_id,
                    facts.evidence_tier,
@@ -1220,22 +1222,22 @@ public static class ReleaseReviewReporter
             from combined_facts facts
             join index_sources sources on sources.source_index_id = facts.source_index_id
             where facts.fact_type = 'AnalyzerCapabilityDiagnostic'
-            order by sources.label, facts.file_path, facts.start_line, facts.original_fact_id;
+            order by facts.source_index_id, facts.file_path, facts.start_line, facts.original_fact_id;
             """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var label = StringOrDefault(reader, 0, "unknown");
+            var sourceIndexId = StringOrDefault(reader, 0, "unknown");
             var factId = StringOrDefault(reader, 1, "unknown");
             var summary = CapabilitySummaryFromProperties(
                 factId,
                 StringOrDefault(reader, 2, RuleIds.AnalyzerCapabilityDownstreamCoverage),
                 StringOrDefault(reader, 3, EvidenceTiers.Tier4Unknown),
                 ParseProperties(StringOrNull(reader, 4)));
-            if (!result.TryGetValue(label, out var list))
+            if (!result.TryGetValue(sourceIndexId, out var list))
             {
                 list = [];
-                result[label] = list;
+                result[sourceIndexId] = list;
             }
 
             list.Add(summary);

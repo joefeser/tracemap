@@ -29,6 +29,7 @@ test("validateStaticVsRuntimeDist reports missing required page text", async (t)
   await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /missing required text: Public claim level: concept/);
+  assert.match(errors.join("\n"), /Evidence: static-vs-runtime\/index\.html\./);
 });
 
 test("validateStaticVsRuntimeDist reports missing route metadata", async (t) => {
@@ -42,6 +43,8 @@ test("validateStaticVsRuntimeDist reports missing route metadata", async (t) => 
 
   assert.match(errors.join("\n"), /sitemap is missing required route/);
   assert.match(errors.join("\n"), /routes-index\.json is missing required route: \/static-vs-runtime\//);
+  assert.match(errors.join("\n"), /Evidence: sitemap\.xml\./);
+  assert.match(errors.join("\n"), /Evidence: routes-index\.json\./);
 });
 
 test("validateStaticVsRuntimeDist reports route metadata regressions", async (t) => {
