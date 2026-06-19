@@ -60,6 +60,7 @@ public static class MarkdownReportWriter
         }
 
         AddBuildEnvironmentDiagnostics(lines, result);
+        AddAnalyzerCapabilityDiagnostics(lines, result);
 
         lines.Add("");
         lines.Add("## Facts By Type");
@@ -262,6 +263,46 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "WinForms Static Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WinFormsSurfaceDeclared
+                or FactTypes.WinFormsControlDeclared
+                or FactTypes.WinFormsResourceMetadataDeclared),
+            FormatWinFormsFact);
+
+        AddFactSection(
+            lines,
+            "WinForms Events",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WinFormsEventBindingDeclared
+                or FactTypes.WinFormsHandlerResolved),
+            FormatWinFormsFact);
+
+        AddFactSection(
+            lines,
+            "WinForms Navigation And Callbacks",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WinFormsNavigationEdgeDeclared
+                or FactTypes.WinFormsCallbackBoundaryDeclared),
+            FormatWinFormsFact);
+
+        AddFactSection(
+            lines,
+            "WinForms Handler Flow",
+            result.Facts.Where(fact => fact.FactType == FactTypes.WinFormsHandlerFlowProjected),
+            fact => $"- `{fact.Properties.GetValueOrDefault("flowClassification") ?? "UnknownAnalysisGap"}` `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` -> `{fact.Properties.GetValueOrDefault("terminalSurfaceKind") ?? "none"}` ({fact.EvidenceTier}, coverage `{fact.Properties.GetValueOrDefault("coverage") ?? "unknown"}`) at `{CombinedReportHelpers.SafePath(fact.Evidence.FilePath)}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "Legacy ASP.NET Static Surface Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.AspNetSurfaceDeclared
+                or FactTypes.AspNetRouteDeclared
+                or FactTypes.AspNetConfigSurfaceDeclared
+                or FactTypes.AspNetHandlerDeclared
+                or FactTypes.AspNetPageMethodDeclared
+                or FactTypes.AspNetNavigationReferenceDeclared
+                or FactTypes.AspNetNavigationEdgeDeclared),
+            FormatLegacyAspNetFact);
+
+        AddFactSection(
+            lines,
             "Boilerplate Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -311,6 +352,27 @@ public static class MarkdownReportWriter
             lines.Add("");
             lines.Add("- WebForms event evidence is static markup, code-behind, designer, and direct backend evidence. It does not prove runtime event firing, page lifecycle execution, event bubbling, deployment, service reachability, SQL execution, branch feasibility, or production usage.");
             lines.Add("- Static logic signals and UI-boilerplate signals are deterministic heuristics, not proof of business logic or code quality.");
+        }
+
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("WinForms", StringComparison.Ordinal)
+            || fact.RuleId.StartsWith("legacy.winforms", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## WinForms Limitations");
+            lines.Add("");
+            lines.Add("- WinForms evidence is deterministic static repository evidence from C# designer/code files and safe resource metadata.");
+            lines.Add("- It does not prove runtime event firing, form visibility, user reachability, layout, localization results, auth/role outcome, branch feasibility, scheduling, service reachability, SQL execution, database existence, deployment, or production usage.");
+            lines.Add("- Raw snippets, resource values, SQL, config values, endpoint addresses, URLs, remotes, local absolute paths, and secrets are omitted or hashed.");
+        }
+
+        if (result.Facts.Any(fact => fact.FactType.StartsWith("AspNet", StringComparison.Ordinal)))
+        {
+            lines.Add("");
+            lines.Add("## Legacy ASP.NET Surface Limitations");
+            lines.Add("");
+            lines.Add("- ASP.NET surface, route, config, handler, PageMethod, and navigation rows are deterministic static evidence from checked-in files only.");
+            lines.Add("- Each route candidate or navigation reference candidate does not prove runtime route matching, IIS deployment, URL rewriting, authorization, browser behavior, JavaScript execution, page rendering, request handling, user reachability, or runtime impact.");
+            lines.Add("- Raw URLs, hostnames, config values, local absolute paths, remotes, endpoint values, snippets, credentials, and secret-looking values are hashed or omitted.");
         }
 
         lines.Add("");
@@ -369,6 +431,49 @@ public static class MarkdownReportWriter
         }
     }
 
+    private static void AddAnalyzerCapabilityDiagnostics(List<string> lines, ScanResult result)
+    {
+        var diagnostics = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic)
+            .OrderBy(fact => fact.Properties.GetValueOrDefault("sourceScope"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("capabilityCode"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("capabilityState"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.RuleId, StringComparer.Ordinal)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (diagnostics.Length == 0 || diagnostics.All(IsQuietCapabilityDiagnostic))
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## Analyzer Capability Diagnostics");
+        lines.Add("");
+        lines.Add("Capability diagnostics summarize analyzer coverage and legacy toolchain signals. They do not prove absence, impact, no-impact, runtime behavior, or local tool installation.");
+        lines.Add("");
+        lines.Add("| Capability | State | Coverage | Tier | Rule | Scope | Support | Guidance | Limitation |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in diagnostics.Take(100))
+        {
+            var code = DisplayCodeValue(fact.Properties.GetValueOrDefault("capabilityCode") ?? fact.ContractElement ?? "unknown");
+            var state = DisplayCodeValue(fact.Properties.GetValueOrDefault("capabilityState") ?? "unknown");
+            var coverage = DisplayCodeValue(fact.Properties.GetValueOrDefault("coverageEffect") ?? "unknown-gap");
+            var scope = DisplayCodeValue(fact.Properties.GetValueOrDefault("sourceScope") ?? "workspace");
+            var support = DisplayCodeValue(fact.Properties.GetValueOrDefault("supportingFactCount") ?? "0");
+            var guidance = DisplayTableValue(fact.Properties.GetValueOrDefault("guidance") ?? fact.Properties.GetValueOrDefault("guidanceCode") ?? "Review capability evidence.");
+            var limitation = DisplayTableValue(fact.Properties.GetValueOrDefault("limitation") ?? "Coverage context only.");
+            lines.Add($"| `{code}` | `{state}` | `{coverage}` | `{fact.EvidenceTier}` | `{fact.RuleId}` | `{scope}` | `{support}` | {guidance} | {limitation} |");
+        }
+    }
+
+    private static bool IsQuietCapabilityDiagnostic(CodeFact fact)
+    {
+        var state = fact.Properties.GetValueOrDefault("capabilityState");
+        var effect = fact.Properties.GetValueOrDefault("coverageEffect");
+        return state == "available" && (effect is "full-semantic" or "informational");
+    }
+
     private static string DisplayFactName(CodeFact fact)
     {
         return fact.ContractElement ?? fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("keyPath") ?? "unknown";
@@ -415,6 +520,22 @@ public static class MarkdownReportWriter
         };
     }
 
+    private static string FormatWinFormsFact(CodeFact fact)
+    {
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return fact.FactType switch
+        {
+            FactTypes.WinFormsSurfaceDeclared => $"- surface `{DisplayCodeValue(fact.Properties.GetValueOrDefault("typeName") ?? DisplayFactName(fact))}` kind `{DisplayCodeValue(fact.Properties.GetValueOrDefault("surfaceKind") ?? "unknown")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsControlDeclared => $"- control `{DisplayCodeValue(fact.Properties.GetValueOrDefault("controlId") ?? DisplayFactName(fact))}` kind `{DisplayCodeValue(fact.Properties.GetValueOrDefault("controlKind") ?? "unknown")}` type `{DisplayCodeValue(fact.Properties.GetValueOrDefault("controlType") ?? "unknown")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsEventBindingDeclared => $"- event `{DisplayCodeValue(fact.Properties.GetValueOrDefault("eventName") ?? "unknown")}` on `{DisplayCodeValue(fact.Properties.GetValueOrDefault("controlId") ?? "unknown")}` -> `{DisplayCodeValue(fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact))}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsHandlerResolved => $"- handler `{DisplayCodeValue(fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact))}` resolved as `{DisplayCodeValue(fact.Properties.GetValueOrDefault("resolutionKind") ?? "unknown")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsNavigationEdgeDeclared => $"- navigation `{DisplayCodeValue(fact.Properties.GetValueOrDefault("navigationKind") ?? DisplayFactName(fact))}` to `{DisplayCodeValue(fact.Properties.GetValueOrDefault("targetFormTypeName") ?? DisplayFactName(fact))}` as `{DisplayCodeValue(fact.Properties.GetValueOrDefault("navigationClassification") ?? "UnknownAnalysisGap")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsCallbackBoundaryDeclared => $"- callback `{DisplayCodeValue(fact.Properties.GetValueOrDefault("boundaryClassification") ?? DisplayFactName(fact))}` event `{DisplayCodeValue(fact.Properties.GetValueOrDefault("eventName") ?? fact.Properties.GetValueOrDefault("callbackKind") ?? "unknown")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            FactTypes.WinFormsResourceMetadataDeclared => $"- resource metadata `{DisplayCodeValue(fact.Properties.GetValueOrDefault("resourceKind") ?? "unknown")}` keys `{DisplayCodeValue(fact.Properties.GetValueOrDefault("resourceKeyHashes") ?? string.Empty)}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`",
+            _ => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`"
+        };
+    }
+
     private static string FormatLegacyRemotingFact(CodeFact fact)
     {
         var name = fact.Properties.GetValueOrDefault("targetTypeName")
@@ -443,6 +564,32 @@ public static class MarkdownReportWriter
             ?? fact.Properties.GetValueOrDefault("sourceKind")
             ?? fact.FactType;
         return $"- `{fact.FactType}` `{name}` as static ASMX/SOAP `{classification}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`";
+    }
+
+    private static string FormatLegacyAspNetFact(CodeFact fact)
+    {
+        var name = FirstPresentValue(
+            fact.Properties.GetValueOrDefault("routeName"),
+            HashLabel(fact, "routeNameHash", "route-name"),
+            fact.Properties.GetValueOrDefault("targetPath"),
+            HashLabel(fact, "targetPathHash", "navigation-target"),
+            fact.Properties.GetValueOrDefault("mappedPagePath"),
+            HashLabel(fact, "routePatternHash", "route-pattern"),
+            fact.Properties.GetValueOrDefault("handlerTypeName"),
+            fact.Properties.GetValueOrDefault("typeName"),
+            fact.Properties.GetValueOrDefault("methodName"),
+            fact.Properties.GetValueOrDefault("sectionKind"),
+            DisplayFactName(fact));
+        var role = FirstPresentValue(
+            fact.Properties.GetValueOrDefault("surfaceKind"),
+            fact.Properties.GetValueOrDefault("routeShape"),
+            fact.Properties.GetValueOrDefault("sectionKind"),
+            fact.Properties.GetValueOrDefault("handlerKind"),
+            fact.Properties.GetValueOrDefault("referenceKind"),
+            fact.Properties.GetValueOrDefault("edgeKind"),
+            fact.FactType);
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return $"- `{fact.FactType}` `{DisplayCodeValue(name)}` as static ASP.NET `{DisplayCodeValue(role)}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`";
     }
 
     private static string FormatLegacyDataMetadataFact(CodeFact fact)

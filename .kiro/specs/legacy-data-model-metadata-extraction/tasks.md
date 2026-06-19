@@ -16,43 +16,43 @@
 
 ## Implementation Tasks
 
-- [ ] 1. Add rule catalog entries and model constants. Requirements: 1, 2, 3, 4, 5, 6, 7, 8.
-  - [ ] Treat rule catalog ownership as the gate for implementation tasks 2-9;
+- [x] 1. Add rule catalog entries and model constants. Requirements: 1, 2, 3, 4, 5, 6, 7, 8.
+  - [x] Treat rule catalog ownership as the gate for implementation tasks 2-9;
         no extractor or reporter code should emit derived conclusions until
         emitted facts/rows, tiers, safe properties, and limitations are
         documented.
-  - [ ] Add `legacy.data.model.identity.v1` as a derived identity/projection
+  - [x] Add `legacy.data.model.identity.v1` as a derived identity/projection
         semantics rule over existing source facts, not as a second emitter for
         existing DBML/EDMX/typed DataSet facts.
-  - [ ] Add `legacy.data.model.relationship.v1` as a derived relationship
+  - [x] Add `legacy.data.model.relationship.v1` as a derived relationship
         semantics rule over `LegacyDataMappingDeclared` source facts while
         preserving existing source `mappingKind` values such as `association`
         and `relation`.
-  - [ ] Add `legacy.data.orm.nhibernate.v1`.
-  - [ ] Add `legacy.data.orm.unsupported.v1`.
-  - [ ] Add `legacy.data.model.surface.v1` for derived `legacy-data`
+  - [x] Add `legacy.data.orm.nhibernate.v1`.
+  - [x] Add `legacy.data.orm.unsupported.v1`.
+  - [x] Add `legacy.data.model.surface.v1` for derived `legacy-data`
         report/export rows and availability gaps, not scan-time projection
         facts.
-  - [ ] Decide whether `legacy.data.model.generated-link.v1` is needed or
+  - [x] Decide whether `legacy.data.model.generated-link.v1` is needed or
         whether `legacy.data.generated-link.v1` remains sufficient.
-  - [ ] Do not add `LegacyDataModelSurfaceProjected` in MVP; derived surface rows
+  - [x] Do not add `LegacyDataModelSurfaceProjected` in MVP; derived surface rows
         must not be re-consumed by prefix-based legacy data fact readers.
-  - [ ] Document emitted fact types, evidence tiers, safe properties, and
+  - [x] Document emitted fact types, evidence tiers, safe properties, and
         limitations in `rules/rule-catalog.yml`.
 
-- [ ] 2. Implement normalized legacy data model identity. Requirements: 1, 2, 7, 8.
-  - [ ] Build a deterministic model identity helper over safe metadata kind,
+- [x] 2. Implement normalized legacy data model identity. Requirements: 1, 2, 7, 8.
+  - [x] Build a deterministic model identity helper over safe metadata kind,
         descriptor role, file path, metadata scope, safe names, and hashes.
-  - [ ] Normalize DBML entity/table/column/association/routine descriptors.
-  - [ ] Normalize EDMX conceptual/storage/property/association/function mapping
+  - [x] Normalize DBML entity/table/column/association/routine descriptors.
+  - [x] Normalize EDMX conceptual/storage/property/association/function mapping
         descriptors.
-  - [ ] Normalize typed DataSet DataSet/DataTable/DataColumn/relation/adapter
+  - [x] Normalize typed DataSet DataSet/DataTable/DataColumn/relation/adapter
         descriptors while preserving unrelated `.xsd` gating.
-  - [ ] Preserve descriptor tier ceilings and avoid upgrading metadata by
+  - [x] Preserve descriptor tier ceilings and avoid upgrading metadata by
         generated-code linkage.
-  - [ ] Include `metadataFormat` in stable keys so DBML, EDMX, typed DataSet,
+  - [x] Include `metadataFormat` in stable keys so DBML, EDMX, typed DataSet,
         and NHibernate descriptors with the same display name remain distinct.
-  - [ ] Add deterministic ordering, stable-key, duplicate-identity, and privacy
+  - [x] Add deterministic ordering, stable-key, duplicate-identity, and privacy
         tests.
 
 - [ ] 3. Add relationship extraction and ambiguity gaps. Requirements: 2, 5, 8.

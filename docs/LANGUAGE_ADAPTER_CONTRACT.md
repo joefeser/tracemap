@@ -141,21 +141,75 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 
 These facts are static evidence only. They do not prove runtime page lifecycle execution, postbacks, event bubbling, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
 
+### Legacy WinForms Event Navigation Facts
+
+The .NET adapter emits WinForms-specific static evidence for desktop UI entry
+points and direct backend context:
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `WinFormsSurfaceDeclared` | Inventories form, user-control, control, component, and application-context classes. | `typeName`, `surfaceKind`, `baseTypes` |
+| `WinFormsControlDeclared` | Records static control/component fields and object creations. | `formTypeName`, `controlId`, `controlType`, `controlKind` |
+| `WinFormsEventBindingDeclared` | Records explicit static event subscriptions. | `formTypeName`, `controlId`, `eventName`, `handlerName`, `bindingKind` |
+| `WinFormsHandlerResolved` | Links event bindings to scoped partial-class handler methods. | `formTypeName`, `handlerName`, `handlerSymbol`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
+| `WinFormsNavigationEdgeDeclared` | Records static `Application.Run`, `Show`, `ShowDialog`, owner/parent, or MDI navigation evidence. | `formTypeName`, `sourceMethodName`, `targetFormTypeName`, `navigationKind`, `navigationClassification` |
+| `WinFormsCallbackBoundaryDeclared` | Records timer, background worker, UI marshal, async/delegate, or callback boundaries. | `controlId`, `eventName`, `handlerName`, `boundaryClassification` |
+| `WinFormsHandlerFlowProjected` | Projects resolved handlers to direct WCF, ASMX, remoting, legacy data, SQL/query, HTTP, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverage` |
+| `WinFormsResourceMetadataDeclared` | Records conservative `.resx` presence, culture suffix, key hashes, and resource kind labels. | `formTypeName`, `cultureSuffix`, `resourceKeyHashes`, `resourceKind` |
+
+These facts are static evidence only. They do not prove runtime event firing,
+form visibility, user reachability, layout, localization results, auth/role
+outcomes, branch feasibility, callback scheduling, service reachability, SQL
+execution, database existence, deployment, or production usage. Source snippets,
+raw resource values, raw SQL, config values, endpoint addresses, URLs, hostnames,
+local absolute paths, repository remotes, and private sample names must not
+appear in properties or reports.
+
+### Legacy ASP.NET Route And Navigation Facts
+
+The .NET adapter also emits deterministic classic ASP.NET surface evidence
+around WebForms pages and handlers. Existing `WebForms*` facts remain
+authoritative for page/control/master event evidence; the ASP.NET facts add
+route, config, handler, PageMethod, and navigation context without running IIS
+or executing the app.
+
+| Fact type | Purpose | Safe matching keys |
+| --- | --- | --- |
+| `AspNetSurfaceDeclared` | Inventories checked-in ASP.NET application and handler surface files, while reusing WebForms page/control/master inventory instead of duplicating it. | `surfaceKind`, safe directive metadata or role-separated hashes, `coverageLabel`, `ruleLimitations` |
+| `AspNetRouteDeclared` | Records supported static classic ASP.NET route registration candidates such as `MapPageRoute`. | `routeShape`, `routePatternHash`, safe route name or hash, mapped page descriptor or hash, `coverageLabel` |
+| `AspNetConfigSurfaceDeclared` | Records safe structures from checked-in handler/module/pages/controls/namespaces/urlMappings/compilation config. | `sectionKind`, safe type/path/verb descriptors or role-separated hashes, `coverageLabel` |
+| `AspNetHandlerDeclared` | Records `.ashx`, `IHttpHandler`, `IHttpAsyncHandler`, and handler-factory static evidence. | `handlerKind`, safe type identity, unresolved factory flags when needed, `coverageLabel` |
+| `AspNetPageMethodDeclared` | Records `[WebMethod]`, `[ScriptMethod]`, and `[ScriptService]` PageMethod/script-service evidence without reclassifying it as ASMX. | `methodName`, `containingTypeName`, `attributeNames`, `isStatic`, `coverageLabel` |
+| `AspNetNavigationReferenceDeclared` | Records static navigation reference candidates from markup, sitemap XML, or supported C# APIs. | `referenceKind`, `sourceSurface`, target descriptor or role-separated hash, `coverageLabel` |
+| `AspNetNavigationEdgeDeclared` | Links a navigation reference to checked-in page, route, config, or handler evidence only when non-hash target evidence supports the edge. | `edgeKind`, `referenceFactId`, `targetFactId`, `targetFactType`, `supportingFactIds` |
+
+ASP.NET route/navigation hashes use the scanner-side context shape
+`legacy.aspnet.<family>|<propertyRole>|<normalizedValue>` and store the
+32-character lowercase hex prefix. The same unsafe raw value in route pattern,
+config, and navigation target roles must produce different stored hashes.
+
+These facts are static evidence only. They do not prove route-table execution,
+IIS deployment, runtime URL rewriting, authorization, browser behavior,
+JavaScript execution, page rendering, request handling, user reachability, or
+runtime impact. Raw URLs, hostnames, config values, endpoint values, local
+absolute paths, remotes, snippets, credentials, and secrets are omitted or
+hashed.
+
 ### Legacy Data Metadata Facts
 
 The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX, typed DataSet XSD/TableAdapter, data-provider config, and deterministic generated-code linkage.
 
 | Fact type | Purpose | Safe matching keys |
 | --- | --- | --- |
-| `LegacyDataMetadataDeclared` | Inventories parseable legacy data metadata documents and generated-designer candidates. | `metadataKind`, `metadataHash`, `inventoryKind`, `path` |
-| `LegacyDataEntityDeclared` | Records static conceptual/generated entity, context, DataSet, row, or TableAdapter descriptors. | `metadataKind`, `entityKind`, `entityName`, `typeName`, `entityNameHash`, `typeNameHash` |
-| `LegacyDataStorageObjectDeclared` | Records static table, view, routine, DataTable, or storage entity-set descriptors. | `metadataKind`, `storageObjectKind`, `storageObjectName`, `tableName`, `storageObjectHash`, `tableNameHash` |
-| `LegacyDataColumnDeclared` | Records static property/field/column descriptors from metadata. | `metadataKind`, `columnKind`, `ownerName`, `propertyName`, `fieldName`, `columnName`, hash variants |
-| `LegacyDataMappingDeclared` | Records unambiguous descriptor-to-descriptor mappings such as entity-table or property-column. | `metadataKind`, `mappingKind`, `entityName`, `tableName`, `propertyName`, `columnName`, hash variants |
+| `LegacyDataMetadataDeclared` | Inventories parseable legacy data metadata documents and generated-designer candidates. | `metadataKind`, `metadataFormat`, `metadataHash`, `inventoryKind`, `path` |
+| `LegacyDataEntityDeclared` | Records static conceptual/generated entity, context, DataSet, row, or TableAdapter descriptors. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `entityName`, `typeName`, hash variants |
+| `LegacyDataStorageObjectDeclared` | Records static table, view, routine, DataTable, or storage entity-set descriptors. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `storageObjectKind`, `storageObjectName`, `tableName`, hash variants |
+| `LegacyDataColumnDeclared` | Records static property/field/column descriptors from metadata. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `ownerName`, `propertyName`, `fieldName`, `columnName`, hash variants |
+| `LegacyDataMappingDeclared` | Records unambiguous descriptor-to-descriptor mappings such as entity-table or property-column. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `mappingKind`, `entityName`, `tableName`, `propertyName`, `columnName`, hash variants |
 | `LegacyDataProviderConfigDeclared` | Records safe provider, connection-name, provider factory, and EF provider metadata without raw values. | `configKind`, `connectionName`, `providerName`, `connectionNameHash`, `providerNameHash`, `valueHash` |
 | `LegacyDataGeneratedCodeLinked` | Links metadata descriptors to generated files or compiler-resolved symbols when deterministic. | `linkKind`, `symbolRole`, `typeName`, `generatedCodeFileName`, `supportingFactIds` |
 
-These facts are static design-time metadata evidence. DBML, EDMX, typed DataSet, TableAdapter, and config descriptor facts are capped at `Tier2Structural`; generated-code links may be `Tier1Semantic` only when compiler-resolved symbol evidence is available, and that link does not upgrade descriptor facts. Raw SQL, connection strings, config values, namespace URIs, provider secrets, URLs, local paths, remotes, source snippets, and secret-looking values must be hashed or omitted. Metadata facts must not emit `DatabaseColumnMapping` without code-level mapping evidence owned by another rule.
+Model identity properties such as `modelIdentityRuleId`, `modelIdentityEvidenceTier`, `sourceMetadataFactId`, `displayName`, `displayNameHash`, `containerName`, `containerHash`, and `coverageLabel` are additive metadata on the source facts; they do not re-emit DBML, EDMX, or typed DataSet descriptors under a second rule ID. These facts are static design-time metadata evidence. DBML, EDMX, typed DataSet, TableAdapter, and config descriptor facts are capped at `Tier2Structural`; generated-code links may be `Tier1Semantic` only when compiler-resolved symbol evidence is available, and that link does not upgrade descriptor facts. Raw SQL, connection strings, config values, namespace URIs, provider secrets, URLs, local paths, remotes, source snippets, and secret-looking values must be hashed or omitted. Metadata facts must not emit `DatabaseColumnMapping` without code-level mapping evidence owned by another rule.
 
 ## Symbol Identity
 

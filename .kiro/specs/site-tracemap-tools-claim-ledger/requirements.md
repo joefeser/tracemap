@@ -1,7 +1,7 @@
 # Site TraceMap Tools Claim Ledger Requirements
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: ready-for-review
 Public claim level: concept
 
 ## Summary

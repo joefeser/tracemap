@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap explanation separating deterministic static repository evidence from runtime telemetry and observability."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Static Evidence Vs Runtime Telemetry | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/static-vs-runtime/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Static Evidence Vs Runtime Telemetry | TraceMap">
+    <meta
+      property="og:description"
+      content="Concept-level boundaries for using TraceMap static repository evidence beside logs, traces, metrics, APM, and incident dashboards."
+    >
+    <meta property="og:url" content="https://tracemap.tools/static-vs-runtime/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Static evidence beside telemetry</p>
+        <h1>Static repository evidence and runtime observability answer different questions.</h1>
+        <p class="hero-subhead">
+          TraceMap provides deterministic static repository evidence from a repository snapshot:
+          rule IDs, evidence tiers, file paths, line spans, commit SHA,
+          extractor versions, coverage labels, and limitations. Runtime
+          observability remains the source for live behavior, traffic,
+          performance, alerts, timelines, and operational interpretation.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page explains boundaries; it does not describe a TraceMap
+          runtime agent, telemetry ingestion path, live dashboard, incident
+          automation, or observability replacement.
+        </p>
+        <nav class="hero-actions" aria-label="Static and runtime boundary links">
+          <a class="button primary" href="/proof-paths/">Follow proof paths</a>
+          <a class="button secondary" href="/static-triage/">Static triage checklist</a>
+          <a class="button secondary" href="/limitations/">Read limitations</a>
+        </nav>
+      </section>
+
+      <section id="static-questions" class="section split-section">
+        <div>
+          <p class="section-kicker">Static questions</p>
+          <h2>TraceMap starts from a repository snapshot.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Evidence shape</strong><span>Rule ID, evidence tier, file path, line span, commit SHA, extractor version, coverage label, limitation, and snippet hash where public-safe.</span></div>
+          <div><strong>Code surfaces</strong><span>Endpoint or route references, contract surfaces, package references, project/configuration surfaces, SQL-facing references, and nearby static references.</span></div>
+          <div><strong>Unknowns</strong><span>Reduced coverage, syntax-only fallback, unavailable semantic proof, and analysis gaps stay labeled instead of being treated as complete coverage.</span></div>
+        </div>
+      </section>
+
+      <section id="runtime-questions" class="section">
+        <div class="section-header">
+          <p class="section-kicker">Different questions</p>
+          <h2>Use static evidence for code context; use runtime systems for production behavior.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <caption>
+              Static evidence can prepare a review packet, but runtime
+              observability and owners remain responsible for live-system
+              conclusions.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Static evidence question</th>
+                <th scope="col">TraceMap evidence shape</th>
+                <th scope="col">Runtime question</th>
+                <th scope="col">Runtime system owner</th>
+                <th scope="col">Limitation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Where is this surface visible in the scanned commit?</strong></td>
+                <td>Repository snapshot, commit SHA, route or endpoint reference, file path, line span, rule ID, evidence tier, and coverage label.</td>
+                <td>Which requests actually ran in production?</td>
+                <td>Runtime telemetry, logs, traces, metrics, dashboards, alerts, and service-owner interpretation.</td>
+                <td>Static references are review input, not traffic proof.</td>
+              </tr>
+              <tr>
+                <td><strong>Which contract, package, config, project, or SQL-facing references are nearby?</strong></td>
+                <td>Deterministic facts, extractor version, artifact family, limitation, and analysis-gap rows when proof is partial.</td>
+                <td>How did the endpoint perform under load, and did requests error?</td>
+                <td>APM, production metrics, trace sampling, error monitoring, tests, and the owning team.</td>
+                <td>TraceMap does not prove endpoint performance, runtime errors, or operational safety.</td>
+              </tr>
+              <tr>
+                <td><strong>What should reviewers inspect next?</strong></td>
+                <td>Static path, nearby evidence, gap label, public-safe proof path, and follow-up owner field in the handoff note.</td>
+                <td>What happened during the incident timeline?</td>
+                <td>Incident dashboards, alert history, logs, traces, incident command, release records, and human review.</td>
+                <td>TraceMap does not determine outage cause, incident root cause, priority, service ownership, or release approval.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="handoff-workflow" class="section">
+        <div class="section-header">
+          <p class="section-kicker">Handoff workflow</p>
+          <h2>Keep the static packet useful without turning it into runtime proof.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Before runtime review</h3>
+            <p>Name the surface, scan scope, commit SHA, rule IDs, evidence tiers, coverage labels, and known gaps so runtime owners know what static context is being handed over.</p>
+          </article>
+          <article>
+            <h3>During handoff</h3>
+            <p>Separate static references from operational questions. Ask runtime owners to check logs, traces, metrics, dashboards, alerts, tests, request behavior, and service context.</p>
+          </article>
+          <article>
+            <h3>After runtime review</h3>
+            <p>Attach runtime conclusions to their own systems of record, then use TraceMap static evidence for follow-up code inspection, not for production certainty.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Manager and reviewer readout</p>
+          <h2>Read the packet as bounded static evidence.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>rule id</code><span>Which deterministic rule produced the fact, and where are the rule limitations documented?</span></div>
+          <div><code>evidence tier</code><span>Was the finding semantic, structural, syntax/textual, or an explicit unknown?</span></div>
+          <div><code>file span</code><span>Which public-safe file path and line span locate the static reference without publishing source snippets?</span></div>
+          <div><code>scan identity</code><span>Which commit SHA and extractor version produced the row?</span></div>
+          <div><code>coverage label</code><span>Is the scan complete for the stated scope, reduced, partial, syntax-only, or unavailable?</span></div>
+          <div><code>follow-up owner</code><span>Who owns the next runtime, test, service-owner, incident-response, or release-process question?</span></div>
+        </div>
+      </section>
+
+      <section id="non-claims" class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The static packet does not become operational certainty.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, incident root cause, service ownership, production dependency understanding, test sufficiency, or complete product coverage.</li>
+          <li>TraceMap does not replace logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.</li>
+          <li>TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis in the scanner or reducer.</li>
+          <li>TraceMap should not use impact wording for a surface unless reducer-backed public-safe evidence supports that wording; otherwise use static reference, static path, surface, nearby evidence, review input, gap, or needs review.</li>
+        </ul>
+      </section>
+
+      <section id="limitations" class="section split-section">
+        <div>
+          <p class="section-kicker">Publishing boundary</p>
+          <h2>Public examples stay summarized and public-safe.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe summary layer</strong><span>Artifact families, public-safe summaries, proof-path pages, rule IDs, evidence tiers, coverage labels, limitations, commit SHA, line spans, and extractor versions when a public proof path backs them.</span></div>
+          <div><strong>Local-only material</strong><span>Do not publish raw fact streams, local SQLite indexes, analyzer logs, source excerpts, database query text, configuration values, secrets, local paths, repository remotes, generated scan directories, private sample identities, telemetry payloads, incident timelines, customer data, service names, or production identifiers.</span></div>
+          <div><strong>Concept examples</strong><span>Runtime examples on this page are generic. Missing proof paths remain visible limitations rather than evidence-backed examples.</span></div>
+        </div>
+      </section>
+
+      <section id="proof-paths" class="section link-section">
+        <div>
+          <p class="section-kicker">Proof paths</p>
+          <h2>Follow public-safe routes for evidence shape and limitations.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/docs/">Docs</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/outputs/">Outputs</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/capabilities/">Capabilities</a>
+          <a href="/demo/">Demo</a>
+          <a href="/demo/result/">Demo result</a>
+          <a href="/static-triage/">Static triage checklist</a>
+          <a href="/incident-call/">Incident-call orientation</a>
+          <a href="/use-cases/incident-review/">Incident review orientation</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Static-versus-runtime orientation links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/validation/">validation</a>,
+        <a href="/limitations/">limitations</a>,
+        and
+        <a href="/static-triage/">static triage</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

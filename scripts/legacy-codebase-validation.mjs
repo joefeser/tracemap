@@ -468,17 +468,29 @@ function collectUiEventFacts(summary, fact) {
   if (fact.factType === "CallEdge" && isHandlerLike(fact.sourceSymbol)) {
     summary.handlerCallFacts.push(evidence);
   }
-  if (safeTextIncludes(fact, "Click") || safeTextIncludes(fact, "OnClick") || safeTextIncludes(fact, "InitializeComponent") || safeTextIncludes(fact, "+=")) {
+  if (isPreciseUiEventBindingFact(fact) || safeTextIncludes(fact, "Click") || safeTextIncludes(fact, "OnClick") || safeTextIncludes(fact, "InitializeComponent") || safeTextIncludes(fact, "+=")) {
     summary.eventWiringFacts.push(evidence);
   }
-  if (isDependencySurfaceFact(fact) && isHandlerLike(fact.sourceSymbol)) {
+  if (isHandlerFlowProjectionFact(fact) || isDependencySurfaceFact(fact) && isHandlerLike(fact.sourceSymbol)) {
     summary.dependencyFacts.push(evidence);
   }
 }
 
 function isHandlerMethodFact(fact) {
-  return fact.factType === "MethodDeclared"
-    && (isHandlerLike(fact.sourceSymbol) || isHandlerLike(fact.targetSymbol) || isHandlerLike(fact.contractElement) || safeTextIncludes(fact, "Click"));
+  return fact.factType === "WebFormsHandlerResolved"
+    || fact.factType === "WinFormsHandlerResolved"
+    || (fact.factType === "MethodDeclared"
+      && (isHandlerLike(fact.sourceSymbol) || isHandlerLike(fact.targetSymbol) || isHandlerLike(fact.contractElement) || safeTextIncludes(fact, "Click")));
+}
+
+function isPreciseUiEventBindingFact(fact) {
+  return fact.factType === "WebFormsEventBindingDeclared"
+    || fact.factType === "WinFormsEventBindingDeclared";
+}
+
+function isHandlerFlowProjectionFact(fact) {
+  return fact.factType === "WebFormsEventFlowProjected"
+    || fact.factType === "WinFormsHandlerFlowProjected";
 }
 
 function isHandlerLike(value) {

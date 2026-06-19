@@ -20,6 +20,9 @@ public static class FileInventory
         ".aspx",
         ".ascx",
         ".master",
+        ".ashx",
+        ".asax",
+        ".sitemap",
         ".svc",
         ".asmx",
         ".svcmap",
@@ -199,12 +202,16 @@ public static class FileInventory
             ".json" => "Json",
             ".cs" when IsWebFormsDesignerFile(fileName) => "WebFormsDesigner",
             ".cs" when IsWebFormsCodeBehindFile(fileName) => "WebFormsCodeBehind",
+            ".cs" when IsWinFormsDesignerFile(path, fileName) => "WinFormsDesigner",
             ".cs" => "CSharp",
             ".cshtml" => "Razor",
             ".sql" => "Sql",
             ".aspx" => "WebFormsMarkup",
             ".ascx" => "WebFormsMarkup",
             ".master" => "WebFormsMarkup",
+            ".ashx" => "AspNetHandler",
+            ".asax" => "AspNetApplication",
+            ".sitemap" => "AspNetSiteMap",
             ".svc" => "ServiceHost",
             ".asmx" => "AsmxServiceHost",
             ".svcmap" => "ServiceReferenceMetadata",
@@ -226,7 +233,8 @@ public static class FileInventory
     {
         return kind.Equals("CSharp", StringComparison.Ordinal)
             || kind.Equals("WebFormsCodeBehind", StringComparison.Ordinal)
-            || kind.Equals("WebFormsDesigner", StringComparison.Ordinal);
+            || kind.Equals("WebFormsDesigner", StringComparison.Ordinal)
+            || kind.Equals("WinFormsDesigner", StringComparison.Ordinal);
     }
 
     private static bool IsWebFormsCodeBehindFile(string fileName)
@@ -241,6 +249,32 @@ public static class FileInventory
         return fileName.EndsWith(".aspx.designer.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".ascx.designer.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".master.designer.cs", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsWinFormsDesignerFile(string path, string fileName)
+    {
+        if (!fileName.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var reader = new StreamReader(stream);
+            var buffer = new char[Math.Min(32768, (int)Math.Min(stream.Length, 32768))];
+            var read = reader.Read(buffer, 0, buffer.Length);
+            var prefix = new string(buffer, 0, read);
+            return prefix.Contains("InitializeComponent", StringComparison.Ordinal)
+                && (prefix.Contains("System.Windows.Forms", StringComparison.Ordinal)
+                    || prefix.Contains("Windows.Forms", StringComparison.Ordinal)
+                    || prefix.Contains("global::System.ComponentModel", StringComparison.Ordinal)
+                    || prefix.Contains("System.ComponentModel.IContainer", StringComparison.Ordinal));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static bool IsWcfMetadataExtension(string extension)
