@@ -1,8 +1,8 @@
 # Route Flow Service/Data Composition Implementation State
 
-Status: implementation-slice-in-progress.
+Status: continuation-slice-in-progress.
 
-Branch: `codex/implement-route-flow-service-data-composition`
+Branch: `codex/continue-route-flow-service-data-composition`
 
 Base branch: `dev`
 
@@ -118,6 +118,76 @@ implements the first suggested PR boundary:
 
 ## Current Validation
 
+- 2026-06-19 continuation branch
+  `codex/continue-route-flow-service-data-composition` started from
+  `origin/dev`, after the projection and endpoint-composition PRs had already
+  landed. This slice does not redo those merged changes.
+- The continuation slice adds the remaining narrow terminal data-surface gap:
+  when route-flow has rule-backed route entry evidence and source-local
+  downstream static call evidence, but no matching terminal dependency/data
+  surface can be connected, the report emits `DataSurfaceAttachmentMissing`
+  under `combined.route-flow.gap.v1` instead of collapsing to a generic
+  `NoRouteFlowEvidence` result.
+- `combined.route-flow.gap.v1` now documents the
+  `DataSurfaceAttachmentMissing` emit and limitations for terminal surface
+  availability. The gap is review-tier and does not claim database existence,
+  query execution, downstream absence, runtime request execution, or runtime DI
+  selection.
+- Added a synthetic combined-index regression covering a route root with
+  downstream controller-to-service-to-repository call evidence and no terminal
+  SQL/data surface; the test asserts the narrow gap, rule ID, evidence tier,
+  file span, supporting facts, and suppression of the generic no-evidence gap.
+- Gap naming decision: the design's provisional
+  `ControllerToServiceBridgeMissing` name is intentionally represented by the
+  narrower existing emitted gap codes `MissingCallEdge`,
+  `MissingImplementationBridge`, `ImplementationCandidateUnavailable`, and
+  `DataSurfaceAttachmentMissing`. This avoids a duplicate gap family while
+  preserving rule-backed bridge evidence and limitations.
+- `combined_object_creations` input is consumed through the shared path graph's
+  `creates` edge type rather than a route-flow-specific SQL reader; missing
+  object-creation tables are tolerated by the path graph and are not a separate
+  route-flow schema gap in this slice. A synthetic creates-edge fixture now
+  verifies route-flow emits an `object-creation` flow row and connected terminal
+  query surface when that evidence exists.
+- `combined_parameter_forward_edges` traversal is explicitly deferred for
+  focused fixture coverage beyond the current path-engine support. The shared
+  path graph already exposes `parameter-forward` edges and route-flow keeps that
+  edge kind traversable, but a dedicated parameter-forward route-flow fixture is
+  reserved for a follow-up bridge coverage PR to avoid expanding this
+  continuation slice.
+- Sonnet Kiro implementation review ran with reduced coverage because Kiro
+  reported denied tool access. Actionable blocking findings were patched:
+  route-flow CLI completion output now prints a safe path, interface candidate
+  coverage now includes syntax/name-only and high fan-out fixtures, the
+  provisional bridge-gap naming decision is documented, generic no-evidence
+  suppression checks accumulated gaps, and fact-symbol projection no longer
+  matches on raw `facts.source_symbol` fallback.
+- Sonnet Kiro implementation re-review also ran with reduced coverage because
+  Kiro reported denied tool access. Actionable re-review findings were patched:
+  formal parameter-forward and object-creation scope notes were added, Task 11
+  status was corrected, the controller-to-service bridge substitution is
+  asserted in tests, and a creates-edge route-flow fixture was added.
+- Final allowed Sonnet Kiro re-review cycle also ran with reduced coverage
+  because Kiro reported denied tool access. Actionable final-cycle blockers were
+  patched without requesting another Kiro round: the test suite now has an
+  explicit skipped parameter-forward deferral marker, ambiguous implementation
+  candidate gap IDs include sorted candidate node IDs and supporting facts, the
+  ambiguous-gap test asserts ID stability across identical input, and the
+  unsupported attached fact-symbol path now has a projection-unavailable gap
+  assertion.
+- Focused validation so far:
+  `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests` passed
+  with 22 passing route-flow tests and one intentional parameter-forward
+  deferral skip before the final full validation pass.
+- Final continuation validation:
+  `dotnet build src/dotnet/TraceMap.sln` passed with 0 warnings and 0 errors;
+  `dotnet test src/dotnet/TraceMap.sln` passed with 514 passing tests and one
+  intentional skipped parameter-forward route-flow fixture; `git diff --check`
+  passed; `./scripts/check-private-paths.sh` passed; checked-in
+  combined paths/reverse smoke passed; direct `tracemap route-flow` smoke wrote
+  `route-flow-report.md` and `route-flow-report.json`, preserved
+  `reportType = "route-flow"` and `version = "1.0"`, and printed a hashed
+  absolute output path.
 - `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests`: passed
   after projection implementation and after Kiro review fixes.
 - Kiro implementation review with Sonnet (`claude-sonnet-4.6`) completed with
@@ -166,16 +236,10 @@ implements the first suggested PR boundary:
 
 ## Remaining Follow-Up For Implementation
 
-- Continue downstream traversal beyond the existing selected combined path graph:
-  route root to service/repository/data methods with bridge gaps.
-- Add interface implementation candidate expansion tests and classification
-  caps for single, multiple, no-candidate, syntax-only, name-only, and high
-  fan-out cases.
-- Attach broader object-shape, repository-like, data-surface, and
-  parameter-forward evidence, or record explicit deferrals with rationale.
-- Add focused coverage for `combined_parameter_forward_edges` as a route-flow
-  traversal bridge. Deferred to the downstream traversal PR because the first
-  slice only enriches already-selected route-flow paths and does not yet own
-  route-root bridge expansion.
-- Run broader validation, Kiro implementation review, PR review loop, and record
-  final results below before merge.
+- Add broader focused fixtures for object-shape, repository-like, data-surface,
+  and `combined_parameter_forward_edges` traversal shapes beyond the current
+  synthetic query/data fixtures.
+- Run broader validation, Kiro implementation review, PR review loop, and
+  record final results below before merge.
+- Private legacy ASP.NET smoke remains local-only and was not run for this
+  continuation slice.

@@ -376,7 +376,10 @@ public static class CombinedRouteFlowReporter
                 ["Truncated output is partial."]));
         }
 
-        if (entryEvidence.Length > 0 && !HasDownstreamFlowEvidence(flowRows) && dependencySurfaces.Count == 0)
+        if (entryEvidence.Length > 0
+            && !HasDownstreamFlowEvidence(flowRows)
+            && dependencySurfaces.Count == 0
+            && !gaps.Any(gap => gap.GapKind == "DataSurfaceAttachmentMissing"))
         {
             gaps.Add(new RouteFlowGap(
                 "gap:no-route-flow-evidence",
@@ -737,6 +740,10 @@ public static class CombinedRouteFlowReporter
         var outgoing = inventory.Edges
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(EndpointEdgeSortKey, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        var callLikeEdgesByFromNodeId = inventory.Edges
+            .Where(edge => edge.EdgeKind is "calls" or "creates" or "argument-passed" or "parameter-forward")
+            .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var implementationCandidatesByInterface = inventory.Edges
             .Where(IsImplementationRelationshipEdge)
             .Where(edge => nodesById.ContainsKey(edge.FromNodeId) && nodesById.ContainsKey(edge.ToNodeId))
@@ -745,7 +752,10 @@ public static class CombinedRouteFlowReporter
         var terminalNodeIds = ResolveEndpointCompositionTerminalNodeIds(options, inventory.Nodes, roots);
         if (terminalNodeIds.Count == 0)
         {
-            return new EndpointCompositionResult([], [], false);
+            return new EndpointCompositionResult(
+                [],
+                TerminalSurfaceMissingGaps(roots, outgoing, callLikeEdgesByFromNodeId, nodesById),
+                false);
         }
 
         var gaps = new List<RouteFlowGap>();
@@ -787,10 +797,6 @@ public static class CombinedRouteFlowReporter
 
         var truncated = false;
         var emittedSequence = 0;
-        var callLikeEdgesByFromNodeId = inventory.Edges
-            .Where(edge => edge.EdgeKind is "calls" or "creates" or "argument-passed" or "parameter-forward")
-            .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         while (queue.Count > 0 && paths.Count < options.MaxPaths)
         {
@@ -838,11 +844,30 @@ public static class CombinedRouteFlowReporter
                 .ToArray();
             if (candidateEdges.Length > 1)
             {
-                gaps.Add(RouteBridgeGap(
+                var supportingFactIds = candidateEdges
+                    .SelectMany(edge => edge.SupportingFactIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray();
+                var candidateNodeIds = candidateEdges
+                    .Select(edge => edge.FromNodeId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray();
+                gaps.Add(new RouteFlowGap(
+                    $"gap:endpoint-composition:AmbiguousImplementationCandidates:{CombinedReportHelpers.Hash($"{current.NodeId}:{string.Join("|", candidateNodeIds)}:{string.Join("|", supportingFactIds)}", 16)}",
                     "AmbiguousImplementationCandidates",
-                    current,
                     "Interface member call has multiple static implementation candidates; candidate-dependent rows are review-tier.",
-                    candidateEdges.SelectMany(edge => edge.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()));
+                    GapRuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    "ReducedCoverage",
+                    SafeLabel(current.SourceLabel),
+                    current.NodeId,
+                    supportingFactIds,
+                    ["Endpoint route-flow composition uses bounded source-local static evidence and does not infer runtime behavior."],
+                    CombinedReportHelpers.SafePath(current.FilePath),
+                    current.StartLine,
+                    current.EndLine));
             }
 
             foreach (var relationship in candidateEdges.Take(10))
@@ -930,6 +955,62 @@ public static class CombinedRouteFlowReporter
     private static string EndpointEdgeSortKey(CombinedPathEdge edge)
     {
         return $"{EndpointEdgeRank(edge.EdgeKind):000}|{edge.FilePath}|{edge.StartLine:000000}|{edge.ToNodeId}|{edge.EdgeId}";
+    }
+
+    private static IReadOnlyList<RouteFlowGap> TerminalSurfaceMissingGaps(
+        IReadOnlyList<CombinedPathNode> roots,
+        IReadOnlyDictionary<string, CombinedPathEdge[]> outgoing,
+        IReadOnlyDictionary<string, CombinedPathEdge[]> callLikeEdgesByFromNodeId,
+        IReadOnlyDictionary<string, CombinedPathNode> nodesById)
+    {
+        var gaps = new List<RouteFlowGap>();
+        foreach (var root in roots)
+        {
+            var bridgeEdges = outgoing.GetValueOrDefault(root.NodeId, [])
+                .Where(edge => edge.EdgeKind == "fact-attached-to-symbol")
+                .Where(edge => nodesById.TryGetValue(edge.ToNodeId, out var target) && IsMethodSymbolNode(target) && string.Equals(target.SourceIndexId, root.SourceIndexId, StringComparison.Ordinal))
+                .ToArray();
+            if (bridgeEdges.Length == 0)
+            {
+                gaps.Add(RouteBridgeGap(
+                    "MissingMethodSymbolBridge",
+                    root,
+                    "Endpoint route evidence could not be tied to a source-local method symbol.",
+                    root.CombinedFactId is null ? [] : [root.CombinedFactId]));
+                continue;
+            }
+
+            var downstreamEdges = bridgeEdges
+                .SelectMany(edge => callLikeEdgesByFromNodeId.GetValueOrDefault(edge.ToNodeId, []))
+                .Where(edge => nodesById.TryGetValue(edge.ToNodeId, out var target) && EndpointSourcesCompatible(root, target))
+                .ToArray();
+            if (downstreamEdges.Length == 0)
+            {
+                continue;
+            }
+
+            gaps.Add(RouteBridgeGap(
+                "DataSurfaceAttachmentMissing",
+                root,
+                "Route-flow found source-local downstream method evidence, but no matching terminal dependency/data surface could be connected.",
+                downstreamEdges
+                    .SelectMany(edge => edge.SupportingFactIds)
+                    .Append(root.CombinedFactId)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value!)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .Take(20)
+                    .ToArray()));
+        }
+
+        return gaps
+            .GroupBy(gap => gap.GapId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
+            .ThenBy(gap => gap.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static bool SourceMatches(CombinedPathNode node, string? sourceFilter)
@@ -2028,7 +2109,7 @@ public static class CombinedRouteFlowReporter
             var symbolParameter = $"$symbol{index}";
             command.Parameters.AddWithValue(sourceParameter, symbolCandidates[index].SourceIndexId);
             command.Parameters.AddWithValue(symbolParameter, symbolCandidates[index].Symbol);
-            clauses.Add($"(links.source_index_id = {sourceParameter} and (links.combined_symbol_id = {symbolParameter} or facts.source_symbol = {symbolParameter} or symbols.display_name = {symbolParameter}))");
+            clauses.Add($"(links.source_index_id = {sourceParameter} and (links.combined_symbol_id = {symbolParameter} or symbols.display_name = {symbolParameter}))");
         }
 
         return clauses.Count == 0
@@ -2248,7 +2329,7 @@ public static class CombinedRouteFlowReporter
         }
         else if (truncated
             || flowRows.Concat<object>(logicRows).Concat(surfaces).Any(RowNeedsReview)
-            || gaps.Any(gap => gap.GapKind is "RuntimeBindingNotProven" or "ImplementationCandidateUnavailable" or "MissingImplementationBridge" or "AmbiguousImplementationCandidates" or "ArgumentProjectionUnavailable" or "FactSymbolProjectionUnavailable" or "DynamicClientUrlNeedsReview" or "TruncatedByLimit"))
+            || gaps.Any(gap => gap.GapKind is "RuntimeBindingNotProven" or "ImplementationCandidateUnavailable" or "MissingImplementationBridge" or "AmbiguousImplementationCandidates" or "DataSurfaceAttachmentMissing" or "ArgumentProjectionUnavailable" or "FactSymbolProjectionUnavailable" or "DynamicClientUrlNeedsReview" or "TruncatedByLimit"))
         {
             classification = RouteFlowClassifications.NeedsReviewStaticRouteFlow;
             reasons.Add("Review-tier, weak, implementation-candidate, dynamic, or truncated static evidence is present.");
@@ -2660,6 +2741,7 @@ public static class CombinedRouteFlowReporter
             "MissingImplementationBridge" => "MissingImplementationBridge",
             "ImplementationCandidateUnavailable" => "ImplementationCandidateUnavailable",
             "AmbiguousImplementationCandidates" => "AmbiguousImplementationCandidates",
+            "DataSurfaceAttachmentMissing" => "DataSurfaceAttachmentMissing",
             "IdentityGap" => "IdentityGap",
             "TraversalBounds" => "TraversalBounds",
             "NoPathFound" or "NoBackendEvidence" => "NoRouteFlowEvidence",

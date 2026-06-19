@@ -1947,7 +1947,7 @@ rules:
 
   - id: combined.route-flow.gap.v1
     name: Route-flow analysis gap
-    description: Emits route-flow gaps for selector misses, missing route roots, missing method-symbol bridges, missing call edges, missing implementation bridges, implementation candidate gaps, runtime binding uncertainty, dynamic dispatch boundaries, reduced coverage, unknown commit SHA, no route-flow evidence, unknown analysis, traversal bounds, truncation, and unsafe value omission.
+    description: Emits route-flow gaps for selector misses, missing route roots, missing method-symbol bridges, missing call edges, missing implementation bridges, implementation candidate gaps, missing data-surface attachments, runtime binding uncertainty, dynamic dispatch boundaries, reduced coverage, unknown commit SHA, no route-flow evidence, unknown analysis, traversal bounds, truncation, and unsafe value omission.
     evidenceTier: Tier4Unknown
     emits:
       - SelectorNoMatch gap
@@ -1955,6 +1955,7 @@ rules:
       - MissingMethodSymbolBridge gap
       - MissingCallEdge gap
       - MissingImplementationBridge gap
+      - DataSurfaceAttachmentMissing gap
       - SchemaMissing gap
       - ExtractorUnavailable gap
       - ImplementationCandidateUnavailable gap
@@ -1974,7 +1975,7 @@ rules:
       - UnsafeValueOmitted gap
     limitations:
       - Gaps are coverage-relative explanations of missing or weak static evidence and must not be rendered as clean absence under reduced coverage.
-      - Endpoint composition gaps describe static bridge availability only and do not prove route reachability, request execution, dependency-injection target selection, dynamic dispatch, branch feasibility, or downstream absence.
+      - Endpoint composition gaps describe static bridge and terminal surface availability only and do not prove route reachability, request execution, dependency-injection target selection, dynamic dispatch, branch feasibility, database existence, query execution, or downstream absence.
       - Truncation gaps mean the report is partial.
       - Gap messages must not echo unsafe selectors, local paths, raw remotes, raw SQL/config values, snippets, connection strings, private labels, or secret-like values.
 
