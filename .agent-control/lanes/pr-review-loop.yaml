@@ -39,19 +39,21 @@ prLoopPacket:
       requirement: optional
       waitUntilReturnedBeforeProcessing: false
   branchPolicy:
-    overnightAllowedMergeTargets: &overnight_allowed_targets
+    # Keep target lists expanded instead of YAML aliases. Some consumers use
+    # safe-load YAML parsers that reject aliases by default.
+    overnightAllowedMergeTargets:
       - dev
       - integration/**
       - feature/**
-    overnightForbiddenMergeTargets: &overnight_forbidden_targets
+    overnightForbiddenMergeTargets:
       - main
       - master
       - release/**
-    ownerOverrideEligibleTargets: &owner_override_eligible_targets
+    ownerOverrideEligibleTargets:
       - dev
       - integration/**
       - feature/**
-    ownerOverrideDeniedTargets: &owner_override_denied_targets
+    ownerOverrideDeniedTargets:
       - main
       - master
       - release/**
@@ -74,9 +76,23 @@ reviewerReturnPolicy:
 
 requiredReviewerNonReturnPolicy:
   stopReason: HUMAN_DECISION_REQUIRED_REVIEW_NON_RETURN
-  overnightAllowedTargets: *overnight_allowed_targets
-  ownerOverrideEligibleTargets: *owner_override_eligible_targets
-  ownerOverrideDeniedTargets: *owner_override_denied_targets
-  overnightForbiddenTargets: *overnight_forbidden_targets
+  # These lists intentionally mirror branchPolicy lists. Keep them expanded for
+  # parser portability and human readback.
+  overnightAllowedTargets:
+    - dev
+    - integration/**
+    - feature/**
+  ownerOverrideEligibleTargets:
+    - dev
+    - integration/**
+    - feature/**
+  ownerOverrideDeniedTargets:
+    - main
+    - master
+    - release/**
+  overnightForbiddenTargets:
+    - main
+    - master
+    - release/**
   mainPromotionRequiresSeparatePr: true
   noSquashByDefault: true
