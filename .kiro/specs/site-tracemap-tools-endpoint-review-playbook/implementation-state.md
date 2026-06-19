@@ -182,6 +182,14 @@ Implementation validation results:
   - `npm run build` from `site/` passed.
   - `git diff --check` passed.
   - `./scripts/check-private-paths.sh` passed.
+- Codex review patch validation on 2026-06-19:
+  - `npm test` from `site/` passed. Result: 192 tests passed.
+  - `npm run validate` from `site/` passed after rerunning sequentially.
+    Result: built static site, validated 43 HTML files, 1295 internal
+    references, 42 sitemap URLs, and 1 legacy story safety target.
+  - `npm run build` from `site/` passed.
+  - `git diff --check` passed.
+  - `./scripts/check-private-paths.sh` passed.
 
 ## Review Findings
 
@@ -227,6 +235,13 @@ Implementation validation results:
   any element. Patched the placeholder check to require escaped literal
   placeholder HTML and generalized sanctioned element removal to matching
   elements by id.
+- Codex review found two still-actionable validator coverage issues. First,
+  unsanctioned affirmative endpoint conclusions such as broken, slow,
+  high-traffic, release-safe, or operationally safe endpoint wording were not
+  rejected explicitly enough. Second, raw artifact checks covered exact
+  artifact-family names but missed generic `.ndjson` and `.sqlite` file
+  references outside sanctioned sections. Patched both checks with regression
+  tests.
 
 ## Oddities
 

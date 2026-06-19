@@ -87,6 +87,8 @@ const privateTextPatterns = [
   { label: "file://", pattern: /file:\/\//i },
   { label: "localhost", pattern: /\blocalhost\b/i },
   { label: "127.0.0.1", pattern: /\b127\.0\.0\.1\b/ },
+  { label: ".ndjson file reference", pattern: /\b[\w.-]+\.ndjson\b/i },
+  { label: ".sqlite file reference", pattern: /\b[\w.-]+\.sqlite\b/i },
   { label: "raw repository remote", pattern: /\b(?:git@[^:\s]+:[^\s]+|https:\/\/github\.com\/[^/\s]+\/[^/\s]+\.git|raw remotes?)\b/i },
   { label: "connection string", pattern: /\b(?:ConnectionString|connection string|Server=|User Id=|Password=)\b/i },
   { label: "generated scan directory", pattern: /\b(?:generated scan directories|scan output folders|\.tracemap)\b/i },
@@ -111,6 +113,8 @@ const forbiddenUnsanctionedPositioning = [
   { label: "complete coverage", pattern: /\b(?:complete product coverage|fully covered|full coverage)\b/i },
   { label: "operational conclusion", pattern: /\b(?:certifies operational safety|proves operational safety|proves release safety|approves a release|safe to release|unsafe to release)\b/i },
   { label: "runtime conclusion", pattern: /\b(?:proves runtime behavior|proves production traffic|proves production usage|proves endpoint performance|diagnoses an outage|proves outage cause)\b/i },
+  { label: "affirmative endpoint conclusion", pattern: /\b(?:endpoint|Endpoint [A-Z])\b[^.]{0,80}\b(?:is|was|seems|looks|remains)\b[^.]{0,40}\b(?:broken|slow|high[- ]traffic|release[- ]safe|operationally safe|safe to release|unsafe to release)\b/i },
+  { label: "affirmative endpoint conclusion", pattern: /\b(?:broken|slow|high[- ]traffic|release[- ]safe|operationally safe)\s+endpoint\b/i },
   { label: "unsupported impact wording", pattern: /\bendpoint\b[^.]{0,80}\b(?:is|was|are|were)\b[^.]{0,40}\bimpacted\b/i }
 ];
 
