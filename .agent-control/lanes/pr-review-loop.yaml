@@ -2,12 +2,12 @@ lane:
   id: tracemap-pr-review-loop
   version: 0.1.0
   status: active
-description: >
-  Repo-local PR-loop policy for TraceMap. This YAML file is lane configuration
-  consumed by agent-control, not an exchanged coordination packet payload.
-  Required reviewers should return before agents process partial review
-  findings, with bounded timeouts so stuck bots produce typed human-decision
-  evidence instead of endless retags.
+  description: >
+    Repo-local PR-loop policy for TraceMap. This YAML file is lane
+    configuration consumed by agent-control, not an exchanged coordination
+    packet payload. Required reviewers should return before agents process
+    partial review findings, with bounded timeouts so stuck bots produce typed
+    human-decision evidence instead of endless retags.
 
 # agent-control lane config key; not an inter-agent coordination packet payload.
 prLoopPacket:
@@ -39,6 +39,9 @@ prLoopPacket:
       requirement: optional
       waitUntilReturnedBeforeProcessing: false
   branchPolicy:
+    # These target lists intentionally mirror requiredReviewerNonReturnPolicy
+    # so branch policy and non-return handoff remain explicit at each decision
+    # point without relying on YAML anchors or alias support in downstream tools.
     overnightAllowedMergeTargets:
       - dev
       - integration/**
@@ -67,13 +70,15 @@ reviewerReturnPolicy:
   requiredTimeoutStopReason: REQUIRED_REVIEWER_RETURN_TIMEOUT
   nonBlockingTimeoutBehavior: residual-risk
   mutationBoundary:
-    qodo: never posted by pr-loop
-    codex: policy-controlled bounded retry only
-    gemini: never posted by pr-loop
-    sourcery: never posted by pr-loop
+    qodo: never
+    codex: bounded_retry
+    gemini: never
+    sourcery: never
 
 requiredReviewerNonReturnPolicy:
   stopReason: HUMAN_DECISION_REQUIRED_REVIEW_NON_RETURN
+  # Keep these lists explicit instead of YAML aliases; they are readback
+  # evidence for humans as much as machine config.
   overnightAllowedTargets:
     - dev
     - integration/**
