@@ -169,21 +169,19 @@ implements the first suggested PR boundary:
   asserted in tests, and a creates-edge route-flow fixture was added.
 - Final allowed Sonnet Kiro re-review cycle also ran with reduced coverage
   because Kiro reported denied tool access. Actionable final-cycle blockers were
-  patched without requesting another Kiro round: the test suite now has an
-  explicit skipped parameter-forward deferral marker, ambiguous implementation
+  patched without requesting another Kiro round: the implementation state now
+  carries an explicit parameter-forward deferral note, ambiguous implementation
   candidate gap IDs include sorted candidate node IDs and supporting facts, the
   ambiguous-gap test asserts ID stability across identical input, and the
   unsupported attached fact-symbol path now has a projection-unavailable gap
   assertion.
 - Focused validation so far:
   `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests` passed
-  with 22 passing route-flow tests and one intentional parameter-forward
-  deferral skip before the final full validation pass.
+  with 22 passing route-flow tests before the final full validation pass.
 - Final continuation validation:
   `dotnet build src/dotnet/TraceMap.sln` passed with 0 warnings and 0 errors;
-  `dotnet test src/dotnet/TraceMap.sln` passed with 514 passing tests and one
-  intentional skipped parameter-forward route-flow fixture; `git diff --check`
-  passed; `./scripts/check-private-paths.sh` passed; checked-in
+  `dotnet test src/dotnet/TraceMap.sln` passed with 514 passing tests;
+  `git diff --check` passed; `./scripts/check-private-paths.sh` passed; checked-in
   combined paths/reverse smoke passed; direct `tracemap route-flow` smoke wrote
   `route-flow-report.md` and `route-flow-report.json`, preserved
   `reportType = "route-flow"` and `version = "1.0"`, and printed a hashed
@@ -192,10 +190,19 @@ implements the first suggested PR boundary:
   CLI output paths now fall back to hashed display without throwing,
   `NoRouteFlowEvidence` is suppressed when more specific bridge/data gaps are
   already present, and `argument-flow` participates in call-like edge probing.
-  Validation after remediation passed: focused route-flow tests (22 passed, one
-  intentional skip), full `dotnet build`, full `dotnet test` (514 passed, one
-  intentional skip), private path guard, `git diff --check`, checked-in combined
-  paths/reverse smoke, and direct route-flow CLI smoke.
+  Validation after remediation passed: focused route-flow tests, full
+  `dotnet build`, full `dotnet test`, private path guard, `git diff --check`,
+  checked-in combined paths/reverse smoke, and direct route-flow CLI smoke.
+- Follow-up PR review-loop remediation patched the current-head findings after
+  the first follow-up push: route-flow now emits `DataSurfaceAttachmentMissing`
+  when terminal surfaces exist elsewhere but cannot connect to the selected
+  route, fact-symbol projection again preserves semantic `facts.source_symbol`
+  joins, CLI output path redaction now reuses the shared safe-path helper, and
+  Windows drive-prefixed paths are hashed by the shared helper. Validation after
+  this remediation passed: focused route-flow tests with zero skips, full
+  `dotnet build`, full `dotnet test` with 514 passing tests and zero skips,
+  private path guard, `git diff --check`, checked-in combined paths/reverse
+  smoke, and direct route-flow CLI smoke.
 - `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests`: passed
   after projection implementation and after Kiro review fixes.
 - Kiro implementation review with Sonnet (`claude-sonnet-4.6`) completed with

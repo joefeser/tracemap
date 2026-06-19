@@ -333,11 +333,6 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(ambiguousGapId, second.Report.Gaps.Single(gap => gap.GapKind == "AmbiguousImplementationCandidates").GapId);
     }
 
-    [Fact(Skip = "Deferred: dedicated combined_parameter_forward_edges route-flow bridge fixture is reserved for a follow-up PR per implementation-state.md.")]
-    public void Route_flow_parameter_forward_bridge_fixture_is_deferred()
-    {
-    }
-
     [Fact]
     public async Task Route_flow_caps_syntax_only_name_only_interface_candidate_at_needs_review()
     {

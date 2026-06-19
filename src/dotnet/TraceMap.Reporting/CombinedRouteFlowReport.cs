@@ -924,11 +924,22 @@ public static class CombinedRouteFlowReporter
                 .ToArray();
             if (bridgedMethodCallEdges.Length > 0)
             {
+                var supportingFactIds = bridgedMethodCallEdges
+                    .SelectMany(edge => edge.SupportingFactIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .Take(20)
+                    .ToArray();
                 gaps.Add(RouteBridgeGap(
                     "MissingCallEdge",
                     root,
                     "Downstream call evidence exists on the bridged endpoint method, but route-flow could not connect it under static traversal rules.",
-                    bridgedMethodCallEdges.SelectMany(edge => edge.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(20).ToArray()));
+                    supportingFactIds));
+                gaps.Add(RouteBridgeGap(
+                    "DataSurfaceAttachmentMissing",
+                    root,
+                    "Route-flow found source-local downstream method evidence, but no matching terminal dependency/data surface could be connected.",
+                    supportingFactIds));
             }
         }
 
@@ -2109,7 +2120,7 @@ public static class CombinedRouteFlowReporter
             var symbolParameter = $"$symbol{index}";
             command.Parameters.AddWithValue(sourceParameter, symbolCandidates[index].SourceIndexId);
             command.Parameters.AddWithValue(symbolParameter, symbolCandidates[index].Symbol);
-            clauses.Add($"(links.source_index_id = {sourceParameter} and (links.combined_symbol_id = {symbolParameter} or symbols.display_name = {symbolParameter}))");
+            clauses.Add($"(links.source_index_id = {sourceParameter} and (links.combined_symbol_id = {symbolParameter} or symbols.display_name = {symbolParameter} or facts.source_symbol = {symbolParameter}))");
         }
 
         return clauses.Count == 0
