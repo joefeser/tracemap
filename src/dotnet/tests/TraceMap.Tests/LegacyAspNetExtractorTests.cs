@@ -157,6 +157,49 @@ public sealed class LegacyAspNetExtractorTests
     }
 
     [Fact]
+    public void Extract_does_not_treat_generic_config_as_aspnet_evidence_for_reduced_semantic_gap()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "App.config"), "<configuration />");
+        var inventory = new[] { new FileInventoryItem("App.config", "Config", 1) };
+
+        var facts = LegacyAspNetExtractor.Extract(repo, TestManifest() with { BuildStatus = "FailedOrPartial" }, inventory, Array.Empty<CodeFact>());
+
+        Assert.DoesNotContain(facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetSurface
+            && fact.Properties.GetValueOrDefault("gapKind") == "ReducedSemanticCoverage");
+    }
+
+    [Fact]
+    public void Scan_keeps_source_relative_javascript_navigation_classified_as_javascript_gap()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Admin"));
+        File.WriteAllText(Path.Combine(repo, "Admin", "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Admin.Default" %>
+            <asp:HyperLink runat="server" ID="ScriptLink" NavigateUrl="javascript:window.location='Details.aspx'" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Admin", "Default.aspx.cs"), """
+            namespace Sample.Admin;
+            public partial class Default { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetNavigation
+            && fact.Properties.GetValueOrDefault("gapKind") == "JavaScriptNavigationUnsupported");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetNavigationReferenceDeclared
+            && fact.Properties.GetValueOrDefault("targetPath") == "Admin/javascript:window.location='Details.aspx'");
+    }
+
+    [Fact]
     public void Extract_emits_gaps_when_config_or_sitemap_xml_cannot_be_read()
     {
         using var temp = new TempDirectory();

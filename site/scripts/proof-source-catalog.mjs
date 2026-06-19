@@ -452,7 +452,7 @@ function collectClaimLevelVocabulary(html) {
       .filter(Boolean);
 
     for (const value of values) {
-      vocabulary.add(value);
+      vocabulary.add(value.toLowerCase());
     }
   }
 

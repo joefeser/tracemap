@@ -103,7 +103,7 @@ public static partial class LegacyAspNetExtractor
 
     private static bool HasAspNetCandidateInventory(IReadOnlyList<FileInventoryItem> inventory)
     {
-        return inventory.Any(item => item.Kind is "WebFormsMarkup" or "WebFormsCodeBehind" or "WebFormsDesigner" or "AspNetApplication" or "AspNetHandler" or "AspNetSiteMap" or "Config");
+        return inventory.Any(item => item.Kind is "WebFormsMarkup" or "WebFormsCodeBehind" or "WebFormsDesigner" or "AspNetApplication" or "AspNetHandler" or "AspNetSiteMap");
     }
 
     private static IReadOnlyDictionary<string, CodeFact[]> BuildSemanticLookup(IReadOnlyList<CodeFact> existingFacts, string factType)
@@ -1132,7 +1132,8 @@ public static partial class LegacyAspNetExtractor
         if (raw.StartsWith("~", StringComparison.Ordinal)
             || raw.StartsWith("/", StringComparison.Ordinal)
             || raw.StartsWith("\\", StringComparison.Ordinal)
-            || raw.Contains("://", StringComparison.Ordinal))
+            || raw.Contains("://", StringComparison.Ordinal)
+            || LooksJavaScriptNavigation(raw))
         {
             return raw;
         }

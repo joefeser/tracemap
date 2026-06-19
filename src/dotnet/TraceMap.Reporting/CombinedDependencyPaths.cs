@@ -1723,7 +1723,7 @@ public static class CombinedDependencyPathReporter
 
             foreach (var edge in outgoing)
             {
-                if (edge.EdgeKind == "webforms-event-flow-projection")
+                if (IsLegacyFlowProjectionEdge(edge.EdgeKind))
                 {
                     continue;
                 }
@@ -2158,7 +2158,7 @@ public static class CombinedDependencyPathReporter
         if (terminal is not null && IsRemotingSurface(terminal.SurfaceKind))
         {
             if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
-                || path.Edges.Any(edge => edge.EdgeKind is "symbol-reconciliation" or "webforms-event-flow-projection")
+                || path.Edges.Any(edge => edge.EdgeKind == "symbol-reconciliation" || IsLegacyFlowProjectionEdge(edge.EdgeKind))
                 || path.Nodes.Any(node => node.NodeKind == "remoting-object")
                 || terminal.SurfaceKind is "remoting-channel" or "remoting-object" or "remoting-api")
             {
@@ -2172,7 +2172,7 @@ public static class CombinedDependencyPathReporter
         var highFanOut = terminal is not null
             && graph.Edges.Count(edge => edge.ToNodeId == terminal.NodeId) >= 5;
         if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
-            || path.Edges.Any(edge => edge.EdgeKind is "symbol-reconciliation" or "webforms-event-flow-projection")
+            || path.Edges.Any(edge => edge.EdgeKind == "symbol-reconciliation" || IsLegacyFlowProjectionEdge(edge.EdgeKind))
             || path.Edges.Any(edge => edge.EdgeKind == "endpoint-match" && edge.Classification != CombinedEndpointClassifications.MatchedEndpoint)
             || genericTerminal
             || highFanOut)
@@ -2193,6 +2193,11 @@ public static class CombinedDependencyPathReporter
     private static bool IsRemotingSurface(string? surfaceKind)
     {
         return surfaceKind is "remoting-endpoint" or "remoting-registration" or "remoting-channel" or "remoting-object" or "remoting-api";
+    }
+
+    private static bool IsLegacyFlowProjectionEdge(string? edgeKind)
+    {
+        return edgeKind is "webforms-event-flow-projection" or "winforms-handler-flow-projection";
     }
 
     private static IReadOnlyList<string> LegacyFlowRuleIdsFor(CombinedPath path)
