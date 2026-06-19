@@ -151,8 +151,9 @@ documented precisely enough. If a rule changes behavior, update the rule catalog
 and tests in the implementation branch.
 
 The proposed rule IDs above are tentative. They become normative only when
-`rules/rule-catalog.yml` entries are added in Phase 7. Product code must not
-emit a proposed rule ID before its catalog entry exists.
+`rules/rule-catalog.yml` entries are added in the baseline rule-catalog gate
+before emitting product code. Product code must not emit a proposed rule ID
+before its catalog entry exists.
 
 `DynamicDispatchCandidate` and `combined.dispatch-candidate.v1` must remain
 distinct concepts. The scanner-level `DynamicDispatchCandidate` fact from

@@ -75,6 +75,11 @@ product-code changes.
     `UnsupportedRegistrationShape`.
   - Added a non-normative fan-out threshold anchor.
   - Clarified combined DI registration extractor metadata join behavior.
+- PR-loop Codex review found one remaining task-ordering issue: the original
+  implementation plan updated the rule catalog after phases that could emit or
+  change rule IDs. Patched by moving the catalog update and validation gate
+  into Phase 1 before scanner, graph, export, or consumer work emits changed
+  evidence, and by narrowing Phase 7 to a catalog drift check.
 - Final re-review preference: Sonnet, unless Opus is clearly needed.
 
 ## Validation State

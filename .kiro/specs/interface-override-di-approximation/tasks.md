@@ -21,6 +21,12 @@
 - [ ] 1.2 Add fixture tests that lock current behavior for direct interface implementation, explicit interface implementation, inheritance, overrides, and current relationship export/combine behavior.
 - [ ] 1.3 Add byte-stability tests for relationship facts, symbol relationship rows, combined relationship rows, and exported relationship evidence.
 - [ ] 1.4 Document any existing behavior gaps before changing scanner or graph code.
+- [ ] 1.5 Before any product code emits or changes a relationship,
+  registration, dispatch-candidate, or dispatch-gap rule ID, update
+  `rules/rule-catalog.yml` for that rule ID with documented limitations.
+- [ ] 1.6 Add rule-catalog validation or focused tests proving any newly
+  emitted or changed rule ID has a catalog entry before scanner, graph,
+  export, or consumer tests assert the emitted evidence.
 
 ### Phase 2: Relationship Evidence Hardening
 
@@ -72,9 +78,11 @@
 - [ ] 6.7 Add consumer tests proving classifications remain conservative and wording avoids runtime certainty.
 - [ ] 6.8 Add forbidden-wording tests for DI-supported candidate edges across paths, route-flow, reverse, impact/include-paths, report, and export.
 
-### Phase 7: Documentation and Rule Catalog
+### Phase 7: Documentation and Catalog Drift Check
 
-- [ ] 7.1 Update `rules/rule-catalog.yml` for any new or changed rules, including documented limitations.
+- [ ] 7.1 Re-check `rules/rule-catalog.yml` for drift after scanner, graph,
+  export, and consumer work, and patch any limitation or wording gaps before
+  final validation.
 - [ ] 7.2 Update `docs/ACCEPTANCE.md` with relationship, DI registration, candidate edge, and consumer acceptance scenarios.
 - [ ] 7.3 Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` if adapter fact requirements change.
 - [ ] 7.4 Update `docs/VALIDATION.md` with pinned smoke guidance if shared graph, report, or adapter behavior changes.
