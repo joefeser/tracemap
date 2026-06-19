@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using TraceMap.Core;
 using TraceMap.Combine;
 using TraceMap.EndpointAlignment;
@@ -357,7 +359,7 @@ public static class TraceMapCommand
                 values.HasFlag("--exit-code")),
             cancellationToken);
 
-        await output.WriteLineAsync($"TraceMap route-flow completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"TraceMap route-flow completed: {SafeOutputPath(result.MarkdownPath ?? result.JsonPath ?? outputPath)}");
         await output.WriteLineAsync($"Classification: {result.Report.Summary.Classification}");
         await output.WriteLineAsync($"Entry evidence: {result.Report.Summary.EntryEvidenceCount}");
         await output.WriteLineAsync($"Static flow rows: {result.Report.Summary.FlowRowCount}");
@@ -2399,6 +2401,30 @@ public static class TraceMapCommand
 
             Outputs:
               combined.sqlite with index_sources, combined_facts, combined_symbols, dependency tables, and derived-row placeholders.
-            """;
+        """;
+    }
+
+    private static string SafeOutputPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "n/a";
+        }
+
+        return Path.IsPathFullyQualified(path)
+            || path.StartsWith("/", StringComparison.Ordinal)
+            || path.StartsWith("\\", StringComparison.Ordinal)
+            || path.Contains("://", StringComparison.Ordinal)
+            || path.Contains(":/", StringComparison.Ordinal)
+            || path.Contains(":\\", StringComparison.Ordinal)
+            ? $"absolute-path-hash:{HashForDisplay(path, 16)}"
+            : path.Replace('\\', '/');
+    }
+
+    private static string HashForDisplay(string value, int length)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        var text = Convert.ToHexString(bytes).ToLowerInvariant();
+        return text[..Math.Min(length, text.Length)];
     }
 }
