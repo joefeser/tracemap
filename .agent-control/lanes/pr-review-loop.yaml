@@ -1,0 +1,94 @@
+lane:
+  id: tracemap-pr-review-loop
+  version: 0.1.0
+  status: active
+description: >
+  Repo-local PR-loop policy for TraceMap. This YAML file is lane configuration
+  consumed by agent-control, not an exchanged coordination packet payload.
+  Required reviewers should return before agents process partial review
+  findings, with bounded timeouts so stuck bots produce typed human-decision
+  evidence instead of endless retags.
+
+# agent-control lane config key; not an inter-agent coordination packet payload.
+prLoopPacket:
+  pushPolicy:
+    mode: batch_until_review_settles
+    localFixesPresent: false
+    validationEvidence: []
+    findingUrls: []
+    waitTimeoutSeconds: 900
+  bots:
+    qodo:
+      requirement: required
+      waitUntilReturnedBeforeProcessing: true
+      waitTimeoutSeconds: 1200
+      requestAllowed: explicit_only
+      requestRetryCeiling: 0
+      retryCooldownSeconds: 0
+    codex:
+      requirement: required
+      waitUntilReturnedBeforeProcessing: true
+      waitTimeoutSeconds: 900
+      requestAllowed: policy
+      requestRetryCeiling: 1
+      retryCooldownSeconds: 120
+    gemini:
+      requirement: optional
+      waitUntilReturnedBeforeProcessing: false
+    sourcery:
+      requirement: optional
+      waitUntilReturnedBeforeProcessing: false
+  branchPolicy:
+    overnightAllowedMergeTargets:
+      - dev
+      - integration/**
+      - feature/**
+    overnightForbiddenMergeTargets:
+      - main
+      - master
+      - release/**
+    ownerOverrideEligibleTargets:
+      - dev
+      - integration/**
+      - feature/**
+    ownerOverrideDeniedTargets:
+      - main
+      - master
+      - release/**
+    mainPromotionRequiresSeparatePr: true
+    mainPromotionOwnerOnly: true
+    # Branch-policy/readback token for "merge commit"; this is not a squash
+    # merge and is rendered by agent-control's merge executor separately.
+    mergeMethod: merge_commit
+
+reviewerReturnPolicy:
+  requiredConfiguredReviewersMustReturn: true
+  optionalReviewersRemainResidualRisk: true
+  requiredTimeoutStopReason: REQUIRED_REVIEWER_RETURN_TIMEOUT
+  nonBlockingTimeoutBehavior: residual-risk
+  mutationBoundary:
+    qodo: never posted by pr-loop
+    codex: policy-controlled bounded retry only
+    gemini: never posted by pr-loop
+    sourcery: never posted by pr-loop
+
+requiredReviewerNonReturnPolicy:
+  stopReason: HUMAN_DECISION_REQUIRED_REVIEW_NON_RETURN
+  overnightAllowedTargets:
+    - dev
+    - integration/**
+    - feature/**
+  ownerOverrideEligibleTargets:
+    - dev
+    - integration/**
+    - feature/**
+  ownerOverrideDeniedTargets:
+    - main
+    - master
+    - release/**
+  overnightForbiddenTargets:
+    - main
+    - master
+    - release/**
+  mainPromotionRequiresSeparatePr: true
+  noSquashByDefault: true
