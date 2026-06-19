@@ -357,7 +357,7 @@ public static class TraceMapCommand
                 values.HasFlag("--exit-code")),
             cancellationToken);
 
-        await output.WriteLineAsync($"TraceMap route-flow completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"TraceMap route-flow completed: {CombinedReportHelpers.SafePath(result.MarkdownPath ?? result.JsonPath ?? outputPath)}");
         await output.WriteLineAsync($"Classification: {result.Report.Summary.Classification}");
         await output.WriteLineAsync($"Entry evidence: {result.Report.Summary.EntryEvidenceCount}");
         await output.WriteLineAsync($"Static flow rows: {result.Report.Summary.FlowRowCount}");
@@ -2399,6 +2399,7 @@ public static class TraceMapCommand
 
             Outputs:
               combined.sqlite with index_sources, combined_facts, combined_symbols, dependency tables, and derived-row placeholders.
-            """;
+        """;
     }
+
 }
