@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace TraceMap.Reporting;
 
-internal static class CombinedReportHelpers
+public static class CombinedReportHelpers
 {
     public static bool SourceIdentityVerified(CombinedReportSource source)
     {
@@ -68,14 +68,32 @@ internal static class CombinedReportHelpers
             return "n/a";
         }
 
-        return Path.IsPathFullyQualified(filePath)
+        var fullyQualified = false;
+        try
+        {
+            fullyQualified = Path.IsPathFullyQualified(filePath);
+        }
+        catch (ArgumentException)
+        {
+            fullyQualified = false;
+        }
+
+        return fullyQualified
             || filePath.StartsWith("/", StringComparison.Ordinal)
             || filePath.StartsWith("\\", StringComparison.Ordinal)
+            || LooksLikeWindowsDrivePath(filePath)
             || filePath.Contains("://", StringComparison.Ordinal)
             || filePath.Contains(":/", StringComparison.Ordinal)
             || filePath.Contains(":\\", StringComparison.Ordinal)
             ? $"absolute-path-hash:{Hash(filePath, 16)}"
             : filePath.Replace('\\', '/');
+    }
+
+    private static bool LooksLikeWindowsDrivePath(string value)
+    {
+        return value.Length >= 2
+            && char.IsAsciiLetter(value[0])
+            && value[1] == ':';
     }
 
     public static string Hash(string value, int length = 64)
