@@ -127,6 +127,18 @@ test("validateEndpointReviewDist rejects artifact-family text outside sanctioned
   assert.match(errors.join("\n"), /artifact-family text outside sanctioned sections: facts\.ndjson/);
 });
 
+test("validateEndpointReviewDist rejects generic raw artifact filenames outside sanctioned sections", async (t) => {
+  const root = await createManagedEndpointReviewDistFixture(t, {
+    pageHtml: endpointReviewPage("<p>leaked-custom.ndjson and data.sqlite appear in regular copy.</p>")
+  });
+  const errors = [];
+
+  await validateEndpointReviewDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public text outside sanctioned sections: \.ndjson file reference/);
+  assert.match(errors.join("\n"), /forbidden public text outside sanctioned sections: \.sqlite file reference/);
+});
+
 test("validateEndpointReviewDist rejects artifact-family text in discovery summary", async (t) => {
   const root = await createManagedEndpointReviewDistFixture(t);
   await rewriteEndpointReviewRoutesIndexEntry(join(root, "dist"), {
@@ -195,6 +207,17 @@ test("validateEndpointReviewDist rejects unsupported endpoint conclusions", asyn
 
   assert.match(errors.join("\n"), /unsupported unsupported impact wording/);
   assert.match(errors.join("\n"), /unsupported runtime conclusion/);
+});
+
+test("validateEndpointReviewDist rejects affirmative endpoint overclaims", async (t) => {
+  const root = await createManagedEndpointReviewDistFixture(t, {
+    pageHtml: endpointReviewPage("<p>The endpoint is broken.</p><p>Endpoint A is high-traffic.</p><p>This is a release-safe endpoint.</p>")
+  });
+  const errors = [];
+
+  await validateEndpointReviewDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /unsupported affirmative endpoint conclusion/);
 });
 
 test("validateEndpointReviewDist rejects scare framing and blame", async (t) => {
