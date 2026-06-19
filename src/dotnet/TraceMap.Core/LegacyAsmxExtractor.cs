@@ -131,11 +131,17 @@ public static partial class LegacyAsmxExtractor
             var tree = CSharpSyntaxTree.ParseText(text, path: file.RelativePath);
             var root = tree.GetCompilationUnitRoot();
             var generatedFile = IsGeneratedSoapReferenceFile(file.RelativePath, text);
+            var asmxHostTypes = facts
+                .Where(fact => fact.FactType == FactTypes.AsmxHostDeclared && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+                .Select(fact => fact.TargetSymbol!)
+                .ToHashSet(StringComparer.Ordinal);
 
             foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>().OrderBy(type => GetLine(tree, type)).ThenBy(GetTypeName, StringComparer.Ordinal))
             {
                 var typeName = GetTypeName(type);
                 var serviceAttributes = MatchedAttributeNames(type.AttributeLists, ServiceAttributeNames).ToArray();
+                var hasAsmxHost = asmxHostTypes.Contains(typeName);
+                var isAsmxServiceContext = serviceAttributes.Length > 0 || hasAsmxHost;
                 if (serviceAttributes.Length > 0)
                 {
                     facts.Add(FactFactory.Create(
@@ -184,7 +190,7 @@ public static partial class LegacyAsmxExtractor
                 {
                     var methodName = method.Identifier.ValueText;
                     var methodSymbol = $"{typeName}.{methodName}";
-                    if (HasAttribute(method.AttributeLists, "WebMethod"))
+                    if (isAsmxServiceContext && HasAttribute(method.AttributeLists, "WebMethod"))
                     {
                         facts.Add(FactFactory.Create(
                             manifest,

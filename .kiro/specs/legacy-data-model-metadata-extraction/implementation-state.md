@@ -1,7 +1,8 @@
 # Legacy Data Model Metadata Extraction Implementation State
 
-Status: spec-ready
-Branch: codex/spec-legacy-data-model-metadata-extraction
+Status: implementation-slice-in-progress
+Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
+Current implementation branch: codex/implement-legacy-data-model-metadata-extraction-slice2
 Public claim level: hidden
 
 ## Why This Spec Exists
@@ -139,3 +140,180 @@ git diff --check
   query parsing, formulas, filters, inheritance, composite IDs, and custom SQL
   should stay gaps unless deterministic tests and redaction rules are added.
 - Add public-safe synthetic fixtures before making public coverage claims.
+
+## Implementation Slice 1 State
+
+Branch: `codex/implement-legacy-data-model-metadata-extraction`
+
+Selected scope: Task 1 only. This slice establishes the rule/catalog and code
+constant contract that later extractor, projection, graph, and export tasks must
+target before they emit model-level conclusions.
+
+Implemented:
+
+- Added `RuleIds` constants for `legacy.data.model.identity.v1`,
+  `legacy.data.model.relationship.v1`, `legacy.data.orm.nhibernate.v1`,
+  `legacy.data.orm.unsupported.v1`, `legacy.data.model.generated-link.v1`, and
+  `legacy.data.model.surface.v1`.
+- Added rule catalog entries documenting emitted fact types, evidence tiers,
+  safe properties, and limitations for the model identity, relationship,
+  NHibernate, unsupported ORM, generated-link, and surface projection rules.
+- Reserved `legacy.data.model.generated-link.v1` for future model-normalized
+  generated-code links while leaving existing generated-code extractor
+  provenance under `legacy.data.generated-link.v1`. Decision rationale:
+  existing DBML, EDMX, and typed DataSet generated-code links keep correct
+  provenance under the original source rule; future tasks should use the model
+  rule only when they add model-normalized linkage semantics beyond that source
+  rule.
+- Kept `legacy.data.model.surface.v1` as a report/export projection rule only.
+  No `LegacyDataModelSurfaceProjected` scan fact or new `legacy-data-model`
+  surface kind was added.
+- Added focused catalog/constant tests in
+  `LegacyDataModelRuleCatalogTests`.
+
+Oddities and scope decisions:
+
+- This is a first implementation PR slice because the full spec spans scanner
+  extraction, NHibernate XML parsing, relationship normalization, combined
+  report/path/reverse/diff/impact integration, graph/vault export, fixtures,
+  and smoke guidance. Implementing all of that in one PR would be too broad to
+  review safely.
+- No scanner behavior changes are included in this slice, so no new facts are
+  emitted yet. Existing DBML, EDMX, typed DataSet, config, and generated-link
+  source facts retain their existing rule IDs.
+- Public claim level remains hidden. No site files, generated scan outputs,
+  private samples, raw SQL, snippets, remotes, local absolute paths, secrets, or
+  local/private artifact labels are in scope.
+
+Validation executed before PR:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModelRuleCatalogTests`: passed, 3 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 11 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 443 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>`: passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- `node scripts/kiro-review.mjs --phase legacy-data-model-metadata-extraction --kind implementation --model claude-sonnet-4.5 --fresh --timeout-ms 600000`: reduced coverage because the review harness reported denied shell access for one command, but no blocking or Medium+ findings. The only actionable review recommendation was to record validation results here, now done.
+
+PR review-loop follow-up:
+
+- Initial PR loop found one required Qodo thread on nonstandard compound
+  `evidenceTier` strings in the new catalog entries. Patched the new entries to
+  use single fixed tier values and hardened `LegacyDataModelRuleCatalogTests` so
+  it verifies that contract with whitespace-tolerant rule lookup. Reran
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModelRuleCatalogTests`, `./scripts/check-private-paths.sh`, and `git diff --check`: all passed.
+
+Follow-ups:
+
+- Task 2 should add deterministic model identity helpers and additive safe
+  metadata fields over existing source extractors.
+- Task 3 should add relationship semantics and ambiguity gaps while preserving
+  existing source `mappingKind` values.
+- Task 4 should add the narrow NHibernate `.hbm.xml` MVP using the existing
+  legacy data safe XML parser bounds and gap classifications.
+- Tasks 7-9 should project model-enriched `legacy-data` surfaces, excluding
+  `AnalysisGap` facts from terminal projection and avoiding double projection.
+
+## Implementation Slice 2 State
+
+Branch: `codex/implement-legacy-data-model-metadata-extraction-slice2`
+
+Selected scope: Task 2 only. This slice adds normalized model identity metadata
+to existing DBML, EDMX, and typed DataSet/TableAdapter source facts while
+leaving NHibernate parsing, unsupported ORM gaps, generated-code hardening,
+relationship ambiguity gaps, and downstream surface/report/export integration
+for later tasks.
+
+Implemented:
+
+- Added a deterministic legacy data model identity helper that derives
+  `stableModelKey` from metadata format, model kind, descriptor role,
+  repo-relative file path, metadata-local scope, safe display/container names,
+  and hashes for unsafe identity parts.
+- Added additive model identity properties to existing DBML entity, storage
+  object, column, association, routine, and mapping descriptor facts.
+- Added additive model identity properties to existing EDMX CSDL/SSDL/MSL
+  entity, storage object, column, routine, and mapping descriptor facts.
+- Added additive model identity properties to existing typed DataSet DataSet,
+  DataTable, DataColumn, relation, and TableAdapter command descriptor facts
+  while preserving unrelated XSD gating.
+- Preserved source rule provenance and descriptor tier ceilings. Existing
+  source facts still emit under `legacy.data.dbml.v1`,
+  `legacy.data.edmx.v1`, or `legacy.data.typed-dataset.v1`; model identity is
+  recorded through properties such as `modelIdentityRuleId`,
+  `modelIdentityEvidenceTier`, `metadataFormat`, `modelKind`,
+  `descriptorRole`, `coverageLabel`, `sourceMetadataFactId`, and
+  `stableModelKey`.
+- Added focused tests for DBML identity fields, EDMX and typed DataSet identity
+  fields, distinct stable keys for duplicate display names across formats and
+  files, parser node/depth bounds, descriptor tier-ceiling preservation, and
+  unsafe display-name hashing through SQLite persistence.
+- Removed an unused parallel `LegacyDataXml` parser so legacy data model work
+  continues to use the shared `SafeXml` parser bounds and classifications.
+- Updated acceptance, language-adapter contract, validation guidance, and the
+  model identity rule limitation text for the new additive identity properties.
+
+Oddities and scope decisions:
+
+- `review-prompts.md` is still absent for this spec. This matches the prior
+  implementation-state note from spec authoring; no new prompt file was added
+  in this implementation slice.
+- This slice intentionally does not introduce new scan fact types, runtime
+  model loading, NHibernate parsing, generated-code semantic upgrades, derived
+  `legacy-data` surfaces, graph/vault export behavior, or public site claims.
+- TableAdapter command descriptors keep the typed DataSet source rule while
+  using `metadataFormat = tableadapter` for model identity so downstream
+  readers can distinguish adapter command metadata without changing source
+  rule ownership.
+
+Validation executed before PR:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 22 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModel`: passed, 3 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 454 tests.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>`: passed; emitted the required scan artifacts and 23 facts.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review had reduced coverage because the review
+  harness reported denied shell access. It found one blocking issue around an
+  unused parallel XML parser helper and several Important test/catalog
+  improvements.
+- Patched by removing the unused `LegacyDataXml` parser, moving safe-value
+  helpers to a non-parser utility, adding node-count/depth parser-bound tests,
+  strengthening duplicate-name stable-key determinism tests, adding a
+  descriptor tier-ceiling test, and documenting the tier-ceiling limitation in
+  `rules/rule-catalog.yml`.
+- One Sonnet re-review also had reduced coverage due to denied shell access. It
+  found no remaining blocking issue, but requested explicit same-name
+  cross-format and tier-ceiling tests. Patched by adding a DBML-vs-EDMX
+  same-name stable-key test and making the tier-ceiling test intent explicit.
+  A third Kiro review was intentionally not run to respect the two-review-round
+  limit; final local validation passed after the patch.
+
+PR review-loop follow-up:
+
+- Initial PR loop found three unresolved review threads: stale safe labels when
+  hashing reused properties, hardcoded full coverage labels, and line-number
+  based stable-key scopes. Patched by clearing stale safe/hash/redaction keys in
+  `LegacyDataSafeValues`, passing reduced coverage labels when metadata gaps
+  are known, removing line numbers from stable-key scope strings, and adding
+  focused regressions for all three behaviors.
+
+Follow-ups:
+
+- Task 3 should add relationship semantics and ambiguity gaps while preserving
+  existing `mappingKind` values.
+- Task 4 should add the narrow NHibernate `.hbm.xml` MVP using the shared
+  legacy data safe XML parser bounds and gap classifications.
+- Task 5 should add unsupported old ORM descriptor gaps.
+- Tasks 7-9 should project model-enriched `legacy-data` surfaces, exclude
+  `AnalysisGap` facts from terminal projection, and verify graph/vault export
+  redaction.

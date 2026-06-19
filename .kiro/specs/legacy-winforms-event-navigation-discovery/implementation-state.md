@@ -1,8 +1,88 @@
 # Legacy WinForms Event Navigation Discovery Implementation State
 
-Status: spec-ready
-Branch: codex/spec-legacy-winforms-event-navigation-discovery
+Status: implementation-complete
+Branch: codex/implement-legacy-winforms-event-navigation-discovery
 Public claim level: hidden
+
+## Implementation Update - 2026-06-18
+
+Implemented the static WinForms event/navigation discovery slice on
+`codex/implement-legacy-winforms-event-navigation-discovery`.
+
+### Landed Scope
+
+- Added WinForms fact/model constants and rule catalog entries for inventory,
+  controls, event binding, handler resolution, navigation, callback boundaries,
+  handler-flow projection, and safe resource metadata.
+- Added deterministic `LegacyWinFormsExtractor` coverage for syntax/structural
+  WinForms surfaces, designer `InitializeComponent` controls, explicit event
+  subscriptions, scoped handler resolution, `Application.Run`, `Show`,
+  `ShowDialog`, MDI parent assignment, timer/background-worker/UI marshal
+  callback boundaries, safe `.resx` key-hash metadata, and explicit gaps.
+- Reused existing scan-local call/object/backend facts for direct
+  `WinFormsHandlerFlowProjected` evidence. Terminal names are hashed through
+  existing TraceMap digest helpers.
+- Integrated WinForms evidence into scan output, generic SQLite/NDJSON storage,
+  scan Markdown report sections, legacy validation UI-event reconciliation,
+  combined legacy-flow root/projection graph consumption, adapter contract docs,
+  acceptance docs, and validation guidance.
+- Added focused tests for designer subscriptions, code subscriptions,
+  navigation/callback/resource extraction, unsafe resource rejection, lambda
+  gap behavior, ambiguous/missing handlers, UI marshal receiver scoping,
+  terminal hash format, non-designer `InitializeComponent` tier boundaries,
+  older-index availability gaps, validation reconciliation, redaction, and
+  deterministic fact IDs.
+
+### Scope Decisions And Oddities
+
+- Implementation remains static and deterministic. It does not execute WinForms
+  apps, run designers, automate UI, resolve runtime DI/reflection, evaluate
+  config transforms, fetch services, connect to databases, or claim runtime
+  reachability.
+- Semantic enrichment is opportunistic through existing Roslyn facts; syntax and
+  structural fallback remain useful when no project loads.
+- `.resx` support stores only resource presence, culture suffix, safe key
+  hashes, and kind labels. Raw resource values are omitted.
+- Rich multi-hop graph expansion, runtime control-tree reconstruction, layout,
+  localization rendering, auth/role proof, branch feasibility, and scheduling
+  proof remain deferred.
+- The temporary CLI smoke fixture lived under `/tmp` and was not committed.
+
+### Validation Run
+
+- `dotnet test src/dotnet/TraceMap.sln --filter LegacyWinFormsExtractorTests`
+  passed: 11 tests.
+- `dotnet build src/dotnet/TraceMap.sln` passed.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 501 tests.
+- `python3 -m unittest scripts.tests.test_legacy_codebase_validation` passed:
+  12 tests.
+- Temporary synthetic WinForms CLI smoke passed twice, produced
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log`, emitted WinForms SQLite counts, rendered WinForms report
+  sections, and produced byte-stable `facts.ndjson` across repeated scans.
+
+### Kiro Review
+
+- Sonnet implementation review (`claude-sonnet-4.6`) completed with reduced
+  coverage because Kiro reported denied tool access
+  (`kiro.review.wrapper.v1` / `ToolDenied`).
+- Patched actionable findings from the first review: UI marshal receiver
+  scoping, same-name handler evidence scoping, noisy dynamic/reflection gaps,
+  navigation tier derivation, and explicit `WinFormsBackendPathUnavailable`
+  gap rows.
+- Sonnet re-review (`claude-sonnet-4.6`) also completed with reduced coverage
+  because Kiro reported denied tool access.
+- Patched re-review findings: removed raw handler names from gap messages,
+  excluded WinForms structural/navigation/callback rows from handler-flow
+  backend evidence, added validation non-divergence coverage, added older-index
+  availability-gap coverage, and added terminal-hash/tier-boundary tests.
+
+### Follow-Ups
+
+- Add public-safe smoke catalog rows only after reviewed synthetic/public
+  fixture evidence is approved for promotion.
+- Expand tests for additional custom delegate, duplicate partial, and
+  factory-selected navigation cases if later specs require deeper precision.
 
 ## Why This Spec Exists
 

@@ -50,12 +50,22 @@
     "priority": "0.7"
   },
   {
+    "path": "/use-cases/endpoint-review/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/incident-call/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
   {
     "path": "/static-triage/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/static-vs-runtime/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
@@ -135,9 +145,24 @@
     "priority": "0.8"
   },
   {
+    "path": "/demo/evidence-trail/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/demo/runbook/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/proof-paths/",
     "changefreq": "monthly",
     "priority": "0.8"
+  },
+  {
+    "path": "/proof-source-catalog/",
+    "changefreq": "monthly",
+    "priority": "0.7"
   },
   {
     "path": "/packets/",
@@ -161,6 +186,11 @@
   },
   {
     "path": "/review-room/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/review-claim-checklist/",
     "changefreq": "monthly",
     "priority": "0.7"
   }

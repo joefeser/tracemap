@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap demo evidence trail: follow one public-safe static question through rule IDs, evidence tiers, coverage labels, proof paths, and explicit gaps."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Demo Evidence Trail | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/demo/evidence-trail/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Demo Evidence Trail">
+    <meta
+      property="og:description"
+      content="A public-safe walkthrough of one static evidence question using checked-in demo summaries and visible limitations."
+    >
+    <meta property="og:url" content="https://tracemap.tools/demo/evidence-trail/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Demo evidence trail</p>
+        <h1>Follow one public-safe static question through the packet.</h1>
+        <p class="hero-subhead">
+          What static evidence connects a changed demo surface to a route and
+          downstream surfaces?
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. No public conclusion without evidence.
+          This is the same evidence packet made easier to follow, not stronger.
+        </p>
+        <nav class="hero-actions" aria-label="Demo evidence trail links">
+          <a class="button primary" href="/demo/result/">Read the demo result</a>
+          <a class="button secondary" href="/demo/runbook/">Check runbook wording</a>
+          <a class="button secondary" href="/demo/proof-upgrades/">Open proof rows</a>
+          <a class="button secondary" href="/proof-paths/">Open proof paths</a>
+          <a class="button secondary" href="/limitations/">Read limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Proof source</p>
+          <h2>The walkthrough uses the checked-in public demo summary.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Source</strong><span><code>site/src/_data/demo-public-summary.json</code></span></div>
+          <div><strong>Rule ID</strong><span><code>public.demo.summary.v1</code></span></div>
+          <div><strong>Evidence tier</strong><span><code>Tier2Structural</code></span></div>
+          <div><strong>Coverage label</strong><span><code>PartialAnalysis</code></span></div>
+          <div><strong>Summary hash</strong><span><code>path-hash:c624c14f5071aecbf8c5c0b4</code></span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Trail</p>
+          <h2>The answer is a sequence of bounded static evidence steps.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-trail-step="changed-surface">
+            <h3>1. Changed surface</h3>
+            <p>
+              The public summary reports <strong>12 changed demo surfaces</strong>
+              in the diff row. The row is available demo evidence with
+              <code>public.demo.summary.v1</code>, <code>Tier2Structural</code>,
+              and <code>PartialAnalysis</code>.
+            </p>
+            <p><strong>Proof path:</strong> <a href="/demo/proof-upgrades/">diff proof row</a>.</p>
+            <p><strong>Limitation:</strong> the summary exposes counts and report-family paths, not private surface names.</p>
+          </article>
+          <article data-trail-step="endpoint-route">
+            <h3>2. Endpoint or route</h3>
+            <p>
+              The combined dependency report row records <strong>14 endpoint
+              findings</strong> across the public demo report families. The row
+              is demo evidence with <code>public.demo.summary.v1</code>,
+              <code>Tier2Structural</code>, and <code>PartialAnalysis</code>.
+            </p>
+            <p><strong>Proof path:</strong> <a href="/demo/proof-upgrades/">combined report proof row</a>.</p>
+            <p><strong>Limitation:</strong> endpoint names stay behind generated local reports unless a public-safe summary exposes them.</p>
+          </article>
+          <article data-trail-step="static-path">
+            <h3>3. Static path segment</h3>
+            <p>
+              The paths and reverse row records <strong>12 paths</strong>,
+              <strong>25 reverse paths</strong>, and <strong>37 path gaps</strong>.
+              That is enough to show the packet contains a static trail segment
+              and also carries reduced coverage with
+              <code>public.demo.summary.v1</code>, <code>Tier2Structural</code>,
+              and <code>PartialAnalysis</code>.
+            </p>
+            <p><strong>Proof path:</strong> <a href="/proof-paths/">public proof path index</a>.</p>
+            <p><strong>Limitation:</strong> the public summary does not publish raw path rows, source excerpts, or data text.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Downstream surfaces</p>
+          <h2>Package, configuration, and SQL-facing surfaces are explicit gaps in this public slice.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-trail-surface-type="package" data-trail-gap="package">
+            <h3>Package evidence</h3>
+            <p>
+              Coverage label: <code>missing-public-item</code>. The public
+              summary records dependency surface counts, but it does not expose
+              a per-package item with its own rule ID and evidence tier.
+            </p>
+            <p><strong>Rule ID:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier4Unknown</code>.</p>
+            <p><strong>Limitation:</strong> treat package details as a local report follow-up until a public-safe row exists.</p>
+          </article>
+          <article data-trail-surface-type="config" data-trail-gap="config">
+            <h3>Configuration evidence</h3>
+            <p>
+              Coverage label: <code>missing-public-item</code>. The public
+              summary does not expose a sanitized configuration surface item
+              with a separate rule ID and evidence tier.
+            </p>
+            <p><strong>Rule ID:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier4Unknown</code>.</p>
+            <p><strong>Limitation:</strong> configuration details stay local unless a future public-safe summary names them without values.</p>
+          </article>
+          <article data-trail-surface-type="sql-facing" data-trail-gap="sql-facing">
+            <h3>SQL-facing evidence</h3>
+            <p>
+              Coverage label: <code>missing-public-item</code>. The public
+              summary can point to path and reverse report families, but it
+              does not publish a sanitized SQL-facing item with a separate rule
+              ID and evidence tier.
+            </p>
+            <p><strong>Rule ID:</strong> <code>public.demo.summary.v1</code>. <strong>Tier:</strong> <code>Tier4Unknown</code>.</p>
+            <p><strong>Limitation:</strong> query text and database-specific details remain outside public copy.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">How to read it</p>
+          <h2>Rule IDs, evidence tiers, coverage labels, and limitations travel together.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Rule IDs</strong><span>Identify the deterministic extractor or summary rule behind a row.</span></div>
+          <div><strong>Evidence tiers</strong><span>Name confidence in the static evidence: <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</span></div>
+          <div><strong>Coverage labels</strong><span>Keep complete, reduced, partial, missing, or unknown evidence visible.</span></div>
+          <div><strong>Limitations</strong><span>Explain what the packet cannot support from the selected proof source.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Claim boundary</p>
+          <h2>The trail is browsable evidence, not a stronger conclusion.</h2>
+        </div>
+        <ul>
+          <li>Safe: the checked-in public summary shows a changed-surface count, endpoint findings, path counts, gaps, rule ID, evidence tier, coverage label, and public-safe report-family paths.</li>
+          <li>Safe: downstream package, configuration, and SQL-facing rows are named as gaps when the selected public summary lacks per-item evidence.</li>
+          <li>Not safe: treating the walkthrough as runtime proof, production proof, endpoint-performance proof, outage cause, operational assurance, release approval, or complete product coverage.</li>
+          <li>Not safe: publishing private identifiers, generated local internals, database text, configuration data, source excerpts, credentials, or workstation paths.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Continue</p>
+          <h2>Follow the trail back to public evidence and limits.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/demo/result/">Public demo result</a>
+          <a href="/demo/runbook/">Public demo runbook</a>
+          <a href="/demo/proof-upgrades/">Demo proof upgrades</a>
+          <a href="/demo/proof-assets/">Demo proof assets</a>
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/evidence/">Evidence model</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/packets/">Packet guide</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/demo/result/">demo result</a>,
+        the
+        <a href="/proof-paths/">proof path index</a>,
+        or the
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

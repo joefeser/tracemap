@@ -247,7 +247,7 @@ rules:
   - id: property-flow.root.v1
     name: Property flow selected root
     description: Records deterministic selected root rows for UI field, control, binding, model, DTO, symbol, or fact selectors over a combined index.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - property-flow selected root row
     limitations:
@@ -258,7 +258,7 @@ rules:
   - id: property-flow.edge.v1
     name: Property flow derived edge
     description: Records deterministic report-time lineage edges derived from available combined facts and path graph evidence.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - property-flow edge row
       - property-flow root-to-graph gap
@@ -411,7 +411,7 @@ rules:
   - id: csharp.razor.model-binding.v1
     name: Razor model-binding target evidence
     description: Reserved rule for static Razor Pages/MVC model-binding target evidence such as handlers, action parameters, BindProperty, FromBody, and FromForm metadata.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - RazorModelBindingTarget
     limitations:
@@ -577,7 +577,7 @@ rules:
   - id: legacy.validation.ui-events.v1
     name: Legacy UI event static evidence probe
     description: Summarizes whether current facts expose WinForms/WebForms-style event wiring, handler-like symbols, call edges, or dependency surfaces without rendering source snippets.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - UI event evidence summary
       - UI event evidence gap
@@ -991,7 +991,7 @@ rules:
   - id: legacy.data.generated-link.v1
     name: Legacy data generated-code linkage
     description: Links DBML, EDMX, and typed DataSet metadata descriptors to checked-in generated files or compiler-resolved generated symbols when deterministic evidence exists.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - LegacyDataGeneratedCodeLinked
       - AnalysisGap
@@ -1000,6 +1000,96 @@ rules:
       - Global short-name matching is not allowed; ambiguous or missing generated-code candidates are gaps.
       - Safe reducer-facing properties include linkKind, symbolRole, typeName, generatedCodeFileName, supportingFactIds, metadataPath, and hash variants for unsafe identifiers.
       - Linkage tier is recorded separately and does not upgrade the descriptor tier of the metadata evidence.
+
+  - id: legacy.data.model.identity.v1
+    name: Legacy data model identity projection
+    description: Documents normalized identity semantics for legacy data model descriptors derived from existing DBML, EDMX, typed DataSet, TableAdapter, generated-code, or old ORM source evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - AnalysisGap
+    limitations:
+      - This rule owns derived identity semantics and availability gaps; existing DBML, EDMX, typed DataSet, config, and generated-link source facts keep their source rule IDs.
+      - Model identities are static checked-in metadata evidence and do not prove runtime data access, query execution, database schema existence, generated-code freshness, deployment, provider compatibility, lazy loading, change tracking, migrations, or production usage.
+      - Descriptor conclusions are capped at the weakest supporting source evidence and are not upgraded by generated-code linkage.
+      - Descriptor tier ceilings are enforced; Tier1Semantic generated-code links do not upgrade Tier2Structural metadata descriptor facts or downstream classifications by themselves.
+      - Safe properties include modelKind, metadataFormat, descriptorRole, stableModelKey, safe display labels or hashes, sourceMetadataFactId, supportingFactIds, coverageLabel, and limitation codes.
+      - Ambiguous, duplicate, unsupported, reduced-coverage, malformed, parser-rejected, or too-large metadata is emitted as a gap rather than an inferred identity.
+      - Raw SQL, source snippets, connection strings, config values, URLs, remotes, local absolute paths, schema/catalog/provider values, private labels, and secrets are hashed or omitted.
+
+  - id: legacy.data.model.relationship.v1
+    name: Legacy data model relationship projection
+    description: Documents deterministic relationship semantics derived from legacy data mapping evidence while preserving source mapping rule IDs and mappingKind values.
+    evidenceTier: Tier2Structural
+    emits:
+      - AnalysisGap
+    limitations:
+      - This rule owns derived relationship semantics and availability gaps; source extractors continue to emit LegacyDataMappingDeclared under their source rule IDs.
+      - Relationship evidence is static descriptor metadata and does not prove database constraints, runtime navigation, lazy loading, cascade behavior, query execution, schema existence, deployment, provider compatibility, or production usage.
+      - Existing source mappingKind values such as association, relation, entity-storage, property-column, adapter-command, orm-class, and orm-property remain stable; model relationship semantics are additive.
+      - Bidirectional relationships require deterministic endpoints; unidirectional, ambiguous, duplicate, inherited, split, conditional, many-to-many, provider-specific, or unsupported shapes are gaps or needs-review evidence.
+      - Descriptor conclusions are capped at the weakest supporting source evidence and are not upgraded by generated-code linkage.
+      - Unsafe endpoint names, SQL-like text, config values, source snippets, connection strings, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
+
+  - id: legacy.data.orm.nhibernate.v1
+    name: Legacy NHibernate mapping metadata
+    description: Extracts safe static descriptor evidence from checked-in NHibernate hbm.xml mapping files without loading NHibernate or provider runtimes.
+    evidenceTier: Tier2Structural
+    emits:
+      - LegacyDataMetadataDeclared
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - AnalysisGap
+    limitations:
+      - NHibernate mapping evidence is checked-in XML metadata only and does not prove session factory loading, runtime mapping validity, lazy loading, cascade behavior, dirty tracking, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - XML parsing uses the legacy data safe parser bounds and rejects DTDs, external entities, malformed input, oversized input, excessive node count, and excessive depth as reduced-coverage gaps.
+      - Safe properties include metadataFormat, modelKind, descriptorRole, stableModelKey, mappingKind, modelRelationshipKind when deterministic, safe display labels or hashes, supportingFactIds, coverageLabel, and limitation codes.
+      - Schema, catalog, formula, filter, SQL, query, dialect, connection, provider-specific values, raw mapping content, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
+      - Inheritance, joined or union subclass mappings, composite IDs, dynamic components, custom SQL, filters, named queries, custom user types, provider extensions, and ambiguous mapping shapes are gaps unless a future rule documents deterministic handling.
+      - Per-class descriptor and relationship emission is capped deterministically; skipped descriptors produce too-large or truncation gaps rather than clean absence.
+
+  - id: legacy.data.orm.unsupported.v1
+    name: Unsupported legacy ORM descriptor gap
+    description: Records safe gaps for recognized old ORM descriptor families outside the deterministic MVP parser scope.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Unsupported ORM evidence is a static coverage gap and does not prove data access, runtime mapping validity, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - Recognized family labels are public-safe descriptors only; raw mapping content, SQL, config values, connection strings, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
+      - LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, Castle ActiveRecord, Fluent-only mappings, and project-local mapping DSLs remain unsupported unless a future rule defines deterministic parser behavior.
+      - Unsupported descriptors produce gaps, not invented entity, table, column, relationship, or generated-code facts.
+
+  - id: legacy.data.model.generated-link.v1
+    name: Legacy data model generated-code linkage
+    description: Reserves model-normalized generated-code linkage semantics for deterministic descriptor-to-symbol evidence beyond the existing source generated-link rule.
+    evidenceTier: Tier1Semantic
+    emits:
+      - LegacyDataGeneratedCodeLinked
+      - AnalysisGap
+    limitations:
+      - Existing generated-code linkage remains under legacy.data.generated-link.v1 unless a model-normalized link needs this distinct rule ID.
+      - Linkage is static repository evidence and does not prove generated files are fresh, runtime code paths execute, database access occurs, query execution occurs, deployment, provider compatibility, or production usage.
+      - Global short-name matching is not allowed; semantic links require scoped compiler-resolved symbols, structural links require scoped metadata/file evidence, and syntax fallback remains reduced coverage.
+      - Ambiguous, stale, missing, duplicate, or reduced-coverage generated-code candidates are gaps rather than arbitrary links.
+      - Linkage tier is recorded separately and does not upgrade descriptor facts above their descriptor tier ceiling.
+      - Safe properties include linkKind, symbolRole, metadataFormat, stableModelKey, generatedCodeFileName, supportingFactIds, coverageLabel, and hash variants for unsafe identifiers; source snippets, raw paths, URLs, remotes, config values, and secrets are omitted.
+
+  - id: legacy.data.model.surface.v1
+    name: Legacy data model surface projection
+    description: Owns derived legacy-data report and export surface rows for safe model descriptors and availability gaps; it is not a scan-time source fact rule.
+    evidenceTier: Tier2Structural
+    emits:
+      - AnalysisGap
+    limitations:
+      - This rule projects the existing legacy-data surface kind with surfaceSubtype data-model; it does not introduce a LegacyDataModelSurfaceProjected scan fact or a parallel legacy-data-model surface kind.
+      - Surface rows are static report/export context and do not prove runtime database use, query execution, schema existence, reachability, dependency impact, deployment, provider compatibility, or production usage.
+      - AnalysisGap facts under legacy.data.* rules are excluded from terminal surface projection and remain gaps, caveats, or limitations.
+      - Already-derived projection rows are not re-consumed by prefix-based legacy data fact readers.
+      - Safe properties include surfaceKind, surfaceSubtype, modelKind, metadataFormat, stableSurfaceKey, safeDisplayName or hash label, sourceRuleIds, supportingFactIds, supportingEdgeIds, coverageLabel, and limitations.
+      - Surface classification is capped for syntax-only, ambiguous, high fan-out, missing generated-code, unsupported, or reduced-coverage evidence.
+      - Raw SQL, source snippets, connection strings, config values, URLs, remotes, local absolute paths, schema/catalog/provider values, private labels, and secrets are hashed or omitted.
 
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
@@ -1029,7 +1119,7 @@ rules:
   - id: legacy.webforms.handler-resolution.v1
     name: Legacy WebForms code-behind handler resolution
     description: Resolves markup event handlers to linked code-behind partial methods by semantic source-symbol evidence when available, otherwise by scoped structural or syntax fallback.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WebFormsHandlerResolved
       - AnalysisGap
@@ -1053,7 +1143,7 @@ rules:
   - id: legacy.webforms.event-flow.v1
     name: Legacy WebForms event-to-backend static flow projection
     description: Projects resolved WebForms handlers to directly connected call, WCF/service-reference, HTTP, SQL/query, config, or dependency-surface evidence while preserving supporting fact IDs and coverage labels.
-    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WebFormsEventFlowProjected
       - AnalysisGap
@@ -1073,6 +1163,180 @@ rules:
       - Logic signals are deterministic static heuristics, not proof of business logic, code quality, risk, runtime behavior, or production usage.
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
+
+  - id: legacy.winforms.inventory.v1
+    name: Legacy WinForms file and surface inventory
+    description: Inventories static WinForms form, user-control, control, component, application-context, designer, startup, and linked resource surface evidence from checked-in files.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WinFormsSurfaceDeclared
+      - AnalysisGap
+    limitations:
+      - WinForms surface inventory is static repository evidence and does not prove runtime form creation, visibility, user reachability, authorization, deployment, or production usage.
+      - Syntax and designer fallback can be reduced by failed MSBuild load, stale generated files, missing partial classes, malformed C#, duplicate type identities, or unsupported generated shapes.
+      - File paths are repo-relative; raw source snippets, local absolute paths, raw remotes, resource values, config values, URLs, endpoint addresses, and secrets are omitted.
+
+  - id: legacy.winforms.control.v1
+    name: Legacy WinForms control and component evidence
+    description: Extracts deterministic static WinForms control and component field/object-creation evidence from designer and code files.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WinFormsControlDeclared
+      - AnalysisGap
+    limitations:
+      - Control/component rows do not prove runtime parentage, control-tree construction, layout, visibility, enabled state, data binding result, localization result, role gating, user access, or production usage.
+      - Dynamic controls, collection lookups, factories, dependency injection, generated designer drift, and runtime state are reduced-coverage gaps rather than guessed controls.
+      - Raw snippets, resource values, local absolute paths, raw remotes, endpoint values, config values, and secrets are not stored.
+
+  - id: legacy.winforms.event-binding.v1
+    name: Legacy WinForms static event binding evidence
+    description: Extracts explicit static WinForms event subscriptions such as Click, grid events, BackgroundWorker callbacks, and Timer ticks from designer and code files.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WinFormsEventBindingDeclared
+      - AnalysisGap
+    limitations:
+      - Event bindings are static declarations and do not prove that a control exists at runtime, that a user can reach the event, that a handler executes, or that backend behavior occurred.
+      - Lambdas, anonymous delegates, custom brokers, reflection, dependency injection, runtime subscription, duplicate handlers, ambiguous partial classes, and unsupported subscription shapes are needs-review or gap evidence.
+      - TraceMap preserves direct evidence and does not choose arbitrary winners when multiple handlers, controls, or partial classes could match.
+
+  - id: legacy.winforms.handler-resolution.v1
+    name: Legacy WinForms handler resolution
+    description: Resolves static WinForms event bindings to scoped partial-class handler methods using semantic evidence when available and structural or syntax fallback when not.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WinFormsHandlerResolved
+      - AnalysisGap
+    limitations:
+      - Handler resolution is static evidence and does not prove runtime event execution, scheduling, branch feasibility, authorization, deployment, or production usage.
+      - Generated designer drift, missing partial classes, overloaded handlers, ambiguous duplicate methods, failed semantic analysis, dynamic wiring, reflection, and dependency injection can reduce confidence.
+      - Handler names are scoped to visible form/control/component partial classes and are not matched globally across the repository.
+
+  - id: legacy.winforms.navigation.v1
+    name: Legacy WinForms static navigation evidence
+    description: Records deterministic static Application.Run, Show, ShowDialog, owner/parent, and MDI navigation or containment evidence from checked-in C#.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WinFormsNavigationEdgeDeclared
+      - AnalysisGap
+    limitations:
+      - Navigation rows do not prove that a form opens at runtime, that a user can reach it, that auth/role checks allow it, that the window is visible, or that navigation occurs in production.
+      - Dynamic factories, dependency injection, reflection, branch gating, role/user-state checks, runtime state, duplicate candidates, and unresolved construction targets are gaps or needs-review classifications.
+      - Navigation evidence remains separate from event binding, handler, call, and object-creation evidence and cites supporting IDs where available.
+
+  - id: legacy.winforms.callback-boundary.v1
+    name: Legacy WinForms callback boundary evidence
+    description: Records static BackgroundWorker, timer, UI marshalling, async/delegate, and callback-boundary evidence linked to WinForms event handlers where possible.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WinFormsCallbackBoundaryDeclared
+      - AnalysisGap
+    limitations:
+      - Callback rows do not prove scheduling, execution order, cancellation, progress semantics, thread affinity, race freedom, completion, service reachability, SQL execution, or production usage.
+      - Unknown receivers, anonymous delegates, async callbacks, thread scheduling, runtime state, and reduced semantic coverage cap confidence and remain boundary-limited evidence.
+
+  - id: legacy.winforms.handler-flow.v1
+    name: Legacy WinForms handler-to-backend static flow projection
+    description: Projects resolved WinForms handlers to directly connected call, object-creation, WCF, ASMX, remoting, legacy data, SQL/query, HTTP, config, or dependency-surface evidence from the same scan.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WinFormsHandlerFlowProjected
+      - AnalysisGap
+    limitations:
+      - Handler-flow projection is static direct evidence and does not prove runtime execution, branch feasibility, dynamic dispatch, dependency injection targets, callback ordering, service reachability, SQL execution, database existence, or production usage.
+      - The projected tier is capped by the weakest required handler/path/terminal evidence; reduced semantic coverage, missing call/value-flow/backend facts, generated-code drift, reflection, and dynamic dispatch produce partial or unknown classifications.
+      - Terminal names that are unsafe for cleartext are hashed using stable TraceMap digest conventions; raw SQL, endpoint addresses, config values, source snippets, local paths, remotes, and secrets are omitted.
+
+  - id: legacy.winforms.resource-metadata.v1
+    name: Legacy WinForms safe resource metadata
+    description: Records conservative .resx presence, culture suffix, safe key hashes, and resource kind labels linked to WinForms surfaces when safe deterministic evidence exists.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WinFormsResourceMetadataDeclared
+      - AnalysisGap
+    limitations:
+      - Resource rows do not store raw strings, binary payloads, images, icons, file paths, URLs, config-looking values, secrets, localization results, runtime text, layout, or user-facing behavior.
+      - DTD/entity expansion, external references, malformed XML, unsupported resource kinds, ambiguous linkage, and too-large resources are parser/security gaps rather than partial raw output.
+
+  - id: legacy.aspnet.surface.v1
+    name: Legacy ASP.NET static surface inventory
+    description: Inventories classic ASP.NET application and handler files, directive metadata, and supporting designer-file gaps while reusing WebForms inventory facts for page/control/master evidence.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AspNetSurfaceDeclared
+      - AnalysisGap
+    limitations:
+      - Surface rows are static checked-in file evidence only and do not prove IIS deployment, runtime compilation, page activation, application startup, authorization, reachability, or production usage.
+      - Existing WebFormsPageDeclared, WebFormsControlDeclared, and WebFormsDesignerControlDeclared facts remain authoritative for page/control/master/event evidence; this rule does not duplicate those identities as ASP.NET surface facts.
+      - Designer files are supporting identity/linkage evidence only; orphan designer files are gaps rather than standalone page, control, route, handler, or navigation surfaces.
+      - Directive values are stored only as safe identifiers, safe repository-relative descriptors, context-separated hashes, or omissions; raw local paths, URLs, hostnames, snippets, remotes, config values, credentials, endpoint values, and secrets are forbidden.
+      - Malformed, unreadable, generated, stale, or unsupported files are analysis gaps, not absence findings.
+
+  - id: legacy.aspnet.route.v1
+    name: Legacy ASP.NET static route registration evidence
+    description: Extracts supported classic ASP.NET route registration candidates such as MapPageRoute and simple RouteCollection.Add PageRouteHandler shapes from checked-in C#.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AspNetRouteDeclared
+      - AnalysisGap
+    limitations:
+      - Route rows are static registration candidates and do not prove route table execution, ASP.NET request matching, URL rewriting, deployment, authorization, reachability, handler selection, or runtime impact.
+      - Dynamic route construction, config-backed patterns, reflection, loops over unknown data, custom route subclasses, custom route handlers, and unsupported route registration shapes are review-tier evidence or gaps, not invented endpoints.
+      - Route names, patterns, defaults, constraints, data tokens, and mapped pages are stored only as safe descriptors, presence flags, context-separated hashes, or omissions.
+      - Syntax-only fallback is capped below semantic confidence when compiler-resolved System.Web.Routing symbols are unavailable or coverage is reduced.
+
+  - id: legacy.aspnet.config.v1
+    name: Legacy ASP.NET checked-in config surface evidence
+    description: Extracts safe structures from checked-in ASP.NET config sections for handlers, modules, pages, controls, namespaces, urlMappings, compilation, and location-scoped settings.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AspNetConfigSurfaceDeclared
+      - AnalysisGap
+    limitations:
+      - Config rows describe checked-in XML only and do not prove runtime transform selection, external include loading, machine.config inheritance, IIS pipeline behavior, deployment, authorization, reachability, or production configuration.
+      - Raw config values, connection strings, app settings, machine keys, endpoint addresses, hostnames, local physical paths, URLs, credentials, and secret-looking values are omitted or hashed and never emitted raw.
+      - Encrypted sections, external configSource/file references, transforms, custom sections, machine.config dependencies, runtime mutations, and unsupported providers are gaps.
+      - Matching hashes alone cannot prove page, route, navigation, or runtime reachability.
+
+  - id: legacy.aspnet.handler.v1
+    name: Legacy ASP.NET static handler evidence
+    description: Detects .ashx directives, IHttpHandler/IHttpAsyncHandler implementations, handler factories, and config-backed handler declarations as static handler surface candidates.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AspNetHandlerDeclared
+      - AnalysisGap
+    limitations:
+      - Handler rows are static declarations and do not prove request execution, factory output, pipeline ordering, authorization, deployment, reachability, or production usage.
+      - Handler factories without compiler-resolved static target types remain review-tier evidence with unresolved factory target metadata.
+      - Syntax fallback can confuse framework interfaces or attributes with project-defined lookalikes; ambiguous targets are capped or emitted as gaps.
+      - Handler paths, class names, and config values are stored only as safe identifiers, safe descriptors, context-separated hashes, or omissions.
+
+  - id: legacy.aspnet.page-method.v1
+    name: Legacy ASP.NET PageMethod and ScriptMethod evidence
+    description: Detects WebForms PageMethod, WebMethod, ScriptMethod, and ScriptService attribute evidence from checked-in C# without reclassifying it as ASMX unless independent ASMX host evidence exists.
+    evidenceTier: Tier1Semantic or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AspNetPageMethodDeclared
+      - AnalysisGap
+    limitations:
+      - PageMethod rows are static attribute evidence and do not prove AJAX execution, serialization behavior, script generation, authorization, page rendering, deployment, reachability, or runtime impact.
+      - PageMethod and ScriptMethod facts remain distinct from ASMX host/operation facts unless a separate ASMX rule supplies host evidence.
+      - Syntax fallback is capped for framework-attribute lookalikes, non-static methods, missing linked page evidence, generated code, partial classes, and reduced semantic coverage.
+      - Raw source snippets, URLs, hostnames, remotes, config values, endpoint values, credentials, and secrets are forbidden.
+
+  - id: legacy.aspnet.navigation.v1
+    name: Legacy ASP.NET static navigation reference evidence
+    description: Extracts deterministic static navigation references from markup, checked-in sitemap XML, and supported C# APIs, and emits conservative target edges only when non-hash checked-in target evidence exists.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AspNetNavigationReferenceDeclared
+      - AspNetNavigationEdgeDeclared
+      - AnalysisGap
+    limitations:
+      - Navigation rows are static reference candidates and do not prove browser behavior, JavaScript execution, data-bound menu materialization, role trimming, master-page or nested-control composition, authorization, reachability, page rendering, form posting, or runtime impact.
+      - JavaScript-generated, resource-driven, data-bound, database-backed, localized, concatenated, role-filtered, runtime master/control-tree, URL-rewritten, and auth-dependent navigation stays review-tier or gap evidence.
+      - Target edges require checked-in page, route, config, or handler evidence with non-hash support; route/config/navigation hash equality alone cannot synthesize an edge.
+      - Raw URLs, hostnames, query strings, fragments, config values, endpoint values, local paths, remotes, snippets, credentials, and secret-looking values are hashed or omitted.
 
   - id: legacy.flow.input-availability.v1
     name: Legacy flow input availability
@@ -1683,13 +1947,20 @@ rules:
 
   - id: combined.route-flow.gap.v1
     name: Route-flow analysis gap
-    description: Emits route-flow gaps for selector misses, missing schema, extractor unavailability, implementation candidate gaps, runtime binding uncertainty, dynamic dispatch boundaries, reduced coverage, unknown commit SHA, no route-flow evidence, unknown analysis, truncation, and unsafe value omission.
+    description: Emits route-flow gaps for selector misses, missing route roots, missing method-symbol bridges, missing call edges, missing implementation bridges, implementation candidate gaps, missing data-surface attachments, runtime binding uncertainty, dynamic dispatch boundaries, reduced coverage, unknown commit SHA, no route-flow evidence, unknown analysis, traversal bounds, truncation, and unsafe value omission.
     evidenceTier: Tier4Unknown
     emits:
       - SelectorNoMatch gap
+      - MissingRouteRoot gap
+      - MissingMethodSymbolBridge gap
+      - MissingCallEdge gap
+      - MissingImplementationBridge gap
+      - DataSurfaceAttachmentMissing gap
       - SchemaMissing gap
       - ExtractorUnavailable gap
       - ImplementationCandidateUnavailable gap
+      - AmbiguousImplementationCandidates gap
+      - IdentityGap gap
       - RuntimeBindingNotProven gap
       - DynamicDispatchBoundary gap
       - DynamicClientUrlNeedsReview gap
@@ -1699,10 +1970,12 @@ rules:
       - UnknownCommitSha gap
       - NoRouteFlowEvidence gap
       - UnknownAnalysisGap gap
+      - TraversalBounds gap
       - TruncatedByLimit gap
       - UnsafeValueOmitted gap
     limitations:
       - Gaps are coverage-relative explanations of missing or weak static evidence and must not be rendered as clean absence under reduced coverage.
+      - Endpoint composition gaps describe static bridge and terminal surface availability only and do not prove route reachability, request execution, dependency-injection target selection, dynamic dispatch, branch feasibility, database existence, query execution, or downstream absence.
       - Truncation gaps mean the report is partial.
       - Gap messages must not echo unsafe selectors, local paths, raw remotes, raw SQL/config values, snippets, connection strings, private labels, or secret-like values.
 
@@ -2138,6 +2411,83 @@ rules:
       - Workspace diagnostics are sanitized categories and do not include raw native output, local paths, private repository names, remotes, package sources, config values, credentials, or source snippets.
       - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
+
+  - id: analyzer.capability.semantic.v1
+    name: Analyzer semantic capability diagnostics
+    description: Summarizes semantic compilation, MSBuild project load, and reference assembly capability from scan status and sanitized workspace evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Capability diagnostics are derived status rows and are not primary compiler symbol observations.
+      - Available or reduced semantic capability does not prove runtime behavior, deployment readiness, production usage, or clean repository health.
+      - Reference assembly and SDK categories summarize observed scan behavior only; they do not enumerate installed tools or prove absence outside the scan scope.
+
+  - id: analyzer.capability.syntax-fallback.v1
+    name: Analyzer syntax fallback capability diagnostics
+    description: Summarizes whether syntax fallback evidence was available when semantic coverage is reduced or unavailable.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Syntax fallback evidence cannot prove compiler-resolved behavior, runtime reachability, overload binding, or dependency resolution.
+      - Syntax fallback availability does not turn no-evidence outcomes into clean absence.
+      - The diagnostic cites sanitized support facts and closed coverage labels rather than source snippets.
+
+  - id: analyzer.capability.project-config.v1
+    name: Analyzer project and config capability diagnostics
+    description: Summarizes static project/config inspection capability from checked-in project, target framework, and toolchain metadata.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Project/config capability is static metadata inspection and does not evaluate arbitrary MSBuild conditions, imports, runtime config transforms, or design-time execution.
+      - Conditional, unsupported, malformed, or unresolved metadata remains reduced or unknown coverage rather than a clean absence conclusion.
+      - Private project values are omitted, hashed, or represented as closed categories before fact IDs and artifacts are produced.
+
+  - id: analyzer.capability.package-restore.v1
+    name: Analyzer package and restore capability diagnostics
+    description: Summarizes NuGet/package restore awareness from package-shape diagnostics, explicit restore option state, and sanitized restore failure categories.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Restore not requested means dependencies were not resolved by TraceMap; it is not evidence that packages are missing.
+      - Restore failure categories are sanitized and do not include package source URLs, credentials, command output, local caches, or raw config values.
+      - Package/restore capability does not prove vulnerability, license, runtime loading, transitive closure, or deployment behavior.
+
+  - id: analyzer.capability.generated-design-time.v1
+    name: Analyzer generated and design-time capability diagnostics
+    description: Summarizes generated/designer-file and design-time linkage capability for supported legacy static patterns.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Generated/design-time capability rows do not prove generated code absence or freshness outside checked-in repository evidence.
+      - Missing, malformed, unlinked, or unknown design-time artifacts cap confidence but do not suppress valid syntax/config facts.
+      - TraceMap does not execute designers, regenerate files, contact services, or inspect private local tool state.
+
+  - id: analyzer.capability.legacy-toolchain.v1
+    name: Analyzer legacy toolchain capability diagnostics
+    description: Summarizes legacy framework, MSBuild/toolset, WebForms, WCF, ASMX, ASP.NET, and remoting capability signals from static repository evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Legacy toolchain capability is static guidance, not proof that Visual Studio, .NET Framework, IIS, service hosts, or runtime dependencies are installed.
+      - Web, service, remoting, and generated shape evidence does not prove activation, event firing, endpoint reachability, proxy freshness, deployment, or impact.
+      - Toolchain signals are informational unless observed scan behavior reduces coverage.
+
+  - id: analyzer.capability.downstream-coverage.v1
+    name: Analyzer downstream coverage capability diagnostics
+    description: Summarizes reduced or unknown analyzer capability for downstream no-evidence and coverage-relative report explanations.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalyzerCapabilityDiagnostic
+    limitations:
+      - Downstream coverage context does not prove absence, impact, no-impact, runtime behavior, release readiness, or clean repository health.
+      - Consumers must keep no-evidence conclusions coverage-relative when this capability is reduced, unavailable, or unknown.
+      - Unsupported capability schema versions must be surfaced as compatibility gaps rather than silently dropped.
 
   - id: http.client.invocation.v1
     name: HTTP client invocation

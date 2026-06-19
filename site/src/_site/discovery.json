@@ -185,6 +185,23 @@
     ]
   },
   {
+    "path": "/demo/runbook/",
+    "title": "Public Demo Runbook",
+    "summary": "Operator checklist for running the public demo, reviewing shareable summaries, following proof paths, and keeping demo claims bounded.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The runbook is a checklist over existing public demo routes, not a new evidence source.",
+      "Shareable wording must stay attached to cited summaries, proof paths, coverage labels, and limitations."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or complete product coverage proof.",
+      "No AI impact analysis, LLM analysis, raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, or private sample names are published."
+    ]
+  },
+  {
     "path": "/demo/proof-upgrades/",
     "title": "Demo Proof Upgrades",
     "summary": "Evidence ledger for demo rows that moved from deferred to reproducible public-demo proof with coverage labels.",
@@ -219,6 +236,23 @@
     ]
   },
   {
+    "path": "/demo/evidence-trail/",
+    "title": "Demo Evidence Trail",
+    "summary": "Demo-level walkthrough of one public-safe static evidence question using checked-in summary rows, proof paths, coverage labels, and explicit downstream gaps.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "The walkthrough uses checked-in public summary counts and labels, not raw local report rows.",
+      "Package, configuration, and SQL-facing surface details are explicit public-summary gaps until sanitized per-item rows exist."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, operational safety, release approval, or complete product coverage proof.",
+      "No raw facts, SQLite indexes, analyzer logs, local output roots, database text, source excerpts, credentials, workstation paths, or generated local internals are published."
+    ]
+  },
+  {
     "path": "/proof-paths/",
     "title": "Proof Path Index",
     "summary": "Public-demo index that maps TraceMap public routes and demo sections to artifact type, rule ID or rule family, evidence tier, coverage label, proof path, limitation, and public status.",
@@ -236,20 +270,37 @@
     ]
   },
   {
+    "path": "/proof-source-catalog/",
+    "title": "Proof Source Catalog",
+    "summary": "Public-demo route-to-source catalog mapping public route wording to proof paths, source artifact families, rule families, evidence tiers or coverage labels, limitations, and non-claims.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The catalog is an orientation layer and does not replace generated artifacts, rule catalog entries, repository docs, route metadata, coverage labels, or documented limitations.",
+      "Page-level demo status does not upgrade concept or hidden rows, and it does not downgrade shipped source-document rows."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No raw facts, raw SQLite, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden private-work details are published."
+    ]
+  },
+  {
     "path": "/roadmap/",
-    "title": "Roadmap Gates",
-    "summary": "Explains how public copy moves from concept to demo only when public-safe evidence and limitations exist.",
+    "title": "Roadmap Claim Ledger",
+    "summary": "Canonical concept-level ledger for public claim wording, proof paths, evidence status, wording status, and limitations.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "roadmap",
-    "preferredProofPath": "/limitations/",
+    "preferredProofPath": "/proof-paths/",
     "limitations": [
-      "Roadmap entries are planning notes, not proof.",
+      "The ledger is a presentation and governance layer, not a replacement for deterministic scanner or reducer outputs.",
       "Concept rows need checked-in samples, generated summaries, and visible limitations before promotion."
     ],
     "nonClaims": [
-      "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, or AI impact analysis proof.",
-      "No LLM calls, embeddings, vector databases, or prompt-based classification in core TraceMap."
+      "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No LLM calls, embeddings, vector databases, prompt-based classification, raw facts, SQLite indexes, analyzer logs, source snippets, SQL, config values, secrets, local paths, raw remotes, generated scan directories, or private sample names are published."
     ]
   },
   {
@@ -284,6 +335,23 @@
     "nonClaims": [
       "No runtime behavior, production traffic, deployment state, endpoint performance, P1 root cause, release safety, or release approval proof.",
       "No AI impact analysis or prompt-based product classification."
+    ]
+  },
+  {
+    "path": "/use-cases/endpoint-review/",
+    "title": "Endpoint Review Playbook",
+    "summary": "Concept-level engineer playbook for reviewing endpoint-adjacent static evidence before choosing code review, tests, telemetry questions, or owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This playbook routes human inspection and follow-up questions; it is not endpoint proof.",
+      "Static evidence can show review cues and gaps, but runtime systems and owners remain responsible for operational claims."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, complete product coverage, team blame, vendor blame, consultant blame, or scare framing.",
+      "No raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, private sample names, connection strings, credentials, table dumps, database contents, facts.ndjson, index.sqlite, report.md, scan-manifest.json, or logs/analyzer.log are published."
     ]
   },
   {
@@ -338,6 +406,24 @@
     ]
   },
   {
+    "path": "/static-vs-runtime/",
+    "title": "Static Evidence Vs Runtime Telemetry",
+    "summary": "Concept-level comparison of TraceMap deterministic static repository evidence with runtime telemetry and observability questions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This route explains boundaries between static repository evidence and runtime systems; it does not describe a current runtime telemetry capability.",
+      "Static evidence can prepare and follow up on operational review, but runtime tools and owners remain responsible for live-system conclusions."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete product coverage, incident root cause, service ownership, production dependency understanding, or test sufficiency proof.",
+      "No replacement for logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
@@ -386,6 +472,23 @@
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
       "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, generated scan directories, AI impact analysis, LLM analysis, or complete product coverage claim."
+    ]
+  },
+  {
+    "path": "/review-claim-checklist/",
+    "title": "Review Claim Checklist",
+    "summary": "Concept-level repeat-before-reuse checklist for keeping TraceMap claims attached to proof paths, rule IDs, evidence tiers, coverage labels, limitations, non-claims, source status, and owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The checklist is a review ritual and cannot upgrade a claim by process alone.",
+      "Concept checklist rows are not evidence that the underlying product behavior has main-backed or demo-backed support."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, real internal reviewer identities, owner identities, or internal review dates are published."
     ]
   },
   {

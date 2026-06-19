@@ -47,6 +47,7 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `parameter_forward_edges` includes direct parameter forwarding, same-method local alias forwarding up to 3 alias hops, and unique constructor field-origin forwarding when evidence exists.
 - `parameter_forward_edges` omits ambiguous constructor field origins and alias chains beyond the documented bound instead of inventing a flow path.
 - .NET scans that encounter DBML, EDMX, typed DataSet XSD/TableAdapter, data-provider config, or generated legacy data designers emit `LegacyData*` facts or explicit `AnalysisGap` facts with rule IDs and evidence tiers.
+- DBML, EDMX, typed DataSet, and TableAdapter descriptor facts include additive normalized model identity metadata such as `metadataFormat`, `modelKind`, `descriptorRole`, and `stableModelKey` while preserving source rule IDs and Tier2 descriptor ceilings.
 - Legacy data metadata rows appear in `facts.ndjson`, `index.sqlite`, and the scan report as static design-time metadata evidence, not runtime data access, SQL execution, provider compatibility, database existence, or production usage.
 - Legacy data metadata facts and reports do not include raw SQL, connection strings, config values, server/catalog names, URLs, local absolute paths, raw remotes, secrets, source snippets, or private sample identities.
 - Unrelated `.xsd` files without typed DataSet/TableAdapter indicators do not become legacy data descriptor facts.
@@ -323,6 +324,8 @@ Minimum checks:
 - WCF metadata-backed mappings and operation-name normalization remain static evidence and do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
 - legacy WebForms facts expose static page/control/event/handler/flow evidence with rule IDs, evidence tiers, supporting fact IDs, coverage labels, and limitations; they do not prove runtime page lifecycle execution, postbacks, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 - WebForms generated reports and validation summaries must not include raw source snippets, raw SQL, config values, raw URLs, local absolute paths, raw remotes, private sample identifiers, or secrets.
+- legacy WinForms facts expose static form/control/component/resource/event/handler/navigation/callback/handler-flow evidence with rule IDs, evidence tiers, supporting fact IDs, coverage labels, and limitations; they do not prove runtime event firing, form visibility, user reachability, branch feasibility, auth/role outcome, scheduling, service reachability, SQL execution, database existence, deployment, or production usage.
+- WinForms generated reports and validation summaries must not include raw source snippets, raw resource values, raw SQL, config values, raw URLs, endpoint addresses, hostnames, local absolute paths, raw remotes, private sample identifiers, or secrets.
 
 ## Endpoint Alignment Acceptance
 
@@ -677,6 +680,7 @@ Each fixture should document:
 | Legacy DBML descriptor | `LegacyDataEntityDeclared`, `LegacyDataStorageObjectDeclared`, `LegacyDataColumnDeclared`, and `LegacyDataMappingDeclared` under `legacy.data.dbml.v1` as static design-time metadata only |
 | Legacy EDMX simple mapping | `LegacyDataMappingDeclared` under `legacy.data.edmx.v1` when MSL maps one conceptual descriptor to one storage descriptor; unsupported shapes emit `AnalysisGap` |
 | Typed DataSet TableAdapter static SQL | `LegacyData*` descriptor facts plus `SqlTextUsed`/SQL-shape `QueryPatternDetected` hashes under `legacy.data.typed-dataset.v1`; raw SQL is not stored |
+| Legacy data model identity | Source descriptor facts carry safe `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, identity-rule provenance, safe display labels or hashes, and source metadata fact IDs without changing source rule ownership |
 | Legacy data config provider | `LegacyDataProviderConfigDeclared` under `legacy.data.config.v1` with safe names or hashes; raw connection strings and config values are omitted |
 | Legacy data generated code | `LegacyDataGeneratedCodeLinked` under `legacy.data.generated-link.v1`; descriptor tiers are not upgraded by the link |
 | Python Pydantic DTO member match | `ProbableImpact` through Tier2 `SerializerContractMember` |

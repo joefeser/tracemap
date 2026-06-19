@@ -273,6 +273,9 @@ public static class ScanEngine
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
         facts.AddRange(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts));
         facts.AddRange(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts));
+        facts.AddRange(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts));
+        facts.AddRange(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts));
+        facts.AddRange(AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, semanticResult, facts, options));
 
         return facts
             .GroupBy(fact => fact.FactId, StringComparer.Ordinal)

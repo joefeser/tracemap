@@ -89,3 +89,4 @@ TestResult.xml
 nunit-*.xml
 scripts/smoke-typescript-endpoints.sh
 .DS_Store
+.tmp

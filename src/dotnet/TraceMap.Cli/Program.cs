@@ -357,7 +357,7 @@ public static class TraceMapCommand
                 values.HasFlag("--exit-code")),
             cancellationToken);
 
-        await output.WriteLineAsync($"TraceMap route-flow completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"TraceMap route-flow completed: {CombinedReportHelpers.SafePath(result.MarkdownPath ?? result.JsonPath ?? outputPath)}");
         await output.WriteLineAsync($"Classification: {result.Report.Summary.Classification}");
         await output.WriteLineAsync($"Entry evidence: {result.Report.Summary.EntryEvidenceCount}");
         await output.WriteLineAsync($"Static flow rows: {result.Report.Summary.FlowRowCount}");
@@ -1512,6 +1512,18 @@ public static class TraceMapCommand
             $"facts={result.Facts.Count}"
         };
         lines.AddRange(result.Manifest.KnownGaps.Select(gap => $"knownGap={gap}"));
+        lines.AddRange(result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic)
+            .GroupBy(fact => new
+            {
+                Code = fact.Properties.GetValueOrDefault("capabilityCode") ?? "unknown",
+                State = fact.Properties.GetValueOrDefault("capabilityState") ?? "unknown",
+                Effect = fact.Properties.GetValueOrDefault("coverageEffect") ?? "unknown"
+            })
+            .OrderBy(group => group.Key.Code, StringComparer.Ordinal)
+            .ThenBy(group => group.Key.State, StringComparer.Ordinal)
+            .ThenBy(group => group.Key.Effect, StringComparer.Ordinal)
+            .Select(group => $"capability={group.Key.Code};state={group.Key.State};coverage={group.Key.Effect};count={group.Count()}"));
         await File.WriteAllLinesAsync(path, lines, cancellationToken);
     }
 
@@ -2387,6 +2399,7 @@ public static class TraceMapCommand
 
             Outputs:
               combined.sqlite with index_sources, combined_facts, combined_symbols, dependency tables, and derived-row placeholders.
-            """;
+        """;
     }
+
 }
