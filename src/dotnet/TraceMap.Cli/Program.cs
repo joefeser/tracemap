@@ -2411,7 +2411,17 @@ public static class TraceMapCommand
             return "n/a";
         }
 
-        return Path.IsPathFullyQualified(path)
+        var fullyQualified = false;
+        try
+        {
+            fullyQualified = Path.IsPathFullyQualified(path);
+        }
+        catch (ArgumentException)
+        {
+            fullyQualified = false;
+        }
+
+        return fullyQualified
             || path.StartsWith("/", StringComparison.Ordinal)
             || path.StartsWith("\\", StringComparison.Ordinal)
             || path.Contains("://", StringComparison.Ordinal)

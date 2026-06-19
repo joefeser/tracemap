@@ -379,7 +379,7 @@ public static class CombinedRouteFlowReporter
         if (entryEvidence.Length > 0
             && !HasDownstreamFlowEvidence(flowRows)
             && dependencySurfaces.Count == 0
-            && !gaps.Any(gap => gap.GapKind == "DataSurfaceAttachmentMissing"))
+            && !gaps.Any(IsNoEvidenceBlockingCompositionGap))
         {
             gaps.Add(new RouteFlowGap(
                 "gap:no-route-flow-evidence",
@@ -741,7 +741,7 @@ public static class CombinedRouteFlowReporter
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(EndpointEdgeSortKey, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var callLikeEdgesByFromNodeId = inventory.Edges
-            .Where(edge => edge.EdgeKind is "calls" or "creates" or "argument-passed" or "parameter-forward")
+            .Where(edge => edge.EdgeKind is "calls" or "creates" or "argument-passed" or "argument-flow" or "parameter-forward")
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var implementationCandidatesByInterface = inventory.Edges
@@ -2704,7 +2704,14 @@ public static class CombinedRouteFlowReporter
 
     private static bool IsNoEvidenceBlockingCompositionGap(RouteFlowGap gap)
     {
-        return gap.GapKind is "MissingRouteRoot" or "MissingMethodSymbolBridge" or "MissingCallEdge" or "IdentityGap" or "TraversalBounds";
+        return gap.GapKind is "MissingRouteRoot"
+            or "MissingMethodSymbolBridge"
+            or "MissingCallEdge"
+            or "MissingImplementationBridge"
+            or "ImplementationCandidateUnavailable"
+            or "DataSurfaceAttachmentMissing"
+            or "IdentityGap"
+            or "TraversalBounds";
     }
 
     private static string GapClassification(RouteFlowGap gap)

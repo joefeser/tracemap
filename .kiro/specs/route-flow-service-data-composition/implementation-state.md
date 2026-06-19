@@ -188,6 +188,14 @@ implements the first suggested PR boundary:
   `route-flow-report.md` and `route-flow-report.json`, preserved
   `reportType = "route-flow"` and `version = "1.0"`, and printed a hashed
   absolute output path.
+- PR review-loop remediation patched three actionable review threads: malformed
+  CLI output paths now fall back to hashed display without throwing,
+  `NoRouteFlowEvidence` is suppressed when more specific bridge/data gaps are
+  already present, and `argument-flow` participates in call-like edge probing.
+  Validation after remediation passed: focused route-flow tests (22 passed, one
+  intentional skip), full `dotnet build`, full `dotnet test` (514 passed, one
+  intentional skip), private path guard, `git diff --check`, checked-in combined
+  paths/reverse smoke, and direct route-flow CLI smoke.
 - `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests`: passed
   after projection implementation and after Kiro review fixes.
 - Kiro implementation review with Sonnet (`claude-sonnet-4.6`) completed with
