@@ -1,4 +1,95 @@
 rules:
+  - id: message.surface.publish.v1
+    name: Static message publisher surface
+    description: Records deterministic static publish, send, produce, or enqueue evidence for broker-backed or external message surfaces when a safe destination identity is visible.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - MessagePublisherSurface
+    limitations:
+      - Publisher evidence is static only and does not prove broker connectivity, runtime delivery, topic existence, production traffic, retries, ordering, auth, retention, dead-letter behavior, deployment reachability, or payload compatibility.
+      - Dynamic, ambiguous, wildcard, unsafe, or unsupported destinations must emit message.surface.gap.v1 AnalysisGap evidence instead of guessed concrete destinations.
+
+  - id: message.surface.consume.v1
+    name: Static message consumer surface
+    description: Records deterministic static consume, subscribe, receive, handler, or trigger evidence for broker-backed or external message surfaces when a safe destination identity is visible.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - MessageConsumerSurface
+    limitations:
+      - Consumer evidence is static only and does not prove live subscriptions, consumer liveness, runtime delivery, broker topology, production traffic, auth, ordering, retries, retention, dead-letter behavior, or payload compatibility.
+      - In-process mediator or notification patterns are excluded from broker-backed message surfaces in v1.
+
+  - id: message.surface.binding.v1
+    name: Static message binding declaration
+    description: Records deterministic static binding, declaration, attribute, or config evidence for message destinations that is not by itself a publisher or consumer claim.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - MessageBindingDeclared
+    limitations:
+      - Binding evidence does not prove runtime binding creation, broker topology, deployment reachability, permissions, traffic, delivery, subscription activity, or payload compatibility.
+      - Binding-only evidence remains visible as a surface row when identity is safe and otherwise becomes an explicit message gap.
+
+  - id: message.surface.identity.v1
+    name: Message destination identity normalization
+    description: Normalizes safe static queue, topic, subscription, exchange, stream, event, and channel identities and hashes unsafe raw destination values with full lowercase SHA-256.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - message destination identity metadata
+    limitations:
+      - Identity normalization does not expand environment interpolation, expression languages, reflection, runtime variables, wildcard subscriptions, pattern topics, or broker aliases.
+      - Rendered reports may show shortened hash prefixes, but persisted destinationHash values and stable-key inputs use full 64-character lowercase SHA-256.
+
+  - id: message.surface.combine.v1
+    name: Combined message surface projection
+    description: Projects message publisher, consumer, and binding facts into combined dependency surface summaries and safe report rows.
+    evidenceTier: Inherits source message evidence tier
+    emits:
+      - combined message surface row
+    limitations:
+      - Combined projection preserves static source evidence only and does not prove runtime delivery, topology, traffic, compatibility, or deployment reachability.
+      - Hashed, dynamic, ambiguous, unsafe, reduced-coverage, or syntax-only rows remain review-tier context.
+
+  - id: message.surface.candidate-edge.v1
+    name: Static message publish-consume candidate edge
+    description: Adds report-level async candidate edge rows when publisher and consumer message surfaces share the same safe static destination identity.
+    evidenceTier: Inherits weakest supporting message evidence tier
+    emits:
+      - message-publish-consume
+    limitations:
+      - Candidate edges are static destination-level evidence only; they are not call edges and do not prove runtime delivery, subscription topology, consumer liveness, ordering, exactly-once behavior, or payload compatibility.
+      - Dynamic, hashed, ambiguous, or unsafe omitted identities do not create candidate edges in v1.
+
+  - id: message.surface.paths.v1
+    name: Message surfaces in path and reverse selectors
+    description: Allows message surface kinds to participate as terminal dependency surfaces in path and reverse queries where existing graph evidence reaches the surface fact.
+    evidenceTier: Inherits source message evidence tier
+    emits:
+      - paths message surface node
+      - reverse message selected surface
+    limitations:
+      - Path and reverse evidence is bounded static graph evidence only; it does not prove runtime ordering, delivery, broker routing, consumer liveness, branch feasibility, or request/response behavior.
+      - Direction filtering is not implemented in this slice; unsupported direction-specific queries must remain explicit gaps or validation errors.
+
+  - id: message.surface.reducer.v1
+    name: Message context for reducer workflows
+    description: Documents how reducer workflows may use message surfaces as conservative context when stable destination, handler, publisher, DTO, package, config, or bounded path evidence exists.
+    evidenceTier: Inherits supporting evidence tier
+    emits:
+      - reducer message context
+    limitations:
+      - Message context does not prove payload compatibility, deserialization success, schema compatibility, runtime consumer breakage, topology, traffic, or deployment reachability.
+      - Name-only, syntax-only, dynamic, hashed, ambiguous, generic, or high-fan-out evidence must downgrade to review-needed or gap-aware classifications.
+
+  - id: message.surface.gap.v1
+    name: Message surface analysis gap
+    description: Records unsupported, dynamic, wildcard, ambiguous, unsafe, missing destination, or reduced-coverage message-surface evidence as AnalysisGap facts.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Gap facts preserve uncertainty and must not be read as evidence that no publisher, consumer, binding, route, topology, or runtime delivery exists.
+      - Gap reasons include dynamic-destination, wildcard-pattern-destination, missing-destination-identity, unsupported-framework, unsafe-omitted, ambiguous-destination, and direction-filter-not-supported.
+
   - id: docs-export.chunk.source-overview.v1
     name: Docs export source overview chunk
     description: Packages indexed source identity, commit, coverage, build, language, extractor, artifact, gap, and limitation metadata into deterministic evidence documentation.
