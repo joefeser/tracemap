@@ -29,7 +29,7 @@ public static class ReleaseReviewPriorityScorer
 
         foreach (var finding in findings)
         {
-            rows.Add(ScoreFinding(report, finding, sectionStatuses[finding.Section]));
+            rows.Add(ScoreFinding(report, finding, sectionStatuses.GetValueOrDefault(finding.Section, ReviewPriorityStatuses.Available)));
         }
 
         foreach (var gap in gaps)
@@ -63,7 +63,7 @@ public static class ReleaseReviewPriorityScorer
             .ToArray();
 
         var status = report.Summary.Truncated
-            || sectionStatuses.Values.Any(status => status == ReleaseReviewStatuses.Truncated)
+            || sectionStatuses.Values.Any(sectionStatus => sectionStatus == ReleaseReviewStatuses.Truncated)
             || sortedRows.Any(row => row.Components.Any(component => component.RuleId == ReviewPriorityRules.Truncation))
             ? ReviewPriorityStatuses.Truncated
             : ReviewPriorityStatuses.Available;
@@ -149,7 +149,7 @@ public static class ReleaseReviewPriorityScorer
                 "cross_repo_reach",
                 "increase",
                 ReviewPriorityRules.Component,
-                EvidenceTiers.Tier2Structural,
+                finding.EvidenceTier,
                 evidence,
                 "Cross-source reach uses explicit release-review row metadata only and does not infer ownership, deployment, topology, or business reach.",
                 [Pair("sourceCount", CrossSourceCount(finding).ToString())]));
@@ -464,9 +464,9 @@ public static class ReleaseReviewPriorityScorer
                 ])
         };
 
-        foreach (var status in sectionStatuses.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        foreach (var sectionStatus in sectionStatuses.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
-            if (status.Value is ReleaseReviewStatuses.Unavailable or ReleaseReviewStatuses.Deferred)
+            if (sectionStatus.Value is ReleaseReviewStatuses.Unavailable or ReleaseReviewStatuses.Deferred)
             {
                 components.Add(Component(
                     "unavailable_workflow",
@@ -475,9 +475,9 @@ public static class ReleaseReviewPriorityScorer
                     EvidenceTiers.Tier4Unknown,
                     evidence,
                     "Unavailable or deferred release-review sections contribute report-level review uncertainty.",
-                    [Pair("section", status.Key), Pair("sectionStatus", status.Value)]));
+                    [Pair("section", sectionStatus.Key), Pair("sectionStatus", sectionStatus.Value)]));
             }
-            else if (status.Value == ReleaseReviewStatuses.Truncated)
+            else if (sectionStatus.Value == ReleaseReviewStatuses.Truncated)
             {
                 components.Add(Component(
                     "truncation",
@@ -486,7 +486,7 @@ public static class ReleaseReviewPriorityScorer
                     EvidenceTiers.Tier4Unknown,
                     evidence,
                     "Truncated release-review sections make report-level priority incomplete.",
-                    [Pair("section", status.Key), Pair("sectionStatus", status.Value)]));
+                    [Pair("section", sectionStatus.Key), Pair("sectionStatus", sectionStatus.Value)]));
             }
         }
 

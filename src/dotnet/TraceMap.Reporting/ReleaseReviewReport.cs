@@ -2082,6 +2082,12 @@ public static class ReleaseReviewReporter
                 builder.AppendLine($"| `{Cell(row.SeverityHint)}` | `{Cell(row.RowId)}` | {Cell(row.RowKind)} | {Cell(row.Section)} | {Cell(row.SourceLabel)} | `{Cell(row.Classification)}` | {Cell(ComponentSummary(row.Components))} | {Cell(string.Join("; ", row.Limitations.Take(3)))} |");
             }
 
+            if (priority.Rows.Count > 25)
+            {
+                builder.AppendLine();
+                builder.AppendLine($"Priority rows omitted from Markdown table: `{priority.Rows.Count - 25}`");
+            }
+
             builder.AppendLine();
         }
 
