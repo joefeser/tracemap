@@ -676,6 +676,13 @@ public static class CombinedDependencyPathReporter
             var attached = false;
             foreach (var symbol in SurfaceAttachmentSymbols(fact))
             {
+                if (IsLegacyDataFact(fact)
+                    && !string.Equals(symbol, fact.SourceSymbol?.Trim(), StringComparison.Ordinal)
+                    && !graph.Nodes.ContainsKey(SymbolNodeId(fact.SourceIndexId, symbol)))
+                {
+                    continue;
+                }
+
                 var symbolNode = graph.GetOrAddSymbolNode(fact.SourceIndexId, fact.SourceLabel, symbol, fact.FilePath, fact.StartLine, fact.EndLine, fact.RuleId, fact.EvidenceTier);
                 graph.AddEdge(new GraphEdge(
                     $"surface:{surface.CombinedFactId}:{symbolNode.NodeId}",
@@ -2671,6 +2678,11 @@ public static class CombinedDependencyPathReporter
 
     private static IReadOnlyList<string> SurfaceAttachmentSymbols(CombinedFactRow fact)
     {
+        if (IsLegacyDataFact(fact))
+        {
+            return LegacyDataAttachmentSymbols(fact).ToArray();
+        }
+
         return new[]
             {
                 fact.SourceSymbol,
@@ -3090,6 +3102,11 @@ public static class CombinedDependencyPathReporter
     private static bool IsDependencySurfaceFact(CombinedFactRow fact)
     {
         if (fact.Properties.TryGetValue("surfaceKind", out var surfaceKind) && !string.IsNullOrWhiteSpace(surfaceKind))
+        {
+            return true;
+        }
+
+        if (IsLegacyDataFact(fact))
         {
             return true;
         }
