@@ -22,8 +22,8 @@
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Run any existing spec lint/check if present; otherwise record that no
   spec lint/check exists.
-- [ ] Open a ready PR into `dev` for the spec-only changes.
-- [ ] Run the PR review loop and record the final decision.
+- [x] Open a ready PR into `dev` for the spec-only changes.
+- [x] Run the PR review loop and record the final decision.
 
 ## Recommended Implementation PR Slices
 
