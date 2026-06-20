@@ -130,9 +130,11 @@ Selector normalization should keep these fields where safe:
 - redaction state and supporting redaction rule when input was unsafe.
 
 Entry evidence comes from existing route-flow selection. Rows must preserve
-source labels, scan IDs, commit SHAs, extractor identity, file spans, supporting
-IDs, route/client method and normalized path keys, and the weakest supporting
-evidence tier.
+source labels, commit SHAs, extractor identity, file spans, supporting IDs,
+route/client method and normalized path keys, and the weakest supporting
+evidence tier. Source scan IDs remain available through `RouteFlowSnapshot`
+source entries; entry rows should not invent a duplicate `scanId` field unless a
+future schema change adds it explicitly.
 
 ## Static Trace Composition
 
