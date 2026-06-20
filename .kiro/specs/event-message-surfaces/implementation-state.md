@@ -100,6 +100,12 @@ Status: implementation-in-progress
   - `./scripts/check-private-paths.sh`: passed.
   - `git diff --check`: passed.
   - `dotnet build src/dotnet/TraceMap.sln`: passed.
+- After second PR-loop review-thread fixes, validation passed on 2026-06-20:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`: 7 passed, 0 failed.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed.
+  - `dotnet test src/dotnet/TraceMap.sln`: 523 passed, 0 failed.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
 
 ## Kiro Review State
 
@@ -129,6 +135,10 @@ Status: implementation-in-progress
   publisher with the same text do not produce a candidate edge.
 - `stableMessageSurfaceKey` uses metadata that excludes handler/publisher
   symbols so handler renames do not churn static destination identities.
+- PR-loop review fixes narrowed MediatR exclusion so broker senders named like
+  `ServiceBusSender` are still extracted, and made same-name constants
+  ambiguity-aware so duplicate unresolved destinations emit gaps instead of
+  projecting the wrong static surface.
 
 ## Follow-Up Items
 
