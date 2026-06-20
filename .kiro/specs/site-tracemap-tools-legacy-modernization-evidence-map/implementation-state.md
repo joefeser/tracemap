@@ -169,11 +169,13 @@ cd site && npm run build
 
 Results:
 
-- `npm test`: passed, 197 tests.
-- `npm run validate`: passed; built the site and validated 44 HTML files, 1349
-  internal references, 43 sitemap URLs, 1 legacy story safety target, and 13
-  legacy modernization evidence-map rows.
-- `npm run build`: passed.
+- `npm test`: passed, 197 tests before PR review; passed again with 199 tests
+  after review-thread fixes.
+- `npm run validate`: passed before PR review and again after review-thread
+  fixes; built the site and validated 44 HTML files, 1349 internal references,
+  43 sitemap URLs, 1 legacy story safety target, and 13 legacy modernization
+  evidence-map rows.
+- `npm run build`: passed before PR review and again after review-thread fixes.
 - `git diff --check`: passed.
 - `git diff --cached --check`: passed before staging and again on the staged diff.
 - `./scripts/check-private-paths.sh`: passed with `Private path guard passed.`
@@ -205,6 +207,17 @@ Automated focused validation finding:
 - The first run of `npm test` caught a title-check bug in the new validator. The
   validator used an impossible word-boundary match before the `<title>` tag.
   The guard was patched and the full site test suite passed afterward.
+
+PR review-loop findings patched:
+
+- Hardened local absolute path detection for lowercase Windows drive letters
+  and forward-slash Windows paths.
+- Made hidden-row slicing case-insensitive for closing table-row tags.
+- Added tight tag stripping so sensitive tokens split across HTML tags are
+  scanned.
+- Adjusted tag stripping so unquoted apostrophes inside tag attributes do not
+  hide later rendered text.
+- Added `&apos;` decoding to the HTML entity normalization helper.
 
 ## Oddities
 
