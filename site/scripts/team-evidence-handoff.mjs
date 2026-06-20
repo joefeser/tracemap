@@ -258,9 +258,10 @@ async function validateTeamEvidenceHandoffPage({ pagePath, routeContext, errors 
   const strippedPageText = normalizeRenderedText(extractMainHtml(strippedHtml));
   const wordCount = countRenderedWords(pageText);
   const routeBoundaryText = collectRouteBoundaryText(routeContext.routeEntry);
+  const routeHardPrivateText = collectRouteHardPrivateText(routeContext.routeEntry);
   const positioningText = `${strippedHtml} ${strippedDecodedHtml} ${strippedPageText} ${attributeText} ${metadataText} ${routeBoundaryText}`;
   const boundaryAllowedPrivateText = `${strippedHtml} ${strippedDecodedHtml} ${attributeText} ${metadataText} ${strippedPageText} ${routeBoundaryText}`;
-  const alwaysForbiddenPrivateText = `${html} ${decodedHtml} ${allAttributeText} ${metadataText} ${pageText} ${routeBoundaryText}`;
+  const alwaysForbiddenPrivateText = `${html} ${decodedHtml} ${allAttributeText} ${metadataText} ${pageText} ${routeBoundaryText} ${routeHardPrivateText}`;
 
   for (const phrase of requiredText) {
     if (!pageText.includes(phrase)) {
@@ -624,6 +625,21 @@ function collectRouteBoundaryText(routeEntry) {
     routeEntry.title,
     routeEntry.summary,
     ...(Array.isArray(routeEntry.limitations) ? routeEntry.limitations : [])
+  ]
+    .filter((value) => typeof value === "string")
+    .join(" ");
+}
+
+function collectRouteHardPrivateText(routeEntry) {
+  if (!routeEntry) {
+    return "";
+  }
+
+  return [
+    routeEntry.title,
+    routeEntry.summary,
+    ...(Array.isArray(routeEntry.limitations) ? routeEntry.limitations : []),
+    ...(Array.isArray(routeEntry.nonClaims) ? routeEntry.nonClaims : [])
   ]
     .filter((value) => typeof value === "string")
     .join(" ");
