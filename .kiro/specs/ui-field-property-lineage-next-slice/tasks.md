@@ -96,8 +96,9 @@
   - [ ] Test a Razor form target with no matching action/handler, proving
     `EndpointAlignmentUnavailable` or equivalent gap output.
   - [ ] Test a `[FromBody]` or `[FromForm]` parameter fact without a Razor form
-    target referencing the action, proving `PropertyIdentityUnavailable` or
-    equivalent gap output for the form root.
+    target referencing the action, proving UI selectors produce
+    `SelectorNoMatch` and do not treat server-only model-binding target facts as
+    UI roots.
   - [ ] Test a combined index where `combined_route_flow_edges` is present but
     empty, proving route-flow-specific traversal remains unavailable.
   - [ ] Test `model:<type>.<property>` where the type is present but no property

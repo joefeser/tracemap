@@ -176,6 +176,11 @@ agent-control pr-loop --repo joefeser/tracemap --pr 237 --base dev --require-cod
     `RouteFlowUnavailable` schema gap.
   - Aligned selector candidate sorting with the current property-flow
     selected-root baseline order.
+- A fresh Codex review on head `2425458e04eb328cbdf76a491015991a271057ec`
+  found that UI selectors should not match server-only model-binding target
+  facts. Patched requirements, design, and tasks so server-only model-binding
+  facts remain under `model:`/`dto:` selectors unless joined to supporting
+  Razor/UI binding or form-target evidence.
 
 ## Follow-Ups For Implementation
 
