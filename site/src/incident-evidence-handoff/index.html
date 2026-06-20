@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap handoff packet for bringing static evidence, proof paths, limits, and next owners into incident-adjacent conversations."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Incident Evidence Handoff Packet | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/incident-evidence-handoff/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Incident Evidence Handoff Packet">
+    <meta
+      property="og:description"
+      content="Static evidence checklist for incident-adjacent handoff: what can be brought, which proof path backs it, what it does not prove, and who owns the next question."
+    >
+    <meta property="og:url" content="https://tracemap.tools/incident-evidence-handoff/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Incident evidence handoff</p>
+        <h1>Carry static evidence into the next incident-adjacent conversation.</h1>
+        <p class="hero-subhead">
+          TraceMap can help an engineer or manager assemble a public-safe packet:
+          the static evidence in hand, the proof path behind it, the limit on
+          the claim, and the owner of the next runtime, release, telemetry,
+          test, service, database, or incident-command question.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          Incident evidence handoff is the packet of static evidence, proof paths, limits, and next owners; it is not runtime proof or incident command.
+        </p>
+        <nav class="hero-actions" aria-label="Incident evidence handoff proof links">
+          <a class="button primary" href="/proof-paths/">Follow proof paths</a>
+          <a class="button secondary" href="/validation/">Review validation</a>
+          <a class="button secondary" href="/limitations/">Check limitations</a>
+        </nav>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Static triage frames the question; the incident evidence handoff packet carries the already-framed evidence, proof paths, limits, and next owners into the next conversation.</h2>
+        <p>
+          Use this route after a static triage note, incident-call orientation,
+          or review-room agenda has named the surface. The packet is the compact
+          transfer layer for a specific incident-adjacent question.
+        </p>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Neighbor boundaries</p>
+          <h2>This page is the packet, not the whole incident story.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Incident call</strong><span><a href="/incident-call/">Incident-call orientation</a> explains how static evidence can orient a live P1 conversation; this packet is the bringable evidence bundle.</span></div>
+          <div><strong>Static triage</strong><span><a href="/static-triage/">Static triage</a> is the engineer checklist for framing the question; this route carries the framed evidence forward.</span></div>
+          <div><strong>Review room</strong><span><a href="/review-room/">The review-room agenda</a> decides what is known, partial, or missing; this packet transfers static evidence into the next owner conversation.</span></div>
+          <div><strong>Manager surfaces</strong><span><a href="/manager-faq/">Manager FAQ</a>, <a href="/manager-packet/">manager packet</a>, and <a href="/manager-brief/">manager brief</a> explain broader manager context; this packet is scoped to one incident-adjacent question.</span></div>
+          <div><strong>Packet and use-case guides</strong><span><a href="/packets/">Evidence packet guidance</a> teaches how to read packets, while <a href="/use-cases/incident-review/">incident-review orientation</a> frames follow-up review. This route is the handoff checklist itself.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Checklist</p>
+          <h2>Every row should say what the static item is, what backs it, what it cannot prove, and who answers next.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>static evidence</h3>
+            <p>Public-safe static summary such as route existence, DTO shape, package reference, dependency edge, or SQL-facing reference.</p>
+          </article>
+          <article>
+            <h3>proof path</h3>
+            <p>Source-to-artifact explanation through a report, demo summary, proof-path entry, or docs-backed rule context.</p>
+          </article>
+          <article>
+            <h3>rule ID/evidence tier</h3>
+            <p>Deterministic rule and tier, when public-safe summaries provide them, so semantic, structural, syntax-only, and gap evidence stay distinct.</p>
+          </article>
+          <article>
+            <h3>coverage label</h3>
+            <p>Complete, partial, reduced, gap, demo-only, or concept-only label that travels beside the claim.</p>
+          </article>
+          <article>
+            <h3>limitation</h3>
+            <p>What the static evidence does not prove, including runtime use, release readiness, production behavior, or incident cause.</p>
+          </article>
+          <article>
+            <h3>next owner</h3>
+            <p>The accountable person or system owner for telemetry, logs, traces, APM, tests, release controls, service ownership, database ownership, or incident command.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Example packet rows</p>
+          <h2>Static evidence narrows the next question; it does not answer it alone.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>route existence</code><span>Proof path: route or handler summary. Rule ID/evidence tier: public-safe deterministic row when available. Coverage label: scoped to the scan. Limitation: does not show live traffic. Next owner: telemetry and service ownership.</span></div>
+          <div><code>DTO shape</code><span>Proof path: source-to-artifact type summary. Rule ID/evidence tier: semantic when compiler-resolved, otherwise labeled structural or syntax-only. Limitation: does not prove payloads seen in production. Next owner: tests and API owners.</span></div>
+          <div><code>package reference</code><span>Proof path: project or package metadata summary. Rule ID/evidence tier: structural evidence unless stronger proof is present. Limitation: does not prove runtime loading or reachability. Next owner: release controls and service ownership.</span></div>
+          <div><code>dependency edge</code><span>Proof path: public-safe dependency report or reducer-backed finding when available. Rule ID/evidence tier: attached to the evidence row. Limitation: does not prove impact unless reducer evidence supports that wording. Next owner: code owners and tests.</span></div>
+          <div><code>SQL-facing reference</code><span>Proof path: sanitized source-to-artifact database-facing summary. Rule ID/evidence tier: semantic, structural, or syntax-only as labeled. Limitation: does not prove database state or query execution. Next owner: database ownership and logs.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Ownership split</p>
+          <h2>Keep static proof and operational ownership in separate columns.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article><h3>telemetry</h3><p>Runtime owners confirm whether production signals mention the framed surface.</p></article>
+          <article><h3>logs</h3><p>Log owners answer whether observed events support or contradict the static question.</p></article>
+          <article><h3>traces</h3><p>Trace owners inspect request paths and timing outside the static packet.</p></article>
+          <article><h3>APM</h3><p>APM owners handle live-system measurements and alert context.</p></article>
+          <article><h3>release controls</h3><p>Release owners decide deployment gates, approvals, and rollback process.</p></article>
+          <article><h3>tests</h3><p>Test owners decide which checks confirm behavior beyond static evidence.</p></article>
+          <article><h3>database ownership</h3><p>Database owners handle schema state, data access, query behavior, and operational risk.</p></article>
+          <article><h3>service ownership</h3><p>Service owners answer code ownership, runtime responsibility, and domain context.</p></article>
+          <article><h3>incident command</h3><p>Incident command owns severity, timeline, communication, decisions, and coordination.</p></article>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>The packet keeps proof paths visible and non-claims explicit.</h2>
+        </div>
+        <ul>
+          <li>Static evidence can narrow questions for humans, but it cannot answer whether production traffic used a path, whether an outage was caused by a change, or whether a release is safe.</li>
+          <li>TraceMap is not telemetry, logs, traces, APM, incident command, ownership review, tests, release controls, service-owner judgment, database-owner judgment, or source review.</li>
+          <li>Concept examples are authored summaries. Private scan evidence needs private review and sanitization before any summary becomes public copy.</li>
+          <li>Do not bring local generated fact files, SQLite indexes, analyzer diagnostics, source excerpts, database query text, configuration details, secrets, workstation paths, repository remotes, scan output folders, or private sample identities into public page copy.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof and context</p>
+          <h2>Move from the handoff packet to public proof, boundaries, and adjacent routes.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/demo/result/">Demo result</a>
+          <a href="/docs/">Docs</a>
+          <a href="/incident-call/">Incident-call orientation</a>
+          <a href="/static-triage/">Static triage checklist</a>
+          <a href="/review-room/">Review-room agenda</a>
+          <a href="/manager-faq/">Manager FAQ</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/manager-brief/">Manager brief</a>
+          <a href="/use-cases/incident-review/">Incident-review orientation</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Incident evidence handoff links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/validation/">validation</a>,
+        <a href="/limitations/">limitations</a>,
+        and the
+        <a href="/demo/result/">public demo result</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

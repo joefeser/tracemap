@@ -14,6 +14,10 @@ import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.m
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
+import {
+  incidentEvidenceHandoffRequiredLinks,
+  incidentEvidenceHandoffRoute
+} from "./incident-evidence-handoff.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
@@ -112,20 +116,24 @@ async function createDistFixture({
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
   sitemapUrls = [
-    ...deployAuditRequiredRoutes,
-    adoptionPlaybookRoute,
-    demoEvidenceTrailRoute,
-    demoRunbookRoute,
-    endpointReviewRoute,
-    incidentCallRoute,
-    managerBriefRoute,
-    managerFaqRoute,
-    proofSourceCatalogRoute,
-    reviewClaimChecklistRoute,
-    reviewRoomRoute,
-    roadmapClaimLedgerRoute,
-    staticTriageRoute,
-    staticVsRuntimeRoute
+    ...new Set([
+      ...deployAuditRequiredRoutes,
+      adoptionPlaybookRoute,
+      demoEvidenceTrailRoute,
+      demoRunbookRoute,
+      endpointReviewRoute,
+      incidentCallRoute,
+      incidentEvidenceHandoffRoute,
+      ...incidentEvidenceHandoffRequiredLinks,
+      managerBriefRoute,
+      managerFaqRoute,
+      proofSourceCatalogRoute,
+      reviewClaimChecklistRoute,
+      reviewRoomRoute,
+      roadmapClaimLedgerRoute,
+      staticTriageRoute,
+      staticVsRuntimeRoute
+    ])
   ].map((route) => `https://tracemap.tools${route}`)
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
@@ -145,6 +153,7 @@ async function createDistFixture({
     "/evidence/",
     "/examples/",
     incidentCallRoute,
+    incidentEvidenceHandoffRoute,
     "/legacy-validation/",
     managerBriefRoute,
     managerFaqRoute,
@@ -183,25 +192,27 @@ async function createDistFixture({
                 ? endpointReviewPage()
               : route === incidentCallRoute
                 ? incidentCallPage()
-                : route === managerBriefRoute
-                  ? managerBriefPage()
-                  : route === managerFaqRoute
-                    ? managerFaqPage()
-                    : route === proofSourceCatalogRoute
-                      ? await proofSourceCatalogPage()
-                      : route === reviewClaimChecklistRoute
-                        ? reviewClaimChecklistPage()
-                      : route === reviewRoomRoute
-                        ? reviewRoomPage()
-                        : route === roadmapClaimLedgerRoute
-                          ? roadmapClaimLedgerPage()
-                          : route === staticTriageRoute
-                            ? staticTriagePage()
-                            : route === staticVsRuntimeRoute
-                              ? staticVsRuntimePage()
-                              : page(
-                                `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
-                              ),
+                : route === incidentEvidenceHandoffRoute
+                  ? incidentEvidenceHandoffPage()
+                  : route === managerBriefRoute
+                    ? managerBriefPage()
+                    : route === managerFaqRoute
+                      ? managerFaqPage()
+                      : route === proofSourceCatalogRoute
+                        ? await proofSourceCatalogPage()
+                        : route === reviewClaimChecklistRoute
+                          ? reviewClaimChecklistPage()
+                          : route === reviewRoomRoute
+                            ? reviewRoomPage()
+                            : route === roadmapClaimLedgerRoute
+                              ? roadmapClaimLedgerPage()
+                              : route === staticTriageRoute
+                                ? staticTriagePage()
+                                : route === staticVsRuntimeRoute
+                                  ? staticVsRuntimePage()
+                                  : page(
+                                    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
+                                  ),
       "utf8"
     );
   }
@@ -287,6 +298,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "use-case",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture incident call limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: incidentEvidenceHandoffRoute,
+        title: "Incident Evidence Handoff",
+        summary: "Fixture incident evidence handoff route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture incident evidence handoff limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -439,6 +461,48 @@ function incidentCallPage() {
     <a href="/use-cases/incident-review/">Incident review orientation</a>
     <a href="/static-triage/">static triage checklist</a>
   `);
+}
+
+function incidentEvidenceHandoffPage() {
+  const filler = Array.from({ length: 110 }, (_, index) => `incident evidence handoff boundary ${index}`).join(" ");
+  return `<!doctype html>
+<html>
+  <head>
+    <title>Incident Evidence Handoff Packet | TraceMap</title>
+    <meta name="description" content="Fixture incident evidence handoff packet.">
+    <link rel="canonical" href="https://tracemap.tools/incident-evidence-handoff/">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="TraceMap Incident Evidence Handoff Packet">
+    <meta property="og:description" content="Fixture static evidence handoff packet.">
+    <meta property="og:url" content="https://tracemap.tools/incident-evidence-handoff/">
+  </head>
+  <body>
+    ${topNav()}
+    <main>
+      <p>Public claim level: concept</p>
+      <p>No public conclusion without evidence</p>
+      <p>Incident evidence handoff is the packet of static evidence, proof paths, limits, and next owners; it is not runtime proof or incident command.</p>
+      <p>Static triage frames the question; the incident evidence handoff packet carries the already-framed evidence, proof paths, limits, and next owners into the next conversation.</p>
+      <p>static evidence proof path rule ID/evidence tier coverage label limitation next owner</p>
+      <p>route existence DTO shape package reference dependency edge SQL-facing reference</p>
+      <p>telemetry logs traces APM release controls tests database ownership service ownership incident command</p>
+      <a href="/proof-paths/">Proof paths</a>
+      <a href="/validation/">Validation</a>
+      <a href="/limitations/">Limitations</a>
+      <a href="/demo/result/">Demo result</a>
+      <a href="/incident-call/">Incident call</a>
+      <a href="/static-triage/">Static triage</a>
+      <a href="/review-room/">Review room</a>
+      <a href="/manager-faq/">Manager FAQ</a>
+      <a href="/packets/">Packets</a>
+      <a href="/manager-packet/">Manager packet</a>
+      <a href="/manager-brief/">Manager brief</a>
+      <a href="/use-cases/incident-review/">Incident review</a>
+      <a href="/docs/">Docs</a>
+      <p>${filler}</p>
+    </main>
+  </body>
+</html>`;
 }
 
 function adoptionPage() {
