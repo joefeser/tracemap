@@ -189,11 +189,12 @@ Validation status:
 
 - Focused explorer tests passed:
   `dotnet test src/dotnet/TraceMap.sln --filter StaticHtmlEvidenceExplorerTests`
-  with 13 tests passing.
+  with 15 tests passing after PR review-loop fixes.
 - Required .NET build passed:
   `dotnet build src/dotnet/TraceMap.sln` with 0 warnings and 0 errors.
 - Required .NET tests passed:
-  `dotnet test src/dotnet/TraceMap.sln` with 547 tests passing.
+  `dotnet test src/dotnet/TraceMap.sln` with 549 tests passing after PR
+  review-loop fixes.
 - Private-path guard passed:
   `./scripts/check-private-paths.sh` reported `Private path guard passed.`
 - Whitespace check passed:
@@ -239,3 +240,5 @@ PR status:
 
 - Ready PR opened against `dev`: https://github.com/joefeser/tracemap/pull/231
 - Initial pushed implementation commit: `11cdfedd`.
+- Bookkeeping commit recording PR URL: `3ce25972`.
+- PR review-loop fix commit pending.
