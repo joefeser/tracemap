@@ -34,6 +34,28 @@ test("validateGlossaryDist reports route metadata regressions", async (t) => {
   assert.match(errors.join("\n"), /expected preferredProofPath \/proof-paths\/, got \/validation\//);
 });
 
+test("validateGlossaryDist accepts page metadata attributes in any order", async (t) => {
+  const glossaryHtml = (await sourceGlossaryPage())
+    .replace(
+      '<link rel="canonical" href="https://tracemap.tools/glossary/">',
+      '<link href="https://tracemap.tools/glossary/" rel="canonical">'
+    )
+    .replace(
+      '<meta property="og:title" content="TraceMap Evidence Glossary">',
+      '<meta content="TraceMap Evidence Glossary" property="og:title">'
+    )
+    .replace(
+      '<meta name="tracemap:public-claim-level" content="concept">',
+      '<meta content="concept" name="tracemap:public-claim-level">'
+    );
+  const root = await createManagedGlossaryDistFixture(t, { glossaryHtml });
+  const errors = [];
+
+  await validateGlossaryDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateGlossaryDist rejects missing required terms", async (t) => {
   const glossaryHtml = (await sourceGlossaryPage()).replace('id="rule-id"', 'id="rule-id-missing"');
   const root = await createManagedGlossaryDistFixture(t, { glossaryHtml });
