@@ -1,14 +1,30 @@
 # Deterministic Review Priority Scoring Implementation State
 
-Status: spec-ready
+Status: implementation-ready-for-review
 
-Branch/PR: `codex/spec-deterministic-risk-scoring`
+Branch/PR: `codex/implement-deterministic-risk-scoring` / PR pending
 
 Issue: `#30`
 
 ## Current Scope
 
-This branch is spec-only. It defines requirements, design, tasks, and review state for deterministic evidence-backed review priority scoring. It does not implement product code.
+This branch implements the first PR boundary: release-review opt-in deterministic review priority scoring only.
+
+Implemented:
+
+- Shared review-priority models, closed vocabularies, constants, and release-review scorer under `TraceMap.Reporting/ReviewPriority`.
+- `tracemap release-review --include-priority` CLI flag.
+- Opt-in Markdown Review Priority section.
+- Opt-in JSON sidecar fields: `reviewPriority` and `reviewPriorityRows`.
+- Ordinal-only v1 behavior with `priorityScore: null` and component `componentValue: null`.
+- Rule catalog entries for `review.priority.*.v1` scoring rules.
+- Focused release-review tests for opt-in output, opt-out compatibility, evidence discipline, reduced coverage/truncation, safety, read-only inputs, CLI flag parsing, and rule catalog coverage.
+
+Not implemented in this PR:
+
+- Scoring for diff, impact, paths, reverse, portfolio, or standalone score commands.
+- Numeric scoring, weights, or score bands.
+- New scanner facts or source rescanning for scoring.
 
 ## Scope Decisions
 
@@ -16,10 +32,10 @@ This branch is spec-only. It defines requirements, design, tasks, and review sta
 - Preferred terminology is `reviewPriority`, `severityHint`, and `attentionLevel`.
 - The feature should prioritize review attention over existing TraceMap evidence rather than claim runtime, production, security, compliance, or business risk.
 - Release-review is the recommended first implementation target because it already composes diff, impact, path/reverse, portfolio-adjacent context, gaps, and checklist evidence.
-- The first implementation slice should use an explicit opt-in flag unless implementation review decides default scoring is safer and fully versioned.
+- The first implementation slice uses explicit opt-in flag `--include-priority`.
 - V1 scoring is ordinal-only. Numeric `priorityScore` weights are deferred to a future scoring model version.
-- V1 should emit `priorityScore: null` where the schema includes that field.
-- Release-review scoring should prefer opt-in sidecar JSON so `--include-priority` opt-out output can remain byte-identical; an always-present additive section requires an explicit version or compatibility decision.
+- V1 emits `priorityScore: null` where the schema includes that field and emits component `componentValue: null`.
+- Release-review scoring uses opt-in sidecar JSON so `--include-priority` opt-out output remains byte-identical with pre-feature output.
 - Scoring must emit downgrade and unknown components rather than hiding uncertainty.
 - Public-surface and cross-repo reach components must derive only from existing static TraceMap evidence and must not infer runtime exposure, deployment topology, ownership, or business reach.
 - Release-review v1 should use the existing status vocabulary and defer `not_supported` until a workflow has a real unsupported-scoring path.
@@ -27,20 +43,26 @@ This branch is spec-only. It defines requirements, design, tasks, and review sta
 
 ## Oddities and Constraints
 
-- Keep implementation tasks unchecked until product code lands.
-- Mark only spec authoring and completed review/validation tasks checked.
+- Implementation task checkboxes are marked complete for the first PR boundary after product code and focused tests landed.
 - Do not include raw local paths, raw remotes, private paths, snippets, raw SQL/config values, URLs, hostnames, or secrets in committed spec artifacts or PR text.
 - Do not add LLM, embedding, vector database, or prompt-based classification behavior to TraceMap core.
 
 ## Validation
 
-- Kiro Opus spec review: completed with reduced coverage because the wrapper reported denied shell access; Medium+ findings patched in this branch.
-- Kiro Sonnet spec review: completed with full coverage; blocking/important ambiguity findings patched in this branch.
-- Final Kiro re-review after patches: completed with full coverage; no blocking issues.
-- `git diff --check`: passed.
+- Kiro Opus spec review: completed on the spec-only branch with reduced coverage because the wrapper reported denied shell access; Medium+ findings patched there.
+- Kiro Sonnet spec review: completed on the spec-only branch with full coverage; blocking/important ambiguity findings patched there.
+- Final Kiro spec re-review after patches: completed with full coverage; no blocking issues.
+- Product implementation Kiro review: completed with reduced coverage because Kiro reported denied tool access. Artifacts saved under `.tmp/kiro-reviews/deterministic-risk-scoring/2026-06-20T172625-480Z-implementation-claude-sonnet-4.6.*`.
+- Product implementation Kiro re-review cycle 1: completed with full coverage. Blocking findings patched: checklist `must_review` mapping, opt-out compatibility test coverage, attention aggregation cleanup, rule-catalog component-kind wording.
+- Product implementation Kiro re-review cycle 2: completed with reduced coverage because Kiro reported denied tool access. Reported remaining test-coverage/cap/selector concerns were patched after the final allowed cycle: scored byte-stability, Markdown escaping through scoring renderer, closed vocabularies/model version, cap semantics, selector no-match under reduced coverage, and reserved fan-out documentation.
+- `dotnet build src/dotnet/TraceMap.sln`: passed.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 534 tests.
+- Focused release-review tests: passed, 23 tests.
+- Release-review CLI/sample smoke: passed by scanning `samples/modern-sample` twice into `/tmp/tracemap-review-priority-smoke` and running `release-review --include-priority`; verified `release-review.md`, `release-review.json`, `reviewPriority`, `reviewPriorityRows`, and `## Review Priority`.
 - `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 ## Follow-Up Items
 
-- Address final re-review low-risk implementation notes during Task 1 before product implementation begins, including the `priorityScore` null-vs-absent decision and ordinal-mode Markdown score-column rendering.
 - Open a ready PR to `dev` with `Refs #30`.
+- Run the repo-local Agent Control PR review loop and patch only still-actionable findings.
