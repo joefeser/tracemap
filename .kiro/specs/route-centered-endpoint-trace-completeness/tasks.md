@@ -37,17 +37,17 @@ Readiness: ready-for-implementation
 
 ## Implementation Tasks
 
-- [ ] 4. Confirm route-flow contract and rule catalog coverage. Requirements:
+- [x] 4. Confirm route-flow contract and rule catalog coverage. Requirements:
       1, 5, 6.
-  - [ ] Preserve `tracemap route-flow`, `reportType = "route-flow"`, and
+  - [x] Preserve `tracemap route-flow`, `reportType = "route-flow"`, and
         `version = "1.0"` unless a later breaking-schema spec supersedes this
         one.
-  - [ ] Confirm all emitted rows use existing `combined.route-flow.*` rule IDs
+  - [x] Confirm all emitted rows use existing `combined.route-flow.*` rule IDs
         or add narrowly documented rule-catalog entries before emitting new
         row kinds.
-  - [ ] Add or update catalog assertions so every emitted route-flow rule ID
+  - [x] Add or update catalog assertions so every emitted route-flow rule ID
         resolves and no parallel route-flow namespace is introduced.
-  - [ ] Confirm limitations cover static evidence, runtime execution,
+  - [x] Confirm limitations cover static evidence, runtime execution,
         production traffic, runtime DI, dynamic dispatch, branch feasibility,
         query execution, release safety, outage cause, and business impact.
 
@@ -60,24 +60,24 @@ Readiness: ready-for-implementation
   - [ ] Add selector miss, unsafe selector, dynamic URL, and reduced-coverage
         tests.
 
-- [ ] 6. Add touched-file summaries from existing rows. Requirements: 2, 3, 6.
-  - [ ] Derive summaries from entry evidence, flow rows, logic rows,
+- [x] 6. Add touched-file summaries from existing rows. Requirements: 2, 3, 6.
+  - [x] Derive summaries from entry evidence, flow rows, logic rows,
         dependency surfaces, and gaps without mutating the combined index.
-  - [ ] Group by source label, commit SHA, repo-relative file path, and safe
+  - [x] Group by source label, commit SHA, repo-relative file path, and safe
         source-scoped identity.
-  - [ ] Preserve supporting row IDs, weakest classification, weakest coverage,
+  - [x] Preserve supporting row IDs, weakest classification, weakest coverage,
         rule IDs, evidence tiers, and line-span ranges.
-  - [ ] Sort deterministically and add byte-stability tests.
+  - [x] Sort deterministically and add byte-stability tests.
 
-- [ ] 7. Add touched-symbol summaries from existing rows. Requirements: 2, 3,
+- [x] 7. Add touched-symbol summaries from existing rows. Requirements: 2, 3,
       6.
-  - [ ] Extract stable symbol IDs and safe display names from selected
+  - [x] Extract stable symbol IDs and safe display names from selected
         route-flow evidence.
-  - [ ] Include source label, file span, symbol kind where available, supporting
+  - [x] Include source label, file span, symbol kind where available, supporting
         row IDs, weakest classification, coverage, and limitations.
-  - [ ] Use explicit unavailable placeholders when symbol identity or spans are
+  - [x] Use explicit unavailable placeholders when symbol identity or spans are
         absent.
-  - [ ] Add tests for route handler symbols, service/interface symbols,
+  - [x] Add tests for route handler symbols, service/interface symbols,
         implementation candidates, dependency symbols, and missing-symbol gaps.
 
 - [ ] 8. Clarify method/service row grouping. Requirements: 3, 5, 6.
@@ -116,24 +116,24 @@ Readiness: ready-for-implementation
   - [ ] Add reduced coverage, unknown commit SHA, missing schema, missing
         extractor, traversal bound, and clean no-evidence tests.
 
-- [ ] 11. Extend Markdown and JSON output safely. Requirements: 6, 7.
-  - [ ] Add backward-compatible JSON fields only.
-  - [ ] Keep existing Markdown sections and add only narrow sections that help
+- [x] 11. Extend Markdown and JSON output safely. Requirements: 6, 7.
+  - [x] Add backward-compatible JSON fields only.
+  - [x] Keep existing Markdown sections and add only narrow sections that help
         trace completeness.
-  - [ ] Use deterministic IDs, ordering, nulls, empty arrays, and closed-set
+  - [x] Use deterministic IDs, ordering, nulls, empty arrays, and closed-set
         placeholders.
-  - [ ] Add forbidden-wording tests for runtime and business-impact claims.
-  - [ ] Add byte-stability tests for Markdown and JSON.
+  - [x] Add forbidden-wording tests for runtime and business-impact claims.
+  - [x] Add byte-stability tests for Markdown and JSON.
 
-- [ ] 12. Validate implementation. Requirements: 7.
-  - [ ] Run focused route-flow tests.
-  - [ ] Run `dotnet test`.
-  - [ ] Run a public-safe CLI smoke over a synthetic or checked-in fixture.
-  - [ ] Follow `docs/VALIDATION.md` for route-flow/reporting changes, or
+- [x] 12. Validate implementation. Requirements: 7.
+  - [x] Run focused route-flow tests.
+  - [x] Run `dotnet test`.
+  - [x] Run a public-safe CLI smoke over a synthetic or checked-in fixture.
+  - [x] Follow `docs/VALIDATION.md` for route-flow/reporting changes, or
         record an explicit deferral with rationale.
-  - [ ] Run `git diff --check`.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Confirm generated outputs do not contain unsafe values.
+  - [x] Run `git diff --check`.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Confirm generated outputs do not contain unsafe values.
 
 ## Suggested PR Boundaries
 
