@@ -227,8 +227,8 @@ Public claim level: concept
   - Disposition: applied the optional Low wording updates, recorded the reduced
     coverage caveat, and moved readiness to `ready-for-implementation` because
     Medium and higher findings are patched or absent.
-- Readiness remains `in-review` until Medium or higher findings are patched or
-  explicitly dispositioned.
+- Readiness is `ready-for-implementation`; Medium and higher findings from
+  spec review were patched or explicitly dispositioned before readiness moved.
 
 ## Validation
 
