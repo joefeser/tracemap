@@ -84,7 +84,10 @@ public static partial class LegacyDataModelDescriptorProjection
         }
 
         var metadataFormat = ClosedToken(FirstValue(fact.Properties, "metadataFormat") ?? MetadataFormatFromKind(FirstValue(fact.Properties, "metadataKind")), "unknown");
-        var sourceArtifactType = SourceArtifactType(metadataFormat, FirstValue(fact.Properties, "descriptorKind", "sourceSection"));
+        var sourceArtifactType = SourceArtifactType(
+            metadataFormat,
+            FirstValue(fact.Properties, "descriptorKind"),
+            FirstValue(fact.Properties, "sourceSection"));
         var modelKind = ClosedToken(FirstValue(fact.Properties, "modelKind", "descriptorModelKind") ?? ModelKindFromFactType(fact.FactType), "unknown");
         var descriptorRole = ClosedToken(FirstValue(fact.Properties, "descriptorRole", "mappingKind", "descriptorKind") ?? modelKind, "unknown");
         var stableModelKey = FirstValue(fact.Properties, "stableModelKey");
@@ -160,6 +163,7 @@ public static partial class LegacyDataModelDescriptorProjection
     public static bool IsTerminalLegacyDataDescriptor(CombinedSurfaceFactInput fact)
     {
         return IsLegacyDataEvidence(fact)
+            && fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)
             && fact.FactType != FactTypes.AnalysisGap
             && !string.Equals(ClosedToken(FirstValue(fact.Properties, "descriptorRole", "descriptorKind") ?? string.Empty, string.Empty), "analysis-gap", StringComparison.Ordinal)
             && !string.Equals(FirstValue(fact.Properties, "classification"), "AnalysisGap", StringComparison.Ordinal);
@@ -313,12 +317,16 @@ public static partial class LegacyDataModelDescriptorProjection
             row.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private static string SourceArtifactType(string metadataFormat, string? descriptorKind)
+    private static string SourceArtifactType(string metadataFormat, string? descriptorKind, string? sourceSection)
     {
         descriptorKind ??= string.Empty;
+        sourceSection = ClosedToken(sourceSection, string.Empty);
         return metadataFormat switch
         {
             "dbml" => "dbml",
+            "edmx" when sourceSection == "csdl" => "edmx-csdl",
+            "edmx" when sourceSection == "ssdl" => "edmx-ssdl",
+            "edmx" when sourceSection == "msl" => "edmx-msl",
             "edmx" when descriptorKind.StartsWith("csdl", StringComparison.Ordinal) => "edmx-csdl",
             "edmx" when descriptorKind.StartsWith("ssdl", StringComparison.Ordinal) => "edmx-ssdl",
             "edmx" when descriptorKind.StartsWith("msl", StringComparison.Ordinal) || descriptorKind.Contains("mapping", StringComparison.Ordinal) => "edmx-msl",
