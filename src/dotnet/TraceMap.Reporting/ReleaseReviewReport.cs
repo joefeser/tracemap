@@ -1,8 +1,10 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 using TraceMap.Reduction;
+using TraceMap.Reporting.ReviewPriority;
 
 namespace TraceMap.Reporting;
 
@@ -26,12 +28,15 @@ public sealed record ReleaseReviewOptions(
     int MaxSurfaceRows = 50,
     int MaxPaths = 25,
     int MaxGaps = 1000,
-    int MaxChecklistItems = 50);
+    int MaxChecklistItems = 50,
+    bool IncludePriority = false);
 
 public sealed record ReleaseReviewResult(
     ReleaseReviewDocument Report,
     string? MarkdownPath,
-    string? JsonPath)
+    string? JsonPath,
+    ReviewPrioritySummary? ReviewPriority = null,
+    IReadOnlyList<ReviewPriorityRow>? ReviewPriorityRows = null)
 {
     public bool HasActionableFindings => Report.Summary.RollupClassification == ReleaseReviewClassifications.ActionableStaticEvidence;
 }
@@ -269,6 +274,18 @@ public static class ReleaseReviewReporter
     {
         var report = await BuildReportAsync(options, cancellationToken);
         var format = CombinedReportHelpers.NormalizeFormat(options.Format, "release-review");
+        if (options.IncludePriority)
+        {
+            var priority = ReleaseReviewPriorityScorer.Score(report);
+            var (scoredMarkdownPath, scoredJsonPath) = await WriteScoredOutputsAsync(
+                options.OutputPath,
+                format,
+                report,
+                priority,
+                cancellationToken);
+            return new ReleaseReviewResult(report, scoredMarkdownPath, scoredJsonPath, priority.Summary, priority.Rows);
+        }
+
         var (markdownPath, jsonPath) = await CombinedReportHelpers.WriteOutputsAsync(
             options.OutputPath,
             format,
@@ -279,6 +296,51 @@ public static class ReleaseReviewReporter
             CombinedDependencyReporter.JsonOptions,
             cancellationToken);
         return new ReleaseReviewResult(report, markdownPath, jsonPath);
+    }
+
+    private static async Task<(string? MarkdownPath, string? JsonPath)> WriteScoredOutputsAsync(
+        string outputPath,
+        string format,
+        ReleaseReviewDocument report,
+        ReleaseReviewPriorityResult priority,
+        CancellationToken cancellationToken)
+    {
+        var fullPath = Path.GetFullPath(outputPath);
+        var markdown = RenderMarkdown(report, priority);
+        var json = ToScoredJson(report, priority);
+        if (Directory.Exists(fullPath) || string.IsNullOrWhiteSpace(Path.GetExtension(fullPath)))
+        {
+            Directory.CreateDirectory(fullPath);
+            var markdownPath = Path.Combine(fullPath, "release-review.md");
+            var jsonPath = Path.Combine(fullPath, "release-review.json");
+            await File.WriteAllTextAsync(markdownPath, markdown, cancellationToken);
+            await File.WriteAllTextAsync(jsonPath, json, cancellationToken);
+            return (markdownPath, jsonPath);
+        }
+
+        var directoryName = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrWhiteSpace(directoryName))
+        {
+            Directory.CreateDirectory(directoryName);
+        }
+
+        if (format == "json")
+        {
+            await File.WriteAllTextAsync(fullPath, json, cancellationToken);
+            return (null, fullPath);
+        }
+
+        await File.WriteAllTextAsync(fullPath, markdown, cancellationToken);
+        return (fullPath, null);
+    }
+
+    private static string ToScoredJson(ReleaseReviewDocument report, ReleaseReviewPriorityResult priority)
+    {
+        var node = JsonSerializer.SerializeToNode(report, CombinedDependencyReporter.JsonOptions) as JsonObject
+            ?? throw new InvalidOperationException("release-review JSON root was not an object.");
+        node["reviewPriority"] = JsonSerializer.SerializeToNode(priority.Summary, CombinedDependencyReporter.JsonOptions);
+        node["reviewPriorityRows"] = JsonSerializer.SerializeToNode(priority.Rows, CombinedDependencyReporter.JsonOptions);
+        return node.ToJsonString(CombinedDependencyReporter.JsonOptions) + Environment.NewLine;
     }
 
     public static async Task<ReleaseReviewDocument> BuildReportAsync(ReleaseReviewOptions options, CancellationToken cancellationToken = default)
@@ -1914,6 +1976,11 @@ public static class ReleaseReviewReporter
 
     private static string RenderMarkdown(ReleaseReviewDocument report)
     {
+        return RenderMarkdown(report, null);
+    }
+
+    private static string RenderMarkdown(ReleaseReviewDocument report, ReleaseReviewPriorityResult? priority)
+    {
         var builder = new StringBuilder();
         builder.AppendLine("# TraceMap Release Review Report");
         builder.AppendLine();
@@ -1930,6 +1997,11 @@ public static class ReleaseReviewReporter
         builder.AppendLine($"- Path context requested: `{report.Query.IncludePaths}`");
         builder.AppendLine($"- Reverse context requested: `{report.Query.IncludeReverse}`");
         builder.AppendLine();
+        if (priority is not null)
+        {
+            RenderReviewPriority(builder, priority);
+        }
+
         builder.AppendLine("## Compared Snapshots");
         builder.AppendLine();
         RenderSnapshot(builder, report.BeforeSnapshot);
@@ -1981,6 +2053,59 @@ public static class ReleaseReviewReporter
         }
 
         return builder.ToString();
+    }
+
+    private static void RenderReviewPriority(StringBuilder builder, ReleaseReviewPriorityResult priority)
+    {
+        builder.AppendLine("## Review Priority");
+        builder.AppendLine();
+        builder.AppendLine($"- Status: `{Cell(priority.Summary.Status)}`");
+        builder.AppendLine($"- Model version: `{Cell(priority.Summary.ModelVersion)}`");
+        builder.AppendLine($"- Attention level: `{Cell(priority.Summary.AttentionLevel)}`");
+        builder.AppendLine("- Priority score: `n/a`");
+        builder.AppendLine($"- Complete: `{priority.Summary.Complete}`");
+        builder.AppendLine($"- Contributing sections: {Cell(string.Join(", ", priority.Summary.ContributingSections))}");
+        builder.AppendLine($"- Limited sections: {Cell(string.Join(", ", priority.Summary.LimitedSections))}");
+        builder.AppendLine();
+
+        if (priority.Rows.Count == 0)
+        {
+            builder.AppendLine("No priority rows generated.");
+            builder.AppendLine();
+        }
+        else
+        {
+            builder.AppendLine("| Severity hint | Row | Kind | Section | Source | Classification | Components | Limitations |");
+            builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
+            foreach (var row in priority.Rows.Take(25))
+            {
+                builder.AppendLine($"| `{Cell(row.SeverityHint)}` | `{Cell(row.RowId)}` | {Cell(row.RowKind)} | {Cell(row.Section)} | {Cell(row.SourceLabel)} | `{Cell(row.Classification)}` | {Cell(ComponentSummary(row.Components))} | {Cell(string.Join("; ", row.Limitations.Take(3)))} |");
+            }
+
+            if (priority.Rows.Count > 25)
+            {
+                builder.AppendLine();
+                builder.AppendLine($"Priority rows omitted from Markdown table: `{priority.Rows.Count - 25}`");
+            }
+
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("### Review Priority Limitations");
+        builder.AppendLine();
+        foreach (var limitation in priority.Summary.Limitations)
+        {
+            builder.AppendLine($"- {Cell(limitation)}");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static string ComponentSummary(IReadOnlyList<ReviewPriorityComponent> components)
+    {
+        return string.Join(
+            "; ",
+            components.Select(component => $"{component.ComponentKind}:{component.Direction}:{component.RuleId}:{component.EvidenceTier}"));
     }
 
     private static void RenderSnapshot(StringBuilder builder, ReleaseReviewSnapshot snapshot)
