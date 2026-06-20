@@ -526,6 +526,10 @@ public sealed class LegacyDataMetadataExtractorTests
                       <End Role="Customer" Type="Model.Customer" Multiplicity="1" />
                       <End Role="Orders" Type="Model.Order" Multiplicity="*" />
                     </Association>
+                    <Association Name="PreferredCustomerOrders">
+                      <End Role="PreferredCustomer" Type="Model.PreferredCustomer" Multiplicity="1" />
+                      <End Role="Orders" Type="Model.Order" Multiplicity="*" />
+                    </Association>
                     <Association Name="MissingTypeAssociation">
                       <End Role="Customer" Type="Model.Customer" />
                       <End Role="UnknownOrder" />
@@ -578,6 +582,20 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("Customer", csdlAssociation.Properties.GetValueOrDefault("sourceEndpointName"));
         Assert.Equal("Order", csdlAssociation.Properties.GetValueOrDefault("targetEndpointName"));
         Assert.Equal("full", csdlAssociation.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+
+        var inheritedEntity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("entityName") == "PreferredCustomer");
+        Assert.Equal("reduced", inheritedEntity.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Contains("unsupported-inherited-model-shape", inheritedEntity.Properties.GetValueOrDefault("limitations"));
+
+        var inheritedAssociation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "csdl-association"
+            && fact.Properties.GetValueOrDefault("associationName") == "PreferredCustomerOrders");
+        Assert.Equal("reduced", inheritedAssociation.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("full", inheritedAssociation.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Contains("inherited-endpoint-needs-review", inheritedAssociation.Properties.GetValueOrDefault("limitations"));
 
         var missingTypeAssociation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.RuleId == RuleIds.LegacyDataEdmx

@@ -220,11 +220,19 @@ public static class LegacyDataMetadataExtractor
         var coverageLabel = csdlSchemas.Length == 0 || ssdlSchemas.Length == 0 || mappingElements.Length == 0 || conceptualContainers.Length > 1 || storageContainers.Length > 1
             ? "reduced"
             : "full";
+        var inheritedEdmxTypeNames = csdlSchemas
+            .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType" && !string.IsNullOrWhiteSpace(AttributeValue(element, "BaseType"))))
+            .Select(element => AttributeValue(element, "Name"))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
 
         foreach (var entity in csdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")).OrderBy(GetLine).ThenBy(element => AttributeValue(element, "Name"), StringComparer.Ordinal))
         {
             var name = AttributeValue(entity, "Name") ?? "entity";
-            if (!string.IsNullOrWhiteSpace(AttributeValue(entity, "BaseType")))
+            var inheritedEntity = inheritedEdmxTypeNames.Contains(name);
+            var entityCoverageLabel = inheritedEntity ? "reduced" : coverageLabel;
+            if (inheritedEntity)
             {
                 AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataEdmx, "UnsupportedLegacyOrmMappingShape", "EDMX inherited model relationship shape requires future deterministic handling.", entity);
             }
@@ -233,7 +241,12 @@ public static class LegacyDataMetadataExtractor
             properties["sourceSection"] = "CSDL";
             AddSafeName(properties, "entityName", "entityHash", name);
             AddSafeName(properties, "typeName", "typeHash", name);
-            AddModelIdentity(properties, "Edmx", "entity", "conceptual", item.RelativePath, "edmx-csdl-entity", name, AttributeValue(entity.Parent, "Namespace"), metadataFact.FactId, Parts(("entity", name), ("namespace", AttributeValue(entity.Parent, "Namespace"))), coverageLabel);
+            if (inheritedEntity)
+            {
+                properties["limitations"] = "unsupported-inherited-model-shape";
+            }
+
+            AddModelIdentity(properties, "Edmx", "entity", "conceptual", item.RelativePath, "edmx-csdl-entity", name, AttributeValue(entity.Parent, "Namespace"), metadataFact.FactId, Parts(("entity", name), ("namespace", AttributeValue(entity.Parent, "Namespace"))), entityCoverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, entity, TargetFrom(properties, "typeName", "typeHash"), properties));
 
             foreach (var property in entity.Elements().Where(element => element.Name.LocalName is "Property" or "NavigationProperty").OrderBy(GetLine))
@@ -244,14 +257,19 @@ public static class LegacyDataMetadataExtractor
                 AddSafeName(columnProps, "entityName", "entityHash", name);
                 AddSafeName(columnProps, "propertyName", "propertyHash", propertyName);
                 AddOptional(columnProps, "descriptorKind", property.Name.LocalName);
-                AddModelIdentity(columnProps, "Edmx", "column", "conceptual", item.RelativePath, "edmx-csdl-property", propertyName, name, metadataFact.FactId, Parts(("entity", name), ("property", propertyName), ("descriptor-kind", property.Name.LocalName)), coverageLabel);
+                if (inheritedEntity)
+                {
+                    columnProps["limitations"] = "unsupported-inherited-model-shape";
+                }
+
+                AddModelIdentity(columnProps, "Edmx", "column", "conceptual", item.RelativePath, "edmx-csdl-property", propertyName, name, metadataFact.FactId, Parts(("entity", name), ("property", propertyName), ("descriptor-kind", property.Name.LocalName)), entityCoverageLabel);
                 facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, property, TargetFrom(columnProps, "propertyName", "propertyHash"), columnProps));
             }
         }
 
         foreach (var association in csdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "Association")).OrderBy(GetLine))
         {
-            AddEdmxAssociationFact(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, association);
+            AddEdmxAssociationFact(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, inheritedEdmxTypeNames, association);
         }
 
         foreach (var set in conceptualContainers.SelectMany(container => container.Elements().Where(element => element.Name.LocalName == "EntitySet")).OrderBy(GetLine))
@@ -368,6 +386,7 @@ public static class LegacyDataMetadataExtractor
         string metadataHash,
         string sourceMetadataFactId,
         string coverageLabel,
+        IReadOnlySet<string> inheritedEdmxTypeNames,
         XElement association)
     {
         var associationName = AttributeValue(association, "Name") ?? "association";
@@ -398,6 +417,11 @@ public static class LegacyDataMetadataExtractor
             relationshipCoverageLabel = "reduced";
             relationshipEndpointCoverage = "unidirectional";
             relationshipLimitations.Add("missing-endpoint-type");
+        }
+        else if (inheritedEdmxTypeNames.Contains(firstType) || inheritedEdmxTypeNames.Contains(secondType))
+        {
+            relationshipCoverageLabel = "reduced";
+            relationshipLimitations.Add("inherited-endpoint-needs-review");
         }
 
         var properties = MetadataProperties("Edmx", metadataHash, "csdl-association");
