@@ -67,6 +67,23 @@
     ]
   },
   {
+    "path": "/glossary/",
+    "title": "Evidence Glossary",
+    "summary": "Concept-level vocabulary for public-safe TraceMap evidence terms before readers repeat public claims.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "Glossary definitions are vocabulary guidance, not scanner or reducer coverage evidence.",
+      "Terms must stay attached to route-specific proof paths, coverage labels, and limitations."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No raw artifact publication, raw facts, raw SQLite indexes, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details."
+    ]
+  },
+  {
     "path": "/outputs/",
     "title": "Output Artifacts",
     "summary": "Names the scanner outputs and describes which artifact families stay public-safe versus local-only.",
