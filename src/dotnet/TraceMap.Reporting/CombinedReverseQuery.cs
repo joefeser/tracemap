@@ -185,6 +185,7 @@ public static class CombinedReverseReporter
         "http-route",
         "http-client",
         "package-config",
+        "legacy-data",
         "message-queue",
         "message-topic",
         "message-subscription",
@@ -651,7 +652,7 @@ public static class CombinedReverseReporter
                 throw new ArgumentException("reverse --surface 'message-publish-consume' is an edge kind, not a dependency surface kind.");
             }
 
-            throw new ArgumentException("reverse --surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, message-queue, message-topic, message-subscription, message-exchange, message-stream, message-event, message-channel, or message-unknown.");
+            throw new ArgumentException("reverse --surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, legacy-data, message-queue, message-topic, message-subscription, message-exchange, message-stream, message-event, message-channel, or message-unknown.");
         }
 
         if (!TargetKinds.Contains(NormalizeTarget(options.To)))

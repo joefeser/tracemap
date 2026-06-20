@@ -333,7 +333,7 @@ public static class CombinedDependencyPathReporter
         await connection.OpenAsync(cancellationToken);
         var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken);
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
-        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts);
+        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
         var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots);
         return (read, graph);
     }
@@ -676,6 +676,13 @@ public static class CombinedDependencyPathReporter
             var attached = false;
             foreach (var symbol in SurfaceAttachmentSymbols(fact))
             {
+                if (IsLegacyDataFact(fact)
+                    && !string.Equals(symbol, fact.SourceSymbol?.Trim(), StringComparison.Ordinal)
+                    && !graph.Nodes.ContainsKey(SymbolNodeId(fact.SourceIndexId, symbol)))
+                {
+                    continue;
+                }
+
                 var symbolNode = graph.GetOrAddSymbolNode(fact.SourceIndexId, fact.SourceLabel, symbol, fact.FilePath, fact.StartLine, fact.EndLine, fact.RuleId, fact.EvidenceTier);
                 graph.AddEdge(new GraphEdge(
                     $"surface:{surface.CombinedFactId}:{symbolNode.NodeId}",
@@ -1096,6 +1103,11 @@ public static class CombinedDependencyPathReporter
         foreach (var legacyData in facts.Where(IsLegacyDataFact).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             var node = ToLegacyDataSurfaceNode(legacyData);
+            if (node is null)
+            {
+                continue;
+            }
+
             graph.AddNode(node);
             foreach (var symbolValue in LegacyDataAttachmentSymbols(legacyData))
             {
@@ -1582,23 +1594,18 @@ public static class CombinedDependencyPathReporter
             null);
     }
 
-    private static GraphNode ToLegacyDataSurfaceNode(CombinedFactRow fact)
+    private static GraphNode? ToLegacyDataSurfaceNode(CombinedFactRow fact)
     {
-        var descriptor = CombinedDependencyReporter.FirstValue(
-                fact.Properties,
-                "entityName",
-                "typeName",
-                "tableName",
-                "storageObjectName",
-                "mappingKind",
-                "metadataKind",
-                "metadataHash")
-            ?? fact.FactType;
-        var safeDescriptor = SafeDisplay(descriptor);
+        var descriptor = LegacyDataModelDescriptorProjection.TryProject(ToSurfaceProjectionInput(fact));
+        if (descriptor is null)
+        {
+            return null;
+        }
+
         return new GraphNode(
             SurfaceNodeId(fact.CombinedFactId),
             "legacy-data",
-            $"legacy-data:{safeDescriptor}",
+            descriptor.DisplayName,
             fact.SourceIndexId,
             SafeSourceLabel(fact.SourceLabel),
             fact.ScanId,
@@ -1611,18 +1618,36 @@ public static class CombinedDependencyPathReporter
             fact.StartLine,
             fact.EndLine,
             "legacy-data",
-            safeDescriptor,
+            descriptor.DisplayName,
             null,
             null,
-            CombinedDependencyReporter.FirstValue(fact.Properties, "mappingKind", "metadataKind"),
-            SafeDisplay(CombinedDependencyReporter.FirstValue(fact.Properties, "tableName", "storageObjectName")),
-            SafeDisplay(CombinedDependencyReporter.FirstValue(fact.Properties, "columnName", "columnNames", "fieldName")),
-            CombinedDependencyReporter.FirstValue(fact.Properties, "metadataKind", "sourceKind"),
-            CombinedDependencyReporter.FirstValue(fact.Properties, "metadataHash", "shapeHash", "queryShapeHash"),
-            CombinedDependencyReporter.FirstValue(fact.Properties, "textHash"),
+            descriptor.MetadataFormat,
+            descriptor.DisplayClearance ? descriptor.ContainerName : null,
+            null,
+            descriptor.SourceArtifactType,
+            descriptor.StableModelKey ?? descriptor.DisplayNameHash,
+            descriptor.DisplayNameHash,
             CombinedDependencyReporter.FirstValue(fact.Properties, "textLength"),
             null,
             null);
+    }
+
+    private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact)
+    {
+        return new CombinedSurfaceFactInput(
+            fact.CombinedFactId,
+            fact.SourceIndexId,
+            fact.SourceLabel,
+            fact.OriginalFactId,
+            fact.ScanId,
+            fact.CommitSha,
+            fact.FactType,
+            fact.RuleId,
+            fact.EvidenceTier,
+            fact.FilePath,
+            fact.StartLine,
+            fact.EndLine,
+            fact.Properties);
     }
 
     private static GraphNode ToProjectionTerminalNode(CombinedFactRow fact, string surfaceKind, string? terminalHash)
@@ -1776,8 +1801,7 @@ public static class CombinedDependencyPathReporter
 
     private static bool IsLegacyDataFact(CombinedFactRow fact)
     {
-        return fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)
-            || fact.RuleId.StartsWith("legacy.data.", StringComparison.Ordinal);
+        return LegacyDataModelDescriptorProjection.IsTerminalLegacyDataDescriptor(ToSurfaceProjectionInput(fact));
     }
 
     private static bool IsRemotingFact(CombinedFactRow fact)
@@ -2654,6 +2678,11 @@ public static class CombinedDependencyPathReporter
 
     private static IReadOnlyList<string> SurfaceAttachmentSymbols(CombinedFactRow fact)
     {
+        if (IsLegacyDataFact(fact))
+        {
+            return LegacyDataAttachmentSymbols(fact).ToArray();
+        }
+
         return new[]
             {
                 fact.SourceSymbol,
@@ -3077,6 +3106,11 @@ public static class CombinedDependencyPathReporter
             return true;
         }
 
+        if (IsLegacyDataFact(fact))
+        {
+            return true;
+        }
+
         return fact.FactType is FactTypes.QueryPatternDetected
             or FactTypes.SqlTextUsed
             or FactTypes.DatabaseColumnMapping
@@ -3159,6 +3193,7 @@ public static class CombinedDependencyPathReporter
                 "http-client" => "HttpClientSurface",
                 "http-route" => "HttpRouteSurface",
                 "package-config" => surface.ConfigKey is not null ? "ConfigSurface" : "PackageSurface",
+                "legacy-data" => "legacy-data",
                 "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" => "MessageSurface",
                 _ => "DependencySurface"
             },
