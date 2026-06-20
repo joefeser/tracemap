@@ -177,6 +177,21 @@ Implementation-branch validation:
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 
+Second PR-loop cleanup validation:
+
+- Follow-up after resolving the review thread showed Qodo's top-level review
+  still had an optional maintainability finding for a no-op boundary regex in
+  `validateClaimBoundaryText`.
+- Patch: removed the inert trailing regex block because required page text
+  already validates the shared principle and the block had no failure path.
+- `npm test` from `site/`: passed with 236 tests.
+- `npm run validate` from `site/`: passed and validated 47 HTML files, 1501
+  internal references, 46 sitemap URLs, one legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
 PR-loop patch validation:
 
 - Initial PR loop for implementation PR returned `actionable_findings` with
