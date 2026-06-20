@@ -214,6 +214,12 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.FlowRows, row => row.RowKind == "client-server-alignment");
         Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(controller, StringComparison.Ordinal));
         Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(clientCache, StringComparison.Ordinal));
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
+            && row.SourceLabel == "server"
+            && row.CommitSha == server.CommitSha
+            && row.FilePath == "Controllers/OrdersController.cs");
+        Assert.DoesNotContain(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
+            && row.SourceLabel == "client");
     }
 
     [Fact]
@@ -571,7 +577,7 @@ public sealed class CombinedRouteFlowTests
             && row.Coverage == "CoverageRelative"
             && row.EvidenceTiers.Contains(EvidenceTiers.Tier3SyntaxOrTextual)
             && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
-        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName == "GET /api/orders/{}"
             && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow
             && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
     }

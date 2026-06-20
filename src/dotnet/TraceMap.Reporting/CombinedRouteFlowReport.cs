@@ -454,7 +454,7 @@ public static class CombinedRouteFlowReporter
         ApplyClassificationFilter(options.Classification, flowRows, logicRows, dependencySurfaces, gaps);
 
         var touchedFiles = BuildTouchedFiles(entryEvidence, flowRows, logicRows, dependencySurfaces, gaps);
-        var touchedSymbols = BuildTouchedSymbols(entryEvidence, flowRows, logicRows, dependencySurfaces);
+        var touchedSymbols = BuildTouchedSymbols(entryEvidence, flowRows, logicRows, dependencySurfaces, routePaths, sources);
         var coverageWarnings = pathReport.CoverageWarnings
             .Concat(sources.SelectMany(source => source.CoverageWarnings))
             .Distinct(StringComparer.Ordinal)
@@ -2236,12 +2236,14 @@ public static class CombinedRouteFlowReporter
         IReadOnlyList<RouteFlowEntryEvidence> entryEvidence,
         IReadOnlyList<RouteFlowRow> flowRows,
         IReadOnlyList<RouteFlowLogicRow> logicRows,
-        IReadOnlyList<RouteFlowDependencySurface> dependencySurfaces)
+        IReadOnlyList<RouteFlowDependencySurface> dependencySurfaces,
+        IReadOnlyList<CombinedPath> routePaths,
+        IReadOnlyList<RouteFlowSource> sources)
     {
         var candidates = entryEvidence
             .Where(row => !string.IsNullOrWhiteSpace(row.DisplaySymbol))
             .Select(row => new TouchedSymbolCandidate(row.EntryId, row.EntryId, row.DisplaySymbol!, row.EntryKind, row.Classification, row.Coverage, row.Evidence))
-            .Concat(flowRows.SelectMany(row => FlowSymbolCandidates(row)))
+            .Concat(PathNodeSymbolCandidates(routePaths, flowRows, sources))
             .Concat(logicRows.Select(row => new TouchedSymbolCandidate(row.LogicRowId, row.LogicRowId, row.DisplayName, row.LogicKind, row.Classification, row.Coverage, row.Evidence)))
             .Concat(dependencySurfaces.Select(row => new TouchedSymbolCandidate(row.SurfaceId, row.SurfaceId, row.DisplayName, row.SurfaceKind, row.Classification, row.Coverage, row.Evidence)))
             .Where(row => !string.IsNullOrWhiteSpace(row.DisplayName))
@@ -2311,12 +2313,33 @@ public static class CombinedRouteFlowReporter
             .ToArray();
     }
 
-    private static IEnumerable<TouchedSymbolCandidate> FlowSymbolCandidates(RouteFlowRow row)
+    private static IEnumerable<TouchedSymbolCandidate> PathNodeSymbolCandidates(
+        IReadOnlyList<CombinedPath> routePaths,
+        IReadOnlyList<RouteFlowRow> flowRows,
+        IReadOnlyList<RouteFlowSource> sources)
     {
-        yield return new TouchedSymbolCandidate(row.RowId, row.FromNodeId ?? $"{row.RowId}:source", row.SourceSymbol, $"{row.RowKind}:source", row.Classification, row.Coverage, row.Evidence);
-        if (!string.IsNullOrWhiteSpace(row.TargetSymbol))
+        var rowByNodeId = flowRows
+            .Where(row => !string.IsNullOrWhiteSpace(row.ToNodeId))
+            .GroupBy(row => row.ToNodeId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(row => row.Sequence).First(), StringComparer.Ordinal);
+        foreach (var node in routePaths.SelectMany(path => path.Nodes).OrderBy(node => node.SourceLabel, StringComparer.Ordinal).ThenBy(node => node.NodeId, StringComparer.Ordinal))
         {
-            yield return new TouchedSymbolCandidate(row.RowId, row.ToNodeId ?? $"{row.RowId}:target", row.TargetSymbol!, $"{row.RowKind}:target", row.Classification, row.Coverage, row.Evidence);
+            var displayName = FlowDisplaySymbol(node);
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                continue;
+            }
+
+            var attachedRow = rowByNodeId.GetValueOrDefault(node.NodeId);
+            var classification = attachedRow?.Classification ?? ClassifyRouteRow(null, node, sources);
+            yield return new TouchedSymbolCandidate(
+                attachedRow?.RowId ?? $"node:{CombinedReportHelpers.Hash(node.NodeId, 16)}",
+                node.SymbolId ?? node.NodeId,
+                displayName,
+                node.NodeKind,
+                classification,
+                CoverageFor(node.EvidenceTier),
+                EvidenceFromNode(PathRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? PathRuleId], sources));
         }
     }
 
