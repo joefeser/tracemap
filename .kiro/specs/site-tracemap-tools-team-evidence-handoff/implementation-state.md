@@ -10,6 +10,9 @@ Public claim level: concept
 - Target base: `dev`
 - Base: `origin/dev` at `022545465a804a8f2fa9c98e191ceca9d8e0ee6d`
 - Worktree: `<local-worktree>`
+- Pull request: `https://github.com/joefeser/tracemap/pull/232`
+- Latest implementation commit at PR creation:
+  `f6388a8c2be63543e9b96c92c5529cdae139b786`
 
 ## Scope
 
@@ -153,6 +156,13 @@ Public claim level: concept
   - Disposition: patched requirements, design, tasks, review packet, and this
     state file to align with the implementation branch; checked completed
     implementation tasks; recorded measured validation and word count.
+
+## PR Review Loop
+
+- Status: pending after PR creation.
+- PR: `https://github.com/joefeser/tracemap/pull/232`
+- Planned command: `agent-control pr-loop --repo joefeser/tracemap --pr 232
+  --base dev --require-codex-review --json`
 
 ## Oddities
 
