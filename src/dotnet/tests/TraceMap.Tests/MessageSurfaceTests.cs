@@ -23,6 +23,7 @@ public sealed class MessageSurfaceTests
                     kafkaProducer.ProduceAsync(OrdersTopic, message);
                     channel.QueueDeclare("orders-work");
                     channel.BasicPublish("orders-exchange", "created", null, message);
+                    channel.BasicPublish("", "orders-default", null, message);
                     daprClient.PublishEventAsync("pubsub", "orders.created", message);
                     kafkaProducer.ProduceAsync(tenantTopic, message);
                     _mediator.Publish(message);
@@ -55,6 +56,11 @@ public sealed class MessageSurfaceTests
             fact.FactType == FactTypes.MessageBindingDeclared
             && fact.RuleId == RuleIds.MessageSurfaceBinding
             && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-work");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MessagePublisherSurface
+            && fact.Properties.GetValueOrDefault("frameworkFeature") == "basic-publish-default-exchange"
+            && fact.Properties.GetValueOrDefault("surfaceKind") == "message-queue"
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-default");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MessageConsumerSurface
             && fact.RuleId == RuleIds.MessageSurfaceConsume
@@ -240,6 +246,10 @@ public sealed class MessageSurfaceTests
         Assert.Equal("hashed", hostLike.Status);
         Assert.Null(hostLike.NormalizedDestinationKey);
         Assert.Equal(64, hostLike.DestinationHash!.Length);
+
+        var caseSensitive = MessageSurfaceIdentity.FromRaw("Orders.Events");
+        Assert.Equal("static", caseSensitive.Status);
+        Assert.Equal("Orders.Events", caseSensitive.NormalizedDestinationKey);
     }
 
     [Fact]

@@ -106,7 +106,7 @@ public static class MessageSurfaceIdentity
 
     private static string NormalizeRenderable(string value)
     {
-        return value.Trim().Replace('\\', '/').ToLowerInvariant();
+        return value.Trim().Replace('\\', '/');
     }
 
     private static bool IsDynamic(string value)
@@ -128,8 +128,8 @@ public static class MessageSurfaceIdentity
     private static bool ContainsUnsafeValue(string value)
     {
         return value.Contains("://", StringComparison.Ordinal)
-            || value.Contains('@', StringComparison.Ordinal)
-            || value.Contains('\\', StringComparison.Ordinal)
+            || value.Contains("@", StringComparison.Ordinal)
+            || value.Contains("\\", StringComparison.Ordinal)
             || value.StartsWith("/", StringComparison.Ordinal)
             || value.StartsWith("C:", StringComparison.OrdinalIgnoreCase)
             || value.Contains("password", StringComparison.OrdinalIgnoreCase)

@@ -331,6 +331,7 @@ public static class CSharpIntegrationSyntaxExtractor
         MessagePattern pattern,
         IReadOnlyDictionary<string, string> constants)
     {
+        pattern = NormalizeMessagePatternForInvocation(pattern, invocation, constants);
         var destination = TryGetStaticString(invocation.ArgumentList.Arguments, pattern.DestinationArgumentIndex, constants, out var rawDestination)
             ? MessageSurfaceIdentity.FromRaw(rawDestination)
             : new MessageDestinationIdentity("dynamic", null, MessageSurfaceIdentity.Sha256(invocation.ToString()), "dynamic-destination");
@@ -338,7 +339,7 @@ public static class CSharpIntegrationSyntaxExtractor
         var evidence = ToEvidenceSpan(filePath, invocation);
         // Hashed identities are still useful static surfaces: the raw unsafe
         // destination is omitted, but the full digest keeps matching deterministic.
-        if (destination.Status is "dynamic" or "unknown" or "unsafe-omitted" || destination.GapReason is not null && destination.Status != "hashed")
+        if (ShouldEmitMessageGap(destination))
         {
             AddMessageGap(manifest, facts, evidence, pattern, destination, GetContainingMemberName(invocation), GetContainingType(invocation), manifest.RepoName);
             return;
@@ -364,7 +365,7 @@ public static class CSharpIntegrationSyntaxExtractor
                 ? MessageSurfaceIdentity.FromRaw(rawDestination)
                 : new MessageDestinationIdentity("dynamic", null, MessageSurfaceIdentity.Sha256(attribute.ToString()), "dynamic-destination");
             var evidence = ToEvidenceSpan(filePath, attribute);
-            if (destination.Status is "dynamic" or "unknown" or "unsafe-omitted" || destination.GapReason is not null && destination.Status != "hashed")
+            if (ShouldEmitMessageGap(destination))
             {
                 AddMessageGap(manifest, facts, evidence, pattern, destination, GetContainingMemberName(attribute), GetContainingType(attribute), manifest.RepoName);
                 continue;
@@ -372,6 +373,37 @@ public static class CSharpIntegrationSyntaxExtractor
 
             AddMessageSurface(manifest, facts, evidence, pattern, destination, GetContainingMemberName(attribute), GetContainingType(attribute), manifest.RepoName);
         }
+    }
+
+    private static MessagePattern NormalizeMessagePatternForInvocation(
+        MessagePattern pattern,
+        InvocationExpressionSyntax invocation,
+        IReadOnlyDictionary<string, string> constants)
+    {
+        if (pattern.FrameworkFamily == "rabbitmq"
+            && pattern.FrameworkFeature == "basic-publish"
+            && TryGetStaticString(invocation.ArgumentList.Arguments, 0, constants, out var exchange)
+            && string.IsNullOrEmpty(exchange))
+        {
+            return pattern with
+            {
+                FrameworkFeature = "basic-publish-default-exchange",
+                SurfaceKind = "message-queue",
+                DestinationArgumentIndex = 1
+            };
+        }
+
+        return pattern;
+    }
+
+    private static bool ShouldEmitMessageGap(MessageDestinationIdentity destination)
+    {
+        if (destination.Status is "dynamic" or "unknown" or "ambiguous")
+        {
+            return true;
+        }
+
+        return destination.GapReason is not null && destination.Status != "hashed";
     }
 
     private static void AddMessageSurface(
