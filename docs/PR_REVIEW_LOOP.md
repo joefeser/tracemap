@@ -24,7 +24,8 @@ Operational boundaries:
   approval.
 
 Run the loop from a TraceMap checkout so the repo-local lane file is loaded by
-default:
+default. The command expects normal GitHub CLI authentication or a GitHub token
+available to Agent Control, such as `GITHUB_TOKEN`:
 
 ```bash
 agent-control pr-loop --repo joefeser/tracemap --pr <number> --base <branch> --json
