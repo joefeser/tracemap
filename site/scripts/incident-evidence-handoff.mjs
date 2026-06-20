@@ -5,7 +5,6 @@ import {
   decodeHtmlEntities,
   escapeRegExp,
   fileExists,
-  normalizeBaseUrl,
   normalizeRenderedText,
   readSitemapLocSet
 } from "./validate-utils.mjs";
@@ -107,7 +106,7 @@ export async function validateIncidentEvidenceHandoffDist({
   errors
 }) {
   const localErrors = [];
-  const cleanBaseUrl = normalizeBaseUrl(baseUrl);
+  const cleanBaseUrl = normalizeIncidentEvidenceHandoffBaseUrl(baseUrl, localErrors);
   const pagePath = resolve(dist, "incident-evidence-handoff", "index.html");
 
   if (!(await fileExists(pagePath))) {
@@ -116,11 +115,31 @@ export async function validateIncidentEvidenceHandoffDist({
     return;
   }
 
-  await validateSitemap({ baseUrl: cleanBaseUrl, dist, errors: localErrors });
+  if (cleanBaseUrl) {
+    await validateSitemap({ baseUrl: cleanBaseUrl, dist, errors: localErrors });
+  }
   const routeContext = await readRouteContext({ baseUrl: cleanBaseUrl, dist, errors: localErrors });
   await validateIncidentEvidenceHandoffPage({ pagePath, routeContext, errors: localErrors });
 
   errors.push(...localErrors);
+}
+
+function normalizeIncidentEvidenceHandoffBaseUrl(value, errors) {
+  let url;
+
+  try {
+    url = new URL(value);
+  } catch {
+    errors.push(`Incident evidence handoff baseUrl must be a valid absolute URL: ${String(value)}`);
+    return null;
+  }
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    errors.push(`Incident evidence handoff baseUrl must use http or https: ${String(value)}`);
+    return null;
+  }
+
+  return url.origin;
 }
 
 async function validateSitemap({ baseUrl, dist, errors }) {
@@ -160,7 +179,7 @@ async function readRouteContext({ baseUrl, dist, errors }) {
   }
 
   const sitemapRoutes = new Set();
-  if (await fileExists(sitemapPath)) {
+  if (baseUrl && (await fileExists(sitemapPath))) {
     for (const loc of await readSitemapLocSet(sitemapPath)) {
       if (loc.startsWith(baseUrl)) {
         sitemapRoutes.add(new URL(loc).pathname);
@@ -210,7 +229,7 @@ async function validateIncidentEvidenceHandoffPage({ pagePath, routeContext, err
   const attributeText = collectDecodedAttributeText(html);
   const pageText = normalizeRenderedText(extractMainHtml(html));
   const wordCount = countRenderedWords(pageText);
-  const positioningText = `${pageText} ${attributeText} ${metadataText}`;
+  const positioningText = `${html} ${decodedHtml} ${pageText} ${attributeText} ${metadataText}`;
   const privateText = `${html} ${decodedHtml} ${attributeText} ${metadataText} ${pageText}`;
 
   for (const phrase of requiredText) {
