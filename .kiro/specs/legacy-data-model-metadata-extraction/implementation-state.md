@@ -317,3 +317,105 @@ Follow-ups:
 - Tasks 7-9 should project model-enriched `legacy-data` surfaces, exclude
   `AnalysisGap` facts from terminal projection, and verify graph/vault export
   redaction.
+
+## Implementation Slice 3 State
+
+Branch: `codex/continue-legacy-data-model-metadata-extraction`
+Base: `origin/dev` at `c3f3967a`
+
+Selected scope: partial Task 3. This slice adds deterministic relationship
+semantics to existing DBML, EDMX, and typed DataSet relationship-shaped source
+facts, plus selected ambiguity gaps, while preserving source rule IDs and
+`mappingKind` values. NHibernate `.hbm.xml` parsing, unsupported old ORM
+descriptor gaps, generated-code hardening, downstream surface/export
+projection, exhaustive unsupported relationship-shape detection, and selector
+downgrade tests remain follow-ups.
+
+Implementation boundary:
+
+- Added explicit model relationship properties such as
+  `modelRelationshipKind = relationship`,
+  `modelRelationshipRuleId = legacy.data.model.relationship.v1`,
+  endpoint names or hashes, endpoint coverage, supporting metadata fact IDs,
+  coverage labels, and limitation codes.
+- Preserved existing DBML `association` and typed DataSet `relation`
+  `mappingKind` values, and add EDMX relationship facts under the existing
+  EDMX source rule.
+- Added deterministic DBML association relationship evidence with source and
+  target endpoints when present, and unidirectional reduced-coverage evidence
+  plus limitations when the target endpoint is missing.
+- Added deterministic EDMX CSDL association relationship evidence and
+  unambiguous MSL `AssociationSetMapping` relationship evidence.
+- Added deterministic typed DataSet `msdata:Relationship` evidence and
+  resolvable XSD key/keyref constraint relationship evidence.
+- Emitted model-identity ambiguity gaps for duplicate DBML relationship names,
+  ambiguous EDMX association endpoints, and ambiguous MSL association-set
+  endpoints.
+- Emitted `UnsupportedLegacyOrmMappingShape` for inherited EDMX model shapes as
+  a representative unsupported relationship/model mapping gap.
+- Kept descriptor evidence capped at `Tier2Structural`; relationship metadata
+  remains static design-time evidence and does not claim runtime data access,
+  query execution, or schema existence.
+
+Deferred within Task 3:
+
+- Exhaustive split-entity, conditional, many-to-many, and other unsupported
+  relationship-shape detection beyond the inherited EDMX representative gap.
+- Selector downgrade behavior tests for downstream workflows.
+- Closing the remaining Task 3 gap/test checkboxes after those behaviors are
+  implemented.
+- Rationale: this extractor slice focuses on common descriptor relationships
+  and one representative unsupported model-shape gap. Split entities,
+  conditional mappings, many-to-many join inference, and selector downgrade
+  behavior require deeper MSL/downstream workflow integration and are better
+  handled with Tasks 7-8 surface/query projection work.
+
+Validation planned/executed:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 25 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModel`: passed, 3 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 552 tests.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke`: passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log` with 27 facts. Relationship-specific smoke is covered by focused synthetic tests because no checked-in sample currently contains DBML/EDMX/XSD legacy data relationship fixtures.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review had reduced coverage due to denied shell
+  access. It found incomplete full Task 3 unsupported-shape coverage, missing
+  selector downgrade tests, a relationship-specific `AmbiguousEdmxMapping`
+  classification, and missing relationship docs. Patched by documenting this as
+  a partial Task 3 slice, keeping remaining unsupported-shape and selector
+  downgrade work deferred, changing the new MSL relationship ambiguity gap to
+  `AmbiguousLegacyDataModelIdentity`, and updating `docs/ACCEPTANCE.md` plus
+  `docs/LANGUAGE_ADAPTER_CONTRACT.md`.
+- First Sonnet re-review had reduced coverage and requested a concrete
+  `UnsupportedLegacyOrmMappingShape` representative gap or a stronger deferral.
+  Patched by emitting and testing `UnsupportedLegacyOrmMappingShape` for
+  inherited EDMX model shapes and documenting the remaining split/conditional/
+  many-to-many follow-up boundary.
+- Second Sonnet re-review had reduced coverage and no further review cycle was
+  run to respect the two re-review limit. It requested clearer partial
+  checkboxes, validation-state details, EDMX endpoint coverage hardening, and
+  more explicit relationship ambiguity tests. Patched by adding nested
+  completed/deferred Task 3 checkboxes, recording validation here, marking EDMX
+  CSDL associations with missing endpoint types as reduced/unidirectional with
+  limitations, and adding a duplicate-role MSL ambiguity assertion.
+
+Documentation updated in this slice:
+
+- `docs/ACCEPTANCE.md` documents relationship metadata fields and the inherited
+  EDMX unsupported-shape gap.
+- `docs/LANGUAGE_ADAPTER_CONTRACT.md` documents relationship properties on
+  `LegacyDataMappingDeclared`.
+
+Remaining follow-ups:
+
+- Complete the remaining Task 3 unsupported-shape detection for split entities,
+  conditional mappings, many-to-many join inference, and other unsupported
+  relationship shapes.
+- Add selector downgrade tests when Tasks 7-8 project model-enriched
+  `legacy-data` surfaces into downstream path/reverse/report workflows.
+- Add NHibernate `.hbm.xml` MVP and unsupported old ORM descriptor gaps in
+  later slices.
