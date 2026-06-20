@@ -1,24 +1,20 @@
 # Site TraceMap Tools Evidence Glossary Implementation State
 
-Status: not-started
+Status: implemented; PR loop pending
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
 Spec branch: `codex/spec-site-evidence-glossary`
+Implementation branch: `codex/impl-site-evidence-glossary`
 Base: `origin/dev`
 Target PR base: `dev`
 
 ## Scope
 
-This phase creates a Kiro spec packet only for a future public-safe evidence
-glossary/reference page, likely `/glossary/` or
-`/docs/evidence-glossary/`.
-
-This phase does not implement site code. Future implementation should explain
-TraceMap vocabulary for engineers, reviewers, managers, architects, and agents
-without implying that every term is fully shipped everywhere.
+This implementation creates the public-safe evidence glossary/reference page as
+a standalone concept-level site route.
 
 ## Claim Boundary
 
@@ -32,24 +28,48 @@ details.
 
 ## Route Decision Status
 
-Not started. Future implementation must evaluate:
+Selected placement: `/glossary/`.
 
-- `/glossary/`
-- `/docs/evidence-glossary/`
-- folding into an existing public-safe documentation, proof-path, or
-  limitations route
+Rejected alternatives:
 
-The selected placement and rejected alternatives must be recorded here before
-implementation is marked complete.
+- `/docs/evidence-glossary/`: rejected because the site already uses short
+  first-level public proof and guidance routes for concept references, and a
+  nested docs route would make the glossary feel like repository
+  documentation instead of public vocabulary guidance.
+- Folded placement on `/evidence/`, `/proof-paths/`, `/proof-source-catalog/`,
+  or `/limitations/`: rejected because those routes already have demo-level or
+  boundary-specific jobs. Folding the glossary into one of them would blur the
+  concept-level claim signal and create a competing vocabulary surface without
+  standalone discovery metadata.
 
-Future implementation must also record canonical-source decisions for
-overlapping terms already described by `/evidence/`, `/proof-paths/`, and
-`/proof-source-catalog/`.
+Route rationale: `/glossary/` is short, human-readable, public-safe, and can be
+listed in sitemap and discovery metadata with `publicClaimLevel: concept`.
 
-Future implementation must record the minimum required link validation result,
-the chosen `hintCategory`, whether `concept` is accepted by discovery and
-validation tooling, and explicit numeric word-count bounds for either the
-standalone route or folded section.
+Canonical-source decisions for overlapping terms:
+
+- `rule ID`: canonical public vocabulary remains `/evidence/`; glossary gives a
+  concept-level definition and links back.
+- `evidence tier`: canonical tier list remains `/evidence/`; glossary repeats
+  the four tier names conservatively.
+- `proof path`: canonical public route mapping remains `/proof-paths/`, with
+  source-family cross-checks in `/proof-source-catalog/`.
+- `coverage label`: canonical examples remain `/proof-paths/` and public demo
+  result surfaces; glossary defines the boundary only.
+- `limitation` and `analysis gap`: canonical boundary wording remains
+  `/limitations/` and `/evidence/`; glossary treats each as part of the claim.
+- `commit/source context`, `extractor version`, `supporting IDs`,
+  `public claim level`, and `local-only artifact family`: glossary is the
+  concept-level vocabulary surface, while generated artifacts, rule catalog
+  entries, route metadata, and documented limitations remain source material.
+
+Discovery metadata decision: `concept` is accepted by the discovery validator,
+and `hintCategory: evidence` is selected because the route defines evidence
+vocabulary rather than a use-case, roadmap, demo, or limitations-only surface.
+
+Validation plan: enforce `/glossary/` in sitemap and discovery outputs; require
+links to `/evidence/`, `/proof-paths/`, `/proof-source-catalog/`, and
+`/limitations/`; verify required terms, stable anchors, non-claims, metadata,
+and word count. Standalone route word-count bounds: 900 to 2200 rendered words.
 
 Accepted `hintCategory` values from `site/scripts/discovery.mjs` at spec-review
 time: `start`, `evidence`, `limitations`, `demo`, `repo-doc`, `roadmap`, and
@@ -101,26 +121,60 @@ discovery validator with rationale.
   `hintCategory` allowlist replaced with the validator enum, non-existent
   aggregate `/use-cases/` route replaced with specific use-case routes, and
   `concept` page-level metadata scoped to standalone glossary routes.
+- PR #242 review loop returned one actionable Qodo/Codex-thread finding for
+  order-sensitive metadata regexes in the glossary validator. Patched by using
+  parsed HTML attributes for canonical, Open Graph title, and page-level claim
+  metadata checks, with a focused regression test for reversed attribute order.
+- PR #242 review loop then surfaced a Qodo top-level finding that required
+  actual `href` and `id` attributes rather than `data-href` or `data-id`
+  lookalikes for required links, anchors, and sanctioned-section stripping.
+  Patched the glossary helper regexes to require whitespace-delimited
+  attributes and added regression tests for `data-href`, `data-id`, and
+  sanctioned-section lookalikes.
+- PR #242 review loop then surfaced a fresh Codex thread requiring hard
+  private-value checks across the whole page instead of stripping sanctioned
+  sections first. Patched the validator to scan local paths, remotes,
+  connection strings, and credential-like tokens against the full decoded page
+  while keeping raw-artifact family vocabulary scoped to sanctioned boundary
+  sections.
+
+## Implementation Summary
+
+- Added standalone route `/glossary/` with visible
+  `Public claim level: concept` and
+  `No public conclusion without evidence`.
+- Added required glossary terms with stable anchors, definitions, public use,
+  and limitations.
+- Added concept-level sitemap and discovery metadata for `/glossary/`.
+- Added focused glossary validation for required copy, terms, anchors, links,
+  metadata, sitemap/discovery coverage, word count, forbidden affirmative
+  positioning, and sanctioned private/raw-material boundary wording.
+- Added focused positive and negative glossary validator tests.
+- Added minimal inbound links from `/evidence/`, `/proof-paths/`, and
+  `/proof-source-catalog/`.
 
 ## Validation
 
-Spec-only local validation passed on 2026-06-20:
+Implementation validation passed on 2026-06-20:
 
-- `git diff --check`
-- `./scripts/check-private-paths.sh` from the repo root: private path guard
-  passed.
+- `npm test` from `site/`: passed, 249 tests after the metadata-order,
+  attribute-boundary, and hard-private review fixes.
+- `npm run validate` from `site/`: passed, generated 48 HTML files, checked
+  1543 internal references, 47 sitemap URLs, 1 legacy story safety target, and
+  13 legacy modernization evidence-map rows.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- Browser sanity for `/glossary/`: passed on desktop 1440x1000 and mobile
+  390x844. The route rendered the expected title and H1, visible concept claim
+  level, non-claims section, required proof links, and no horizontal overflow.
 
-Site implementation validation is deferred because this phase creates the spec
-packet only and does not change site source:
-
-Future implementation validation:
-
-- `npm test` from `site/`
-- `npm run validate` from `site/`
-- `npm run build` from `site/`
-- desktop and mobile browser sanity checks if route, layout, or interaction
-  changes are made
+Minimum required link validation result: `/evidence/`, `/proof-paths/`,
+`/proof-source-catalog/`, and `/limitations/` exist in generated output and
+are enforced by the glossary validator. Additional linked routes present at
+implementation time are `/validation/`, `/roadmap/`, `/capabilities/`,
+`/manager-brief/`, `/review-claim-checklist/`, and `/docs/`.
 
 ## Follow-Ups
 
-- None yet.
+- None.
