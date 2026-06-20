@@ -200,6 +200,32 @@
 
 ## PR Loop Log
 
+- Implementation PR:
+  `https://github.com/joefeser/tracemap/pull/241`
+- First implementation PR-loop run:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 241 --base dev --require-codex-review --quiet --json`
+- First implementation PR-loop result: `actionable_findings`, stop reason
+  `UNRESOLVED_REVIEW_THREADS`, canMerge `false`.
+- Findings:
+  - Codex P2: gap file-span evidence with known source was grouped under
+    commit `unknown`, splitting touched-file summaries from the real-commit
+    file row and hiding weakest classification/coverage.
+  - Codex P2: touched-symbol summaries synthesized a new display/file hash
+    instead of preserving available row/node identities.
+- Disposition:
+  - Patched gap evidence projection to reuse the known source/file commit when
+    available so gap rows merge into the real touched-file summary.
+  - Patched touched-symbol aggregation to carry stable candidate identities,
+    using route-flow row node IDs when available and a deterministic
+    unavailable placeholder only as fallback.
+  - Added regression assertions for known-commit gap merging and non-hashed
+    symbol identities.
+- Follow-up validation after patch: `dotnet test
+  src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter
+  CombinedRouteFlowTests`, `dotnet test src/dotnet/TraceMap.sln`, the
+  public-demo combine/route-flow smoke, `./scripts/check-private-paths.sh`, and
+  `git diff --check` passed.
+
 - First run command:
   `agent-control pr-loop --repo joefeser/tracemap --pr 233 --base dev --require-codex-review --json`
 - First run result: `actionable_findings`, stop reason

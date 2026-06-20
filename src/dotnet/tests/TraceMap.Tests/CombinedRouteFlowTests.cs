@@ -51,6 +51,7 @@ public sealed class CombinedRouteFlowTests
             && row.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1"));
         Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
             && row.FilePath == "Controllers/OrdersController.cs"
+            && !row.SymbolId.StartsWith("touched-symbol:", StringComparison.Ordinal)
             && row.Evidence.RuleId == "combined.route-flow.report.v1"
             && row.RuleIds.Contains("combined.route-flow.path.v1")
             && row.SupportingRowIds.Any(id => id.StartsWith("row:", StringComparison.Ordinal)));
@@ -251,6 +252,10 @@ public sealed class CombinedRouteFlowTests
         var bridgeGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge" && gap.RuleId == "combined.route-flow.gap.v1");
         Assert.Equal("Controllers/OrdersController.cs", bridgeGap.FilePath);
         Assert.Equal(10, bridgeGap.StartLine);
+        var touchedControllerFile = Assert.Single(result.Report.TouchedFiles, file => file.FilePath == "Controllers/OrdersController.cs");
+        Assert.NotEqual("unknown", touchedControllerFile.CommitSha);
+        Assert.Contains(bridgeGap.GapId, touchedControllerFile.SupportingRowIds);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, touchedControllerFile.Classification);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MissingCallEdge");
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
     }
