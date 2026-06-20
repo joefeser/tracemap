@@ -38,6 +38,27 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-filter-sort-selection");
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "argument-flow" && row.Evidence.RuleId == "combined.route-flow.argument-projection.v1");
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-shape" && row.Evidence.RuleId == "combined.route-flow.fact-symbol-projection.v1");
+        Assert.Contains(result.Report.TouchedFiles, row => row.FilePath == "Controllers/OrdersController.cs"
+            && row.FirstStartLine == 10
+            && row.LastEndLine == 14
+            && row.Evidence.RuleId == "combined.route-flow.report.v1"
+            && row.RuleIds.Contains("combined.route-flow.entry.v1")
+            && row.RuleIds.Contains("combined.route-flow.path.v1")
+            && row.SupportingRowIds.Any(id => id.StartsWith("entry:", StringComparison.Ordinal))
+            && row.SupportingRowIds.Any(id => id.StartsWith("row:", StringComparison.Ordinal)));
+        Assert.Contains(result.Report.TouchedFiles, row => row.FilePath == "Infrastructure/OrderRepository.cs"
+            && row.RuleIds.Contains("combined.route-flow.dependency-surface.v1")
+            && row.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1"));
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
+            && row.FilePath == "Controllers/OrdersController.cs"
+            && row.Evidence.RuleId == "combined.route-flow.report.v1"
+            && row.RuleIds.Contains("combined.route-flow.path.v1")
+            && row.SupportingRowIds.Any(id => id.StartsWith("row:", StringComparison.Ordinal)));
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName == "GET /api/orders/{}"
+            && row.FilePath == "Controllers/OrdersController.cs"
+            && row.RuleIds.Contains("combined.route-flow.entry.v1"));
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains("parameter:", StringComparison.Ordinal)
+            && row.SymbolKind == "argument-flow");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.Contains(result.Report.Snapshot.Sources, source => source.ScannerVersion == "tracemap-milestone15");
         Assert.All(result.Report.FlowRows, row =>
@@ -60,6 +81,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("TraceMap Route Flow Report", markdown);
         Assert.Contains("static route-flow evidence", markdown);
         Assert.Contains("candidate implementation", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("## Touched Files", markdown);
+        Assert.Contains("## Touched Symbols", markdown);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Server=private", markdown, StringComparison.OrdinalIgnoreCase);
@@ -72,7 +95,23 @@ public sealed class CombinedRouteFlowTests
 
         var parsed = JsonSerializer.Deserialize<RouteFlowReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(parsed);
-        var sqlSurface = parsed!.DependencySurfaces.Single(surface => surface.SurfaceKind == "sql-query");
+        Assert.Contains(parsed!.TouchedFiles, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
+        Assert.Contains(parsed.TouchedSymbols, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
+        Assert.All(parsed.TouchedFiles, row =>
+        {
+            Assert.NotEmpty(row.SupportingRowIds);
+            Assert.NotEmpty(row.RuleIds);
+            Assert.NotEmpty(row.EvidenceTiers);
+            Assert.Equal(row.FilePath, row.Evidence.FilePath);
+        });
+        Assert.All(parsed.TouchedSymbols, row =>
+        {
+            Assert.NotEmpty(row.SupportingRowIds);
+            Assert.NotEmpty(row.RuleIds);
+            Assert.NotEmpty(row.EvidenceTiers);
+            Assert.False(string.IsNullOrWhiteSpace(row.DisplayName));
+        });
+        var sqlSurface = parsed.DependencySurfaces.Single(surface => surface.SurfaceKind == "sql-query");
         Assert.NotEmpty(sqlSurface.Evidence.SupportingFactIds);
         Assert.Contains(RuleIds.CSharpSyntaxQueryPattern, sqlSurface.Evidence.SupportingRuleIds);
         Assert.Equal("tracemap-milestone15", sqlSurface.Evidence.ExtractorVersion);
@@ -494,6 +533,14 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
             && row.Evidence.EvidenceTier == EvidenceTiers.Tier1Semantic
             && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+        Assert.Contains(result.Report.TouchedFiles, row => row.FilePath == "Controllers/OrdersController.cs"
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow
+            && row.Coverage == "CoverageRelative"
+            && row.EvidenceTiers.Contains(EvidenceTiers.Tier3SyntaxOrTextual)
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
     }
 
     [Fact]
@@ -734,6 +781,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("- MissingCallEdge gap", catalog);
         Assert.Contains("- DataSurfaceAttachmentMissing gap", catalog);
         Assert.Contains("- TraversalBounds gap", catalog);
+        Assert.Contains("- route-flow-report.json", catalog);
     }
 
     private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp, string serverBuildStatus = "Succeeded")

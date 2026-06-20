@@ -138,8 +138,8 @@ execute queries.
    IDs, and limitations where available.
 4. WHEN argument/value-origin rows are unavailable, unjoinable, cross-source by
    guess, or only name-matched THEN the report SHALL emit
-   `ArgumentProjectionUnavailable` or a narrower gap and SHALL NOT infer a data
-   flow.
+   `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`, or a
+   narrower gap and SHALL NOT infer a data flow.
 5. WHEN `combined_fact_symbols` attach query, object-shape, config, package, or
    data facts to selected symbols THEN the report SHALL include fact-symbol
    projection rows only when the symbol identity is source-local and
@@ -205,10 +205,12 @@ be stable, machine-readable, and reviewable.
    files, touched symbols, and value-origin evidence.
 4. WHEN identical input rows and options are used twice THEN Markdown and JSON
    SHALL be byte-stable.
-5. Arrays and maps SHALL sort deterministically by source label, normalized
-   selector kind, normalized selector key, classification rank, path length,
-   sequence where available, row kind, safe display label, file path, start
-   line, end line, symbol ID, fact ID, edge ID, and stable row ID.
+5. Newly added arrays and maps SHALL sort deterministically by source label,
+   normalized selector kind, normalized selector key, classification rank, path
+   length, sequence where available, row kind, safe display label, file path,
+   start line, end line, symbol ID, fact ID, edge ID, and stable row ID.
+   Existing route-flow row collections SHALL keep their established stable
+   orderings.
 6. Output wording SHALL use phrases such as "static evidence",
    "candidate implementation", "coverage-relative", and "touched by selected
    evidence"; it SHALL NOT say "impacted", "executed", "called at runtime",
