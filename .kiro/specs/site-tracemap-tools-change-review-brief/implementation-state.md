@@ -11,7 +11,7 @@ Public claim level: concept
 - Base: `origin/dev` at `21b8cc11953d0d18286d10c0170d26fffb70669c`
 - Worktree: isolated implementation worktree; absolute local path intentionally omitted
   from the checked-in state file for the private-path guard.
-- Pull request: pending until PR creation; final report records the URL.
+- Pull request: `https://github.com/joefeser/tracemap/pull/244`
 - Latest implementation commit: pending until commit; final report records the
   exact SHA to avoid self-referential amend churn in this checked-in state file.
 
@@ -250,7 +250,20 @@ Public claim level: concept
 
 ## PR Review Loop
 
-- Pending until PR creation.
+- Initial run after the required wait returned `actionable_findings` with
+  `stopReason: ACTIONABLE_BOT_FINDINGS`; Qodo flagged the public Non-Claims
+  sentence for using `impacted` without reducer-backed evidence.
+- Patch applied: removed `impacted` from the public Non-Claims sentence in
+  `site/src/use-cases/change-review/index.html`.
+- Validation after the Qodo patch passed:
+  `npm test`, `npm run validate`, `npm run build`, `git diff --check`, and
+  `./scripts/check-private-paths.sh`.
+- Rerun after the patch returned `human_decision_required` with
+  `stopReason: BOT_REVIEW_CEILING_REACHED`. Mechanical gates were clean:
+  unresolved threads `0`, pending checks `0`, failed checks `0`, actionable bot
+  findings `0`, and merge state `CLEAN`. Required Codex review remained stale
+  because Codex reviewed the pre-fix head and the configured review request
+  ceiling had been reached.
 
 ## Oddities
 
