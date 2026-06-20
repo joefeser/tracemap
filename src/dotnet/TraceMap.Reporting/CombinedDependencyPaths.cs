@@ -225,7 +225,15 @@ public static class CombinedDependencyPathReporter
         "remoting-object",
         "remoting-api",
         "legacy-data",
-        "dependency-surface"
+        "dependency-surface",
+        "message-queue",
+        "message-topic",
+        "message-subscription",
+        "message-exchange",
+        "message-stream",
+        "message-event",
+        "message-channel",
+        "message-unknown"
     };
 
     private static readonly HashSet<string> EdgeKindTerms = new(StringComparer.Ordinal)
@@ -239,7 +247,8 @@ public static class CombinedDependencyPathReporter
         "parameter-forward",
         "fact-attached-to-symbol",
         "surface-evidence",
-        "symbol-reconciliation"
+        "symbol-reconciliation",
+        "message-publish-consume"
     };
 
     private static readonly HashSet<string> LegacyTerminalSurfaceKinds = new(StringComparer.Ordinal)
@@ -366,7 +375,7 @@ public static class CombinedDependencyPathReporter
 
             if (!TerminalSurfaceKinds.Contains(surfaceKind))
             {
-                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, or dependency-surface.");
+                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, dependency-surface, message-queue, message-topic, message-subscription, message-exchange, message-stream, message-event, message-channel, or message-unknown.");
             }
         }
 
@@ -435,6 +444,28 @@ public static class CombinedDependencyPathReporter
         }
         else
         {
+            var messageTerminalNode = terminalNodes
+                .Select(id => graph.Nodes.TryGetValue(id, out var node) ? node : null)
+                .OfType<GraphNode>()
+                .FirstOrDefault(node => IsMessageSurfaceKind(node.SurfaceKind));
+            if (messageTerminalNode is not null)
+            {
+                gaps.Add(new CombinedPathGap(
+                    $"gap:message-direction-filter:{messageTerminalNode.NodeId}",
+                    "DirectionFilterNotSupported",
+                    CombinedDependencyPathClassifications.AnalysisGap,
+                    "Message surface direction filtering is not supported in this path-query slice; publisher, consumer, and binding evidence may be selected together.",
+                    messageTerminalNode.SourceIndexId,
+                    messageTerminalNode.SourceLabel,
+                    messageTerminalNode.NodeId,
+                    messageTerminalNode.CombinedFactId,
+                    RuleIds.MessageSurfaceGap,
+                    EvidenceTiers.Tier4Unknown,
+                    messageTerminalNode.FilePath,
+                    messageTerminalNode.StartLine,
+                    "direction-filter-not-supported"));
+            }
+
             var search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
@@ -3128,6 +3159,7 @@ public static class CombinedDependencyPathReporter
                 "http-client" => "HttpClientSurface",
                 "http-route" => "HttpRouteSurface",
                 "package-config" => surface.ConfigKey is not null ? "ConfigSurface" : "PackageSurface",
+                "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" => "MessageSurface",
                 _ => "DependencySurface"
             },
             surface.DisplayName,
@@ -3155,6 +3187,18 @@ public static class CombinedDependencyPathReporter
             surface.TextLength,
             surface.PackageName,
             surface.ConfigKey);
+    }
+
+    private static bool IsMessageSurfaceKind(string? surfaceKind)
+    {
+        return surfaceKind is "message-queue"
+            or "message-topic"
+            or "message-subscription"
+            or "message-exchange"
+            or "message-stream"
+            or "message-event"
+            or "message-channel"
+            or "message-unknown";
     }
 
     private static (string Method, string PathKey) ParseEndpointSelector(string value)

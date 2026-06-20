@@ -121,7 +121,19 @@ public sealed record CombinedDependencySurfaceRow(
     string? DependencyGroup = null,
     string? PackageManager = null,
     string? VersionHash = null,
-    string? RedactionReason = null);
+    string? RedactionReason = null,
+    string? FrameworkFamily = null,
+    string? FrameworkFeature = null,
+    string? OperationDirection = null,
+    string? OperationKind = null,
+    string? DestinationIdentityStatus = null,
+    string? NormalizedDestinationKey = null,
+    string? DestinationHash = null,
+    string? EventTypeIdentity = null,
+    string? HandlerSymbolId = null,
+    string? PublisherSymbolId = null,
+    string? SafeMetadataHash = null,
+    string? StableMessageSurfaceKey = null);
 
 public sealed record CombinedDependencyEdgeRow(
     string EdgeKind,
@@ -229,6 +241,7 @@ public static class CombinedDependencyReporter
     [
         "Endpoint alignment is static method/path evidence. It does not prove runtime traffic, runtime reachability, auth behavior, proxy behavior, deployment base paths, CORS behavior, or user exercise.",
         "SQL query/persistence rows are static shape, hash, or mapping evidence. They do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.",
+        "Event/message rows are static evidence only. They do not prove runtime delivery, broker topology, live subscriptions, production traffic, ordering, retries, dead-letter behavior, schema compatibility, or payload compatibility.",
         "Call and creation edges are static code evidence. They do not prove dynamic dispatch targets, runtime DI registrations, reflection targets, branch feasibility, or collection contents.",
         "Parameter-forwarding rows are direct static argument-to-parameter evidence, not full taint analysis.",
         "Reduced coverage means absence of evidence is not evidence of absence."
@@ -259,6 +272,7 @@ public static class CombinedDependencyReporter
         var read = await ReadAsync(connection, cancellationToken);
         var endpointFindings = MatchEndpoints(read.Sources, read.Facts);
         var surfaces = BuildSurfaces(read.Facts);
+        var dependencyEdges = read.Edges.Concat(BuildMessageCandidateEdges(surfaces)).ToArray();
         var needsReview = BuildNeedsReview(endpointFindings, read.Facts);
         var warnings = read.CoverageWarnings
             .OrderBy(value => value, StringComparer.Ordinal)
@@ -271,15 +285,15 @@ public static class CombinedDependencyReporter
             new CombinedReportSummary(
                 read.Sources.Count,
                 read.Facts.Count,
-                read.Edges.Count,
+                dependencyEdges.Length,
                 endpointFindings.Count,
                 CountBy(endpointFindings, finding => finding.Classification),
                 CountBy(surfaces, surface => surface.SurfaceKind),
-                CountBy(read.Edges, edge => edge.EdgeKind),
+                CountBy(dependencyEdges, edge => edge.EdgeKind),
                 read.ValueOriginEvidenceCounts),
             endpointFindings,
             surfaces,
-            read.Edges
+            dependencyEdges
                 .Select(SanitizeEdge)
                 .OrderBy(edge => edge.EdgeKind, StringComparer.Ordinal)
                 .ThenBy(edge => edge.SourceLabel, StringComparer.Ordinal)
@@ -869,7 +883,19 @@ public static class CombinedDependencyReporter
             surface.DependencyGroup,
             surface.PackageManager,
             surface.VersionHash,
-            surface.RedactionReason);
+            surface.RedactionReason,
+            surface.FrameworkFamily,
+            surface.FrameworkFeature,
+            surface.OperationDirection,
+            surface.OperationKind,
+            surface.DestinationIdentityStatus,
+            surface.NormalizedDestinationKey,
+            surface.DestinationHash,
+            surface.EventTypeIdentity,
+            surface.HandlerSymbolId,
+            surface.PublisherSymbolId,
+            surface.SafeMetadataHash,
+            surface.StableMessageSurfaceKey);
     }
 
     private static IReadOnlyList<CombinedNeedsReviewRow> BuildNeedsReview(IReadOnlyList<CombinedEndpointFinding> endpointFindings, IReadOnlyList<CombinedFactRow> facts)
@@ -935,6 +961,66 @@ public static class CombinedDependencyReporter
         return edge with { FilePath = SafePath(edge.FilePath) };
     }
 
+    private static IReadOnlyList<CombinedDependencyEdgeRow> BuildMessageCandidateEdges(IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
+    {
+        var publishers = surfaces
+            .Where(surface => surface.OperationDirection == "publish"
+                && surface.DestinationIdentityStatus == "static"
+                && !string.IsNullOrWhiteSpace(surface.NormalizedDestinationKey))
+            .ToArray();
+        var consumers = surfaces
+            .Where(surface => surface.OperationDirection == "consume"
+                && surface.DestinationIdentityStatus == "static"
+                && !string.IsNullOrWhiteSpace(surface.NormalizedDestinationKey))
+            .ToArray();
+
+        return publishers
+            .Join(
+                consumers,
+                publisher => $"{publisher.SurfaceKind}|{publisher.NormalizedDestinationKey}",
+                consumer => $"{consumer.SurfaceKind}|{consumer.NormalizedDestinationKey}",
+                (publisher, consumer) => new { Publisher = publisher, Consumer = consumer },
+                StringComparer.Ordinal)
+            .OrderBy(pair => pair.Publisher.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(pair => pair.Consumer.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(pair => pair.Publisher.NormalizedDestinationKey, StringComparer.Ordinal)
+            .Select(pair => new CombinedDependencyEdgeRow(
+                "message-publish-consume",
+                pair.Publisher.SourceIndexId,
+                $"{pair.Publisher.SourceLabel}->{pair.Consumer.SourceLabel}",
+                $"message-edge:{Hash($"{pair.Publisher.CombinedFactId}|{pair.Consumer.CombinedFactId}", 24)}",
+                $"{pair.Publisher.OriginalFactId};{pair.Consumer.OriginalFactId}",
+                pair.Publisher.DisplayName,
+                pair.Consumer.DisplayName,
+                null,
+                null,
+                RuleIds.MessageSurfaceCandidateEdge,
+                WeakestEvidenceTier(pair.Publisher.EvidenceTier, pair.Consumer.EvidenceTier),
+                pair.Publisher.FilePath,
+                pair.Publisher.StartLine,
+                pair.Publisher.EndLine))
+            .ToArray();
+    }
+
+    private static string WeakestEvidenceTier(string left, string right)
+    {
+        var leftRank = EvidenceTierRank(left);
+        var rightRank = EvidenceTierRank(right);
+        return leftRank >= rightRank ? left : right;
+    }
+
+    private static int EvidenceTierRank(string tier)
+    {
+        return tier switch
+        {
+            EvidenceTiers.Tier1Semantic => 1,
+            EvidenceTiers.Tier2Structural => 2,
+            EvidenceTiers.Tier3SyntaxOrTextual => 3,
+            EvidenceTiers.Tier4Unknown => 4,
+            _ => 4
+        };
+    }
+
     private static async Task<(string? MarkdownPath, string? JsonPath)> WriteOutputsAsync(string outputPath, string format, CombinedDependencyReportDocument report, CancellationToken cancellationToken)
     {
         var fullPath = Path.GetFullPath(outputPath);
@@ -995,6 +1081,7 @@ public static class CombinedDependencyReporter
         builder.AppendLine("## Dependency Surfaces");
         builder.AppendLine();
         builder.AppendLine("- SQL query rows are static shape or hash evidence only; they do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.");
+        builder.AppendLine("- Event/message rows are static evidence only. They do not prove runtime delivery, broker topology, live subscriptions, production traffic, ordering, retries, dead-letter behavior, schema compatibility, or payload compatibility.");
         builder.AppendLine();
         AppendRows(builder, report.DependencySurfaces, "| Kind | Source | Name | Details | Evidence |", "| --- | --- | --- | --- | --- |",
             surface => $"| {Cell(surface.SurfaceKind)} | {Cell(surface.SourceLabel)} | {Cell(surface.DisplayName)} | {Cell(SurfaceDetails(surface))} | {Cell($"{surface.RuleId} {surface.EvidenceTier} {surface.FilePath}:{surface.StartLine}")} |");
@@ -1091,8 +1178,15 @@ public static class CombinedDependencyReporter
             "sql-query" => $"op {surface.OperationName ?? "unknown"} table {surface.TableName ?? "n/a"} columns {surface.ColumnNames ?? "n/a"} source {surface.SourceKind ?? "unknown"} shape {surface.ShapeHash ?? surface.TextHash ?? "n/a"}",
             "sql-persistence" => $"table {surface.TableName ?? "n/a"} columns {surface.ColumnNames ?? "n/a"}",
             "package-config" => $"package {surface.PackageName ?? "n/a"} ecosystem {surface.Ecosystem ?? "unknown"} version {surface.Version ?? surface.VersionHash ?? "n/a"} scope {surface.DependencyScope ?? "unknown"} manifest {surface.ManifestKind ?? "unknown"} key {surface.ConfigKey ?? "n/a"}",
+            "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" =>
+                $"framework {surface.FrameworkFamily ?? "unknown"} direction {surface.OperationDirection ?? "unknown"} operation {surface.OperationKind ?? "unknown"} identity {surface.DestinationIdentityStatus ?? "unknown"} destination {surface.NormalizedDestinationKey ?? ShortHash(surface.DestinationHash) ?? "n/a"} caveat static-only",
             _ => string.Empty
         };
+    }
+
+    private static string? ShortHash(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : $"hash:{value[..Math.Min(16, value.Length)]}";
     }
 
     private static string EvidenceLabel(string? sourceLabel, string? filePath, int? startLine)

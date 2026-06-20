@@ -11,37 +11,37 @@
 ## Implementation Tasks
 
 - [ ] 1. Add shared vocabulary and rule catalog entries. Requirements: 1, 2, 8.
-  - [ ] Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` with the shared message
+  - [x] Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` with the shared message
         fact vocabulary, safe metadata fields, surface kinds, evidence-tier
         guidance, and adapter obligations before TypeScript, Python, or JVM
         implementation slices begin.
-  - [ ] Commit and review rule catalog entries before any implementation emits
+  - [x] Commit and review rule catalog entries before any implementation emits
         `MessagePublisherSurface`, `MessageConsumerSurface`,
         `MessageBindingDeclared`, message-specific `AnalysisGap` facts,
         `message-publish-consume`, or any `message.surface.*` rule-backed fact
         or row.
-  - [ ] Add rule catalog entries for publisher, consumer, binding, identity,
+  - [x] Add rule catalog entries for publisher, consumer, binding, identity,
         combine, candidate-edge, paths, reducer, and gap rules before emitting
         facts.
-  - [ ] Document limitations for static evidence, runtime delivery, topology,
+  - [x] Document limitations for static evidence, runtime delivery, topology,
         live subscriptions, traffic, auth, retries, retention, ordering,
         dead-letter behavior, schema compatibility, and deployment reachability.
-  - [ ] Add shared surface kinds for queue, topic, subscription, exchange,
+  - [x] Add shared surface kinds for queue, topic, subscription, exchange,
         stream, event, channel, and unknown message surfaces.
-  - [ ] Add safe destination identity normalization and hashing helpers.
-  - [ ] Document `MessageBindingDeclared` as the v1 home for declaration-only
+  - [x] Add safe destination identity normalization and hashing helpers.
+  - [x] Document `MessageBindingDeclared` as the v1 home for declaration-only
         destination metadata; defer any separate destination-only fact until a
         future spec defines its integration path.
-  - [ ] Require full collision-resistant destination hash input for stable keys
+  - [x] Require full collision-resistant destination hash input for stable keys
         and document any shortened display-only hash behavior.
   - [ ] Add tests for safe renderable names, hashed names, dynamic names,
         unsafe omitted names, deterministic stable keys, and Markdown escaping.
-  - [ ] Add a stable-key test proving a handler rename does not change a
+  - [x] Add a stable-key test proving a handler rename does not change a
         static-destination surface key when destination and direction are
         unchanged.
   - [ ] Add a hashed-destination collision or duplicate-key test proving
         distinct hidden destinations are not silently merged.
-  - [ ] Add a negative test proving MediatR-like in-process notification
+  - [x] Add a negative test proving MediatR-like in-process notification
         patterns do not emit broker-backed message publisher or consumer facts.
 
 - [ ] 2. Implement .NET publisher/consumer/binding extraction. Requirements:
@@ -50,12 +50,12 @@
         symbols resolve.
   - [ ] Detect selected .NET consumer/handler declarations with semantic
         evidence where symbols resolve.
-  - [ ] Detect selected attribute/config binding declarations.
-  - [ ] Emit syntax fallback evidence when MSBuild or semantic model loading
+  - [x] Detect selected attribute/config binding declarations.
+  - [x] Emit syntax fallback evidence when MSBuild or semantic model loading
         fails.
-  - [ ] Emit analysis gaps for dynamic, ambiguous, unsupported, or unsafe
+  - [x] Emit analysis gaps for dynamic, ambiguous, unsupported, or unsafe
         destination identity.
-  - [ ] Preserve file paths, line spans, commit SHA, extractor versions,
+  - [x] Preserve file paths, line spans, commit SHA, extractor versions,
         rule IDs, evidence tiers, and supporting symbol IDs where available.
   - [ ] Add checked-in synthetic fixtures covering semantic, syntax fallback,
         config/binding, dynamic destination, unsupported framework, and failed
@@ -65,22 +65,22 @@
 
 - [ ] 3. Project event/message facts into combined dependency surfaces.
       Requirements: 5, 8, 9.
-  - [ ] Update combined surface projection to include message surface kinds.
-  - [ ] Extend `CombinedSurfaceProjectionRow` and combined report JSON rows with
+  - [x] Update combined surface projection to include message surface kinds.
+  - [x] Extend `CombinedSurfaceProjectionRow` and combined report JSON rows with
         message-specific fields such as operation direction, framework family,
         destination identity status, destination key/hash, event type identity,
         handler/publisher identity, and safe metadata hash.
-  - [ ] Decide and document whether `handlerSymbolId` and `publisherSymbolId`
+  - [x] Decide and document whether `handlerSymbolId` and `publisherSymbolId`
         are `fact_symbols` role rows or properties-only safe metadata.
   - [ ] Update report schema version or documented JSON contract according to
         existing dependency-report conventions.
-  - [ ] Render event/message surface summaries and rows in combined Markdown
+  - [x] Render event/message surface summaries and rows in combined Markdown
         and JSON reports.
-  - [ ] Preserve one-sided publisher and consumer evidence.
-  - [ ] Project `MessageBindingDeclared` bind/declare rows into combined
+  - [x] Preserve one-sided publisher and consumer evidence.
+  - [x] Project `MessageBindingDeclared` bind/declare rows into combined
         reports when safe, or emit explicit gap rows when omitted because
         identity is dynamic, unsafe, or absent.
-  - [ ] Create static publish/consume candidate rows only for safe stable
+  - [x] Create static publish/consume candidate rows only for safe stable
         destination matches.
   - [ ] Add identity-collision tests proving same destination with different
         operation directions does not collapse into one row.
@@ -89,7 +89,7 @@
         artifact according to adapter rules.
   - [ ] Add stable-key fallback tests for dynamic and unsafe-omitted
         destinations.
-  - [ ] Label hashed, dynamic, ambiguous, unsafe, and reduced-coverage rows.
+  - [x] Label hashed, dynamic, ambiguous, unsafe, and reduced-coverage rows.
   - [ ] Add combined report tests for rows, counts, candidate relationships,
         binding-declared-only evidence, redaction, deterministic ordering,
         byte-stable output, empty message sections/arrays, and required empty
@@ -97,16 +97,16 @@
   - [ ] Name and test required JSON fields for empty message sections, including
         message surfaces and publish/consume candidate rows, following existing
         report naming conventions.
-  - [ ] Test that combined report rendering never emits
+  - [x] Test that combined report rendering never emits
         `message-publish-consume` as a `surfaceKind`.
 
 - [ ] 4. Integrate message surfaces with paths, route-flow, and reverse
       queries. Requirements: 6, 8, 9.
-  - [ ] Allow message surface kinds as path and reverse selectors.
-  - [ ] Extend reverse-query surface allowlists and validation errors for
+  - [x] Allow message surface kinds as path and reverse selectors.
+  - [x] Extend reverse-query surface allowlists and validation errors for
         message surface kinds, with tests for accepted selectors and clean
         rejection of unsupported values.
-  - [ ] Reject `message-publish-consume` as a surface-kind selector with a
+  - [x] Reject `message-publish-consume` as a surface-kind selector with a
         clear validation error and test.
   - [ ] Add direction filtering for publisher, consumer, binding, or all
         directions; if deferred, emit an explicit unavailable gap and document
@@ -175,15 +175,15 @@
   - [ ] Add fixture tests, adapter validation, and private-output guards.
 
 - [ ] 9. Validate implementation. Requirements: 8, 9.
-  - [ ] Run `dotnet test`.
+  - [x] Run `dotnet test`.
   - [ ] Run relevant TypeScript, Python, and JVM adapter tests for touched
         adapters.
-  - [ ] Run a combine/report/paths/reverse smoke over public or synthetic
+  - [x] Run a combine/report/paths/reverse smoke over public or synthetic
         event/message fixtures.
-  - [ ] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `./scripts/check-private-paths.sh`.
   - [ ] Confirm `./scripts/check-private-paths.sh` covers combined report,
         paths report, reverse report, route-flow report, reducer output, and
         any new message-surface output files; update it if coverage is missing.
-  - [ ] Run `git diff --check`.
-  - [ ] Update docs, acceptance notes, report schema/version documentation, and
+  - [x] Run `git diff --check`.
+  - [x] Update docs, acceptance notes, report schema/version documentation, and
         language adapter contract where rule or schema behavior changes.
