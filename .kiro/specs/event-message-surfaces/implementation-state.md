@@ -94,6 +94,12 @@ Status: implementation-in-progress
   - `./scripts/check-private-paths.sh`: passed.
   - `git diff --check`: passed.
   - `dotnet build src/dotnet/TraceMap.sln`: passed.
+- After first PR-loop review-thread fixes, validation passed on 2026-06-20:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`: 6 passed, 0 failed.
+  - `dotnet test src/dotnet/TraceMap.sln`: 522 passed, 0 failed.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed.
 
 ## Kiro Review State
 
