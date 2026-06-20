@@ -96,8 +96,8 @@ Acceptance Criteria:
    metadata format, safe display label or hash, source artifact type, rule ID,
    evidence tier, source label, scan ID, commit SHA, extractor version where
    available, file path, line span, supporting fact IDs, supporting edge IDs,
-   coverage label, display clearance status, claim-level context ID where
-   available, and limitations.
+   coverage label, `displayClearance`, `claimLevelContextId` where available,
+   and limitations.
 2. WHEN model-specific properties are available THEN the row SHOULD render safe
    values for `modelKind`, `metadataFormat`, `descriptorRole`,
    `stableModelKey`, `displayName`, `displayNameHash`, `containerName`,
