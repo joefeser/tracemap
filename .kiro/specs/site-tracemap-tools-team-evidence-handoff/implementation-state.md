@@ -172,6 +172,13 @@ Public claim level: concept
     boundary scanning, and route metadata checks; added tests for metadata
     overclaims, `>` in attributes, and secrets inside boundary copy; checked
     the final implementation-state task.
+- Second result: `actionable_findings`.
+  - Stop reason: `ACTIONABLE_BOT_FINDINGS`.
+  - Evidence: remaining Qodo finding requested canonical evidence-tier copy
+    on `/team-evidence-handoff/`.
+  - Patch: changed the evidence-tier field copy to use canonical TraceMap
+    labels `Tier1Semantic`, `Tier2Structural`, `Tier3SyntaxOrTextual`, and
+    `Tier4Unknown`.
 - PR: `https://github.com/joefeser/tracemap/pull/232`
 - Next step: push PR review patch and rerun the PR loop.
 
