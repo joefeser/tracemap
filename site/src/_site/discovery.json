@@ -440,6 +440,23 @@
     ]
   },
   {
+    "path": "/team-evidence-handoff/",
+    "title": "Team Evidence Handoff",
+    "summary": "Concept-level handoff language for sharing deterministic static evidence with a teammate, reviewer, manager, or agent while keeping proof fields together.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is concept-level communication guidance, not a completed collaboration workflow or approval system.",
+      "Every handoff summary must stay attached to a proof path, rule context, evidence tier, coverage label, limitations, non-claims, local-only artifact handling, and next owner/action."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, autonomous approval, or complete product coverage proof.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, credential-like values, or private URLs are published."
+    ]
+  },
+  {
     "path": "/static-vs-runtime/",
     "title": "Static Evidence Vs Runtime Telemetry",
     "summary": "Concept-level comparison of TraceMap deterministic static repository evidence with runtime telemetry and observability questions.",
