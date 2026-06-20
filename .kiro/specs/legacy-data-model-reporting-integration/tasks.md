@@ -1,6 +1,6 @@
 # Legacy Data Model Reporting Integration Tasks
 
-Current state: `spec-reviewed`.
+Current state: `implementation-slice-1-ready-for-pr`.
 
 This spec is intentionally implementation-oriented, but this branch is
 spec-only. Product code tasks below should be completed in later PRs and the
@@ -12,37 +12,37 @@ descriptor projection and report/query readers that already consume
 release-review scoring expansion, vault/RAG expansion, and explorer UI filters
 for follow-up PRs unless review shows a narrower safe path.
 
-- [ ] 1. Add shared legacy data model descriptor projection helpers.
-  - [ ] Normalize current `LegacyData*` facts and near-term model identity
+- [x] 1. Add shared legacy data model descriptor projection helpers.
+  - [x] Normalize current `LegacyData*` facts and near-term model identity
         fields into a report/export descriptor view.
-  - [ ] Exclude `AnalysisGap` facts from terminal surface projection.
-  - [ ] Preserve source rule IDs, evidence tiers, source labels, commit SHAs,
+  - [x] Exclude `AnalysisGap` facts from terminal surface projection.
+  - [x] Preserve source rule IDs, evidence tiers, source labels, commit SHAs,
         extractor versions, file spans, supporting IDs, coverage, and
         limitations.
-  - [ ] Add safe label/hash selection and redaction metadata.
-  - [ ] Add duplicate stable identity detection.
-  - [ ] Escape Markdown-sensitive characters in safe display labels and hashes
+  - [x] Add safe label/hash selection and redaction metadata.
+  - [x] Add duplicate stable identity detection.
+  - [x] Escape Markdown-sensitive characters in safe display labels and hashes
         before rendering Markdown table cells.
-  - [ ] Accept a `ClaimLevelContext` or equivalent output-profile parameter in
+  - [x] Accept a `ClaimLevelContext` or equivalent output-profile parameter in
         the projection helper and derive `displayClearance` deterministically;
         default to hash-only display when no context is provided.
-  - [ ] Add a test proving projection without claim-level context records
+  - [x] Add a test proving projection without claim-level context records
         `displayClearance = false` and renders hash-only display values.
 
 - [ ] 2. Integrate descriptors into combined dependency reports and paths.
-  - [ ] Render safe `legacy-data` surface rows with model metadata where
+  - [x] Render safe `legacy-data` surface rows with model metadata where
         available.
-  - [ ] Fall back to current safe legacy data fields when model metadata is
+  - [x] Fall back to current safe legacy data fields when model metadata is
         absent.
   - [ ] Emit scoped availability gaps for missing optional graph tables only
         when relevant.
-  - [ ] Prevent double projection when persisted derived rows exist.
+  - [x] Prevent double projection when persisted derived rows exist.
   - [ ] Add a derived-surface discriminator check so double-projection tests can
         pass once persisted rows land.
-  - [ ] Add deterministic ordering and stable ID tests.
+  - [x] Add deterministic ordering and stable ID tests.
 
 - [ ] 3. Integrate descriptors into reverse query support.
-  - [ ] Allow `legacy-data` surface selection where current selector contracts
+  - [x] Allow `legacy-data` surface selection where current selector contracts
         support it.
   - [ ] Add stable ID/hash selector support if safe descriptor labels are
         hidden.
@@ -58,7 +58,7 @@ for follow-up PRs unless review shows a narrower safe path.
         kind and update the catalog entry if they do not.
 
 - [ ] 4. Integrate descriptors into route-flow rendering.
-  - [ ] Render terminal `legacy-data` rows only when a credible static path
+  - [x] Render terminal `legacy-data` rows only when a credible static path
         reaches the surface.
   - [ ] Render supporting descriptor rows separately from terminal rows.
   - [ ] Cap classification by weakest evidence, ambiguity, high fan-out,
@@ -94,20 +94,20 @@ for follow-up PRs unless review shows a narrower safe path.
   - [ ] Validate generated HTML, JSON, CSS, and JavaScript for unsafe values.
 
 - [ ] 8. Add focused compatibility and safety tests.
-  - [ ] Current facts without model fields.
-  - [ ] Near-term model fields with no relationship links.
+  - [x] Current facts without model fields.
+  - [x] Near-term model fields with no relationship links.
   - [ ] Generated-code links absent, stale, ambiguous, or syntax-only.
   - [ ] Unsupported ORM represented only by `AnalysisGap`.
   - [ ] Missing optional combined tables.
   - [ ] Unknown future `legacy.data.*` rule or descriptor role.
-  - [ ] Duplicate stable identity.
-  - [ ] Public/demo redaction for descriptor labels and hashes.
-  - [ ] Safe display labels and hashes containing Markdown-sensitive characters
+  - [x] Duplicate stable identity.
+  - [x] Public/demo redaction for descriptor labels and hashes.
+  - [x] Safe display labels and hashes containing Markdown-sensitive characters
         are escaped in Markdown table cells.
   - [ ] Release-review checklist output is covered by public/demo safety tests.
-  - [ ] JSON output omits or encodes unsafe raw values rather than relying on
+  - [x] JSON output omits or encodes unsafe raw values rather than relying on
         Markdown escaping.
-  - [ ] Byte-stable Markdown, JSON, and HTML where touched.
+  - [x] Byte-stable Markdown and JSON where touched.
 
 - [ ] 9. Update docs and rule catalog when implementation emits new rules.
   - [ ] Reuse existing source and workflow rules where possible.
@@ -119,9 +119,9 @@ for follow-up PRs unless review shows a narrower safe path.
   - [ ] Update acceptance docs for new user-facing outputs.
 
 - [ ] 10. Run implementation validation before merging product code.
-  - [ ] Focused .NET tests for touched reporting/export layers.
-  - [ ] CLI smoke with synthetic or public-safe artifacts.
-  - [ ] `git diff --check`.
-  - [ ] `./scripts/check-private-paths.sh`.
+  - [x] Focused .NET tests for touched reporting/export layers.
+  - [x] CLI smoke with synthetic or public-safe artifacts.
+  - [x] `git diff --check`.
+  - [x] `./scripts/check-private-paths.sh`.
   - [ ] Relevant pinned smoke checks from `docs/VALIDATION.md` when language
         adapters or shared graph behavior change.

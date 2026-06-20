@@ -133,7 +133,28 @@ public sealed record CombinedDependencySurfaceRow(
     string? HandlerSymbolId = null,
     string? PublisherSymbolId = null,
     string? SafeMetadataHash = null,
-    string? StableMessageSurfaceKey = null);
+    string? StableMessageSurfaceKey = null,
+    string? LegacyDataDescriptorId = null,
+    string? LegacyDataProjectionRuleId = null,
+    string? LegacyDataMetadataFormat = null,
+    string? LegacyDataSourceArtifactType = null,
+    string? LegacyDataModelKind = null,
+    string? LegacyDataDescriptorRole = null,
+    string? LegacyDataStableModelKey = null,
+    string? LegacyDataDisplayNameHash = null,
+    string? LegacyDataContainerName = null,
+    string? LegacyDataContainerHash = null,
+    string? LegacyDataStorageKind = null,
+    string? LegacyDataMappingKind = null,
+    string? LegacyDataModelRelationshipKind = null,
+    string? LegacyDataSourceMetadataFactId = null,
+    IReadOnlyList<string>? LegacyDataSupportingFactIds = null,
+    IReadOnlyList<string>? LegacyDataSupportingEdgeIds = null,
+    string? LegacyDataCoverageLabel = null,
+    IReadOnlyList<string>? LegacyDataLimitations = null,
+    IReadOnlyList<string>? LegacyDataRedactions = null,
+    bool LegacyDataDisplayClearance = false,
+    string? LegacyDataClaimLevelContextId = null);
 
 public sealed record CombinedDependencyEdgeRow(
     string EdgeKind,
@@ -241,6 +262,7 @@ public static class CombinedDependencyReporter
     [
         "Endpoint alignment is static method/path evidence. It does not prove runtime traffic, runtime reachability, auth behavior, proxy behavior, deployment base paths, CORS behavior, or user exercise.",
         "SQL query/persistence rows are static shape, hash, or mapping evidence. They do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.",
+        "Legacy data rows are static descriptor evidence only. They do not prove database existence, runtime provider selection, query execution, migration execution, production data access, or runtime database use.",
         "Event/message rows are static evidence only. They do not prove runtime delivery, broker topology, live subscriptions, production traffic, ordering, retries, dead-letter behavior, schema compatibility, or payload compatibility.",
         "Call and creation edges are static code evidence. They do not prove dynamic dispatch targets, runtime DI registrations, reflection targets, branch feasibility, or collection contents.",
         "Parameter-forwarding rows are direct static argument-to-parameter evidence, not full taint analysis.",
@@ -895,7 +917,28 @@ public static class CombinedDependencyReporter
             surface.HandlerSymbolId,
             surface.PublisherSymbolId,
             surface.SafeMetadataHash,
-            surface.StableMessageSurfaceKey);
+            surface.StableMessageSurfaceKey,
+            surface.LegacyDataDescriptorId,
+            surface.LegacyDataProjectionRuleId,
+            surface.LegacyDataMetadataFormat,
+            surface.LegacyDataSourceArtifactType,
+            surface.LegacyDataModelKind,
+            surface.LegacyDataDescriptorRole,
+            surface.LegacyDataStableModelKey,
+            surface.LegacyDataDisplayNameHash,
+            surface.LegacyDataContainerName,
+            surface.LegacyDataContainerHash,
+            surface.LegacyDataStorageKind,
+            surface.LegacyDataMappingKind,
+            surface.LegacyDataModelRelationshipKind,
+            surface.LegacyDataSourceMetadataFactId,
+            surface.LegacyDataSupportingFactIds,
+            surface.LegacyDataSupportingEdgeIds,
+            surface.LegacyDataCoverageLabel,
+            surface.LegacyDataLimitations,
+            surface.LegacyDataRedactions,
+            surface.LegacyDataDisplayClearance,
+            surface.LegacyDataClaimLevelContextId);
     }
 
     private static IReadOnlyList<CombinedNeedsReviewRow> BuildNeedsReview(IReadOnlyList<CombinedEndpointFinding> endpointFindings, IReadOnlyList<CombinedFactRow> facts)
@@ -1081,6 +1124,7 @@ public static class CombinedDependencyReporter
         builder.AppendLine("## Dependency Surfaces");
         builder.AppendLine();
         builder.AppendLine("- SQL query rows are static shape or hash evidence only; they do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.");
+        builder.AppendLine("- Legacy data rows are static descriptor evidence only; they do not prove database existence, runtime provider selection, query execution, migration execution, production data access, or runtime database use.");
         builder.AppendLine("- Event/message rows are static evidence only. They do not prove runtime delivery, broker topology, live subscriptions, production traffic, ordering, retries, dead-letter behavior, schema compatibility, or payload compatibility.");
         builder.AppendLine();
         AppendRows(builder, report.DependencySurfaces, "| Kind | Source | Name | Details | Evidence |", "| --- | --- | --- | --- | --- |",
@@ -1180,8 +1224,15 @@ public static class CombinedDependencyReporter
             "package-config" => $"package {surface.PackageName ?? "n/a"} ecosystem {surface.Ecosystem ?? "unknown"} version {surface.Version ?? surface.VersionHash ?? "n/a"} scope {surface.DependencyScope ?? "unknown"} manifest {surface.ManifestKind ?? "unknown"} key {surface.ConfigKey ?? "n/a"}",
             "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" =>
                 $"framework {surface.FrameworkFamily ?? "unknown"} direction {surface.OperationDirection ?? "unknown"} operation {surface.OperationKind ?? "unknown"} identity {surface.DestinationIdentityStatus ?? "unknown"} destination {surface.NormalizedDestinationKey ?? ShortHash(surface.DestinationHash) ?? "n/a"} caveat static-only",
+            "legacy-data" =>
+                $"descriptor {surface.LegacyDataDescriptorId ?? "unknown"} format {surface.LegacyDataMetadataFormat ?? "unknown"} role {surface.LegacyDataModelKind ?? "unknown"} displayClearance {surface.LegacyDataDisplayClearance.ToString().ToLowerInvariant()} coverage {surface.LegacyDataCoverageLabel ?? "unknown"} projectionRule {surface.LegacyDataProjectionRuleId ?? "n/a"} limitations {Joined(surface.LegacyDataLimitations)}",
             _ => string.Empty
         };
+    }
+
+    private static string Joined(IReadOnlyList<string>? values)
+    {
+        return values is null || values.Count == 0 ? "n/a" : string.Join(";", values);
     }
 
     private static string? ShortHash(string? value)

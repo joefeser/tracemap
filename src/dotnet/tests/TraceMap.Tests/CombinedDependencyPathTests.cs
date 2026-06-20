@@ -103,6 +103,50 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_project_legacy_data_descriptor_nodes_and_exclude_analysis_gaps()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "paths");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Read(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            LegacyDataEntityFact(server, repository, "CustomerLedger", "Models/Store.dbml", 21),
+            LegacyDataGapFact(server, "Models/Store.dbml", 30)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                outDir,
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "legacy-data"));
+
+        var path = Assert.Single(result.Report.Paths);
+        var terminal = path.Nodes.Last();
+        Assert.Equal("legacy-data", terminal.SurfaceKind);
+        Assert.StartsWith("entity:hash:", terminal.DisplayName, StringComparison.Ordinal);
+        Assert.Equal("dbml", terminal.OperationName);
+        Assert.Equal("dbml", terminal.SourceKind);
+        Assert.Equal("ldm:path-model-key", terminal.ShapeHash);
+        Assert.DoesNotContain("CustomerLedger", terminal.DisplayName, StringComparison.Ordinal);
+        Assert.DoesNotContain(path.Nodes, node => node.CombinedFactId is not null && node.RuleId == RuleIds.LegacyDataDbml && node.NodeKind == FactTypes.AnalysisGap);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.json"));
+        Assert.Contains("legacy-data", markdown);
+        Assert.DoesNotContain("CustomerLedger", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerLedger", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Legacy_paths_report_labels_missing_winforms_precision_as_availability_gap_for_older_indexes()
     {
         using var temp = new TempDirectory();
@@ -814,6 +858,45 @@ public sealed class CombinedDependencyPathTests
                 ["columnNames"] = "id;status",
                 ["sqlSourceKind"] = "literal-string",
                 ["queryShapeHash"] = "shape123"
+            });
+    }
+
+    private static CodeFact LegacyDataEntityFact(ScanManifest manifest, string sourceSymbol, string displayName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: displayName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "full",
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = displayName,
+                ["metadataFormat"] = "dbml",
+                ["metadataHash"] = "metadata-hash",
+                ["metadataKind"] = "Dbml",
+                ["modelKind"] = "entity",
+                ["stableModelKey"] = "ldm:path-model-key"
+            });
+    }
+
+    private static CodeFact LegacyDataGapFact(ScanManifest manifest, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: "Legacy data descriptor gap requires review.",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = "AmbiguousLegacyDataModelIdentity",
+                ["metadataFormat"] = "dbml"
             });
     }
 

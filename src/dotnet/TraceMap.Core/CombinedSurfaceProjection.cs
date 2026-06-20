@@ -34,18 +34,18 @@ public sealed record CombinedSurfaceProjectionRow(
     string FilePath,
     int StartLine,
     int EndLine,
-    string? HttpMethod,
-    string? NormalizedPathKey,
-    string? OperationName,
-    string? TableName,
-    string? ColumnNames,
-    string? SourceKind,
-    string? ShapeHash,
-    string? TextHash,
-    string? TextLength,
-    string? PackageName,
-    string? Version,
-    string? ConfigKey,
+    string? HttpMethod = null,
+    string? NormalizedPathKey = null,
+    string? OperationName = null,
+    string? TableName = null,
+    string? ColumnNames = null,
+    string? SourceKind = null,
+    string? ShapeHash = null,
+    string? TextHash = null,
+    string? TextLength = null,
+    string? PackageName = null,
+    string? Version = null,
+    string? ConfigKey = null,
     string? Ecosystem = null,
     string? ManifestKind = null,
     string? DependencyScope = null,
@@ -64,14 +64,42 @@ public sealed record CombinedSurfaceProjectionRow(
     string? HandlerSymbolId = null,
     string? PublisherSymbolId = null,
     string? SafeMetadataHash = null,
-    string? StableMessageSurfaceKey = null);
+    string? StableMessageSurfaceKey = null,
+    string? LegacyDataDescriptorId = null,
+    string? LegacyDataProjectionRuleId = null,
+    string? LegacyDataMetadataFormat = null,
+    string? LegacyDataSourceArtifactType = null,
+    string? LegacyDataModelKind = null,
+    string? LegacyDataDescriptorRole = null,
+    string? LegacyDataStableModelKey = null,
+    string? LegacyDataDisplayNameHash = null,
+    string? LegacyDataContainerName = null,
+    string? LegacyDataContainerHash = null,
+    string? LegacyDataStorageKind = null,
+    string? LegacyDataMappingKind = null,
+    string? LegacyDataModelRelationshipKind = null,
+    string? LegacyDataSourceMetadataFactId = null,
+    IReadOnlyList<string>? LegacyDataSupportingFactIds = null,
+    IReadOnlyList<string>? LegacyDataSupportingEdgeIds = null,
+    string? LegacyDataCoverageLabel = null,
+    IReadOnlyList<string>? LegacyDataLimitations = null,
+    IReadOnlyList<string>? LegacyDataRedactions = null,
+    bool LegacyDataDisplayClearance = false,
+    string? LegacyDataClaimLevelContextId = null);
 
 public static class CombinedSurfaceProjection
 {
     public static IReadOnlyList<CombinedSurfaceProjectionRow> BuildSurfaces(IReadOnlyList<CombinedSurfaceFactInput> facts)
     {
-        return facts
-            .Select(ToSurface)
+        var legacyDataFactIds = facts
+            .Where(LegacyDataModelDescriptorProjection.IsLegacyDataEvidence)
+            .Select(fact => fact.CombinedFactId)
+            .ToHashSet(StringComparer.Ordinal);
+        return LegacyDataModelDescriptorProjection.BuildDescriptors(facts)
+            .Select(ToLegacyDataSurface)
+            .Concat(facts
+                .Where(fact => !legacyDataFactIds.Contains(fact.CombinedFactId))
+                .Select(ToSurface))
             .OfType<CombinedSurfaceProjectionRow>()
             .OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ThenBy(surface => surface.SourceLabel, StringComparer.Ordinal)
@@ -205,6 +233,51 @@ public static class CombinedSurfaceProjection
             publisherSymbolId,
             safeMetadataHash,
             stableMessageSurfaceKey);
+    }
+
+    private static CombinedSurfaceProjectionRow ToLegacyDataSurface(LegacyDataModelDescriptorProjectionRow descriptor)
+    {
+        return new CombinedSurfaceProjectionRow(
+            descriptor.SurfaceKind,
+            descriptor.DisplayName,
+            descriptor.SourceIndexId,
+            descriptor.SourceLabel,
+            descriptor.ScanId,
+            descriptor.CommitSha,
+            descriptor.CombinedFactId,
+            descriptor.OriginalFactId,
+            descriptor.FactType,
+            descriptor.SourceRuleId,
+            descriptor.EvidenceTier,
+            descriptor.FilePath,
+            descriptor.StartLine,
+            descriptor.EndLine,
+            OperationName: descriptor.MetadataFormat,
+            SourceKind: descriptor.SourceArtifactType,
+            ShapeHash: descriptor.StableModelKey ?? descriptor.DisplayNameHash,
+            TextHash: descriptor.DisplayNameHash,
+            RedactionReason: descriptor.Redactions.Count == 0 ? null : string.Join(";", descriptor.Redactions),
+            LegacyDataDescriptorId: descriptor.DescriptorId,
+            LegacyDataProjectionRuleId: RuleIds.LegacyDataModelSurface,
+            LegacyDataMetadataFormat: descriptor.MetadataFormat,
+            LegacyDataSourceArtifactType: descriptor.SourceArtifactType,
+            LegacyDataModelKind: descriptor.ModelKind,
+            LegacyDataDescriptorRole: descriptor.DescriptorRole,
+            LegacyDataStableModelKey: descriptor.StableModelKey,
+            LegacyDataDisplayNameHash: descriptor.DisplayNameHash,
+            LegacyDataContainerName: descriptor.ContainerName,
+            LegacyDataContainerHash: descriptor.ContainerHash,
+            LegacyDataStorageKind: descriptor.StorageKind,
+            LegacyDataMappingKind: descriptor.MappingKind,
+            LegacyDataModelRelationshipKind: descriptor.ModelRelationshipKind,
+            LegacyDataSourceMetadataFactId: descriptor.SourceMetadataFactId,
+            LegacyDataSupportingFactIds: descriptor.SupportingFactIds,
+            LegacyDataSupportingEdgeIds: descriptor.SupportingEdgeIds,
+            LegacyDataCoverageLabel: descriptor.CoverageLabel,
+            LegacyDataLimitations: descriptor.Limitations,
+            LegacyDataRedactions: descriptor.Redactions,
+            LegacyDataDisplayClearance: descriptor.DisplayClearance,
+            LegacyDataClaimLevelContextId: descriptor.ClaimLevelContextId);
     }
 
     private static string? SurfaceKind(CombinedSurfaceFactInput fact)

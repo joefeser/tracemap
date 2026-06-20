@@ -1,13 +1,125 @@
 # Legacy Data Model Reporting Integration Implementation State
 
-Status: `spec-reviewed`
+Status: `implementation-slice-1-ready-for-pr`
 
-Branch: `codex/spec-legacy-data-model-reporting-integration`
+Branch: `codex/implement-legacy-data-model-reporting-integration`
 
 Target base: `dev`
 
-Scope: spec-only PR for integrating legacy data model metadata into
-user-facing reports and exports.
+Scope: first product-code slice for shared legacy data model descriptor
+projection and existing combined report/path readers.
+
+## Current Implementation Slice
+
+Selected first PR boundary:
+
+- Added a shared `LegacyDataModelDescriptorProjection` helper over current
+  `LegacyData*` facts and near-term model identity fields.
+- Integrated projected descriptors into the existing `legacy-data` dependency
+  surface family in combined dependency reports.
+- Reused the same projection for combined path graph legacy-data nodes so
+  reverse and route-flow consumers that already read combined path surfaces can
+  see the same safe descriptor rows.
+- Excluded `AnalysisGap` facts under `legacy.data.*` from terminal surface
+  projection; they remain needs-review/gap evidence.
+- Kept display hash-only by default when no claim-level context is supplied.
+- Added duplicate descriptor identity limitation handling.
+
+Deferred from this slice:
+
+- New extractor families or persisted derived rows.
+- Dedicated model-specific reverse selectors beyond existing
+  `--surface legacy-data` / surface-name/hash-compatible path-node fields.
+- Release-review scoring, vault/RAG export, static HTML explorer filters,
+  diff/impact expansion, and language-adapter pinned smokes.
+- A new reverse no-path rule ID; no new no-path gap was emitted by this slice.
+
+## Slice Validation
+
+Focused validation run:
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "CombinedDependencyReportTests|CombinedDependencyPathTests|CombinedReverseQueryTests|CombinedRouteFlowTests"
+```
+
+Result: passed, 69 tests after adding reverse `legacy-data` selector coverage.
+
+Full validation run:
+
+```text
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Results:
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed, 0 warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 560 tests.
+- `./scripts/check-private-paths.sh`: passed with `Private path guard passed.`
+- `git diff --check`: passed.
+
+CLI smoke with synthetic/public-safe artifacts:
+
+```text
+dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll scan --repo /tmp/tracemap-legacy-smoke/repo --out /tmp/tracemap-legacy-smoke/scan
+dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll combine --index /tmp/tracemap-legacy-smoke/scan/index.sqlite --label smoke --out /tmp/tracemap-legacy-smoke/combined.sqlite
+dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll report --index /tmp/tracemap-legacy-smoke/combined.sqlite --out /tmp/tracemap-legacy-smoke/report
+dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll paths --index /tmp/tracemap-legacy-smoke/combined.sqlite --out /tmp/tracemap-legacy-smoke/paths --from-symbol Customer --to-surface legacy-data
+dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll reverse --index /tmp/tracemap-legacy-smoke/combined.sqlite --out /tmp/tracemap-legacy-smoke/reverse --surface legacy-data
+```
+
+Results:
+
+- `scan`: passed, 19 facts, `Level3SyntaxAnalysis`.
+- `combine`: passed, 1 source and 19 facts imported.
+- `report`: passed, 6 projected `legacy-data` surfaces, `ReducedCoverage`.
+- `paths`: passed, 0 paths and 7 gaps because the synthetic scan had no
+  imported symbol/call graph rows; this correctly preserved reduced coverage
+  instead of claiming reachability.
+- `reverse`: passed, selected 6 `legacy-data` surfaces, 0 roots, 8 gaps,
+  `ReducedCoverage`.
+
+Kiro implementation review:
+
+```text
+node scripts/kiro-review.mjs --phase legacy-data-model-reporting-integration --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
+node scripts/kiro-review.mjs --phase legacy-data-model-reporting-integration --kind implementation --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
+```
+
+Both review runs returned reduced coverage because Kiro reported denied tool
+access. No Medium+ actionable findings were available to patch from either
+run. Review artifacts:
+
+- Sonnet implementation review:
+  `.tmp/kiro-reviews/legacy-data-model-reporting-integration/2026-06-20T225130-669Z-implementation-claude-sonnet-4.6.clean.md`
+  and matching `.meta.json`. Coverage: `Reduced`; tool access denied.
+- Opus implementation review:
+  `.tmp/kiro-reviews/legacy-data-model-reporting-integration/2026-06-20T225359-688Z-implementation-claude-opus-4.8.clean.md`
+  and matching `.meta.json`. Coverage: `Reduced`; tool access denied.
+
+PR creation and PR loop are still pending for this branch.
+
+## Slice Oddities
+
+- Combined facts do not currently expose a per-fact extractor version field in
+  the shared surface projection input. The projection preserves scan/source
+  provenance available through existing combined report rows and leaves deeper
+  extractor-version plumbing for a future schema slice.
+- Persisted derived legacy data model surfaces do not exist yet, so
+  double-projection prevention is source-fact based in this slice. A dedicated
+  derived-surface discriminator remains a follow-up once persistence lands.
+- Route-flow support is intentionally through existing combined path terminal
+  surfaces. No standalone route-flow descriptor bridge was added.
+
+## PR Status
+
+- PR URL: pending.
+- Latest commit: pending.
+- Kiro review: reduced coverage; Sonnet and Opus both reported denied tool
+  access.
+- PR loop: pending.
 
 ## Current Decisions
 
