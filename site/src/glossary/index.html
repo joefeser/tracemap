@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap evidence glossary for public-safe rule IDs, evidence tiers, proof paths, coverage labels, limitations, and claim levels."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <meta name="tracemap:public-claim-level" content="concept">
+    <title>Evidence Glossary | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/glossary/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Glossary">
+    <meta
+      property="og:description"
+      content="Concept-level vocabulary for public-safe TraceMap evidence claims and limitations."
+    >
+    <meta property="og:url" content="https://tracemap.tools/glossary/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Evidence glossary</p>
+        <h1>Stable words for bounded TraceMap claims.</h1>
+        <p class="hero-subhead">
+          This concept-level glossary helps engineers, reviewers, managers,
+          architects, and agents repeat TraceMap vocabulary without upgrading a
+          public statement beyond its evidence.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          The glossary defines public-safe terminology; it does not certify that
+          every term is fully implemented, complete, or present on every
+          TraceMap surface.
+        </p>
+        <nav class="hero-actions" aria-label="Glossary proof and boundary links">
+          <a class="button primary" href="#terms">Read terms</a>
+          <a class="button secondary" href="/evidence/">Evidence model</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/proof-source-catalog/">Proof source catalog</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">How to read it</p>
+          <h2>The glossary is a vocabulary map, not a new source of proof.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Use it before quoting TraceMap.</strong><span>Pick the term that matches the available static evidence, then keep the rule, tier, proof path, coverage label, and limitation attached.</span></div>
+          <div><strong>Prefer canonical proof surfaces.</strong><span><a href="/evidence/">/evidence/</a> owns the core rule and tier vocabulary, <a href="/proof-paths/">/proof-paths/</a> owns public route trails, and <a href="/proof-source-catalog/">/proof-source-catalog/</a> maps routes to source families.</span></div>
+          <div><strong>Keep boundaries visible.</strong><span><a href="/limitations/">/limitations/</a> remains the public boundary surface for what static analysis cannot prove by itself.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="terms" aria-labelledby="terms-heading">
+        <div class="section-header">
+          <p class="section-kicker">Glossary terms</p>
+          <h2 id="terms-heading">Each term includes definition, public use, and limitation.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article id="rule-id" data-glossary-term="rule ID">
+            <h3>Rule ID</h3>
+            <p><strong>Definition:</strong> The stable identifier for the deterministic rule or extractor judgment that produced or classified evidence.</p>
+            <p><strong>Public use:</strong> A claim can be repeated only when its evidence remains attached to a rule ID or documented rule family.</p>
+            <p><strong>Limitation:</strong> A rule ID does not make the finding complete, current, or available across every adapter or route.</p>
+          </article>
+          <article id="evidence-tier" data-glossary-term="evidence tier">
+            <h3>Evidence tier</h3>
+            <p><strong>Definition:</strong> The evidence-strength label for a row or summary: <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</p>
+            <p><strong>Public use:</strong> Tiers help readers separate compiler-resolved evidence, framework structure, syntax or text evidence, and explicit unknowns.</p>
+            <p><strong>Limitation:</strong> Lower tiers are not failures, and higher tiers are not complete coverage or operational proof.</p>
+          </article>
+          <article id="proof-path" data-glossary-term="proof path">
+            <h3>Proof path</h3>
+            <p><strong>Definition:</strong> The public-safe route or reference trail that lets a reader inspect why a claim is being made.</p>
+            <p><strong>Public use:</strong> A proof path can point to <a href="/proof-paths/">public route trails</a>, source documents, summaries, or anchors that keep the claim reviewable.</p>
+            <p><strong>Limitation:</strong> A proof path is a public review trail and does not publish private scan output.</p>
+          </article>
+          <article id="coverage-label" data-glossary-term="coverage label">
+            <h3>Coverage label</h3>
+            <p><strong>Definition:</strong> The scan or analysis coverage state, such as full, partial, reduced, unknown, or gap-labeled evidence.</p>
+            <p><strong>Public use:</strong> Coverage labels keep a static summary from being restated as broader certainty.</p>
+            <p><strong>Limitation:</strong> Partial, reduced, unknown, or gap-labeled evidence cannot support a clean absence claim.</p>
+          </article>
+          <article id="limitation" data-glossary-term="limitation">
+            <h3>Limitation</h3>
+            <p><strong>Definition:</strong> A first-class part of a TraceMap claim that says what the evidence does not show.</p>
+            <p><strong>Public use:</strong> Limitations travel with summaries, proof paths, tiers, and coverage labels so readers do not overstate the result.</p>
+            <p><strong>Limitation:</strong> Limitation text is not a generic disclaimer and cannot be separated from the claim it bounds.</p>
+          </article>
+          <article id="analysis-gap" data-glossary-term="analysis gap">
+            <h3>Analysis gap</h3>
+            <p><strong>Definition:</strong> Explicit evidence that TraceMap could not prove or disprove something under current analysis conditions.</p>
+            <p><strong>Public use:</strong> A gap can route review, identify reduced coverage, and prevent unsupported clean wording.</p>
+            <p><strong>Limitation:</strong> A gap is not proof that the surface is absent, reachable, unreachable, risky, or harmless.</p>
+          </article>
+          <article id="commit-source-context" data-glossary-term="commit/source context">
+            <h3>Commit/source context</h3>
+            <p><strong>Definition:</strong> The repository identity and commit or source revision context used for a scan or public-safe summary.</p>
+            <p><strong>Public use:</strong> Context lets reviewers know which source state a public-safe statement describes.</p>
+            <p><strong>Limitation:</strong> Public summaries should avoid private repository endpoints and machine-specific source details.</p>
+          </article>
+          <article id="extractor-version" data-glossary-term="extractor version">
+            <h3>Extractor version</h3>
+            <p><strong>Definition:</strong> The deterministic extractor, adapter, reducer, schema, or validation version that produced a public-safe evidence summary.</p>
+            <p><strong>Public use:</strong> Version labels help future readers compare findings without guessing which extraction rules were active.</p>
+            <p><strong>Limitation:</strong> A version label does not imply every extractor has identical coverage or that newer evidence exists.</p>
+          </article>
+          <article id="supporting-ids" data-glossary-term="supporting IDs">
+            <h3>Supporting IDs</h3>
+            <p><strong>Definition:</strong> Related public-safe identifiers, such as fact IDs, reducer finding IDs, rule IDs, route anchors, or summary IDs.</p>
+            <p><strong>Public use:</strong> Supporting IDs help humans and agents correlate public claims without exposing raw artifacts.</p>
+            <p><strong>Limitation:</strong> IDs are pointers, not proof by themselves; the cited proof path and limitation still matter.</p>
+          </article>
+          <article id="public-claim-level" data-glossary-term="public claim level">
+            <h3>Public claim level</h3>
+            <p><strong>Definition:</strong> A conservative label, such as <code>concept</code>, <code>demo</code>, or <code>shipped</code>, that constrains how strongly the public site may present a claim.</p>
+            <p><strong>Public use:</strong> Claim levels help route copy, discovery metadata, and review agents avoid promoting concept or demo wording.</p>
+            <p><strong>Limitation:</strong> The label does not create evidence, override limitations, or prove product-wide availability.</p>
+          </article>
+          <article id="local-only-artifact-family" data-glossary-term="local-only artifact family">
+            <h3>Local-only artifact family</h3>
+            <p><strong>Definition:</strong> A family of source materials, such as fact streams, SQLite indexes, analyzer logs, rule catalogs, and generated scan directories, that may inform private review.</p>
+            <p><strong>Public use:</strong> Public pages may name artifact families and link to public-safe summaries, checked-in docs, or site routes that describe their boundaries.</p>
+            <p><strong>Limitation:</strong> Raw <code>facts.ndjson</code>, raw <code>index.sqlite</code>, raw <code>logs/analyzer.log</code>, <code>.tracemap/</code>, and <code>.tracemap-demo/</code> are not public glossary material.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="tier-grid">
+          <article>
+            <span>Tier1Semantic</span>
+            <h3>Compiler-resolved evidence</h3>
+            <p>Use when semantic analysis resolves symbols or equivalent adapter-specific meaning. It still remains scoped to the scan context.</p>
+          </article>
+          <article>
+            <span>Tier2Structural</span>
+            <h3>Known structure evidence</h3>
+            <p>Use for framework, project, package, config, route, serializer, or source-structure patterns that deterministic rules can identify.</p>
+          </article>
+          <article>
+            <span>Tier3SyntaxOrTextual</span>
+            <h3>Syntax or text evidence</h3>
+            <p>Use when syntax or text can route review but cannot prove exact symbol identity or complete relationships.</p>
+          </article>
+          <article>
+            <span>Tier4Unknown</span>
+            <h3>Unknown or gap evidence</h3>
+            <p>Use when current analysis cannot prove or disprove the question. Unknown is a labeled state, not a silent success.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" aria-labelledby="non-claims-heading">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2 id="non-claims-heading">The glossary does not expand TraceMap's public claims.</h2>
+        </div>
+        <ul>
+          <li>No runtime behavior, production traffic, endpoint performance, outage cause, release safety, or operational safety proof.</li>
+          <li>No AI impact analysis, LLM analysis, machine learning impact analysis, artificial intelligence impact analysis, intelligent analysis, smart impact, vector database, prompt-based classification, powered by embeddings, embedding-based analysis, vector search-powered, or vector search analysis claim.</li>
+          <li>No complete product coverage, adapter parity, language parity, scan completeness, absence-of-impact, or release approval claim.</li>
+          <li>No raw artifact publication: no raw facts, raw SQLite indexes, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, private sample names, hidden validation details, <code>facts.ndjson</code>, <code>index.sqlite</code>, <code>logs/analyzer.log</code>, <code>.tracemap/</code>, or <code>.tracemap-demo/</code>.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Related public-safe routes</p>
+          <h2>Follow terms back to proof and boundary surfaces.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/evidence/">Evidence model</a>
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/proof-source-catalog/">Proof source catalog</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation</a>
+          <a href="/roadmap/">Roadmap claim ledger</a>
+          <a href="/capabilities/">Capabilities</a>
+          <a href="/manager-brief/">Manager brief</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/docs/">Docs</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Source orientation:
+        <a href="/evidence/">evidence model</a>,
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/proof-source-catalog/">proof source catalog</a>,
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

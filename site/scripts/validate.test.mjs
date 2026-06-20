@@ -13,6 +13,7 @@ import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
+import { glossaryRoute } from "./glossary.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import {
   incidentEvidenceHandoffRequiredLinks,
@@ -127,6 +128,7 @@ async function createDistFixture({
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       endpointReviewRoute,
+      glossaryRoute,
       incidentCallRoute,
       incidentEvidenceHandoffRoute,
       ...incidentEvidenceHandoffRequiredLinks,
@@ -165,6 +167,7 @@ async function createDistFixture({
     teamEvidenceHandoffRoute,
     "/legacy-modernization/evidence-map/",
     "/legacy-validation/",
+    glossaryRoute,
     managerBriefRoute,
     managerFaqRoute,
     proofSourceCatalogRoute,
@@ -190,47 +193,7 @@ async function createDistFixture({
 
     const path = route.replace(/^\/|\/$/g, "");
     await mkdir(join(dist, path), { recursive: true });
-    await writeFile(
-      join(dist, path, "index.html"),
-      route === "/deploy-audit/"
-        ? deployAuditPage()
-        : route === adoptionPlaybookRoute
-          ? adoptionPage()
-          : route === demoEvidenceTrailRoute
-            ? demoEvidenceTrailPage()
-            : route === demoRunbookRoute
-              ? demoRunbookPage()
-              : route === endpointReviewRoute
-                ? endpointReviewPage()
-              : route === incidentCallRoute
-                ? incidentCallPage()
-                : route === incidentEvidenceHandoffRoute
-                  ? incidentEvidenceHandoffPage()
-                  : route === teamEvidenceHandoffRoute
-                    ? teamEvidenceHandoffPage()
-                    : route === managerBriefRoute
-                      ? managerBriefPage()
-                      : route === managerFaqRoute
-                        ? managerFaqPage()
-                        : route === proofSourceCatalogRoute
-                          ? await proofSourceCatalogPage()
-                          : route === reviewClaimChecklistRoute
-                            ? reviewClaimChecklistPage()
-                            : route === reviewRoomRoute
-                              ? reviewRoomPage()
-                              : route === roadmapClaimLedgerRoute
-                                ? roadmapClaimLedgerPage()
-                                : route === staticTriageRoute
-                                  ? staticTriagePage()
-                                  : route === staticVsRuntimeRoute
-                                    ? staticVsRuntimePage()
-                                    : route === stakeholderQuestionIndexRoute
-                                      ? await stakeholderQuestionIndexPage()
-                                      : page(
-                                        `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
-                                      ),
-      "utf8"
-    );
+    await writeFile(join(dist, path, "index.html"), await fixturePageHtml(route, path), "utf8");
   }
 
   await writeFile(join(dist, "index.html"), indexHtml, "utf8");
@@ -242,6 +205,84 @@ async function createDistFixture({
   await writeDiscoveryFiles(dist);
 
   return root;
+}
+
+async function fixturePageHtml(route, path) {
+  if (route === "/deploy-audit/") {
+    return deployAuditPage();
+  }
+
+  if (route === adoptionPlaybookRoute) {
+    return adoptionPage();
+  }
+
+  if (route === demoEvidenceTrailRoute) {
+    return demoEvidenceTrailPage();
+  }
+
+  if (route === demoRunbookRoute) {
+    return demoRunbookPage();
+  }
+
+  if (route === endpointReviewRoute) {
+    return endpointReviewPage();
+  }
+
+  if (route === glossaryRoute) {
+    return glossaryPage();
+  }
+
+  if (route === incidentCallRoute) {
+    return incidentCallPage();
+  }
+
+  if (route === incidentEvidenceHandoffRoute) {
+    return incidentEvidenceHandoffPage();
+  }
+
+  if (route === teamEvidenceHandoffRoute) {
+    return teamEvidenceHandoffPage();
+  }
+
+  if (route === managerBriefRoute) {
+    return managerBriefPage();
+  }
+
+  if (route === managerFaqRoute) {
+    return managerFaqPage();
+  }
+
+  if (route === proofSourceCatalogRoute) {
+    return proofSourceCatalogPage();
+  }
+
+  if (route === reviewClaimChecklistRoute) {
+    return reviewClaimChecklistPage();
+  }
+
+  if (route === reviewRoomRoute) {
+    return reviewRoomPage();
+  }
+
+  if (route === roadmapClaimLedgerRoute) {
+    return roadmapClaimLedgerPage();
+  }
+
+  if (route === staticTriageRoute) {
+    return staticTriagePage();
+  }
+
+  if (route === staticVsRuntimeRoute) {
+    return staticVsRuntimePage();
+  }
+
+  if (route === stakeholderQuestionIndexRoute) {
+    return stakeholderQuestionIndexPage();
+  }
+
+  return page(
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
+  );
 }
 
 async function writeDiscoveryFiles(dist) {
@@ -303,6 +344,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
           "No facts.ndjson, index.sqlite, logs/analyzer.log, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, connection strings, credentials, table dumps, or database contents are public."
+        ]
+      },
+      {
+        path: glossaryRoute,
+        title: "Evidence Glossary",
+        summary: "Concept-level vocabulary for public-safe TraceMap evidence terms before readers repeat public claims.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "Glossary definitions are vocabulary guidance, not scanner or reducer coverage evidence.",
+          "Terms must stay attached to route-specific proof paths, coverage labels, and limitations."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+          "No raw artifact publication, raw facts, raw SQLite indexes, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details."
         ]
       },
       {
@@ -488,6 +546,10 @@ function deployAuditPage() {
 
 async function proofSourceCatalogPage() {
   return readFile(new URL("../src/proof-source-catalog/index.html", import.meta.url), "utf8");
+}
+
+async function glossaryPage() {
+  return readFile(new URL("../src/glossary/index.html", import.meta.url), "utf8");
 }
 
 async function stakeholderQuestionIndexPage() {
