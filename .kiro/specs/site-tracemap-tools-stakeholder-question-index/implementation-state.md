@@ -192,6 +192,22 @@ Second PR-loop cleanup validation:
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 
+Fresh Codex review validation:
+
+- Fresh Codex review on `c935ed43` returned one unresolved thread: the
+  validator rejected raw artifact links but did not reject raw artifact names
+  added as unlinked visible copy outside limitation or non-claim contexts.
+- Patch: added a raw-artifact text guard over rendered and decoded unbounded
+  HTML after stripping limitation and non-claim contexts, plus a regression
+  test for unlinked `facts.ndjson` text.
+- `npm test` from `site/`: passed with 237 tests.
+- `npm run validate` from `site/`: passed and validated 47 HTML files, 1501
+  internal references, 46 sitemap URLs, one legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
 PR-loop patch validation:
 
 - Initial PR loop for implementation PR returned `actionable_findings` with

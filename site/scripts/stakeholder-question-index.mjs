@@ -108,6 +108,17 @@ const forbiddenDirectProofTargets = [
   "connectionstring"
 ];
 
+const forbiddenRawArtifactText = [
+  "facts.ndjson",
+  "index.sqlite",
+  "logs/analyzer.log",
+  "analyzer.log",
+  "scan-manifest.json",
+  "report.md",
+  "raw SQL",
+  "raw source snippets"
+];
+
 const forbiddenAffirmativeClaimPatterns = [
   /\bTraceMap\b[^.]{0,90}\b(?:proves?|guarantees?|certifies?|approves?|resolves?|replaces?)\b/gi,
   /\b(?:AI impact analysis|LLM analysis|prompt-based classification|embedding search|vector database analysis)\b/gi,
@@ -244,6 +255,7 @@ async function validateQuestionIndexPage({ pagePath, errors }) {
 
   validateQuestionRows(html, errors);
   validateProofLinks(html, errors);
+  validateRawArtifactText({ html, errors });
   validateClaimBoundaryText({ decodedHtml, html, pageText, errors });
 }
 
@@ -314,6 +326,20 @@ function validateProofLinks(html, errors) {
       if (lower.includes(target)) {
         errors.push(withEvidence(`Stakeholder question index links directly to forbidden proof target: ${href}`, "questions/index.html"));
       }
+    }
+  }
+}
+
+function validateRawArtifactText({ html, errors }) {
+  const unboundedHtml = stripBoundedClaimContext(html);
+  const scanValues = [
+    normalizeRenderedText(unboundedHtml),
+    decodeHtmlEntities(unboundedHtml)
+  ];
+
+  for (const text of forbiddenRawArtifactText) {
+    if (containsForbiddenText(text, ...scanValues)) {
+      errors.push(withEvidence(`Stakeholder question index contains forbidden raw artifact text outside a limitation or non-claim: ${text}`, "questions/index.html"));
     }
   }
 }
