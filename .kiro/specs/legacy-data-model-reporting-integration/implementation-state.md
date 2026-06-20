@@ -113,7 +113,16 @@ PR loop findings patched so far:
   legacy-data surface labels hash-only and avoiding standalone raw descriptor
   target nodes.
 
-Latest PR-loop decision is pending rerun after the target-symbol linkage fix.
+Latest PR-loop decision after the target-symbol linkage fix:
+
+- Decision: `human_decision_required`.
+- Stop reason: `FRESH_REVIEW_FIX_CYCLE_CEILING_REACHED`.
+- Mechanical gates: clean merge state, zero unresolved review threads, zero
+  actionable bot findings, and zero pending or failed checks.
+- Residual gate: required Codex review is stale because Codex reviewed
+  `ebff75f8` and the branch later added `ea85f408` plus state-note updates.
+- Owner recommendation from the lane: Joe may merge the exact current `dev`
+  head by accepting stale required-review risk, or wait/inspect manually.
 
 ## Slice Oddities
 
@@ -133,7 +142,10 @@ Latest PR-loop decision is pending rerun after the target-symbol linkage fix.
 - Latest implementation commit: `ea85f408`.
 - Kiro review: reduced coverage; Sonnet and Opus both reported denied tool
   access.
-- PR loop: pending rerun after latest target-symbol linkage fix.
+- PR loop: `human_decision_required`;
+  `FRESH_REVIEW_FIX_CYCLE_CEILING_REACHED`. All mechanical gates were clean at
+  head `0efad733` before this final state-note update; remaining decision was
+  owner acceptance of stale required Codex review risk.
 
 ## Current Decisions
 
