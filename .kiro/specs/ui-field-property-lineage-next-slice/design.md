@@ -199,6 +199,11 @@ Selector matching is closed and deterministic.
 | `symbol:<id-or-display>` | symbol-attached facts | Prefer exact symbol ID; display matching is bounded. |
 | `fact:<combinedFactId>` | exact combined fact | Strongest root disambiguator. |
 
+Server-only model-binding target facts do not satisfy `field:`, `control:`, or
+`binding:` selectors unless a supporting Razor/UI binding or form-target fact
+connects them to a UI root. This prevents a body/form parameter property from
+appearing as a selected UI field when no UI binding evidence exists.
+
 Matching order:
 
 1. Reject unsafe selector input with sanitized category diagnostics.

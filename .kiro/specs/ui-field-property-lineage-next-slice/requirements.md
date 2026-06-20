@@ -117,8 +117,10 @@ field or binding roots while making ambiguous generic matches obvious.
 
 1. WHEN `field:<name>`, `control:<name>`, or `binding:<name>` is used THEN root
    matching SHALL consider only documented safe metadata fields from UI binding,
-   form control, event binding, template variable, Razor binding, form target,
-   and model-binding target facts.
+   form control, event binding, template variable, Razor binding, and Razor form
+   target facts. Server-only model-binding target facts SHALL NOT satisfy UI
+   selectors unless a supporting Razor/UI binding or form-target fact connects
+   them to a UI root; they remain candidates for `model:` and `dto:` selectors.
 2. WHEN selector values are generic property names THEN selected roots and
    downstream paths SHALL remain no stronger than `NeedsReviewLineage` unless
    a stronger selector context such as `--source`, `fact:`, `symbol:`,
