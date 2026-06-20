@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
 using TraceMap.Combine;
@@ -38,6 +39,28 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-filter-sort-selection");
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "argument-flow" && row.Evidence.RuleId == "combined.route-flow.argument-projection.v1");
         Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "query-shape" && row.Evidence.RuleId == "combined.route-flow.fact-symbol-projection.v1");
+        Assert.Contains(result.Report.TouchedFiles, row => row.FilePath == "Controllers/OrdersController.cs"
+            && row.FirstStartLine == 10
+            && row.LastEndLine == 14
+            && row.Evidence.RuleId == "combined.route-flow.report.v1"
+            && row.RuleIds.Contains("combined.route-flow.entry.v1")
+            && row.RuleIds.Contains("combined.route-flow.path.v1")
+            && row.SupportingRowIds.Any(id => id.StartsWith("entry:", StringComparison.Ordinal))
+            && row.SupportingRowIds.Any(id => id.StartsWith("row:", StringComparison.Ordinal)));
+        Assert.Contains(result.Report.TouchedFiles, row => row.FilePath == "Infrastructure/OrderRepository.cs"
+            && row.RuleIds.Contains("combined.route-flow.dependency-surface.v1")
+            && row.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1"));
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
+            && row.FilePath == "Controllers/OrdersController.cs"
+            && !row.SymbolId.StartsWith("touched-symbol:", StringComparison.Ordinal)
+            && row.Evidence.RuleId == "combined.route-flow.report.v1"
+            && row.RuleIds.Contains("combined.route-flow.path.v1")
+            && row.SupportingRowIds.Any(id => id.StartsWith("row:", StringComparison.Ordinal)));
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName == "GET /api/orders/{}"
+            && row.FilePath == "Controllers/OrdersController.cs"
+            && row.RuleIds.Contains("combined.route-flow.entry.v1"));
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains("parameter:", StringComparison.Ordinal)
+            && row.SymbolKind == "argument-flow");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.Contains(result.Report.Snapshot.Sources, source => source.ScannerVersion == "tracemap-milestone15");
         Assert.All(result.Report.FlowRows, row =>
@@ -60,6 +83,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("TraceMap Route Flow Report", markdown);
         Assert.Contains("static route-flow evidence", markdown);
         Assert.Contains("candidate implementation", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("## Touched Files", markdown);
+        Assert.Contains("## Touched Symbols", markdown);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Server=private", markdown, StringComparison.OrdinalIgnoreCase);
@@ -72,7 +97,24 @@ public sealed class CombinedRouteFlowTests
 
         var parsed = JsonSerializer.Deserialize<RouteFlowReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(parsed);
-        var sqlSurface = parsed!.DependencySurfaces.Single(surface => surface.SurfaceKind == "sql-query");
+        Assert.Contains(parsed!.TouchedFiles, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
+        Assert.Contains(parsed.TouchedSymbols, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
+        Assert.All(parsed.TouchedFiles, row =>
+        {
+            Assert.NotEmpty(row.SupportingRowIds);
+            Assert.NotEmpty(row.RuleIds);
+            Assert.NotEmpty(row.EvidenceTiers);
+            Assert.Equal(row.FilePath, row.Evidence.FilePath);
+        });
+        Assert.All(parsed.TouchedSymbols, row =>
+        {
+            Assert.NotEmpty(row.SupportingRowIds);
+            Assert.NotEmpty(row.RuleIds);
+            Assert.NotEmpty(row.EvidenceTiers);
+            Assert.False(string.IsNullOrWhiteSpace(row.CommitSha));
+            Assert.False(string.IsNullOrWhiteSpace(row.DisplayName));
+        });
+        var sqlSurface = parsed.DependencySurfaces.Single(surface => surface.SurfaceKind == "sql-query");
         Assert.NotEmpty(sqlSurface.Evidence.SupportingFactIds);
         Assert.Contains(RuleIds.CSharpSyntaxQueryPattern, sqlSurface.Evidence.SupportingRuleIds);
         Assert.Equal("tracemap-milestone15", sqlSurface.Evidence.ExtractorVersion);
@@ -112,6 +154,32 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_markdown_renderer_treats_missing_additive_touched_lists_as_empty()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp);
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var json = JsonSerializer.Serialize(result.Report, CombinedDependencyReporter.JsonOptions);
+        var node = JsonNode.Parse(json)!.AsObject();
+        node.Remove("touchedFiles");
+        node.Remove("touchedSymbols");
+        var oldReport = JsonSerializer.Deserialize<RouteFlowReport>(node.ToJsonString(), CombinedDependencyReporter.JsonOptions);
+
+        var render = typeof(CombinedRouteFlowReporter).GetMethod("RenderMarkdown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(render);
+        var markdown = Assert.IsType<string>(render!.Invoke(null, [oldReport!]));
+
+        Assert.Contains("- Touched files: `0`", markdown);
+        Assert.Contains("- Touched symbols: `0`", markdown);
+        Assert.Contains("## Touched Files", markdown);
+        Assert.Contains("## Touched Symbols", markdown);
+    }
+
+    [Fact]
     public async Task Client_call_selector_preserves_generic_client_server_paths()
     {
         using var temp = new TempDirectory();
@@ -146,6 +214,12 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.FlowRows, row => row.RowKind == "client-server-alignment");
         Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(controller, StringComparison.Ordinal));
         Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(clientCache, StringComparison.Ordinal));
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
+            && row.SourceLabel == "server"
+            && row.CommitSha == server.CommitSha
+            && row.FilePath == "Controllers/OrdersController.cs");
+        Assert.DoesNotContain(result.Report.TouchedSymbols, row => row.DisplayName.Contains(controller, StringComparison.Ordinal)
+            && row.SourceLabel == "client");
     }
 
     [Fact]
@@ -212,6 +286,10 @@ public sealed class CombinedRouteFlowTests
         var bridgeGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge" && gap.RuleId == "combined.route-flow.gap.v1");
         Assert.Equal("Controllers/OrdersController.cs", bridgeGap.FilePath);
         Assert.Equal(10, bridgeGap.StartLine);
+        var touchedControllerFile = Assert.Single(result.Report.TouchedFiles, file => file.FilePath == "Controllers/OrdersController.cs");
+        Assert.NotEqual("unknown", touchedControllerFile.CommitSha);
+        Assert.Contains(bridgeGap.GapId, touchedControllerFile.SupportingRowIds);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, touchedControllerFile.Classification);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MissingCallEdge");
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
     }
@@ -494,6 +572,14 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
             && row.Evidence.EvidenceTier == EvidenceTiers.Tier1Semantic
             && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+        Assert.Contains(result.Report.TouchedFiles, row => row.FilePath == "Controllers/OrdersController.cs"
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow
+            && row.Coverage == "CoverageRelative"
+            && row.EvidenceTiers.Contains(EvidenceTiers.Tier3SyntaxOrTextual)
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName == "GET /api/orders/{}"
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
     }
 
     [Fact]
@@ -734,6 +820,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("- MissingCallEdge gap", catalog);
         Assert.Contains("- DataSurfaceAttachmentMissing gap", catalog);
         Assert.Contains("- TraversalBounds gap", catalog);
+        Assert.Contains("- route-flow-report.json", catalog);
     }
 
     private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp, string serverBuildStatus = "Succeeded")
