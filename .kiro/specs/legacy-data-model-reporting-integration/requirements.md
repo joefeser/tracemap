@@ -96,7 +96,8 @@ Acceptance Criteria:
    metadata format, safe display label or hash, source artifact type, rule ID,
    evidence tier, source label, scan ID, commit SHA, extractor version where
    available, file path, line span, supporting fact IDs, supporting edge IDs,
-   coverage label, and limitations.
+   coverage label, display clearance status, claim-level context ID where
+   available, and limitations.
 2. WHEN model-specific properties are available THEN the row SHOULD render safe
    values for `modelKind`, `metadataFormat`, `descriptorRole`,
    `stableModelKey`, `displayName`, `displayNameHash`, `containerName`,
@@ -226,10 +227,6 @@ Acceptance Criteria:
    stable identity SHALL prefer `stableModelKey`, source label, metadata format,
    descriptor role, source artifact identity, safe/hash descriptor key, and rule
    ID over volatile row IDs or display-only labels.
-   WHEN before/after stable identities cannot be uniquely resolved due to
-   ambiguous identity, diff SHALL mark the row `ambiguous-identity`, list the
-   matching candidates as supporting rows, and classify the change as
-   needs-review rather than a definite add or remove.
 2. WHEN before/after stable identities cannot be uniquely resolved due to
    ambiguous identity THEN diff SHALL mark the row `ambiguous-identity`, list
    the matching candidates as supporting rows, and classify the change as
@@ -347,7 +344,8 @@ Acceptance Criteria:
 1. Stable IDs SHALL be derived from schema version, source index ID or stable
    source identity, commit SHA presence/value where safe, source rule ID,
    metadata format, descriptor role, stable model key or safe/hash descriptor
-   key, source artifact path hash, line span, and supporting IDs.
+   key, source artifact type, source artifact path hash, repo-relative file path
+   or path hash, line span, and supporting IDs.
    WHEN optional fields such as stable model key, file path, or line span are
    absent, each absent field SHALL contribute a canonical absence token such as
    `field-absent` rather than being omitted from the hash input.
