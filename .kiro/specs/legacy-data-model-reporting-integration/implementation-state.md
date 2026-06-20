@@ -42,7 +42,8 @@ Focused validation run:
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "CombinedDependencyReportTests|CombinedDependencyPathTests|CombinedReverseQueryTests|CombinedRouteFlowTests"
 ```
 
-Result: passed, 69 tests after adding reverse `legacy-data` selector coverage.
+Result: passed, 72 tests after adding reverse `legacy-data` selector coverage
+and target-symbol-only legacy descriptor path coverage.
 
 Full validation run:
 
@@ -56,7 +57,7 @@ git diff --check
 Results:
 
 - `dotnet build src/dotnet/TraceMap.sln`: passed, 0 warnings.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 560 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 563 tests.
 - `./scripts/check-private-paths.sh`: passed with `Private path guard passed.`
 - `git diff --check`: passed.
 
@@ -99,14 +100,27 @@ run. Review artifacts:
   `.tmp/kiro-reviews/legacy-data-model-reporting-integration/2026-06-20T225359-688Z-implementation-claude-opus-4.8.clean.md`
   and matching `.meta.json`. Coverage: `Reduced`; tool access denied.
 
-PR loop is still pending for this branch.
+PR loop findings patched so far:
+
+- Codex P1: preserve legacy-rule SQL facts as SQL surfaces instead of
+  projecting every `legacy.data.*` rule as a terminal legacy-data descriptor.
+- Codex P2: classify EDMX MSL source sections as `edmx-msl`.
+- Codex P3: render descriptor role plus model kind in combined report details.
+- Qodo: carry scan/source extractor version into projected legacy-data
+  descriptor rows.
+- Codex P2 follow-up: link legacy-data surfaces through target symbols only when
+  the target is already backed by static graph evidence, keeping terminal
+  legacy-data surface labels hash-only and avoiding standalone raw descriptor
+  target nodes.
+
+Latest PR-loop decision is pending rerun after the target-symbol linkage fix.
 
 ## Slice Oddities
 
 - Combined facts do not currently expose a per-fact extractor version field in
-  the shared surface projection input. The projection preserves scan/source
-  provenance available through existing combined report rows and leaves deeper
-  extractor-version plumbing for a future schema slice.
+  the shared surface projection input. This slice carries the source
+  `index_sources.scanner_version` into projected legacy descriptor report rows
+  where combined report/path readers have source provenance.
 - Persisted derived legacy data model surfaces do not exist yet, so
   double-projection prevention is source-fact based in this slice. A dedicated
   derived-surface discriminator remains a follow-up once persistence lands.
@@ -116,10 +130,10 @@ PR loop is still pending for this branch.
 ## PR Status
 
 - PR URL: `https://github.com/joefeser/tracemap/pull/243`.
-- Latest implementation commit: `d2ecc83b`.
+- Latest implementation commit: `ea85f408`.
 - Kiro review: reduced coverage; Sonnet and Opus both reported denied tool
   access.
-- PR loop: pending.
+- PR loop: pending rerun after latest target-symbol linkage fix.
 
 ## Current Decisions
 
