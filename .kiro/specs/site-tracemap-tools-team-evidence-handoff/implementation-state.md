@@ -179,6 +179,13 @@ Public claim level: concept
   - Patch: changed the evidence-tier field copy to use canonical TraceMap
     labels `Tier1Semantic`, `Tier2Structural`, `Tier3SyntaxOrTextual`, and
     `Tier4Unknown`.
+- Third result: `actionable_findings`.
+  - Stop reason: `UNRESOLVED_REVIEW_THREADS`.
+  - Evidence: Codex P2 finding said route metadata `nonClaims` were excluded
+    from the hard private-value scan.
+  - Patch: included route `nonClaims` in the always-forbidden private-value
+    scan and added a regression test for `secret=value` in non-claims
+    metadata.
 - PR: `https://github.com/joefeser/tracemap/pull/232`
 - Next step: push PR review patch and rerun the PR loop.
 

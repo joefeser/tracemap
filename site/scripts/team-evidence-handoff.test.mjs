@@ -64,6 +64,21 @@ test("validateTeamEvidenceHandoffDist rejects forbidden route metadata positioni
   assert.match(errors.join("\n"), /forbidden AI\/LLM positioning/);
 });
 
+test("validateTeamEvidenceHandoffDist rejects hard private values in route nonClaims", async (t) => {
+  const root = await createManagedTeamEvidenceHandoffDistFixture(t);
+  await rewriteHandoffRoutesIndexEntry(join(root, "dist"), {
+    nonClaims: [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "Do not publish secret=value."
+    ]
+  });
+  const errors = [];
+
+  await validateTeamEvidenceHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private\/raw material/);
+});
+
 test("validateTeamEvidenceHandoffDist reports missing required links", async (t) => {
   const root = await createManagedTeamEvidenceHandoffDistFixture(t, {
     handoffHtml: teamEvidenceHandoffPage({ omittedLink: "/manager-faq/" })
