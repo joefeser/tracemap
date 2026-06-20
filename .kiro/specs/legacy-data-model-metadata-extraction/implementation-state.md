@@ -372,10 +372,10 @@ Deferred within Task 3:
 
 Validation planned/executed:
 
-- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 25 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 26 tests.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModel`: passed, 3 tests.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 552 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 553 tests.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke`: passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log` with 27 facts. Relationship-specific smoke is covered by focused synthetic tests because no checked-in sample currently contains DBML/EDMX/XSD legacy data relationship fixtures.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
@@ -419,3 +419,15 @@ Remaining follow-ups:
   `legacy-data` surfaces into downstream path/reverse/report workflows.
 - Add NHibernate `.hbm.xml` MVP and unsupported old ORM descriptor gaps in
   later slices.
+
+PR review-loop follow-up:
+
+- Initial PR loop for PR #234 returned `actionable_findings` with two unresolved
+  review threads. Patched both:
+  - Gemini found EDMX CSDL `relationshipEndpointCoverage` was tied to
+    file-level reduced coverage. Fixed by separating endpoint completeness from
+    model identity/file coverage and adding a reduced-file/full-endpoint
+    regression test.
+  - Codex found dotted XSD key/keyref constraint names were collapsed by the
+    typed DataSet QName helper. Fixed by preserving dotted local names and
+    adding a dotted constraint-name regression test.
