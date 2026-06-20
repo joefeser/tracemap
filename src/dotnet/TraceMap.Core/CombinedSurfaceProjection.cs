@@ -52,7 +52,19 @@ public sealed record CombinedSurfaceProjectionRow(
     string? DependencyGroup = null,
     string? PackageManager = null,
     string? VersionHash = null,
-    string? RedactionReason = null);
+    string? RedactionReason = null,
+    string? FrameworkFamily = null,
+    string? FrameworkFeature = null,
+    string? OperationDirection = null,
+    string? OperationKind = null,
+    string? DestinationIdentityStatus = null,
+    string? NormalizedDestinationKey = null,
+    string? DestinationHash = null,
+    string? EventTypeIdentity = null,
+    string? HandlerSymbolId = null,
+    string? PublisherSymbolId = null,
+    string? SafeMetadataHash = null,
+    string? StableMessageSurfaceKey = null);
 
 public static class CombinedSurfaceProjection
 {
@@ -123,6 +135,18 @@ public static class CombinedSurfaceProjection
         var dependencyScope = FirstValue(fact.Properties, "dependencyScope", "scope");
         var dependencyGroup = FirstValue(fact.Properties, "dependencyGroup", "dependencySection", "buildTool");
         var packageManager = FirstValue(fact.Properties, "packageManager", "buildTool");
+        var frameworkFamily = FirstValue(fact.Properties, "frameworkFamily");
+        var frameworkFeature = FirstValue(fact.Properties, "frameworkFeature");
+        var operationDirection = FirstValue(fact.Properties, "operationDirection");
+        var operationKind = FirstValue(fact.Properties, "operationKind");
+        var destinationIdentityStatus = FirstValue(fact.Properties, "destinationIdentityStatus");
+        var normalizedDestinationKey = FirstValue(fact.Properties, "normalizedDestinationKey");
+        var destinationHash = FirstValue(fact.Properties, "destinationHash");
+        var eventTypeIdentity = FirstValue(fact.Properties, "eventTypeIdentity");
+        var handlerSymbolId = FirstValue(fact.Properties, "handlerSymbolId");
+        var publisherSymbolId = FirstValue(fact.Properties, "publisherSymbolId");
+        var safeMetadataHash = FirstValue(fact.Properties, "safeMetadataHash");
+        var stableMessageSurfaceKey = FirstValue(fact.Properties, "stableMessageSurfaceKey");
         var displayName = surfaceKind switch
         {
             "http-client" or "http-route" => normalizedPathKey ?? FirstValue(fact.Properties, "normalizedPathTemplate") ?? $"{httpMethod ?? "ANY"} unknown",
@@ -130,6 +154,8 @@ public static class CombinedSurfaceProjection
             "sql-persistence" => SqlPersistenceDisplayName(fact, tableName, columns, mappedName),
             "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
             "asmx-service" or "asmx-operation" or "asmx-client" or "asmx-config" or "asmx-metadata" => asmxName ?? $"unknown-{surfaceKind}:{fact.CombinedFactId}",
+            "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" =>
+                MessageSurfaceDisplayName(surfaceKind, operationDirection, normalizedDestinationKey, destinationHash, eventTypeIdentity, fact.CombinedFactId),
             _ => $"unknown-surface:{fact.CombinedFactId}"
         };
 
@@ -166,7 +192,19 @@ public static class CombinedSurfaceProjection
             dependencyGroup,
             packageManager,
             versionHash,
-            redactionReason);
+            redactionReason,
+            frameworkFamily,
+            frameworkFeature,
+            operationDirection,
+            operationKind,
+            destinationIdentityStatus,
+            normalizedDestinationKey,
+            destinationHash,
+            eventTypeIdentity,
+            handlerSymbolId,
+            publisherSymbolId,
+            safeMetadataHash,
+            stableMessageSurfaceKey);
     }
 
     private static string? SurfaceKind(CombinedSurfaceFactInput fact)
@@ -191,6 +229,14 @@ public static class CombinedSurfaceProjection
             return "sql-query";
         }
 
+        if (fact.FactType is FactTypes.MessagePublisherSurface or FactTypes.MessageConsumerSurface or FactTypes.MessageBindingDeclared)
+        {
+            var surfaceKind = FirstValue(fact.Properties, "surfaceKind");
+            return MessageSurfaceIdentity.SurfaceKinds.Contains(surfaceKind, StringComparer.Ordinal)
+                ? surfaceKind
+                : "message-unknown";
+        }
+
         if (fact.Properties.TryGetValue("surfaceKind", out var declaredSurfaceKind)
             && !string.IsNullOrWhiteSpace(declaredSurfaceKind))
         {
@@ -213,6 +259,33 @@ public static class CombinedSurfaceProjection
         }
 
         return null;
+    }
+
+    private static string MessageSurfaceDisplayName(
+        string surfaceKind,
+        string? operationDirection,
+        string? normalizedDestinationKey,
+        string? destinationHash,
+        string? eventTypeIdentity,
+        string combinedFactId)
+    {
+        var prefix = operationDirection ?? surfaceKind;
+        if (!string.IsNullOrWhiteSpace(normalizedDestinationKey))
+        {
+            return $"{prefix}:{normalizedDestinationKey}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(eventTypeIdentity))
+        {
+            return $"{prefix}:event:{eventTypeIdentity}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(destinationHash))
+        {
+            return $"{prefix}:hash:{destinationHash[..Math.Min(16, destinationHash.Length)]}";
+        }
+
+        return $"{prefix}:unknown-message:{Hash(combinedFactId, 16)}";
     }
 
     private static string SqlSurfaceDisplayName(
