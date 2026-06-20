@@ -177,6 +177,21 @@ Implementation-branch validation:
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 
+PR-loop patch validation:
+
+- Initial PR loop for implementation PR returned `actionable_findings` with
+  one unresolved review thread in `site/scripts/stakeholder-question-index.mjs`.
+- Patch: added `ruleIdOrFamily` to the focused validator's required row
+  fields and added a regression test that removes the field from the
+  agent/bot discovery row.
+- `npm test` from `site/`: passed with 236 tests.
+- `npm run build` from `site/`: passed.
+- `npm run validate` from `site/`: passed and validated 47 HTML files, 1501
+  internal references, 46 sitemap URLs, one legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
 ## Oddities
 
 - `claude-opus-4.8` review returned a quota error with no review content. See
@@ -184,6 +199,9 @@ Implementation-branch validation:
   allows.
 - Local browser sanity initially found port `4173` already in use. The local
   sanity server used port `4187` instead.
+- During PR-loop patch validation, running `npm run validate` and
+  `npm run build` concurrently caused a local `site/dist` race. The build
+  passed, and `npm run validate` passed when rerun by itself.
 
 ## PR Loop Findings
 

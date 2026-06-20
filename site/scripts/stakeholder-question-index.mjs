@@ -45,6 +45,7 @@ const requiredFields = new Set([
   "evidenceSurface",
   "publicClaimLevel",
   "proofPath",
+  "ruleIdOrFamily",
   "limitation",
   "nonClaim"
 ]);
