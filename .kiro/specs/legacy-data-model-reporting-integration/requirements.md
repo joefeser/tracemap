@@ -341,11 +341,15 @@ that do not depend on row order or local machine state.
 
 Acceptance Criteria:
 
-1. Stable IDs SHALL be derived from schema version, source index ID or stable
-   source identity, commit SHA presence/value where safe, source rule ID,
-   metadata format, descriptor role, stable model key or safe/hash descriptor
-   key, source artifact type, source artifact path hash, repo-relative file path
-   or path hash, line span, and supporting IDs.
+1. Row/provenance stable IDs SHALL be derived from schema version, source index
+   ID or stable source identity, commit SHA presence/value where safe, source
+   rule ID, metadata format, descriptor role, stable model key or safe/hash
+   descriptor key, source artifact type, source artifact path hash,
+   repo-relative file path or path hash, line span, and supporting IDs.
+   Cross-snapshot descriptor identity keys used for diff matching SHALL exclude
+   commit SHA, commit SHA display category, scan ID, extractor version, and
+   profile-specific display policy so unchanged descriptors can match across
+   before/after snapshots.
    WHEN optional fields such as stable model key, file path, or line span are
    absent, each absent field SHALL contribute a canonical absence token such as
    `field-absent` rather than being omitted from the hash input.
