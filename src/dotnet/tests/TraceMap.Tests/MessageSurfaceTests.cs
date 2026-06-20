@@ -35,6 +35,16 @@ public sealed class MessageSurfaceTests
                 {
                 }
 
+                [ServiceBusTrigger("orders-servicebus-queue")]
+                public void HandleServiceBusQueue(string payload)
+                {
+                }
+
+                [ServiceBusTrigger("orders-servicebus-topic", "orders-subscription")]
+                public void HandleServiceBusTopic(string payload)
+                {
+                }
+
                 [ServiceBusTrigger("unsafe://private-host/orders")]
                 public void Unsafe(string payload)
                 {
@@ -71,6 +81,14 @@ public sealed class MessageSurfaceTests
             && fact.RuleId == RuleIds.MessageSurfaceConsume
             && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-work");
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MessageConsumerSurface
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-servicebus-queue"
+            && fact.Properties.GetValueOrDefault("surfaceKind") == "message-queue");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MessageConsumerSurface
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-servicebus-topic"
+            && fact.Properties.GetValueOrDefault("surfaceKind") == "message-topic");
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.MessageSurfaceGap
             && fact.Properties.GetValueOrDefault("gapReason") == "dynamic-destination");
@@ -88,7 +106,7 @@ public sealed class MessageSurfaceTests
     }
 
     [Fact]
-    public void Ambiguous_const_destination_names_emit_gap_instead_of_wrong_static_surface()
+    public void Qualified_const_destination_names_use_qualified_identity()
     {
         using var temp = new TempDirectory();
         File.WriteAllText(Path.Combine(temp.Path, "Messaging.cs"), """
@@ -108,6 +126,37 @@ public sealed class MessageSurfaceTests
                 {
                     kafkaProducer.ProduceAsync(FirstDestinations.Destination, message);
                 }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MessagePublisherSurface
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders.first");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.MessagePublisherSurface
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders.second");
+    }
+
+    [Fact]
+    public void Ambiguous_unqualified_const_destination_names_emit_gap_instead_of_wrong_static_surface()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Messaging.cs"), """
+            public sealed class Publisher
+            {
+                private const string Destination = "orders.first";
+
+                public void Publish(dynamic kafkaProducer, object message)
+                {
+                    kafkaProducer.ProduceAsync(Destination, message);
+                }
+            }
+
+            public sealed class OtherPublisher
+            {
+                private const string Destination = "orders.second";
             }
             """);
 
