@@ -121,6 +121,10 @@ discovery validator with rationale.
   `hintCategory` allowlist replaced with the validator enum, non-existent
   aggregate `/use-cases/` route replaced with specific use-case routes, and
   `concept` page-level metadata scoped to standalone glossary routes.
+- PR #242 review loop returned one actionable Qodo/Codex-thread finding for
+  order-sensitive metadata regexes in the glossary validator. Patched by using
+  parsed HTML attributes for canonical, Open Graph title, and page-level claim
+  metadata checks, with a focused regression test for reversed attribute order.
 
 ## Implementation Summary
 
@@ -141,7 +145,8 @@ discovery validator with rationale.
 
 Implementation validation passed on 2026-06-20:
 
-- `npm test` from `site/`: passed, 244 tests.
+- `npm test` from `site/`: passed, 245 tests after the metadata-order review
+  fix.
 - `npm run validate` from `site/`: passed, generated 48 HTML files, checked
   1543 internal references, 47 sitemap URLs, 1 legacy story safety target, and
   13 legacy modernization evidence-map rows.

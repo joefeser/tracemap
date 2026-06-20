@@ -233,15 +233,15 @@ async function validateGlossaryPage({ pagePath, errors }) {
     }
   }
 
-  if (!/<link\b[^>]*\brel\s*=\s*["']canonical["'][^>]*\bhref\s*=\s*["']https:\/\/tracemap\.tools\/glossary\/["'][^>]*>/i.test(html)) {
+  if (!hasElementWithAttributes(html, "link", { rel: "canonical", href: "https://tracemap.tools/glossary/" })) {
     errors.push(withEvidence("Glossary page is missing canonical metadata for https://tracemap.tools/glossary/.", pageArtifact));
   }
 
-  if (!/<meta\b[^>]*\bproperty\s*=\s*["']og:title["'][^>]*\bcontent\s*=\s*["'][^"']+["'][^>]*>/i.test(html)) {
+  if (!hasElementWithAttributes(html, "meta", { property: "og:title" }, ["content"])) {
     errors.push(withEvidence("Glossary page is missing Open Graph title metadata.", pageArtifact));
   }
 
-  if (!/<meta\b[^>]*\bname\s*=\s*["']tracemap:public-claim-level["'][^>]*\bcontent\s*=\s*["']concept["'][^>]*>/i.test(html)) {
+  if (!hasElementWithAttributes(html, "meta", { name: "tracemap:public-claim-level", content: "concept" })) {
     errors.push(withEvidence("Glossary page is missing concept page-level metadata.", pageArtifact));
   }
 
@@ -342,6 +342,35 @@ function hasHref(html, href) {
 function hasId(html, id) {
   const escaped = escapeRegExp(id);
   return new RegExp(`\\bid\\s*=\\s*["']${escaped}["']`, "i").test(html);
+}
+
+function hasElementWithAttributes(html, tagName, expectedAttributes, requiredAttributes = []) {
+  const escapedTagName = escapeRegExp(tagName);
+  for (const match of html.matchAll(new RegExp(`<${escapedTagName}\\b([^>]*)>`, "gi"))) {
+    const attributes = parseAttributes(match[1]);
+    const hasExpectedAttributes = Object.entries(expectedAttributes).every(
+      ([name, value]) => attributes.get(name.toLowerCase()) === value
+    );
+    const hasRequiredAttributes = requiredAttributes.every((name) => {
+      const value = attributes.get(name.toLowerCase());
+      return typeof value === "string" && value.trim() !== "";
+    });
+
+    if (hasExpectedAttributes && hasRequiredAttributes) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function parseAttributes(value) {
+  const attributes = new Map();
+  for (const match of value.matchAll(/\b([^\s"'=<>`]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
+    attributes.set(match[1].toLowerCase(), decodeHtmlEntities(match[2] ?? match[3] ?? ""));
+  }
+
+  return attributes;
 }
 
 function withEvidence(message, artifact) {
