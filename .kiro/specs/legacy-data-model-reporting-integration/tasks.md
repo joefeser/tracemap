@@ -1,6 +1,6 @@
 # Legacy Data Model Reporting Integration Tasks
 
-Current state: `spec-drafted`.
+Current state: `spec-reviewed`.
 
 This spec is intentionally implementation-oriented, but this branch is
 spec-only. Product code tasks below should be completed in later PRs and the
