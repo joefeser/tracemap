@@ -773,7 +773,8 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--max-surface-rows", 50),
                 ParsePositiveInt(values, "--max-paths", 25),
                 ParsePositiveInt(values, "--max-gaps", 1000),
-                ParsePositiveInt(values, "--max-checklist-items", 50)),
+                ParsePositiveInt(values, "--max-checklist-items", 50),
+                values.HasFlag("--include-priority")),
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap release-review completed: {result.MarkdownPath ?? result.JsonPath}");
@@ -1539,7 +1540,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review"
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--include-priority" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -2052,6 +2053,7 @@ public static class TraceMapCommand
               --package-delta <path>     Validate package delta input and report deferred package-upgrade status.
               --include-paths            Include bounded path context where combined indexes support it.
               --include-reverse          Include bounded reverse context where combined indexes support it.
+              --include-priority         Include deterministic review priority scoring in release-review output.
               --allow-identity-mismatch  Continue when combined source labels point at different source identities.
               --source <label>           Filter to one source label.
               --endpoint "<M> <P>"       Filter endpoint/path evidence to method/path key where compatible.

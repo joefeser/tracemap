@@ -90,6 +90,114 @@ rules:
       - Gap facts preserve uncertainty and must not be read as evidence that no publisher, consumer, binding, route, topology, or runtime delivery exists.
       - Gap reasons include dynamic-destination, wildcard-pattern-destination, missing-destination-identity, unsupported-framework, unsafe-omitted, ambiguous-destination, and direction-filter-not-supported.
 
+  - id: review.priority.component.v1
+    name: Deterministic review priority component
+    description: Emits ordinal-only review-priority components over already-built report rows such as release-review findings, gaps, and checklist items while preserving source classifications and rule IDs.
+    evidenceTier: Inherits weakest supporting report evidence tier
+    emits:
+      - review priority component
+      - review priority row
+    limitations:
+      - Review priority is deterministic static review prioritization only; it is not runtime risk prediction, release approval, vulnerability scanning, compliance, business criticality, production impact, or AI judgment.
+      - V1 emits ordinal severityHint and attentionLevel values only; priorityScore and componentValue remain null and no numeric weights, bands, learned tuning, or environment-specific scoring are used.
+      - Components may raise review attention only from existing TraceMap evidence such as classifications, evidence tiers, public-surface sections, bounded path or reverse context, source counts, and checklist provenance.
+      - V1 component kinds include report_aggregation, static_change_evidence, evidence_tier_strength, public_surface, cross_repo_reach, path_context, reverse_context, checklist_attention, no_actionable_evidence, and analysis_gap where the release-review row or gap supplies matching evidence.
+      - The fan_out component kind is reserved for a follow-up release-review slice with explicit deterministic fan-out inputs; v1 does not infer fan-out from row count or source count alone.
+
+  - id: review.priority.aggregate.v1
+    name: Deterministic review priority aggregation
+    description: Aggregates row-level review-priority components into closed-vocabulary severityHint and attentionLevel values with deterministic ordering and visible completeness limits.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - review priority summary
+      - review priority ordering
+    limitations:
+      - Aggregation preserves underlying report classifications and cannot relabel a source row into a stronger product conclusion.
+      - Unknown, unavailable, reduced, or truncated evidence can make report-level priority incomplete or unknown; low attention is emitted only under credible coverage for the requested evidence.
+      - Tie-breaking is deterministic by completeness, severity, source classification, evidence tier, source label, section, stable safe path or line span, and stable row ID.
+
+  - id: review.priority.downgrade.v1
+    name: Review priority downgrade and cap
+    description: Emits visible cap or downgrade components when evidence quality prevents a stronger ordinal review-priority hint.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - review priority downgrade component
+      - review priority cap component
+    limitations:
+      - Tier3, syntax-only, textual, hash-only, ambiguous, duplicate, name-only, fallback, coverage-relative, and noisy fan-out evidence is capped at review-tier priority unless separate documented non-noisy evidence supports a stronger hint.
+      - Downgrades do not delete positive evidence; the positive component and cap component must remain visible together.
+
+  - id: review.priority.coverage.v1
+    name: Review priority coverage limitation
+    description: Records reduced or coverage-relative analysis as a scoring cap or unknown component rather than clean absence or high-confidence change evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority coverage component
+    limitations:
+      - Reduced before coverage makes newly observed after evidence coverage-relative rather than definite new risk.
+      - Reduced after coverage makes missing after evidence coverage-relative rather than definite removal.
+      - Coverage gaps preserve uncertainty and do not prove absence of source behavior or low review attention.
+
+  - id: review.priority.identity.v1
+    name: Review priority source identity limitation
+    description: Records missing, duplicated, unverified, one-sided, or conflicting source identity as a scoring cap or unknown component.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority identity component
+    limitations:
+      - Missing or conflicting source identity prevents history-completeness and cross-source comparability claims.
+      - Source labels and identity hashes are static report evidence only and do not infer ownership, deployment topology, runtime coupling, or business reach.
+
+  - id: review.priority.commit.v1
+    name: Review priority commit identity limitation
+    description: Records missing or unknown commit SHA evidence as a scoring gap for rows or reports that depend on before/after history comparison.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority commit component
+    limitations:
+      - Unknown commit SHA limits history-completeness language and must not be treated as a clean comparable snapshot.
+      - Commit gaps do not prove source changes are present or absent.
+
+  - id: review.priority.schema.v1
+    name: Review priority schema limitation
+    description: Records required or optional schema availability limits carried by the underlying report workflow.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority schema component
+    limitations:
+      - Required schema gaps make affected scoring unavailable or unknown using sanitized section or table names only.
+      - Optional precision schema gaps cap affected priority and do not prove absence of evidence.
+
+  - id: review.priority.truncation.v1
+    name: Review priority truncation limitation
+    description: Records row, gap, checklist, path, reverse, or section cap truncation as incomplete scoring evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority truncation component
+    limitations:
+      - Truncated scoring is partial and must not be read as exhaustive prioritization or evidence absence.
+      - Omitted counts and cap metadata are report bounds, not source complexity or runtime behavior claims.
+
+  - id: review.priority.workflow.v1
+    name: Review priority unavailable workflow limitation
+    description: Records requested or represented report sections that are unavailable or deferred as explicit scoring uncertainty.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority unavailable-workflow component
+    limitations:
+      - Deferred or unavailable workflow sections are not treated as low priority or no evidence.
+      - The component describes static report workflow availability only and does not infer source behavior, deployment readiness, or release safety.
+
+  - id: review.priority.selector.v1
+    name: Review priority selector outcome
+    description: Records selector no-match, ignored-selector, ambiguity, or unsafe-selector outcomes for review-priority scoring.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority selector component
+    limitations:
+      - Selector no-match is informational only under credible requested coverage and identity.
+      - Selector no-match under reduced, unknown, or unavailable coverage remains uncertain and does not prove absence of evidence.
+
   - id: docs-export.chunk.source-overview.v1
     name: Docs export source overview chunk
     description: Packages indexed source identity, commit, coverage, build, language, extractor, artifact, gap, and limitation metadata into deterministic evidence documentation.
