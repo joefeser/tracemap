@@ -241,4 +241,6 @@ PR status:
 - Ready PR opened against `dev`: https://github.com/joefeser/tracemap/pull/231
 - Initial pushed implementation commit: `11cdfedd`.
 - Bookkeeping commit recording PR URL: `3ce25972`.
-- PR review-loop fix commit pending.
+- First PR review-loop fix commit: `1bf9c4bc`.
+- Second PR review-loop manifest/evidence fix commit: `16613eab`.
+- PR review-loop rerun pending after pushing `16613eab`.
