@@ -60,6 +60,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/use-cases/change-review/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/use-cases/endpoint-review/",
     "changefreq": "monthly",
     "priority": "0.7"
