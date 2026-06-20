@@ -26,6 +26,10 @@ import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import {
+  teamEvidenceHandoffRequiredLinks,
+  teamEvidenceHandoffRoute
+} from "./team-evidence-handoff.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -125,6 +129,8 @@ async function createDistFixture({
       incidentCallRoute,
       incidentEvidenceHandoffRoute,
       ...incidentEvidenceHandoffRequiredLinks,
+      teamEvidenceHandoffRoute,
+      ...teamEvidenceHandoffRequiredLinks,
       managerBriefRoute,
       managerFaqRoute,
       proofSourceCatalogRoute,
@@ -154,6 +160,7 @@ async function createDistFixture({
     "/examples/",
     incidentCallRoute,
     incidentEvidenceHandoffRoute,
+    teamEvidenceHandoffRoute,
     "/legacy-validation/",
     managerBriefRoute,
     managerFaqRoute,
@@ -194,25 +201,27 @@ async function createDistFixture({
                 ? incidentCallPage()
                 : route === incidentEvidenceHandoffRoute
                   ? incidentEvidenceHandoffPage()
-                  : route === managerBriefRoute
-                    ? managerBriefPage()
-                    : route === managerFaqRoute
-                      ? managerFaqPage()
-                      : route === proofSourceCatalogRoute
-                        ? await proofSourceCatalogPage()
-                        : route === reviewClaimChecklistRoute
-                          ? reviewClaimChecklistPage()
-                          : route === reviewRoomRoute
-                            ? reviewRoomPage()
-                            : route === roadmapClaimLedgerRoute
-                              ? roadmapClaimLedgerPage()
-                              : route === staticTriageRoute
-                                ? staticTriagePage()
-                                : route === staticVsRuntimeRoute
-                                  ? staticVsRuntimePage()
-                                  : page(
-                                    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
-                                  ),
+                  : route === teamEvidenceHandoffRoute
+                    ? teamEvidenceHandoffPage()
+                    : route === managerBriefRoute
+                      ? managerBriefPage()
+                      : route === managerFaqRoute
+                        ? managerFaqPage()
+                        : route === proofSourceCatalogRoute
+                          ? await proofSourceCatalogPage()
+                          : route === reviewClaimChecklistRoute
+                            ? reviewClaimChecklistPage()
+                            : route === reviewRoomRoute
+                              ? reviewRoomPage()
+                              : route === roadmapClaimLedgerRoute
+                                ? roadmapClaimLedgerPage()
+                                : route === staticTriageRoute
+                                  ? staticTriagePage()
+                                  : route === staticVsRuntimeRoute
+                                    ? staticVsRuntimePage()
+                                    : page(
+                                      `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
+                                    ),
       "utf8"
     );
   }
@@ -310,6 +319,19 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture incident evidence handoff limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: teamEvidenceHandoffRoute,
+        title: "Team Evidence Handoff",
+        summary: "Fixture team evidence handoff route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture team evidence handoff limitations remain bounded."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof."
+        ]
       },
       {
         path: managerBriefRoute,
@@ -499,6 +521,48 @@ function incidentEvidenceHandoffPage() {
       <a href="/manager-brief/">Manager brief</a>
       <a href="/use-cases/incident-review/">Incident review</a>
       <a href="/docs/">Docs</a>
+      <p>${filler}</p>
+    </main>
+  </body>
+</html>`;
+}
+
+function teamEvidenceHandoffPage() {
+  const filler = Array.from({ length: 110 }, (_, index) => `team evidence handoff boundary ${index}`).join(" ");
+  return `<!doctype html>
+<html>
+  <head>
+    <title>Team Evidence Handoff | TraceMap</title>
+    <meta name="description" content="Fixture team evidence handoff route.">
+    <link rel="canonical" href="https://tracemap.tools/team-evidence-handoff/">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="TraceMap Team Evidence Handoff">
+    <meta property="og:description" content="Fixture team evidence handoff route.">
+    <meta property="og:url" content="https://tracemap.tools/team-evidence-handoff/">
+  </head>
+  <body>
+    ${topNav()}
+    <main>
+      <p>Public claim level: concept</p>
+      <p>No public conclusion without evidence</p>
+      <p>A handoff is complete only when the summary, proof path, rule ID/rule family, evidence tier, coverage label, limitations, non-claims, local-only artifacts, and next owner/action travel together.</p>
+      <p>The summary is a bounded statement of what static evidence supports, and the proof path points to public-safe proof surfaces or private review locations, not private scanner output on the public site.</p>
+      <p>summary proof path rule ID/rule family evidence tier coverage label limitations non-claims local-only artifacts next owner/action.</p>
+      <p>Teammate Reviewer Manager Agent teammate reviewer manager agent.</p>
+      <p>Use /packets/ for packet artifact families. Use /manager-packet/ for manager-ready summaries. Use /review-room/ for a shared agenda. Use /manager-faq/ for stakeholder questions. Use /proof-source-catalog/ for proof-source families.</p>
+      <a href="/proof-paths/">Proof paths</a>
+      <a href="/packets/">Packets</a>
+      <a href="/manager-packet/">Manager packet</a>
+      <a href="/review-room/">Review room</a>
+      <a href="/manager-faq/">Manager FAQ</a>
+      <a href="/proof-source-catalog/">Proof-source catalog</a>
+      <a href="/limitations/">Limitations</a>
+      <a href="/validation/">Validation</a>
+      <section data-boundary-region>
+        <p>It does not claim runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, autonomous approval, or complete product coverage.</p>
+        <p>It does not replace human ownership, tests, telemetry, release review, code review, source review, logs, traces, incident response, or manager judgment.</p>
+        <p>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, credential-like values, or private URLs. Private repository evidence needs private review before any public-safe summary is written.</p>
+      </section>
       <p>${filler}</p>
     </main>
   </body>
