@@ -20,6 +20,7 @@ Start here:
 - [Build milestones](MILESTONES.md)
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
 - [PR review loop](docs/PR_REVIEW_LOOP.md)
+- [Static HTML evidence explorer](docs/STATIC_HTML_EVIDENCE_EXPLORER.md)
 - [Rule catalog](rules/rule-catalog.yml)
 
 TraceMap is not an AI impact-analysis tool. The scanner and reducer do not use LLM calls, embeddings, vector databases, or prompt-based classification.
@@ -83,7 +84,13 @@ Useful .NET index commands:
 dotnet run --project src/dotnet/TraceMap.Cli -- flow --index .tracemap/index.sqlite --symbol request --out .tracemap/flow-report.md
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap/index.sqlite --out .tracemap/index-export.json --format json
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap/index.sqlite --out .tracemap/relationships.mmd --format mermaid
+dotnet run --project src/dotnet/TraceMap.Cli -- explorer generate --input .tracemap --out .tracemap-explorer
 ```
+
+`tracemap explorer generate` writes a local static HTML evidence explorer from
+existing generated TraceMap artifacts. It is separate from the public
+`tracemap.tools` site, uses bundled local assets, and does not rescan source
+code or derive new impact conclusions.
 
 Combine multiple indexes for cross-repo or cross-language dependency queries:
 
