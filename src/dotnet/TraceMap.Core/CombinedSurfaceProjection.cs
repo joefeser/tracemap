@@ -17,7 +17,8 @@ public sealed record CombinedSurfaceFactInput(
     string FilePath,
     int StartLine,
     int EndLine,
-    IReadOnlyDictionary<string, string> Properties);
+    IReadOnlyDictionary<string, string> Properties,
+    string? ExtractorVersion = null);
 
 public sealed record CombinedSurfaceProjectionRow(
     string SurfaceKind,
@@ -85,7 +86,8 @@ public sealed record CombinedSurfaceProjectionRow(
     IReadOnlyList<string>? LegacyDataLimitations = null,
     IReadOnlyList<string>? LegacyDataRedactions = null,
     bool LegacyDataDisplayClearance = false,
-    string? LegacyDataClaimLevelContextId = null);
+    string? LegacyDataClaimLevelContextId = null,
+    string? LegacyDataExtractorVersion = null);
 
 public static class CombinedSurfaceProjection
 {
@@ -277,7 +279,8 @@ public static class CombinedSurfaceProjection
             LegacyDataLimitations: descriptor.Limitations,
             LegacyDataRedactions: descriptor.Redactions,
             LegacyDataDisplayClearance: descriptor.DisplayClearance,
-            LegacyDataClaimLevelContextId: descriptor.ClaimLevelContextId);
+            LegacyDataClaimLevelContextId: descriptor.ClaimLevelContextId,
+            LegacyDataExtractorVersion: descriptor.ExtractorVersion);
     }
 
     private static string? SurfaceKind(CombinedSurfaceFactInput fact)

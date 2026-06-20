@@ -363,6 +363,7 @@ public sealed class CombinedDependencyReportTests
         Assert.Equal("entity", surface.LegacyDataModelKind);
         Assert.Equal("conceptual", surface.LegacyDataDescriptorRole);
         Assert.Equal("reduced", surface.LegacyDataCoverageLabel);
+        Assert.Equal("tracemap-milestone15", surface.LegacyDataExtractorVersion);
         Assert.False(surface.LegacyDataDisplayClearance);
         Assert.StartsWith("entity:hash:", surface.DisplayName, StringComparison.Ordinal);
         Assert.DoesNotContain(descriptorName, surface.DisplayName, StringComparison.Ordinal);
@@ -373,7 +374,9 @@ public sealed class CombinedDependencyReportTests
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
         Assert.Contains("static descriptor evidence only", markdown);
         Assert.Contains("role conceptual model entity", markdown);
+        Assert.Contains("extractor tracemap-milestone15", markdown);
         Assert.Contains("\"legacyDataProjectionRuleId\": \"legacy.data.model.surface.v1\"", json);
+        Assert.Contains("\"legacyDataExtractorVersion\": \"tracemap-milestone15\"", json);
         Assert.DoesNotContain(descriptorName, markdown, StringComparison.Ordinal);
         Assert.DoesNotContain(descriptorName, json, StringComparison.Ordinal);
         Assert.DoesNotContain("runtime database use", surface.DisplayName, StringComparison.OrdinalIgnoreCase);

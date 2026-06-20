@@ -333,7 +333,7 @@ public static class CombinedDependencyPathReporter
         await connection.OpenAsync(cancellationToken);
         var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken);
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
-        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts);
+        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
         var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots);
         return (read, graph);
     }
