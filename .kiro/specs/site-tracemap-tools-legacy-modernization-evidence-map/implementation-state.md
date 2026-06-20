@@ -169,13 +169,15 @@ cd site && npm run build
 
 Results:
 
-- `npm test`: passed, 197 tests before PR review; passed again with 199 tests
-  after review-thread fixes.
+- `npm test`: passed, 197 tests before PR review; passed with 199 tests after
+  review-thread fixes; passed with 200 tests after leak-error redaction.
 - `npm run validate`: passed before PR review and again after review-thread
   fixes; built the site and validated 44 HTML files, 1349 internal references,
   43 sitemap URLs, 1 legacy story safety target, and 13 legacy modernization
   evidence-map rows.
 - `npm run build`: passed before PR review and again after review-thread fixes.
+  A parallel validate/build rerun caused a transient generated-output race;
+  sequential `npm run validate` and `npm run build` both passed afterward.
 - `git diff --check`: passed.
 - `git diff --cached --check`: passed before staging and again on the staged diff.
 - `./scripts/check-private-paths.sh`: passed with `Private path guard passed.`
@@ -218,6 +220,8 @@ PR review-loop findings patched:
 - Adjusted tag stripping so unquoted apostrophes inside tag attributes do not
   hide later rendered text.
 - Added `&apos;` decoding to the HTML entity normalization helper.
+- Redacted matched leak evidence from validator error messages so sensitive
+  values are not echoed into logs.
 
 ## Oddities
 

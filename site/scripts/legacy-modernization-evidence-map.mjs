@@ -191,7 +191,7 @@ export function validateLegacyModernizationEvidenceMapHtml(
   for (const check of hardLeakChecks) {
     const match = raw.match(check.pattern)?.[0] ?? text.match(check.pattern)?.[0] ?? tightText.match(check.pattern)?.[0];
     if (match) {
-      errors.push(`${label} contains forbidden ${check.id}: ${trimEvidence(match)}`);
+      errors.push(`${label} contains forbidden ${check.id}: ${redactEvidence(check.id)}`);
     }
   }
 
@@ -301,6 +301,6 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function trimEvidence(value) {
-  return value.replace(/\s+/g, " ").trim().slice(0, 80);
+function redactEvidence(id) {
+  return `[redacted ${id}]`;
 }

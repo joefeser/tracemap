@@ -62,6 +62,17 @@ test("legacy modernization evidence map guard rejects private material and unsup
   }
 });
 
+test("legacy modernization evidence map guard redacts sensitive evidence in errors", async () => {
+  const html = `${await readFile(
+    pageSource,
+    "utf8"
+  )}<p>Server=db;Database=orders;User ID=sa;Password=secret;</p>`;
+  const message = validateLegacyModernizationEvidenceMapHtml(html).join("\n");
+
+  assert.match(message, /redacted connection-string/);
+  assert.doesNotMatch(message, /Password=secret/);
+});
+
 test("legacy modernization evidence map guard slices rows with uppercase closing tags", async () => {
   const source = await readFile(pageSource, "utf8");
   const html = source.replace(
