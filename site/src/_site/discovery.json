@@ -389,6 +389,23 @@
     ]
   },
   {
+    "path": "/use-cases/change-review/",
+    "title": "Change Review Brief",
+    "summary": "Concept-level review brief for preparing PR, release, or change-review conversations from deterministic static evidence, visible coverage limits, and named next owners.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This brief prepares review questions from static evidence; it is not proof of runtime behavior or release outcome.",
+      "Coverage labels, limitations, and next owners must remain visible when evidence is partial, reduced, unknown, unavailable, or future-only."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No release approval proof, production safety proof, operational safety proof, raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, facts.ndjson, index.sqlite, report.md, scan-manifest.json, or logs/analyzer.log are published."
+    ]
+  },
+  {
     "path": "/use-cases/endpoint-review/",
     "title": "Endpoint Review Playbook",
     "summary": "Concept-level engineer playbook for reviewing endpoint-adjacent static evidence before choosing code review, tests, telemetry questions, or owner follow-up.",

@@ -1,82 +1,85 @@
 # Site TraceMap Tools Change Review Brief Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
-- Branch: `codex/spec-site-change-review-brief`
+- Branch: `codex/impl-site-change-review-brief`
 - Target base: `dev`
-- Base: `origin/dev` at `c3f3967aa825b2da3b29e2cf1ffa018088099273`
-- Worktree: isolated spec worktree; absolute local path intentionally omitted
+- Base: `origin/dev` at `21b8cc11953d0d18286d10c0170d26fffb70669c`
+- Worktree: isolated implementation worktree; absolute local path intentionally omitted
   from the checked-in state file for the private-path guard.
 - Pull request: pending until PR creation; final report records the URL.
-- Latest spec commit: current branch head; final report records the exact SHA
-  to avoid self-referential amend churn in this checked-in state file.
+- Latest implementation commit: pending until commit; final report records the
+  exact SHA to avoid self-referential amend churn in this checked-in state file.
 
 ## Scope
 
 - Spec folder ownership:
   `.kiro/specs/site-tracemap-tools-change-review-brief/`
-- Spec-only deliverables:
-  `requirements.md`, `design.md`, `tasks.md`, `implementation-state.md`, and
-  `review-packet.md`.
-- This phase does not implement site code, scanner behavior, reducer behavior,
-  generated artifacts, validation scripts, public copy changes, route metadata,
-  discovery metadata, sitemap metadata, or browser validation.
+- Implementation deliverables:
+  `site/src/use-cases/change-review/index.html`,
+  `site/scripts/change-review.mjs`,
+  `site/scripts/change-review.test.mjs`, route metadata, sitemap metadata,
+  discovery metadata, use-case index link, validation registration, central
+  validation fixtures, and spec bookkeeping.
+- This phase does not implement scanner behavior, reducer behavior, generated
+  artifact publication, or generated `site/dist`/`site/output` edits.
 
 ## Public Claim Level
 
 - Public claim level: `concept`
-- Rationale: the future page is a public-safe review-preparation concept. This
-  spec does not cite checked-in public-safe demo evidence for a completed
-  change-review brief route, so a stronger claim level is not justified.
+- Rationale: the page is a public-safe review-preparation concept and does not
+  cite checked-in public-safe demo evidence for a completed change-review brief
+  artifact, so a stronger claim level is not justified.
 
 ## Scope Decisions
 
-- Preferred route for future implementation: `/use-cases/change-review/`.
-- Conditional route alternative: `/change-review/`.
-- Conditional section alternatives: `/review-room/` or `/packets/` only if a
-  future implementation records why section placement is safer than a
-  standalone use-case route.
-- Required route/placement decision remains open for the implementation phase.
-- Required future page sections: `Change Context`, `Evidence Packet`, `Review
+- Selected route: `/use-cases/change-review/`.
+- Rejected route alternative: `/change-review/`; the shorter route makes the
+  brief look like a primary product surface instead of a review use case.
+- Rejected section alternatives: `/review-room/` and `/packets/`; the change
+  review brief is a reusable PR/release/change conversation packet, not the
+  full meeting surface and not packet taxonomy.
+- Primary navigation was left unchanged; this is a use-case leaf page linked
+  from the use-case index and related routes, not a primary navigation review.
+- Implemented page sections: `Change Context`, `Evidence Packet`, `Review
   Questions`, `Stop Conditions`, `Next Owners`, `Limitations`, and
   `Non-Claims`.
-- Required cross-link candidates for future implementation:
+- Verified cross-link candidates in generated output through `npm run validate`:
   `/proof-paths/`, `/packets/`, `/review-room/`, `/validation/`,
   `/limitations/`, `/use-cases/endpoint-review/`,
   `/use-cases/incident-review/`, `/static-vs-runtime/`,
   `/review-claim-checklist/`, and `/use-cases/`.
-- Current `origin/dev` route check at spec creation found the original
-  candidate routes present in `site/src`; Opus review also identified
-  `/use-cases/incident-review/` as an adjacent route to include in future
-  cross-link and differentiation checks.
-- Future implementation must verify all candidate routes in generated output
-  before linking.
-- Adjacent route differentiation that future implementation must record in
-  copy and in this state file: `/team-evidence-handoff/`,
-  `/manager-packet/`, `/static-triage/`, `/manager-brief/`, and
-  `/deploy-audit/`. If the distinction from `/team-evidence-handoff/` cannot
-  be stated crisply, implementation should choose section placement on the
-  closest existing page rather than a near-duplicate standalone route.
-- Future standalone route validation must follow the existing per-page
-  validator convention: `site/scripts/change-review.mjs` exporting
-  `validateChangeReviewDist`, registration in `site/scripts/validate.mjs`, and
-  `site/scripts/change-review.test.mjs`. Section placement must extend the
-  host page's validator and test instead.
-- Future implementation must validate that replacement/approval non-claim copy
-  renders, and that unsupported replacement or release-approval claims are
-  caught outside the sanctioned `Non-Claims` region.
-- Future `Evidence Packet` copy must include visible static dependency
-  surfaces as references, not runtime behavior proof.
-- Future validation must distinguish descriptive private/raw category phrases
-  from actual private identifier values. Category phrases belong only inside
-  sanctioned regions; actual private repository names, customer names, service
-  names, owner names, private sample names, and real internal review dates are
-  never allowed and require synthetic examples, private-path checks, and manual
-  review because arbitrary values cannot be fully pattern-matched.
+- No candidate cross-links were unavailable, substituted, or deferred.
+- Adjacent route differentiation recorded in public copy and validated by
+  manual review:
+  `/use-cases/incident-review/` is incident-adjacent orientation, while this
+  page is pre-review and in-review change preparation;
+  `/static-triage/` is triage framing;
+  `/manager-brief/` and `/manager-packet/` are leadership framing;
+  `/deploy-audit/` is static-site deploy output checking.
+- `/team-evidence-handoff/` differentiation: that route moves an evidence
+  packet between receivers without losing proof boundaries; this route frames
+  one PR, release, or change-review conversation with `Change Context`, framed
+  `Review Questions`, `Stop Conditions`, and named next owners. That distinction
+  was crisp enough to keep a standalone route rather than adding a section to
+  the handoff page.
+- Standalone route validation follows the existing per-page convention:
+  `site/scripts/change-review.mjs` exports `validateChangeReviewDist`, it is
+  registered in `site/scripts/validate.mjs`, and
+  `site/scripts/change-review.test.mjs` covers required copy, links, metadata,
+  forbidden claims, private material, unsupported wording, and scan partitioning.
+- Sanctioned section IDs are `change-review-stop-conditions`,
+  `change-review-limitations`, and `change-review-non-claims`.
+- Validator partitioning: actual private values and blame/scare framing are
+  checked across the whole page; artifact-family names, descriptive private/raw
+  category phrases, unsupported overclaims, replacement/approval overclaims,
+  and AI/LLM positioning are checked after the sanctioned sections are stripped.
+- Rendered word-count range uses the neighboring endpoint-review concept-page
+  band: 700 to 1900 words.
 
 ## Duplicate-Spec Check
 
@@ -234,10 +237,16 @@ Public claim level: concept
 
 - Passed: `git diff --check`.
 - Passed: `./scripts/check-private-paths.sh`.
-- Deferred to future implementation: `npm test`, `npm run validate`, and
-  `npm run build` from `site/` because this phase changes only spec files.
-- Deferred to future implementation: browser sanity checks because this phase
-  changes no route or layout.
+- Passed: `npm test` from `site/`.
+- Passed: `npm run validate` from `site/`; generated output included the
+  `/use-cases/change-review/` route, resolved required internal links, sitemap
+  metadata, discovery metadata, and route-index metadata.
+- Passed: `npm run build` from `site/`.
+- Passed: desktop browser sanity at 1440x1000 through Playwright CLI.
+- Passed: mobile browser sanity at 390x844 through Playwright CLI; DOM check
+  reported no horizontal overflow.
+- Generated screenshot artifacts were inspected and removed from the worktree
+  before commit.
 
 ## PR Review Loop
 
@@ -259,10 +268,10 @@ Public claim level: concept
   access while checking one repo detail. The review still completed, read the
   packet, verified routes and validator conventions through file/glob/grep
   tools, and returned no High or Medium findings.
+- The default site dev-server port was already in use during browser sanity;
+  the route was checked on an alternate local port using the same site server.
 
 ## Follow-ups
 
-- Future implementation must re-check whether `/use-cases/change-review/` or
-  `/change-review/` is the correct final placement before writing site code.
-- Future implementation must keep public copy bounded to deterministic static
-  evidence and must not publish private/raw artifact material.
+- No follow-up items are known before PR review. Revisit only if the review
+  loop, CI, or human review identifies actionable findings.
