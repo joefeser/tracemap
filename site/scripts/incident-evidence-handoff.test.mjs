@@ -31,6 +31,19 @@ test("validateIncidentEvidenceHandoffDist accepts href spacing around assignment
   assert.deepEqual(errors, []);
 });
 
+test("validateIncidentEvidenceHandoffDist accepts apostrophes in metadata attributes", async (t) => {
+  const root = await createManagedIncidentEvidenceHandoffDistFixture(t, {
+    handoffHtml: incidentEvidenceHandoffPage("", {
+      metadataDescription: "Joe's incident evidence handoff packet."
+    })
+  });
+  const errors = [];
+
+  await validateIncidentEvidenceHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateIncidentEvidenceHandoffDist reports missing locked distinction copy", async (t) => {
   const root = await createManagedIncidentEvidenceHandoffDistFixture(t, {
     handoffHtml: page("<p>Incident evidence handoff placeholder.</p>")
@@ -130,6 +143,19 @@ test("validateIncidentEvidenceHandoffDist rejects encoded private text", async (
   assert.match(errors.join("\n"), /forbidden private\/raw artifact text: raw SQL/);
 });
 
+test("validateIncidentEvidenceHandoffDist rejects private text after apostrophes in attributes", async (t) => {
+  const root = await createManagedIncidentEvidenceHandoffDistFixture(t, {
+    handoffHtml: incidentEvidenceHandoffPage("", {
+      extraLinkAttribute: "title=\"Joe's raw SQL packet\""
+    })
+  });
+  const errors = [];
+
+  await validateIncidentEvidenceHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private\/raw artifact text: raw SQL/);
+});
+
 test("validateIncidentEvidenceHandoffDist rejects missing ownership rows", async (t) => {
   const root = await createManagedIncidentEvidenceHandoffDistFixture(t, {
     handoffHtml: incidentEvidenceHandoffPage("", { omittedOwnershipRow: "database ownership" })
@@ -214,13 +240,21 @@ function page(body) {
 
 function incidentEvidenceHandoffPage(
   extra = "",
-  { fillerWordCount = 430, omittedLink = null, omittedOwnershipRow = null, spacedHref = false } = {}
+  {
+    extraLinkAttribute = "",
+    fillerWordCount = 430,
+    metadataDescription = "Fixture incident evidence handoff description.",
+    omittedLink = null,
+    omittedOwnershipRow = null,
+    spacedHref = false
+  } = {}
 ) {
   const href = (route) => {
     if (route === omittedLink) {
       return "";
     }
-    return spacedHref ? `<a href = "${route}">${route}</a>` : `<a href="${route}">${route}</a>`;
+    const attribute = extraLinkAttribute ? ` ${extraLinkAttribute}` : "";
+    return spacedHref ? `<a${attribute} href = "${route}">${route}</a>` : `<a${attribute} href="${route}">${route}</a>`;
   };
   const ownershipRows = [
     "route existence",
@@ -247,7 +281,7 @@ function incidentEvidenceHandoffPage(
 <html>
   <head>
     <title>Incident Evidence Handoff Packet | TraceMap</title>
-    <meta name="description" content="Fixture incident evidence handoff description.">
+    <meta name="description" content="${metadataDescription}">
     <link rel="canonical" href="https://tracemap.tools/incident-evidence-handoff/">
     <meta property="og:type" content="article">
     <meta property="og:title" content="Incident Evidence Handoff Packet">

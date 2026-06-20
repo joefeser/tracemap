@@ -255,21 +255,57 @@ async function validateIncidentEvidenceHandoffPage({ pagePath, routeContext, err
 }
 
 function validatePageMetadata(html, errors) {
+  const metaTags = findTagAttributes(html, "meta");
+  const linkTags = findTagAttributes(html, "link");
   const checks = [
-    [/<title>[^<]+<\/title>/i, "title"],
-    [/<meta\b(?=[^>]*\bname\s*=\s*["']description["'])(?=[^>]*\bcontent\s*=\s*["'][^"']+["'])[^>]*>/i, "description"],
-    [/<link\b(?=[^>]*\brel\s*=\s*["']canonical["'])(?=[^>]*\bhref\s*=\s*["']https:\/\/tracemap\.tools\/incident-evidence-handoff\/["'])[^>]*>/i, "canonical URL"],
-    [/<meta\b(?=[^>]*\bproperty\s*=\s*["']og:type["'])(?=[^>]*\bcontent\s*=\s*["']article["'])[^>]*>/i, "Open Graph type"],
-    [/<meta\b(?=[^>]*\bproperty\s*=\s*["']og:title["'])(?=[^>]*\bcontent\s*=\s*["'][^"']+["'])[^>]*>/i, "Open Graph title"],
-    [/<meta\b(?=[^>]*\bproperty\s*=\s*["']og:description["'])(?=[^>]*\bcontent\s*=\s*["'][^"']+["'])[^>]*>/i, "Open Graph description"],
-    [/<meta\b(?=[^>]*\bproperty\s*=\s*["']og:url["'])(?=[^>]*\bcontent\s*=\s*["']https:\/\/tracemap\.tools\/incident-evidence-handoff\/["'])[^>]*>/i, "Open Graph URL"]
+    [/<title>[^<]+<\/title>/i.test(html), "title"],
+    [hasMeta(metaTags, { name: "description", content: "non-empty" }), "description"],
+    [
+      linkTags.some(
+        (attributes) =>
+          hasRel(attributes, "canonical") &&
+          getAttribute(attributes, "href") === "https://tracemap.tools/incident-evidence-handoff/"
+      ),
+      "canonical URL"
+    ],
+    [hasMeta(metaTags, { property: "og:type", content: "article" }), "Open Graph type"],
+    [hasMeta(metaTags, { property: "og:title", content: "non-empty" }), "Open Graph title"],
+    [hasMeta(metaTags, { property: "og:description", content: "non-empty" }), "Open Graph description"],
+    [
+      hasMeta(metaTags, {
+        property: "og:url",
+        content: "https://tracemap.tools/incident-evidence-handoff/"
+      }),
+      "Open Graph URL"
+    ]
   ];
 
-  for (const [pattern, label] of checks) {
-    if (!pattern.test(html)) {
+  for (const [passed, label] of checks) {
+    if (!passed) {
       errors.push(`Incident evidence handoff page is missing required metadata: ${label}`);
     }
   }
+}
+
+function hasMeta(metaTags, expected) {
+  return metaTags.some((attributes) => {
+    if (expected.name && getAttribute(attributes, "name") !== expected.name) {
+      return false;
+    }
+
+    if (expected.property && getAttribute(attributes, "property") !== expected.property) {
+      return false;
+    }
+
+    const content = getAttribute(attributes, "content");
+    return expected.content === "non-empty" ? Boolean(content?.trim()) : content === expected.content;
+  });
+}
+
+function hasRel(attributes, expectedRel) {
+  return (getAttribute(attributes, "rel") ?? "")
+    .split(/\s+/)
+    .some((rel) => rel.toLowerCase() === expectedRel.toLowerCase());
 }
 
 function validateInternalRouteLinks(html, { routes, sitemapRoutes }, errors) {
@@ -343,7 +379,7 @@ function collectMetadataText(html) {
 }
 
 function collectDecodedAttributeText(html) {
-  return decodeHtmlEntities([...html.matchAll(/\s[a-z:-]+\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]).join(" "));
+  return decodeHtmlEntities([...html.matchAll(/\s[a-z:-]+\s*=\s*("[^"]*"|'[^']*')/gi)].map((match) => unquoteAttributeValue(match[1])).join(" "));
 }
 
 function extractMainHtml(html) {
@@ -352,7 +388,9 @@ function extractMainHtml(html) {
 }
 
 function extractHrefs(html) {
-  return [...html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)].map((match) => decodeHtmlEntities(match[1]));
+  return findTagAttributes(html, "a")
+    .map((attributes) => getAttribute(attributes, "href"))
+    .filter((href) => typeof href === "string");
 }
 
 function normalizeRouteHref(href) {
@@ -369,13 +407,20 @@ function normalizeRouteHref(href) {
 }
 
 function hasHref(html, href) {
-  const escaped = escapeRegExp(href);
-  return new RegExp(`<a\\b[^>]*\\bhref\\s*=\\s*["']${escaped}["']`, "i").test(html);
+  return extractHrefs(html).includes(href);
 }
 
 function getAttribute(attributes, name) {
-  const match = attributes.match(new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*["']([^"']*)["']`, "i"));
-  return match ? decodeHtmlEntities(match[1]) : null;
+  const match = attributes.match(new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*("[^"]*"|'[^']*')`, "i"));
+  return match ? decodeHtmlEntities(unquoteAttributeValue(match[1])) : null;
+}
+
+function findTagAttributes(html, tagName) {
+  return [...html.matchAll(new RegExp(`<${escapeRegExp(tagName)}\\b([^>]*)>`, "gi"))].map((match) => match[1]);
+}
+
+function unquoteAttributeValue(value) {
+  return value.slice(1, -1);
 }
 
 function countRenderedWords(value) {
