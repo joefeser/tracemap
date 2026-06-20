@@ -390,10 +390,12 @@ public static class LegacyDataMetadataExtractor
         var firstType = LocalName(AttributeValue(ends[0], "Type"));
         var secondType = LocalName(AttributeValue(ends[1], "Type"));
         var relationshipCoverageLabel = coverageLabel;
+        var relationshipEndpointCoverage = "full";
         var relationshipLimitations = new List<string>();
         if (string.IsNullOrWhiteSpace(firstType) || string.IsNullOrWhiteSpace(secondType))
         {
             relationshipCoverageLabel = "reduced";
+            relationshipEndpointCoverage = "unidirectional";
             relationshipLimitations.Add("missing-endpoint-type");
         }
 
@@ -407,7 +409,7 @@ public static class LegacyDataMetadataExtractor
         AddSafeName(properties, "targetEndpointRole", "targetEndpointRoleHash", secondRole);
         AddSafeName(properties, "sourceMultiplicity", "sourceMultiplicityHash", AttributeValue(ends[0], "Multiplicity"));
         AddSafeName(properties, "targetMultiplicity", "targetMultiplicityHash", AttributeValue(ends[1], "Multiplicity"));
-        AddRelationshipSemantics(properties, sourceMetadataFactId, relationshipCoverageLabel == "reduced" ? "unidirectional" : "full", relationshipLimitations);
+        AddRelationshipSemantics(properties, sourceMetadataFactId, relationshipEndpointCoverage, relationshipLimitations);
         AddModelIdentity(
             properties,
             "Edmx",
@@ -1206,7 +1208,7 @@ public static class LegacyDataMetadataExtractor
             return trimmed[(colonIndex + 1)..];
         }
 
-        return LocalName(trimmed) ?? trimmed;
+        return trimmed;
     }
 
     private static string? LastXPathIdentifier(string? xpath)

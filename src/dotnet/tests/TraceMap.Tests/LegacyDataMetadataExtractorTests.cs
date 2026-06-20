@@ -604,6 +604,46 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_keeps_edmx_endpoint_coverage_separate_from_file_coverage()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "ReducedModel.edmx"), """
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="FirstContainer" />
+                    <EntityContainer Name="SecondContainer" />
+                    <Association Name="CustomerOrders">
+                      <End Role="Customer" Type="Model.Customer" />
+                      <End Role="Orders" Type="Model.Order" />
+                    </Association>
+                  </Schema>
+                </edmx:ConceptualModels>
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer" />
+                  </Schema>
+                </edmx:StorageModels>
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs" />
+                </edmx:Mappings>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var association = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "csdl-association"
+            && fact.Properties.GetValueOrDefault("associationName") == "CustomerOrders");
+        Assert.Equal("reduced", association.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("full", association.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.False(association.Properties.ContainsKey("limitations"));
+    }
+
+    [Fact]
     public void Scan_adds_typed_dataset_relation_and_constraint_relationship_semantics()
     {
         using var temp = new TempDirectory();
@@ -624,8 +664,8 @@ public sealed class LegacyDataMetadataExtractorTests
                   </xs:choice>
                 </xs:complexType>
               </xs:element>
-              <xs:key name="CustomersKey"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:key>
-              <xs:keyref name="CustomerOrdersConstraint" refer="mstns:CustomersKey">
+              <xs:key name="Customers.IdKey"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:key>
+              <xs:keyref name="CustomerOrdersConstraint" refer="mstns:Customers.IdKey">
                 <xs:selector xpath=".//mstns:Orders" />
                 <xs:field xpath="mstns:CustomerId" />
               </xs:keyref>
@@ -653,6 +693,7 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("relationship", constraint.Properties.GetValueOrDefault("modelRelationshipKind"));
         Assert.Equal("Customers", constraint.Properties.GetValueOrDefault("sourceEndpointName"));
         Assert.Equal("Orders", constraint.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.Equal("Customers.IdKey", constraint.Properties.GetValueOrDefault("referencedConstraintName"));
         Assert.Equal("full", constraint.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
     }
 
