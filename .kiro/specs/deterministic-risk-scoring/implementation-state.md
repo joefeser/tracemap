@@ -2,7 +2,7 @@
 
 Status: implementation-ready-for-review
 
-Branch/PR: `codex/implement-deterministic-risk-scoring` / PR pending
+Branch/PR: `codex/implement-deterministic-risk-scoring` / https://github.com/joefeser/tracemap/pull/227
 
 Issue: `#30`
 
@@ -64,5 +64,4 @@ Not implemented in this PR:
 
 ## Follow-Up Items
 
-- Open a ready PR to `dev` with `Refs #30`.
 - Run the repo-local Agent Control PR review loop and patch only still-actionable findings.
