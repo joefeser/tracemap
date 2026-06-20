@@ -354,13 +354,13 @@ public static class CSharpIntegrationSyntaxExtractor
         foreach (var attribute in root.DescendantNodes().OfType<AttributeSyntax>())
         {
             var attributeName = attribute.Name.ToString();
-            var pattern = MessageAttributePattern(attributeName);
+            var arguments = attribute.ArgumentList?.Arguments ?? default(SeparatedSyntaxList<AttributeArgumentSyntax>);
+            var pattern = MessageAttributePattern(attributeName, arguments);
             if (pattern is null)
             {
                 continue;
             }
 
-            var arguments = attribute.ArgumentList?.Arguments ?? default(SeparatedSyntaxList<AttributeArgumentSyntax>);
             var destination = TryGetStaticString(arguments, pattern.DestinationArgumentIndex, constants, out var rawDestination)
                 ? MessageSurfaceIdentity.FromRaw(rawDestination)
                 : new MessageDestinationIdentity("dynamic", null, MessageSurfaceIdentity.Sha256(attribute.ToString()), "dynamic-destination");
@@ -795,7 +795,7 @@ public static class CSharpIntegrationSyntaxExtractor
         };
     }
 
-    private static MessagePattern? MessageAttributePattern(string attributeName)
+    private static MessagePattern? MessageAttributePattern(string attributeName, SeparatedSyntaxList<AttributeArgumentSyntax> arguments)
     {
         var name = attributeName.EndsWith("Attribute", StringComparison.Ordinal)
             ? attributeName[..^"Attribute".Length]
@@ -803,7 +803,7 @@ public static class CSharpIntegrationSyntaxExtractor
         return name switch
         {
             "QueueTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "queue-trigger-attribute", "consume", "handle", "message-queue", 0),
-            "ServiceBusTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "servicebus-trigger-attribute", "consume", "handle", "message-topic", 0),
+            "ServiceBusTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "servicebus-trigger-attribute", "consume", "handle", arguments.Count >= 2 ? "message-topic" : "message-queue", 0),
             "EventHubTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "eventhub-trigger-attribute", "consume", "handle", "message-stream", 0),
             "TimerTrigger" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "azure-functions", "timer-trigger-attribute", "declare", "bind", "message-event", 0),
             "QueueOutput" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "azure-functions", "queue-output-attribute", "bind", "bind", "message-queue", 0),
@@ -888,17 +888,36 @@ public static class CSharpIntegrationSyntaxExtractor
             }
 
             var name = declaration.Identifier.ValueText;
-            if (constants.TryGetValue(name, out var existing))
+            AddConstant(constants, name, literal.Token.ValueText);
+
+            if (fieldOrLocal is FieldDeclarationSyntax)
             {
-                constants[name] = existing == literal.Token.ValueText ? existing : null;
-            }
-            else
-            {
-                constants[name] = literal.Token.ValueText;
+                var typePath = string.Join(
+                    ".",
+                    declaration.Ancestors()
+                        .OfType<TypeDeclarationSyntax>()
+                        .Reverse()
+                        .Select(type => type.Identifier.ValueText));
+                if (!string.IsNullOrWhiteSpace(typePath))
+                {
+                    AddConstant(constants, $"{typePath}.{name}", literal.Token.ValueText);
+                }
             }
         }
 
         return constants;
+    }
+
+    private static void AddConstant(SortedDictionary<string, string?> constants, string name, string value)
+    {
+        if (constants.TryGetValue(name, out var existing))
+        {
+            constants[name] = existing == value ? existing : null;
+        }
+        else
+        {
+            constants[name] = value;
+        }
     }
 
     private static bool TryGetStaticString(SeparatedSyntaxList<ArgumentSyntax> arguments, int index, IReadOnlyDictionary<string, string?> constants, out string value)
@@ -938,7 +957,7 @@ public static class CSharpIntegrationSyntaxExtractor
             return true;
         }
 
-        if (expression is MemberAccessExpressionSyntax memberAccess && constants.TryGetValue(memberAccess.Name.Identifier.ValueText, out var memberConstantValue) && memberConstantValue is not null)
+        if (expression is MemberAccessExpressionSyntax memberAccess && constants.TryGetValue(memberAccess.WithoutTrivia().ToString(), out var memberConstantValue) && memberConstantValue is not null)
         {
             value = memberConstantValue;
             return true;

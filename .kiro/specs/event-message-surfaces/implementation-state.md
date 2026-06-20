@@ -106,6 +106,12 @@ Status: implementation-in-progress
   - `dotnet test src/dotnet/TraceMap.sln`: 523 passed, 0 failed.
   - `./scripts/check-private-paths.sh`: passed.
   - `git diff --check`: passed.
+- After fresh Codex PR-loop findings, validation passed on 2026-06-20:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`: 8 passed, 0 failed.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed.
+  - `dotnet test src/dotnet/TraceMap.sln`: 524 passed, 0 failed.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
 
 ## Kiro Review State
 
@@ -139,6 +145,10 @@ Status: implementation-in-progress
   `ServiceBusSender` are still extracted, and made same-name constants
   ambiguity-aware so duplicate unresolved destinations emit gaps instead of
   projecting the wrong static surface.
+- Fresh Codex review fixes made qualified constant member access resolve only
+  through qualified type/member keys and classify one-argument
+  `ServiceBusTrigger` attributes as queue surfaces while keeping two-argument
+  topic/subscription triggers as topic surfaces.
 
 ## Follow-Up Items
 
