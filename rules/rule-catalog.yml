@@ -1,4 +1,123 @@
 rules:
+  - id: explorer.input.unsupported-schema.v1
+    name: Static HTML explorer unsupported input schema
+    description: Records generated artifacts that the local static HTML evidence explorer discovered but cannot safely parse in the current implementation slice.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer generation gap
+      - unsupported artifact row
+    limitations:
+      - Unsupported input gaps describe explorer compatibility only and do not prove that the artifact lacks evidence.
+      - The explorer must not merge unsupported generated artifacts silently or render raw unsupported content.
+
+  - id: explorer.input.provenance-conflict.v1
+    name: Static HTML explorer provenance conflict
+    description: Records commit, source identity, schema, or claim-level conflicts between generated artifacts selected for the same explorer output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer generation gap
+      - partial section label
+    limitations:
+      - Provenance conflicts make affected explorer sections partial or unavailable; they do not prove source changes, runtime impact, or evidence absence.
+      - Conflict rows must identify the conflict kind using safe artifact IDs or closed labels rather than raw paths, remotes, hosts, or private names.
+      - PR 1 records commit conflicts with a closed gapKind; claim-level weakening, schema mismatch, and identity mismatch subtypes are deferred and must remain explicit limitations until implemented.
+
+  - id: explorer.input.missing-commit.v1
+    name: Static HTML explorer missing commit metadata
+    description: Records missing, unknown, or unusable commit SHA metadata in generated TraceMap artifacts used by the explorer.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer source identity gap
+      - partial coverage label
+    limitations:
+      - Missing commit metadata limits provenance and history-completeness language but does not prove source changes are present or absent.
+      - The explorer may surface safe commit SHA values when available, but it must not expose raw remotes, local paths, or private repository names.
+
+  - id: explorer.render.redacted-display-value.v1
+    name: Static HTML explorer redacted display value
+    description: Records unsafe or non-public display values that were replaced with safe hashes, stable IDs, or closed placeholders before explorer rendering.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer redaction row
+      - safe display value
+    limitations:
+      - Redacted values preserve safety and provenance shape but may reduce human readability and must not be interpreted as concrete source identities.
+      - Redaction rows do not authorize publishing raw snippets, raw SQL, config values, remotes, endpoint addresses, hostnames, secrets, or local absolute paths.
+
+  - id: explorer.render.omitted-unsafe-value.v1
+    name: Static HTML explorer omitted unsafe value
+    description: Records unsafe values or categories omitted from explorer visible UI, embedded data, downloadable data, or generated README output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer omission count
+      - explorer limitation or gap
+    limitations:
+      - Omitted unsafe values make affected sections partial and must not be treated as evidence that no source behavior exists.
+      - Omission diagnostics must report rule ID, safe category, and generated artifact scope without printing the unsafe raw value.
+      - PR 1 intentionally omits raw fact property values and raw scan manifest identity fields; raw SQL property classification beyond existing unsafe categories is deferred.
+
+  - id: explorer.render.catalog-unavailable.v1
+    name: Static HTML explorer rule catalog unavailable
+    description: Records that a compatible rule catalog artifact was unavailable, so the explorer can show observed rule IDs and built-in explorer rule stubs only.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer rule catalog gap
+    limitations:
+      - Catalog-unavailable gaps affect rule descriptions and limitations only; they do not delete or strengthen underlying evidence rows.
+      - The explorer must continue showing rule IDs from evidence rows even when full catalog metadata is unavailable.
+
+  - id: explorer.render.no-network-assets.v1
+    name: Static HTML explorer local no-network assets
+    description: Documents that the generated explorer uses bundled local HTML, CSS, JavaScript, and data files with no remote scripts, fonts, images, stylesheets, telemetry, or service calls.
+    evidenceTier: Tier2Structural
+    emits:
+      - explorer validation result
+      - bundled asset metadata
+    limitations:
+      - No-network validation covers generated explorer assets and does not prove anything about the scanned repository's runtime behavior.
+      - Generated assets must fail validation or omit features rather than falling back to remote assets.
+
+  - id: explorer.render.partial-section.v1
+    name: Static HTML explorer partial section
+    description: Marks explorer sections as partial, unavailable, not provided, or unsupported when compatible generated artifacts are missing or intentionally not rendered in the current slice.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer generation gap
+      - partial section label
+    limitations:
+      - Partial sections are compatibility and coverage labels, not proof of evidence absence or runtime safety.
+      - The explorer must distinguish not-provided, unsupported, and no-evidence-under-credible-coverage states when enough input metadata is available.
+
+  - id: explorer.validation.generated-file-stale.v1
+    name: Static HTML explorer stale generated file guard
+    description: Prevents overwriting stale or unverified generated explorer files without explicit operator intent.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer validation failure
+    limitations:
+      - Generated-file validation protects output directories only and does not validate scanner or reducer conclusions.
+      - Failure messages must use generated artifact paths and rule IDs without printing unsafe source values.
+
+  - id: explorer.validation.user-file-collision.v1
+    name: Static HTML explorer user file collision guard
+    description: Prevents overwriting user-authored files in the requested explorer output directory.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer validation failure
+    limitations:
+      - Collision validation is an output safety guard and does not prove anything about input artifact quality.
+      - Force options may replace TraceMap-generated explorer output, but must not silently overwrite user-authored files.
+
+  - id: explorer.validation.unsafe-value-rejected.v1
+    name: Static HTML explorer unsafe generated value rejected
+    description: Fails explorer generation when post-render safety validation finds unsafe material in HTML, CSS, JavaScript, JSON data, manifest, README, metadata, or generated paths.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer validation failure
+    limitations:
+      - Safety rejection proves only that generated explorer output failed the selected safety profile; it does not classify source code behavior.
+      - Rejection diagnostics must identify the safety rule and generated artifact location without printing the unsafe raw value.
+
   - id: message.surface.publish.v1
     name: Static message publisher surface
     description: Records deterministic static publish, send, produce, or enqueue evidence for broker-backed or external message surfaces when a safe destination identity is visible.
