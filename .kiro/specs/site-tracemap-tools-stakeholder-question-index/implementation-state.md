@@ -142,6 +142,11 @@ Spec-branch validation completed before commit:
   intent-to-add so untracked content was included.
 - `./scripts/check-private-paths.sh` passed.
 
+PR-loop follow-up validation after patch:
+
+- `git diff --check` passed.
+- `./scripts/check-private-paths.sh` passed.
+
 Future implementation-branch validation:
 
 - `git diff --check`
@@ -157,6 +162,22 @@ Future implementation-branch validation:
 - `claude-opus-4.8` review returned a quota error with no review content. See
   Readiness Note for details; re-run before the first site-source PR if quota
   allows.
+
+## PR Loop Findings
+
+Initial PR loop for PR #235 returned `actionable_findings` with three
+unresolved review threads in `design.md`:
+
+- Design matrix did not expose rule ID or rule-family handling despite
+  requirements that proof paths preserve rule IDs where public-safe.
+- Engineer and demo rows used conditional public claim level shorthand.
+- Agent/bot discovery target surface used `sitemap/discovery metadata` in the
+  route-oriented column instead of a route.
+
+Fix: expanded the design matrix to include `Target route`, `Evidence surface`,
+and `Rule ID/rule family` columns; changed all required rows to `concept`;
+kept discovery metadata as the evidence surface for agents while using
+`/proof-paths/`, `/validation/`, and `/limitations/` as concrete proof routes.
 
 ## Follow-Ups
 
