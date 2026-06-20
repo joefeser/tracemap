@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap legacy modernization evidence map concept: reviewer questions for deterministic static repository evidence, hidden legacy surfaces, coverage gaps, and proof paths."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Legacy Modernization Evidence Map | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/legacy-modernization/evidence-map/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Legacy Modernization Evidence Map Concept">
+    <meta
+      property="og:description"
+      content="A concept-level map for asking modernization planning questions from static repository evidence without claiming runtime proof or migration safety."
+    >
+    <meta property="og:url" content="https://tracemap.tools/legacy-modernization/evidence-map/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Legacy modernization evidence map</p>
+        <h1>Modernization planning starts with static evidence, not a safety claim.</h1>
+        <p class="hero-subhead">
+          This concept page maps legacy modernization questions to deterministic
+          static repository evidence, coverage gaps, hidden surface families,
+          and public-safe proof routes. It works from repository snapshots and
+          checked-in artifacts, not live systems.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page is a reviewer-question map for modernization planning, not
+          the <a href="/legacy-evidence/">legacy evidence story</a> and not the
+          <a href="/legacy-validation/">legacy validation plan</a>.
+        </p>
+        <nav class="hero-actions" aria-label="Legacy modernization evidence links">
+          <a class="button primary" href="#evidence-map">Open evidence map</a>
+          <a class="button secondary" href="/legacy-evidence/">Legacy evidence story</a>
+          <a class="button secondary" href="/legacy-validation/">Legacy validation concept</a>
+          <a class="button secondary" href="/limitations/">Static limitations</a>
+        </nav>
+      </section>
+
+      <section id="reader-questions" class="section">
+        <div class="section-header">
+          <p class="section-kicker">Reader questions</p>
+          <h2>Different reviewers need different evidence prompts.</h2>
+        </div>
+        <div class="workflow-grid audience-grid">
+          <article>
+            <h3>Managers</h3>
+            <p>What static evidence exists before scope is approved, which rows are hidden, and which coverage gaps need human planning time?</p>
+          </article>
+          <article>
+            <h3>Architects</h3>
+            <p>What old project shapes, framework clues, service families, UI surfaces, and data metadata families need design review?</p>
+          </article>
+          <article>
+            <h3>Engineers</h3>
+            <p>Which evidence came from semantic analysis, structural patterns, syntax fallback, config or project metadata, or an explicit analysis gap?</p>
+          </article>
+          <article>
+            <h3>Reviewers</h3>
+            <p>Where are the rule IDs, evidence tiers, coverage labels, limitations, proof paths, and non-claims that bound each public statement?</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="evidence-map" class="section" aria-labelledby="evidence-map-heading">
+        <div class="section-header">
+          <p class="section-kicker">Evidence map</p>
+          <h2 id="evidence-map-heading">Legacy concerns stay beside status, limitation, and proof path.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-legacy-modernization-evidence-map>
+            <caption>
+              Public status labels describe what this page may say now. Hidden
+              rows name the surface family only; they do not claim support,
+              detection results, or demonstration.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Legacy concern</th>
+                <th scope="col">Reviewer question</th>
+                <th scope="col">Evidence shape</th>
+                <th scope="col">Public status</th>
+                <th scope="col">Limitation</th>
+                <th scope="col">Proof path</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-map-row="old-frameworks-toolchains" data-row-category="general-model" data-public-status="concept">
+                <td><strong>Old frameworks and toolchains</strong></td>
+                <td>What target framework, project style, package, restore, generated-file, or toolset clues are visible?</td>
+                <td>Static project and repository metadata used as planning input.</td>
+                <td><code>concept</code></td>
+                <td>Framework clues do not prove package compatibility, migration feasibility, or live deployment state.</td>
+                <td><a href="/evidence/">Evidence model</a>; <a href="/capabilities/">capability boundaries</a>.</td>
+              </tr>
+              <tr data-map-row="project-load-build-gaps" data-row-category="general-model" data-public-status="concept">
+                <td><strong>Project load and build gaps</strong></td>
+                <td>Did semantic project load succeed, or does the scan need reduced-coverage labeling?</td>
+                <td>Coverage labels and analysis-gap evidence for failed project load, missing build context, or partial analysis.</td>
+                <td><code>concept</code></td>
+                <td>Failed build or project load is reduced coverage, never a clean repository result.</td>
+                <td><a href="/limitations/">Limitations</a>; <a href="/legacy-validation/">legacy validation concept</a>.</td>
+              </tr>
+              <tr data-map-row="syntax-fallback" data-row-category="general-model" data-public-status="concept">
+                <td><strong>Syntax fallback</strong></td>
+                <td>When semantic evidence is unavailable, which checked-in syntax or text evidence still helps review?</td>
+                <td>Syntax-only or textual evidence that keeps useful facts visible with weaker evidence tiers.</td>
+                <td><code>concept</code></td>
+                <td>Syntax fallback cannot resolve compiler symbols or prove behavior outside the repository snapshot.</td>
+                <td><a href="/evidence/">Evidence tiers</a>; <a href="/validation/">validation map</a>.</td>
+              </tr>
+              <tr data-map-row="config-project-metadata" data-row-category="general-model" data-public-status="concept">
+                <td><strong>Config and project metadata</strong></td>
+                <td>Which checked-in configuration or project files can guide reviewer questions?</td>
+                <td>Static config and project-file presence, metadata shape, and coverage labels.</td>
+                <td><code>concept</code></td>
+                <td>This row does not assert service binding detection, service-reference detection, endpoint extraction, or connection-value extraction.</td>
+                <td><a href="/proof-paths/">Proof path index</a>; <a href="/outputs/">output boundaries</a>.</td>
+              </tr>
+              <tr data-map-row="wcf-service-references" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>WCF and service references</strong></td>
+                <td>Which service-reference family would need architecture and owner review?</td>
+                <td>Named hidden surface family only.</td>
+                <td><code>hidden</code> pending validation</td>
+                <td>No public support result, reachable service claim, deployed endpoint claim, or binding compatibility claim is made here.</td>
+                <td><a href="/legacy-evidence/">Hidden legacy evidence ledger</a>.</td>
+              </tr>
+              <tr data-map-row="wcf-metadata" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>WCF metadata normalization</strong></td>
+                <td>Which metadata-normalization questions would need public-safe proof before publication?</td>
+                <td>Named hidden surface family only.</td>
+                <td><code>hidden</code> pending validation</td>
+                <td>No metadata support, downloaded metadata proof, endpoint value, or compatibility conclusion is published.</td>
+                <td><a href="/legacy-evidence/">Hidden legacy evidence ledger</a>.</td>
+              </tr>
+              <tr data-map-row="asmx-soap-services" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>ASMX and SOAP services</strong></td>
+                <td>Which older service-host family would require reviewer follow-up?</td>
+                <td>Named hidden, unledgered surface family.</td>
+                <td><code>hidden</code> pending ledger entry</td>
+                <td>Unledgered here means no public support claim, route claim, operation claim, or service address is shown.</td>
+                <td><a href="/legacy-evidence/">Hidden legacy evidence ledger</a>; follow-up ledger gap recorded.</td>
+              </tr>
+              <tr data-map-row="remoting" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>.NET Remoting</strong></td>
+                <td>Which remoting-family references would need review before any public wording changes?</td>
+                <td>Named hidden surface family only.</td>
+                <td><code>hidden</code> pending validation</td>
+                <td>No hosted service, activation path, exploitability, or production-usage result is claimed.</td>
+                <td><a href="/legacy-evidence/">Hidden legacy evidence ledger</a>.</td>
+              </tr>
+              <tr data-map-row="winforms-navigation-events" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>WinForms navigation and events</strong></td>
+                <td>Which desktop UI wiring family would need source-owner review?</td>
+                <td>Named hidden, unledgered surface family.</td>
+                <td><code>hidden</code> pending ledger entry</td>
+                <td>No event support claim, navigation claim, user-action claim, or runtime UI reachability claim is made.</td>
+                <td><a href="/legacy-validation/">Legacy validation concept</a>; follow-up ledger gap recorded.</td>
+              </tr>
+              <tr data-map-row="webforms-event-route-navigation" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>WebForms events, routes, and navigation</strong></td>
+                <td>Which WebForms UI family questions belong in review before modernization scope is set?</td>
+                <td>Named hidden surface family; route and navigation aspects are unledgered here.</td>
+                <td><code>hidden</code> pending validation and ledger entry</td>
+                <td>No event execution, route reachability, navigation behavior, ViewState, or postback simulation claim is made.</td>
+                <td><a href="/legacy-evidence/">Hidden legacy evidence ledger</a>; <a href="/legacy-validation/">validation concept</a>.</td>
+              </tr>
+              <tr data-map-row="legacy-data-metadata" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>Legacy data metadata</strong></td>
+                <td>Which old data metadata families would require database and owner review?</td>
+                <td>Named hidden surface family only.</td>
+                <td><code>hidden</code> pending validation</td>
+                <td>No database existence, query execution, schema compatibility, permission, or production data result is claimed.</td>
+                <td><a href="/legacy-evidence/">Hidden legacy evidence ledger</a>.</td>
+              </tr>
+              <tr data-map-row="build-environment-diagnostics" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>Build environment diagnostics detection</strong></td>
+                <td>Which environment-diagnostic family would explain why coverage is reduced?</td>
+                <td>Named hidden surface family only.</td>
+                <td><code>hidden</code> pending validation</td>
+                <td>This hidden row does not turn missing toolchains, restore failures, or generated-file gaps into install advice or clean results.</td>
+                <td><a href="/legacy-evidence/">Hidden legacy evidence ledger</a>; <a href="/limitations/">limitations</a>.</td>
+              </tr>
+              <tr data-map-row="flow-composition" data-row-category="legacy-surface-detection" data-public-status="hidden">
+                <td><strong>Flow composition reporting</strong></td>
+                <td>Which static path-composition questions would need proof before being repeated publicly?</td>
+                <td>Named hidden surface family only.</td>
+                <td><code>hidden</code> pending validation</td>
+                <td>No runtime flow tracing, full dependency result, release decision, or migration completeness claim is made.</td>
+                <td><a href="/legacy-evidence/">Hidden legacy evidence ledger</a>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="claim-ledger-note">
+          The map is intentionally sparse. A hidden row can help a reviewer ask
+          the right question without becoming public support language.
+        </p>
+      </section>
+
+      <section id="coverage-gaps" class="section split-section">
+        <div>
+          <p class="section-kicker">Coverage gaps</p>
+          <h2>Evidence tier language keeps partial analysis useful.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Tier1Semantic</strong><span>Compiler-resolved static symbol evidence when project load and semantic analysis succeed.</span></div>
+          <div><strong>Tier2Structural</strong><span>Known framework, project, or file-structure patterns that can guide review with limitations visible.</span></div>
+          <div><strong>Tier3SyntaxOrTextual</strong><span>Syntax-only or text evidence used when stronger analysis is unavailable or reduced.</span></div>
+          <div><strong>Tier4Unknown</strong><span>Analysis gaps, unsupported formats, malformed metadata, or unable-to-prove states that block stronger conclusions.</span></div>
+        </div>
+      </section>
+
+      <section id="hidden-material" class="section split-section">
+        <div>
+          <p class="section-kicker">Hidden material</p>
+          <h2>Private validation can exist without becoming public copy.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>raw values</code><span>Source excerpts, SQL text, configuration values, service addresses, endpoint values, credentials, and database contents stay out of public pages.</span></div>
+          <div><code>raw artifacts</code><span>Local generated outputs, analyzer details, and unsanitized repository evidence stay behind public-safe summaries.</span></div>
+          <div><code>private identity</code><span>Private sample names, local paths, raw remotes, customer data, and production identifiers are not published.</span></div>
+          <div><code>hidden validation</code><span>Hidden surface-family validation remains abstract until a redacted public proof path exists.</span></div>
+        </div>
+      </section>
+
+      <section id="non-claims" class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The map is planning context, not modernization approval.</h2>
+        </div>
+        <ul>
+          <li>No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, production dependency understanding, exploitability, database existence, package compatibility, migration feasibility, migration completeness, AI impact analysis, LLM analysis, or complete product coverage proof is claimed.</li>
+          <li>Static evidence does not replace runtime telemetry, source-owner review, architecture review, security review, database review, test results, build or restore validation, migration planning, release approval, code review, governance, or human judgment.</li>
+          <li>Rows avoid impact wording unless a deterministic reducer result with public-safe rule IDs, evidence tiers, proof path, and limitations supports that exact statement.</li>
+        </ul>
+      </section>
+
+      <section id="proof-paths" class="section link-section">
+        <div>
+          <p class="section-kicker">Proof paths</p>
+          <h2>Follow current public-safe routes instead of inventing stronger proof.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/legacy-evidence/">Legacy evidence story</a>
+          <a href="/legacy-validation/">Legacy validation concept</a>
+          <a href="/capabilities/">Capability boundaries</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation map</a>
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/roadmap/">Claim roadmap</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/adoption/">Adoption playbook</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Legacy modernization evidence remains concept-level until a specific
+        row has public-safe proof, limitations, and claim-ledger approval.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

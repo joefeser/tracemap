@@ -14,6 +14,7 @@ import { validateDemoEvidenceTrailDist } from "./demo-evidence-trail.mjs";
 import { validateDemoRunbookDist } from "./demo-runbook.mjs";
 import { validateEndpointReviewDist } from "./endpoint-review.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
+import { validateLegacyModernizationEvidenceMap } from "./legacy-modernization-evidence-map.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
 import { validateManagerFaqDist } from "./manager-faq.mjs";
@@ -33,10 +34,11 @@ export async function validateSite(options = {}) {
   await buildSite({ log, root });
   await validateDemoSummary({ root });
   const legacyStoryResult = await validateLegacyStorySafety({ root });
+  const legacyModernizationResult = await validateLegacyModernizationEvidenceMap({ root });
   const result = await validateDist({ root });
 
   log(
-    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, and ${legacyStoryResult.scannedFileCount} legacy story safety targets.`
+    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, ${legacyStoryResult.scannedFileCount} legacy story safety targets, and ${legacyModernizationResult.rowCount} legacy modernization evidence-map rows.`
   );
 
   return result;

@@ -1,226 +1,229 @@
 # Site TraceMap Tools Legacy Modernization Evidence Map Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
-Last verified: 2026-06-18
+Status: implemented
+Readiness: ready-for-review
+Last verified: 2026-06-20
 Public claim level: concept
 
 ## Branch
 
-Spec branch: `codex/spec-site-legacy-modernization-evidence-map`
+Implementation branch: `codex/impl-site-legacy-modernization-evidence-map`
 Base: `origin/dev`
-Worktree: dedicated spec worktree; local path intentionally omitted to satisfy
-the private absolute-path guardrail.
+Target PR base: `dev`
+Worktree: dedicated implementation worktree; local path intentionally omitted to
+satisfy the private absolute-path guardrail.
 
 ## Scope
 
-This branch creates the spec packet for a future public-safe site page or
-section explaining how TraceMap can organize deterministic static evidence
-during legacy modernization and migration planning.
+This implementation adds a bounded public concept route for the TraceMap site:
+`/legacy-modernization/evidence-map/`.
 
-This is spec creation only. It does not implement site code, scanner code,
-reducer behavior, runtime integrations, AI/LLM workflows, demo artifacts,
-generated evidence, or static site output.
+Owned files changed:
 
-## Public Claim Level
+- `.kiro/specs/site-tracemap-tools-legacy-modernization-evidence-map/tasks.md`
+- `.kiro/specs/site-tracemap-tools-legacy-modernization-evidence-map/implementation-state.md`
+- `site/src/legacy-modernization/evidence-map/index.html`
+- `site/src/_site/pages.json`
+- `site/src/_site/discovery.json`
+- `site/src/legacy-evidence/index.html`
+- `site/src/legacy-validation/index.html`
+- `site/src/roadmap/index.html`
+- `site/scripts/legacy-modernization-evidence-map.mjs`
+- `site/scripts/legacy-modernization-evidence-map.test.mjs`
+- `site/scripts/validate.mjs`
 
-Selected level: `concept`.
+Generated static output was built for validation but not edited by hand.
 
-Rationale: the future page is explanatory planning content. Existing
-public-safe surfaces can support TraceMap's deterministic static evidence model
-in general, but this specific legacy modernization evidence map has not shipped
-as a dedicated route and does not have a complete checked-in public demo proof
-path. Specific demo rows require public-safe proof before they can be shown as
-demo-backed.
+## Route Decision
 
-## Scope Decisions
+Selected placement: standalone concept route
+`/legacy-modernization/evidence-map/`.
 
-- Recommended future route: `/legacy-modernization/evidence-map/`, with final
-  placement decided during implementation.
-- The page must be public-safe planning context for managers, architects,
-  engineers, and reviewers.
-- The page must connect old framework/toolchain clues, project load failures,
-  syntax fallback, WCF, ASMX, remoting, WinForms, WebForms, config/project
-  metadata, and legacy data metadata to reviewer questions only where
-  public-safe evidence exists or as clearly labeled concept/dev-only/hidden
-  material.
-- The future page must stay distinct from `/legacy-evidence/` and
-  `/legacy-validation/`: it is a reviewer-question evidence map for
-  modernization planning, not the legacy evidence story and not the legacy
-  validation plan page.
-- The future page must also stay distinct from `/capabilities/`,
-  `/limitations/`, `/validation/`, `/manager-packet/`, and claim-governance or
-  claim-ledger pages: it links to those surfaces instead of restating
-  capability maturity, limitations, validation status, the manager packet, or
-  the canonical claim ledger.
-- Per-theme labels must be reconciled against the
-  `site-tracemap-tools-legacy-evidence-story` theme claim ledger as the
-  authoritative label source, and cross-checked against
-  `legacy-story-reconciliation` as an internal coexistence reference before
-  publish.
-- Future implementation must re-check the sibling ledger state before assigning
-  row labels. In this snapshot, every sibling-ledger theme is pinned `hidden`,
-  so legacy-surface detection rows default to named `hidden` rows until the
-  ledger is updated with public-safe proof.
-- General static-evidence-model rows such as old frameworks/toolchains,
-  project-load/build-as-reduced-coverage, syntax fallback, and config/project
-  metadata coverage may use `concept` when they describe only the public
-  evidence model and reviewer question. They must not imply hidden detection
-  support such as build environment diagnostics detection or specific
-  WCF/WebForms/WinForms/ASMX support.
-- WinForms navigation/event surfaces and ASMX/SOAP services are currently
-  required row themes but are not entries in either sibling reconciliation
-  source; future implementation must default them to named `hidden` rows until
-  a future ledger update adds public-safe proof.
-- WebForms route/navigation surfaces beyond the sibling ledger's narrower
-  WebForms event-flow theme are also unledgered for that route/navigation
-  aspect and default to named `hidden` rows until the sibling ledger is updated
-  with public-safe proof.
-- `omitted` is reserved for cases where naming the surface family itself would
-  leak hidden capability detail or private validation information. Publicly
-  documented framework-family names such as WCF, ASMX/SOAP, remoting,
-  WinForms, and WebForms do not by themselves require omission.
-- `legacy-story-reconciliation` is consulted as an internal hidden-level
-  reconciliation source; its private contents must not be surfaced in public
-  copy.
-- Capabilities that exist only on `dev` must be labeled `dev-only` or omitted.
-- Hidden or unsanitized validation stays abstract and does not disclose private
-  sample names, raw artifacts, counts, cadence, or unreleased sequencing.
-- The spec forbids runtime proof, production traffic, endpoint performance,
-  outage-cause, release-safety, operational-safety, database-existence,
-  package-compatibility, exploitability, migration-safety, AI/LLM analysis, and
-  complete-product-coverage claims.
-- Future implementation tasks remain unchecked because this branch is
-  spec-only.
+Rationale:
 
-## Spec Review Commands And Results
+- The standalone route matches the spec's recommended placement and keeps the
+  page focused on reviewer questions for modernization planning.
+- The route does not enter primary navigation. Discovery is through sitemap,
+  route metadata, discovery metadata, and bounded links from adjacent concept
+  pages.
+- The page describes static repository evidence from repository snapshots and
+  checked-in artifacts. It does not imply a shipped modernization assessment
+  product, repository upload flow, runtime service, telemetry collector, AI/LLM
+  workflow, or migration approval surface.
 
-Planned commands:
+Rejected alternatives:
 
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-- `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+- Section on `/legacy-evidence/`: rejected because that route is the sibling
+  legacy evidence story and claim ledger. This implementation needs a
+  reviewer-question evidence map without superseding the story.
+- Section on `/legacy-validation/`: rejected because that route describes the
+  validation plan for messy legacy repositories. This implementation maps
+  modernization planning questions to current public-safe evidence boundaries.
+- Section on `/capabilities/`, `/limitations/`, `/validation/`, or
+  `/manager-packet/`: rejected because those pages already own capability
+  maturity, non-claims, validation status, and manager summary framing. The new
+  route links to them instead of restating their roles.
 
-Results:
+The route uses `/roadmap/` and `/review-claim-checklist/` for claim-governance
+context. No `/claims/` or `/claim-ledger/` route exists in this snapshot, so no
+links to those candidate routes were added.
 
-- `claude-opus-4.8` initial spec review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T190342-577Z-spec-claude-opus-4.8.*`.
-  Findings: 2 Medium and 2 Low. Patched the Medium findings by distinguishing
-  this page from `/legacy-evidence/` and `/legacy-validation/`, and by
-  requiring row-label reconciliation with the sibling legacy theme claim
-  ledger. Also patched the Low cross-link and shipped-row proof-link hardening.
-- `claude-sonnet-4.6` initial spec review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T190642-706Z-spec-claude-sonnet-4.6.*`.
-  Findings: 4 Low and no Medium or higher findings. Patched the Low
-  bookkeeping and polish items: validation readiness gate wording, explicit
-  re-review follow-up wording, `git diff --cached --check` in future tasks,
-  and cross-link sequencing guidance.
-- `claude-sonnet-4.6` re-review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T190805-796Z-re-review-claude-sonnet-4.6.*`.
-  Findings: 3 Low and no Medium or higher findings. Patched readiness-gate task
-  coverage and the design definition for `omitted`.
-- `claude-opus-4.8` re-review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T190853-992Z-re-review-claude-opus-4.8.*`.
-  Findings: 1 Medium and 2 Low. Patched the Medium finding by defaulting
-  unledgered WinForms and ASMX/SOAP themes to `hidden` or `omitted` until a
-  sibling ledger update adds public-safe proof. Also patched the label
-  vocabulary drift and hidden-source clarification.
-- `claude-opus-4.8` second re-review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T191424-857Z-re-review-claude-opus-4.8.*`.
-  Findings: 2 Medium and 2 Low. Patched by clarifying that all current
-  sibling-ledger themes default to `hidden` or `omitted`, constraining
-  `concept` row labels to general evidence-model framing only, adding
-  enforceable distinctness from non-legacy site surfaces, and clarifying that
-  `legacy-story-reconciliation` is an internal coexistence reference rather
-  than the authoritative label ledger.
-- `claude-opus-4.8` third re-review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T191814-054Z-re-review-claude-opus-4.8.*`.
-  Findings: 2 Medium and 3 Low. Patched by resolving the row-inclusion versus
-  hidden/omitted conflict, requiring named `hidden` rows for public framework
-  families, narrowing `concept` rows to non-hidden/non-unledgered framing,
-  standardizing on `legacy data metadata`, requiring implementation-time ledger
-  re-checks, and documenting that a sparse map is acceptable.
-- `claude-opus-4.8` fourth re-review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T192406-137Z-re-review-claude-opus-4.8.*`.
-  Findings: 1 Medium and 3 Low. Patched by separating general public
-  static-evidence-model rows from hidden legacy-surface detection rows, keeping
-  reduced-coverage and syntax-fallback principles public concept without
-  implying hidden detection capability, and noting WebForms route/navigation as
-  an unledgered hidden-default surface.
-- `claude-opus-4.8` fifth re-review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T192905-713Z-re-review-claude-opus-4.8.*`.
-  Findings: 1 Medium and 3 Low. Patched by explicitly forbidding
-  config/project metadata rows from implying hidden WCF, `system.serviceModel`,
-  service-reference, endpoint, or connection-string extraction and by recording
-  the WebForms route/navigation unledgered default.
-- `claude-sonnet-4.6` final re-review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-modernization-evidence-map --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  completed with full coverage and saved artifacts under
-  `.tmp/kiro-reviews/site-tracemap-tools-legacy-modernization-evidence-map/2026-06-18T193257-544Z-re-review-claude-sonnet-4.6.*`.
-  Findings: 4 Low and no Medium or higher findings. Patched the useful Low
-  cross-link task guidance and validation-gate wording before final readiness.
+## Public Copy Boundary
 
-### Review Coverage Status
+The page includes visible `Public claim level: concept` and the shared site
+principle `No public conclusion without evidence`.
 
-Medium or higher findings must be patched and re-reviewed where feasible before
-`Readiness` moves to `ready-for-implementation`.
+The page explicitly states that TraceMap organizes deterministic static
+repository evidence for modernization planning, not runtime behavior,
+production telemetry, migration safety, release safety, operational safety,
+database existence, package compatibility, AI/LLM analysis, or complete product
+coverage.
+
+The page does not publish raw facts, raw SQLite, analyzer details, raw source
+snippets, raw SQL, config values, secrets, local paths, raw remotes, generated
+scan directories, private sample names, connection strings, service addresses,
+endpoint values, credentials, database contents, or hidden validation details.
+
+## Evidence Map Rows
+
+General static-evidence-model rows are labeled `concept`:
+
+| Row | Category | Public status | Decision |
+| --- | --- | --- | --- |
+| Old frameworks and toolchains | General model | `concept` | Public evidence-model framing only. |
+| Project load and build gaps | General model | `concept` | Reduced coverage, never clean-repo wording. |
+| Syntax fallback | General model | `concept` | Useful weaker evidence, not semantic proof. |
+| Config and project metadata | General model | `concept` | Static metadata framing only; no service binding, service-reference, endpoint, or connection-value extraction claim. |
+
+Legacy-surface detection rows are labeled `hidden`:
+
+| Row | Ledger result | Public status | Decision |
+| --- | --- | --- | --- |
+| WCF and service references | Sibling ledger hidden | `hidden` | Named hidden row only. |
+| WCF metadata normalization | Sibling ledger hidden | `hidden` | Named hidden row only. |
+| .NET Remoting | Sibling ledger hidden | `hidden` | Named hidden row only. |
+| WebForms events, routes, and navigation | Event-flow theme hidden; route/navigation aspect unledgered | `hidden` | Named hidden row with route/navigation gap recorded. |
+| Legacy data metadata | Sibling ledger hidden | `hidden` | Named hidden row only. |
+| Build environment diagnostics detection | Sibling ledger hidden | `hidden` | Named hidden row only. |
+| Flow composition reporting | Sibling ledger hidden | `hidden` | Named hidden row only. |
+| ASMX and SOAP services | Absent from sibling ledger | `hidden` | Named hidden row; follow-up ledger gap recorded. |
+| WinForms navigation and events | Absent from sibling ledger | `hidden` | Named hidden row; follow-up ledger gap recorded. |
+
+No row uses `demo-backed`, `main`, `shipped`, `dev-only`, or `omitted`. No
+specific demo rows were added because no row-specific checked-in public-safe
+proof path was identified for this concept page.
+
+## Sibling Ledger Reconciliation
+
+The `site-tracemap-tools-legacy-evidence-story` theme claim ledger was
+rechecked on the implementation base before row labels were assigned. It still
+pins WCF/service-reference mapping, WCF metadata normalization, .NET Remoting
+detection, WebForms event flow, legacy data metadata, build diagnostics, and
+flow composition reporting as hidden pending validation.
+
+The hidden `legacy-story-reconciliation` packet was cross-checked as an
+internal coexistence reference. Its public claim level remains hidden, so it was
+not used to promote any public site row.
+
+Unledgered defaults recorded:
+
+- ASMX/SOAP services default to `hidden` until a future sibling-ledger entry and
+  public-safe proof exist.
+- WinForms navigation/event surfaces default to `hidden` until a future
+  sibling-ledger entry and public-safe proof exist.
+- WebForms route/navigation surfaces beyond the narrower WebForms event-flow
+  ledger entry default to `hidden` until a future ledger update adds public-safe
+  proof.
+
+## Cross-Links
+
+Inbound links added:
+
+- `/legacy-evidence/` links to the modernization evidence map from the hero and
+  link grid.
+- `/legacy-validation/` links to the modernization evidence map from the hero
+  and link grid.
+- `/roadmap/` adds a concept card, next-proof-upgrade note, and source-material
+  link for the modernization evidence map.
+
+The new page links only to public-safe existing routes verified by site
+validation: `/legacy-evidence/`, `/legacy-validation/`, `/capabilities/`,
+`/limitations/`, `/validation/`, `/proof-paths/`, `/manager-packet/`,
+`/roadmap/`, `/review-claim-checklist/`, and `/adoption/`.
+
+Demo result and proof-upgrade routes were not used as proof paths for evidence
+map rows because this page has no demo-backed row.
 
 ## Validation
 
-Planned spec validation:
+Commands run:
 
-- `git diff --check`
-- `git diff --cached --check`
-- `./scripts/check-private-paths.sh`
+```text
+git diff --check
+git diff --cached --check
+cd site && npm test
+cd site && npm run validate
+cd site && npm run build
+./scripts/check-private-paths.sh
+```
 
 Results:
 
-- `git diff --check`: passed on 2026-06-18.
-- `git diff --cached --check`: passed on 2026-06-18.
-- `./scripts/check-private-paths.sh`: passed on 2026-06-18 with
-  `Private path guard passed.`
+- `npm test`: passed, 197 tests.
+- `npm run validate`: passed; built the site and validated 44 HTML files, 1349
+  internal references, 43 sitemap URLs, 1 legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+- `git diff --cached --check`: passed before staging and again on the staged diff.
+- `./scripts/check-private-paths.sh`: passed with `Private path guard passed.`
+
+Browser sanity:
+
+- Started local preview on alternate port because the default preview port was
+  already in use.
+- Desktop check at 1280px: route, title, H1, top navigation, required anchors,
+  table marker, 13 rows, 4 concept rows, 9 hidden rows, and no page-level
+  horizontal overflow were confirmed.
+- Mobile check at 390px: H1 visible, 11 nav links present, 13 rows present,
+  first hidden row labeled `hidden`, proof-link grid present, no page-level
+  horizontal overflow, and the wide evidence table stayed inside its horizontal
+  scroll wrapper.
+- Temporary preview server was stopped after the check.
+
+## Review Findings
+
+Implementation self-review finding:
+
+- Initial site patch application landed in the root checkout instead of the
+  dedicated implementation worktree. The exact site patch was moved into the
+  dedicated worktree and reversed from the root checkout. Unrelated root
+  checkout changes were left untouched.
+
+Automated focused validation finding:
+
+- The first run of `npm test` caught a title-check bug in the new validator. The
+  validator used an impossible word-boundary match before the `<title>` tag.
+  The guard was patched and the full site test suite passed afterward.
 
 ## Oddities
 
-- This spec intentionally overlaps with public capability, limitations,
-  validation, manager, and claim-governance pages. The distinct role is a
-  legacy modernization evidence map: it organizes reviewer questions around
-  old-framework and legacy-surface evidence without claiming assessment
-  completeness.
-- This spec also intentionally overlaps with the already-implemented
-  `site-tracemap-tools-legacy-evidence-story` and
-  `site-tracemap-tools-legacy-validation-concept` specs. The distinct role is a
-  reviewer-question evidence map: what old project shape is visible, what was
-  found by semantic analysis versus syntax/config fallback, what gaps remain,
-  and what must be validated before public or migration conclusions. It is not
-  the narrative legacy evidence story and not the `/legacy-validation/` plan
-  page. Future implementation must confirm the placement does not duplicate or
-  supersede those pages before publishing.
-- The spec includes both `requirements.md` and `design.md` because the future
-  page has enough public-claim and information-architecture constraints that a
-  separate design note should help implementation stay bounded.
+- The evidence map intentionally names public framework-family rows as hidden
+  rows. This satisfies the spec requirement to name the family without turning
+  hidden validation into public support language.
+- The page does not use `omitted` because naming WCF, ASMX/SOAP, Remoting,
+  WinForms, WebForms, and legacy data metadata does not itself leak private
+  validation details in this public-safe framing.
+- The mobile table uses the existing horizontal table wrapper. This preserves
+  dense reviewer-oriented columns without causing page-level horizontal
+  overflow.
 
 ## Follow-Ups
 
-- Run re-review of the Opus-patched and Sonnet-polished material with at least
-  one requested model, and with both requested models where feasible.
-- Patch any remaining Medium or higher findings and rerun re-review where
-  feasible.
-- Run the required whitespace, cached-diff, and private-path checks.
-- Future implementation should decide whether to add the page as a standalone
-  route or as a section on an existing public-safe surface.
+- Add sibling-ledger entries for ASMX/SOAP, WinForms navigation/event surfaces,
+  and WebForms route/navigation aspects before any future public promotion.
+- Upgrade any hidden row only after checked-in public-safe proof exists, with
+  rule IDs, evidence tiers, coverage labels, limitations, and implementation
+  state updated in the same change.
+- Keep concept rows from smuggling hidden detection claims when future copy is
+  edited.
