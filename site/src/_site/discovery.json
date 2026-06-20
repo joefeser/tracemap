@@ -423,6 +423,23 @@
     ]
   },
   {
+    "path": "/incident-evidence-handoff/",
+    "title": "Incident Evidence Handoff Packet",
+    "summary": "Concept-level handoff packet for bringing static evidence, proof paths, limits, and next owners into incident-adjacent conversations.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The packet is concept-level guidance for static evidence transfer, not runtime confirmation, incident diagnosis, release approval, or operational command.",
+      "Every static item needs a proof path, coverage label, limitation, and owner for the next non-static question."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or complete coverage proof.",
+      "No generated fact files, local SQLite indexes, analyzer diagnostics, source excerpts, database query text, configuration details, secrets, workstation paths, repository remotes, scan output folders, or private sample identities are public handoff material."
+    ]
+  },
+  {
     "path": "/static-vs-runtime/",
     "title": "Static Evidence Vs Runtime Telemetry",
     "summary": "Concept-level comparison of TraceMap deterministic static repository evidence with runtime telemetry and observability questions.",

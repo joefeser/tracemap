@@ -14,6 +14,7 @@ import { validateDemoEvidenceTrailDist } from "./demo-evidence-trail.mjs";
 import { validateDemoRunbookDist } from "./demo-runbook.mjs";
 import { validateEndpointReviewDist } from "./endpoint-review.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
+import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff.mjs";
 import { validateLegacyModernizationEvidenceMap } from "./legacy-modernization-evidence-map.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
@@ -80,6 +81,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateEndpointReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateIncidentEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
