@@ -368,11 +368,25 @@ public static class StaticHtmlEvidenceExplorer
 
             foreach (var fact in facts.OrderBy(fact => fact.RuleId, StringComparer.Ordinal)
                          .ThenBy(fact => fact.FactType, StringComparer.Ordinal)
-                         .ThenBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
-                         .ThenBy(fact => fact.Evidence.StartLine)
+                         .ThenBy(fact => fact.Evidence?.FilePath ?? string.Empty, StringComparer.Ordinal)
+                         .ThenBy(fact => fact.Evidence?.StartLine ?? 0)
                          .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
             {
-                var safePath = SafeRepositoryPath(fact.Evidence.FilePath, redactions);
+                var evidence = fact.Evidence;
+                if (evidence is null)
+                {
+                    gaps.Add(CreateGap(
+                        $"missing-evidence-span-{Hash(fact.FactId, 16)}",
+                        PartialSectionRuleId,
+                        "missing-evidence-span",
+                        "artifact:facts-ndjson",
+                        "evidence-rows",
+                        coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                        "An evidence row did not include a file span, so the explorer rendered the row with partial span metadata.",
+                        [fact.FactId]));
+                }
+
+                var safePath = evidence is null ? null : SafeRepositoryPath(evidence.FilePath, redactions);
                 evidenceRows.Add(new ExplorerEvidenceRow(
                     $"evidence:{Hash(fact.FactId, 24)}",
                     SafeClosedText(fact.RuleId, "rule-id", redactions),
@@ -382,11 +396,11 @@ public static class StaticHtmlEvidenceExplorer
                     "artifact:facts-ndjson",
                     SourceId,
                     safePath,
-                    fact.Evidence.StartLine,
-                    fact.Evidence.EndLine,
-                    SafeSnippetHash(fact.Evidence.SnippetHash, redactions),
+                    evidence?.StartLine,
+                    evidence?.EndLine,
+                    evidence is null ? "n/a" : SafeSnippetHash(evidence.SnippetHash, redactions),
                     coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
-                    SafeClosedText(fact.Evidence.ExtractorVersion, "extractor-version", redactions),
+                    SafeClosedText(evidence?.ExtractorVersion, "extractor-version", redactions),
                     []));
                 RecordOmittedFactProperties(fact, redactions);
 
@@ -696,16 +710,16 @@ public static class StaticHtmlEvidenceExplorer
     {
         var labels = new SortedSet<string>(StringComparer.Ordinal)
         {
-            SafeCoverageLabel(manifest.AnalysisLevel),
-            SafeCoverageLabel(manifest.BuildStatus)
+            SafeCoverageLabel(manifest.AnalysisLevel ?? "UnknownAnalysisLevel"),
+            SafeCoverageLabel(manifest.BuildStatus ?? "UnknownBuildStatus")
         };
-        foreach (var gap in manifest.KnownGaps)
+        foreach (var gap in manifest.KnownGaps ?? [])
         {
             labels.Add(SafeCoverageLabel(gap));
         }
 
-        if (!manifest.AnalysisLevel.Contains("Full", StringComparison.OrdinalIgnoreCase)
-            || !manifest.BuildStatus.Equals("Succeeded", StringComparison.OrdinalIgnoreCase))
+        if (!(manifest.AnalysisLevel ?? string.Empty).Contains("Full", StringComparison.OrdinalIgnoreCase)
+            || !(manifest.BuildStatus ?? string.Empty).Equals("Succeeded", StringComparison.OrdinalIgnoreCase))
         {
             labels.Add("PartialAnalysis");
         }
@@ -815,6 +829,11 @@ public static class StaticHtmlEvidenceExplorer
         CodeFact fact,
         Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions)
     {
+        if (fact.Properties is null)
+        {
+            return;
+        }
+
         foreach (var value in fact.Properties.Values)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -1379,7 +1398,7 @@ public static class StaticHtmlEvidenceExplorer
                 throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: source-map at {path}.");
             }
 
-            if (Regex.IsMatch(content, @"https?://", RegexOptions.CultureInvariant))
+            if (Regex.IsMatch(content, @"https?://", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase))
             {
                 throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: remote-reference at {path}.");
             }
@@ -1413,14 +1432,14 @@ public static class StaticHtmlEvidenceExplorer
                 continue;
             }
 
-            if (hasGeneratedManifest)
+            if (hasGeneratedManifest && force)
             {
                 continue;
             }
 
-            throw new InvalidOperationException(force
-                ? $"UserFileCollision: {UserFileCollisionRuleId} [{Tier4Unknown}]: {relativePath}."
-                : $"GeneratedFileStale: {GeneratedFileStaleRuleId} [{Tier4Unknown}]: {relativePath}.");
+            throw new InvalidOperationException(hasGeneratedManifest
+                ? $"GeneratedFileStale: {GeneratedFileStaleRuleId} [{Tier4Unknown}]: {relativePath}."
+                : $"UserFileCollision: {UserFileCollisionRuleId} [{Tier4Unknown}]: {relativePath}.");
         }
     }
 
@@ -1447,11 +1466,11 @@ public static class StaticHtmlEvidenceExplorer
             return null;
         }
 
-        if (value.Contains("/Users/", StringComparison.Ordinal)
-            || value.Contains("/home/", StringComparison.Ordinal)
-            || value.Contains("/private/", StringComparison.Ordinal)
-            || value.Contains("\\Users\\", StringComparison.Ordinal)
-            || Regex.IsMatch(value, @"[A-Za-z]:\\", RegexOptions.CultureInvariant))
+        if (value.Contains("/Users/", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("/home/", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("/private/", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("\\Users\\", StringComparison.OrdinalIgnoreCase)
+            || Regex.IsMatch(value, @"[A-Za-z]:\\", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase))
         {
             return "local-absolute-path";
         }

@@ -165,7 +165,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output)));
-        Assert.Contains(StaticHtmlEvidenceExplorer.GeneratedFileStaleRuleId, failure.Message);
+        Assert.Contains(StaticHtmlEvidenceExplorer.UserFileCollisionRuleId, failure.Message);
         Assert.DoesNotContain(temp.Path, failure.Message);
     }
 
@@ -184,6 +184,22 @@ public sealed class StaticHtmlEvidenceExplorerTests
             StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output, Force: true)));
         Assert.Contains(StaticHtmlEvidenceExplorer.UserFileCollisionRuleId, failure.Message);
         Assert.DoesNotContain(temp.Path, failure.Message);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_requires_force_for_prior_generated_output()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("5"));
+
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output)));
+        Assert.Contains(StaticHtmlEvidenceExplorer.GeneratedFileStaleRuleId, failure.Message);
     }
 
     [Fact]
@@ -257,6 +273,41 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains("No static evidence rows were found in the provided fact stream under the current coverage.", html);
         Assert.Contains("index.sqlite was not provided", html);
         Assert.Contains("A JSON artifact was discovered but is not supported", html);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_handles_legacy_null_manifest_and_fact_fields_as_gaps()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await File.WriteAllTextAsync(Path.Combine(input, "scan-manifest.json"), """
+            {
+              "scanId": "legacy-scan",
+              "repoName": "example-repo",
+              "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "scannerVersion": "legacy-scanner",
+              "scannedAt": "2026-01-01T00:00:00Z",
+              "analysisLevel": null,
+              "buildStatus": null,
+              "knownGaps": null,
+              "solutions": [],
+              "projects": [],
+              "targetFrameworks": []
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(input, "facts.ndjson"), """
+            {"factId":"legacy-fact","scanId":"legacy-scan","repo":"example-repo","commitSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","factType":"TypeDeclared","ruleId":"csharp.syntax.declarations.v1","evidenceTier":"Tier3SyntaxOrTextual","evidence":null,"properties":null}
+
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Gaps, gap => gap.GapKind == "missing-evidence-span");
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("legacy-fact", await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json")));
+        Assert.Contains("UnknownAnalysisLevel", html);
     }
 
     [Fact]
