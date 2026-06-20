@@ -92,7 +92,7 @@ public static class CombinedSurfaceProjection
     public static IReadOnlyList<CombinedSurfaceProjectionRow> BuildSurfaces(IReadOnlyList<CombinedSurfaceFactInput> facts)
     {
         var legacyDataFactIds = facts
-            .Where(LegacyDataModelDescriptorProjection.IsLegacyDataEvidence)
+            .Where(LegacyDataModelDescriptorProjection.IsTerminalLegacyDataDescriptor)
             .Select(fact => fact.CombinedFactId)
             .ToHashSet(StringComparer.Ordinal);
         return LegacyDataModelDescriptorProjection.BuildDescriptors(facts)

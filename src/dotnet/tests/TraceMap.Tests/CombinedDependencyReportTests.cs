@@ -372,6 +372,7 @@ public sealed class CombinedDependencyReportTests
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
         Assert.Contains("static descriptor evidence only", markdown);
+        Assert.Contains("role conceptual model entity", markdown);
         Assert.Contains("\"legacyDataProjectionRuleId\": \"legacy.data.model.surface.v1\"", json);
         Assert.DoesNotContain(descriptorName, markdown, StringComparison.Ordinal);
         Assert.DoesNotContain(descriptorName, json, StringComparison.Ordinal);
@@ -419,6 +420,60 @@ public sealed class CombinedDependencyReportTests
         Assert.Equal("entity", surface.LegacyDataModelKind);
         Assert.Equal("entity:hash:entity-hash", surface.DisplayName);
         Assert.False(surface.LegacyDataDisplayClearance);
+    }
+
+    [Fact]
+    public void Legacy_data_projection_preserves_legacy_rule_sql_facts_as_sql_surfaces()
+    {
+        var surfaces = CombinedSurfaceProjection.BuildSurfaces([
+            new CombinedSurfaceFactInput(
+                "cf-sql",
+                "src-1",
+                "api",
+                "of-sql",
+                "scan-api",
+                "abc123",
+                FactTypes.SqlTextUsed,
+                RuleIds.LegacyDataTypedDataSet,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                "Models/Orders.xsd",
+                18,
+                18,
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["sqlSourceKind"] = "tableadapter-command",
+                    ["textHash"] = "sql-shape-hash",
+                    ["textLength"] = "42"
+                })
+        ]);
+
+        var surface = Assert.Single(surfaces);
+        Assert.Equal("sql-query", surface.SurfaceKind);
+        Assert.Equal("sql-shape-hash", surface.TextHash);
+        Assert.Null(surface.LegacyDataProjectionRuleId);
+    }
+
+    [Fact]
+    public void Legacy_data_projection_classifies_edmx_msl_from_source_section()
+    {
+        var surfaces = CombinedSurfaceProjection.BuildSurfaces([
+            LegacyDataInput(
+                "cf-msl",
+                "of-msl",
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["descriptorKind"] = "entity-table",
+                    ["displayNameHash"] = "display-hash",
+                    ["metadataFormat"] = "edmx",
+                    ["modelKind"] = "mapping",
+                    ["sourceSection"] = "msl",
+                    ["stableModelKey"] = "ldm:msl"
+                })
+        ]);
+
+        var surface = Assert.Single(surfaces);
+        Assert.Equal("legacy-data", surface.SurfaceKind);
+        Assert.Equal("edmx-msl", surface.LegacyDataSourceArtifactType);
     }
 
     [Fact]
