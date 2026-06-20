@@ -51,6 +51,20 @@ test("validateStakeholderQuestionIndexDist reports route metadata regressions", 
   assert.match(errors.join("\n"), /expected preferredProofPath \/proof-paths\/, got \/validation\//);
 });
 
+test("validateStakeholderQuestionIndexDist rejects route metadata overclaims", async (t) => {
+  const root = await createManagedQuestionIndexDistFixture(t);
+  await rewriteQuestionIndexRoutesIndexEntry(join(root, "dist"), {
+    summary: "TraceMap proves impacted services are safe to release.",
+    limitations: ["TraceMap proves impacted services are safe to release."]
+  });
+  const errors = [];
+
+  await validateStakeholderQuestionIndexDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /routes-index\.json contains forbidden unbounded claim wording: TraceMap proves/);
+  assert.match(errors.join("\n"), /routes-index\.json contains forbidden unbounded claim wording: safe to release/);
+});
+
 test("validateStakeholderQuestionIndexDist reports missing required row fields", async (t) => {
   const root = await createManagedQuestionIndexDistFixture(t, {
     questionHtml: questionIndexPage({
