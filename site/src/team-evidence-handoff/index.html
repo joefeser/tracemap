@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap guide for handing deterministic static evidence to a teammate, reviewer, manager, or agent while preserving proof boundaries."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Team Evidence Handoff | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/team-evidence-handoff/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Team Evidence Handoff">
+    <meta
+      property="og:description"
+      content="Concept guide for sharing a bounded static evidence packet without separating the summary from proof paths, rule context, coverage, limitations, and next owners."
+    >
+    <meta property="og:url" content="https://tracemap.tools/team-evidence-handoff/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Team evidence handoff</p>
+        <h1>Hand a packet to the next receiver without losing the proof boundary.</h1>
+        <p class="hero-subhead">
+          A TraceMap handoff is concept-level language for giving a teammate,
+          reviewer, manager, or agent the same bounded static evidence packet:
+          what the summary says, where the proof path starts, which rule family
+          explains the evidence, how coverage is labeled, and who owns the next
+          action.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+        </p>
+        <nav class="hero-actions" aria-label="Team evidence handoff proof links">
+          <a class="button primary" href="/proof-paths/">Follow proof paths</a>
+          <a class="button secondary" href="/packets/">Read packet guidance</a>
+          <a class="button secondary" href="/limitations/">Check limitations</a>
+        </nav>
+      </section>
+
+      <section class="section callout-section">
+        <h2>A handoff is complete only when the summary, proof path, rule ID/rule family, evidence tier, coverage label, limitations, non-claims, local-only artifacts, and next owner/action travel together.</h2>
+        <p>
+          The summary is a bounded statement of what static evidence supports,
+          not a substitute for proof details. The proof path points to
+          public-safe proof surfaces or private review locations, not private
+          scanner output on the public site.
+        </p>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Handoff fields</p>
+          <h2>Every receiver gets the same proof-bearing field set.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>summary</strong><span>Bounded wording that repeats only what static evidence supports.</span></div>
+          <div><strong>proof path</strong><span>Public-safe route, review note, or private review location that lets the receiver inspect the basis.</span></div>
+          <div><strong>rule ID/rule family</strong><span>The deterministic rule context that explains why the evidence exists and where its documented limits begin.</span></div>
+          <div><strong>evidence tier</strong><span>The confidence boundary, such as semantic, structural, syntax-only, textual, or unknown evidence.</span></div>
+          <div><strong>coverage label</strong><span>The scan or page label that keeps complete, partial, reduced, gap, demo, or concept status visible.</span></div>
+          <div><strong>limitations</strong><span>The proof boundary that prevents the handoff from becoming a stronger claim than the evidence supports.</span></div>
+          <div><strong>non-claims</strong><span>Explicit statements about what the packet is not proving.</span></div>
+          <div><strong>local-only artifacts</strong><span>Private working material that stays local unless a human creates a public-safe summary.</span></div>
+          <div><strong>next owner/action</strong><span>The human owner or review process responsible for the next question.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Receiver patterns</p>
+          <h2>Change the framing, not the evidence fields.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Teammate</h3>
+            <p>Lead with implementation context, nearby code review, and follow-up questions. Keep summary, proof path, rule ID/rule family, evidence tier, coverage label, limitations, non-claims, local-only artifacts, and next owner/action visible.</p>
+          </article>
+          <article>
+            <h3>Reviewer</h3>
+            <p>Lead with proof path, rule family, evidence tier, coverage label, limitations, and review gaps. Keep the same summary, non-claims, local-only artifacts, and next owner/action attached.</p>
+          </article>
+          <article>
+            <h3>Manager</h3>
+            <p>Lead with what can be repeated to stakeholders without overclaiming, what remains a non-claim, and which owner/action is next. Keep proof path, rule context, tier, coverage, and limitations nearby.</p>
+          </article>
+          <article>
+            <h3>Agent</h3>
+            <p>Lead with bounded instructions: preserve the proof path, keep local-only artifacts private, retain explicit non-claims, and return the same field set with the next owner/action named.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Neighbor boundaries</p>
+          <h2>Use this route when one receiver needs the next bounded packet summary.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Packet guide</strong><span>Use <a href="/packets/">/packets/</a> for packet artifact families; use this page for handoff language and receiver context.</span></div>
+          <div><strong>Manager packet</strong><span>Use <a href="/manager-packet/">/manager-packet/</a> for manager-ready summaries; use this page across teammate, reviewer, manager, and agent receivers.</span></div>
+          <div><strong>Review room</strong><span>Use <a href="/review-room/">/review-room/</a> for a shared agenda; use this page for what one person hands to the next receiver.</span></div>
+          <div><strong>Manager FAQ</strong><span>Use <a href="/manager-faq/">/manager-faq/</a> for stakeholder questions; use this page for handoff phrases and fields.</span></div>
+          <div><strong>Proof catalog</strong><span>Use <a href="/proof-source-catalog/">/proof-source-catalog/</a> for proof-source families; use this page to preserve proof boundaries in communication.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-boundary-region>
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>The handoff preserves what is known, partial, missing, and owned next.</h2>
+        </div>
+        <ul>
+          <li>It does not claim runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, autonomous approval, or complete product coverage.</li>
+          <li>It does not replace human ownership, tests, telemetry, release review, code review, source review, logs, traces, incident response, or manager judgment.</li>
+          <li>Local-only artifacts are private working material. Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, credential-like values, or private URLs.</li>
+          <li>Private repository evidence needs private review before any public-safe summary is written.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof and context</p>
+          <h2>Follow the handoff into proof paths, packet guides, and validation boundaries.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/packets/">Evidence packets</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/review-room/">Evidence review room</a>
+          <a href="/manager-faq/">Manager FAQ</a>
+          <a href="/proof-source-catalog/">Proof-source catalog</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/incident-evidence-handoff/">Incident evidence handoff</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Team evidence handoff links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/packets/">evidence packets</a>,
+        <a href="/review-room/">review room</a>,
+        and
+        <a href="/validation/">validation</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
