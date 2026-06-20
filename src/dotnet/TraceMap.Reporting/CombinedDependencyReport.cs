@@ -154,7 +154,8 @@ public sealed record CombinedDependencySurfaceRow(
     IReadOnlyList<string>? LegacyDataLimitations = null,
     IReadOnlyList<string>? LegacyDataRedactions = null,
     bool LegacyDataDisplayClearance = false,
-    string? LegacyDataClaimLevelContextId = null);
+    string? LegacyDataClaimLevelContextId = null,
+    string? LegacyDataExtractorVersion = null);
 
 public sealed record CombinedDependencyEdgeRow(
     string EdgeKind,
@@ -293,7 +294,7 @@ public static class CombinedDependencyReporter
 
         var read = await ReadAsync(connection, cancellationToken);
         var endpointFindings = MatchEndpoints(read.Sources, read.Facts);
-        var surfaces = BuildSurfaces(read.Facts);
+        var surfaces = BuildSurfaces(read.Facts, read.Sources);
         var dependencyEdges = read.Edges.Concat(BuildMessageCandidateEdges(surfaces)).ToArray();
         var needsReview = BuildNeedsReview(endpointFindings, read.Facts);
         var warnings = read.CoverageWarnings
@@ -840,9 +841,11 @@ public static class CombinedDependencyReporter
             notes);
     }
 
-    internal static IReadOnlyList<CombinedDependencySurfaceRow> BuildSurfaces(IReadOnlyList<CombinedFactRow> facts)
+    internal static IReadOnlyList<CombinedDependencySurfaceRow> BuildSurfaces(IReadOnlyList<CombinedFactRow> facts, IReadOnlyList<CombinedReportSource>? sources = null)
     {
-        return CombinedSurfaceProjection.BuildSurfaces(facts.Select(ToSurfaceProjectionInput).ToArray())
+        var extractorVersionsBySource = sources?.ToDictionary(source => source.SourceIndexId, source => source.ScannerVersion, StringComparer.Ordinal)
+            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        return CombinedSurfaceProjection.BuildSurfaces(facts.Select(fact => ToSurfaceProjectionInput(fact, extractorVersionsBySource.GetValueOrDefault(fact.SourceIndexId))).ToArray())
             .Select(ToSurfaceRow)
             .OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ThenBy(surface => surface.SourceLabel, StringComparer.Ordinal)
@@ -852,7 +855,7 @@ public static class CombinedDependencyReporter
             .ToArray();
     }
 
-    private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact)
+    private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact, string? extractorVersion = null)
     {
         return new CombinedSurfaceFactInput(
             fact.CombinedFactId,
@@ -867,7 +870,8 @@ public static class CombinedDependencyReporter
             fact.FilePath,
             fact.StartLine,
             fact.EndLine,
-            fact.Properties);
+            fact.Properties,
+            extractorVersion);
     }
 
     private static CombinedDependencySurfaceRow ToSurfaceRow(CombinedSurfaceProjectionRow surface)
@@ -938,7 +942,8 @@ public static class CombinedDependencyReporter
             surface.LegacyDataLimitations,
             surface.LegacyDataRedactions,
             surface.LegacyDataDisplayClearance,
-            surface.LegacyDataClaimLevelContextId);
+            surface.LegacyDataClaimLevelContextId,
+            surface.LegacyDataExtractorVersion);
     }
 
     private static IReadOnlyList<CombinedNeedsReviewRow> BuildNeedsReview(IReadOnlyList<CombinedEndpointFinding> endpointFindings, IReadOnlyList<CombinedFactRow> facts)
@@ -1225,7 +1230,7 @@ public static class CombinedDependencyReporter
             "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" =>
                 $"framework {surface.FrameworkFamily ?? "unknown"} direction {surface.OperationDirection ?? "unknown"} operation {surface.OperationKind ?? "unknown"} identity {surface.DestinationIdentityStatus ?? "unknown"} destination {surface.NormalizedDestinationKey ?? ShortHash(surface.DestinationHash) ?? "n/a"} caveat static-only",
             "legacy-data" =>
-                $"descriptor {surface.LegacyDataDescriptorId ?? "unknown"} format {surface.LegacyDataMetadataFormat ?? "unknown"} role {surface.LegacyDataDescriptorRole ?? "unknown"} model {surface.LegacyDataModelKind ?? "unknown"} displayClearance {surface.LegacyDataDisplayClearance.ToString().ToLowerInvariant()} coverage {surface.LegacyDataCoverageLabel ?? "unknown"} projectionRule {surface.LegacyDataProjectionRuleId ?? "n/a"} limitations {Joined(surface.LegacyDataLimitations)}",
+                $"descriptor {surface.LegacyDataDescriptorId ?? "unknown"} format {surface.LegacyDataMetadataFormat ?? "unknown"} role {surface.LegacyDataDescriptorRole ?? "unknown"} model {surface.LegacyDataModelKind ?? "unknown"} displayClearance {surface.LegacyDataDisplayClearance.ToString().ToLowerInvariant()} coverage {surface.LegacyDataCoverageLabel ?? "unknown"} extractor {surface.LegacyDataExtractorVersion ?? "n/a"} projectionRule {surface.LegacyDataProjectionRuleId ?? "n/a"} limitations {Joined(surface.LegacyDataLimitations)}",
             _ => string.Empty
         };
     }
