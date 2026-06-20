@@ -169,9 +169,9 @@ Acceptance criteria:
   `/review-claim-checklist/`, `/proof-source-catalog/`, and `/docs/`. The
   glossary route itself does not yet exist at spec-review time. Additional
   routes also present at spec-review time include `/review-room/`,
-  `/manager-faq/`, `/static-vs-runtime/`, `/adoption/`, `/use-cases/`,
-  `/workflows/`, and `/packets/`; these may be linked when relevant to glossary
-  vocabulary.
+  `/manager-faq/`, `/static-vs-runtime/`, `/adoption/`,
+  `/use-cases/incident-review/`, `/use-cases/endpoint-review/`, `/workflows/`,
+  and `/packets/`; these may be linked when relevant to glossary vocabulary.
 - At minimum, the glossary must link to the canonical vocabulary and boundary
   surfaces it reconciles against: `/evidence/`, `/proof-paths/`,
   `/proof-source-catalog/`, and `/limitations/`. These are required links, and
@@ -214,9 +214,11 @@ Acceptance criteria:
   `concept` is an accepted `publicClaimLevel` value in discovery and validation
   tooling, and records the result in `implementation-state.md`.
 - Sitemap metadata includes the route if a standalone route is chosen.
-- Page-level metadata carries the `concept` claim-level signal so discovery
-  tools and automated reviewers do not classify the glossary as a shipped
-  capability page.
+- Standalone page-level metadata carries the `concept` claim-level signal so
+  discovery tools and automated reviewers do not classify the glossary as a
+  shipped capability page. If the glossary is folded into an existing route,
+  the containing page's route metadata keeps its existing claim level unless
+  the whole containing page is intentionally reclassified.
 - Validation checks confirm the route or section renders, includes
   `Public claim level: concept`, includes
   `No public conclusion without evidence`, includes every required term, and
