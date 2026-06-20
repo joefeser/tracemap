@@ -463,6 +463,200 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_adds_dbml_relationship_semantics_and_duplicate_gaps()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.dbml"), """
+            <Database Name="Store" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers">
+                <Type Name="Customer">
+                  <Column Name="CustomerId" Member="CustomerId" />
+                  <Association Name="CustomerOrders" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" IsForeignKey="true" />
+                  <Association Name="DuplicateRelation" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+                  <Association Name="DuplicateRelation" ThisKey="CustomerId" OtherKey="CustomerId" />
+                </Type>
+              </Table>
+            </Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var association = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("associationName") == "CustomerOrders");
+        Assert.Equal("association", association.Properties.GetValueOrDefault("mappingKind"));
+        Assert.Equal("relationship", association.Properties.GetValueOrDefault("modelRelationshipKind"));
+        Assert.Equal(RuleIds.LegacyDataModelRelationship, association.Properties.GetValueOrDefault("modelRelationshipRuleId"));
+        Assert.Equal(EvidenceTiers.Tier2Structural, association.Properties.GetValueOrDefault("modelRelationshipEvidenceTier"));
+        Assert.Equal("Customer", association.Properties.GetValueOrDefault("sourceEndpointName"));
+        Assert.Equal("Order", association.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.Equal("full", association.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.False(string.IsNullOrWhiteSpace(association.Properties.GetValueOrDefault("supportingFactIds")));
+
+        var duplicateWithoutTarget = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("associationName") == "DuplicateRelation"
+            && fact.Properties.GetValueOrDefault("relationshipEndpointCoverage") == "unidirectional");
+        Assert.Equal("reduced", duplicateWithoutTarget.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Contains("missing-target-endpoint", duplicateWithoutTarget.Properties.GetValueOrDefault("limitations"));
+        Assert.Contains("duplicate-relationship-name", duplicateWithoutTarget.Properties.GetValueOrDefault("limitations"));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity");
+    }
+
+    [Fact]
+    public void Scan_adds_edmx_relationship_semantics_and_ambiguous_gaps()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.edmx"), """
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer">
+                      <EntitySet Name="Customers" EntityType="Model.Customer" />
+                      <EntitySet Name="Orders" EntityType="Model.Order" />
+                    </EntityContainer>
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                    <EntityType Name="Order"><Property Name="OrderId" Type="Int32" /></EntityType>
+                    <EntityType Name="PreferredCustomer" BaseType="Model.Customer"><Property Name="LoyaltyId" Type="Int32" /></EntityType>
+                    <Association Name="CustomerOrders">
+                      <End Role="Customer" Type="Model.Customer" Multiplicity="1" />
+                      <End Role="Orders" Type="Model.Order" Multiplicity="*" />
+                    </Association>
+                    <Association Name="MissingTypeAssociation">
+                      <End Role="Customer" Type="Model.Customer" />
+                      <End Role="UnknownOrder" />
+                    </Association>
+                    <Association Name="AmbiguousAssociation">
+                      <End Role="OnlyOne" Type="Model.Customer" />
+                    </Association>
+                  </Schema>
+                </edmx:ConceptualModels>
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer">
+                      <EntitySet Name="Customers" EntityType="Store.Customers" Table="Customers" />
+                      <EntitySet Name="Orders" EntityType="Store.Orders" Table="Orders" />
+                      <EntitySet Name="FK_CustomerOrders" EntityType="Store.FK_CustomerOrders" Table="FK_CustomerOrders" />
+                    </EntityContainer>
+                    <EntityType Name="Customers"><Property Name="CustomerId" Type="int" /></EntityType>
+                    <EntityType Name="Orders"><Property Name="OrderId" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <AssociationSetMapping Name="CustomerOrders" TypeName="Model.CustomerOrders" StoreEntitySet="FK_CustomerOrders">
+                        <EndProperty Name="Customer"><ScalarProperty Name="CustomerId" ColumnName="CustomerId" /></EndProperty>
+                        <EndProperty Name="Orders"><ScalarProperty Name="OrderId" ColumnName="OrderId" /></EndProperty>
+                      </AssociationSetMapping>
+                      <AssociationSetMapping Name="BrokenAssociation" TypeName="Model.Broken" StoreEntitySet="FK_Broken">
+                        <EndProperty Name="OnlyOne" />
+                      </AssociationSetMapping>
+                      <AssociationSetMapping Name="DuplicateRoleAssociation" TypeName="Model.Duplicate" StoreEntitySet="FK_Duplicate">
+                        <EndProperty Name="Customer" />
+                        <EndProperty Name="Customer" />
+                      </AssociationSetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var csdlAssociation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "csdl-association"
+            && fact.Properties.GetValueOrDefault("associationName") == "CustomerOrders");
+        Assert.Equal("association", csdlAssociation.Properties.GetValueOrDefault("mappingKind"));
+        Assert.Equal("relationship", csdlAssociation.Properties.GetValueOrDefault("modelRelationshipKind"));
+        Assert.Equal("Customer", csdlAssociation.Properties.GetValueOrDefault("sourceEndpointName"));
+        Assert.Equal("Order", csdlAssociation.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.Equal("full", csdlAssociation.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+
+        var missingTypeAssociation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "csdl-association"
+            && fact.Properties.GetValueOrDefault("associationName") == "MissingTypeAssociation");
+        Assert.Equal("unidirectional", missingTypeAssociation.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("reduced", missingTypeAssociation.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Contains("missing-endpoint-type", missingTypeAssociation.Properties.GetValueOrDefault("limitations"));
+
+        var mslAssociation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "msl-association"
+            && fact.Properties.GetValueOrDefault("associationName") == "CustomerOrders");
+        Assert.Equal("MSL", mslAssociation.Properties.GetValueOrDefault("sourceSection"));
+        Assert.Equal("relationship", mslAssociation.Properties.GetValueOrDefault("modelRelationshipKind"));
+        Assert.Equal("FK_CustomerOrders", mslAssociation.Properties.GetValueOrDefault("containerName"));
+
+        Assert.Equal(3, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape");
+    }
+
+    [Fact]
+    public void Scan_adds_typed_dataset_relation_and_constraint_relationship_semantics()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Orders.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop"
+                       xmlns:mstns="urn:store">
+              <xs:element name="OrdersDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="OrdersDataSet">
+                <xs:complexType>
+                  <xs:choice maxOccurs="unbounded">
+                    <xs:element name="Customers" msprop:Generator_UserTableName="Customers" msprop:Generator_RowClassName="CustomersRow">
+                      <xs:complexType><xs:sequence><xs:element name="CustomerId" type="xs:int" /></xs:sequence></xs:complexType>
+                    </xs:element>
+                    <xs:element name="Orders" msprop:Generator_UserTableName="Orders" msprop:Generator_RowClassName="OrdersRow">
+                      <xs:complexType><xs:sequence><xs:element name="CustomerId" type="xs:int" /></xs:sequence></xs:complexType>
+                    </xs:element>
+                  </xs:choice>
+                </xs:complexType>
+              </xs:element>
+              <xs:key name="CustomersKey"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:key>
+              <xs:keyref name="CustomerOrdersConstraint" refer="mstns:CustomersKey">
+                <xs:selector xpath=".//mstns:Orders" />
+                <xs:field xpath="mstns:CustomerId" />
+              </xs:keyref>
+              <xs:annotation><xs:appinfo><msdata:Relationship name="CustomerOrders" parent="Customers" child="Orders" /></xs:appinfo></xs:annotation>
+            </xs:schema>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var relation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "relation"
+            && fact.Properties.GetValueOrDefault("relationName") == "CustomerOrders");
+        Assert.Equal("relation", relation.Properties.GetValueOrDefault("mappingKind"));
+        Assert.Equal("relationship", relation.Properties.GetValueOrDefault("modelRelationshipKind"));
+        Assert.Equal("Customers", relation.Properties.GetValueOrDefault("sourceEndpointName"));
+        Assert.Equal("Orders", relation.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.Equal("full", relation.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+
+        var constraint = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "constraint-relation"
+            && fact.Properties.GetValueOrDefault("relationName") == "CustomerOrdersConstraint");
+        Assert.Equal("relation", constraint.Properties.GetValueOrDefault("mappingKind"));
+        Assert.Equal("relationship", constraint.Properties.GetValueOrDefault("modelRelationshipKind"));
+        Assert.Equal("Customers", constraint.Properties.GetValueOrDefault("sourceEndpointName"));
+        Assert.Equal("Orders", constraint.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.Equal("full", constraint.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+    }
+
+    [Fact]
     public void Scan_keeps_duplicate_display_names_distinct_by_format_and_source()
     {
         using var temp = new TempDirectory();
