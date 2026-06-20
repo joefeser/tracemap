@@ -339,6 +339,89 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_projects_legacy_data_descriptors_with_hash_only_display_and_analysis_gap_exclusion()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        const string descriptorName = "Customer|Ledger";
+
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            LegacyDataEntityFact(manifest, descriptorName, "Models/Store.dbml", 12),
+            LegacyDataGapFact(manifest, "Models/Store.dbml", 20)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["api"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces, row => row.SurfaceKind == "legacy-data");
+        Assert.Equal(RuleIds.LegacyDataDbml, surface.RuleId);
+        Assert.Equal(RuleIds.LegacyDataModelSurface, surface.LegacyDataProjectionRuleId);
+        Assert.Equal("dbml", surface.LegacyDataMetadataFormat);
+        Assert.Equal("entity", surface.LegacyDataModelKind);
+        Assert.Equal("conceptual", surface.LegacyDataDescriptorRole);
+        Assert.Equal("reduced", surface.LegacyDataCoverageLabel);
+        Assert.False(surface.LegacyDataDisplayClearance);
+        Assert.StartsWith("entity:hash:", surface.DisplayName, StringComparison.Ordinal);
+        Assert.DoesNotContain(descriptorName, surface.DisplayName, StringComparison.Ordinal);
+        Assert.Contains("descriptor-display-hash-only-without-claim-context", surface.LegacyDataLimitations ?? []);
+        Assert.Contains(result.Report.NeedsReview, row => row.RuleId == RuleIds.LegacyDataDbml && row.ReviewKind == FactTypes.AnalysisGap);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
+        Assert.Contains("static descriptor evidence only", markdown);
+        Assert.Contains("\"legacyDataProjectionRuleId\": \"legacy.data.model.surface.v1\"", json);
+        Assert.DoesNotContain(descriptorName, markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain(descriptorName, json, StringComparison.Ordinal);
+        Assert.DoesNotContain("runtime database use", surface.DisplayName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Legacy_data_projection_flags_duplicate_descriptor_identity()
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["descriptorRole"] = "conceptual",
+            ["displayNameHash"] = "display-hash",
+            ["metadataFormat"] = "dbml",
+            ["modelKind"] = "entity",
+            ["stableModelKey"] = "ldm:duplicate"
+        };
+
+        var surfaces = CombinedSurfaceProjection.BuildSurfaces([
+            LegacyDataInput("cf-1", "of-1", properties),
+            LegacyDataInput("cf-2", "of-2", properties)
+        ]);
+
+        Assert.Equal(2, surfaces.Count);
+        Assert.All(surfaces, surface => Assert.Contains("duplicate-stable-identity", surface.LegacyDataLimitations ?? []));
+    }
+
+    [Fact]
+    public void Legacy_data_projection_falls_back_when_model_identity_fields_are_absent()
+    {
+        var surfaces = CombinedSurfaceProjection.BuildSurfaces([
+            LegacyDataInput(
+                "cf-current",
+                "of-current",
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["entityHash"] = "entity-hash",
+                    ["metadataKind"] = "Dbml"
+                })
+        ]);
+
+        var surface = Assert.Single(surfaces);
+        Assert.Equal("legacy-data", surface.SurfaceKind);
+        Assert.Equal("dbml", surface.LegacyDataMetadataFormat);
+        Assert.Equal("entity", surface.LegacyDataModelKind);
+        Assert.Equal("entity:hash:entity-hash", surface.DisplayName);
+        Assert.False(surface.LegacyDataDisplayClearance);
+    }
+
+    [Fact]
     public async Task Report_includes_same_source_endpoint_matches_and_directory_row_caps()
     {
         using var temp = new TempDirectory();
@@ -665,6 +748,64 @@ public sealed class CombinedDependencyReportTests
                 ["surfaceKind"] = "package-config",
                 ["version"] = "1.0.0"
             });
+    }
+
+    private static CodeFact LegacyDataEntityFact(ScanManifest manifest, string displayName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: displayName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced",
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = displayName,
+                ["metadataFormat"] = "dbml",
+                ["metadataHash"] = "metadata-hash",
+                ["metadataKind"] = "Dbml",
+                ["modelKind"] = "entity",
+                ["sourceMetadataFactId"] = "metadata-fact-1",
+                ["stableModelKey"] = "ldm:test-model-key",
+                ["supportingFactIds"] = "metadata-fact-1"
+            });
+    }
+
+    private static CodeFact LegacyDataGapFact(ScanManifest manifest, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: "Legacy data descriptor gap requires review.",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = "AmbiguousLegacyDataModelIdentity",
+                ["metadataFormat"] = "dbml"
+            });
+    }
+
+    private static CombinedSurfaceFactInput LegacyDataInput(string combinedFactId, string originalFactId, IReadOnlyDictionary<string, string> properties)
+    {
+        return new CombinedSurfaceFactInput(
+            combinedFactId,
+            "src-1",
+            "api",
+            originalFactId,
+            "scan-api",
+            "abc123",
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier2Structural,
+            "Models/Store.dbml",
+            12,
+            12,
+            properties);
     }
 
     private static async Task<long> CountAsync(string sqlitePath, string table)
