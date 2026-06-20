@@ -94,14 +94,14 @@
   - [ ] Test `fact:<combinedFactId>` as a strong disambiguator for a generic
     property name.
   - [ ] Test a Razor form target with no matching action/handler, proving
-    `ModelBindingUnavailable` or equivalent gap output.
+    `EndpointAlignmentUnavailable` or equivalent gap output.
   - [ ] Test a `[FromBody]` or `[FromForm]` parameter fact without a Razor form
     target referencing the action, proving `PropertyIdentityUnavailable` or
     equivalent gap output for the form root.
   - [ ] Test a combined index where `combined_route_flow_edges` is present but
     empty, proving route-flow-specific traversal remains unavailable.
   - [ ] Test `model:<type>.<property>` where the type is present but no property
-    facts exist, proving `PropertyIdentityUnavailable` or equivalent gap output.
+    facts exist, proving `SelectorNoMatch` or equivalent gap output.
   - [ ] Test byte stability for a combined index containing model-binding target
     facts and the new node/edge shapes.
   - [ ] Test high fan-out at 9 candidates and 10 candidates, proving the v1
