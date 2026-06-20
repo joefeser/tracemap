@@ -103,6 +103,17 @@ test("validateStakeholderQuestionIndexDist rejects direct raw-artifact proof lin
   assert.match(errors.join("\n"), /links directly to forbidden proof target: \/facts\.ndjson/);
 });
 
+test("validateStakeholderQuestionIndexDist rejects unbounded raw artifact text", async (t) => {
+  const root = await createManagedQuestionIndexDistFixture(t, {
+    questionHtml: questionIndexPage({ extra: "<p>Publish facts.ndjson as proof.</p>" })
+  });
+  const errors = [];
+
+  await validateStakeholderQuestionIndexDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden raw artifact text outside a limitation or non-claim: facts\.ndjson/);
+});
+
 async function createManagedQuestionIndexDistFixture(t, options = {}) {
   const root = await createQuestionIndexDistFixture(options);
   t.after(() => rm(root, { recursive: true, force: true }));
