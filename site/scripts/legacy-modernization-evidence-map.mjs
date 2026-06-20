@@ -55,7 +55,7 @@ const requiredLinks = [
 const hardLeakChecks = [
   {
     id: "local-absolute-path",
-    pattern: /(?:^|[\s"'(=])(?:\/Users\/|\/home\/|\/tmp\/|\/var\/folders\/|\/private\/var\/|[A-Z]:\\)[^\s<>"')]+/gi
+    pattern: /(?:^|[\s"'(=])(?:\/Users\/|\/home\/|\/tmp\/|\/var\/folders\/|\/private\/var\/|[A-Za-z]:[\\/])[^\s<>"')]+/gi
   },
   {
     id: "generated-output-root",
@@ -127,6 +127,7 @@ export function validateLegacyModernizationEvidenceMapHtml(
 ) {
   const errors = [];
   const text = normalizeRenderedContent(decodeHtmlEntities(stripTags(html)));
+  const tightText = normalizeRenderedContent(decodeHtmlEntities(stripTagsTight(html)));
   const raw = normalizeRenderedContent(decodeHtmlEntities(html));
 
   if (!/<title>Legacy Modernization Evidence Map \| TraceMap<\/title>/i.test(html)) {
@@ -188,7 +189,7 @@ export function validateLegacyModernizationEvidenceMapHtml(
   }
 
   for (const check of hardLeakChecks) {
-    const match = raw.match(check.pattern)?.[0] ?? text.match(check.pattern)?.[0];
+    const match = raw.match(check.pattern)?.[0] ?? text.match(check.pattern)?.[0] ?? tightText.match(check.pattern)?.[0];
     if (match) {
       errors.push(`${label} contains forbidden ${check.id}: ${trimEvidence(match)}`);
     }
@@ -209,8 +210,9 @@ function getAttribute(tag, name) {
 }
 
 function sliceRowHtml(html, rowStart) {
-  const end = html.indexOf("</tr>", rowStart);
-  return end === -1 ? html.slice(rowStart) : html.slice(rowStart, end + "</tr>".length);
+  const rest = html.slice(rowStart);
+  const end = rest.search(/<\/tr\s*>/i);
+  return end === -1 ? rest : rest.slice(0, end + rest.slice(end).match(/^<\/tr\s*>/i)[0].length);
 }
 
 function normalizeRenderedContent(value) {
@@ -222,9 +224,18 @@ function normalizeRenderedContent(value) {
 }
 
 function stripTags(html) {
+  return stripTagsWithSeparator(html, " ");
+}
+
+function stripTagsTight(html) {
+  return stripTagsWithSeparator(html, "");
+}
+
+function stripTagsWithSeparator(html, separator) {
   let text = "";
   let insideTag = false;
   let quote = "";
+  let afterEquals = false;
 
   for (const char of html) {
     if (insideTag) {
@@ -235,14 +246,26 @@ function stripTags(html) {
         continue;
       }
 
-      if (char === '"' || char === "'") {
+      if ((char === '"' || char === "'") && afterEquals) {
         quote = char;
+        afterEquals = false;
         continue;
       }
 
       if (char === ">") {
         insideTag = false;
-        text += " ";
+        afterEquals = false;
+        text += separator;
+        continue;
+      }
+
+      if (char === "=") {
+        afterEquals = true;
+        continue;
+      }
+
+      if (!/\s/.test(char)) {
+        afterEquals = false;
       }
 
       continue;
@@ -250,7 +273,8 @@ function stripTags(html) {
 
     if (char === "<") {
       insideTag = true;
-      text += " ";
+      afterEquals = false;
+      text += separator;
       continue;
     }
 
@@ -267,6 +291,7 @@ function decodeHtmlEntities(value) {
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
     .replace(/&#39;/g, "'")
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, decimal) => String.fromCodePoint(Number.parseInt(decimal, 10)));
