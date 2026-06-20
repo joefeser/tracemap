@@ -206,7 +206,7 @@ descriptor name.
 
 ## Stable Identity
 
-Stable IDs use a versioned hash input:
+Row/provenance stable IDs use a versioned hash input:
 
 ```text
 legacy-data-model-reporting/v1
@@ -238,6 +238,15 @@ rather than being omitted, so partially populated gap rows produce different
 stable IDs from fully populated descriptor rows sharing the same source rule.
 `sourceIndexId` is mandatory for gap rows even when the broader source stable
 identity is otherwise unavailable.
+
+Cross-snapshot descriptor identity keys used for diff matching are separate
+from row/provenance IDs. They must not include commit SHA, commit SHA display
+category, scan ID, extractor version, profile-specific display clearance, or
+supporting fact IDs. Descriptor diff keys should use source stable identity,
+source rule ID, metadata format, descriptor role, stable model key or safe/hash
+descriptor key, source artifact type, and repo-relative file path or path hash
+where those fields are part of the descriptor's static identity. A
+row/provenance ID must not be reused as a before/after descriptor match key.
 
 Do not include local absolute paths, raw remotes, timestamps, random values,
 SQLite row order, raw SQL, connection strings, config values, unsafe descriptor
