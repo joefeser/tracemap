@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
 using TraceMap.Combine;
@@ -110,6 +111,7 @@ public sealed class CombinedRouteFlowTests
             Assert.NotEmpty(row.SupportingRowIds);
             Assert.NotEmpty(row.RuleIds);
             Assert.NotEmpty(row.EvidenceTiers);
+            Assert.False(string.IsNullOrWhiteSpace(row.CommitSha));
             Assert.False(string.IsNullOrWhiteSpace(row.DisplayName));
         });
         var sqlSurface = parsed.DependencySurfaces.Single(surface => surface.SurfaceKind == "sql-query");
@@ -149,6 +151,32 @@ public sealed class CombinedRouteFlowTests
             ToSurface: "sql-query"));
         Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "route-flow-report.md")));
         Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "route-flow-report.json")));
+    }
+
+    [Fact]
+    public async Task Route_flow_markdown_renderer_treats_missing_additive_touched_lists_as_empty()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp);
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var json = JsonSerializer.Serialize(result.Report, CombinedDependencyReporter.JsonOptions);
+        var node = JsonNode.Parse(json)!.AsObject();
+        node.Remove("touchedFiles");
+        node.Remove("touchedSymbols");
+        var oldReport = JsonSerializer.Deserialize<RouteFlowReport>(node.ToJsonString(), CombinedDependencyReporter.JsonOptions);
+
+        var render = typeof(CombinedRouteFlowReporter).GetMethod("RenderMarkdown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(render);
+        var markdown = Assert.IsType<string>(render!.Invoke(null, [oldReport!]));
+
+        Assert.Contains("- Touched files: `0`", markdown);
+        Assert.Contains("- Touched symbols: `0`", markdown);
+        Assert.Contains("## Touched Files", markdown);
+        Assert.Contains("## Touched Symbols", markdown);
     }
 
     [Fact]

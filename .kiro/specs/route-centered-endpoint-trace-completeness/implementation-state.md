@@ -225,6 +225,24 @@
   CombinedRouteFlowTests`, `dotnet test src/dotnet/TraceMap.sln`, the
   public-demo combine/route-flow smoke, `./scripts/check-private-paths.sh`, and
   `git diff --check` passed.
+- Second implementation PR-loop run result: `actionable_findings`, stop reason
+  `UNRESOLVED_REVIEW_THREADS`, canMerge `false`.
+- Findings:
+  - Qodo: touched-symbol summaries lacked a top-level `commitSha`.
+  - Qodo: additive `touchedFiles`/`touchedSymbols` fields could be `null` when
+    deserializing older `route-flow-report.json` artifacts, and Markdown
+    rendering dereferenced them directly.
+- Disposition:
+  - Added top-level `CommitSha` to `RouteFlowTouchedSymbol` while continuing to
+    emit evidence-level commit SHA.
+  - Made Markdown rendering coalesce missing additive touched collections to
+    empty lists for older JSON-derived report objects.
+  - Added a regression test that removes the additive fields from serialized
+    route-flow JSON and verifies Markdown rendering treats them as empty.
+- Follow-up validation after Qodo patch: focused route-flow tests passed with
+  23 tests, full solution tests passed with 555 tests, public-demo
+  combine/route-flow smoke passed, smoke-output sentinel passed,
+  `./scripts/check-private-paths.sh` passed, and `git diff --check` passed.
 
 - First run command:
   `agent-control pr-loop --repo joefeser/tracemap --pr 233 --base dev --require-codex-review --json`

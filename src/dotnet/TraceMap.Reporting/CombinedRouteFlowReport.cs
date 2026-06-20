@@ -178,6 +178,7 @@ public sealed record RouteFlowTouchedFile(
 public sealed record RouteFlowTouchedSymbol(
     string SymbolId,
     string SourceLabel,
+    string? CommitSha,
     string? FilePath,
     int? StartLine,
     int? EndLine,
@@ -2274,6 +2275,7 @@ public static class CombinedRouteFlowReporter
                 return new RouteFlowTouchedSymbol(
                     symbolIdentity,
                     first.SourceLabel,
+                    first.CommitSha,
                     first.FilePath,
                     firstStartLine,
                     lastEndLine,
@@ -3248,6 +3250,8 @@ public static class CombinedRouteFlowReporter
 
     private static string RenderMarkdown(RouteFlowReport report)
     {
+        IReadOnlyList<RouteFlowTouchedFile> touchedFiles = report.TouchedFiles ?? [];
+        IReadOnlyList<RouteFlowTouchedSymbol> touchedSymbols = report.TouchedSymbols ?? [];
         var builder = new StringBuilder();
         builder.AppendLine("# TraceMap Route Flow Report");
         builder.AppendLine();
@@ -3260,8 +3264,8 @@ public static class CombinedRouteFlowReporter
         builder.AppendLine($"- Static flow rows: `{report.Summary.FlowRowCount}`");
         builder.AppendLine($"- Business/data logic rows: `{report.Summary.LogicRowCount}`");
         builder.AppendLine($"- Dependency surfaces: `{report.Summary.DependencySurfaceCount}`");
-        builder.AppendLine($"- Touched files: `{report.TouchedFiles.Count}`");
-        builder.AppendLine($"- Touched symbols: `{report.TouchedSymbols.Count}`");
+        builder.AppendLine($"- Touched files: `{touchedFiles.Count}`");
+        builder.AppendLine($"- Touched symbols: `{touchedSymbols.Count}`");
         builder.AppendLine($"- Gaps: `{report.Summary.GapCount}`");
         builder.AppendLine($"- Exit code would be non-zero: `{report.Summary.ExitCodeWouldBeNonZero}`");
         AppendList(builder, "Classification reasons", report.Summary.ClassificationReasons);
@@ -3310,12 +3314,12 @@ public static class CombinedRouteFlowReporter
 
         builder.AppendLine("## Touched Files");
         builder.AppendLine();
-        AppendRows(builder, report.TouchedFiles, "| Source | File | Lines | Classification | Coverage | Supporting rows | Evidence |", "| --- | --- | --- | --- | --- | --- | --- |",
+        AppendRows(builder, touchedFiles, "| Source | File | Lines | Classification | Coverage | Supporting rows | Evidence |", "| --- | --- | --- | --- | --- | --- | --- |",
             row => $"| {Cell(row.SourceLabel)} | {Cell(row.FilePath)} | {Cell(LineSpan(row.FirstStartLine, row.LastEndLine))} | {Cell(row.Classification)} | {Cell(row.Coverage)} | {Cell(string.Join(", ", row.SupportingRowIds))} | {Cell(Evidence(row.Evidence))} |");
 
         builder.AppendLine("## Touched Symbols");
         builder.AppendLine();
-        AppendRows(builder, report.TouchedSymbols, "| Source | Symbol | Kind | File | Lines | Classification | Coverage | Supporting rows | Evidence |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        AppendRows(builder, touchedSymbols, "| Source | Symbol | Kind | File | Lines | Classification | Coverage | Supporting rows | Evidence |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
             row => $"| {Cell(row.SourceLabel)} | {Cell(row.DisplayName)} | {Cell(row.SymbolKind)} | {Cell(row.FilePath ?? "n/a")} | {Cell(LineSpan(row.StartLine, row.EndLine))} | {Cell(row.Classification)} | {Cell(row.Coverage)} | {Cell(string.Join(", ", row.SupportingRowIds))} | {Cell(Evidence(row.Evidence))} |");
 
         builder.AppendLine("## Gaps");
