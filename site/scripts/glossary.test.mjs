@@ -115,6 +115,17 @@ test("validateGlossaryDist rejects forbidden material hidden behind data-id sanc
   assert.match(errors.join("\n"), /forbidden private\/raw material outside sanctioned sections: facts\.ndjson/);
 });
 
+test("validateGlossaryDist rejects hard private material inside sanctioned sections", async (t) => {
+  const machinePath = ["/", "Users", "/private-workspace"].join("");
+  const glossaryHtml = (await sourceGlossaryPage()).replace("raw artifact publication:", `raw artifact publication: ${machinePath}`);
+  const root = await createManagedGlossaryDistFixture(t, { glossaryHtml });
+  const errors = [];
+
+  await validateGlossaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private\/raw material: \/Users\//);
+});
+
 test("validateGlossaryDist rejects missing required public-safe links", async (t) => {
   const glossaryHtml = (await sourceGlossaryPage()).replaceAll('href="/proof-source-catalog/"', 'href="/proof-source-catalog-missing/"');
   const root = await createManagedGlossaryDistFixture(t, { glossaryHtml });

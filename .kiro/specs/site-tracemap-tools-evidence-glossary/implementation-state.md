@@ -131,6 +131,12 @@ discovery validator with rationale.
   Patched the glossary helper regexes to require whitespace-delimited
   attributes and added regression tests for `data-href`, `data-id`, and
   sanctioned-section lookalikes.
+- PR #242 review loop then surfaced a fresh Codex thread requiring hard
+  private-value checks across the whole page instead of stripping sanctioned
+  sections first. Patched the validator to scan local paths, remotes,
+  connection strings, and credential-like tokens against the full decoded page
+  while keeping raw-artifact family vocabulary scoped to sanctioned boundary
+  sections.
 
 ## Implementation Summary
 
@@ -151,8 +157,8 @@ discovery validator with rationale.
 
 Implementation validation passed on 2026-06-20:
 
-- `npm test` from `site/`: passed, 248 tests after the metadata-order and
-  attribute-boundary review fixes.
+- `npm test` from `site/`: passed, 249 tests after the metadata-order,
+  attribute-boundary, and hard-private review fixes.
 - `npm run validate` from `site/`: passed, generated 48 HTML files, checked
   1543 internal references, 47 sitemap URLs, 1 legacy story safety target, and
   13 legacy modernization evidence-map rows.

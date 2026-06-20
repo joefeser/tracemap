@@ -95,7 +95,7 @@ const forbiddenAffirmativePositioning = [
   { label: "unsupported impacted wording", pattern: /\b(?:endpoint|route|contract|surface|service|package)\b[^.]{0,80}\bimpacted\b/i }
 ];
 
-const forbiddenPrivateRawPatterns = [
+const alwaysForbiddenPrivatePatterns = [
   { label: "/Users/", pattern: /(?:^|[\s"'(=])\/Users\//i },
   { label: "/home/", pattern: /(?:^|[\s"'(=])\/home\//i },
   { label: "~/", pattern: /(?:^|[\s"'(=])~\//i },
@@ -103,9 +103,12 @@ const forbiddenPrivateRawPatterns = [
   { label: "file://", pattern: /file:\/\//i },
   { label: "localhost", pattern: /\blocalhost\b/i },
   { label: "127.0.0.1", pattern: /\b127\.0\.0\.1\b/ },
-  { label: "raw remotes", pattern: /\b(?:git@[^:\s]+:[^\s]+|https:\/\/github\.com\/[^/\s]+\/[^/\s]+\.git|raw remotes?)\b/i },
+  { label: "raw remote URL", pattern: /\b(?:git@[^:\s]+:[^\s]+|https:\/\/github\.com\/[^/\s]+\/[^/\s]+\.git)\b/i },
   { label: "connection string", pattern: /\b(?:ConnectionString|connection string|Server=|User Id=|Password=)\b/i },
-  { label: "credential token", pattern: /\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|secret\s*=|password\s*=|sk-[A-Za-z0-9_-]{12,})\b/i },
+  { label: "credential token", pattern: /\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|secret\s*=|password\s*=|sk-[A-Za-z0-9_-]{12,})\b/i }
+];
+
+const boundaryAllowedPrivateRawPatterns = [
   { label: "raw SQL", pattern: /\braw SQL\b/i },
   { label: "raw source snippets", pattern: /\braw source snippets?\b/i },
   { label: "config values", pattern: /\bconfig values?\b/i },
@@ -298,7 +301,13 @@ async function validateGlossaryPage({ pagePath, errors }) {
     }
   }
 
-  for (const { label, pattern } of forbiddenPrivateRawPatterns) {
+  for (const { label, pattern } of alwaysForbiddenPrivatePatterns) {
+    if (pattern.test(decodedHtml) || pattern.test(decodedText)) {
+      errors.push(withEvidence(`Glossary page contains forbidden private/raw material: ${label}`, pageArtifact));
+    }
+  }
+
+  for (const { label, pattern } of boundaryAllowedPrivateRawPatterns) {
     if (pattern.test(unsanctionedHtml) || pattern.test(unsanctionedText)) {
       errors.push(withEvidence(`Glossary page contains forbidden private/raw material outside sanctioned sections: ${label}`, pageArtifact));
     }
