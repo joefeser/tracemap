@@ -1,6 +1,6 @@
 # UI Field and Property Lineage Next Slice Implementation State
 
-Status: spec-review-in-progress
+Status: spec-pr-open-review-loop-in-progress
 
 ## Current Branch
 
@@ -165,6 +165,17 @@ agent-control pr-loop --repo joefeser/tracemap --pr 237 --base dev --require-cod
   threads, or actionable bot findings were reported.
 - This state-only bookkeeping update should be followed by a fresh PR-loop run
   after push so the final decision reflects the current head.
+- Subsequent PR-loop runs after bookkeeping found actionable Gemini and Qodo
+  findings. Patched:
+  - Corrected task expectations from `ModelBindingUnavailable` to
+    `EndpointAlignmentUnavailable` for a Razor form target with no matching
+    action/handler.
+  - Corrected `model:<type>.<property>` no-match task expectation to
+    `SelectorNoMatch`.
+  - Aligned route-flow gap wording with the current baseline
+    `RouteFlowUnavailable` schema gap.
+  - Aligned selector candidate sorting with the current property-flow
+    selected-root baseline order.
 
 ## Follow-Ups For Implementation
 
