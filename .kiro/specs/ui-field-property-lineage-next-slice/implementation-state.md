@@ -150,7 +150,21 @@ unless Opus is clearly needed.
 
 ## PR Review Loop
 
-Pending PR creation.
+- Ready PR opened: #237 into `dev`.
+- Initial PR loop command:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 237 --base dev --require-codex-review --json
+```
+
+- Initial PR loop result on head `2c896cfb2ddbd30eb29ad2debc3df1a6a10f19ff`:
+  `merge_ready`.
+- Required Codex and Qodo reviews settled cleanly. Optional Gemini review was
+  not requested and optional Gemini review threads were reported as residual
+  risk by policy, not blockers. No pending checks, failed checks, unresolved
+  threads, or actionable bot findings were reported.
+- This state-only bookkeeping update should be followed by a fresh PR-loop run
+  after push so the final decision reflects the current head.
 
 ## Follow-Ups For Implementation
 
