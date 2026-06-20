@@ -218,10 +218,12 @@ without inventing new runtime claims.
    signal, `combined_route_flow_edges`, or a documented successor THEN
    property-flow MAY include route-flow edges as supporting evidence after the
    property reaches an HTTP call, endpoint, action, or handler.
-3. WHEN route-flow evidence is absent THEN property-flow SHALL still show
-   local UI-to-payload, form-to-handler, endpoint, model-binding, and property
-   evidence where present, plus a route-flow-unavailable gap only for hops that
-   genuinely require route-flow-specific semantics.
+3. WHEN the route-flow schema signal is absent THEN property-flow SHALL preserve
+   the baseline `RouteFlowUnavailable` schema gap while still showing local
+   UI-to-payload, form-to-handler, endpoint, model-binding, and property
+   evidence where present. That gap labels unavailable route-flow-specific
+   traversal and SHALL NOT suppress or downgrade local evidence that does not
+   require route-flow semantics.
 4. WHEN combined path or reverse evidence already establishes part of the
    downstream trail THEN property-flow SHALL include that evidence as
    supporting context rather than recomputing incompatible semantics.

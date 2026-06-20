@@ -204,16 +204,17 @@ Matching order:
 1. Reject unsafe selector input with sanitized category diagnostics.
 2. Apply source and framework filters.
 3. Match closed selector family.
-4. Sort candidates by source label, file path, line span, fact type, rule ID,
-   and combined fact ID.
+4. Sort candidates by the current property-flow selected-root baseline:
+   source label, root kind, safe display name, file path, start line, and
+   combined fact ID.
 5. Apply `--max-roots`.
 6. Emit ambiguity metadata and gaps when total candidates exceed selected roots
    or when type/family identity overlaps.
 
 Facts classified as both model and DTO families count once for candidate and
 cap purposes. Ambiguity metadata records all matched families, while sorting
-uses the fact's primary family, then the shared sort keys above, so truncation
-remains deterministic.
+uses the same selected-root baseline keys above, so truncation remains
+deterministic without changing current report ordering.
 
 Generic fan-out rules:
 
