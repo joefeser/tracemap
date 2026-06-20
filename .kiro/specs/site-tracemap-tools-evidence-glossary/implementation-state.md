@@ -51,11 +51,10 @@ the chosen `hintCategory`, whether `concept` is accepted by discovery and
 validation tooling, and explicit numeric word-count bounds for either the
 standalone route or folded section.
 
-Accepted `hintCategory` values observed in `discovery.json` at spec-review
-time: `start`, `evidence`, `proof`, `validation`, `output`, `legacy`,
-`workflow`, `use-case`, `adoption`, `demo`, `audience`, `comparison`, and
-`source`. Future implementation must choose from this list or document a new
-value with rationale.
+Accepted `hintCategory` values from `site/scripts/discovery.mjs` at spec-review
+time: `start`, `evidence`, `limitations`, `demo`, `repo-doc`, `roadmap`, and
+`use-case`. Future implementation must choose from this list or update the
+discovery validator with rationale.
 
 ## Review Status
 
@@ -98,6 +97,10 @@ value with rationale.
 - Current Medium or higher findings: none known after patches. Review coverage
   remains partially reduced where noted above because Kiro denied tool access in
   some review runs.
+- PR-loop actionable review findings patched after PR creation: stale
+  `hintCategory` allowlist replaced with the validator enum, non-existent
+  aggregate `/use-cases/` route replaced with specific use-case routes, and
+  `concept` page-level metadata scoped to standalone glossary routes.
 
 ## Validation
 
