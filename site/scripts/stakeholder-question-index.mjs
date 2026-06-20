@@ -329,10 +329,6 @@ function validateClaimBoundaryText({ decodedHtml, html, pageText, errors }) {
       errors.push(withEvidence(`Stakeholder question index contains forbidden unbounded claim wording: ${match[0]}`, "questions/index.html"));
     }
   }
-
-  if (/\b(?:proof|evidence|claim)\b[^.]{0,90}\bwithout\b[^.]{0,30}\bevidence\b/i.test(pageText)) {
-    return;
-  }
 }
 
 function stripBoundedClaimContext(html) {
