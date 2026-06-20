@@ -1,12 +1,12 @@
 # Site TraceMap Tools Team Evidence Handoff Design
 
-Status: not-started
+Status: in-review
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Overview
 
-This spec defines a future concept-level public site page or section at
+This implementation defines a concept-level public site page at
 `/team-evidence-handoff/`. The page teaches a bounded communication pattern for
 sharing TraceMap evidence with a teammate, reviewer, manager, or agent while
 keeping proof boundaries intact.
@@ -26,7 +26,7 @@ Every handoff keeps the same proof-bearing fields together:
 
 ## Information Architecture
 
-The future page should be a public concept route with a concise structure:
+The page should be a public concept route with a concise structure:
 
 1. Claim-level header with `Public claim level: concept` and the shared
    principle.
@@ -63,14 +63,14 @@ Discovery metadata should use:
 
 ## Content Model
 
-The required field list is the contract for the future page and validator. The
+The required field list is the contract for the page and validator. The
 page should include the exact deterministic sentence:
 
 `A handoff is complete only when the summary, proof path, rule ID/rule family,
 evidence tier, coverage label, limitations, non-claims, local-only artifacts,
 and next owner/action travel together.`
 
-The future page may use short synthetic examples, such as:
+The page may use short synthetic examples, such as:
 
 - Teammate: "Here is the bounded summary, the proof path, and the follow-up
   code owner question."
@@ -87,7 +87,7 @@ generated scan directories, private sample names, or raw scanner output.
 
 ## Boundary Design
 
-The future page should make the proof boundary visible in the copy rather than
+The page should make the proof boundary visible in the copy rather than
 burying it in a disclaimer. Recommended copy patterns:
 
 - "The summary is only repeatable while attached to the proof path and
@@ -121,7 +121,7 @@ operational safety, AI/LLM analysis, or complete coverage.
 
 ## Validation Design
 
-The future implementation should add focused validation comparable to
+The implementation should add focused validation comparable to
 neighboring concept-page validators. Validation should check:
 
 - rendered route exists
