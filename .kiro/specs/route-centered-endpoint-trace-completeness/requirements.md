@@ -206,8 +206,9 @@ be stable, machine-readable, and reviewable.
 4. WHEN identical input rows and options are used twice THEN Markdown and JSON
    SHALL be byte-stable.
 5. Arrays and maps SHALL sort deterministically by source label, normalized
-   selector key, classification rank, path length, row kind, safe display
-   label, file path, start line, symbol ID, fact ID, edge ID, and stable row ID.
+   selector kind, normalized selector key, classification rank, path length,
+   sequence where available, row kind, safe display label, file path, start
+   line, end line, symbol ID, fact ID, edge ID, and stable row ID.
 6. Output wording SHALL use phrases such as "static evidence",
    "candidate implementation", "coverage-relative", and "touched by selected
    evidence"; it SHALL NOT say "impacted", "executed", "called at runtime",

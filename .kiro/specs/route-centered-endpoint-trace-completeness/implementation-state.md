@@ -126,7 +126,25 @@
   path guard rather than a separate repo spec lint command.
 - Diff scope: staged files are limited to
   `.kiro/specs/route-centered-endpoint-trace-completeness/`.
+- Follow-up PR-loop patch validation: `git diff --cached --check` passed and
+  `./scripts/check-private-paths.sh` passed after staging the review-thread
+  fixes.
 
 ## PR Loop Log
 
-Pending.
+- First run command:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 233 --base dev --require-codex-review --json`
+- First run result: `actionable_findings`, stop reason
+  `UNRESOLVED_REVIEW_THREADS`, canMerge `false`.
+- Findings:
+  - Gemini Medium review thread on `requirements.md`: deterministic sorting
+    keys differed from `design.md`.
+  - Gemini Medium review thread on `design.md`: entry evidence preservation
+    text mentioned scan IDs even though current entry/evidence-ref models do
+    not carry a direct `scanId` field.
+- Disposition:
+  - Patched `requirements.md` to use the same ordering keys as `design.md`,
+    including selector kind, sequence where available, and end line.
+  - Patched `design.md` to state source scan IDs remain available through
+    `RouteFlowSnapshot` source entries and entry rows should not invent a
+    duplicate field unless a future schema change adds it explicitly.
