@@ -70,6 +70,28 @@ test("validateIncidentEvidenceHandoffDist reports missing route metadata", async
   assert.match(errors.join("\n"), /routes-index\.json is missing required route: \/incident-evidence-handoff\//);
 });
 
+test("validateIncidentEvidenceHandoffDist normalizes path-bearing baseUrl values", async (t) => {
+  const root = await createManagedIncidentEvidenceHandoffDistFixture(t);
+  const errors = [];
+
+  await validateIncidentEvidenceHandoffDist({
+    baseUrl: "https://tracemap.tools/docs/",
+    dist: join(root, "dist"),
+    errors
+  });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateIncidentEvidenceHandoffDist reports invalid baseUrl values", async (t) => {
+  const root = await createManagedIncidentEvidenceHandoffDistFixture(t);
+  const errors = [];
+
+  await validateIncidentEvidenceHandoffDist({ baseUrl: null, dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /baseUrl must be a valid absolute URL: null/);
+});
+
 test("validateIncidentEvidenceHandoffDist reports route metadata regressions", async (t) => {
   const root = await createManagedIncidentEvidenceHandoffDistFixture(t);
   await rewriteHandoffRoutesIndexEntry(join(root, "dist"), {
@@ -130,6 +152,17 @@ test("validateIncidentEvidenceHandoffDist rejects forbidden positioning", async 
   await validateIncidentEvidenceHandoffDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /forbidden runtime\/AI positioning: complete product coverage/);
+});
+
+test("validateIncidentEvidenceHandoffDist rejects forbidden positioning outside main text", async (t) => {
+  const root = await createManagedIncidentEvidenceHandoffDistFixture(t, {
+    handoffHtml: incidentEvidenceHandoffPage("<!-- proves runtime behavior -->")
+  });
+  const errors = [];
+
+  await validateIncidentEvidenceHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden runtime\/AI positioning: proves runtime behavior/);
 });
 
 test("validateIncidentEvidenceHandoffDist rejects encoded private text", async (t) => {
