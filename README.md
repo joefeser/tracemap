@@ -19,6 +19,7 @@ Start here:
 - [Decision log](docs/DECISIONS.md)
 - [Build milestones](MILESTONES.md)
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
+- [PR review loop](docs/PR_REVIEW_LOOP.md)
 - [Rule catalog](rules/rule-catalog.yml)
 
 TraceMap is not an AI impact-analysis tool. The scanner and reducer do not use LLM calls, embeddings, vector databases, or prompt-based classification.
