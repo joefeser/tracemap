@@ -66,6 +66,21 @@ test("validateStakeholderQuestionIndexDist reports missing required row fields",
   assert.match(errors.join("\n"), /manager-planning is missing required field: safeAnswerShape/);
 });
 
+test("validateStakeholderQuestionIndexDist requires rule ID or family cells", async (t) => {
+  const root = await createManagedQuestionIndexDistFixture(t, {
+    questionHtml: questionIndexPage({
+      rowOverrides: {
+        "agent-bot-discovery": { omitField: "ruleIdOrFamily" }
+      }
+    })
+  });
+  const errors = [];
+
+  await validateStakeholderQuestionIndexDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /agent-bot-discovery is missing required field: ruleIdOrFamily/);
+});
+
 test("validateStakeholderQuestionIndexDist allows bounded non-claims but rejects unbounded AI wording", async (t) => {
   const root = await createManagedQuestionIndexDistFixture(t, {
     questionHtml: questionIndexPage({ extra: "<p>TraceMap performs AI impact analysis.</p>" })
