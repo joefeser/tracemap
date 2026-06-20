@@ -55,9 +55,10 @@ public static class TraceMapCommand
                 "contract-diff" => ContractDiffHelp(),
                 "baseline" => BaselineHelp(),
                 "evidence-pack" => EvidencePackHelp(),
+                "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" ? 0 : 1;
+            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         try
@@ -87,6 +88,7 @@ public static class TraceMapCommand
                 "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
                 "baseline" => await RunBaselineAsync(rest, output, error, cancellationToken),
                 "evidence-pack" => await RunEvidencePackAsync(rest, output, error, cancellationToken),
+                "explorer" => await RunExplorerAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
         }
@@ -1033,6 +1035,51 @@ public static class TraceMapCommand
         return 0;
     }
 
+    private static async Task<int> RunExplorerAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0 || IsHelp(args[0]))
+        {
+            await output.WriteLineAsync(ExplorerHelp());
+            return 0;
+        }
+
+        var subcommand = args[0].ToLowerInvariant();
+        if (subcommand != "generate")
+        {
+            await error.WriteLineAsync("error: explorer supports only the generate subcommand.");
+            return 1;
+        }
+
+        var values = ParseOptions(args.Skip(1).ToArray(), "--force");
+        if (!values.TryGetValue("--input", out var inputPath) || string.IsNullOrWhiteSpace(inputPath))
+        {
+            await error.WriteLineAsync("error: explorer generate requires --input <artifact-dir>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: explorer generate requires --out <explorer-output>.");
+            return 1;
+        }
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(
+            new StaticHtmlEvidenceExplorerOptions(
+                inputPath,
+                outputPath,
+                values.GetValueOrDefault("--safety-profile"),
+                values.HasFlag("--force")),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap explorer generate completed: {Path.GetFullPath(outputPath)}");
+        await output.WriteLineAsync($"Safety profile: {result.Manifest.SafetyProfile}");
+        await output.WriteLineAsync($"Artifacts: {result.Manifest.Counts.ArtifactCount}");
+        await output.WriteLineAsync($"Evidence rows: {result.Manifest.Counts.EvidenceRowCount}");
+        await output.WriteLineAsync($"Gaps: {result.Manifest.Counts.GapCount}");
+        await output.WriteLineAsync($"Files: {result.WrittenFiles.Count}");
+        return 0;
+    }
+
     private static async Task<int> RunBaselineAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         if (args.Length == 0 || IsHelp(args[0]))
@@ -1689,6 +1736,7 @@ public static class TraceMapCommand
               tracemap docs-export --index <index-or-combined.sqlite> --out <docs-output>
               tracemap baseline create --scan-output <path> --label <neutral-slug> --purpose <neutral-slug> --out <path>
               tracemap evidence-pack create --input <path> --input-kind <kind> --label <neutral-slug> --purpose <neutral-slug> --claim-level <level> --date <yyyy-MM> --out <path>
+              tracemap explorer generate --input <artifact-dir> --out <explorer-output>
 
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
@@ -1713,6 +1761,7 @@ public static class TraceMapCommand
               docs-export Generate deterministic Markdown and JSONL evidence docs for external ingestion.
               baseline Create, validate, and compare redacted legacy baseline summaries.
               evidence-pack Create, validate, and promote redacted legacy evidence packs.
+              explorer Generate a local static HTML evidence explorer from existing TraceMap artifacts.
             """;
     }
 
@@ -2265,6 +2314,35 @@ public static class TraceMapCommand
 
             Outputs:
               evidence-pack.json, evidence-pack.md, validation-result.json
+            """;
+    }
+
+    private static string ExplorerHelp()
+    {
+        return """
+            Usage:
+              tracemap explorer generate --input <artifact-dir> --out <explorer-output> [--safety-profile <public-demo|hidden-local>] [--force]
+
+            Required:
+              --input <artifact-dir>      Directory containing generated TraceMap artifacts such as scan-manifest.json and facts.ndjson.
+              --out <explorer-output>     Output directory for the local static explorer.
+
+            Optional:
+              --safety-profile <value>    public-demo (default) or hidden-local.
+              --force                     Overwrite prior TraceMap-generated explorer output.
+
+            Outputs:
+              index.html
+              assets/explorer.css
+              assets/explorer.js
+              data/explorer-manifest.json
+              data/explorer-data.json
+              README.md
+
+            Notes:
+              The explorer is a local generated artifact, not the public tracemap.tools site.
+              It renders selected generated artifacts and does not rescan source code,
+              query databases, call services, or derive new impact conclusions.
             """;
     }
 

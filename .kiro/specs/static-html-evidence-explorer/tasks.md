@@ -1,7 +1,7 @@
 # Static HTML Evidence Explorer Tasks
 
-Status: spec-ready
-Readiness: ready-for-implementation
+Status: implementation-in-progress
+Readiness: pr1-ready-for-review
 Public claim level: concept
 
 ## Spec-Only PR Scope
@@ -23,50 +23,50 @@ Public claim level: concept
 
 ## Implementation Tasks
 
-- [ ] 1. Confirm current artifact contracts. Requirements: 1, 2, 9.
-  - [ ] Inventory current scan manifest, facts, SQLite index, Markdown report,
+- [x] 1. Confirm current artifact contracts. Requirements: 1, 2, 9.
+  - [x] Inventory current scan manifest, facts, SQLite index, Markdown report,
     JSON report, combined index/report, reducer output, and rule catalog
     schemas that can feed the explorer.
-  - [ ] Record which artifacts carry repo/commit SHA, source labels, coverage
+  - [x] Record which artifacts carry repo/commit SHA, source labels, coverage
     labels, extractor versions, rule IDs, evidence tiers, snippet hashes, gaps,
     limitations, and reducer classifications.
-  - [ ] Identify unsupported or optional artifact families and define their
+  - [x] Identify unsupported or optional artifact families and define their
     partial/unavailable/gap behavior.
-  - [ ] Inventory the existing public/demo and docs-export safety policy as
+  - [x] Inventory the existing public/demo and docs-export safety policy as
     the source of truth for explorer redaction, omission, and rejection.
-  - [ ] Derive closed vocabularies from existing TraceMap schemas, enums, rule
+  - [x] Derive closed vocabularies from existing TraceMap schemas, enums, rule
     catalog values, and report contracts where available.
-  - [ ] Add initial rule catalog stubs for explorer-specific rule IDs needed
+  - [x] Add initial rule catalog stubs for explorer-specific rule IDs needed
     by the first implementation slice.
-  - [ ] Confirm the explorer does not alter the required `tracemap scan`
+  - [x] Confirm the explorer does not alter the required `tracemap scan`
     output contract.
 
-- [ ] 2. Design and implement explorer generation entry point. Requirements:
+- [x] 2. Design and implement explorer generation entry point. Requirements:
   1, 2, 9.
-  - [ ] Choose the CLI command or option name according to existing CLI
+  - [x] Choose the CLI command or option name according to existing CLI
     conventions.
-  - [ ] Define safety profile selection, including `public-demo` and
+  - [x] Define safety profile selection, including `public-demo` and
     `hidden-local` behavior or the equivalent current TraceMap profile names.
-  - [ ] Load generated TraceMap artifacts from an input artifact/report
+  - [x] Load generated TraceMap artifacts from an input artifact/report
     directory without reading live source repository files.
-  - [ ] Write a local static output directory with `index.html`, local assets,
+  - [x] Write a local static output directory with `index.html`, local assets,
     explorer data, and an explorer manifest.
-  - [ ] Preserve generated-file sentinel and collision behavior where current
+  - [x] Preserve generated-file sentinel and collision behavior where current
     report exporters already provide it.
-  - [ ] Add documentation that distinguishes the local generated explorer from
+  - [x] Add documentation that distinguishes the local generated explorer from
     the public `tracemap.tools` site.
-  - [ ] Record the chosen command name, output layout, and safety profile
+  - [x] Record the chosen command name, output layout, and safety profile
     selection in `implementation-state.md` and user-facing docs.
 
 - [ ] 3. Build provenance reconciliation and manifest output. Requirements: 2,
   3, 4.
-  - [ ] Create typed artifact/source records with artifact kind, safe label,
+  - [x] Create typed artifact/source records with artifact kind, safe label,
     content hash, schema version, claim level, coverage labels, commit SHA
     where safe, and source IDs.
   - [ ] Detect missing commit metadata, unsupported schema versions, provenance
     conflicts, and claim-level conflicts.
-  - [ ] Emit rule-backed gaps or limitations for partial or incompatible input.
-  - [ ] Add tests for supported inputs, unsupported inputs, missing commit
+  - [x] Emit rule-backed gaps or limitations for partial or incompatible input.
+  - [x] Add tests for supported inputs, unsupported inputs, missing commit
     metadata, conflicting provenance, and affected-section partial/stopped UI
     labels.
 
@@ -92,7 +92,7 @@ Public claim level: concept
     in affected sections.
   - [ ] Add tests for overview counts, source safety, artifact provenance, and
     JavaScript-disabled baseline content.
-  - [ ] Add tests that render distinct UI wording for not-provided,
+  - [x] Add tests that render distinct UI wording for not-provided,
     unsupported, and no-evidence-under-credible-coverage states.
 
 - [ ] 6. Render surfaces, paths, and reducer-backed results. Requirements: 5,
@@ -180,7 +180,7 @@ Public claim level: concept
 
 ## Recommended PR Slices
 
-- [ ] PR 1: CLI skeleton, artifact discovery, initial rule catalog stubs,
+- [x] PR 1: CLI skeleton, artifact discovery, initial rule catalog stubs,
   safety-profile selection, provenance reconciliation, manifest schema, and
   no-network asset bundling.
 - [ ] PR 2: Safe view models and overview/source/artifact rendering.
