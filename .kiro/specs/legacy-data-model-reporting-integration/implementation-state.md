@@ -99,7 +99,7 @@ run. Review artifacts:
   `.tmp/kiro-reviews/legacy-data-model-reporting-integration/2026-06-20T225359-688Z-implementation-claude-opus-4.8.clean.md`
   and matching `.meta.json`. Coverage: `Reduced`; tool access denied.
 
-PR creation and PR loop are still pending for this branch.
+PR loop is still pending for this branch.
 
 ## Slice Oddities
 
@@ -115,8 +115,8 @@ PR creation and PR loop are still pending for this branch.
 
 ## PR Status
 
-- PR URL: pending.
-- Latest commit: pending.
+- PR URL: `https://github.com/joefeser/tracemap/pull/243`.
+- Latest implementation commit: `d2ecc83b`.
 - Kiro review: reduced coverage; Sonnet and Opus both reported denied tool
   access.
 - PR loop: pending.
