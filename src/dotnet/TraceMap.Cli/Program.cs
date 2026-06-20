@@ -2068,7 +2068,7 @@ public static class TraceMapCommand
               --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
               --exit-code                Return exit code 1 when reverse roots or paths are present.
               --source <label>           Filter selected surfaces and requested roots to one source label.
-              --surface <kind>           sql-query, http-route, http-client, or package-config.
+              --surface <kind>           sql-query, http-route, http-client, package-config, or legacy-data.
               --surface-name <text>      Exact case-insensitive surface name.
               --to <target>              endpoints, symbols, sources, or all. Default: endpoints.
               --max-surfaces <n>         Selected surfaces. Default: 200.
