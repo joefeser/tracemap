@@ -439,3 +439,8 @@ PR review-loop follow-up:
   - Constraint relationship extraction now requires the XML Schema namespace for
     `key`, `unique`, `keyref`, and `selector` elements so non-XSD lookalikes do
     not become relationship facts.
+- Fresh Codex review on the current head found inherited EDMX model shapes
+  emitted a gap but left related descriptor/relationship facts at full coverage.
+  Patched by marking inherited EDMX entities/properties and CSDL associations
+  involving inherited endpoint types as reduced coverage with explicit
+  limitations while preserving endpoint completeness separately.
