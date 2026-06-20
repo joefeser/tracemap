@@ -235,6 +235,9 @@ public static class FactTypes
     public const string RazorFormTarget = nameof(RazorFormTarget);
     public const string RazorModelBindingTarget = nameof(RazorModelBindingTarget);
     public const string RazorBindingGap = nameof(RazorBindingGap);
+    public const string MessagePublisherSurface = nameof(MessagePublisherSurface);
+    public const string MessageConsumerSurface = nameof(MessageConsumerSurface);
+    public const string MessageBindingDeclared = nameof(MessageBindingDeclared);
 }
 
 public static class RuleIds
@@ -352,6 +355,15 @@ public static class RuleIds
     public const string RazorFormTarget = "csharp.razor.form-target.v1";
     public const string RazorModelBinding = "csharp.razor.model-binding.v1";
     public const string RazorBindingGap = "csharp.razor.binding-gap.v1";
+    public const string MessageSurfacePublish = "message.surface.publish.v1";
+    public const string MessageSurfaceConsume = "message.surface.consume.v1";
+    public const string MessageSurfaceBinding = "message.surface.binding.v1";
+    public const string MessageSurfaceIdentity = "message.surface.identity.v1";
+    public const string MessageSurfaceCombine = "message.surface.combine.v1";
+    public const string MessageSurfaceCandidateEdge = "message.surface.candidate-edge.v1";
+    public const string MessageSurfacePaths = "message.surface.paths.v1";
+    public const string MessageSurfaceReducer = "message.surface.reducer.v1";
+    public const string MessageSurfaceGap = "message.surface.gap.v1";
 }
 
 public static class ScannerVersions
