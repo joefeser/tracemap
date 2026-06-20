@@ -1,6 +1,6 @@
 # Site TraceMap Tools Stakeholder Question Index Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -8,60 +8,75 @@ Public claim level: concept
 
 Spec branch: `codex/spec-site-stakeholder-question-index`
 
+Implementation branch: `codex/impl-site-stakeholder-question-index`
+
 Base: `origin/dev`
 
 Target PR base: `dev`
 
-Scope: spec packet only under
-`.kiro/specs/site-tracemap-tools-stakeholder-question-index/`.
+Scope: implementation for this spec only, covering this spec packet and the
+site source, route metadata, discovery metadata, validation, and tests needed
+for the stakeholder question index.
 
 ## Current State
 
-This is a spec-only phase. No site source, route metadata, generated site
-output, scanner code, reducer code, validation script, or generated artifact
-has been implemented.
+Implemented as a standalone public route at `/questions/`.
 
-The spec defines a future public-safe stakeholder question index that starts
-with reader questions and routes readers to existing evidence surfaces. The
-surface is an orientation/index layer, not a new proof claim.
+The route is a public-safe orientation index that starts with reader questions
+and routes readers to existing evidence surfaces. It is not a new proof claim,
+capability matrix, claim ledger, FAQ replacement, scanner behavior, reducer
+behavior, generated artifact, runtime workflow, or AI/LLM analysis surface.
 
 ## Claim-Level Decision
 
 Selected public claim level: `concept`.
 
-Rationale: the proposed page or section is navigational and explanatory. It
-does not create new public demo evidence or prove a new analyzer capability.
-Rows may route to demo-backed surfaces such as public demo results, but the
-question index itself should remain concept-level unless a future spec
-amendment records checked-in public-safe evidence that supports a row or page
-upgrade.
+Rationale: the page is navigational and explanatory. It does not create new
+public demo evidence or prove a new analyzer capability. Rows route to current
+public-safe surfaces, including some demo-backed surfaces, but every matrix row
+uses row-level `concept` because the row answer shape is orientation and route
+selection.
 
 ## Route and Placement Guidance
 
-Candidate placements for future implementation:
+Selected placement: `/questions/`.
 
-- `/questions/`
-- `/use-cases/questions/`
-- section on `/use-cases/`
+Rejected alternatives:
 
-Future implementation must record the selected placement and rejected
-alternatives before changing site source. It must also record substitutions or
-omissions for any candidate target route that does not exist at implementation
-time.
+- `/use-cases/questions/`: rejected because the index is intended to serve
+  managers, reviewers, incident participants, architects, demo evaluators, and
+  agents in addition to use-case readers.
+- Section on `/use-cases/`: rejected because the matrix needs route metadata,
+  sitemap discovery, discovery metadata, stable row anchors, and focused
+  validation as its own public-safe orientation surface.
+- Primary navigation placement: rejected because the route remains
+  concept-level orientation and existing primary navigation already has dense
+  evidence, validation, limitation, demo, and docs links.
+
+Route substitutions or omissions: none. All candidate target routes existed at
+implementation time, including `/manager-packet/`,
+`/use-cases/endpoint-review/`, `/incident-evidence-handoff/`,
+`/legacy-modernization/evidence-map/`, `/proof-paths/`,
+`/proof-source-catalog/`, `/review-claim-checklist/`,
+`/static-vs-runtime/`, `/demo/result/`, `/vault-export/`, `/limitations/`,
+and `/validation/`.
 
 ## Scope Decisions
 
 - Keep the surface as a question-to-proof-path orientation index.
-- Keep all implementation tasks unchecked until a future implementation phase
-  changes site source and validation.
 - Require rows for manager planning, engineer endpoint/change review,
   incident-adjacent handoff, modernization planning, reviewer claim checking,
   demo evaluation, proof-source inspection, and agent/bot discovery.
 - Require each row to include audience, question, safe answer shape, target
   route, evidence surface, public claim level, proof path, limitation, and
   non-claim.
-- Use `Public claim level: concept` unless future public-safe evidence
-  justifies `demo`.
+- Include `rule ID or rule family` as a visible matrix column so proof-path
+  handling stays attached to each row.
+- Use page-level and row-level `Public claim level: concept`.
+- Keep target-route claim levels separate from page-level and row-level claim
+  levels.
+- Keep `/questions/` out of primary navigation. Add a bounded inbound link from
+  `/use-cases/` only.
 - Do not publish raw scanner artifacts, private material, hidden validation
   details, runtime telemetry, or raw source/config/SQL material.
 
@@ -147,21 +162,77 @@ PR-loop follow-up validation after patch:
 - `git diff --check` passed.
 - `./scripts/check-private-paths.sh` passed.
 
-Future implementation-branch validation:
+Implementation-branch validation:
 
-- `git diff --check`
-- `./scripts/check-private-paths.sh`
-- `npm test` from `site/`
-- `npm run validate` from `site/`
-- `npm run build` from `site/`
-- desktop and mobile browser sanity checks if route, layout, or interaction
-  changes are made
+- `npm test` from `site/`: passed.
+- `npm run validate` from `site/`: passed and validated 47 HTML files, 1501
+  internal references, 46 sitemap URLs, one legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `npm run build` from `site/`: passed.
+- Browser sanity: passed on `/questions/` using desktop 1440 by 1000 and
+  mobile 390 by 844 viewports. The visible route showed the concept claim
+  label, shared principle, quick links, matrix, route targets, and non-claims.
+  The mobile matrix preserved stable columns inside the existing horizontal
+  table wrapper.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
+Second PR-loop cleanup validation:
+
+- Follow-up after resolving the review thread showed Qodo's top-level review
+  still had an optional maintainability finding for a no-op boundary regex in
+  `validateClaimBoundaryText`.
+- Patch: removed the inert trailing regex block because required page text
+  already validates the shared principle and the block had no failure path.
+- `npm test` from `site/`: passed with 236 tests.
+- `npm run validate` from `site/`: passed and validated 47 HTML files, 1501
+  internal references, 46 sitemap URLs, one legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
+Fresh Codex review validation:
+
+- Fresh Codex review on `c935ed43` returned one unresolved thread: the
+  validator rejected raw artifact links but did not reject raw artifact names
+  added as unlinked visible copy outside limitation or non-claim contexts.
+- Patch: added a raw-artifact text guard over rendered and decoded unbounded
+  HTML after stripping limitation and non-claim contexts, plus a regression
+  test for unlinked `facts.ndjson` text.
+- `npm test` from `site/`: passed with 237 tests.
+- `npm run validate` from `site/`: passed and validated 47 HTML files, 1501
+  internal references, 46 sitemap URLs, one legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
+PR-loop patch validation:
+
+- Initial PR loop for implementation PR returned `actionable_findings` with
+  one unresolved review thread in `site/scripts/stakeholder-question-index.mjs`.
+- Patch: added `ruleIdOrFamily` to the focused validator's required row
+  fields and added a regression test that removes the field from the
+  agent/bot discovery row.
+- `npm test` from `site/`: passed with 236 tests.
+- `npm run build` from `site/`: passed.
+- `npm run validate` from `site/`: passed and validated 47 HTML files, 1501
+  internal references, 46 sitemap URLs, one legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
 
 ## Oddities
 
 - `claude-opus-4.8` review returned a quota error with no review content. See
   Readiness Note for details; re-run before the first site-source PR if quota
   allows.
+- Local browser sanity initially found port `4173` already in use. The local
+  sanity server used port `4187` instead.
+- During PR-loop patch validation, running `npm run validate` and
+  `npm run build` concurrently caused a local `site/dist` race. The build
+  passed, and `npm run validate` passed when rerun by itself.
 
 ## PR Loop Findings
 
@@ -181,11 +252,6 @@ kept discovery metadata as the evidence surface for agents while using
 
 ## Follow-Ups
 
-- Future implementation should confirm current route names before linking to
-  any candidate target route.
-- Future implementation should explicitly confirm whether `/vault-export/`
-  exists at implementation time or record the substitution or omission
-  rationale in this file before publishing any row that targets it.
-- Future implementation should decide whether `/questions/` is sufficiently
-  clear for both humans and agents, or whether `/use-cases/questions/` better
-  fits the existing information architecture.
+- Re-run validation after PR-loop patches, if any.
+- Do not promote row-level claim levels to `demo` unless a future amendment
+  records exact public-safe evidence for the row answer shape.

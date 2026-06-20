@@ -304,6 +304,23 @@
     ]
   },
   {
+    "path": "/questions/",
+    "title": "Stakeholder Question Index",
+    "summary": "Concept-level orientation route from stakeholder questions to public-safe proof paths, route targets, limitations, and claim-checking surfaces.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The index is navigation and wording guidance; it does not create new proof or upgrade target routes.",
+      "Rows must keep route-specific proof paths, rule IDs or rule families, evidence tiers, coverage labels, limitations, and non-claims attached."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, staffing, priority, ownership, private-repo behavior, or complete product coverage proof.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, raw facts, raw SQLite, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details are published."
+    ]
+  },
+  {
     "path": "/legacy-evidence/",
     "title": "Legacy Evidence Story",
     "summary": "Concept claim ledger for hidden legacy-adjacent static evidence themes, promotion gates, and public-safe boundaries.",

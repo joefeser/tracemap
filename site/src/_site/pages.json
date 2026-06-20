@@ -40,6 +40,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/questions/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/adoption/",
     "changefreq": "monthly",
     "priority": "0.7"

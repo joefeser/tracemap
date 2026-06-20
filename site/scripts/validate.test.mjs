@@ -26,6 +26,7 @@ import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import { stakeholderQuestionIndexRoute } from "./stakeholder-question-index.mjs";
 import {
   teamEvidenceHandoffRequiredLinks,
   teamEvidenceHandoffRoute
@@ -138,7 +139,8 @@ async function createDistFixture({
       reviewRoomRoute,
       roadmapClaimLedgerRoute,
       staticTriageRoute,
-      staticVsRuntimeRoute
+      staticVsRuntimeRoute,
+      stakeholderQuestionIndexRoute
     ])
   ].map((route) => `https://tracemap.tools${route}`)
 } = {}) {
@@ -161,6 +163,7 @@ async function createDistFixture({
     incidentCallRoute,
     incidentEvidenceHandoffRoute,
     teamEvidenceHandoffRoute,
+    "/legacy-modernization/evidence-map/",
     "/legacy-validation/",
     managerBriefRoute,
     managerFaqRoute,
@@ -172,9 +175,11 @@ async function createDistFixture({
     roadmapClaimLedgerRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    stakeholderQuestionIndexRoute,
     "/use-cases/",
     "/outputs/",
     "/use-cases/incident-review/",
+    "/vault-export/",
     "/workflows/"
   ]);
 
@@ -219,9 +224,11 @@ async function createDistFixture({
                                   ? staticTriagePage()
                                   : route === staticVsRuntimeRoute
                                     ? staticVsRuntimePage()
-                                    : page(
-                                      `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
-                                    ),
+                                    : route === stakeholderQuestionIndexRoute
+                                      ? await stakeholderQuestionIndexPage()
+                                      : page(
+                                        `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
+                                      ),
       "utf8"
     );
   }
@@ -425,6 +432,22 @@ async function writeDiscoveryFiles(dist) {
         ]
       },
       {
+        path: stakeholderQuestionIndexRoute,
+        title: "Stakeholder Question Index",
+        summary: "Concept-level orientation route from stakeholder questions to public-safe proof paths.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "Rows preserve route-specific proof paths, rule IDs or rule families, evidence tiers, coverage labels, limitations, and non-claims."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, private-repo behavior, or complete product coverage proof.",
+          "No AI impact analysis, LLM analysis, prompt-based classification, raw facts, raw SQLite, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details are published."
+        ]
+      },
+      {
         url: "https://github.com/joefeser/tracemap/blob/main/README.md",
         title: "Fixture README",
         summary: "Fixture source document for validation.",
@@ -465,6 +488,10 @@ function deployAuditPage() {
 
 async function proofSourceCatalogPage() {
   return readFile(new URL("../src/proof-source-catalog/index.html", import.meta.url), "utf8");
+}
+
+async function stakeholderQuestionIndexPage() {
+  return readFile(new URL("../src/questions/index.html", import.meta.url), "utf8");
 }
 
 function incidentCallPage() {
