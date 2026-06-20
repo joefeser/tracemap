@@ -197,6 +197,8 @@ async function validateRoutesIndex({ dist, errors }) {
     errors.push(withEvidence("Stakeholder question index routes-index.json uses shipped wording for concept content.", "routes-index.json"));
   }
 
+  validateRouteMetadataClaimBoundaryText(routeEntry, errors);
+
   const nonClaimsText = Array.isArray(routeEntry.nonClaims) ? routeEntry.nonClaims.join(" ") : "";
   for (const phrase of [
     "No runtime behavior",
@@ -357,6 +359,17 @@ function validateClaimBoundaryText({ decodedHtml, html, pageText, errors }) {
   }
 }
 
+function validateRouteMetadataClaimBoundaryText(routeEntry, errors) {
+  const scanText = routeUnboundedTextFields(routeEntry).join(" ");
+
+  for (const pattern of forbiddenAffirmativeClaimPatterns) {
+    const matches = [...scanText.matchAll(pattern)];
+    for (const match of matches) {
+      errors.push(withEvidence(`Stakeholder question index routes-index.json contains forbidden unbounded claim wording: ${match[0]}`, "routes-index.json"));
+    }
+  }
+}
+
 function stripBoundedClaimContext(html) {
   return html
     .replace(/<td\b(?=[^>]*\bdata-field\s*=\s*["'](?:limitation|nonClaim)["'])[^>]*>[\s\S]*?<\/td>/gi, " ")
@@ -401,6 +414,18 @@ function routeTextFields(routeEntry) {
     routeEntry.summary,
     ...(Array.isArray(routeEntry.limitations) ? routeEntry.limitations : [])
   ].filter((value) => typeof value === "string");
+}
+
+function routeUnboundedTextFields(routeEntry) {
+  return [
+    routeEntry.title,
+    routeEntry.summary,
+    ...(Array.isArray(routeEntry.limitations) ? routeEntry.limitations.filter((value) => !isNegatedMetadataBoundary(value)) : [])
+  ].filter((value) => typeof value === "string");
+}
+
+function isNegatedMetadataBoundary(value) {
+  return typeof value === "string" && /\b(?:no|not|does not|do not|cannot|can't|without)\b/i.test(value);
 }
 
 function containsForbiddenText(text, ...values) {
