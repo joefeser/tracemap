@@ -243,6 +243,24 @@
   23 tests, full solution tests passed with 555 tests, public-demo
   combine/route-flow smoke passed, smoke-output sentinel passed,
   `./scripts/check-private-paths.sh` passed, and `git diff --check` passed.
+- Third implementation PR-loop run requested and received a fresh Codex review
+  for commit `35e6ff250dd005398fd0d33401f9507b1b27a754`. Result:
+  `actionable_findings`, stop reason `UNRESOLVED_REVIEW_THREADS`, canMerge
+  `false`.
+- Finding:
+  - Codex P2: target touched symbols for cross-source rows could inherit the
+    edge/source-side evidence rather than target/source-local evidence.
+- Disposition:
+  - Reworked path method/service touched-symbol candidates to derive from the
+    selected route-flow path nodes with node evidence, rather than deriving
+    target symbols from edge evidence.
+  - Added a client-call cross-source regression assertion that the server
+    controller touched symbol is attributed to the server source label, commit,
+    and file rather than the client.
+- Follow-up validation after cross-source evidence patch: focused route-flow
+  tests passed with 23 tests, full solution tests passed with 555 tests,
+  public-demo combine/route-flow smoke passed, smoke-output sentinel passed,
+  `./scripts/check-private-paths.sh` passed, and `git diff --check` passed.
 
 - First run command:
   `agent-control pr-loop --repo joefeser/tracemap --pr 233 --base dev --require-codex-review --json`
