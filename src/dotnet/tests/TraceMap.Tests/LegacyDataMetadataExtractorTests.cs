@@ -698,6 +698,55 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_marks_ambiguous_typed_dataset_constraints_and_ignores_non_xsd_lookalikes()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "AmbiguousConstraints.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop"
+                       xmlns:mstns="urn:store"
+                       xmlns:custom="urn:custom">
+              <xs:element name="OrdersDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="OrdersDataSet">
+                <xs:complexType>
+                  <xs:choice maxOccurs="unbounded">
+                    <xs:element name="Customers" msprop:Generator_UserTableName="Customers" msprop:Generator_RowClassName="CustomersRow" />
+                    <xs:element name="Orders" msprop:Generator_UserTableName="Orders" msprop:Generator_RowClassName="OrdersRow" />
+                    <xs:element name="OrderLines" msprop:Generator_UserTableName="OrderLines" msprop:Generator_RowClassName="OrderLinesRow" />
+                  </xs:choice>
+                </xs:complexType>
+              </xs:element>
+              <xs:key name="SharedKey"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:key>
+              <xs:key name="SharedKey"><xs:selector xpath=".//mstns:Orders" /><xs:field xpath="mstns:OrderId" /></xs:key>
+              <xs:keyref name="AmbiguousCustomerOrders" refer="mstns:SharedKey">
+                <xs:selector xpath=".//mstns:OrderLines" />
+                <xs:field xpath="mstns:OrderId" />
+              </xs:keyref>
+              <custom:keyref name="FakeRelationship" refer="mstns:SharedKey">
+                <custom:selector xpath=".//mstns:Orders" />
+              </custom:keyref>
+            </xs:schema>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Equal(3, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"));
+
+        var ambiguousConstraint = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "constraint-relation"
+            && fact.Properties.GetValueOrDefault("relationName") == "AmbiguousCustomerOrders");
+        Assert.Equal("unidirectional", ambiguousConstraint.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Contains("ambiguous-constraint-name", ambiguousConstraint.Properties.GetValueOrDefault("limitations"));
+        Assert.Contains("constraint-endpoint-needs-review", ambiguousConstraint.Properties.GetValueOrDefault("limitations"));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "FakeRelationship");
+    }
+
+    [Fact]
     public void Scan_keeps_duplicate_display_names_distinct_by_format_and_source()
     {
         using var temp = new TempDirectory();

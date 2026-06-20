@@ -11,6 +11,7 @@ public static class LegacyDataMetadataExtractor
 {
     private const string ExtractorId = "LegacyDataExtractor";
     private const long MaxGeneratedDesignerBytes = SafeXml.MaxXmlBytes;
+    private static readonly XNamespace Xs = "http://www.w3.org/2001/XMLSchema";
     private static readonly XNamespace MsData = "urn:schemas-microsoft-com:xml-msdata";
     private static readonly XNamespace MsProp = "urn:schemas-microsoft-com:xml-msprop";
 
@@ -483,29 +484,50 @@ public static class LegacyDataMetadataExtractor
         string sourceMetadataFactId,
         XDocument document)
     {
-        var keyedTables = document.Descendants()
-            .Where(element => element.Name.LocalName is "key" or "unique")
+        var constraintDefinitions = document.Descendants()
+            .Where(IsXsdKeyOrUnique)
             .Select(element => new
             {
-                Name = AttributeValue(element, "name"),
-                Table = LastXPathIdentifier(element.Elements().FirstOrDefault(child => child.Name.LocalName == "selector") is { } selector ? AttributeValue(selector, "xpath") : null)
+                Element = element,
+                Name = LocalQualifiedName(AttributeValue(element, "name")),
+                Table = LastXPathIdentifier(element.Elements().FirstOrDefault(IsXsdSelector) is { } selector ? AttributeValue(selector, "xpath") : null)
             })
             .Where(item => !string.IsNullOrWhiteSpace(item.Name) && !string.IsNullOrWhiteSpace(item.Table))
-            .GroupBy(item => LocalQualifiedName(item.Name), StringComparer.Ordinal)
+            .Select(item => new ConstraintDefinition(item.Element, item.Name, item.Table!))
+            .ToArray();
+        var ambiguousConstraintNames = constraintDefinitions
+            .GroupBy(item => item.Name, StringComparer.Ordinal)
+            .Where(group => group.Select(item => item.Table).Distinct(StringComparer.Ordinal).Count() > 1)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        foreach (var ambiguousGroup in ambiguousConstraintNames.Values.SelectMany(group => group).OrderBy(item => GetLine(item.Element)))
+        {
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataTypedDataSet, "AmbiguousLegacyDataModelIdentity", "Typed DataSet constraint name resolved to multiple selector tables.", ambiguousGroup.Element);
+        }
+
+        var keyedTables = constraintDefinitions
+            .Where(item => !ambiguousConstraintNames.ContainsKey(item.Name))
+            .GroupBy(item => item.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First().Table, StringComparer.Ordinal);
 
-        foreach (var keyref in document.Descendants().Where(element => element.Name.LocalName == "keyref").OrderBy(GetLine))
+        foreach (var keyref in document.Descendants().Where(IsXsdKeyRef).OrderBy(GetLine))
         {
             var relationName = AttributeValue(keyref, "name") ?? "keyref";
             var referencedKey = LocalQualifiedName(AttributeValue(keyref, "refer"));
+            var referencesAmbiguousConstraint = ambiguousConstraintNames.ContainsKey(referencedKey);
             var parentTableName = keyedTables.GetValueOrDefault(referencedKey);
-            var selector = keyref.Elements().FirstOrDefault(element => element.Name.LocalName == "selector");
+            var selector = keyref.Elements().FirstOrDefault(IsXsdSelector);
             var childTableName = LastXPathIdentifier(AttributeValue(selector, "xpath"));
             var coverageLabel = string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName) ? "reduced" : "full";
             var limitations = new List<string>();
             if (coverageLabel == "reduced")
             {
                 limitations.Add("constraint-endpoint-needs-review");
+            }
+
+            if (referencesAmbiguousConstraint)
+            {
+                limitations.Add("ambiguous-constraint-name");
+                AddGap(manifest, facts, relativePath, RuleIds.LegacyDataTypedDataSet, "AmbiguousLegacyDataModelIdentity", "Typed DataSet keyref referenced an ambiguous constraint name.", keyref);
             }
 
             var properties = MetadataProperties("TypedDataSet", metadataHash, "constraint-relation");
@@ -1270,6 +1292,21 @@ public static class LegacyDataMetadataExtractor
             || AttributeValue(element, MsProp + "Generator_DataSetName") is not null;
     }
 
+    private static bool IsXsdKeyOrUnique(XElement element)
+    {
+        return element.Name == Xs + "key" || element.Name == Xs + "unique";
+    }
+
+    private static bool IsXsdKeyRef(XElement element)
+    {
+        return element.Name == Xs + "keyref";
+    }
+
+    private static bool IsXsdSelector(XElement element)
+    {
+        return element.Name == Xs + "selector";
+    }
+
     private static bool IsTableAdapterCommand(XElement element)
     {
         return element.Name.LocalName.Contains("Command", StringComparison.OrdinalIgnoreCase)
@@ -1289,6 +1326,8 @@ public static class LegacyDataMetadataExtractor
     }
 
     private sealed record TypedDataSetIndicatorResult(bool HasIntrinsicIndicator, bool HasDescriptorContent);
+
+    private sealed record ConstraintDefinition(XElement Element, string Name, string Table);
 
     private sealed record GeneratedCandidate(string FilePath, IReadOnlyDictionary<string, int> TypeLines)
     {

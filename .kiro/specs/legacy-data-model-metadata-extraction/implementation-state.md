@@ -372,10 +372,10 @@ Deferred within Task 3:
 
 Validation planned/executed:
 
-- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 26 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 27 tests.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModel`: passed, 3 tests.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 553 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 554 tests.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke`: passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log` with 27 facts. Relationship-specific smoke is covered by focused synthetic tests because no checked-in sample currently contains DBML/EDMX/XSD legacy data relationship fixtures.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
@@ -431,3 +431,11 @@ PR review-loop follow-up:
   - Codex found dotted XSD key/keyref constraint names were collapsed by the
     typed DataSet QName helper. Fixed by preserving dotted local names and
     adding a dotted constraint-name regression test.
+- Follow-up PR loop found the prior Qodo top-level review still actionable on
+  the XSD constraint path. Patched both findings:
+  - Duplicate `xs:key`/`xs:unique` names with different selector tables now emit
+    `AmbiguousLegacyDataModelIdentity` gaps instead of silently picking the
+    first table.
+  - Constraint relationship extraction now requires the XML Schema namespace for
+    `key`, `unique`, `keyref`, and `selector` elements so non-XSD lookalikes do
+    not become relationship facts.
