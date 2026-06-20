@@ -97,8 +97,8 @@ unchecked until site code work actually begins.
   claims, private material, unsupported `impacted` wording, link resolution,
   route metadata, discovery metadata, and sitemap metadata.
 - [ ] Validate that replacement and approval non-claim copy renders and that
-  unsupported `replaces ...` and `approves the release` wording is caught
-  outside the sanctioned `Non-Claims` region.
+  unsupported `replaces ...`, `approves the release`, and `release approval`
+  wording is caught outside the sanctioned `Non-Claims` region.
 - [ ] Manually verify bounded cross-link anchor text, or use an existing
   anchor-text validator helper if one exists at implementation time.
 - [ ] For a standalone route, add `site/scripts/change-review.mjs` exporting

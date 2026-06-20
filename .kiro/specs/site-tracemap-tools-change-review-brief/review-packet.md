@@ -53,8 +53,8 @@ Review focus:
   release safety claims, operational safety claims, and complete coverage
   claims?
 - Does the spec prevent saying TraceMap approves releases, replaces tests,
-  replaces code review, replaces release review, or proves a change is safe or
-  unsafe?
+  replaces code review, replaces source review, replaces release review, or
+  proves a change is safe or unsafe?
 - Does the spec block raw facts, raw SQLite content, analyzer logs, raw source
   snippets, raw SQL, config values, secrets, local absolute paths, raw remotes,
   generated scan directories, private sample names, raw command output, and

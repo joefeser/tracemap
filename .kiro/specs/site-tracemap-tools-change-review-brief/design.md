@@ -220,9 +220,10 @@ Future validation should be focused, not broad churn:
   checklist items, while still catching unsupported `impacted` wording and
   release/runtime/production assurance claims.
 - Unsupported-overclaim checks also catch replacement and approval claims such
-  as `replaces tests`, `replaces code review`, `replaces release review`, or
-  `approves the release`, while allowing the authored non-claim sentence inside
-  the sanctioned `Non-Claims` region.
+  as `replaces tests`, `replaces code review`, `replaces release review`,
+  `replaces source review`, `approves the release`, or `release approval`,
+  while allowing the authored non-claim sentence inside the sanctioned
+  `Non-Claims` region.
 - Required-copy validation confirms the replacement/approval non-claim sentence
   renders.
 - Link validation confirms required cross-links resolve; bounded anchor-text
