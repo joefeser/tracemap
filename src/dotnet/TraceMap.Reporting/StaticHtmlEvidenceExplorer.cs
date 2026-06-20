@@ -33,6 +33,7 @@ public sealed record ExplorerManifest(
     string RepoIdentityPolicy,
     string GenerationTimestampPolicy,
     string? GeneratedAt,
+    string RepositoryIdentifier,
     string? CommitSha,
     string CoverageStatus,
     ExplorerManifestCounts Counts,
@@ -124,6 +125,7 @@ public sealed record ExplorerEvidenceRow(
     string SupportId,
     string ArtifactId,
     string? SourceId,
+    string? CommitSha,
     string? FilePath,
     int? StartLine,
     int? EndLine,
@@ -395,6 +397,7 @@ public static class StaticHtmlEvidenceExplorer
                     SafeClosedText(fact.FactId, "support-id", redactions),
                     "artifact:facts-ndjson",
                     SourceId,
+                    IsUsableCommitSha(fact.CommitSha) ? fact.CommitSha : null,
                     safePath,
                     evidence?.StartLine,
                     evidence?.EndLine,
@@ -535,6 +538,7 @@ public static class StaticHtmlEvidenceExplorer
             RepoIdentityPolicy: context.CommitSha is null ? "omitted-for-safety" : "commit-sha-only",
             GenerationTimestampPolicy: "omitted-deterministic",
             GeneratedAt: null,
+            RepositoryIdentifier: context.CommitSha is null ? SourceId : $"commit:{context.CommitSha}",
             context.CommitSha,
             context.CoverageStatus,
             counts,
@@ -765,7 +769,9 @@ public static class StaticHtmlEvidenceExplorer
             affectedSection,
             coverageLabel,
             message,
-            supportIds.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            (supportIds.Count == 0 ? [scope] : supportIds)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray());
     }
 
     private static IReadOnlyList<ExplorerRule> ExplorerRules()
@@ -1165,20 +1171,21 @@ public static class StaticHtmlEvidenceExplorer
         {
             builder.AppendLine($"      <p>The no-JavaScript baseline renders the first {EvidenceRowNoScriptLimit} deterministic rows out of {rows.Count}. The full safe row set is available in data/explorer-data.json.</p>");
         }
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>File span</th><th>Snippet hash</th><th>Extractor</th></tr></thead><tbody>");
+        builder.AppendLine("      <table data-filterable=\"true\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th></tr></thead><tbody>");
         foreach (var row in rows.Take(EvidenceRowNoScriptLimit))
         {
             var span = row.FilePath is null ? "n/a" : $"{row.FilePath}:{row.StartLine}-{row.EndLine}";
             var snippetHash = Html(row.SnippetHash ?? "n/a");
             var extractorVersion = Html(row.ExtractorVersion ?? "unknown");
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td></tr>");
+            var commitSha = Html(row.CommitSha ?? "partial");
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td></tr>");
         }
         if (rows.Count == 0)
         {
             var message = factStreamProvided
                 ? "No static evidence rows were found in the provided fact stream under the current coverage."
                 : "Evidence rows are unavailable because no compatible fact stream was provided.";
-            builder.AppendLine($"        <tr><td colspan=\"8\">{Html(message)}</td></tr>");
+            builder.AppendLine($"        <tr><td colspan=\"9\">{Html(message)}</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
