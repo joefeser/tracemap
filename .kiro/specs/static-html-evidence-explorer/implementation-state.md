@@ -237,4 +237,5 @@ Kiro implementation review status:
 
 PR status:
 
-- Pending commit, push, and PR creation.
+- Ready PR opened against `dev`: https://github.com/joefeser/tracemap/pull/231
+- Initial pushed implementation commit: `11cdfedd`.
