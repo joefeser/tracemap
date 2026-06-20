@@ -322,7 +322,7 @@ function removeSectionsById(html, ids) {
   let result = html;
   for (const id of ids) {
     const escaped = escapeRegExp(id);
-    result = result.replace(new RegExp(`<([a-z][\\w:-]*)\\b(?=[^>]*\\bid\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/\\1>`, "gi"), "");
+    result = result.replace(new RegExp(`<([a-z][\\w:-]*)\\b(?=[^>]*\\sid\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/\\1>`, "gi"), "");
   }
 
   return result;
@@ -330,18 +330,18 @@ function removeSectionsById(html, ids) {
 
 function extractElementById(html, id) {
   const escaped = escapeRegExp(id);
-  const match = html.match(new RegExp(`<([a-z][\\w:-]*)\\b(?=[^>]*\\bid\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/\\1>`, "i"));
+  const match = html.match(new RegExp(`<([a-z][\\w:-]*)\\b(?=[^>]*\\sid\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/\\1>`, "i"));
   return match ? match[0] : "";
 }
 
 function hasHref(html, href) {
   const escaped = escapeRegExp(href);
-  return new RegExp(`<a\\b[^>]*\\bhref\\s*=\\s*["']${escaped}["']`, "i").test(html);
+  return new RegExp(`<a\\b[^>]*\\shref\\s*=\\s*["']${escaped}["']`, "i").test(html);
 }
 
 function hasId(html, id) {
   const escaped = escapeRegExp(id);
-  return new RegExp(`\\bid\\s*=\\s*["']${escaped}["']`, "i").test(html);
+  return new RegExp(`\\sid\\s*=\\s*["']${escaped}["']`, "i").test(html);
 }
 
 function hasElementWithAttributes(html, tagName, expectedAttributes, requiredAttributes = []) {

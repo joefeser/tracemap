@@ -66,6 +66,16 @@ test("validateGlossaryDist rejects missing required terms", async (t) => {
   assert.match(errors.join("\n"), /missing required term anchor: rule-id/);
 });
 
+test("validateGlossaryDist rejects data-id in place of real term anchors", async (t) => {
+  const glossaryHtml = (await sourceGlossaryPage()).replace('id="rule-id"', 'data-id="rule-id"');
+  const root = await createManagedGlossaryDistFixture(t, { glossaryHtml });
+  const errors = [];
+
+  await validateGlossaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing required term anchor: rule-id/);
+});
+
 test("validateGlossaryDist rejects forbidden affirmative AI positioning outside sanctioned sections", async (t) => {
   const glossaryHtml = (await sourceGlossaryPage()).replace(
     "Stable words for bounded TraceMap claims.",
@@ -92,8 +102,31 @@ test("validateGlossaryDist rejects private and raw material outside sanctioned s
   assert.match(errors.join("\n"), /forbidden private\/raw material outside sanctioned sections: facts\.ndjson/);
 });
 
+test("validateGlossaryDist rejects forbidden material hidden behind data-id sanctioned section lookalikes", async (t) => {
+  const glossaryHtml = (await sourceGlossaryPage()).replace(
+    "</main>",
+    '<section data-id="non-claims"><p>facts.ndjson</p></section></main>'
+  );
+  const root = await createManagedGlossaryDistFixture(t, { glossaryHtml });
+  const errors = [];
+
+  await validateGlossaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private\/raw material outside sanctioned sections: facts\.ndjson/);
+});
+
 test("validateGlossaryDist rejects missing required public-safe links", async (t) => {
   const glossaryHtml = (await sourceGlossaryPage()).replaceAll('href="/proof-source-catalog/"', 'href="/proof-source-catalog-missing/"');
+  const root = await createManagedGlossaryDistFixture(t, { glossaryHtml });
+  const errors = [];
+
+  await validateGlossaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing required link: \/proof-source-catalog\//);
+});
+
+test("validateGlossaryDist rejects data-href in place of real required links", async (t) => {
+  const glossaryHtml = (await sourceGlossaryPage()).replaceAll('href="/proof-source-catalog/"', 'data-href="/proof-source-catalog/"');
   const root = await createManagedGlossaryDistFixture(t, { glossaryHtml });
   const errors = [];
 

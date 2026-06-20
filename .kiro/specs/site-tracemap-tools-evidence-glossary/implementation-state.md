@@ -125,6 +125,12 @@ discovery validator with rationale.
   order-sensitive metadata regexes in the glossary validator. Patched by using
   parsed HTML attributes for canonical, Open Graph title, and page-level claim
   metadata checks, with a focused regression test for reversed attribute order.
+- PR #242 review loop then surfaced a Qodo top-level finding that required
+  actual `href` and `id` attributes rather than `data-href` or `data-id`
+  lookalikes for required links, anchors, and sanctioned-section stripping.
+  Patched the glossary helper regexes to require whitespace-delimited
+  attributes and added regression tests for `data-href`, `data-id`, and
+  sanctioned-section lookalikes.
 
 ## Implementation Summary
 
@@ -145,8 +151,8 @@ discovery validator with rationale.
 
 Implementation validation passed on 2026-06-20:
 
-- `npm test` from `site/`: passed, 245 tests after the metadata-order review
-  fix.
+- `npm test` from `site/`: passed, 248 tests after the metadata-order and
+  attribute-boundary review fixes.
 - `npm run validate` from `site/`: passed, generated 48 HTML files, checked
   1543 internal references, 47 sitemap URLs, 1 legacy story safety target, and
   13 legacy modernization evidence-map rows.
