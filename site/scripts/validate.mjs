@@ -25,6 +25,7 @@ import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
+import { validateStakeholderQuestionIndexDist } from "./stakeholder-question-index.mjs";
 import { validateTeamEvidenceHandoffDist } from "./team-evidence-handoff.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
@@ -91,6 +92,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateRoadmapClaimLedgerDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateStakeholderQuestionIndexDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateTeamEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
