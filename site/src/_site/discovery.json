@@ -321,6 +321,23 @@
     ]
   },
   {
+    "path": "/legacy-modernization/evidence-map/",
+    "title": "Legacy Modernization Evidence Map",
+    "summary": "Concept-level reviewer-question map for organizing deterministic static repository evidence, hidden legacy surface families, coverage gaps, and proof paths during modernization planning.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "roadmap",
+    "preferredProofPath": "/legacy-evidence/",
+    "limitations": [
+      "The route is planning context and cannot upgrade hidden legacy surface families without public-safe proof.",
+      "Named hidden rows are not support results, demo rows, or migration conclusions."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production telemetry, production traffic, endpoint performance, outage cause, release safety, operational safety, production dependency understanding, exploitability, database existence, package compatibility, migration feasibility, migration completeness, AI impact analysis, LLM analysis, or complete product coverage proof.",
+      "No raw facts, raw SQLite, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, connection strings, service addresses, endpoint values, credentials, database contents, or hidden validation details are published."
+    ]
+  },
+  {
     "path": "/use-cases/incident-review/",
     "title": "Incident Review Orientation",
     "summary": "Describes how static evidence can orient incident-adjacent code questions while operational proof stays outside TraceMap.",
