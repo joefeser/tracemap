@@ -243,4 +243,9 @@ PR status:
 - Bookkeeping commit recording PR URL: `3ce25972`.
 - First PR review-loop fix commit: `1bf9c4bc`.
 - Second PR review-loop manifest/evidence fix commit: `16613eab`.
-- PR review-loop rerun pending after pushing `16613eab`.
+- Bookkeeping commit recording the second review-loop fix: `46a0fc9d`.
+- PR review-loop result for `46a0fc9d`: `merge_ready`, `canMerge: true`.
+  Required gates were clean by configured policy: no unresolved review threads,
+  no pending or failed checks, merge state `CLEAN`, required Codex review
+  completed on the current head, Qodo actionable findings dispositioned with
+  evidence, and optional Gemini/Sourcery reviews absent only as residual risk.
