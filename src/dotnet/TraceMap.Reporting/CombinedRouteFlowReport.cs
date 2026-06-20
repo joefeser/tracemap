@@ -45,6 +45,8 @@ public sealed record RouteFlowReport(
     IReadOnlyList<RouteFlowRow> FlowRows,
     IReadOnlyList<RouteFlowLogicRow> LogicRows,
     IReadOnlyList<RouteFlowDependencySurface> DependencySurfaces,
+    IReadOnlyList<RouteFlowTouchedFile> TouchedFiles,
+    IReadOnlyList<RouteFlowTouchedSymbol> TouchedSymbols,
     IReadOnlyList<RouteFlowGap> Gaps,
     IReadOnlyList<string> Limitations);
 
@@ -159,6 +161,35 @@ public sealed record RouteFlowDependencySurface(
     IReadOnlyDictionary<string, string> SafeMetadata,
     RouteFlowEvidenceRef Evidence);
 
+public sealed record RouteFlowTouchedFile(
+    string FileId,
+    string SourceLabel,
+    string? CommitSha,
+    string FilePath,
+    int? FirstStartLine,
+    int? LastEndLine,
+    string Classification,
+    string Coverage,
+    IReadOnlyList<string> SupportingRowIds,
+    IReadOnlyList<string> RuleIds,
+    IReadOnlyList<string> EvidenceTiers,
+    RouteFlowEvidenceRef Evidence);
+
+public sealed record RouteFlowTouchedSymbol(
+    string SymbolId,
+    string SourceLabel,
+    string? FilePath,
+    int? StartLine,
+    int? EndLine,
+    string DisplayName,
+    string SymbolKind,
+    string Classification,
+    string Coverage,
+    IReadOnlyList<string> SupportingRowIds,
+    IReadOnlyList<string> RuleIds,
+    IReadOnlyList<string> EvidenceTiers,
+    RouteFlowEvidenceRef Evidence);
+
 public sealed record RouteFlowGap(
     string GapId,
     string GapKind,
@@ -198,6 +229,7 @@ public static class CombinedRouteFlowReporter
     private const string ClassificationRuleId = "combined.route-flow.classification.v1";
     private const string GapRuleId = "combined.route-flow.gap.v1";
     private const string RedactionRuleId = "combined.route-flow.redaction.v1";
+    private const string ReportRuleId = "combined.route-flow.report.v1";
     private const int MarkdownRowLimit = 200;
 
     private static readonly HashSet<string> AllowedClassifications = new(StringComparer.Ordinal)
@@ -420,6 +452,8 @@ public static class CombinedRouteFlowReporter
 
         ApplyClassificationFilter(options.Classification, flowRows, logicRows, dependencySurfaces, gaps);
 
+        var touchedFiles = BuildTouchedFiles(entryEvidence, flowRows, logicRows, dependencySurfaces, gaps);
+        var touchedSymbols = BuildTouchedSymbols(entryEvidence, flowRows, logicRows, dependencySurfaces);
         var coverageWarnings = pathReport.CoverageWarnings
             .Concat(sources.SelectMany(source => source.CoverageWarnings))
             .Distinct(StringComparer.Ordinal)
@@ -440,6 +474,8 @@ public static class CombinedRouteFlowReporter
             flowRows,
             logicRows,
             dependencySurfaces,
+            touchedFiles,
+            touchedSymbols,
             gaps,
             Limitations());
     }
@@ -2092,6 +2128,244 @@ public static class CombinedRouteFlowReporter
         return values;
     }
 
+    private sealed record TouchedFileCandidate(
+        string RowId,
+        string Classification,
+        string Coverage,
+        RouteFlowEvidenceRef Evidence);
+
+    private sealed record TouchedSymbolCandidate(
+        string RowId,
+        string DisplayName,
+        string SymbolKind,
+        string Classification,
+        string Coverage,
+        RouteFlowEvidenceRef Evidence);
+
+    private static IReadOnlyList<RouteFlowTouchedFile> BuildTouchedFiles(
+        IReadOnlyList<RouteFlowEntryEvidence> entryEvidence,
+        IReadOnlyList<RouteFlowRow> flowRows,
+        IReadOnlyList<RouteFlowLogicRow> logicRows,
+        IReadOnlyList<RouteFlowDependencySurface> dependencySurfaces,
+        IReadOnlyList<RouteFlowGap> gaps)
+    {
+        var candidates = entryEvidence.Select(row => new TouchedFileCandidate(row.EntryId, row.Classification, row.Coverage, row.Evidence))
+            .Concat(flowRows.Select(row => new TouchedFileCandidate(row.RowId, row.Classification, row.Coverage, row.Evidence)))
+            .Concat(logicRows.Select(row => new TouchedFileCandidate(row.LogicRowId, row.Classification, row.Coverage, row.Evidence)))
+            .Concat(dependencySurfaces.Select(row => new TouchedFileCandidate(row.SurfaceId, row.Classification, row.Coverage, row.Evidence)))
+            .Concat(gaps.Select(row => new TouchedFileCandidate(row.GapId, GapClassification(row), row.Coverage, EvidenceFromGap(row))))
+            .Where(row => !string.IsNullOrWhiteSpace(row.Evidence.FilePath))
+            .ToArray();
+
+        return candidates
+            .GroupBy(row => $"{row.Evidence.SourceLabel}\0{row.Evidence.CommitSha}\0{row.Evidence.FilePath}", StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var rows = group.ToArray();
+                var first = rows[0].Evidence;
+                var supportingRowIds = rows.Select(row => row.RowId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                var ruleIds = SummaryRuleIds(rows.Select(row => row.Evidence));
+                var tiers = rows.Select(row => row.Evidence.EvidenceTier).Distinct(StringComparer.Ordinal).OrderBy(EvidenceTierRank).ThenBy(value => value, StringComparer.Ordinal).ToArray();
+                var startLine = rows.Select(row => row.Evidence.StartLine).Where(value => value.HasValue).Select(value => value!.Value).DefaultIfEmpty().Min();
+                var endLine = rows.Select(row => row.Evidence.EndLine).Where(value => value.HasValue).Select(value => value!.Value).DefaultIfEmpty().Max();
+                int? firstStartLine = startLine == 0 ? null : startLine;
+                int? lastEndLine = endLine == 0 ? null : endLine;
+                var classification = rows.Select(row => row.Classification).Aggregate(RouteFlowClassifications.StrongStaticRouteFlow, WeakestClassification);
+                var coverage = rows.Select(row => row.Coverage).Aggregate("FullEvidenceAvailable", WeakestCoverage);
+                var facts = rows.SelectMany(row => row.Evidence.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                var edges = rows.SelectMany(row => row.Evidence.SupportingEdgeIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                var limitations = rows.SelectMany(row => row.Evidence.Limitations)
+                    .Append("Touched-file summaries are grouped static evidence locations and do not prove runtime request execution or business impact.")
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray();
+                var filePath = first.FilePath!;
+                return new RouteFlowTouchedFile(
+                    $"touched-file:{CombinedReportHelpers.Hash($"{first.SourceLabel}\0{first.CommitSha}\0{filePath}", 24)}",
+                    first.SourceLabel,
+                    first.CommitSha,
+                    filePath,
+                    firstStartLine,
+                    lastEndLine,
+                    classification,
+                    coverage,
+                    supportingRowIds,
+                    ruleIds,
+                    tiers,
+                    new RouteFlowEvidenceRef(
+                        ReportRuleId,
+                        WeakestEvidenceTier(rows.Select(row => row.Evidence.EvidenceTier)),
+                        first.SourceLabel,
+                        first.CommitSha,
+                        filePath,
+                        firstStartLine,
+                        lastEndLine,
+                        "route-flow",
+                        Version,
+                        facts,
+                        edges,
+                        ruleIds,
+                        limitations));
+            })
+            .OrderBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(row => ClassificationRank(row.Classification))
+            .ThenBy(row => row.FilePath, StringComparer.Ordinal)
+            .ThenBy(row => row.FirstStartLine ?? 0)
+            .ThenBy(row => row.LastEndLine ?? 0)
+            .ThenBy(row => row.FileId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<RouteFlowTouchedSymbol> BuildTouchedSymbols(
+        IReadOnlyList<RouteFlowEntryEvidence> entryEvidence,
+        IReadOnlyList<RouteFlowRow> flowRows,
+        IReadOnlyList<RouteFlowLogicRow> logicRows,
+        IReadOnlyList<RouteFlowDependencySurface> dependencySurfaces)
+    {
+        var candidates = entryEvidence
+            .Where(row => !string.IsNullOrWhiteSpace(row.DisplaySymbol))
+            .Select(row => new TouchedSymbolCandidate(row.EntryId, row.DisplaySymbol!, row.EntryKind, row.Classification, row.Coverage, row.Evidence))
+            .Concat(flowRows.SelectMany(row => FlowSymbolCandidates(row)))
+            .Concat(logicRows.Select(row => new TouchedSymbolCandidate(row.LogicRowId, row.DisplayName, row.LogicKind, row.Classification, row.Coverage, row.Evidence)))
+            .Concat(dependencySurfaces.Select(row => new TouchedSymbolCandidate(row.SurfaceId, row.DisplayName, row.SurfaceKind, row.Classification, row.Coverage, row.Evidence)))
+            .Where(row => !string.IsNullOrWhiteSpace(row.DisplayName))
+            .ToArray();
+
+        return candidates
+            .GroupBy(row => $"{row.Evidence.SourceLabel}\0{row.DisplayName}\0{row.Evidence.FilePath}", StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var rows = group.ToArray();
+                var first = rows[0].Evidence;
+                var displayName = rows.Select(row => row.DisplayName).OrderBy(value => value, StringComparer.Ordinal).First();
+                var supportingRowIds = rows.Select(row => row.RowId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                var ruleIds = SummaryRuleIds(rows.Select(row => row.Evidence));
+                var tiers = rows.Select(row => row.Evidence.EvidenceTier).Distinct(StringComparer.Ordinal).OrderBy(EvidenceTierRank).ThenBy(value => value, StringComparer.Ordinal).ToArray();
+                var startLine = rows.Select(row => row.Evidence.StartLine).Where(value => value.HasValue).Select(value => value!.Value).DefaultIfEmpty().Min();
+                var endLine = rows.Select(row => row.Evidence.EndLine).Where(value => value.HasValue).Select(value => value!.Value).DefaultIfEmpty().Max();
+                int? firstStartLine = startLine == 0 ? null : startLine;
+                int? lastEndLine = endLine == 0 ? null : endLine;
+                var classification = rows.Select(row => row.Classification).Aggregate(RouteFlowClassifications.StrongStaticRouteFlow, WeakestClassification);
+                var coverage = rows.Select(row => row.Coverage).Aggregate("FullEvidenceAvailable", WeakestCoverage);
+                var facts = rows.SelectMany(row => row.Evidence.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                var edges = rows.SelectMany(row => row.Evidence.SupportingEdgeIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                var limitations = rows.SelectMany(row => row.Evidence.Limitations)
+                    .Append("Touched-symbol summaries are grouped static evidence identities and do not prove runtime dispatch, runtime dependency-injection target selection, or production use.")
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray();
+                var symbolKind = rows.Select(row => row.SymbolKind).OrderBy(value => value, StringComparer.Ordinal).First();
+                return new RouteFlowTouchedSymbol(
+                    $"touched-symbol:{CombinedReportHelpers.Hash($"{first.SourceLabel}\0{displayName}\0{first.FilePath}", 24)}",
+                    first.SourceLabel,
+                    first.FilePath,
+                    firstStartLine,
+                    lastEndLine,
+                    displayName,
+                    symbolKind,
+                    classification,
+                    coverage,
+                    supportingRowIds,
+                    ruleIds,
+                    tiers,
+                    new RouteFlowEvidenceRef(
+                        ReportRuleId,
+                        WeakestEvidenceTier(rows.Select(row => row.Evidence.EvidenceTier)),
+                        first.SourceLabel,
+                        first.CommitSha,
+                        first.FilePath,
+                        firstStartLine,
+                        lastEndLine,
+                        "route-flow",
+                        Version,
+                        facts,
+                        edges,
+                        ruleIds,
+                        limitations));
+            })
+            .OrderBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(row => ClassificationRank(row.Classification))
+            .ThenBy(row => row.DisplayName, StringComparer.Ordinal)
+            .ThenBy(row => row.FilePath, StringComparer.Ordinal)
+            .ThenBy(row => row.StartLine ?? 0)
+            .ThenBy(row => row.EndLine ?? 0)
+            .ThenBy(row => row.SymbolId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IEnumerable<TouchedSymbolCandidate> FlowSymbolCandidates(RouteFlowRow row)
+    {
+        yield return new TouchedSymbolCandidate(row.RowId, row.SourceSymbol, $"{row.RowKind}:source", row.Classification, row.Coverage, row.Evidence);
+        if (!string.IsNullOrWhiteSpace(row.TargetSymbol))
+        {
+            yield return new TouchedSymbolCandidate(row.RowId, row.TargetSymbol!, $"{row.RowKind}:target", row.Classification, row.Coverage, row.Evidence);
+        }
+    }
+
+    private static RouteFlowEvidenceRef EvidenceFromGap(RouteFlowGap gap)
+    {
+        return new RouteFlowEvidenceRef(
+            gap.RuleId,
+            gap.EvidenceTier,
+            gap.SourceLabel ?? "unknown",
+            "unknown",
+            gap.FilePath,
+            gap.StartLine,
+            gap.EndLine,
+            "route-flow",
+            Version,
+            gap.SupportingFactIds,
+            [],
+            [gap.RuleId],
+            gap.Limitations);
+    }
+
+    private static IReadOnlyList<string> SummaryRuleIds(IEnumerable<RouteFlowEvidenceRef> evidence)
+    {
+        return evidence
+            .SelectMany(item => item.SupportingRuleIds.Append(item.RuleId))
+            .Append(ReportRuleId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string WeakestEvidenceTier(IEnumerable<string> tiers)
+    {
+        return tiers
+            .OrderByDescending(EvidenceTierRank)
+            .ThenBy(value => value, StringComparer.Ordinal)
+            .FirstOrDefault() ?? EvidenceTiers.Tier4Unknown;
+    }
+
+    private static int EvidenceTierRank(string? tier)
+    {
+        return tier switch
+        {
+            EvidenceTiers.Tier1Semantic => 0,
+            EvidenceTiers.Tier2Structural => 1,
+            EvidenceTiers.Tier3SyntaxOrTextual => 2,
+            EvidenceTiers.Tier4Unknown => 3,
+            _ => 3
+        };
+    }
+
+    private static string WeakestCoverage(string left, string right)
+    {
+        return CoverageRank(left) >= CoverageRank(right) ? left : right;
+    }
+
+    private static int CoverageRank(string? coverage)
+    {
+        return coverage switch
+        {
+            "FullEvidenceAvailable" => 0,
+            "CoverageRelative" => 1,
+            "ReducedCoverage" => 2,
+            _ => 2
+        };
+    }
+
     private static string AddArgumentPairFilterParameters(SqliteCommand command, IReadOnlyList<SymbolPairCandidate> pairCandidates)
     {
         var clauses = new List<string>();
@@ -2962,6 +3236,8 @@ public static class CombinedRouteFlowReporter
         builder.AppendLine($"- Static flow rows: `{report.Summary.FlowRowCount}`");
         builder.AppendLine($"- Business/data logic rows: `{report.Summary.LogicRowCount}`");
         builder.AppendLine($"- Dependency surfaces: `{report.Summary.DependencySurfaceCount}`");
+        builder.AppendLine($"- Touched files: `{report.TouchedFiles.Count}`");
+        builder.AppendLine($"- Touched symbols: `{report.TouchedSymbols.Count}`");
         builder.AppendLine($"- Gaps: `{report.Summary.GapCount}`");
         builder.AppendLine($"- Exit code would be non-zero: `{report.Summary.ExitCodeWouldBeNonZero}`");
         AppendList(builder, "Classification reasons", report.Summary.ClassificationReasons);
@@ -3007,6 +3283,16 @@ public static class CombinedRouteFlowReporter
         builder.AppendLine();
         AppendRows(builder, report.DependencySurfaces, "| Kind | Name | Stable key | Classification | Evidence |", "| --- | --- | --- | --- | --- |",
             row => $"| {Cell(row.SurfaceKind)} | {Cell(row.DisplayName)} | {Cell(row.StableKey)} | {Cell(row.Classification)} | {Cell(Evidence(row.Evidence))} |");
+
+        builder.AppendLine("## Touched Files");
+        builder.AppendLine();
+        AppendRows(builder, report.TouchedFiles, "| Source | File | Lines | Classification | Coverage | Supporting rows | Evidence |", "| --- | --- | --- | --- | --- | --- | --- |",
+            row => $"| {Cell(row.SourceLabel)} | {Cell(row.FilePath)} | {Cell(LineSpan(row.FirstStartLine, row.LastEndLine))} | {Cell(row.Classification)} | {Cell(row.Coverage)} | {Cell(string.Join(", ", row.SupportingRowIds))} | {Cell(Evidence(row.Evidence))} |");
+
+        builder.AppendLine("## Touched Symbols");
+        builder.AppendLine();
+        AppendRows(builder, report.TouchedSymbols, "| Source | Symbol | Kind | File | Lines | Classification | Coverage | Supporting rows | Evidence |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            row => $"| {Cell(row.SourceLabel)} | {Cell(row.DisplayName)} | {Cell(row.SymbolKind)} | {Cell(row.FilePath ?? "n/a")} | {Cell(LineSpan(row.StartLine, row.EndLine))} | {Cell(row.Classification)} | {Cell(row.Coverage)} | {Cell(string.Join(", ", row.SupportingRowIds))} | {Cell(Evidence(row.Evidence))} |");
 
         builder.AppendLine("## Gaps");
         builder.AppendLine();
@@ -3061,6 +3347,13 @@ public static class CombinedRouteFlowReporter
     private static string Evidence(RouteFlowEvidenceRef evidence)
     {
         return $"{evidence.RuleId} {evidence.EvidenceTier} {evidence.FilePath ?? "n/a"}:{evidence.StartLine?.ToString() ?? "?"}";
+    }
+
+    private static string LineSpan(int? startLine, int? endLine)
+    {
+        return startLine.HasValue || endLine.HasValue
+            ? $"{startLine?.ToString() ?? "?"}-{endLine?.ToString() ?? "?"}"
+            : "n/a";
     }
 
     private static string Cell(string? value)

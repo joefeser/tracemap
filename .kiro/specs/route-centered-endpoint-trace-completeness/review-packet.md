@@ -2,8 +2,10 @@
 
 ## Reviewer Focus
 
-Please review this spec as a spec-only PR. Focus on whether it is implementable,
-deterministic, public-safe, and consistent with existing route-flow contracts.
+Please review this first implementation-slice PR. Focus on whether the
+touched-file and touched-symbol summaries are deterministic, public-safe,
+additive to the existing route-flow contract, and backed by existing
+route-flow evidence.
 
 ## Key Questions
 
@@ -23,7 +25,9 @@ deterministic, public-safe, and consistent with existing route-flow contracts.
 
 ## Explicit Non-Goals
 
-- No product code in this PR.
+- No scanner/extractor rewrite in this PR.
+- No new public command, route-flow report type, or breaking schema family in
+  this PR.
 - No runtime tracing, traffic observation, production call-path proof, runtime
   DI target proof, outage-cause analysis, release-safety claim, business-impact
   claim, AI/LLM analysis, embeddings, vector databases, or prompt-based
