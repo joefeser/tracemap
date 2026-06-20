@@ -113,7 +113,8 @@ Public claim level: concept
 
 ## Validation
 
-- Passed: `npm test` from `site/` (225 tests).
+- Passed: `npm test` from `site/` (225 tests before PR review patch; 228
+  tests after PR review patch).
 - Passed: `npm run validate` from `site/` after discovery wording patch.
   - Result: built static site to `dist/`; validated 46 HTML files, 1433
     internal references, 45 sitemap URLs, 1 legacy story safety target, and 13
@@ -159,10 +160,20 @@ Public claim level: concept
 
 ## PR Review Loop
 
-- Status: pending after PR creation.
+- First result: `actionable_findings`.
+  - Command: `agent-control pr-loop --repo joefeser/tracemap --pr 232 --base
+    dev --require-codex-review --json`
+  - Stop reason: `UNRESOLVED_REVIEW_THREADS`.
+  - Evidence: 6 unresolved review threads at head
+    `2e4dae3e46cb6aaf49af580118aa4fdc5c4f74a0`; merge state `CLEAN`; no
+    pending or failed checks; required Codex review completed; required Qodo
+    had actionable findings.
+  - Patch: hardened `site/scripts/team-evidence-handoff.mjs` tag parsing,
+    boundary scanning, and route metadata checks; added tests for metadata
+    overclaims, `>` in attributes, and secrets inside boundary copy; checked
+    the final implementation-state task.
 - PR: `https://github.com/joefeser/tracemap/pull/232`
-- Planned command: `agent-control pr-loop --repo joefeser/tracemap --pr 232
-  --base dev --require-codex-review --json`
+- Next step: push PR review patch and rerun the PR loop.
 
 ## Oddities
 
@@ -177,6 +188,9 @@ Public claim level: concept
 - `npm run validate` initially failed because discovery metadata used
   `shipped` inside concept-level copy; wording was changed to `completed` and
   validation then passed.
+- One local validation attempt raced `npm run validate` and `npm run build`
+  against the same generated `site/dist/` directory; rerunning validation alone
+  passed.
 
 ## Follow-ups
 
