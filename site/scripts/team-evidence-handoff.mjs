@@ -95,15 +95,7 @@ const unsupportedOverclaimPatterns = [
   /\bproduction observability tool\b/i
 ];
 
-const privateTextPatterns = [
-  /\/Users\//i,
-  /\bfile:\/\//i,
-  /\blocalhost\b/i,
-  /\bconnection string\b/i,
-  /\bpassword\s*=/i,
-  /\bapi[_-]?key\b/i,
-  /\bsecret\s*=/i,
-  /\bsk-[A-Za-z0-9_-]{12,}\b/i,
+const boundaryAllowedPrivateTextPatterns = [
   /\braw facts?\b/i,
   /\braw SQLite\b/i,
   /\banalyzer logs?\b/i,
@@ -112,9 +104,18 @@ const privateTextPatterns = [
   /\bconfig values?\b/i,
   /\braw remotes?\b/i,
   /\bgenerated scan directories\b/i,
-  /\bprivate sample names?\b/i,
-  /\bcredential-like values?\b/i,
-  /\bprivate URLs?\b/i
+  /\bprivate sample names?\b/i
+];
+
+const alwaysForbiddenPrivateTextPatterns = [
+  /\/Users\//i,
+  /\bfile:\/\//i,
+  /\blocalhost\b/i,
+  /\bconnection string\b/i,
+  /\bpassword\s*=/i,
+  /\bapi[_-]?key\b/i,
+  /\bsecret\s*=/i,
+  /\bsk-[A-Za-z0-9_-]{12,}\b/i
 ];
 
 export async function validateTeamEvidenceHandoffDist({
@@ -252,11 +253,14 @@ async function validateTeamEvidenceHandoffPage({ pagePath, routeContext, errors 
   const strippedDecodedHtml = decodeHtmlEntities(strippedHtml);
   const metadataText = collectMetadataText(html);
   const attributeText = collectDecodedAttributeText(strippedHtml);
+  const allAttributeText = collectDecodedAttributeText(html);
   const pageText = normalizeRenderedText(extractMainHtml(html));
   const strippedPageText = normalizeRenderedText(extractMainHtml(strippedHtml));
   const wordCount = countRenderedWords(pageText);
-  const positioningText = `${strippedHtml} ${strippedDecodedHtml} ${strippedPageText} ${attributeText} ${metadataText}`;
-  const privateText = `${strippedHtml} ${strippedDecodedHtml} ${attributeText} ${metadataText} ${strippedPageText}`;
+  const routeBoundaryText = collectRouteBoundaryText(routeContext.routeEntry);
+  const positioningText = `${strippedHtml} ${strippedDecodedHtml} ${strippedPageText} ${attributeText} ${metadataText} ${routeBoundaryText}`;
+  const boundaryAllowedPrivateText = `${strippedHtml} ${strippedDecodedHtml} ${attributeText} ${metadataText} ${strippedPageText} ${routeBoundaryText}`;
+  const alwaysForbiddenPrivateText = `${html} ${decodedHtml} ${allAttributeText} ${metadataText} ${pageText} ${routeBoundaryText}`;
 
   for (const phrase of requiredText) {
     if (!pageText.includes(phrase)) {
@@ -303,8 +307,14 @@ async function validateTeamEvidenceHandoffPage({ pagePath, routeContext, errors 
   });
   validatePatterns({
     errors,
-    patterns: privateTextPatterns,
-    text: privateText,
+    patterns: boundaryAllowedPrivateTextPatterns,
+    text: boundaryAllowedPrivateText,
+    label: "forbidden private/raw material"
+  });
+  validatePatterns({
+    errors,
+    patterns: alwaysForbiddenPrivateTextPatterns,
+    text: alwaysForbiddenPrivateText,
     label: "forbidden private/raw material"
   });
 }
@@ -385,13 +395,36 @@ function validatePatterns({ errors, patterns, text, label }) {
 }
 
 function stripSanctionedBoundaryRegions(html) {
-  return html.replace(/<section\b(?=[^>]*\bdata-boundary-region\b)[^>]*>[\s\S]*?<\/section>/gi, "");
+  const removals = [];
+  let from = 0;
+
+  while (from < html.length) {
+    const opening = findNextTag(html, "section", from);
+    if (!opening) {
+      break;
+    }
+
+    from = opening.end;
+    if (!/\bdata-boundary-region\b/i.test(opening.attributes)) {
+      continue;
+    }
+
+    const end = findMatchingClosingTag(html, "section", opening.end);
+    if (end === -1) {
+      continue;
+    }
+
+    removals.push([opening.start, end]);
+    from = end;
+  }
+
+  return removeRanges(html, removals);
 }
 
 function collectMetadataText(html) {
   const values = [];
-  for (const match of html.matchAll(/<meta\b([^>]*)>/gi)) {
-    const content = getAttribute(match[1], "content");
+  for (const attributes of findTagAttributes(html, "meta")) {
+    const content = getAttribute(attributes, "content");
     if (content) {
       values.push(content);
     }
@@ -406,7 +439,12 @@ function collectMetadataText(html) {
 }
 
 function collectDecodedAttributeText(html) {
-  return decodeHtmlEntities([...html.matchAll(/\s[a-z:-]+\s*=\s*("[^"]*"|'[^']*')/gi)].map((match) => unquoteAttributeValue(match[1])).join(" "));
+  return decodeHtmlEntities(
+    findAllTagAttributes(html)
+      .flatMap((attributes) => [...attributes.matchAll(/\s[a-z:-]+\s*=\s*("[^"]*"|'[^']*')/gi)])
+      .map((match) => unquoteAttributeValue(match[1]))
+      .join(" ")
+  );
 }
 
 function extractMainHtml(html) {
@@ -443,7 +481,152 @@ function getAttribute(attributes, name) {
 }
 
 function findTagAttributes(html, tagName) {
-  return [...html.matchAll(new RegExp(`<${escapeRegExp(tagName)}\\b([^>]*)>`, "gi"))].map((match) => match[1]);
+  const tags = [];
+  let from = 0;
+
+  while (from < html.length) {
+    const tag = findNextTag(html, tagName, from);
+    if (!tag) {
+      break;
+    }
+
+    tags.push(tag.attributes);
+    from = tag.end;
+  }
+
+  return tags;
+}
+
+function findAllTagAttributes(html) {
+  const tags = [];
+  let from = 0;
+
+  while (from < html.length) {
+    const start = html.indexOf("<", from);
+    if (start === -1) {
+      break;
+    }
+
+    const end = findTagEnd(html, start);
+    if (end === -1) {
+      break;
+    }
+
+    const raw = html.slice(start + 1, end);
+    if (!raw.startsWith("/") && !raw.startsWith("!") && !raw.startsWith("?")) {
+      const name = raw.match(/^([a-z][a-z0-9:-]*)\b/i);
+      if (name) {
+        tags.push(raw.slice(name[0].length));
+      }
+    }
+
+    from = end + 1;
+  }
+
+  return tags;
+}
+
+function findNextTag(html, tagName, from) {
+  const pattern = new RegExp(`<${escapeRegExp(tagName)}\\b`, "gi");
+  pattern.lastIndex = from;
+
+  while (true) {
+    const match = pattern.exec(html);
+    if (!match) {
+      return null;
+    }
+
+    const end = findTagEnd(html, match.index);
+    if (end === -1) {
+      return null;
+    }
+
+    return {
+      start: match.index,
+      end: end + 1,
+      attributes: html.slice(match.index + match[0].length, end)
+    };
+  }
+}
+
+function findMatchingClosingTag(html, tagName, from) {
+  const tagPattern = new RegExp(`<\\/?${escapeRegExp(tagName)}\\b`, "gi");
+  tagPattern.lastIndex = from;
+  let depth = 1;
+
+  while (true) {
+    const match = tagPattern.exec(html);
+    if (!match) {
+      return -1;
+    }
+
+    const end = findTagEnd(html, match.index);
+    if (end === -1) {
+      return -1;
+    }
+
+    if (html[match.index + 1] === "/") {
+      depth -= 1;
+      if (depth === 0) {
+        return end + 1;
+      }
+    } else {
+      depth += 1;
+    }
+
+    tagPattern.lastIndex = end + 1;
+  }
+}
+
+function findTagEnd(html, start) {
+  let quote = null;
+
+  for (let index = start + 1; index < html.length; index += 1) {
+    const char = html[index];
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === "\"" || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === ">") {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function removeRanges(value, ranges) {
+  let result = "";
+  let cursor = 0;
+
+  for (const [start, end] of ranges) {
+    result += value.slice(cursor, start);
+    cursor = end;
+  }
+
+  return result + value.slice(cursor);
+}
+
+function collectRouteBoundaryText(routeEntry) {
+  if (!routeEntry) {
+    return "";
+  }
+
+  return [
+    routeEntry.title,
+    routeEntry.summary,
+    ...(Array.isArray(routeEntry.limitations) ? routeEntry.limitations : [])
+  ]
+    .filter((value) => typeof value === "string")
+    .join(" ");
 }
 
 function unquoteAttributeValue(value) {

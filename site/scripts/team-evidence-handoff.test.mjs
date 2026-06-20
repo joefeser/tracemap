@@ -52,6 +52,18 @@ test("validateTeamEvidenceHandoffDist reports route metadata regressions", async
   assert.match(errors.join("\n"), /nonClaims are missing required term: production traffic/);
 });
 
+test("validateTeamEvidenceHandoffDist rejects forbidden route metadata positioning", async (t) => {
+  const root = await createManagedTeamEvidenceHandoffDistFixture(t);
+  await rewriteHandoffRoutesIndexEntry(join(root, "dist"), {
+    summary: "AI-powered handoff summary."
+  });
+  const errors = [];
+
+  await validateTeamEvidenceHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden AI\/LLM positioning/);
+});
+
 test("validateTeamEvidenceHandoffDist reports missing required links", async (t) => {
   const root = await createManagedTeamEvidenceHandoffDistFixture(t, {
     handoffHtml: teamEvidenceHandoffPage({ omittedLink: "/manager-faq/" })
@@ -109,9 +121,33 @@ test("validateTeamEvidenceHandoffDist permits sanctioned non-claims and public-s
   assert.deepEqual(errors, []);
 });
 
+test("validateTeamEvidenceHandoffDist accepts greater-than characters in metadata attributes", async (t) => {
+  const root = await createManagedTeamEvidenceHandoffDistFixture(t, {
+    handoffHtml: teamEvidenceHandoffPage({
+      metadataDescription: "Receiver > handoff fixture."
+    })
+  });
+  const errors = [];
+
+  await validateTeamEvidenceHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateTeamEvidenceHandoffDist rejects private text outside boundary copy", async (t) => {
   const root = await createManagedTeamEvidenceHandoffDistFixture(t, {
     handoffHtml: teamEvidenceHandoffPage({ extraBody: "<p>Use file:///tmp/private.html.</p>" })
+  });
+  const errors = [];
+
+  await validateTeamEvidenceHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private\/raw material/);
+});
+
+test("validateTeamEvidenceHandoffDist rejects secrets inside boundary copy", async (t) => {
+  const root = await createManagedTeamEvidenceHandoffDistFixture(t, {
+    handoffHtml: teamEvidenceHandoffPage({ extraBoundary: "<p>secret=value</p>" })
   });
   const errors = [];
 
@@ -185,7 +221,13 @@ async function rewriteHandoffRoutesIndexEntry(dist, fields) {
   await writeFile(path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
 }
 
-function teamEvidenceHandoffPage({ extraBody = "", fillerWordCount = 320, omittedLink = null } = {}) {
+function teamEvidenceHandoffPage({
+  extraBody = "",
+  extraBoundary = "",
+  fillerWordCount = 320,
+  metadataDescription = "Team evidence handoff fixture.",
+  omittedLink = null
+} = {}) {
   const links = teamEvidenceHandoffRequiredLinks
     .filter((link) => link !== omittedLink)
     .map((link) => `<a href="${link}">${link}</a>`)
@@ -210,17 +252,18 @@ function teamEvidenceHandoffPage({ extraBody = "", fillerWordCount = 320, omitte
         <p>It does not claim runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, autonomous approval, or complete product coverage.</p>
         <p>It does not replace human ownership, tests, telemetry, release review, code review, source review, logs, traces, incident response, or manager judgment.</p>
         <p>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, credential-like values, or private URLs. Private repository evidence needs private review before any public-safe summary is written.</p>
+        ${extraBoundary}
       </section>
     </main>
-  `);
+  `, { metadataDescription });
 }
 
-function page(body) {
+function page(body, { metadataDescription = "Team evidence handoff fixture." } = {}) {
   return `<!doctype html>
 <html lang="en">
   <head>
     <title>Team Evidence Handoff | TraceMap</title>
-    <meta name="description" content="Team evidence handoff fixture.">
+    <meta name="description" content="${metadataDescription}">
     <link rel="canonical" href="https://tracemap.tools/team-evidence-handoff/">
     <meta property="og:type" content="article">
     <meta property="og:title" content="TraceMap Team Evidence Handoff">
