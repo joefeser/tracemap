@@ -18,13 +18,14 @@ public sealed class MessageSurfaceTests
             {
                 private const string OrdersTopic = "orders.events";
 
-                public void Publish(dynamic kafkaProducer, dynamic channel, dynamic daprClient, string tenantTopic, object message)
+                public void Publish(dynamic kafkaProducer, dynamic channel, dynamic daprClient, dynamic serviceBusSender, string tenantTopic, object message)
                 {
                     kafkaProducer.ProduceAsync(OrdersTopic, message);
                     channel.QueueDeclare("orders-work");
                     channel.BasicPublish("orders-exchange", "created", null, message);
                     channel.BasicPublish("", "orders-default", null, message);
                     daprClient.PublishEventAsync("pubsub", "orders.created", message);
+                    serviceBusSender.SendAsync("orders-sent", message);
                     kafkaProducer.ProduceAsync(tenantTopic, message);
                     _mediator.Publish(message);
                 }
@@ -62,6 +63,10 @@ public sealed class MessageSurfaceTests
             && fact.Properties.GetValueOrDefault("surfaceKind") == "message-queue"
             && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-default");
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MessagePublisherSurface
+            && fact.Properties.GetValueOrDefault("operationKind") == "send"
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-sent");
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MessageConsumerSurface
             && fact.RuleId == RuleIds.MessageSurfaceConsume
             && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-work");
@@ -80,6 +85,41 @@ public sealed class MessageSurfaceTests
             fact.FactType == FactTypes.MessagePublisherSurface
             && fact.Evidence.StartLine.ToString() == "12"
             && fact.Properties.GetValueOrDefault("frameworkFamily")?.Contains("mediator", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    [Fact]
+    public void Ambiguous_const_destination_names_emit_gap_instead_of_wrong_static_surface()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Messaging.cs"), """
+            public static class FirstDestinations
+            {
+                public const string Destination = "orders.first";
+            }
+
+            public static class SecondDestinations
+            {
+                public const string Destination = "orders.second";
+            }
+
+            public sealed class Publisher
+            {
+                public void Publish(dynamic kafkaProducer, object message)
+                {
+                    kafkaProducer.ProduceAsync(FirstDestinations.Destination, message);
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.MessagePublisherSurface
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") is "orders.first" or "orders.second");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.MessageSurfaceGap
+            && fact.Properties.GetValueOrDefault("gapReason") == "dynamic-destination");
     }
 
     [Fact]

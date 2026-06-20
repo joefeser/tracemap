@@ -280,7 +280,7 @@ public static class CSharpIntegrationSyntaxExtractor
         InvocationExpressionSyntax invocation,
         string invocationName,
         string? receiverName,
-        IReadOnlyDictionary<string, string> constants)
+        IReadOnlyDictionary<string, string?> constants)
     {
         if (IsInProcessMediatorInvocation(invocationName, receiverName, invocation))
         {
@@ -329,7 +329,7 @@ public static class CSharpIntegrationSyntaxExtractor
         string filePath,
         InvocationExpressionSyntax invocation,
         MessagePattern pattern,
-        IReadOnlyDictionary<string, string> constants)
+        IReadOnlyDictionary<string, string?> constants)
     {
         pattern = NormalizeMessagePatternForInvocation(pattern, invocation, constants);
         var destination = TryGetStaticString(invocation.ArgumentList.Arguments, pattern.DestinationArgumentIndex, constants, out var rawDestination)
@@ -378,7 +378,7 @@ public static class CSharpIntegrationSyntaxExtractor
     private static MessagePattern NormalizeMessagePatternForInvocation(
         MessagePattern pattern,
         InvocationExpressionSyntax invocation,
-        IReadOnlyDictionary<string, string> constants)
+        IReadOnlyDictionary<string, string?> constants)
     {
         if (pattern.FrameworkFamily == "rabbitmq"
             && pattern.FrameworkFeature == "basic-publish"
@@ -822,7 +822,6 @@ public static class CSharpIntegrationSyntaxExtractor
 
         var receiver = receiverName ?? string.Empty;
         return receiver.Contains("mediator", StringComparison.OrdinalIgnoreCase)
-            || receiver.Contains("sender", StringComparison.OrdinalIgnoreCase)
             || invocation.Expression.ToString().Contains("MediatR", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -871,9 +870,9 @@ public static class CSharpIntegrationSyntaxExtractor
         return "message-framework";
     }
 
-    private static IReadOnlyDictionary<string, string> ExtractStringConstants(CompilationUnitSyntax root)
+    private static IReadOnlyDictionary<string, string?> ExtractStringConstants(CompilationUnitSyntax root)
     {
-        var constants = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var constants = new SortedDictionary<string, string?>(StringComparer.Ordinal);
         foreach (var declaration in root.DescendantNodes().OfType<VariableDeclaratorSyntax>())
         {
             var fieldOrLocal = declaration.Parent?.Parent;
@@ -888,13 +887,21 @@ public static class CSharpIntegrationSyntaxExtractor
                 continue;
             }
 
-            constants[declaration.Identifier.ValueText] = literal.Token.ValueText;
+            var name = declaration.Identifier.ValueText;
+            if (constants.TryGetValue(name, out var existing))
+            {
+                constants[name] = existing == literal.Token.ValueText ? existing : null;
+            }
+            else
+            {
+                constants[name] = literal.Token.ValueText;
+            }
         }
 
         return constants;
     }
 
-    private static bool TryGetStaticString(SeparatedSyntaxList<ArgumentSyntax> arguments, int index, IReadOnlyDictionary<string, string> constants, out string value)
+    private static bool TryGetStaticString(SeparatedSyntaxList<ArgumentSyntax> arguments, int index, IReadOnlyDictionary<string, string?> constants, out string value)
     {
         value = string.Empty;
         if (arguments.Count <= index)
@@ -905,7 +912,7 @@ public static class CSharpIntegrationSyntaxExtractor
         return TryGetStaticString(arguments[index].Expression, constants, out value);
     }
 
-    private static bool TryGetStaticString(SeparatedSyntaxList<AttributeArgumentSyntax> arguments, int index, IReadOnlyDictionary<string, string> constants, out string value)
+    private static bool TryGetStaticString(SeparatedSyntaxList<AttributeArgumentSyntax> arguments, int index, IReadOnlyDictionary<string, string?> constants, out string value)
     {
         value = string.Empty;
         if (arguments.Count <= index)
@@ -916,7 +923,7 @@ public static class CSharpIntegrationSyntaxExtractor
         return TryGetStaticString(arguments[index].Expression, constants, out value);
     }
 
-    private static bool TryGetStaticString(ExpressionSyntax expression, IReadOnlyDictionary<string, string> constants, out string value)
+    private static bool TryGetStaticString(ExpressionSyntax expression, IReadOnlyDictionary<string, string?> constants, out string value)
     {
         value = string.Empty;
         if (expression is LiteralExpressionSyntax literal && IsStringLiteralToken(literal.Token))
@@ -925,13 +932,13 @@ public static class CSharpIntegrationSyntaxExtractor
             return true;
         }
 
-        if (expression is IdentifierNameSyntax identifier && constants.TryGetValue(identifier.Identifier.ValueText, out var constantValue))
+        if (expression is IdentifierNameSyntax identifier && constants.TryGetValue(identifier.Identifier.ValueText, out var constantValue) && constantValue is not null)
         {
             value = constantValue;
             return true;
         }
 
-        if (expression is MemberAccessExpressionSyntax memberAccess && constants.TryGetValue(memberAccess.Name.Identifier.ValueText, out var memberConstantValue))
+        if (expression is MemberAccessExpressionSyntax memberAccess && constants.TryGetValue(memberAccess.Name.Identifier.ValueText, out var memberConstantValue) && memberConstantValue is not null)
         {
             value = memberConstantValue;
             return true;
