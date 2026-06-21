@@ -127,6 +127,156 @@ public sealed class PropertyFlowTests
     }
 
     [Fact]
+    public async Task Property_flow_accepts_safe_observed_demo_metadata_without_upgrading_static_classification()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _) = await CreatePropertyFlowCombinedIndexAsync(temp);
+        var observedPath = Path.Combine(temp.Path, "observed.json");
+        await File.WriteAllTextAsync(observedPath, """
+            {
+              "observedEvidence": [
+                {
+                  "label": "local-demo-field-check",
+                  "safeMetadata": {
+                    "artifactHash": "abc123",
+                    "captureMode": "local-demo",
+                    "field": "email",
+                    "selector": "binding:user.email",
+                    "tool": "browser-observation"
+                  }
+                }
+              ]
+            }
+            """);
+
+        var withoutObserved = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "without-observed"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular"));
+        var withObserved = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "with-observed"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: observedPath));
+
+        Assert.Equal(withoutObserved.Summary.Classification, withObserved.Report.Summary.Classification);
+        Assert.Equal(withoutObserved.LineagePaths.Select(path => path.Classification), withObserved.Report.LineagePaths.Select(path => path.Classification));
+        var observed = Assert.Single(withObserved.Report.ObservedEvidence);
+        Assert.Equal(PropertyFlowClassifications.ObservedDemoContext, observed.Classification);
+        Assert.Equal("property-flow.observed-evidence.v1", observed.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, observed.EvidenceTier);
+        Assert.Equal("email", observed.SafeMetadata["field"]);
+        Assert.Equal("abc123", observed.SafeMetadata["artifactHash"]);
+
+        var markdown = await File.ReadAllTextAsync(withObserved.MarkdownPath!);
+        var json = await File.ReadAllTextAsync(withObserved.JsonPath!);
+        Assert.Contains("Observed evidence is demo/validation metadata only", markdown);
+        Assert.Contains("local-demo-field-check", markdown);
+        Assert.Contains("\"classification\": \"ObservedDemoContext\"", json);
+        Assert.DoesNotContain(temp.Path, markdown);
+        Assert.DoesNotContain(temp.Path, json);
+    }
+
+    [Fact]
+    public async Task Property_flow_rejects_unsafe_observed_demo_metadata()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _) = await CreatePropertyFlowCombinedIndexAsync(temp);
+        var observedPath = Path.Combine(temp.Path, "observed-unsafe.json");
+        await File.WriteAllTextAsync(observedPath, """
+            {
+              "observedEvidence": [
+                {
+                  "label": "local-demo-field-check",
+                  "safeMetadata": {
+                    "secretToken": "nope"
+                  }
+                }
+              ]
+            }
+            """);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "unsafe-out"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: observedPath)));
+        Assert.Contains("unsafe observed evidence metadata", exception.Message);
+        Assert.DoesNotContain("secretToken", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check"}]}""", "requires non-empty safeMetadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{}}]}""", "requires non-empty safeMetadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"artifactHash":"src/private/page.html"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"captureMode":"production-login"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"noteCode":"live-http"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"noteCode":"apiKey=abc123"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"C:/workspace/private-field","safeMetadata":{"artifactHash":"abc123"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"\\\\server\\share\\private-field","safeMetadata":{"artifactHash":"abc123"}}]}""", "unsafe observed evidence metadata")]
+    public async Task Property_flow_rejects_observed_demo_metadata_without_safe_evidence_or_with_runtime_markers(string observedJson, string expectedMessage)
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _) = await CreatePropertyFlowCombinedIndexAsync(temp);
+        var observedPath = Path.Combine(temp.Path, "observed-unsafe.json");
+        await File.WriteAllTextAsync(observedPath, observedJson);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "unsafe-out"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: observedPath)));
+
+        Assert.Contains(expectedMessage, exception.Message);
+        Assert.DoesNotContain(temp.Path, exception.Message);
+        Assert.DoesNotContain("apiKey=abc123", exception.Message);
+    }
+
+    [Fact]
+    public async Task Property_flow_rejects_unbounded_observed_demo_metadata_inputs()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _) = await CreatePropertyFlowCombinedIndexAsync(temp);
+
+        var oversizedPath = Path.Combine(temp.Path, "observed-oversized.json");
+        await File.WriteAllTextAsync(oversizedPath, "{\"observedEvidence\":[{\"label\":\"local-demo-field-check\",\"safeMetadata\":{\"artifactHash\":\"" + new string('a', 300_000) + "\"}}]}");
+
+        var oversizedException = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "oversized-out"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: oversizedPath)));
+
+        Assert.Contains("size limit", oversizedException.Message);
+        Assert.DoesNotContain(temp.Path, oversizedException.Message);
+
+        var manyRowsPath = Path.Combine(temp.Path, "observed-many-rows.json");
+        var rows = Enumerable.Range(1, 51).Select(index => "{\"label\":\"demo-field-" + index + "\",\"safeMetadata\":{\"artifactHash\":\"hash" + index + "\"}}");
+        await File.WriteAllTextAsync(manyRowsPath, """{"observedEvidence":[""" + string.Join(",", rows) + """]}""");
+
+        var manyRowsException = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "many-rows-out"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: manyRowsPath)));
+
+        Assert.Contains("row limit", manyRowsException.Message);
+        Assert.DoesNotContain(temp.Path, manyRowsException.Message);
+    }
+
+    [Fact]
     public async Task Property_flow_reports_generic_ambiguous_and_selector_no_match_states()
     {
         using var temp = new TempDirectory();

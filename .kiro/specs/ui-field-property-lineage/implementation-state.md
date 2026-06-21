@@ -3,14 +3,29 @@
 Status: implemented-v1-with-follow-ups
 
 Post-promotion note: PR #173 implemented the v1 property-flow slice and PR #247
-promoted it to `main`. Remaining unchecked items are follow-up lineage depth,
-not current unmerged work.
+promoted it to `main`. The observed-evidence follow-up is implemented in the
+current branch. Remaining unchecked items are follow-up lineage depth, not
+current unmerged work.
 
 ## Current Branch
 
-`codex/implement-ui-field-property-lineage`
+`codex/implement-ui-property-lineage-followup`
 
 ## Current Slice
+
+Current follow-up slice: add an opt-in `--observed-evidence <json>` metadata
+attachment for `tracemap property-flow`. The input is a local JSON file with
+safe `observedEvidence` rows. It is report metadata only:
+
+- It does not capture browser/computer-use data.
+- It does not perform live HTTP, runtime DOM proof, production login, or
+  credentialed workflows.
+- It rejects unsafe metadata keys and values with sanitized diagnostics.
+- It labels accepted rows as `ObservedDemoContext` under
+  `property-flow.observed-evidence.v1`.
+- It does not upgrade summary, root, path, or edge static classifications.
+
+Historical v1 slice:
 
 This slice implements a deterministic v1 of `tracemap property-flow` over
 combined indexes, adds Angular template/form source facts in the TypeScript
@@ -78,8 +93,10 @@ claims.
   `NeedsReviewLineage` unless narrowed by source/type/symbol/fact identity.
 - Missing optional schema produces `MissingOptionalSchema` gaps; route-flow
   schema absence produces `RouteFlowUnavailable`.
-- Optional browser/computer-use evidence is not implemented in this slice and
-  remains outside the core command.
+- Optional browser/computer-use evidence capture remains outside the core
+  command. The current follow-up only accepts pre-existing safe observed
+  metadata via `--observed-evidence <json>` and keeps it from influencing static
+  classifications.
 
 ## Oddities
 
@@ -94,6 +111,17 @@ claims.
 
 ## Validation
 
+- `dotnet test src/dotnet/TraceMap.sln --filter PropertyFlow`
+- `dotnet build src/dotnet/TraceMap.sln`
+- `dotnet test src/dotnet/TraceMap.sln`: 573 passed
+- `./scripts/check-private-paths.sh`
+- `git diff --check`
+
+Python, JVM, and TypeScript adapter checks were deferred for the current
+follow-up because no language adapter extraction code changed.
+
+Historical v1 validation:
+
 - `dotnet build src/dotnet/TraceMap.sln`
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`
 - `npm run check --prefix src/typescript`
@@ -106,6 +134,21 @@ slice; no Python or JVM adapter code changed. The relevant TypeScript adapter
 check and .NET/Razor tests were run.
 
 ## Kiro Review
+
+Current follow-up:
+
+- Kiro CLI availability checked: `/usr/local/bin/kiro`.
+- `kiro chat -m ask -` was invoked with the current diff and a focused
+  merge-readiness prompt for the observed-evidence slice. The CLI accepted stdin
+  and returned only `Reading from stdin ...` without textual review output in
+  this terminal session.
+- Because no actionable Kiro findings were returned, the implementation was
+  self-reviewed against the prompt questions and hardened before publish:
+  observed evidence cannot upgrade classifications, unsafe metadata is rejected
+  without echoing values, unreadable file errors are sanitized, and observed
+  evidence IDs are deterministic after sorting.
+
+Historical v1:
 
 - Initial implementation review completed with reduced coverage because the
   wrapper reported denied tool access for one shell command.
@@ -157,8 +200,9 @@ check and .NET/Razor tests were run.
   projection, and AutoMapper-like evidence where rule-backed facts exist.
 - Add deeper validation/read/write, service/repository, query/data/entity, and
   dependency surface property hops.
-- Add optional observed/browser metadata as demo-only evidence in a future
-  opt-in workflow, without upgrading static classifications.
+- Add a future capture/import workflow for browser/computer-use observed
+  evidence if needed; keep it outside core scanning and keep it unable to
+  upgrade static classifications.
 
 ## Blockers
 
