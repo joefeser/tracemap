@@ -166,4 +166,6 @@ not `Closes #35`.
   - Suppressed immediate candidate-to-relationship backtracking so derived
     interface/override candidate edges do not immediately traverse back over
     the backing relationship and create misleading cycle truncation.
+  - Added source scanner version and end-line metadata to
+    `DispatchCandidateFanOut` gaps, with focused test coverage.
 - Re-ran focused and full validation after the review-loop patch.
