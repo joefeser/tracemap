@@ -244,6 +244,7 @@ async function validateSitemap({ baseUrl, dist, errors }) {
 async function validateRoutesIndex({ dist, errors }) {
   const routeEntry = await readRouteEntry({ dist, errors, route: managerDemoScriptRoute });
   if (!routeEntry) {
+    errors.push(withEvidence(`Manager demo script routes-index.json is missing required route: ${managerDemoScriptRoute}`, routesIndexArtifact));
     return;
   }
 
