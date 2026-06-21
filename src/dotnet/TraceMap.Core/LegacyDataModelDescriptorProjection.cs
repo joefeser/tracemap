@@ -339,6 +339,7 @@ public static partial class LegacyDataModelDescriptorProjection
             "generated-code" => "generated-data-code",
             "config" => "provider-config",
             "nhibernate" => "nhibernate-hbm",
+            "nhibernate-hbm" => "nhibernate-hbm",
             _ => "unknown"
         };
     }
@@ -353,6 +354,7 @@ public static partial class LegacyDataModelDescriptorProjection
             "TableAdapter" => "tableadapter",
             "GeneratedDesigner" => "generated-code",
             "Config" => "config",
+            "NHibernateHbm" => "nhibernate-hbm",
             _ => null
         };
     }
