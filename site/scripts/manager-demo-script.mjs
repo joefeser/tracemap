@@ -264,13 +264,34 @@ async function validateRoutesIndex({ dist, errors }) {
   for (const field of ["title", "summary"]) {
     if (typeof routeEntry[field] !== "string" || routeEntry[field].trim() === "") {
       errors.push(withEvidence(`Manager demo script routes-index.json is missing non-empty ${field}.`, routesIndexArtifact));
+      continue;
     }
+
+    validateRoutesIndexPositioning({ errors, field, value: routeEntry[field] });
   }
 
   for (const field of ["limitations", "nonClaims"]) {
     if (!Array.isArray(routeEntry[field]) || routeEntry[field].length === 0) {
       errors.push(withEvidence(`Manager demo script routes-index.json is missing non-empty ${field}.`, routesIndexArtifact));
     }
+  }
+}
+
+function validateRoutesIndexPositioning({ errors, field, value }) {
+  const normalized = normalizeOverclaimText(value);
+
+  if (forbiddenPositioningPattern.test(normalized)) {
+    errors.push(withEvidence(`Manager demo script routes-index.json ${field} contains forbidden AI/LLM positioning.`, routesIndexArtifact));
+  }
+
+  const proofMatch = normalized.match(forbiddenProofClaimPattern);
+  if (proofMatch) {
+    errors.push(withEvidence(`Manager demo script routes-index.json ${field} contains forbidden proof claim: ${proofMatch[0]}`, routesIndexArtifact));
+  }
+
+  const conclusionMatch = normalized.match(unsupportedConclusionPattern);
+  if (conclusionMatch) {
+    errors.push(withEvidence(`Manager demo script routes-index.json ${field} contains unsupported conclusion: ${conclusionMatch[0]}`, routesIndexArtifact));
   }
 }
 
