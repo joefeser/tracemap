@@ -1,6 +1,6 @@
 # Implementation State
 
-Status: implemented-pending-pr-loop
+Status: implemented-pr-loop-clean
 Readiness: ready-for-implementation
 Last verified: 2026-06-21
 Branch: codex/impl-site-review-packet-assembly
@@ -121,7 +121,31 @@ proof, release gate, or autonomous review workflow.
 - In-app browser control was attempted first but failed before navigation with
   a browser-control environment metadata error; terminal Playwright CLI was
   used for the real browser sanity check.
-- PR loop: pending until the ready PR is opened.
+- PR loop:
+  - Initial run on PR #259 stopped on
+    `PR_BODY_LITERAL_ESCAPED_NEWLINES`; PR body was edited to replace literal
+    escaped newline sequences with real Markdown newlines.
+  - Second run stopped on four unresolved Gemini review threads in
+    `site/scripts/review-packet-assembly.mjs`; fixed by normalizing sitemap
+    paths, route-index paths, and required href checks, and by tightening
+    attribute parsing so `data-href` cannot satisfy required `href` links.
+    Added regression tests for trailing-slash link normalization and
+    `data-href` rejection. Threads were resolved after the fix.
+  - Third run stopped on a Qodo top-level actionable finding for
+    tag-splitting scan bypasses and brittle case-sensitive non-claim metadata
+    checks; fixed by adding tight tag-stripped scan text for forbidden/private
+    checks and case-insensitive metadata topic matching. Added regression tests
+    for tag-split forbidden claims, tag-split private text, and case-varied
+    route nonClaims.
+  - A PR-level disposition was recorded for the Qodo top-level comment with
+    fixing commit `4856f8d1066418304a4f7df34b0ada7addace2f3`, validation
+    evidence, and low residual risk.
+  - Final recorded run before this state-note-only update returned
+    `merge_ready` on head `4856f8d1066418304a4f7df34b0ada7addace2f3`,
+    stop reason `NONE`, no unresolved threads, no pending checks, no failed
+    checks, no actionable bot findings, merge state `CLEAN`, and residual risk
+    `medium` because required Codex review was satisfied by the configured
+    `trustedCodeReview` quorum after Qodo returned.
 
 ## Oddities
 
@@ -138,7 +162,5 @@ proof, release gate, or autonomous review workflow.
 
 ## Follow-ups
 
-- Complete commit, push, ready PR creation, and required PR loop against
-  `dev`.
 - Keep future copy centered on human checklist assembly so the route does not
   read as a generated packet-builder feature.
