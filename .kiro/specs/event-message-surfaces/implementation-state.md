@@ -6,6 +6,47 @@ Post-promotion note: PR #225 implemented the first event/message surface slice
 and PR #247 promoted it to `main`. Remaining unchecked task items are follow-up
 depth, not current unmerged work.
 
+## Current Follow-Up Slice
+
+- Branch: `codex/implement-event-message-surfaces-followup`
+- Base: `origin/dev`
+- Selected scope: message direction filtering for `paths` and `reverse`.
+- Implemented:
+  - Added explicit `--message-direction publish|consume|bind|declare|all`
+    support for `tracemap paths` and `tracemap reverse`.
+  - Carried `operationDirection` from combined message surface rows into path
+    graph/report nodes.
+  - Filtered only message surfaces by direction; non-message surfaces are not
+    affected by the selector.
+  - Removed the old `direction-filter-not-supported` gap for selected message
+    surfaces because the filter is now implemented.
+  - Recorded the selected direction in Markdown/JSON query metadata.
+  - Added focused tests for publish/consume filtering and invalid direction
+    validation.
+  - Added follow-up tests for `all` direction behavior and `declare`
+    direction filtering.
+- Still out of scope:
+  - Route-flow async message-hop rendering.
+  - Reducer context over message surfaces.
+  - Roslyn semantic Tier1 message extraction.
+  - TypeScript, Python, and JVM message adapter slices.
+- Validation so far:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`: 8 passed, 0 failed.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed.
+  - `dotnet test src/dotnet/TraceMap.sln`: 585 passed, 0 failed.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+- Review:
+  - Sonnet implementation review artifact:
+    `.tmp/kiro-reviews/event-message-surfaces/2026-06-21T204944-520Z-implementation-claude-sonnet-4.6.clean.md`.
+    Coverage was reduced due denied tool access and findings largely reviewed
+    the prior V1 scope.
+  - Opus re-review artifact:
+    `.tmp/kiro-reviews/event-message-surfaces/2026-06-21T205351-261Z-re-review-claude-opus-4.8.clean.md`.
+    Coverage was reduced due denied tool access. Opus found no blocking issues
+    for this follow-up slice and requested slice-local `all`/`declare`
+    direction tests; those tests were added.
+
 ## Branch
 
 - `codex/implement-event-message-surfaces`
@@ -62,7 +103,6 @@ depth, not current unmerged work.
   .NET message extraction is syntax/static structural evidence.
 - Reducer context over message surfaces is documented in the rule catalog but
   not wired into reducer classification yet.
-- Direction filtering for paths/reverse is not implemented.
 - Route-flow async message-hop rendering is not implemented.
 - TypeScript, Python, and JVM message adapters remain separate future slices.
 - Report schema version was not bumped; message fields are additive on existing
@@ -159,8 +199,6 @@ depth, not current unmerged work.
 - Add Roslyn semantic message extraction for a small framework set and Tier1
   tests.
 - Add reducer context and downgrade behavior for message surfaces.
-- Add actual direction filtering for paths/reverse. This slice emits explicit
-  `direction-filter-not-supported` gaps when message surfaces are selected.
 - Add route-flow async boundary rendering for message hops.
 - Add cross-language adapter slices only after the shared contract is accepted.
 

@@ -23,7 +23,8 @@ public sealed record CombinedDependencyPathOptions(
     bool IncludeLegacyRoots = false,
     int MaxDepth = 8,
     int MaxPaths = 100,
-    int MaxFrontier = 10000);
+    int MaxFrontier = 10000,
+    string? MessageDirection = null);
 
 public sealed record CombinedDependencyPathResult(
     CombinedDependencyPathReport Report,
@@ -63,7 +64,9 @@ public sealed record CombinedPathQuery(
     int MaxPaths,
     int MaxFrontier,
     string Algorithm,
-    string AlgorithmVersion);
+    string AlgorithmVersion,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? MessageDirection);
 
 public sealed record CombinedPathSummary(
     int SourceCount,
@@ -114,7 +117,9 @@ public sealed record CombinedPathNode(
     string? TextHash,
     string? TextLength,
     string? PackageName,
-    string? ConfigKey);
+    string? ConfigKey,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? OperationDirection = null);
 
 public sealed record CombinedPathEdge(
     string EdgeId,
@@ -384,6 +389,8 @@ public static class CombinedDependencyPathReporter
         {
             throw new ArgumentException("paths --classification must be one of StrongStaticPath, ProbableStaticPath, NeedsReviewStaticPath, NoBackendEvidence, ReducedCoverage, or AnalysisGap.");
         }
+
+        NormalizeMessageDirection(options.MessageDirection, "paths");
     }
 
     private static CombinedDependencyPathReport BuildReport(
@@ -444,28 +451,6 @@ public static class CombinedDependencyPathReporter
         }
         else
         {
-            var messageTerminalNode = terminalNodes
-                .Select(id => graph.Nodes.TryGetValue(id, out var node) ? node : null)
-                .OfType<GraphNode>()
-                .FirstOrDefault(node => IsMessageSurfaceKind(node.SurfaceKind));
-            if (messageTerminalNode is not null)
-            {
-                gaps.Add(new CombinedPathGap(
-                    $"gap:message-direction-filter:{messageTerminalNode.NodeId}",
-                    "DirectionFilterNotSupported",
-                    CombinedDependencyPathClassifications.AnalysisGap,
-                    "Message surface direction filtering is not supported in this path-query slice; publisher, consumer, and binding evidence may be selected together.",
-                    messageTerminalNode.SourceIndexId,
-                    messageTerminalNode.SourceLabel,
-                    messageTerminalNode.NodeId,
-                    messageTerminalNode.CombinedFactId,
-                    RuleIds.MessageSurfaceGap,
-                    EvidenceTiers.Tier4Unknown,
-                    messageTerminalNode.FilePath,
-                    messageTerminalNode.StartLine,
-                    "direction-filter-not-supported"));
-            }
-
             var search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
@@ -583,7 +568,8 @@ public static class CombinedDependencyPathReporter
                 options.MaxPaths,
                 options.MaxFrontier,
                 Algorithm,
-                AlgorithmVersion),
+                AlgorithmVersion,
+                NormalizeMessageDirection(options.MessageDirection, "paths")),
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -2495,6 +2481,7 @@ public static class CombinedDependencyPathReporter
     {
         var surfaceKind = string.IsNullOrWhiteSpace(options.ToSurface) ? null : options.ToSurface.Trim();
         var surfaceName = string.IsNullOrWhiteSpace(options.SurfaceName) ? null : options.SurfaceName.Trim();
+        var messageDirection = NormalizeMessageDirection(options.MessageDirection, "paths");
         var explicitSurfaceKind = surfaceKind is not null;
         var startFactIds = startNodes
             .Select(node => node.CombinedFactId)
@@ -2506,8 +2493,30 @@ public static class CombinedDependencyPathReporter
             .Where(node => explicitSurfaceKind || IsDefaultTerminalSurface(node, startFactIds))
             .Where(node => surfaceKind is null || string.Equals(node.SurfaceKind, surfaceKind, StringComparison.Ordinal))
             .Where(node => surfaceName is null || SurfaceNameMatches(node, surfaceName))
+            .Where(node => messageDirection is null || !IsMessageSurfaceKind(node.SurfaceKind) || string.Equals(node.OperationDirection, messageDirection, StringComparison.Ordinal))
             .Select(node => node.NodeId)
             .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static string? NormalizeMessageDirection(string? value, string commandName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim().ToLowerInvariant();
+        if (trimmed == "all")
+        {
+            return null;
+        }
+
+        if (trimmed is "publish" or "consume" or "bind" or "declare")
+        {
+            return trimmed;
+        }
+
+        throw new ArgumentException($"{commandName} --message-direction must be one of publish, consume, bind, declare, or all.");
     }
 
     private static bool IsDefaultTerminalSurface(GraphNode node, IReadOnlySet<string> startFactIds)
@@ -3221,7 +3230,8 @@ public static class CombinedDependencyPathReporter
             surface.TextHash,
             surface.TextLength,
             surface.PackageName,
-            surface.ConfigKey);
+            surface.ConfigKey,
+            surface.OperationDirection);
     }
 
     private static bool IsMessageSurfaceKind(string? surfaceKind)
@@ -3376,6 +3386,7 @@ public static class CombinedDependencyPathReporter
         builder.AppendLine($"- From source: `{report.Query.FromSource ?? "n/a"}`");
         builder.AppendLine($"- To surface: `{report.Query.ToSurface ?? "all"}`");
         builder.AppendLine($"- Surface name: `{report.Query.SurfaceName ?? "n/a"}`");
+        builder.AppendLine($"- Message direction: `{report.Query.MessageDirection ?? "all"}`");
         builder.AppendLine($"- Source pair: `{report.Query.SourcePair ?? "n/a"}`");
         builder.AppendLine($"- Classification: `{report.Query.Classification ?? "all"}`");
         builder.AppendLine($"- Bounds: depth `{report.Query.MaxDepth}`, paths `{report.Query.MaxPaths}`, frontier `{report.Query.MaxFrontier}`");
@@ -3946,7 +3957,8 @@ public static class CombinedDependencyPathReporter
         string? TextHash,
         string? TextLength,
         string? PackageName,
-        string? ConfigKey)
+        string? ConfigKey,
+        string? OperationDirection = null)
     {
         public CombinedPathNode ToReportNode()
         {
@@ -3977,7 +3989,8 @@ public static class CombinedDependencyPathReporter
                 TextHash,
                 TextLength,
                 PackageName,
-                ConfigKey);
+                ConfigKey,
+                OperationDirection);
         }
     }
 

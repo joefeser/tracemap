@@ -206,7 +206,7 @@ rules:
     limitations:
       - Path and reverse evidence is bounded static graph evidence only; it does not prove runtime ordering, delivery, broker routing, consumer liveness, branch feasibility, or request/response behavior.
       - Path and reverse rows preserve attached source evidence tiers in row metadata, but this selector rule is Tier4Unknown because reachability context depends on graph completeness.
-      - Direction filtering is not implemented in this slice; unsupported direction-specific queries must remain explicit gaps or validation errors.
+      - Direction filtering is limited to explicit message surface directions publish, consume, bind, and declare; it filters static surface evidence only and does not prove runtime broker flow.
 
   - id: message.surface.reducer.v1
     name: Message context for reducer workflows

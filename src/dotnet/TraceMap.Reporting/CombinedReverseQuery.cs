@@ -18,7 +18,8 @@ public sealed record CombinedReverseOptions(
     int MaxRoots = 100,
     int MaxPathsPerRoot = 5,
     int MaxGaps = 1000,
-    bool ExitCode = false);
+    bool ExitCode = false,
+    string? MessageDirection = null);
 
 public sealed record CombinedReverseResult(
     CombinedReverseReport Report,
@@ -57,7 +58,9 @@ public sealed record CombinedReverseQuery(
     int MaxRoots,
     int MaxPathsPerRoot,
     int MaxGaps,
-    bool ExitCode);
+    bool ExitCode,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? MessageDirection);
 
 public sealed record CombinedReverseSnapshotInfo(
     string IndexKind,
@@ -228,6 +231,7 @@ public static class CombinedReverseReporter
         var sourceFilter = string.IsNullOrWhiteSpace(options.Source) ? null : options.Source.Trim();
         var surfaceKind = string.IsNullOrWhiteSpace(options.Surface) ? null : options.Surface.Trim();
         var surfaceName = string.IsNullOrWhiteSpace(options.SurfaceName) ? null : options.SurfaceName.Trim();
+        var messageDirection = NormalizeMessageDirection(options.MessageDirection, "reverse");
         var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
         var sourcesById = graph.Sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
         var gaps = graph.Gaps.Select(FromPathGap).ToList();
@@ -254,7 +258,7 @@ public static class CombinedReverseReporter
                 EmptyMetadata()));
         }
 
-        var selectedSurfaceNodes = SelectSurfaceNodes(graph.Nodes, sourceFilter, surfaceKind, surfaceName);
+        var selectedSurfaceNodes = SelectSurfaceNodes(graph.Nodes, sourceFilter, surfaceKind, surfaceName, messageDirection);
         var selectedSurfaceTotal = selectedSurfaceNodes.Length;
         var truncated = false;
         if (selectedSurfaceNodes.Length > options.MaxSurfaces)
@@ -288,29 +292,6 @@ public static class CombinedReverseReporter
             .Select(group => group.Key)
             .ToHashSet(StringComparer.Ordinal);
         var selectedSurfaces = selectedSurfaceNodes.Select(node => ToSurface(node, sourcesById, duplicateSurfaceKeys.Contains(SurfaceStableKey(node)))).ToArray();
-        if (selectedSurfaceNodes.Any(node => IsMessageSurfaceKind(node.SurfaceKind)))
-        {
-            var messageNode = selectedSurfaceNodes.First(node => IsMessageSurfaceKind(node.SurfaceKind));
-            gaps.Add(new CombinedReverseGap(
-                $"gap:message-direction-filter:{messageNode.NodeId}",
-                "DirectionFilterNotSupported",
-                CombinedReverseClassifications.UnknownAnalysisGap,
-                RuleIds.MessageSurfaceGap,
-                EvidenceTiers.Tier4Unknown,
-                "Message surface direction filtering is not supported in this reverse-query slice; publisher, consumer, and binding evidence may be selected together.",
-                messageNode.SourceIndexId,
-                messageNode.SourceLabel,
-                selectedSurfaces.FirstOrDefault(surface => surface.SupportingFactIds.Contains(messageNode.CombinedFactId ?? string.Empty))?.SurfaceId,
-                null,
-                null,
-                messageNode.NodeId,
-                messageNode.CombinedFactId,
-                messageNode.FilePath,
-                messageNode.StartLine,
-                messageNode.EndLine,
-                "direction-filter-not-supported",
-                SortedMetadata([new("gapReason", "direction-filter-not-supported")])));
-        }
         foreach (var duplicate in selectedSurfaces.GroupBy(surface => surface.StableKey, StringComparer.Ordinal).Where(group => group.Count() > 1))
         {
             gaps.Add(new CombinedReverseGap(
@@ -606,7 +587,8 @@ public static class CombinedReverseReporter
                 options.MaxRoots,
                 options.MaxPathsPerRoot,
                 options.MaxGaps,
-                options.ExitCode),
+                options.ExitCode,
+                messageDirection),
             new CombinedReverseSnapshotInfo(
                 "combined",
                 graph.Sources.Count,
@@ -664,15 +646,18 @@ public static class CombinedReverseReporter
         {
             throw new ArgumentException("reverse numeric caps must be positive integers.");
         }
+
+        NormalizeMessageDirection(options.MessageDirection, "reverse");
     }
 
-    private static CombinedPathNode[] SelectSurfaceNodes(IReadOnlyList<CombinedPathNode> nodes, string? sourceFilter, string? surfaceKind, string? surfaceName)
+    private static CombinedPathNode[] SelectSurfaceNodes(IReadOnlyList<CombinedPathNode> nodes, string? sourceFilter, string? surfaceKind, string? surfaceName, string? messageDirection)
     {
         return nodes
             .Where(node => node.SurfaceKind is not null)
             .Where(node => surfaceKind is null || string.Equals(node.SurfaceKind, surfaceKind, StringComparison.Ordinal))
             .Where(node => sourceFilter is null || string.Equals(node.SourceLabel, sourceFilter, StringComparison.OrdinalIgnoreCase))
             .Where(node => surfaceName is null || SurfaceNameMatches(node, surfaceName))
+            .Where(node => messageDirection is null || !IsMessageSurfaceKind(node.SurfaceKind) || string.Equals(node.OperationDirection, messageDirection, StringComparison.Ordinal))
             .OrderBy(node => SurfaceClassificationRank(ClassifySurface(node)))
             .ThenBy(node => node.SourceLabel, StringComparer.Ordinal)
             .ThenBy(node => node.SurfaceKind, StringComparer.Ordinal)
@@ -723,6 +708,7 @@ public static class CombinedReverseReporter
                 new("tableName", node.TableName),
                 new("columnNames", node.ColumnNames),
                 new("sqlSourceKind", node.SourceKind),
+                new("operationDirection", node.OperationDirection),
                 new("shapeHash", node.ShapeHash),
                 new("textHash", node.TextHash),
                 new("textLength", node.TextLength),
@@ -1309,6 +1295,27 @@ public static class CombinedReverseReporter
             null);
     }
 
+    private static string? NormalizeMessageDirection(string? value, string commandName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim().ToLowerInvariant();
+        if (trimmed == "all")
+        {
+            return null;
+        }
+
+        if (trimmed is "publish" or "consume" or "bind" or "declare")
+        {
+            return trimmed;
+        }
+
+        throw new ArgumentException($"{commandName} --message-direction must be one of publish, consume, bind, declare, or all.");
+    }
+
     private static string NodeStableKey(CombinedPathNode node)
     {
         var identity = string.Join("|", [
@@ -1459,6 +1466,7 @@ public static class CombinedReverseReporter
         builder.AppendLine($"- Surface: `{report.Query.SurfaceKind ?? "all"}`");
         builder.AppendLine($"- Surface name: `{report.Query.SurfaceName ?? "n/a"}`");
         builder.AppendLine($"- Surface name match: `{report.Query.SurfaceNameMatchMode}`");
+        builder.AppendLine($"- Message direction: `{report.Query.MessageDirection ?? "all"}`");
         builder.AppendLine($"- To: `{report.Query.To}`");
         builder.AppendLine($"- Bounds: surfaces `{report.Query.MaxSurfaces}`, depth `{report.Query.MaxDepth}`, frontier `{report.Query.MaxFrontier}`, roots `{report.Query.MaxRoots}`, paths per root `{report.Query.MaxPathsPerRoot}`, gaps `{report.Query.MaxGaps}`");
         builder.AppendLine();
