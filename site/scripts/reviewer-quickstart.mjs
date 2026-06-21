@@ -317,8 +317,9 @@ function validateRouteEntry(routeEntry, errors) {
     }
   }
 
-  const publicMetadataText = [routeEntry.title, routeEntry.summary, ...(routeEntry.limitations ?? [])].join(" ");
-  validateForbiddenClaims({ errors, text: publicMetadataText, label: "metadata" });
+  const limitations = Array.isArray(routeEntry.limitations) ? routeEntry.limitations : [];
+  const publicMetadataText = [routeEntry.title, routeEntry.summary, ...limitations].join(" ");
+  validateForbiddenClaims({ errors, text: publicMetadataText, label: "metadata", artifact: routesIndexArtifact });
 }
 
 async function validateReviewerQuickstartPage({ pagePath, routeContext, errors }) {
@@ -506,13 +507,13 @@ async function validateInboundLinks({ dist, errors }) {
   }
 }
 
-function validateForbiddenClaims({ errors, text, label }) {
+function validateForbiddenClaims({ artifact = pageArtifact, errors, text, label }) {
   for (const pattern of forbiddenClaimPatterns) {
     const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
     const globalPattern = new RegExp(pattern.source, flags);
     for (const match of text.matchAll(globalPattern)) {
       if (!hasNegatedContext(text, match.index)) {
-        errors.push(withEvidence(`Reviewer quickstart contains forbidden public claim in ${label}: ${match[0]}`, pageArtifact));
+        errors.push(withEvidence(`Reviewer quickstart contains forbidden public claim in ${label}: ${match[0]}`, artifact));
         break;
       }
     }

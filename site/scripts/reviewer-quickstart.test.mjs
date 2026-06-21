@@ -64,6 +64,21 @@ test("validateReviewerQuickstartDist reports route metadata regressions", async 
   assert.match(errors.join("\n"), /nonClaims are missing required term: production traffic/);
 });
 
+test("validateReviewerQuickstartDist reports malformed metadata without crashing", async (t) => {
+  const root = await createManagedReviewerQuickstartFixture(t);
+  await rewriteRouteEntry(join(root, "dist"), {
+    limitations: 42,
+    summary: "TraceMap proves runtime behavior."
+  });
+  const errors = [];
+
+  await validateReviewerQuickstartDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /must include limitations metadata/);
+  assert.match(errors.join("\n"), /forbidden public claim in metadata/);
+  assert.match(errors.join("\n"), /\[routes-index\.json\]/);
+});
+
 test("validateReviewerQuickstartDist reports missing required adjacent link", async (t) => {
   const root = await createManagedReviewerQuickstartFixture(t, {
     reviewerHtml: reviewerQuickstartPage().replaceAll('href="/demo/manager-script/"', 'href="/demo/manager-script-missing/"')
