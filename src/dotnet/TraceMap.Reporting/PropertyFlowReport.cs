@@ -647,6 +647,11 @@ public static class PropertyFlowReporter
             }
 
             var metadata = ReadObservedMetadata(row);
+            if (metadata.Count == 0)
+            {
+                throw new ArgumentException("property-flow observed evidence requires non-empty safeMetadata.");
+            }
+
             rows.Add((label, metadata));
         }
 
@@ -698,7 +703,7 @@ public static class PropertyFlowReporter
     {
         if (!row.TryGetProperty("safeMetadata", out var metadataElement))
         {
-            return new SortedDictionary<string, string>(StringComparer.Ordinal);
+            throw new ArgumentException("property-flow observed evidence requires non-empty safeMetadata.");
         }
 
         if (metadataElement.ValueKind != JsonValueKind.Object)
@@ -720,7 +725,7 @@ public static class PropertyFlowReporter
             }
 
             var value = property.Value.GetString()?.Trim() ?? string.Empty;
-            if (!IsSafeValue(value) || SensitiveObservedToken(value))
+            if (!IsSafeObservedMetadataValue(value))
             {
                 throw new ArgumentException("property-flow rejected unsafe observed evidence metadata.");
             }
@@ -733,7 +738,18 @@ public static class PropertyFlowReporter
 
     private static bool SensitiveObservedToken(string value)
     {
-        return Regex.IsMatch(value, "(secret|token|password|cookie|credential|authorization|bearer|connectionstring|rawsql|snippet|hostname|remoteurl)", RegexOptions.IgnoreCase);
+        return Regex.IsMatch(value, "(secret|token|password|cookie|credential|authorization|bearer|connectionstring|rawsql|snippet|hostname|remoteurl|apikey|api_key|api-key|production|prod-|live-|live_|runtime|http)", RegexOptions.IgnoreCase);
+    }
+
+    private static bool IsSafeObservedMetadataValue(string value)
+    {
+        if (!IsSafeValue(value) || SensitiveObservedToken(value))
+        {
+            return false;
+        }
+
+        return !value.Contains('/', StringComparison.Ordinal)
+            && !value.Contains('\\', StringComparison.Ordinal);
     }
 
     private static void ValidateOptions(PropertyFlowOptions options, PropertySelector selector)
