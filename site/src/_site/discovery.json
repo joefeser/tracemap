@@ -152,6 +152,23 @@
     ]
   },
   {
+    "path": "/packets/assembly/",
+    "title": "Review Packet Assembly",
+    "summary": "Concept-level checklist for assembling public-safe review handoff material from existing TraceMap evidence surfaces.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is a human checklist over existing evidence surfaces, not a generated packet-builder feature or new proof source.",
+      "Missing public-safe fields remain visible as limitations instead of being upgraded into stronger wording."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval or safety, operational safety, AI impact analysis, LLM analysis, autonomous review, generated packet-builder behavior, or complete coverage proof.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, or credential-like values are public packet material."
+    ]
+  },
+  {
     "path": "/limitations/",
     "title": "Limitations",
     "summary": "Starts with what TraceMap cannot prove so readers keep static evidence separate from operational claims.",

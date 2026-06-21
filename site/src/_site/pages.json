@@ -205,6 +205,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/packets/assembly/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/manager-packet/",
     "changefreq": "monthly",
     "priority": "0.8"
