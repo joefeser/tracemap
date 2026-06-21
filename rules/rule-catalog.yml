@@ -2231,6 +2231,29 @@ rules:
       - Name-only, syntax-only, fallback, cross-source, or cross-language implementation guesses are not strong bridge evidence in v1.
       - Reflection, factories, service locators, configuration-driven bindings, and dynamic dispatch remain analysis gaps unless a future deterministic rule covers them.
 
+  - id: combined.dispatch-candidate.v1
+    name: Combined dispatch candidate edge
+    description: Derives bounded in-memory path edges from interface or override method symbols to statically known implementation or override method candidates using combined symbol-relationship evidence.
+    evidenceTier: Inherits relationship evidence and caps path classification at NeedsReviewPath
+    emits:
+      - interface-candidate path edge
+      - override-candidate path edge
+    limitations:
+      - Candidate edges are static review evidence only and do not prove runtime dispatch, dependency-injection target selection, object lifetime, branch feasibility, or production execution.
+      - Candidates are derived only from source-local method-level relationship evidence; type-level inheritance or interface relationships do not substitute for member-level evidence in v1.
+      - Syntax-only, fallback, reduced-coverage, ambiguous, generated-code uncertain, or high fan-out candidates remain review-tier and must not strengthen downstream classifications.
+
+  - id: combined.dispatch-gap.v1
+    name: Combined dispatch candidate gap
+    description: Emits gap rows when dispatch candidate derivation is capped, ambiguous, unavailable, or otherwise unable to support credible static traversal.
+    evidenceTier: Tier4Unknown
+    emits:
+      - DispatchCandidateFanOut gap
+    limitations:
+      - Gap rows describe limits of the current static evidence graph and must not be read as proof that no runtime target exists.
+      - Candidate caps are deterministic traversal limits; omitted candidates may still be possible static review evidence outside the configured bound.
+      - Missing relationship evidence under reduced coverage must remain an unknown analysis gap rather than a clean absence conclusion.
+
   - id: combined.route-flow.logic-surface.v1
     name: Route-flow business and data logic surface
     description: Emits projection, object-shape, query-shape, validation, guard, branch, async, serializer, contract, and flow-boundary rows as path-context evidence.
