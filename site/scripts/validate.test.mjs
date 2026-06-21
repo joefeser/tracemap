@@ -13,6 +13,7 @@ import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
+import { changeReviewRoute } from "./change-review.mjs";
 import { glossaryRoute } from "./glossary.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import {
@@ -128,6 +129,7 @@ async function createDistFixture({
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       endpointReviewRoute,
+      changeReviewRoute,
       glossaryRoute,
       incidentCallRoute,
       incidentEvidenceHandoffRoute,
@@ -160,6 +162,7 @@ async function createDistFixture({
     demoEvidenceTrailRoute,
     demoRunbookRoute,
     endpointReviewRoute,
+    changeReviewRoute,
     "/evidence/",
     "/examples/",
     incidentCallRoute,
@@ -226,6 +229,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === endpointReviewRoute) {
     return endpointReviewPage();
+  }
+
+  if (route === changeReviewRoute) {
+    return changeReviewPage();
   }
 
   if (route === glossaryRoute) {
@@ -344,6 +351,20 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
           "No facts.ndjson, index.sqlite, logs/analyzer.log, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, connection strings, credentials, table dumps, or database contents are public."
+        ]
+      },
+      {
+        path: changeReviewRoute,
+        title: "Change Review Brief",
+        summary: "Fixture change review brief route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture change review limitations remain bounded."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+          "No release approval proof, raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, facts.ndjson, index.sqlite, report.md, scan-manifest.json, or logs/analyzer.log are published."
         ]
       },
       {
@@ -775,6 +796,62 @@ function endpointReviewPage() {
     <a href="/review-room/">Review room</a>
     <a href="/static-triage/">Static triage</a>
     <a href="/demo/runbook/">Demo runbook</a>
+    <p>${filler}</p>
+  `);
+}
+
+function changeReviewPage() {
+  const filler = Array.from({ length: 150 }, (_, index) => `change review boundary ${index}`).join(" ");
+
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>A change review brief is a bounded static-evidence packet for a PR, release, or change-review conversation.</p>
+    <p>Engineers Code reviewers Architects and managers Release reviewers and agents</p>
+    <meta property="og:type" content="article">
+    <section id="change-context">
+      <h2>Change Context</h2>
+      <p>review question changed area commit or branch context review trigger outside scope</p>
+    </section>
+    <section id="evidence-packet">
+      <h2>Evidence Packet</h2>
+      <p>proof path Rule ID or rule family Visible static dependency surfaces coverage label file path and line span commit SHA extractor version limitations non-claims</p>
+      <p>Tier1Semantic Tier2Structural Tier3SyntaxOrTextual Tier4Unknown</p>
+    </section>
+    <section id="review-questions">
+      <h2>Review Questions</h2>
+      <p>Which code review, test review, runtime review, release review, architecture review, or agent handoff question remains open?</p>
+    </section>
+    <section id="change-review-stop-conditions">
+      <h2>Stop Conditions</h2>
+      <p>missing proof path private-only evidence unknown or reduced coverage unsupported runtime or release wording raw artifact exposure no named next owner raw facts facts.ndjson raw SQLite index.sqlite report.md scan-manifest.json logs/analyzer.log analyzer logs raw source snippets raw SQL config values secrets local paths raw remotes generated scan directories private sample names raw command output hidden validation details credentials connection strings</p>
+    </section>
+    <section id="next-owners">
+      <h2>Next Owners</h2>
+      <p>code owner reviewer test owner runtime/service owner release reviewer architect agent handoff owner</p>
+    </section>
+    <section id="change-review-limitations">
+      <h2>Limitations</h2>
+      <p>partial analysis syntax-only evidence unknown unavailable future-only coverage The brief does not replace tests, code review, source review, runtime observability, release review, owner confirmation, or human judgment.</p>
+    </section>
+    <section id="change-review-non-claims">
+      <h2>Non-Claims</h2>
+      <p>A change review brief is not release approval and does not approve a release.</p>
+      <p>runtime behavior production traffic endpoint performance outage cause release safety operational safety AI impact analysis LLM analysis complete product coverage impacted safe unsafe approved blocked root cause validated for release production proven operational assurance production observability tool</p>
+    </section>
+    <section id="adjacent-routes">
+      <p>team evidence handoff manager packet static triage manager brief deploy audit</p>
+    </section>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/packets/">Packet vocabulary</a>
+    <a href="/review-room/">Review room</a>
+    <a href="/validation/">Validation limits</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/use-cases/endpoint-review/">Endpoint review use case</a>
+    <a href="/use-cases/incident-review/">Incident review use case</a>
+    <a href="/static-vs-runtime/">Static versus runtime</a>
+    <a href="/review-claim-checklist/">Claim checklist</a>
+    <a href="/use-cases/">Use-case index</a>
     <p>${filler}</p>
   `);
 }
