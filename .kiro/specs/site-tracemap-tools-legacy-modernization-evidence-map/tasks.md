@@ -1,7 +1,7 @@
 # Site TraceMap Tools Legacy Modernization Evidence Map Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 These tasks are future implementation work. They remain unchecked because this

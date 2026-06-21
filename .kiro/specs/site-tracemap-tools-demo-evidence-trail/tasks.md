@@ -1,7 +1,7 @@
 # Site TraceMap Tools Demo Evidence Trail Tasks
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: demo
 
 Ordering note: implementation is complete on codex/impl-site-demo-evidence-trail; tasks are checked to reflect the delivered site work and validation.

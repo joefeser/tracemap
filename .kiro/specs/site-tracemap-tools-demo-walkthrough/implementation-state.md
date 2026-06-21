@@ -1,9 +1,10 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
 Last verified: 2026-06-15
 Branch: codex/site-demo-walkthrough
-Source of truth: working tree
+Source of truth: origin/main
 Public claim level: demo
 
 ## Summary

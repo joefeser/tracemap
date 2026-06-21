@@ -1,7 +1,7 @@
 # Implementation State
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Last verified: 2026-06-18
 Branch: codex/impl-site-endpoint-review-playbook
 Worktree: not recorded (private-text guardrail)

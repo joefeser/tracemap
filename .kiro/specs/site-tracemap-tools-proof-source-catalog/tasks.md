@@ -1,7 +1,7 @@
 # Site TraceMap Tools Proof Source Catalog Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: demo
 
 These tasks are future implementation work. They remain unchecked because this

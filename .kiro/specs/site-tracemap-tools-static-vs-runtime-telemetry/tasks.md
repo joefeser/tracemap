@@ -1,7 +1,7 @@
 # Site TraceMap Tools Static Vs Runtime Telemetry Tasks
 
-Status: completed
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Note: validation tasks must pass before future implementation tasks are checked

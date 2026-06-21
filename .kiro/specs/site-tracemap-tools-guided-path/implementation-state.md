@@ -1,9 +1,12 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 Last verified: 2026-06-14
 Branch: codex/site-demo-guided-path
-Source of truth: pending PR
+Source of truth: origin/main
 
 ## Summary
 

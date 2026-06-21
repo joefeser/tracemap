@@ -1,7 +1,7 @@
 # Site TraceMap Tools Incident Evidence Handoff Implementation State
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 ## Branch

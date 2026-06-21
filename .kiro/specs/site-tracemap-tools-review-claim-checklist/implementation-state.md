@@ -1,7 +1,7 @@
 # Implementation State
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Last verified: 2026-06-18
 Branch: codex/impl-site-review-claim-checklist
 Worktree: dedicated implementation worktree; local absolute path omitted from

@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 - [x] 1. Add the legacy validation concept spec and implementation state.
   - Include `Public claim level: concept`.
   - Record that core legacy validation remains hidden until redacted summaries exist.

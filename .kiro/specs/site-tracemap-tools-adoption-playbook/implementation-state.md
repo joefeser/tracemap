@@ -1,7 +1,7 @@
 # Site TraceMap Tools Adoption Playbook Implementation State
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 ## Branch

@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 - [x] 1. Add sitemap source metadata.
   - Move public non-blog page URLs into private site metadata.
   - Keep canonical paths, changefreq values, and priorities aligned with the

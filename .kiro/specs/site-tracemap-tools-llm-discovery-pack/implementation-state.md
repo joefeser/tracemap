@@ -1,6 +1,6 @@
 # Implementation State
 
-Status: completed
+Status: implemented
 Readiness: implemented
 Branch: codex/site-next-phase-20260616
 Public claim level: demo

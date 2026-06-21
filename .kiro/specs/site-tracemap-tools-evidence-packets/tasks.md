@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 - [x] 1. Add the evidence packet spec and implementation state.
   - Include `Public claim level: demo`.
   - Record the site-only scope and claim boundaries.
