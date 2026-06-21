@@ -25,6 +25,8 @@ depth, not current unmerged work.
     validation.
   - Added follow-up tests for `all` direction behavior and `declare`
     direction filtering.
+  - Moved message-direction normalization into `CombinedReportHelpers` after
+    PR-loop feedback flagged duplicate helpers in paths and reverse reporters.
 - Still out of scope:
   - Route-flow async message-hop rendering.
   - Reducer context over message surfaces.
@@ -36,6 +38,11 @@ depth, not current unmerged work.
   - `dotnet test src/dotnet/TraceMap.sln`: 585 passed, 0 failed.
   - `./scripts/check-private-paths.sh`: passed.
   - `git diff --check`: passed.
+  - After PR-loop duplicate-helper fix:
+    `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`,
+    `dotnet build src/dotnet/TraceMap.sln`,
+    `dotnet test src/dotnet/TraceMap.sln`,
+    `./scripts/check-private-paths.sh`, and `git diff --check` passed.
 - Review:
   - Sonnet implementation review artifact:
     `.tmp/kiro-reviews/event-message-surfaces/2026-06-21T204944-520Z-implementation-claude-sonnet-4.6.clean.md`.

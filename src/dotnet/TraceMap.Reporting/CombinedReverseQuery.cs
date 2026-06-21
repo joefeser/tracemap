@@ -231,7 +231,7 @@ public static class CombinedReverseReporter
         var sourceFilter = string.IsNullOrWhiteSpace(options.Source) ? null : options.Source.Trim();
         var surfaceKind = string.IsNullOrWhiteSpace(options.Surface) ? null : options.Surface.Trim();
         var surfaceName = string.IsNullOrWhiteSpace(options.SurfaceName) ? null : options.SurfaceName.Trim();
-        var messageDirection = NormalizeMessageDirection(options.MessageDirection, "reverse");
+        var messageDirection = CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "reverse");
         var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
         var sourcesById = graph.Sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
         var gaps = graph.Gaps.Select(FromPathGap).ToList();
@@ -647,7 +647,7 @@ public static class CombinedReverseReporter
             throw new ArgumentException("reverse numeric caps must be positive integers.");
         }
 
-        NormalizeMessageDirection(options.MessageDirection, "reverse");
+        CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "reverse");
     }
 
     private static CombinedPathNode[] SelectSurfaceNodes(IReadOnlyList<CombinedPathNode> nodes, string? sourceFilter, string? surfaceKind, string? surfaceName, string? messageDirection)
@@ -1293,27 +1293,6 @@ public static class CombinedReverseReporter
             null,
             null,
             null);
-    }
-
-    private static string? NormalizeMessageDirection(string? value, string commandName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var trimmed = value.Trim().ToLowerInvariant();
-        if (trimmed == "all")
-        {
-            return null;
-        }
-
-        if (trimmed is "publish" or "consume" or "bind" or "declare")
-        {
-            return trimmed;
-        }
-
-        throw new ArgumentException($"{commandName} --message-direction must be one of publish, consume, bind, declare, or all.");
     }
 
     private static string NodeStableKey(CombinedPathNode node)
