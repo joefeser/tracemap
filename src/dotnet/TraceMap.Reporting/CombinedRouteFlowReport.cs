@@ -2879,7 +2879,7 @@ public static class CombinedRouteFlowReporter
         return "SelectorNoMatch";
     }
 
-    private static RouteFlowSelectorTrace BuildSelectorTrace(
+    private static RouteFlowSelectorTrace? BuildSelectorTrace(
         CombinedRouteFlowOptions options,
         string? routeSelector,
         string? clientSelector,
@@ -2898,6 +2898,11 @@ public static class CombinedRouteFlowReporter
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+        if (supportingFactIds.Length == 0)
+        {
+            return null;
+        }
+
         var limitations = new List<string>
         {
             "Selector metadata is static query context and does not prove runtime execution.",

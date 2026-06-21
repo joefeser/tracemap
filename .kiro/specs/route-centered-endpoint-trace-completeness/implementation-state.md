@@ -317,6 +317,7 @@
   - Initial PR-loop command: `agent-control pr-loop --repo joefeser/tracemap --pr 253 --base dev --require-codex-review --json`
   - Initial PR-loop result: `merge_ready`, stop reason `NONE`, canMerge `true`, merge state `CLEAN`, unresolved threads `0`, pending checks `0`, failed checks `0`, actionable bot findings `0`.
   - Bot lifecycle evidence: Qodo and Gemini returned; Codex was satisfied by configured trusted-code-review quorum with residual risk noted by the lane policy.
+  - Follow-up Qodo patch: selector traces are now omitted when selector entry evidence has no supporting fact IDs; Markdown keeps rendering missing selector traces as unavailable.
 - Follow-ups remaining from this spec:
   - Task 8 method/service row grouping.
   - Task 9 data/query/dependency and value-origin row polish.
