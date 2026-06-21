@@ -88,6 +88,14 @@ IDs, evidence tiers, coverage labels, supporting IDs, and limitation
 references. Lower-tier, reduced-coverage, gap, or review-only evidence remains
 labeled for review and is not promoted by docs-export.
 
+Legacy data model descriptors are packaged as `data-surface` chunks when
+terminal static descriptor facts are present. The chunk cites both the source
+`legacy.data.*` rule and the projection rule
+`legacy.data.model.surface.v1`, renders hash-only descriptor labels unless a
+future reviewed claim context explicitly allows clear labels, and does not
+claim SQL execution, runtime provider selection, live schema existence,
+migration execution, or production database usage.
+
 ## Stable IDs
 
 Docs-export IDs use context-separated SHA-256 inputs with length-prefixed
