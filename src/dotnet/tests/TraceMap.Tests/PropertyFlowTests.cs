@@ -332,7 +332,8 @@ public sealed class PropertyFlowTests
         var pageFormCombined = Path.Combine(temp.Path, "page-form-combined.sqlite");
         var pageForm = RazorPageFormTargetFact(server, "Save", "POST", "Pages/Profile/Edit.cshtml", 2);
         var pageHandlerBinding = ModelBindingFact(server, "ProfileInput", "Email", "view-model", "handler-parameter", "form", null, null, "OnPostSaveAsync", "POST", "Pages/Profile/Edit.cshtml.cs", 11);
-        SqliteIndexWriter.Write(pageFormIndex, server, [pageForm, pageHandlerBinding]);
+        var sameHandlerOtherPageBinding = ModelBindingFact(server, "ProfileInput", "Email", "view-model", "handler-parameter", "form", null, null, "OnPostSaveAsync", "POST", "Pages/Admin/Edit.cshtml.cs", 12);
+        SqliteIndexWriter.Write(pageFormIndex, server, [pageForm, pageHandlerBinding, sameHandlerOtherPageBinding]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([pageFormIndex], pageFormCombined, ["server"]));
         var pageHandlerReport = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
             pageFormCombined,
@@ -340,6 +341,7 @@ public sealed class PropertyFlowTests
             "binding:POST",
             Framework: "razor"));
         Assert.Contains(pageHandlerReport.LineagePaths, path => path.Edges.Any(edge => edge.EdgeKind == "form-target-binds-model"));
+        Assert.DoesNotContain(pageHandlerReport.LineagePaths.SelectMany(path => path.Nodes), node => node.FilePath == "Pages/Admin/Edit.cshtml.cs");
 
         var written = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
             combinedPath,
