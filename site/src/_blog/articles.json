@@ -1,5 +1,20 @@
 [
   {
+    "slug": "what-a-proof-path-is",
+    "category": "Proof paths",
+    "title": "What a Proof Path Is",
+    "h1": "What a proof path is",
+    "description": "A practical guide to reading TraceMap proof paths, static evidence, limitations, and public-safe claim boundaries.",
+    "ogDescription": "Learn how to read a TraceMap proof path without turning static evidence into runtime or release claims.",
+    "cardDescription": "How to follow a public claim through proof surfaces, evidence tiers, limitations, and safe handoff language.",
+    "hero": "A proof path is the route from a public claim to the static evidence, limitation, and next question that keep the claim reviewable.",
+    "published": "2026-06-21",
+    "publishedDisplay": "June 21, 2026",
+    "body": "articles/what-a-proof-path-is.html",
+    "calloutHeading": "Ready to inspect the surfaces?",
+    "calloutHtml": "Open the <a href=\"/proof-paths/\">proof path index</a>, take the <a href=\"/proof-paths/tour/\">guided tour</a>, or use the <a href=\"/review-claim-checklist/\">review claim checklist</a>."
+  },
+  {
     "slug": "building-tracemap-with-codex-kiro-qodo",
     "category": "Project workflow",
     "title": "Building TraceMap With Codex, Kiro, and Qodo",
