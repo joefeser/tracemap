@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level reviewer quickstart for inspecting a TraceMap evidence packet or public-safe proof trail in five minutes without upgrading the claim."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Reviewer Quickstart | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/reviewer-quickstart/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Reviewer Quickstart">
+    <meta
+      property="og:description"
+      content="A five-minute, concept-level inspection guide for public-safe TraceMap evidence packets, proof paths, limitations, and owner follow-up."
+    >
+    <meta property="og:url" content="https://tracemap.tools/reviewer-quickstart/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Reviewer quickstart</p>
+        <h1>Inspect the claim, proof path, and limits before repeating the packet.</h1>
+        <p class="hero-subhead">
+          This concept guide helps a code reviewer, maintainer, reviewer agent,
+          or engineering owner inspect a TraceMap evidence packet or public-safe
+          proof trail in about five minutes. It is the first-stop orientation,
+          not the complete review workflow.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page is reviewer-facing guidance for static evidence packets,
+          not a release gate, approval system, source-review substitute, test
+          substitute, runtime observability substitute, or automated decision.
+        </p>
+        <nav class="hero-actions" aria-label="Reviewer quickstart links">
+          <a class="button primary" href="#five-minute-review">Start checklist</a>
+          <a class="button secondary" href="/review-room/">Review room</a>
+          <a class="button secondary" href="/packets/assembly/">Packet assembly</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+          <a class="button secondary" href="/proof-paths/tour/">Proof-path tour</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="start-here">
+        <div>
+          <p class="section-kicker">Start Here</p>
+          <h2>Begin with the claim and stop if there is no evidence trail.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Name the claim</strong><span>Write the exact sentence under review before reading supporting material.</span></div>
+          <div><strong>Find the proof path</strong><span>Use a public-safe route, summary, documented trail, or named private review location that does not expose raw material.</span></div>
+          <div><strong>Keep fields attached</strong><span>Carry claim level, rule, tier, coverage, commit or source context, extractor context, limitations, non-claims, validation evidence, gaps, and next owner together.</span></div>
+          <div><strong>Stop on absence</strong><span>Missing evidence creates a follow-up owner question, not a clean conclusion.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="five-minute-review">
+        <div class="section-header">
+          <p class="section-kicker">Five-Minute Review</p>
+          <h2>Use the same order before a claim is repeated, upgraded, or routed.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-quickstart-step="identify the claim"><h3>1. identify the claim</h3><p>Name the exact claim first; stop if it bundles several conclusions.</p></article>
+          <article data-quickstart-step="find the proof path"><h3>2. find the proof path</h3><p>Locate a public-safe route, summary, documented source trail, or named private review location; stop if the trail is absent.</p></article>
+          <article data-quickstart-step="check public claim level"><h3>3. check public claim level</h3><p>Keep concept, demo, shipped, hidden, or other supported vocabulary from being upgraded by confidence or repetition.</p></article>
+          <article data-quickstart-step="read rule ID/family"><h3>4. read rule ID/family</h3><p>Confirm the deterministic rule ID or documented rule family before repeating evidence-backed wording.</p></article>
+          <article data-quickstart-step="inspect evidence tier and coverage label"><h3>5. inspect evidence tier and coverage label</h3><p>Read <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code> with the coverage label.</p></article>
+          <article data-quickstart-step="check commit/extractor context"><h3>6. check commit/extractor context</h3><p>Check the commit SHA or source revision and extractor version or extractor family when public-safe; otherwise record the limitation.</p></article>
+          <article data-quickstart-step="read limitations/non-claims"><h3>7. read limitations/non-claims</h3><p>Carry limitations and non-claims with the claim instead of treating them as footnotes.</p></article>
+          <article data-quickstart-step="name next owner"><h3>8. name next owner</h3><p>Route missing validation, source, test, runtime, release, or ownership questions to a human owner category.</p></article>
+          <article data-quickstart-step="stop on missing evidence"><h3>9. stop on missing evidence</h3><p>Do not repeat, upgrade, approve, or route a stronger claim when required evidence is missing.</p></article>
+        </div>
+      </section>
+
+      <section class="section" id="evidence-fields">
+        <div class="section-header">
+          <p class="section-kicker">Evidence Fields</p>
+          <h2>Expect these public-safe fields before treating a packet as reviewable.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-reviewer-evidence-fields>
+            <caption>Unavailable fields stay visible as limitations or unresolved gaps.</caption>
+            <thead>
+              <tr><th scope="col">Field</th><th scope="col">Reviewer check</th></tr>
+            </thead>
+            <tbody>
+              <tr data-evidence-field="claim"><td>claim</td><td>The exact sentence or question under review.</td></tr>
+              <tr data-evidence-field="proof path"><td>proof path</td><td>Public-safe route, summary, documented trail, or named private review location.</td></tr>
+              <tr data-evidence-field="public claim level"><td>public claim level</td><td>The visible claim-strength boundary for this page or packet.</td></tr>
+              <tr data-evidence-field="rule ID or rule family"><td>rule ID or rule family</td><td>Deterministic rule basis and documented limitation.</td></tr>
+              <tr data-evidence-field="evidence tier"><td>evidence tier</td><td><code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</td></tr>
+              <tr data-evidence-field="coverage label"><td>coverage label</td><td>The exact coverage state from the cited evidence.</td></tr>
+              <tr data-evidence-field="commit SHA or source revision context"><td>commit SHA or source revision context</td><td>Source revision context when public-safe and available.</td></tr>
+              <tr data-evidence-field="extractor version or extractor family"><td>extractor version or extractor family</td><td>Extractor context when public-safe and available.</td></tr>
+              <tr data-evidence-field="file path and line span when public-safe"><td>file path and line span when public-safe</td><td>Checked-in public demo paths or sanitized source references, never raw source.</td></tr>
+              <tr data-evidence-field="limitation"><td>limitation</td><td>What the evidence cannot prove.</td></tr>
+              <tr data-evidence-field="non-claim"><td>non-claim</td><td>What the reviewer must not infer.</td></tr>
+              <tr data-evidence-field="validation evidence"><td>validation evidence</td><td>Public-safe command family, review summary, test summary, or validation status.</td></tr>
+              <tr data-evidence-field="unresolved gap"><td>unresolved gap</td><td>Reduced, syntax-only, unknown, private-only, or pending owner evidence.</td></tr>
+              <tr data-evidence-field="next owner"><td>next owner</td><td>The human owner category for the remaining question.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-reviewer-boundary="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop Conditions</p>
+          <h2>Stop when the packet would make the public claim stronger than the evidence.</h2>
+        </div>
+        <ul>
+          <li><strong>missing proof path</strong>: no public-safe route, summary, documented trail, or named private review location.</li>
+          <li><strong>missing rule ID or rule family</strong>: no deterministic rule basis or documented family.</li>
+          <li><strong>missing evidence tier</strong>: tier strength is absent or unlabeled.</li>
+          <li><strong>missing coverage label</strong>: coverage state is missing from the cited evidence.</li>
+          <li><strong>missing limitation</strong>: the claim omits what the evidence cannot prove.</li>
+          <li><strong>missing public claim level</strong>: the route or packet does not show concept, demo, shipped, hidden, or another supported level.</li>
+          <li><strong>missing commit or extractor context without explicit limitation</strong>: source revision or extractor context is absent and not explained.</li>
+          <li><strong>no validation evidence</strong>: no public-safe validation status, test summary, review summary, or command family is named.</li>
+          <li><strong>no next owner</strong>: the remaining question has nowhere to go.</li>
+          <li><strong>private-only support presented as public proof</strong>: private evidence is treated as public support.</li>
+          <li><strong>raw artifact leakage</strong>: raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values appear in public copy.</li>
+          <li><strong>unsupported wording</strong>: runtime, release, safety, production, AI/LLM, autonomous approval, or complete-coverage language appears outside explicit boundary copy.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="safe-review-language">
+        <div>
+          <p class="section-kicker">Safe Review Language</p>
+          <h2>Use bounded verbs and keep unsupported conclusions out of the sentence.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Use</strong><span><code>inspect</code>, <code>check</code>, <code>follow</code>, <code>review</code>, <code>compare</code>, <code>label</code>, <code>record</code>, <code>route</code>, <code>escalate</code>, or <code>cannot conclude from this packet</code>.</span></div>
+          <div><strong>Say</strong><span>This packet shows where to inspect the public-safe proof path, rule basis, tier, coverage, context, limitations, and next owner before repeating the claim.</span></div>
+          <div><strong>Avoid</strong><span>Do not call a change, endpoint, service, vendor system, team, release, dependency, database reference, or packet approved, blocked, root cause, production-proven, complete, or impacted from this quickstart.</span></div>
+          <div><strong>Route</strong><span>When evidence is missing, name the owner question instead of turning absence into confidence.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="escalation-owners">
+        <div>
+          <p class="section-kicker">Escalation Owners</p>
+          <h2>Route gaps to owner categories, not blame.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>reviewer owner</code><span>Claim wording, packet scope, and repeat-or-hold decision.</span></div>
+          <div><code>source review owner</code><span>Source-level interpretation when the static proof path is insufficient.</span></div>
+          <div><code>code owner</code><span>Implementation area, ownership context, and next source question.</span></div>
+          <div><code>service owner</code><span>Service context beyond static packet evidence.</span></div>
+          <div><code>database owner</code><span>Database reference or schema questions outside the public-safe packet.</span></div>
+          <div><code>test owner</code><span>Test evidence, missing test summary, or validation gap.</span></div>
+          <div><code>validation owner</code><span>Validation status, review summary, and command-family evidence.</span></div>
+          <div><code>telemetry or runtime owner</code><span>Runtime observability, production, endpoint, or incident questions outside static evidence.</span></div>
+          <div><code>release owner</code><span>Release process questions that static evidence cannot approve.</span></div>
+          <div><code>manager or decision owner</code><span>Human decision routing when evidence is reduced, private-only, or missing.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-reviewer-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Non-Claims</p>
+          <h2>The quickstart reads evidence packets; it does not expand what they prove.</h2>
+        </div>
+        <ul>
+          <li>This quickstart and cited packets do not prove runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, or complete coverage.</li>
+          <li>They do not perform AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, autonomous approval, or release approval.</li>
+          <li>They do not replace tests, code review, source review, runtime observability, telemetry, service ownership, release controls, or human judgment.</li>
+          <li>The reviewer may inspect, compare, record, route, or escalate; they cannot conclude from this packet when required evidence is missing.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" id="related-surfaces">
+        <div>
+          <p class="section-kicker">Related surfaces</p>
+          <h2>Move to the deeper public-safe page when the quickstart points there.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/review-room/">Review-room agenda</a>
+          <a href="/packets/assembly/">Review packet assembly</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/proof-paths/tour/">Guided proof-path tour</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/questions/">Stakeholder questions</a>
+          <a href="/demo/runbook/">Demo runbook</a>
+          <a href="/demo/manager-script/">Manager demo script</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Reviewer quickstart links
+        <a href="/review-room/">review-room agendas</a>,
+        <a href="/packets/assembly/">packet assembly</a>,
+        and
+        <a href="/review-claim-checklist/">claim checking</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

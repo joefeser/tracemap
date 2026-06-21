@@ -169,6 +169,24 @@
     ]
   },
   {
+    "path": "/reviewer-quickstart/",
+    "title": "Reviewer Quickstart",
+    "summary": "Five-minute concept-level guide for inspecting a public-safe TraceMap evidence packet before repeating or routing a claim.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is first-stop reviewer orientation over existing public-safe packet and proof-path surfaces, not a complete review workflow or new evidence source.",
+      "Missing fields remain visible as limitations, unresolved gaps, or owner follow-up instead of being upgraded into stronger public wording."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, autonomous approval, or release approval proof.",
+      "No replacement of tests, code review, source review, runtime observability, telemetry, service ownership, release controls, or human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public quickstart material."
+    ]
+  },
+  {
     "path": "/limitations/",
     "title": "Limitations",
     "summary": "Starts with what TraceMap cannot prove so readers keep static evidence separate from operational claims.",
