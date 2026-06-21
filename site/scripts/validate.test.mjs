@@ -8,6 +8,10 @@ import {
   adoptionPartialAnalysisSentence,
   adoptionPlaybookRoute
 } from "./adoption-playbook.mjs";
+import {
+  blogProofPathRequiredLinks,
+  blogProofPathSeriesRoute
+} from "./blog-proof-path-series.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
@@ -132,6 +136,7 @@ async function createDistFixture({
     ...new Set([
       ...deployAuditRequiredRoutes,
       adoptionPlaybookRoute,
+      blogProofPathSeriesRoute,
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       endpointReviewRoute,
@@ -164,6 +169,7 @@ async function createDistFixture({
     ...deployAuditRequiredRoutes,
     adoptionPlaybookRoute,
     "/blog/",
+    blogProofPathSeriesRoute,
     "/capabilities/",
     "/demo/start-here/",
     "/demo/proof-upgrades/",
@@ -229,6 +235,14 @@ async function fixturePageHtml(route, path) {
 
   if (route === adoptionPlaybookRoute) {
     return adoptionPage();
+  }
+
+  if (route === "/blog/") {
+    return page(`<a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a>`);
+  }
+
+  if (route === blogProofPathSeriesRoute) {
+    return blogProofPathSeriesPage();
   }
 
   if (route === demoEvidenceTrailRoute) {
@@ -313,6 +327,59 @@ async function fixturePageHtml(route, path) {
 
   return page(
     `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a>` : ""}`
+  );
+}
+
+function blogProofPathSeriesPage() {
+  const links = blogProofPathRequiredLinks.map((link) => `<a href="${link}">${link}</a>`).join(" ");
+  const filler = Array.from(
+    { length: 65 },
+    () =>
+      "The reviewer follows static evidence, checks the rule family, reads the coverage label, records the limitation, and hands unresolved runtime questions to owners."
+  ).join(" ");
+
+  return page(
+    `<article>
+      <meta property="og:type" content="article">
+      <link rel="canonical" href="https://tracemap.tools${blogProofPathSeriesRoute}">
+      <header>
+        <h1>What a proof path is</h1>
+        <p>Public claim level: concept</p>
+      </header>
+      <section data-proof-blog-block="opening-problem">
+        <h2>The problem is claim drift.</h2>
+        <p>${filler}</p>
+      </section>
+      <section data-proof-blog-block="evidence-backed-claim-example">
+        <h2>An evidence-backed claim names what would support it.</h2>
+        <p>${links}</p>
+      </section>
+      <section data-proof-blog-block="proof-path-reading-steps">
+        <h2>Read a proof path in order.</h2>
+        <p>Start with the claim, check the public claim level, open the proof surface, read the tier, keep the limitation visible, and use the checklist.</p>
+      </section>
+      <section data-proof-blog-block="proof-surfaces">
+        <h2>The supporting surfaces each have a job.</h2>
+        <p>${links}</p>
+      </section>
+      <section data-proof-blog-block="limitations-and-non-claims" data-tm-boundary="claim-boundary">
+        <h2>Limitations and non-claims are part of the proof path.</h2>
+        <p>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, or product behavior.</p>
+        <p>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, raw command output, or credential-like values.</p>
+      </section>
+      <section data-proof-blog-block="safe-language-examples">
+        <h2>Safe language examples</h2>
+        <p>This proof path shows where the public claim is supported and what limits still apply.</p>
+      </section>
+      <section data-proof-blog-block="unsafe-language-examples" data-tm-boundary="wording-to-avoid">
+        <h2>Unsafe language examples, framed as wording to avoid</h2>
+        <p>TraceMap proves this endpoint is safe in production.</p>
+      </section>
+      <section data-proof-blog-block="closing-handoff-action">
+        <h2>Close the loop with a handoff, not a bigger claim.</h2>
+        <p>Repeat the sentence with the same limits or take the static evidence to the owner, telemetry, logs, traces, tests, or release review.</p>
+      </section>
+    </article>`
   );
 }
 
