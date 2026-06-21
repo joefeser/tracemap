@@ -1,7 +1,7 @@
 # Site TraceMap Tools Reviewer Quickstart Implementation State
 
 Status: implemented
-Readiness: implemented-pending-pr-loop
+Readiness: pr-loop-merge-ready-before-bookkeeping
 Public claim level: concept
 Last updated: 2026-06-21
 Branch: codex/impl-site-reviewer-quickstart
@@ -143,19 +143,46 @@ The route-specific validator checks:
 
 ## PR Loop
 
-- Pending. Run after the ready PR is created:
-  `agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER> --base dev --require-codex-review --quiet --json`
+- PR: #270.
+- First PR-loop on head `32da80f782ad7d4affc5d98db777f08abda421e9`
+  returned `actionable_findings` / `UNRESOLVED_REVIEW_THREADS` with three
+  current review threads in `site/scripts/reviewer-quickstart.mjs`.
+- Follow-up commit `3d85c876f0bc1232b013340ef0f4835c30bc617d` fixed the
+  metadata-validator review threads by avoiding non-array spread of
+  `routeEntry.limitations`, passing `routes-index.json` as the metadata error
+  artifact, and adding malformed-metadata regression coverage.
+- PR-loop then reported a still-actionable top-level Qodo finding from the
+  original head. Follow-up commit
+  `6a660179a5ac5829616e6f515379c6ad61c2fc70` removed the unsupported
+  `impacted` wording from public copy and added `secrets` raw/private-material
+  validation coverage plus a regression test.
+- Recorded an evidence-backed review-finding disposition for the top-level Qodo
+  comment via `agent-control review-finding-disposition comment --execute`.
+  Disposition source:
+  `https://github.com/joefeser/tracemap/pull/270#issuecomment-4763607211`.
+- Latest PR-loop before this bookkeeping update:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 270 --base dev --require-codex-review --quiet --json`
+  returned `merge_ready` / `NONE` for head
+  `6a660179a5ac5829616e6f515379c6ad61c2fc70`.
+- Merge readiness evidence at that head: merge state `CLEAN`, zero unresolved
+  review threads, no pending checks, no failed checks, no actionable bot
+  findings, Qodo finding disposition recorded, and configured
+  `trustedCodeReview` quorum satisfied.
+- Residual risk at that head: `medium`. Codex reviewed
+  `32da80f782ad7d4affc5d98db777f08abda421e9`; current head was
+  `6a660179a5ac5829616e6f515379c6ad61c2fc70`. PR-loop reported no stale
+  actionable Codex findings and treated missing fresh Codex as residual risk
+  under the configured `dev` quorum policy.
 
 ## Residual Risks
 
-- None known before PR review loop.
-- If PR-loop returns a clean `dev` stale-Codex docs/spec/test follow-up state,
+- A final bookkeeping-only spec commit is expected after the merge-ready loop
+  outcome above so this state file can record PR-loop evidence. If that exact
+  final head returns a clean `dev` stale-Codex docs/spec/test follow-up state,
   report exact head and residual stale-review risk as an owner-ready handoff
   per repo policy rather than retagging reviewers by hand.
 
 ## Follow-Ups
 
-- Create ready PR to `dev`.
-- Wait 3 minutes after PR creation, then run the required repo-local
-  `agent-control pr-loop` command.
-- Patch only still-actionable findings returned by the PR-loop JSON.
+- Push this bookkeeping state update.
+- Rerun PR-loop on the exact final head and report the terminal decision.
