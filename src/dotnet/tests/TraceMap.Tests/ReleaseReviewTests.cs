@@ -409,6 +409,24 @@ public sealed class ReleaseReviewTests
     }
 
     [Fact]
+    public async Task Include_priority_is_scoped_to_release_review_command()
+    {
+        using var temp = new TempDirectory();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync([
+            "scan",
+            "--repo", temp.Path,
+            "--out", Path.Combine(temp.Path, "scan"),
+            "--include-priority"
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("Missing value for --include-priority", error.ToString());
+    }
+
+    [Fact]
     public void Release_review_priority_rule_ids_are_documented()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
