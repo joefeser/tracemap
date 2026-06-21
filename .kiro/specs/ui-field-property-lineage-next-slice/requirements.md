@@ -198,7 +198,10 @@ precise enough that common names do not create false lineage.
    derived rule IDs.
 6. WHEN high fan-out is detected for generic or common property names THEN
    roots, edges, and paths SHALL downgrade to `NeedsReviewLineage` or emit a
-   fan-out gap under a documented threshold.
+   fan-out gap. The v1 threshold is 10 or more candidate property roots for the
+   normalized property name in the filtered source/framework set; changing the
+   default threshold requires an explicit requirement update and documented
+   report/query metadata.
 7. WHEN no DTO/model property evidence exists after a UI-to-HTTP or
    form-to-action hop THEN reports SHALL emit a `PropertyIdentityUnavailable`
    or equivalent gap and SHALL NOT claim downstream property lineage.

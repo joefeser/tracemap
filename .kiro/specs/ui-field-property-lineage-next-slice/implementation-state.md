@@ -1,193 +1,119 @@
 # UI Field and Property Lineage Next Slice Implementation State
 
-Status: spec-pr-open-review-loop-in-progress
+Status: implementation-slice-ready-for-pr
 
 ## Current Branch
 
-`codex/spec-ui-field-property-lineage-next-slice`
+`codex/implement-ui-field-property-lineage-next-slice`
 
-## Scope
+## Selected Slice
 
-This is a spec-only continuation PR for the next UI field/property lineage
-implementation boundary. It does not implement product code.
+PR 1: Model-Binding And Property Identity Join.
 
-The spec focuses on connecting existing Angular/Razor field/control/binding
-evidence to DTO/model property identity and downstream static route, path,
-reverse, data, dependency, vault, docs-export, and static HTML explorer
-evidence. Optional browser/computer-use evidence remains deferred and
-demo-only.
+This slice implements deterministic static model-binding target facts and
+report-layer property identity joins. It does not implement PR 2 downstream
+static composition, optional browser/computer-use evidence, runtime proof,
+reflection/DI solving, branch feasibility, LLM calls, embeddings, vector
+databases, or prompt-based classification.
 
-## Source Material
+## Implemented
 
-- Existing Kiro spec: `.kiro/specs/ui-field-property-lineage/`.
-- Existing implementation state for the first property-flow slices.
-- Current `tracemap property-flow` implementation and focused tests.
-- Public issue #165: trace UI field bindings to model and backend properties.
-- Public issue #159: route-centered static call flow report.
-- Existing docs for validation, vault export, evidence docs export, and static
-  HTML evidence explorer.
+- Strengthened syntax `PropertyDeclared` metadata with containing type,
+  declared type, qualified target symbol, property name, and model family.
+- Added `RazorModelBindingTarget` facts under
+  `csharp.razor.model-binding.v1` for:
+  - MVC action parameters where parameter DTO/model properties are statically
+    visible in the same syntax unit.
+  - Razor Page handler parameters where properties are statically visible in
+    the same syntax unit.
+  - `[BindProperty]`, page model, and view-model property targets.
+- Kept server-only `RazorModelBindingTarget` facts out of `field:`,
+  `control:`, and `binding:` root selection unless separate UI/form facts are
+  present.
+- Added report-layer derived paths for:
+  - Razor binding to model/view-model property identity.
+  - Razor form target to action/handler model-binding target.
+  - Angular event/control payload fields through existing object-shape,
+    HTTP-call, endpoint route, and model-binding evidence.
+- Added review-tier gaps for `SameNameOnlyPropertyMatch`,
+  `PropertyIdentityUnavailable`, `EndpointAlignmentUnavailable`, and
+  `GenericPropertyFanOut`.
+- Added Tier4 `RazorBindingGap` evidence for model-binding parameter types that
+  cannot be expanded by same-file syntax fallback.
+- Preserved additive report version `1.0`; new rows and metadata stay inside
+  existing arrays/objects.
 
-## Baseline Observed
+## Scope Decisions And Limitations
 
-- Existing property-flow supports selector parsing, source/framework filters,
-  generic property-name downgrade, stable Markdown/JSON reports, safe metadata,
-  and combined-index read-only reporting.
-- Angular template/form/event/template-variable facts already exist for the
-  initial UI root slice.
-- Razor binding and static form target facts already exist for the initial
-  Razor slice.
-- `RazorModelBindingTarget` is reserved in the report model but model-binding
-  target extraction remains follow-up work.
-- The existing tasks list still leaves deeper event-handler-to-payload,
-  payload-to-HTTP, endpoint-to-model, mapping/projection, validation,
-  service/repository, query/data/entity, and dependency-surface property hops as
-  follow-up work.
-- Route-flow exists in the repository, but property-flow must still rely on a
-  documented schema signal and emit gaps when route-flow-specific traversal is
-  unavailable.
-
-## Scope Decisions
-
-- The new spec does not duplicate the broad original UI lineage spec.
-- The first implementation PR after this spec should be limited to property
-  identity joins and model-binding target facts with focused downstream
-  composition through already indexed evidence.
-- Same-name and generic property joins remain review-tier unless narrowed by
-  exact fact, symbol, source, type, or rule-backed alias/value-origin evidence.
-- Browser/computer-use capture is excluded from core property-flow and deferred
-  to a future explicit opt-in demo workflow if needed.
-- Public fixtures must be synthetic and must not include private names, local
-  paths, raw routes, raw SQL, config values, raw remotes, hostnames, secrets,
-  snippets, or private sample labels.
-
-## Oddities
-
-- The prior spec task list marks much of property-flow complete while still
-  listing downstream composition details as unchecked or follow-up work. This
-  continuation treats those unchecked/follow-up items as the next boundary.
-- Route-flow is implemented locally even though the public issue remains open.
-  This spec uses schema/evidence availability rather than issue state as the
-  product gate.
-
-## Review Commands
-
-Planned:
-
-```bash
-node scripts/kiro-review.mjs --phase ui-field-property-lineage-next-slice --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
-node scripts/kiro-review.mjs --phase ui-field-property-lineage-next-slice --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
-```
-
-Re-review limit: at most two cycles, preferring Sonnet for final re-review
-unless Opus is clearly needed.
-
-## Review Results
-
-- Opus Kiro spec review completed with full coverage:
-  `.tmp/kiro-reviews/ui-field-property-lineage-next-slice/2026-06-20T202307-114Z-spec-claude-opus-4.8.clean.md`.
-  It found blockers around Markdown section order and first-PR scope, plus
-  important determinism clarifications for rule IDs, gap vocabulary, route-flow
-  schema signal, fan-out threshold, and missing tests.
-- Sonnet Kiro spec review completed with full coverage:
-  `.tmp/kiro-reviews/ui-field-property-lineage-next-slice/2026-06-20T202709-329Z-spec-claude-sonnet-4.6.clean.md`.
-  It found blockers around model-binding rule IDs, report version policy, and
-  generic fan-out threshold, plus non-blocking selector, endpoint-signal,
-  same-name, downstream consumer gap, and spec-lint recording clarifications.
-- Patched review findings:
-  - Added Coverage Warnings to the documented Markdown section order.
-  - Split implementation tasks into recommended PR slices so PR 1 is focused on
-    model-binding/property identity joins and focused tests.
-  - Collapsed model-binding rule guidance onto existing
-    `csharp.razor.model-binding.v1` unless future implementation first adds and
-    reviews separate catalog entries.
-  - Added explicit report version compatibility and `1.1` bump policy.
-  - Pinned generic property fan-out to a deterministic v1 count threshold of 10.
-  - Named `combined_route_flow_edges` as the route-flow schema signal.
-  - Clarified endpoint alignment signal expectations over `combined_facts` and
-    `index_sources`, with future persisted `endpoint_matches` as a documented
-    successor.
-  - Reused existing `MissingOptionalSchema` and `RouteFlowUnavailable` gaps
-    instead of adding overlapping downstream schema gaps.
-  - Clarified same-name-only joins, DTO/model family overlap, downstream
-    consumer gap reuse, and missing-test expectations.
-- Sonnet re-review cycle 1 completed with reduced coverage because Kiro
-  reported denied tool access:
-  `.tmp/kiro-reviews/ui-field-property-lineage-next-slice/2026-06-20T203051-780Z-re-review-claude-sonnet-4.6.clean.md`.
-  The re-review found remaining rule-ID and test precision issues. Patched:
-  - Documented TypeScript value-to-payload and property mapping hops as
-    `property-flow.edge.v1` report-layer derived edges that must preserve source
-    fact rule IDs, with new scanner rules required before new scanner facts are
-    emitted.
-  - Added `EndpointAlignmentUnavailable` for available endpoint-alignment schema
-    with no matching rows.
-  - Added same-name downgrade notes to selector rows.
-  - Clarified additive closed-vocabulary kind values versus version-bump
-    triggers.
-  - Clarified MVC-specific versus Razor-Pages-specific safe metadata.
-  - Added missing PR 1 test scenarios for Razor control filters, DTO/model
-    family exclusion and overlap, `fact:` disambiguation, missing handler
-    matches, and empty route-flow schema.
-- Sonnet final re-review cycle completed with full coverage:
-  `.tmp/kiro-reviews/ui-field-property-lineage-next-slice/2026-06-20T203504-006Z-re-review-claude-sonnet-4.6.clean.md`.
-  It reported the spec was ready to merge after two narrow blocker fixes. These
-  were patched after the final allowed re-review:
-  - Clarified precedence when same-name-only and high fan-out gaps both apply.
-  - Added a task gate requiring TypeScript scanner rule catalog entries, or an
-    explicit no-new-scanner-fact note, before PR 1 fixtures rely on new
-    TypeScript facts.
-  Additional narrow recommendations patched without another review cycle:
-  - Cross-referenced endpoint alignment schema in requirements.
-  - Clarified observed evidence additive compatibility, multi-family candidate
-    sorting, `[FromBody]`/`[FromForm]` without form target tests, model-binding
-    byte-stability tests, and fan-out threshold boundary tests.
+- No new TypeScript scanner fact types were added. PR 1 TypeScript fixtures use
+  existing Angular event, object-shape, and HTTP-call fact families.
+- C# model-binding target extraction is syntax-backed and conservative.
+  Cross-file action-parameter-to-property expansion remains a follow-up; syntax
+  fallback emits an explicit `cross-file-parameter-type` `RazorBindingGap`
+  instead of choosing hidden target winners.
+- Same-name-only joins remain `NeedsReviewLineage`; exact type/fact/symbol or
+  endpoint/model-binding evidence is required for stronger classification.
+- Dynamic model-binding gap expansion and alias-as-supporting-metadata behavior
+  are deferred follow-ups. This slice does not use alias evidence to promote
+  classifications or choose hidden winners.
+- Route-flow-specific downstream traversal remains deferred to PR 2.
+- JVM and Python adapter smokes were deferred because this slice did not modify
+  JVM or Python adapters.
 
 ## Validation
 
-- `git diff --check`: passed.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "PropertyFlowTests|CSharpSyntaxExtractorTests"`: passed, 17 tests.
+- `npm install --prefix src/typescript`: completed to install pinned local test dependencies.
+- `npm run check --prefix src/typescript`: passed, 7 files / 29 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3` 2.1.11.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 568 tests, with the same existing NU1903 warning.
+- CLI sample smoke over `samples/endpoint-server-aspnet` and
+  `samples/endpoint-client-angular`: scan/combine/property-flow completed,
+  produced `property-flow-report.md` and `property-flow-report.json`, and
+  reported reduced coverage because the public endpoint client sample has HTTP
+  evidence but no Angular template binding root facts.
 - `./scripts/check-private-paths.sh`: passed.
-- Existing spec lint/check discovery: no dedicated spec lint/check script was
-  found in repository scripts or package metadata during this spec pass.
+- `git diff --check`: passed.
 
-## PR Review Loop
+## Review Status
 
-- Ready PR opened: #237 into `dev`.
-- Initial PR loop command:
+- Kiro implementation review completed with full coverage:
+  `.tmp/kiro-reviews/ui-field-property-lineage-next-slice/2026-06-20T234639-174Z-implementation-claude-sonnet-4.6.clean.md`.
+- Initial review findings were bookkeeping/spec-scope issues. Patched:
+  - Moved dynamic model-binding gap expansion from PR 1 required tasks to
+    Deferred Follow-Ups.
+  - Moved alias-as-supporting-metadata behavior and alias-specific tests to
+    Deferred Follow-Ups because this slice does not consume alias evidence.
+  - Marked completed parent tasks only where all remaining PR 1 bullets are
+    complete.
+- Kiro re-review cycle 1 completed with full coverage:
+  `.tmp/kiro-reviews/ui-field-property-lineage-next-slice/2026-06-20T234926-413Z-re-review-claude-sonnet-4.6.clean.md`.
+  Patched remaining spec/test precision issues, including implementation-PR
+  framing, fan-out threshold documentation, `propertyType` design metadata, and
+  additional selector/family/gap tests.
+- Kiro re-review cycle 2 completed with reduced coverage because Kiro reported
+  denied tool access:
+  `.tmp/kiro-reviews/ui-field-property-lineage-next-slice/2026-06-20T235456-592Z-re-review-claude-sonnet-4.6.clean.md`.
+  Patched the blocking findings:
+  - Aligned production `PropertyDeclared.targetSymbol` with synthetic tests by
+    using qualified `Type.Property` symbols when a containing type exists.
+  - Added rule-catalog limitations for convention-based ViewModel/InputModel/
+    FormModel model-binding facts and same-file syntax fallback boundaries.
+  - Emitted `RazorBindingGap` for likely model-binding parameter types whose
+    properties cannot be expanded from same-file syntax.
+  Also patched the closely related Razor Pages handler route-to-model-binding
+  join and added focused coverage.
 
-```bash
-agent-control pr-loop --repo joefeser/tracemap --pr 237 --base dev --require-codex-review --json
-```
+## PR Status
 
-- Initial PR loop result on head `2c896cfb2ddbd30eb29ad2debc3df1a6a10f19ff`:
-  `merge_ready`.
-- Required Codex and Qodo reviews settled cleanly. Optional Gemini review was
-  not requested and optional Gemini review threads were reported as residual
-  risk by policy, not blockers. No pending checks, failed checks, unresolved
-  threads, or actionable bot findings were reported.
-- This state-only bookkeeping update should be followed by a fresh PR-loop run
-  after push so the final decision reflects the current head.
-- Subsequent PR-loop runs after bookkeeping found actionable Gemini and Qodo
-  findings. Patched:
-  - Corrected task expectations from `ModelBindingUnavailable` to
-    `EndpointAlignmentUnavailable` for a Razor form target with no matching
-    action/handler.
-  - Corrected `model:<type>.<property>` no-match task expectation to
-    `SelectorNoMatch`.
-  - Aligned route-flow gap wording with the current baseline
-    `RouteFlowUnavailable` schema gap.
-  - Aligned selector candidate sorting with the current property-flow
-    selected-root baseline order.
-- A fresh Codex review on head `2425458e04eb328cbdf76a491015991a271057ec`
-  found that UI selectors should not match server-only model-binding target
-  facts. Patched requirements, design, and tasks so server-only model-binding
-  facts remain under `model:`/`dto:` selectors unless joined to supporting
-  Razor/UI binding or form-target evidence.
+Prior spec-only PR work was completed before this branch. The current
+implementation PR is ready to open after final validation, commit, and push.
 
-## Follow-Ups For Implementation
+## Follow-Ups
 
-- Add or strengthen model-binding target facts.
-- Add UI binding/control to property identity joins.
-- Add payload/form to endpoint and DTO/model joins.
-- Compose downstream static route/path/reverse/data/dependency evidence where
-  existing facts support it.
-- Preserve report/export contracts and safe artifact integration.
-- Add public-safe fixtures and focused tests.
+- Expand model-binding target extraction across files when semantic or
+  deterministic project-wide syntax metadata can support it safely.
+- Add deeper mapper/projection, validation/read/write, service/repository,
+  query/data/entity, and dependency-surface property hops in later slices.
+- Add PR 2 route-flow/path/reverse/data/dependency composition only where
+  existing combined evidence exposes a property-specific trail.
