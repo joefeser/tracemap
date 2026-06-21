@@ -264,8 +264,9 @@ function validateRouteEntry(routeEntry, errors) {
   }
 
   const nonClaimsText = routeEntry.nonClaims.join(" ");
+  const normalizedNonClaimsText = normalizeScanText(nonClaimsText).toLowerCase();
   for (const term of metadataNonClaimTerms) {
-    if (!nonClaimsText.includes(term)) {
+    if (!normalizedNonClaimsText.includes(term.toLowerCase())) {
       errors.push(withEvidence(`Review packet assembly routes-index.json nonClaims are missing required term: ${term}`, routesIndexArtifact));
     }
   }
@@ -283,9 +284,11 @@ async function validateReviewPacketAssemblyPage({ pagePath, routeContext, errors
   const pageText = normalizeRenderedText(mainHtml);
   const lowerPageText = pageText.toLowerCase();
   const strippedText = normalizeRenderedText(strippedMainHtml);
+  const strippedTextTight = normalizeTightHtmlText(strippedMainHtml);
   const metadataText = collectMetadataText(html);
   const attributeText = collectDecodedAttributeText(strippedHtml);
   const allAttributeText = collectDecodedAttributeText(html);
+  const allTextTight = normalizeTightHtmlText(html);
   const wordCount = countWords(pageText);
 
   for (const phrase of requiredText) {
@@ -336,17 +339,17 @@ async function validateReviewPacketAssemblyPage({ pagePath, routeContext, errors
 
   validateForbiddenClaims({
     errors,
-    text: `${strippedText} ${metadataText} ${attributeText}`,
+    text: `${strippedText} ${strippedTextTight} ${metadataText} ${attributeText}`,
     label: "page copy outside sanctioned boundary regions"
   });
   validateRawMaterial({
     errors,
-    text: `${normalizeRenderedText(strippedHtml)} ${metadataText} ${attributeText}`,
+    text: `${normalizeRenderedText(strippedHtml)} ${normalizeTightHtmlText(strippedHtml)} ${metadataText} ${attributeText}`,
     label: "outside sanctioned boundary regions"
   });
   validateHardPrivateMaterial({
     errors,
-    text: `${html} ${decodedHtml} ${pageText} ${metadataText} ${allAttributeText} ${JSON.stringify(routeContext.routeEntry ?? {})}`,
+    text: `${html} ${decodedHtml} ${pageText} ${allTextTight} ${metadataText} ${allAttributeText} ${JSON.stringify(routeContext.routeEntry ?? {})}`,
     label: "page, attributes, or metadata"
   });
 }
@@ -509,6 +512,57 @@ function collectDecodedAttributeText(html) {
       .map((match) => unquoteAttributeValue(match[1]))
       .join(" ")
   );
+}
+
+function normalizeTightHtmlText(html) {
+  return normalizeScanText(decodeHtmlEntities(stripTagsTight(html)));
+}
+
+function normalizeScanText(value) {
+  return String(value)
+    .normalize("NFKC")
+    .replace(/\p{Cf}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripTagsTight(html) {
+  let text = "";
+  let insideTag = false;
+  let quote = "";
+
+  for (let index = 0; index < html.length; index += 1) {
+    const char = html[index];
+
+    if (insideTag) {
+      if (quote) {
+        if (char === quote) {
+          quote = "";
+        }
+        continue;
+      }
+
+      if (char === "\"" || char === "'") {
+        quote = char;
+        continue;
+      }
+
+      if (char === ">") {
+        insideTag = false;
+      }
+      continue;
+    }
+
+    if (char === "<") {
+      insideTag = true;
+      quote = "";
+      continue;
+    }
+
+    text += char;
+  }
+
+  return text;
 }
 
 function extractMainHtml(html) {
