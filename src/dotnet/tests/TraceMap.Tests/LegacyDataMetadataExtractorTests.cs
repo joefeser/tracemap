@@ -995,11 +995,17 @@ public sealed class LegacyDataMetadataExtractorTests
     {
         using var temp = new TempDirectory();
         Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "sqlmap"));
         Directory.CreateDirectory(Path.Combine(temp.Path, "Orm"));
         Directory.CreateDirectory(Path.Combine(temp.Path, "Domain"));
         File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Customer.sqlmap.xml"), """
             <sqlMap namespace="CustomerSecret" xmlns="http://ibatis.apache.org/mapping">
               <select id="GetCustomers">SELECT * FROM Customers WHERE ApiSecret = 'hidden'</select>
+            </sqlMap>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "sqlmap", "order.xml"), """
+            <sqlMap namespace="OrderSecret" xmlns="http://ibatis.apache.org/mapping">
+              <select id="GetOrders">SELECT * FROM Orders WHERE ApiSecret = 'hidden'</select>
             </sqlMap>
             """);
         File.WriteAllText(Path.Combine(temp.Path, "Orm", "Model.llblgenproj"), """
@@ -1033,6 +1039,7 @@ public sealed class LegacyDataMetadataExtractorTests
         var allProperties = await ReadAllPropertiesAsync(indexPath);
 
         Assert.Contains(result.Inventory, item => item.Kind == "LegacyOrmMetadata" && item.RelativePath == "Mappings/Customer.sqlmap.xml");
+        Assert.Contains(result.Inventory, item => item.Kind == "LegacyOrmMetadata" && item.RelativePath == "sqlmap/order.xml");
         Assert.Contains(result.Inventory, item => item.Kind == "LegacyOrmMetadata" && item.RelativePath == "Orm/Model.llblgenproj");
 
         var gaps = result.Facts
