@@ -1,5 +1,11 @@
 # Event And Message Dependency Surfaces Tasks
 
+Status: implemented-v1-with-follow-ups
+
+Post-promotion note: PR #225 implemented the first event/message surface slice.
+Unchecked items below are follow-up depth, not evidence that the v1 slice is
+still pending.
+
 ## Spec Authoring Tasks
 
 - [x] Create requirements for static event/message publish, consume, binding,

@@ -1,9 +1,12 @@
 # Vault Export Hidden Safety Implementation State
 
-Status: implemented-pending-pr-review
+Status: implemented
 Branch: codex/implement-vault-export-hidden-safety
 Issue: #171
 Public claim level: hidden
+
+Post-promotion note: PR #177 completed the hidden/local safety slice and PR
+#247 promoted it to `main`.
 
 ## Scope Decisions
 

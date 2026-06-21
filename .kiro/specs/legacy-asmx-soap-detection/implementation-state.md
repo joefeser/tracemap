@@ -4,7 +4,10 @@ Status: implemented-mvp
 Branch: codex/implement-legacy-asmx-soap-detection
 Scope: first implementation slice
 Public claim level: hidden
-Readiness: ready-for-pr-review-loop
+Readiness: merged-with-follow-ups
+
+Post-promotion note: PR #153 implemented the ASMX/SOAP MVP and PR #247 promoted
+it to `main`. Remaining unchecked boxes are follow-up/backlog scope.
 
 ## Summary
 
