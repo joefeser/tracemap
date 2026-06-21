@@ -1829,7 +1829,11 @@ public static class TraceMapCommand
               --from-webforms-event <id>  Start from a WebForms event/root fact or selector.
               --from-source <label>      Constrain start evidence to a source label.
               --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
-                                          package-config, wcf-operation, legacy-data, dependency-surface.
+                                          package-config, wcf-operation, legacy-data,
+                                          dependency-surface, message-queue, message-topic,
+                                          message-subscription, message-exchange,
+                                          message-stream, message-event, message-channel,
+                                          message-unknown.
               --surface-name <text>      Exact name, or leading/trailing * wildcard.
               --message-direction <dir>  For message surfaces: publish, consume, bind, declare, or all.
               --source-pair <a>:<b>      Constrain endpoint crossing; escape literal colons as \:.
@@ -2073,7 +2077,11 @@ public static class TraceMapCommand
               --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
               --exit-code                Return exit code 1 when reverse roots or paths are present.
               --source <label>           Filter selected surfaces and requested roots to one source label.
-              --surface <kind>           sql-query, http-route, http-client, package-config, or legacy-data.
+              --surface <kind>           sql-query, http-route, http-client, package-config,
+                                          legacy-data, message-queue, message-topic,
+                                          message-subscription, message-exchange,
+                                          message-stream, message-event, message-channel,
+                                          or message-unknown.
               --surface-name <text>      Exact case-insensitive surface name.
               --message-direction <dir>  For message surfaces: publish, consume, bind, declare, or all.
               --to <target>              endpoints, symbols, sources, or all. Default: endpoints.

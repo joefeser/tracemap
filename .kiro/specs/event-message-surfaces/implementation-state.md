@@ -30,6 +30,8 @@ depth, not current unmerged work.
   - Tightened the `declare` direction test fixture after PR-loop feedback so
     the fixture creates a queue declare surface before asserting selected
     declare surfaces.
+  - Updated `paths` and `reverse` CLI help after Qodo feedback so documented
+    surface-kind selectors include supported `message-*` kinds.
 - Still out of scope:
   - Route-flow async message-hop rendering.
   - Reducer context over message surfaces.
@@ -48,6 +50,10 @@ depth, not current unmerged work.
     `./scripts/check-private-paths.sh`, and `git diff --check` passed.
   - After PR-loop declare-fixture fix:
     `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`,
+    `dotnet build src/dotnet/TraceMap.sln`,
+    `dotnet test src/dotnet/TraceMap.sln`,
+    `./scripts/check-private-paths.sh`, and `git diff --check` passed.
+  - After Qodo CLI-help fix:
     `dotnet build src/dotnet/TraceMap.sln`,
     `dotnet test src/dotnet/TraceMap.sln`,
     `./scripts/check-private-paths.sh`, and `git diff --check` passed.
