@@ -107,7 +107,8 @@ databases, or prompt-based classification.
 ## PR Status
 
 Prior spec-only PR work was completed before this branch. The current
-implementation PR is ready to open after final validation, commit, and push.
+implementation PR is open and ready for review:
+https://github.com/joefeser/tracemap/pull/245
 
 ## Follow-Ups
 
