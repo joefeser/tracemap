@@ -40,6 +40,8 @@ databases, or prompt-based classification.
   `GenericPropertyFanOut`.
 - Added Tier4 `RazorBindingGap` evidence for model-binding parameter types that
   cannot be expanded by same-file syntax fallback.
+- Added Tier4 `RazorBindingGap` evidence for duplicate simple type names in the
+  same syntax file, avoiding merged-property hidden winners.
 - Preserved additive report version `1.0`; new rows and metadata stay inside
   existing arrays/objects.
 
@@ -50,7 +52,8 @@ databases, or prompt-based classification.
 - C# model-binding target extraction is syntax-backed and conservative.
   Cross-file action-parameter-to-property expansion remains a follow-up; syntax
   fallback emits an explicit `cross-file-parameter-type` `RazorBindingGap`
-  instead of choosing hidden target winners.
+  instead of choosing hidden target winners. Duplicate same-file simple type
+  names emit `ambiguous-parameter-type` gaps.
 - Same-name-only joins remain `NeedsReviewLineage`; exact type/fact/symbol or
   endpoint/model-binding evidence is required for stronger classification.
 - Dynamic model-binding gap expansion and alias-as-supporting-metadata behavior
@@ -103,6 +106,11 @@ databases, or prompt-based classification.
     properties cannot be expanded from same-file syntax.
   Also patched the closely related Razor Pages handler route-to-model-binding
   join and added focused coverage.
+- PR-loop review on PR #245 returned actionable duplicate-class-name and async
+  Razor handler findings. Patched duplicate simple class names to emit
+  `ambiguous-parameter-type` gaps, normalized Razor handler comparisons across
+  `Async` suffixes and `OnPost`/`OnGet` prefixes while preserving HTTP-method
+  checks, and added focused tests.
 
 ## PR Status
 

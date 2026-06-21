@@ -524,11 +524,19 @@ public static class CSharpSyntaxExtractor
 
     private static void AddRazorModelBindingTargetFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
     {
-        var propertyMap = root.DescendantNodes()
+        var classPropertyGroups = root.DescendantNodes()
             .OfType<ClassDeclarationSyntax>()
+            .GroupBy(type => type.Identifier.ValueText, StringComparer.Ordinal)
+            .ToArray();
+        var ambiguousTypeNames = classPropertyGroups
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var propertyMap = classPropertyGroups
+            .Where(group => group.Count() == 1)
             .ToDictionary(
-                type => type.Identifier.ValueText,
-                type => type.Members
+                group => group.Key,
+                group => group.Single().Members
                     .OfType<PropertyDeclarationSyntax>()
                     .Where(property => !string.IsNullOrWhiteSpace(property.Identifier.ValueText))
                     .Select(property => new ModelProperty(property.Identifier.ValueText, property.Type.ToString(), property))
@@ -569,7 +577,8 @@ public static class CSharpSyntaxExtractor
                             method.Identifier.ValueText,
                             null,
                             httpMethods,
-                            propertyMap);
+                            propertyMap,
+                            ambiguousTypeNames);
                     }
                 }
             }
@@ -592,7 +601,8 @@ public static class CSharpSyntaxExtractor
                             null,
                             method.Identifier.ValueText,
                             [PageHandlerHttpMethod(method.Identifier.ValueText)],
-                            propertyMap);
+                            propertyMap,
+                            ambiguousTypeNames);
                     }
                 }
             }
@@ -677,10 +687,31 @@ public static class CSharpSyntaxExtractor
         string? actionName,
         string? handlerName,
         IReadOnlyList<string> httpMethods,
-        IReadOnlyDictionary<string, ModelProperty[]> propertyMap)
+        IReadOnlyDictionary<string, ModelProperty[]> propertyMap,
+        IReadOnlySet<string> ambiguousTypeNames)
     {
         var parameterType = CleanTypeName(parameter.Type?.ToString() ?? string.Empty);
-        if (!propertyMap.TryGetValue(LastTypePart(parameterType), out var properties) || properties.Length == 0)
+        var parameterTypeName = LastTypePart(parameterType);
+        if (ambiguousTypeNames.Contains(parameterTypeName))
+        {
+            AddModelBindingGap(
+                manifest,
+                facts,
+                filePath,
+                parameter,
+                "ambiguous-parameter-type",
+                bindingKind,
+                parameterTypeName,
+                parameter.Identifier.ValueText,
+                ParameterSource(parameter),
+                controllerName,
+                actionName,
+                handlerName,
+                httpMethods);
+            return;
+        }
+
+        if (!propertyMap.TryGetValue(parameterTypeName, out var properties) || properties.Length == 0)
         {
             if (IsLikelyModelBindingParameterType(parameterType))
             {
@@ -691,7 +722,7 @@ public static class CSharpSyntaxExtractor
                     parameter,
                     "cross-file-parameter-type",
                     bindingKind,
-                    LastTypePart(parameterType),
+                    parameterTypeName,
                     parameter.Identifier.ValueText,
                     ParameterSource(parameter),
                     controllerName,
@@ -718,7 +749,7 @@ public static class CSharpSyntaxExtractor
                     parameter,
                     bindingKind,
                     modelKind,
-                    LastTypePart(parameterType),
+                    parameterTypeName,
                     property.Name,
                     property.Name,
                     property.TypeName,

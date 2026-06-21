@@ -737,6 +737,7 @@ rules:
       - Convention-only or syntax-only model-binding evidence remains review-tier unless semantic facts support the link.
       - Convention-based ViewModel/InputModel/FormModel type-name matching emits review-tier RazorModelBindingTarget facts for matching type properties without requiring a proven route, action parameter, handler parameter, or model directive.
       - Syntax fallback only expands action and handler parameter types declared in the same syntax file; unresolved cross-file parameter types emit RazorBindingGap facts instead of hidden target winners.
+      - Duplicate simple type names in the same syntax file are treated as ambiguous for parameter property expansion and emit RazorBindingGap facts instead of merging properties across candidate types.
 
   - id: csharp.razor.binding-gap.v1
     name: Razor binding analysis gap
