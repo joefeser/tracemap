@@ -2255,10 +2255,12 @@ rules:
     emits:
       - route-flow fact-symbol projection logic row
       - FactSymbolProjectionUnavailable gap
+      - FactSymbolUnsupportedTypeSkipped gap
     limitations:
       - Fact-symbol projection rows preserve source-local static attachments only; they do not prove runtime request execution, dependency injection binding, dynamic dispatch target selection, SQL execution, database existence, schema compatibility, package loading, or production use.
       - Projection requires source-local symbol identity already present in the selected route-flow path; global short-name stitching and cross-source symbol guesses are not evidence in this rule.
       - Query, data, config, package, and object-shape metadata must use safe descriptors and hashes; raw SQL, config values, connection strings, URLs, remotes, source snippets, local paths, private labels, and secrets must not be rendered.
+      - Unsupported attached fact-symbol types are reported as review-tier skipped context, not silently rendered or inferred as data-flow evidence.
 
   - id: combined.route-flow.classification.v1
     name: Route-flow summary classification
@@ -2298,6 +2300,7 @@ rules:
       - DynamicClientUrlNeedsReview gap
       - ArgumentProjectionUnavailable gap
       - FactSymbolProjectionUnavailable gap
+      - FactSymbolUnsupportedTypeSkipped gap
       - ReducedCoverage gap
       - UnknownCommitSha gap
       - NoRouteFlowEvidence gap
@@ -2308,6 +2311,7 @@ rules:
     limitations:
       - Gaps are coverage-relative explanations of missing or weak static evidence and must not be rendered as clean absence under reduced coverage.
       - Endpoint composition gaps describe static bridge and terminal surface availability only and do not prove route reachability, request execution, dependency-injection target selection, dynamic dispatch, branch feasibility, database existence, query execution, or downstream absence.
+      - Controller-to-service bridge availability is represented by narrower MissingCallEdge, MissingImplementationBridge, ImplementationCandidateUnavailable, and DataSurfaceAttachmentMissing gaps; v1 does not emit a separate ControllerToServiceBridgeMissing gap code.
       - Truncation gaps mean the report is partial.
       - Gap messages must not echo unsafe selectors, local paths, raw remotes, raw SQL/config values, snippets, connection strings, private labels, or secret-like values.
 

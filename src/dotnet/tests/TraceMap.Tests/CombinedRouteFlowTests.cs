@@ -83,7 +83,8 @@ public sealed class CombinedRouteFlowTests
             Assert.StartsWith("surface-key-hash:", surface.StableKey, StringComparison.Ordinal);
             Assert.DoesNotContain("orders", surface.StableKey, StringComparison.OrdinalIgnoreCase);
         });
-        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolUnsupportedTypeSkipped");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.json"));
@@ -146,9 +147,9 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(factSymbolProjection.Evidence.SupportingRuleIds, rule => rule == RuleIds.CSharpSyntaxQueryPattern);
         Assert.Contains(factSymbolProjection.Evidence.SupportingRuleIds, rule => rule == "combined.route-flow.redaction.v1");
         Assert.Contains("tableNameHash", factSymbolProjection.SafeMetadata.Keys);
+        Assert.Contains("evidenceKind", factSymbolProjection.SafeMetadata.Keys);
+        Assert.DoesNotContain("factType", factSymbolProjection.SafeMetadata.Keys);
         Assert.DoesNotContain("orders", JsonSerializer.Serialize(factSymbolProjection.SafeMetadata), StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(parsed.LogicRows, row => row.SafeMetadata.TryGetValue("factType", out var factType)
-            && factType == FactTypes.ConnectionStringDeclared);
 
         var secondOutDir = outDir;
         await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
@@ -680,6 +681,58 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
     }
 
+    [Fact]
+    public async Task Route_flow_traverses_parameter_forward_bridge_to_data_surface()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.String)";
+        var service = "Server.OrderService.Query(System.String)";
+        var controllerParameter = $"{controller}:System.String request";
+        var serviceParameter = $"{service}:System.String request";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            ArgumentPassedFact(server, controller, service, "System.String request", "request", "System.String", "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, serviceParameter, "Services/OrderService.cs", 24, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.FlowRows, row => row.RowKind == "argument-flow"
+            && row.EdgeKind == "argument-flow"
+            && row.SourceSymbol.Contains(controller, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(controllerParameter, StringComparison.Ordinal) == true
+            && row.Evidence.SupportingRuleIds.Contains(RuleIds.CSharpSemanticParameterForwarding));
+        Assert.Contains(result.Report.FlowRows, row => row.RowKind == "parameter-forward"
+            && row.EdgeKind == "parameter-forward"
+            && row.SourceSymbol.Contains(controllerParameter, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(serviceParameter, StringComparison.Ordinal) == true
+            && row.Evidence.SupportingRuleIds.Contains(RuleIds.CSharpSemanticParameterForwarding));
+        Assert.Contains(result.Report.LogicRows, row => row.LogicKind == "flow-boundary"
+            && row.SafeMetadata.TryGetValue("edgeKind", out var edgeKind)
+            && edgeKind == "parameter-forward"
+            && row.Evidence.SupportingRuleIds.Contains(RuleIds.CSharpSemanticParameterForwarding));
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
+        Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains("System.String request", StringComparison.Ordinal)
+            && row.SupportingRowIds.Any(id => id.StartsWith("row:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "DataSurfaceAttachmentMissing" or "NoRouteFlowEvidence");
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.json"));
+        Assert.Contains("parameter-forward", markdown);
+        Assert.Contains("\"edgeKind\": \"parameter-forward\"", json);
+        Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
+    }
+
 
     [Fact]
     public async Task Route_flow_json_file_output_and_classification_filter_empty_rows_yields_selector_gap()
@@ -805,7 +858,10 @@ public sealed class CombinedRouteFlowTests
             Route: "GET /api/orders/{id}"));
 
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ArgumentProjectionUnavailable");
-        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        // The fixture includes attached fact-symbol context selected by the route path, but unsupported
+        // fact-symbol shapes must be reported as skipped context rather than rendered as projection rows.
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolUnsupportedTypeSkipped");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.RuleId is "combined.route-flow.argument-projection.v1" or "combined.route-flow.fact-symbol-projection.v1");
     }
@@ -837,6 +893,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("- MissingMethodSymbolBridge gap", catalog);
         Assert.Contains("- MissingCallEdge gap", catalog);
         Assert.Contains("- DataSurfaceAttachmentMissing gap", catalog);
+        Assert.Contains("- FactSymbolUnsupportedTypeSkipped gap", catalog);
         Assert.Contains("- TraversalBounds gap", catalog);
         Assert.Contains("- route-flow-report.json", catalog);
     }
