@@ -2,7 +2,10 @@
 
 Status: implementation-complete
 
-Readiness: ready-for-pr
+Readiness: merged
+
+Post-promotion note: PR #206 implemented this slice and PR #247 promoted it to
+`main`. Remaining unchecked tasks are follow-up hardening.
 
 Branch: `codex/implement-route-flow-endpoint-composition`
 

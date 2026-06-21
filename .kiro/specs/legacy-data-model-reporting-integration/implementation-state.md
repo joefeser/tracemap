@@ -1,6 +1,9 @@
 # Legacy Data Model Reporting Integration Implementation State
 
-Status: `implementation-slice-1-ready-for-pr`
+Status: `implemented-slice-1-with-follow-ups`
+
+Post-promotion note: PR #236 merged the shared descriptor projection/reporting
+integration slice and PR #247 promoted it to `main`.
 
 Branch: `codex/implement-legacy-data-model-reporting-integration`
 

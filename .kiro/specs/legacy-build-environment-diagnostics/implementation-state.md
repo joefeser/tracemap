@@ -4,7 +4,10 @@ Status: implemented
 Branch: codex/legacy-build-environment-diagnostics
 Scope: core scanner/report implementation
 Public claim level: hidden until reviewed
-Readiness: ready-for-pr-review
+Readiness: merged
+
+Post-promotion note: PR #120 implemented build environment diagnostics and PR
+#247 promoted them to `main`.
 
 ## Summary
 

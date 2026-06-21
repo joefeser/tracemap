@@ -1,8 +1,12 @@
 # Static HTML Evidence Explorer Tasks
 
-Status: implementation-in-progress
-Readiness: pr1-ready-for-review
+Status: implemented-pr1-with-follow-ups
+Readiness: follow-up-slices-available
 Public claim level: concept
+
+Post-promotion note: the first implementation slice is merged. Unchecked items
+below are continuation work for later explorer hardening and richer rendering;
+do not treat them as unfinished PR #231 tasks.
 
 ## Spec-Only PR Scope
 

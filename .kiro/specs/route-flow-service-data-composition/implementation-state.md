@@ -1,6 +1,10 @@
 # Route Flow Service/Data Composition Implementation State
 
-Status: continuation-slice-in-progress.
+Status: implemented-continuation-slice-with-follow-up.
+
+Post-promotion note: PR #222 completed the route-flow service/data composition
+slice and PR #247 promoted it to `main`. Remaining unchecked task items are
+follow-up polish or broader projection work.
 
 Branch: `codex/continue-route-flow-service-data-composition`
 

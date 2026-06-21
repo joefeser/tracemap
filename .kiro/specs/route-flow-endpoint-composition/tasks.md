@@ -1,8 +1,11 @@
 # Route Flow Endpoint Composition Tasks
 
-Status: spec-ready
+Status: implemented-with-follow-ups
 
-Readiness: ready-for-implementation
+Readiness: follow-up-slices-available
+
+Post-promotion note: PR #206 implemented this slice. Unchecked items below are
+follow-up hardening, not current unmerged work.
 
 ## Spec Delivery Tasks
 
