@@ -300,7 +300,8 @@ public static class TraceMapCommand
                 IncludeLegacyRoots: values.HasFlag("--include-legacy-roots"),
                 MaxDepth: ParsePositiveInt(values, "--max-depth", 8),
                 MaxPaths: ParsePositiveInt(values, "--max-paths", 100),
-                MaxFrontier: ParsePositiveInt(values, "--max-frontier", 10000)),
+                MaxFrontier: ParsePositiveInt(values, "--max-frontier", 10000),
+                MessageDirection: values.GetValueOrDefault("--message-direction")),
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap paths completed: {result.MarkdownPath ?? result.JsonPath}");
@@ -712,7 +713,8 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--max-roots", 100),
                 ParsePositiveInt(values, "--max-paths-per-root", 5),
                 ParsePositiveInt(values, "--max-gaps", 1000),
-                values.HasFlag("--exit-code")),
+                values.HasFlag("--exit-code"),
+                values.GetValueOrDefault("--message-direction")),
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap reverse completed: {result.MarkdownPath ?? result.JsonPath}");
@@ -1829,6 +1831,7 @@ public static class TraceMapCommand
               --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
                                           package-config, wcf-operation, legacy-data, dependency-surface.
               --surface-name <text>      Exact name, or leading/trailing * wildcard.
+              --message-direction <dir>  For message surfaces: publish, consume, bind, declare, or all.
               --source-pair <a>:<b>      Constrain endpoint crossing; escape literal colons as \:.
               --classification <value>   StrongStaticPath, ProbableStaticPath,
                                           NeedsReviewStaticPath, NoBackendEvidence,
@@ -2072,6 +2075,7 @@ public static class TraceMapCommand
               --source <label>           Filter selected surfaces and requested roots to one source label.
               --surface <kind>           sql-query, http-route, http-client, package-config, or legacy-data.
               --surface-name <text>      Exact case-insensitive surface name.
+              --message-direction <dir>  For message surfaces: publish, consume, bind, declare, or all.
               --to <target>              endpoints, symbols, sources, or all. Default: endpoints.
               --max-surfaces <n>         Selected surfaces. Default: 200.
               --max-roots <n>            Reverse roots. Default: 100.

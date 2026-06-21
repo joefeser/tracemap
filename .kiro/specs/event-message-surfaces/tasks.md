@@ -114,9 +114,10 @@ still pending.
         rejection of unsupported values.
   - [x] Reject `message-publish-consume` as a surface-kind selector with a
         clear validation error and test.
-  - [ ] Add direction filtering for publisher, consumer, binding, or all
-        directions; if deferred, emit an explicit unavailable gap and document
-        the limitation in reports using reason `direction-filter-not-supported`.
+  - [x] Add direction filtering for publisher, consumer, binding, or all
+        directions; reserve `direction-filter-not-supported` for future
+        adapters or report contexts that cannot honor a direction-specific
+        selector.
   - [ ] Show endpoint/symbol/source-to-publisher paths when existing graph
         evidence reaches publisher facts.
   - [ ] Show consumer-to-downstream paths when existing graph evidence starts

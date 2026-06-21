@@ -385,9 +385,9 @@ Rules:
   all message surfaces.
 - Reverse and path selectors should support direction filtering separately from
   surface kind, for example publisher, consumer, binding, or all directions.
-  If direction filtering is not implemented in the first slice, reports must
-  emit an unavailable gap with reason `direction-filter-not-supported` rather
-  than folding publishers and consumers together silently.
+  If a future adapter or report cannot honor a direction-specific query, it
+  must emit an unavailable gap with reason `direction-filter-not-supported`
+  rather than folding publishers and consumers together silently.
 - Route-flow reports can show message boundary nodes only with explicit async
   caveats.
 - `NoPathEvidence` must remain separate from dynamic destination,

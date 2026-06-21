@@ -235,6 +235,7 @@ public sealed class MessageSurfaceTests
             public sealed class Publisher
             {
                 public void Publish(dynamic kafkaProducer, object message) => kafkaProducer.ProduceAsync("orders.events", message);
+                public void Configure(dynamic channel) => channel.QueueDeclare("orders-work");
             }
             """);
         File.WriteAllText(Path.Combine(consumerRepo, "Consumer.cs"), """
@@ -282,31 +283,47 @@ public sealed class MessageSurfaceTests
     }
 
     [Fact]
-    public async Task Paths_and_reverse_accept_message_surface_selectors_and_reject_candidate_edge_kind()
+    public async Task Paths_and_reverse_filter_message_surfaces_by_direction_and_reject_candidate_edge_kind()
     {
         using var temp = new TempDirectory();
-        var repo = Path.Combine(temp.Path, "publisher");
-        Directory.CreateDirectory(repo);
-        File.WriteAllText(Path.Combine(repo, "Publisher.cs"), """
+        var publisherRepo = Path.Combine(temp.Path, "publisher");
+        var consumerRepo = Path.Combine(temp.Path, "consumer");
+        Directory.CreateDirectory(publisherRepo);
+        Directory.CreateDirectory(consumerRepo);
+        File.WriteAllText(Path.Combine(publisherRepo, "Publisher.cs"), """
             public sealed class Publisher
             {
                 public void Publish(dynamic kafkaProducer, object message) => kafkaProducer.ProduceAsync("orders.events", message);
             }
             """);
+        File.WriteAllText(Path.Combine(consumerRepo, "Consumer.cs"), """
+            public sealed class Consumer
+            {
+                public void Consume(dynamic kafkaConsumer) => kafkaConsumer.Consume("orders.events");
+            }
+            """);
 
-        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(repo, ".tracemap")));
-        Directory.CreateDirectory(Path.Combine(repo, ".tracemap"));
-        SqliteIndexWriter.Write(Path.Combine(repo, ".tracemap", "index.sqlite"), scan.Manifest, scan.Facts);
+        var publisherScan = ScanEngine.Scan(new ScanOptions(publisherRepo, Path.Combine(publisherRepo, ".tracemap")));
+        var consumerScan = ScanEngine.Scan(new ScanOptions(consumerRepo, Path.Combine(consumerRepo, ".tracemap")));
+        Directory.CreateDirectory(Path.Combine(publisherRepo, ".tracemap"));
+        Directory.CreateDirectory(Path.Combine(consumerRepo, ".tracemap"));
+        SqliteIndexWriter.Write(Path.Combine(publisherRepo, ".tracemap", "index.sqlite"), publisherScan.Manifest, publisherScan.Facts);
+        SqliteIndexWriter.Write(Path.Combine(consumerRepo, ".tracemap", "index.sqlite"), consumerScan.Manifest, consumerScan.Facts);
         var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
-        await CombinedIndexBuilder.CombineAsync(new CombineOptions([Path.Combine(repo, ".tracemap", "index.sqlite")], combinedPath, ["publisher"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [Path.Combine(publisherRepo, ".tracemap", "index.sqlite"), Path.Combine(consumerRepo, ".tracemap", "index.sqlite")],
+            combinedPath,
+            ["publisher", "consumer"]));
 
         var paths = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
             combinedPath,
             Path.Combine(temp.Path, "paths"),
             FromSource: "publisher",
-            ToSurface: "message-stream"));
+            ToSurface: "message-stream",
+            MessageDirection: "publish"));
+        Assert.Equal("publish", paths.Report.Query.MessageDirection);
         Assert.Contains(paths.Report.Inventory.SurfacesByKind, pair => pair.Key == "message-stream");
-        Assert.Contains(paths.Report.Gaps, gap =>
+        Assert.DoesNotContain(paths.Report.Gaps, gap =>
             gap.RuleId == RuleIds.MessageSurfaceGap
             && gap.Reason == "direction-filter-not-supported");
 
@@ -314,12 +331,41 @@ public sealed class MessageSurfaceTests
             combinedPath,
             Path.Combine(temp.Path, "reverse"),
             Surface: "message-stream",
+            MessageDirection: "consume",
             To: "sources"));
-        Assert.Contains(reverse.Report.SelectedSurfaces, surface => surface.SurfaceKind == "message-stream");
-        Assert.Contains(reverse.Report.Gaps, gap =>
+        Assert.Equal("consume", reverse.Report.Query.MessageDirection);
+        Assert.Contains(reverse.Report.SelectedSurfaces, surface =>
+            surface.SurfaceKind == "message-stream"
+            && surface.Metadata.GetValueOrDefault("operationDirection") == "consume");
+        Assert.DoesNotContain(reverse.Report.SelectedSurfaces, surface =>
+            surface.SurfaceKind == "message-stream"
+            && surface.Metadata.GetValueOrDefault("operationDirection") == "publish");
+        Assert.DoesNotContain(reverse.Report.Gaps, gap =>
             gap.RuleId == RuleIds.MessageSurfaceGap
             && gap.Reason == "direction-filter-not-supported"
             && gap.Metadata.GetValueOrDefault("gapReason") == "direction-filter-not-supported");
+
+        var allDirections = await CombinedReverseReporter.WriteAsync(new CombinedReverseOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "reverse-all"),
+            Surface: "message-stream",
+            MessageDirection: "all",
+            To: "sources"));
+        Assert.Null(allDirections.Report.Query.MessageDirection);
+        Assert.Contains(allDirections.Report.SelectedSurfaces, surface =>
+            surface.Metadata.GetValueOrDefault("operationDirection") == "publish");
+        Assert.Contains(allDirections.Report.SelectedSurfaces, surface =>
+            surface.Metadata.GetValueOrDefault("operationDirection") == "consume");
+
+        var declare = await CombinedReverseReporter.WriteAsync(new CombinedReverseOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "reverse-declare"),
+            Surface: "message-queue",
+            MessageDirection: "declare",
+            To: "sources"));
+        Assert.Equal("declare", declare.Report.Query.MessageDirection);
+        Assert.All(declare.Report.SelectedSurfaces, surface =>
+            Assert.Equal("declare", surface.Metadata.GetValueOrDefault("operationDirection")));
 
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -332,6 +378,12 @@ public sealed class MessageSurfaceTests
         var reverseExit = await TraceMapCommand.RunAsync(["reverse", "--index", combinedPath, "--out", Path.Combine(temp.Path, "bad-reverse"), "--surface", "message-publish-consume"], reverseOutput, reverseError);
         Assert.Equal(1, reverseExit);
         Assert.Contains("edge kind", reverseError.ToString());
+
+        using var invalidDirectionOutput = new StringWriter();
+        using var invalidDirectionError = new StringWriter();
+        var invalidDirectionExit = await TraceMapCommand.RunAsync(["reverse", "--index", combinedPath, "--out", Path.Combine(temp.Path, "bad-direction"), "--surface", "message-stream", "--message-direction", "sideways"], invalidDirectionOutput, invalidDirectionError);
+        Assert.Equal(1, invalidDirectionExit);
+        Assert.Contains("--message-direction", invalidDirectionError.ToString());
     }
 
     [Fact]
