@@ -5,11 +5,12 @@
 - Branch: `codex/implement-interface-override-di-approximation`
 - Base: `origin/dev`
 - Issue: `Refs #35`
+- PR: `https://github.com/joefeser/tracemap/pull/271`
 - Scope: implementation slice 1
 
 ## Current Status
 
-Implementation slice in progress. The selected slice adds conservative
+Implementation slice implemented in PR #271. The selected slice adds conservative
 `tracemap paths` traversal over method-level interface and override dispatch
 candidates derived from existing combined symbol relationship evidence.
 
@@ -110,7 +111,7 @@ git diff --check
 
 Results:
 
-- Focused path tests passed: 23 tests.
+- Focused path tests passed: 24 tests.
 - `dotnet build` passed.
 - Full .NET suite passed: 588 tests.
 - Private path guard passed.
@@ -135,7 +136,8 @@ not `Closes #35`.
   rendering.
 - Add full missing-candidate, reduced-coverage, syntax-only, and scanner-level
   `DynamicDispatchCandidate` non-conflation tests.
-- Run Kiro implementation review, final validation, commit, PR, and PR loop.
+- Add broader scanner-level relationship extraction hardening for syntax-only
+  and reduced-coverage cases.
 
 ## Implementation Review Notes
 
@@ -151,3 +153,17 @@ not `Closes #35`.
 - Remaining review findings are full-spec follow-up work: DI extraction,
   reverse/route-flow/impact/export integration, broader scanner hardening,
   and full-spec validation. Those remain unchecked in `tasks.md`.
+
+## PR Review Loop Notes
+
+- First `agent-control pr-loop` run for PR #271 returned
+  `actionable_findings` with unresolved Codex/Gemini review threads.
+- Patched actionable findings:
+  - Materialized dispatch relationship groups before adding candidate edges so
+    candidate derivation does not enumerate a mutating edge collection.
+  - Replaced `string.Contains(char, StringComparison)` with
+    `IndexOf(char, StringComparison)` for the target framework used here.
+  - Suppressed immediate candidate-to-relationship backtracking so derived
+    interface/override candidate edges do not immediately traverse back over
+    the backing relationship and create misleading cycle truncation.
+- Re-ran focused and full validation after the review-loop patch.
