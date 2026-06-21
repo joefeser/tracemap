@@ -87,7 +87,7 @@ content. A static list is acceptable and likely simpler.
 | Anchor | Question | Answer purpose | Required fields to preserve | Stop or handoff condition |
 | --- | --- | --- | --- | --- |
 | `#what-is-a-proof-path` | What is a proof path? | Define a public-safe trail from claim to deterministic static evidence. | Claim, public claim level, proof path, rule ID or rule family, evidence tier, coverage label, limitation, source context. | Stop if the trail cannot name the evidence-bearing fields. |
-| `#how-to-read` | How do I read a proof path? | Give the fixed reading order. | Claim, claim level, rule, tier, coverage, commit/source context, extractor version or schema family, limitation, non-claim, next owner. | Stop if any evidence-bearing field is missing or private-only. |
+| `#how-to-read` | How do I read a proof path? | Give the fixed reading order. | Claim, public claim level, proof path, rule ID or rule family, evidence tier, coverage label, commit or public-safe source context, extractor version or schema family, limitation, non-claim, next owner. | Stop if any evidence-bearing field is missing or private-only. |
 | `#evidence-tiers` | What do evidence tiers mean? | Explain tiers without turning tier rank into complete proof. | `Tier1Semantic`, `Tier2Structural`, `Tier3SyntaxOrTextual`, `Tier4Unknown`. | Downgrade or label uncertainty when tier is syntax-only, unknown, or absent. |
 | `#coverage-labels` | What do coverage labels mean? | Explain coverage as a boundary. | Full, partial, reduced, unknown, unavailable, future-only, or gap-labeled state when public-safe. | Preserve reduced or unknown labels; do not normalize them upward. |
 | `#limitations` | Why do limitations matter? | Treat limitations as part of the claim. | Limitation, non-claim, owner follow-up where needed. | Do not repeat the claim after dropping the limitation. |
@@ -95,7 +95,7 @@ content. A static list is acceptable and likely simpler.
 | `#review-packets` | How do proof paths relate to review packets? | Explain packet assembly and review handoff. | Proof paths, limitations, review notes, owner follow-ups, public claim level. | A packet does not approve release, safety, or runtime behavior. |
 | `#static-evidence-cannot-prove` | What can static evidence not prove? | State hard non-claims. | Runtime, production, performance, outage, release, operational, complete-coverage, AI/LLM, approval, and replacement boundaries. | Route operational questions to runtime owners, tests, observability, and human review. |
 | `#private-or-raw-artifacts` | Can a proof path use private or raw artifacts? | Explain public-safe proof material. | Public-safe summaries, checked-in docs, public routes, sanctioned demo artifacts. | Raw/private/local material cannot become public FAQ content. |
-| `#agents-and-reviewers` | What should agents and reviewers preserve? | Tell human and automated readers what must travel with a claim. | Proof path, rule ID or rule family, tier, coverage, limitation, non-claim, public claim level. | Do not repeat a claim after dropping required fields. |
+| `#agents-and-reviewers` | What should agents and reviewers preserve? | Tell human and automated readers what must travel with a claim. | Proof path, rule ID or rule family, evidence tier, coverage label, limitation, non-claim, public claim level. | Do not repeat a claim after dropping required fields. |
 
 Implementation may add more questions if they stay inside the same boundary.
 It must not omit the required questions.
@@ -238,9 +238,9 @@ with structured HTML tools where practical. It should verify:
 - safe and unsafe answer pattern regions;
 - adjacent route links and substitutions;
 - no unsupported runtime, production, endpoint-performance, outage-cause,
-  release-safety, operational-safety, complete-coverage, AI/LLM, release-
-  approval, autonomous-approval, or replacement-of-review claims outside
-  bounded rejection contexts;
+  release-safety, operational-safety, complete-coverage, AI/LLM,
+  release-approval, autonomous-approval, or replacement-of-review claims
+  outside bounded rejection contexts;
 - no unsupported conclusion verbs (`proves`, `guarantees`, `certifies`,
   `approves`, `replaces`, `resolves`, or unqualified `impacted`) outside
   bounded unsafe-pattern, non-claim, or limitation regions, with `impacted`
@@ -248,6 +248,11 @@ with structured HTML tools where practical. It should verify:
 - no forbidden private/raw material in visible text, decoded HTML, raw HTML,
   attributes, alt text, captions, metadata, fixtures, tests, discovery output,
   sitemap output, or bot-facing metadata;
+- placeholder rule IDs, commit-like values, extractor versions, claim labels,
+  and review-packet labels are visibly marked illustrative and are not
+  presented as real TraceMap findings;
+- example outbound links resolve only to allowed public-safe target families,
+  or implementation-state records the deferral, substitution, or omission;
 - no blame language in visible copy, metadata, examples, or validation
   errors, checking at least a recorded advisory set of representative blame
   indicators such as `failed`, `fault`, `to blame`, `negligent`, `careless`,
