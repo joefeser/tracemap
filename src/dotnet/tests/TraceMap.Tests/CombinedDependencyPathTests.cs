@@ -173,6 +173,12 @@ public sealed class CombinedDependencyPathTests
         var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
         Assert.Equal("combined.dispatch-gap.v1", gap.RuleId);
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("Services/StatusService10.cs", gap.FilePath);
+        Assert.Equal(28, gap.StartLine);
+        Assert.Equal(28, gap.EndLine);
+        Assert.Equal(server.CommitSha, gap.CommitSha);
+        Assert.Equal(server.ScannerVersion, gap.ExtractorVersion);
+        Assert.Equal("combined-symbol-relationships", gap.EvidenceScope);
     }
 
     [Fact]

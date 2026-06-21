@@ -153,7 +153,8 @@ public sealed record CombinedPathGap(
     string? Reason,
     string? CommitSha = null,
     string? ExtractorVersion = null,
-    string? EvidenceScope = null);
+    string? EvidenceScope = null,
+    int? EndLine = null);
 
 public sealed record CombinedPathInventory(
     IReadOnlyDictionary<string, int> NodesByKind,
@@ -2042,8 +2043,9 @@ public static class CombinedDependencyPathReporter
                     abstractionNode.StartLine,
                     "dispatch-candidate-fanout",
                     abstractionNode.CommitSha,
-                    null,
-                    "combined-symbol-relationships"));
+                    graph.ScannerVersionFor(abstractionNode.SourceIndexId),
+                    "combined-symbol-relationships",
+                    abstractionNode.EndLine));
             }
         }
     }
@@ -3906,6 +3908,11 @@ public static class CombinedDependencyPathReporter
         public Dictionary<string, List<GraphEdge>> Outgoing { get; } = new(StringComparer.Ordinal);
         public List<CombinedPathGap> Gaps { get; } = [];
         private readonly Dictionary<string, CombinedReportSource> sourcesById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
+
+        public string? ScannerVersionFor(string sourceIndexId)
+        {
+            return sourcesById.TryGetValue(sourceIndexId, out var source) ? source.ScannerVersion : null;
+        }
 
         public void AddNode(GraphNode node)
         {
