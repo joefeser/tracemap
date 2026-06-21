@@ -294,6 +294,7 @@ public sealed class MessageSurfaceTests
             public sealed class Publisher
             {
                 public void Publish(dynamic kafkaProducer, object message) => kafkaProducer.ProduceAsync("orders.events", message);
+                public void Configure(dynamic channel) => channel.QueueDeclare("orders-work");
             }
             """);
         File.WriteAllText(Path.Combine(consumerRepo, "Consumer.cs"), """
@@ -364,6 +365,9 @@ public sealed class MessageSurfaceTests
             MessageDirection: "declare",
             To: "sources"));
         Assert.Equal("declare", declare.Report.Query.MessageDirection);
+        Assert.Contains(declare.Report.SelectedSurfaces, surface =>
+            surface.SurfaceKind == "message-queue"
+            && surface.Metadata.GetValueOrDefault("operationDirection") == "declare");
         Assert.All(declare.Report.SelectedSurfaces, surface =>
             Assert.Equal("declare", surface.Metadata.GetValueOrDefault("operationDirection")));
 
