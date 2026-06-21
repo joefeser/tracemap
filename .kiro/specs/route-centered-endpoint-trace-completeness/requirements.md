@@ -111,7 +111,10 @@ static evidence.
 5. WHEN overrides, inheritance, partial classes, generated code, reflection,
    factories, service locators, configuration-driven bindings, or dynamic
    dispatch affect target selection THEN the report SHALL emit gaps or
-   limitations rather than choosing a runtime target.
+   limitations rather than choosing a runtime target. Candidate-boundary gaps
+   include `ImplementationCandidateUnavailable`,
+   `MissingImplementationBridge`, and `AmbiguousImplementationCandidates`
+   where supported by existing route-flow gap rules.
 6. WHEN traversal caps are reached THEN the report SHALL emit
    `TruncatedByLimit` or `TraversalBounds`, label the trace partial, and keep
    all retained rows in deterministic order.
@@ -163,7 +166,9 @@ is known, what is partial, and why confidence was downgraded.
 1. WHEN every required selector, entry, path, symbol, and terminal-surface link
    has full static coverage, known commit SHA, verified source identity, and no
    blocking gaps THEN the summary MAY be `StrongStaticRouteFlow` or
-   `ProbableStaticRouteFlow` according to existing route-flow rules.
+   `ProbableStaticRouteFlow` according to existing route-flow rules. Semantic
+   evidence may support `StrongStaticRouteFlow`; structural or fallback root
+   evidence caps the summary at `ProbableStaticRouteFlow` or weaker.
 2. WHEN evidence is syntax-only, textual, name-only, dynamic, ambiguous,
    high-fan-out, generated-code uncertain, interface-candidate,
    fallback-derived, unverified, reduced, or truncated THEN affected rows SHALL
@@ -229,8 +234,9 @@ public-safe and specific enough to prevent regressions.
 2. Tests SHALL cover safe selector normalization, selector miss behavior,
    route/client entry evidence, route-to-method symbol bridging, touched files,
    touched symbols, direct service calls, interface candidates, no candidates,
-   multiple candidates, data/query/dependency rows, argument/value-origin rows,
-   and unjoinable projection gaps.
+   multiple candidates, `ProbableStaticRouteFlow` boundaries,
+   data/query/dependency rows, argument/value-origin rows, and unjoinable
+   projection gaps.
 3. Tests SHALL cover reduced coverage, unknown commit SHA, missing schema,
    missing extractor, traversal bounds, high fan-out, dynamic URL, and
    syntax-only downgrade behavior.
