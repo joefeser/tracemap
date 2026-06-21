@@ -211,6 +211,33 @@ public sealed class PropertyFlowTests
         Assert.DoesNotContain("secretToken", exception.Message);
     }
 
+    [Theory]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check"}]}""", "requires non-empty safeMetadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{}}]}""", "requires non-empty safeMetadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"artifactHash":"src/private/page.html"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"captureMode":"production-login"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"noteCode":"live-http"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"noteCode":"apiKey=abc123"}}]}""", "unsafe observed evidence metadata")]
+    public async Task Property_flow_rejects_observed_demo_metadata_without_safe_evidence_or_with_runtime_markers(string observedJson, string expectedMessage)
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _) = await CreatePropertyFlowCombinedIndexAsync(temp);
+        var observedPath = Path.Combine(temp.Path, "observed-unsafe.json");
+        await File.WriteAllTextAsync(observedPath, observedJson);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "unsafe-out"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: observedPath)));
+
+        Assert.Contains(expectedMessage, exception.Message);
+        Assert.DoesNotContain(temp.Path, exception.Message);
+        Assert.DoesNotContain("apiKey=abc123", exception.Message);
+    }
+
     [Fact]
     public async Task Property_flow_reports_generic_ambiguous_and_selector_no_match_states()
     {
