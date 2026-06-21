@@ -52,6 +52,7 @@ internal static class LegacyDataModelIdentity
             "TableAdapter" => "tableadapter",
             "GeneratedDesigner" => "generated-code",
             "Config" => "config",
+            "NHibernateHbm" => "nhibernate-hbm",
             _ => NormalizeToken(metadataKind, "unknown")
         };
     }
