@@ -1057,6 +1057,8 @@ public static class EvidenceDocsExporter
     {
         var ruleIds = DistinctSorted([fact.RuleId, RuleIds.LegacyDataModelSurface, packagingRuleId]);
         var supportingIds = DistinctSorted([fact.FactId, descriptor.DescriptorId, .. descriptor.SupportingFactIds]);
+        var evidenceTiers = DistinctSorted([fact.EvidenceTier, descriptor.EvidenceTier]);
+        var coverageLabels = DistinctSorted([fact.Source.CoverageLabel, descriptor.CoverageLabel]);
         var limitations = new[]
         {
             LimitationForFamily(family, supportingIds),
@@ -1088,7 +1090,8 @@ public static class EvidenceDocsExporter
             | Descriptor role | `{EscapeInline(descriptor.DescriptorRole)}` |
             | Projection rule | `{EscapeInline(RuleIds.LegacyDataModelSurface)}` |
             | Source rule | `{EscapeInline(fact.RuleId)}` |
-            | Evidence tier | `{EscapeInline(fact.EvidenceTier)}` |
+            | Evidence tiers | `{EscapeInline(string.Join(", ", evidenceTiers))}` |
+            | Coverage labels | `{EscapeInline(string.Join(", ", coverageLabels))}` |
             | File span | `{EscapeInline(FormatSpan(fact))}` |
             | Limitations | `{EscapeInline(string.Join(", ", descriptor.Limitations))}` |
 
@@ -1106,8 +1109,8 @@ public static class EvidenceDocsExporter
             [sourceRef],
             supportingIds,
             ruleIds,
-            DistinctSorted([fact.EvidenceTier, descriptor.EvidenceTier]),
-            DistinctSorted([fact.Source.CoverageLabel, descriptor.CoverageLabel]),
+            evidenceTiers,
+            coverageLabels,
             GapsForFact(fact, family),
             limitations);
     }
