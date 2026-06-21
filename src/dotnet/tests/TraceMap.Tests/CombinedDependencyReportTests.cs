@@ -509,6 +509,34 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_caps_message_candidate_edges_per_destination_with_warning()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        var facts = new List<CodeFact>();
+        for (var index = 0; index < 11; index++)
+        {
+            facts.Add(MessageSurfaceFact(manifest, FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, "publish", index));
+            facts.Add(MessageSurfaceFact(manifest, FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, "consume", index));
+        }
+
+        SqliteIndexWriter.Write(indexPath, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["api"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        Assert.Equal(100, result.Report.DependencyEdges.Count(edge => edge.EdgeKind == "message-publish-consume"));
+        Assert.Contains(result.Report.CoverageWarnings, warning =>
+            warning.Contains("Message candidate edge generation truncated for destination hash", StringComparison.Ordinal)
+            && warning.Contains("at 100 rows", StringComparison.Ordinal));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
+        Assert.Contains("Message candidate edge generation truncated", json);
+    }
+
+    [Fact]
     public async Task Report_matches_multi_method_any_and_optional_server_routes()
     {
         using var temp = new TempDirectory();
@@ -805,6 +833,28 @@ public sealed class CombinedDependencyReportTests
                 ["packageName"] = $"Package.{index:000}",
                 ["surfaceKind"] = "package-config",
                 ["version"] = "1.0.0"
+            });
+    }
+
+    private static CodeFact MessageSurfaceFact(ScanManifest manifest, string factType, string ruleId, string direction, int index)
+    {
+        return FactFactory.Create(
+            manifest,
+            factType,
+            ruleId,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan($"Messaging/Message{index:00}.cs", index + 1, index + 1, null, "test", "test/1.0"),
+            targetSymbol: $"{direction}:orders.shared:{index:00}",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["destinationIdentityStatus"] = "static",
+                ["frameworkFamily"] = "test-broker",
+                ["frameworkFeature"] = "test-surface",
+                ["normalizedDestinationKey"] = "orders.shared",
+                ["operationDirection"] = direction,
+                ["operationKind"] = direction == "publish" ? "send" : "receive",
+                ["stableMessageSurfaceKey"] = $"message:orders.shared:{direction}:{index:00}",
+                ["surfaceKind"] = "message-queue"
             });
     }
 

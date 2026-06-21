@@ -229,6 +229,10 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
     IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts);
 
+internal sealed record MessageCandidateEdgeResult(
+    IReadOnlyList<CombinedDependencyEdgeRow> Edges,
+    IReadOnlyList<string> Warnings);
+
 internal sealed record CombinedSourceReadRow(
     CombinedReportSource Source,
     string ManifestJson);
@@ -249,6 +253,8 @@ public static class CombinedDependencyReporter
 {
     private const string Version = "1.0";
     private const int MarkdownRowLimit = 200;
+    private const int MaxMessageCandidateEdges = 1000;
+    private const int MaxMessageCandidateEdgesPerDestination = 100;
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -295,9 +301,11 @@ public static class CombinedDependencyReporter
         var read = await ReadAsync(connection, cancellationToken);
         var endpointFindings = MatchEndpoints(read.Sources, read.Facts);
         var surfaces = BuildSurfaces(read.Facts, read.Sources);
-        var dependencyEdges = read.Edges.Concat(BuildMessageCandidateEdges(surfaces)).ToArray();
+        var messageCandidateEdges = BuildMessageCandidateEdges(surfaces);
+        var dependencyEdges = read.Edges.Concat(messageCandidateEdges.Edges).ToArray();
         var needsReview = BuildNeedsReview(endpointFindings, read.Facts);
         var warnings = read.CoverageWarnings
+            .Concat(messageCandidateEdges.Warnings)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var report = new CombinedDependencyReportDocument(
@@ -1009,45 +1017,89 @@ public static class CombinedDependencyReporter
         return edge with { FilePath = SafePath(edge.FilePath) };
     }
 
-    private static IReadOnlyList<CombinedDependencyEdgeRow> BuildMessageCandidateEdges(IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
+    private static MessageCandidateEdgeResult BuildMessageCandidateEdges(IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
     {
-        var publishers = surfaces
+        var publishersByDestination = surfaces
             .Where(surface => surface.OperationDirection == "publish"
                 && surface.DestinationIdentityStatus == "static"
                 && !string.IsNullOrWhiteSpace(surface.NormalizedDestinationKey))
-            .ToArray();
-        var consumers = surfaces
+            .GroupBy(MessageDestinationKey, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(surface => surface.SourceLabel, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.DisplayName, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.StartLine)
+                    .ThenBy(surface => surface.CombinedFactId, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+        var consumersByDestination = surfaces
             .Where(surface => surface.OperationDirection == "consume"
                 && surface.DestinationIdentityStatus == "static"
                 && !string.IsNullOrWhiteSpace(surface.NormalizedDestinationKey))
-            .ToArray();
+            .GroupBy(MessageDestinationKey, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(surface => surface.SourceLabel, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.DisplayName, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.StartLine)
+                    .ThenBy(surface => surface.CombinedFactId, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
 
-        return publishers
-            .Join(
-                consumers,
-                publisher => $"{publisher.SurfaceKind}|{publisher.NormalizedDestinationKey}",
-                consumer => $"{consumer.SurfaceKind}|{consumer.NormalizedDestinationKey}",
-                (publisher, consumer) => new { Publisher = publisher, Consumer = consumer },
-                StringComparer.Ordinal)
-            .OrderBy(pair => pair.Publisher.SourceLabel, StringComparer.Ordinal)
-            .ThenBy(pair => pair.Consumer.SourceLabel, StringComparer.Ordinal)
-            .ThenBy(pair => pair.Publisher.NormalizedDestinationKey, StringComparer.Ordinal)
-            .Select(pair => new CombinedDependencyEdgeRow(
-                "message-publish-consume",
-                pair.Publisher.SourceIndexId,
-                $"{pair.Publisher.SourceLabel}->{pair.Consumer.SourceLabel}",
-                $"message-edge:{Hash($"{pair.Publisher.CombinedFactId}|{pair.Consumer.CombinedFactId}", 24)}",
-                $"{pair.Publisher.OriginalFactId};{pair.Consumer.OriginalFactId}",
-                pair.Publisher.DisplayName,
-                pair.Consumer.DisplayName,
-                null,
-                null,
-                RuleIds.MessageSurfaceCandidateEdge,
-                WeakestEvidenceTier(pair.Publisher.EvidenceTier, pair.Consumer.EvidenceTier),
-                pair.Publisher.FilePath,
-                pair.Publisher.StartLine,
-                pair.Publisher.EndLine))
-            .ToArray();
+        var edges = new List<CombinedDependencyEdgeRow>();
+        var warnings = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var key in publishersByDestination.Keys.Intersect(consumersByDestination.Keys, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+        {
+            var perDestinationCount = 0;
+            foreach (var publisher in publishersByDestination[key])
+            {
+                foreach (var consumer in consumersByDestination[key])
+                {
+                    if (edges.Count >= MaxMessageCandidateEdges)
+                    {
+                        warnings.Add($"Message candidate edge generation truncated at {MaxMessageCandidateEdges} rows; candidate async edge evidence is reduced coverage.");
+                        return new MessageCandidateEdgeResult(edges, warnings.ToArray());
+                    }
+
+                    if (perDestinationCount >= MaxMessageCandidateEdgesPerDestination)
+                    {
+                        warnings.Add($"Message candidate edge generation truncated for destination hash {Hash(key, 16)} at {MaxMessageCandidateEdgesPerDestination} rows; candidate async edge evidence is reduced coverage.");
+                        goto NextDestination;
+                    }
+
+                    edges.Add(new CombinedDependencyEdgeRow(
+                        "message-publish-consume",
+                        publisher.SourceIndexId,
+                        $"{publisher.SourceLabel}->{consumer.SourceLabel}",
+                        $"message-edge:{Hash($"{publisher.CombinedFactId}|{consumer.CombinedFactId}", 24)}",
+                        $"{publisher.OriginalFactId};{consumer.OriginalFactId}",
+                        publisher.DisplayName,
+                        consumer.DisplayName,
+                        null,
+                        null,
+                        RuleIds.MessageSurfaceCandidateEdge,
+                        WeakestEvidenceTier(publisher.EvidenceTier, consumer.EvidenceTier),
+                        publisher.FilePath,
+                        publisher.StartLine,
+                        publisher.EndLine));
+                    perDestinationCount++;
+                }
+            }
+
+        NextDestination:
+            continue;
+        }
+
+        return new MessageCandidateEdgeResult(edges, warnings.ToArray());
+    }
+
+    private static string MessageDestinationKey(CombinedDependencySurfaceRow surface)
+    {
+        return $"{surface.SurfaceKind}|{surface.NormalizedDestinationKey}";
     }
 
     private static string WeakestEvidenceTier(string left, string right)

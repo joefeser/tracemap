@@ -726,7 +726,7 @@ public static class TraceMapCommand
 
     private static async Task<int> RunReleaseReviewAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        var values = ParseOptions(args);
+        var values = ParseOptions(args, "--include-priority");
         if (!values.TryGetValue("--before", out var beforePath) || string.IsNullOrWhiteSpace(beforePath))
         {
             await error.WriteLineAsync("error: release-review requires --before <index.sqlite>.");
@@ -1071,7 +1071,7 @@ public static class TraceMapCommand
                 values.HasFlag("--force")),
             cancellationToken);
 
-        await output.WriteLineAsync($"TraceMap explorer generate completed: {Path.GetFullPath(outputPath)}");
+        await output.WriteLineAsync("TraceMap explorer generate completed.");
         await output.WriteLineAsync($"Safety profile: {result.Manifest.SafetyProfile}");
         await output.WriteLineAsync($"Artifacts: {result.Manifest.Counts.ArtifactCount}");
         await output.WriteLineAsync($"Evidence rows: {result.Manifest.Counts.EvidenceRowCount}");
@@ -1587,7 +1587,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--include-priority" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review"
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
