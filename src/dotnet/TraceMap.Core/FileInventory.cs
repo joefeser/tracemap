@@ -250,6 +250,7 @@ public static class FileInventory
         var extension = Path.GetExtension(path);
         var lowerRelative = relative.ToLowerInvariant();
         var lowerFileName = fileName.ToLowerInvariant();
+        var pathParts = lowerRelative.Split('/', StringSplitOptions.RemoveEmptyEntries);
 
         if (extension.Equals(".llblgenproj", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".lgp", StringComparison.OrdinalIgnoreCase)
@@ -268,13 +269,13 @@ public static class FileInventory
             || lowerFileName.Contains("llblgen", StringComparison.Ordinal)
             || lowerFileName.Contains("subsonic", StringComparison.Ordinal)
             || lowerFileName.Contains("activerecord", StringComparison.Ordinal)
-            || lowerRelative.Contains("/sqlmap/", StringComparison.Ordinal)
-            || lowerRelative.Contains("/sqlmaps/", StringComparison.Ordinal)
-            || lowerRelative.Contains("/ibatis/", StringComparison.Ordinal)
-            || lowerRelative.Contains("/mybatis/", StringComparison.Ordinal)
-            || lowerRelative.Contains("/llblgen/", StringComparison.Ordinal)
-            || lowerRelative.Contains("/subsonic/", StringComparison.Ordinal)
-            || lowerRelative.Contains("/activerecord/", StringComparison.Ordinal);
+            || pathParts.Contains("sqlmap", StringComparer.Ordinal)
+            || pathParts.Contains("sqlmaps", StringComparer.Ordinal)
+            || pathParts.Contains("ibatis", StringComparer.Ordinal)
+            || pathParts.Contains("mybatis", StringComparer.Ordinal)
+            || pathParts.Contains("llblgen", StringComparer.Ordinal)
+            || pathParts.Contains("subsonic", StringComparer.Ordinal)
+            || pathParts.Contains("activerecord", StringComparer.Ordinal);
     }
 
     public static bool IsCSharpKind(string kind)
