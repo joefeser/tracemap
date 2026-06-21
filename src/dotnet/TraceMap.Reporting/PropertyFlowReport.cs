@@ -268,7 +268,7 @@ public static class PropertyFlowReporter
     private const string TruncationRuleId = "property-flow.truncation.v1";
     private const string ObservedRuleId = "property-flow.observed-evidence.v1";
     private const int MaxObservedEvidenceBytes = 256 * 1024;
-    private const int MaxObservedEvidenceRows = 200;
+    private const int MaxObservedEvidenceRows = 50;
 
     private static readonly HashSet<string> GenericNames = new(StringComparer.OrdinalIgnoreCase)
     {
