@@ -94,6 +94,20 @@ test("validateManagerDemoScriptDist rejects unsupported positioning outside non-
   assert.match(errors.join("\n"), /forbidden AI\/LLM positioning/);
 });
 
+test("validateManagerDemoScriptDist rejects forbidden positioning in metadata", async (t) => {
+  const root = await createManagedManagerDemoScriptDistFixture(t, {
+    pageHtml: managerDemoScriptPage().replace(
+      'content="Fixture description"',
+      'content="AI-powered manager demo shortcut"'
+    )
+  });
+  const errors = [];
+
+  await validateManagerDemoScriptDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden AI\/LLM positioning/);
+});
+
 test("validateManagerDemoScriptDist allows non-claim warning vocabulary", async (t) => {
   const root = await createManagedManagerDemoScriptDistFixture(t, {
     pageHtml: managerDemoScriptPage(`

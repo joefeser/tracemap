@@ -206,7 +206,9 @@ function validateForbiddenPrivateText({ errors, text }) {
 }
 
 function validatePositioning({ errors, html }) {
-  const unsanctioned = normalizeOverclaimText(normalizeRenderedText(stripSanctionedSections(html)));
+  const unsanctionedHtml = stripSanctionedSections(html);
+  const unsanctionedText = normalizeRenderedText(unsanctionedHtml);
+  const unsanctioned = normalizeOverclaimText(`${unsanctionedHtml} ${unsanctionedText}`);
 
   if (forbiddenPositioningPattern.test(unsanctioned)) {
     errors.push(withEvidence("Manager demo script page contains forbidden AI/LLM positioning outside non-claim sections.", pageArtifact));
