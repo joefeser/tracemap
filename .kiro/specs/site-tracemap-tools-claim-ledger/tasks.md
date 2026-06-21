@@ -1,7 +1,7 @@
 # Site TraceMap Tools Claim Ledger Tasks
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 - [x] Evaluate extending `/roadmap/` as the canonical claim-ledger surface

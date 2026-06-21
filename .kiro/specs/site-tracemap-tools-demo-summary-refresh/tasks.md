@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 - [x] 1. Add the public-safe demo summary fixture contract.
   - Define the committed fixture path under `site/src/`.
   - Include version, source summary metadata, public claim level, sections,

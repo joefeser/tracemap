@@ -1,5 +1,7 @@
 # Site TraceMap Tools Incident Review Use Case Tasks
 
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 - [x] Create `/use-cases/incident-review/` using existing static site layout patterns, and add the matching `site/src/_site/pages.json` entry in the same commit so the sitemap never points to a missing HTML file.

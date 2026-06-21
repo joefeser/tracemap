@@ -1,9 +1,12 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 Last verified: 2026-06-15
 Branch: codex/site-docs-index
-Source of truth: working tree
+Source of truth: origin/main
 
 ## Summary
 

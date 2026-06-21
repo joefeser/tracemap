@@ -1,6 +1,7 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
 Branch: codex/site-demo-proof-upgrades
 Public claim level: demo
 

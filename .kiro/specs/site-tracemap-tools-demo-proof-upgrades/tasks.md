@@ -1,5 +1,7 @@
 # Site TraceMap Tools Demo Proof Upgrades Tasks
 
+Status: implemented
+Readiness: implemented
 Public claim level: demo
 
 - [x] Add `/demo/proof-upgrades/` page using existing site styles.

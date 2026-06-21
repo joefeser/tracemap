@@ -1,5 +1,7 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
 Public claim level: shipped
 
 - [x] 1. Add the static site subproject.

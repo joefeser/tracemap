@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 - [x] 1. Add shared header rendering.
   - Export canonical navigation data from the build script.
   - Render static and blog page headers from one helper.

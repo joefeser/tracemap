@@ -1,14 +1,11 @@
 # Site TraceMap Tools Stakeholder Question Index Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
-<!-- Site-code implementation is deferred to a future phase. This spec is
-ready for a future implementer to pick up, not a signal to implement on this
-spec branch. -->
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
-Future implementation tasks must remain unchecked until the corresponding
-site code, metadata, validation, and browser sanity work is complete.
+Completed implementation tasks below reflect the published `/questions/` route,
+metadata, validation, and browser sanity work.
 
 ## Spec Review Tasks
 
@@ -24,11 +21,10 @@ site code, metadata, validation, and browser sanity work is complete.
 - [x] Move `Readiness` to `ready-for-implementation` only after Medium or
   higher findings are patched or explicitly dispositioned.
 
-## Future Implementation Tasks
+## Implementation Tasks
 
-Spec-only phase note: these tasks must remain unchecked until a future
-implementation phase changes site source, validation, and metadata. Do not
-start these tasks on the spec branch.
+Implementation phase note: these tasks are checked because the corresponding
+site source, validation, and metadata work has landed.
 
 - [x] Confirm or update this spec-local `implementation-state.md` with branch,
   route choice, scope decisions, review results, validation plan, and initial
