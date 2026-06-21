@@ -261,7 +261,7 @@ public sealed class PropertyFlowTests
         Assert.DoesNotContain(temp.Path, oversizedException.Message);
 
         var manyRowsPath = Path.Combine(temp.Path, "observed-many-rows.json");
-        var rows = Enumerable.Range(1, 201).Select(index => "{\"label\":\"demo-field-" + index + "\",\"safeMetadata\":{\"artifactHash\":\"hash" + index + "\"}}");
+        var rows = Enumerable.Range(1, 51).Select(index => "{\"label\":\"demo-field-" + index + "\",\"safeMetadata\":{\"artifactHash\":\"hash" + index + "\"}}");
         await File.WriteAllTextAsync(manyRowsPath, """{"observedEvidence":[""" + string.Join(",", rows) + """]}""");
 
         var manyRowsException = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
