@@ -75,6 +75,28 @@ test("validateReviewPacketAssemblyDist reports missing required adjacent link", 
   assert.match(errors.join("\n"), /missing required link: \/manager-packet\//);
 });
 
+test("validateReviewPacketAssemblyDist accepts required links without trailing slashes", async (t) => {
+  const root = await createManagedReviewPacketAssemblyFixture(t, {
+    assemblyHtml: reviewPacketAssemblyPage().replaceAll('href="/manager-packet/"', 'href="/manager-packet"')
+  });
+  const errors = [];
+
+  await validateReviewPacketAssemblyDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateReviewPacketAssemblyDist rejects data-href in place of a required link", async (t) => {
+  const root = await createManagedReviewPacketAssemblyFixture(t, {
+    assemblyHtml: reviewPacketAssemblyPage().replaceAll('href="/manager-packet/"', 'data-href="/manager-packet/"')
+  });
+  const errors = [];
+
+  await validateReviewPacketAssemblyDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing required link: \/manager-packet\//);
+});
+
 test("validateReviewPacketAssemblyDist rejects positive generated packet-builder claims", async (t) => {
   const root = await createManagedReviewPacketAssemblyFixture(t, {
     assemblyHtml: reviewPacketAssemblyPage("<p>TraceMap generated packet-builder output for the user.</p>")
