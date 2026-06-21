@@ -305,10 +305,11 @@ Acceptance criteria:
   `.kiro/specs/site-tracemap-tools-guided-proof-path-tour/`.
 - The packet includes `requirements.md`, `design.md`, `tasks.md`,
   `implementation-state.md`, and `review-packet.md`.
-- The packet is created with `Status: not-started`,
-  `Readiness: spec-review`, and `Public claim level: concept`.
-- After Kiro spec review findings are patched or dispositioned, `Readiness` is
-  updated to `ready-for-implementation` in all five packet files.
+- The delivered packet has `Status: not-started`,
+  `Readiness: ready-for-implementation`, and
+  `Public claim level: concept`.
+- Any mention of the earlier `Readiness: spec-review` state is historical
+  transition or review evidence only, not the current acceptance state.
 - The `Status`, `Readiness`, and `Public claim level` headers remain
   consistent across all five packet files whenever packet-level status changes.
 - Future implementation tasks remain unchecked until site code is actually
