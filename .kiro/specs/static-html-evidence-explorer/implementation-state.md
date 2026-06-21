@@ -1,8 +1,13 @@
 # Static HTML Evidence Explorer Implementation State
 
-Status: implementation-in-progress
-Readiness: PR-1-slice-implemented-locally
+Status: implemented-pr1-with-follow-ups
+Readiness: follow-up-slices-available
 Public claim level: concept
+
+Post-promotion note: PR #231 landed the first static HTML evidence explorer
+slice and PR #247 promoted it to `main`. Remaining unchecked tasks in this spec
+are follow-up slices, not evidence that the first explorer slice is still
+unmerged.
 
 ## Branch
 

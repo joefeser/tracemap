@@ -1,9 +1,14 @@
 # Legacy Data Model Metadata Extraction Implementation State
 
-Status: implementation-slice-in-progress
+Status: continuation-ready
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
 Current implementation branch: codex/implement-legacy-data-model-metadata-extraction-slice2
 Public claim level: hidden
+
+Post-promotion note: several legacy-data model identity/reporting slices have
+landed, including PR #199 and PR #236. This spec still has follow-up work, but
+there is no active implementation branch running for it after the PR #247
+promotion.
 
 ## Why This Spec Exists
 
