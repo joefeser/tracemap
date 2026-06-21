@@ -413,7 +413,8 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--max-paths", 100),
                 ParsePositiveInt(values, "--max-frontier", 10000),
                 ParsePositiveInt(values, "--max-inventory", 1000),
-                ParsePositiveInt(values, "--max-gaps", 1000)),
+                ParsePositiveInt(values, "--max-gaps", 1000),
+                values.GetValueOrDefault("--observed-evidence")),
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap property-flow completed: {result.MarkdownPath ?? result.JsonPath}");
@@ -1911,6 +1912,7 @@ public static class TraceMapCommand
             Filters:
               --source <label>           Case-insensitive exact source label filter.
               --framework <value>        angular, razor, or any. Default: any.
+              --observed-evidence <json> Optional demo metadata JSON. Does not upgrade static lineage.
 
             Bounds:
               --max-roots <n>            Default: 25.
