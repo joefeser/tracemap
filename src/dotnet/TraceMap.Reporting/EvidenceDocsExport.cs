@@ -1081,7 +1081,7 @@ public static class EvidenceDocsExporter
             | Fact type | `{EscapeInline(fact.FactType)}` |
             | Descriptor ID | `{EscapeInline(descriptor.DescriptorId)}` |
             | Display label | `{EscapeInline(descriptor.DisplayName)}` |
-            | Display clearance | `{EscapeInline(descriptor.DisplayClearance.ToString().ToLowerInvariant())}` |
+            | Display clearance | `{(descriptor.DisplayClearance ? "true" : "false")}` |
             | Metadata format | `{EscapeInline(descriptor.MetadataFormat)}` |
             | Source artifact type | `{EscapeInline(descriptor.SourceArtifactType)}` |
             | Model kind | `{EscapeInline(descriptor.ModelKind)}` |
@@ -2173,7 +2173,7 @@ public static class EvidenceDocsExporter
             return "gap";
         }
 
-        if (TryProjectLegacyDataDescriptor(fact) is not null)
+        if (IsPotentialLegacyDataDescriptor(fact) && TryProjectLegacyDataDescriptor(fact) is not null)
         {
             return "data-surface";
         }
@@ -2226,7 +2226,10 @@ public static class EvidenceDocsExporter
 
     private static LegacyDataModelDescriptorProjectionRow? TryProjectLegacyDataDescriptor(DocFact fact)
     {
-        if (fact.FilePath is null || fact.StartLine is null || fact.EndLine is null)
+        if (!IsPotentialLegacyDataDescriptor(fact)
+            || fact.FilePath is null
+            || fact.StartLine is null
+            || fact.EndLine is null)
         {
             return null;
         }
@@ -2250,6 +2253,12 @@ public static class EvidenceDocsExporter
             new LegacyDataModelDescriptorProjectionOptions(
                 AllowClearDisplayLabels: false,
                 ClaimLevelContextId: $"docs-export:{fact.Source.ClaimLevel}"));
+    }
+
+    private static bool IsPotentialLegacyDataDescriptor(DocFact fact)
+    {
+        return fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)
+            || fact.RuleId.StartsWith("legacy.data.", StringComparison.Ordinal);
     }
 
     private static string PackagingRuleForFamily(string family)
