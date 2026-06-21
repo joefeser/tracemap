@@ -1990,7 +1990,8 @@ public static class CombinedDependencyPathReporter
             .GroupBy(edge => edge.ToNodeId, StringComparer.Ordinal)
             .OrderBy(group => graph.Nodes.TryGetValue(group.Key, out var node) ? node.SourceLabel : string.Empty, StringComparer.Ordinal)
             .ThenBy(group => graph.Nodes.TryGetValue(group.Key, out var node) ? node.DisplayName : string.Empty, StringComparer.Ordinal)
-            .ThenBy(group => group.Key, StringComparer.Ordinal);
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .ToArray();
 
         foreach (var group in relationshipGroups)
         {
@@ -2050,7 +2051,7 @@ public static class CombinedDependencyPathReporter
     private static bool IsMethodNode(GraphNode node)
     {
         return string.Equals(node.NodeKind, "Method", StringComparison.Ordinal)
-            || node.DisplayName.Contains('(', StringComparison.Ordinal);
+            || node.DisplayName.IndexOf('(', StringComparison.Ordinal) >= 0;
     }
 
     private static SymbolAlias? TryCreateSymbolAlias(string displayName)
@@ -2175,6 +2176,11 @@ public static class CombinedDependencyPathReporter
 
             foreach (var edge in outgoing)
             {
+                if (IsDispatchCandidateBacktrack(graph, state, edge))
+                {
+                    continue;
+                }
+
                 if (state.NodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
                     truncated = true;
@@ -2193,6 +2199,19 @@ public static class CombinedDependencyPathReporter
         }
 
         return new SearchResult(paths, gaps, truncated);
+    }
+
+    private static bool IsDispatchCandidateBacktrack(EvidenceGraph graph, PathState state, GraphEdge edge)
+    {
+        if (state.EdgeIds.Count == 0 || edge.EdgeKind is not ("implements" or "overrides"))
+        {
+            return false;
+        }
+
+        var previous = graph.EdgesById[state.EdgeIds[^1]];
+        return previous.EdgeKind is "interface-candidate" or "override-candidate"
+            && edge.FromNodeId == previous.ToNodeId
+            && edge.ToNodeId == previous.FromNodeId;
     }
 
     private static CombinedPath ToPath(string pathId, EvidenceGraph graph, PathState state)

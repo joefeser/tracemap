@@ -120,6 +120,9 @@ public sealed class CombinedDependencyPathTests
         Assert.NotEmpty(candidate.SupportingCombinedEdgeIds);
         Assert.Contains(path.Notes, note => note.Code == "StaticDispatchCandidate");
         Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit"
+            && gap.Reason == "cycle"
+            && (gap.NodeId == candidate.FromNodeId || gap.NodeId == candidate.ToNodeId));
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.md"));
         Assert.Contains("interface-candidate", markdown);
