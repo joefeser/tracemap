@@ -132,19 +132,49 @@ before commit.
 
 ## Review And PR Loop
 
-PR loop status: pending until the PR exists.
+PR: `#261`
 
-Required command for the PR phase:
+Initial PR-loop run after PR creation stopped with:
 
-```bash
-agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER> --base dev --require-codex-review --quiet --json
-```
+- `decision`: `actionable_findings`
+- `stopReason`: `UNRESOLVED_REVIEW_THREADS`
+- `headRefOid`: `be6cf417a875c8096027d7ec89fb32489a647bcb`
+- Finding: one Gemini review thread in `site/scripts/proof-path-tour.mjs`
+  about `stripTagsTight` handling comments with apostrophes.
 
-No PR-loop actionable findings are known before PR creation.
+Patch outcome:
+
+- Added comment handling in `stripTagsTight`.
+- Added a regression test for split forbidden claims after an apostrophe
+  comment.
+- Validation after patch: `npm test` passed with 306 tests, `npm run
+  validate` passed, `npm run build` passed, `git diff --check` passed, and
+  `./scripts/check-private-paths.sh` passed.
+- Pushed fix commit `b37479cf08ee0f04217411d0be5d78a434f5de7c`.
+- Resolved the fixed Gemini review thread.
+
+PR-loop rerun after the fix returned:
+
+- `decision`: `merge_ready`
+- `stopReason`: `NONE`
+- `canMerge`: `true`
+- `nextAction`: `merge_ready`
+- `headRefOid`: `b37479cf08ee0f04217411d0be5d78a434f5de7c`
+- `mergeState`: `CLEAN`
+- `unresolvedThreads`: `0`
+- `pendingChecks`: none
+- `failedChecks`: none
+- `actionableBotFindings`: none
+- `residualRiskLevel`: `medium`
+
+Residual risk recorded by PR loop: required Codex review was satisfied by the
+configured `trustedCodeReview` quorum after Qodo returned; Codex was not
+present and is treated as residual risk, not a merge blocker, under the
+`dev` lane policy.
 
 ## Follow-Ups
 
-- After PR creation, wait 3 minutes, run the required `agent-control pr-loop`
-  command, follow its JSON authority gate, and update this file with the exact
-  decision, stop reason, head SHA, unresolved threads, checks, and residual
-  risk before the final owner handoff.
+- This state update is bookkeeping after the clean PR-loop result. Rerun
+  `agent-control pr-loop --repo joefeser/tracemap --pr 261 --base dev
+  --require-codex-review --quiet --json` after pushing this documentation-only
+  commit and report the exact final head and decision.
