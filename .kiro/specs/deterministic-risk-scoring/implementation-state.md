@@ -1,6 +1,9 @@
 # Deterministic Review Priority Scoring Implementation State
 
-Status: implementation-ready-for-review
+Status: implemented-release-review-v1
+
+Post-promotion note: PR #227 implemented opt-in deterministic release-review
+priority scoring and PR #247 promoted it to `main`.
 
 Branch/PR: `codex/implement-deterministic-risk-scoring` / https://github.com/joefeser/tracemap/pull/227
 

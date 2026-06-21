@@ -1,11 +1,16 @@
 # UI Field and Property Lineage Tasks
 
+Status: implemented-v1-with-follow-ups
+
+Post-promotion note: PR #173 implemented the v1 property-flow slice. Unchecked
+items below are continuation work.
+
 ## Spec-Only PR Scope
 
 - [x] Add Kiro spec files under `.kiro/specs/ui-field-property-lineage/`.
 - [x] Keep this PR limited to the new spec folder.
 - [x] Capture issue #165 and related issue #159 as source material in `implementation-state.md`.
-- [ ] Land the spec PR into `dev`.
+- [x] Land the spec PR into `dev`.
 
 ## Implementation Tasks
 

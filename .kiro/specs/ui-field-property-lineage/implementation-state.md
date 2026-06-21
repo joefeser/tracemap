@@ -1,6 +1,10 @@
 # UI Field and Property Lineage Implementation State
 
-Status: implementation-slice-in-progress
+Status: implemented-v1-with-follow-ups
+
+Post-promotion note: PR #173 implemented the v1 property-flow slice and PR #247
+promoted it to `main`. Remaining unchecked items are follow-up lineage depth,
+not current unmerged work.
 
 ## Current Branch
 

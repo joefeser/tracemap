@@ -1,10 +1,10 @@
 # Legacy Data Model Reporting Integration Tasks
 
-Current state: `implementation-slice-1-ready-for-pr`.
+Current state: `implemented-slice-1-with-follow-ups`.
 
-This spec is intentionally implementation-oriented, but this branch is
-spec-only. Product code tasks below should be completed in later PRs and the
-checkboxes updated when those implementations land.
+PR #236 merged the first implementation slice. Remaining unchecked items below
+are follow-up slices and should not be read as blocking the merged descriptor
+projection/reporting integration.
 
 Recommended first implementation PR: tasks 1 through 4, limited to shared
 descriptor projection and report/query readers that already consume

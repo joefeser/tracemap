@@ -1,6 +1,10 @@
 # UI Field and Property Lineage Next Slice Implementation State
 
-Status: implementation-slice-ready-for-pr
+Status: implemented
+
+Post-promotion note: commits `0bf81597`, `32fdfb9b`, and `dbcdb5e6`
+implemented and patched this model-binding/property identity slice before PR
+#247 promoted it to `main`.
 
 ## Current Branch
 

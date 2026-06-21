@@ -4,7 +4,10 @@ Status: implemented
 Branch: codex/legacy-sample-evidence-pack
 Scope: CLI/reporting implementation
 Public claim level: hidden until promoted packs are reviewed for site/docs use
-Readiness: implementation complete, pending PR review
+Readiness: merged
+
+Post-promotion note: PR #140 implemented evidence packs and PR #247 promoted
+them to `main`.
 
 ## Summary
 

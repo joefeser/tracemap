@@ -1,41 +1,41 @@
 # TraceMap Next Execution Report
 
-Date: 2026-06-14
+Date: 2026-06-21
 
 ## Current State
 
-- Main checkout was synced from `origin/dev` at `cb83827`.
-- Local cleanup branch: `codex/spec-task-state-cleanup`.
-- PR #61, `dev` to `main`, is open for the main promotion and currently mergeable.
-- Private path guard is green on PR #61.
-- Sourcery skipped the promotion review because the diff is larger than its review limit.
-- Do not push this cleanup branch until the promotion-review bots are done or a human asks for it.
+- `main` was promoted through PR #247.
+- `dev` was recreated from `origin/main` after GitHub deleted the old remote
+  `dev` branch.
+- Current working branch for this cleanup: `codex/spec-state-runway-cleanup`.
+- Current baseline head: `71c9f440`.
+- Main worktree is clean aside from this spec-state cleanup branch.
+- No extra core worktrees are currently registered. Keep the site manager
+  worktree separate when site work resumes.
 
-## Product Shape
+## Product Shape On Main
 
-TraceMap now has a useful static analysis base across multiple language families:
+TraceMap now has a broad deterministic static-evidence base:
 
 - .NET scanner, reducer, graph/flow facts, and reporting commands.
 - TypeScript scanner.
-- Python scanner MVP.
+- Python scanner MVP plus endpoint/SQL detail slices.
 - JVM scanner MVP for Java plus Kotlin syntax fallback.
 - Combined index builder.
-- Combined dependency report.
-- Combined dependency paths.
-- Combined dependency diff.
-- Combined change impact.
-- Reverse dependency query.
-- Endpoint alignment.
-- Snapshot diff by SHA/index, with combined delegation.
-- SQL dependency surfaces.
-- Query pattern reporting.
-- Package dependency surfaces.
+- Combined dependency report, paths, diff, reverse query, and change impact.
+- Route-flow and property-flow reports.
+- Snapshot diff by SHA/index.
+- SQL dependency surfaces, query pattern reporting, and SQL schema impact.
+- Package dependency surfaces and package upgrade impact.
 - Multi-index portfolio report.
-- Contract delta impact v2.
-- Public demo workflow.
-- Kiro review wrapper with profile-auth fallback.
-- Private path guard.
-- Initial static `tracemap.tools` site under `site/`, with root `amplify.yml` for AWS Amplify deployment from this repository.
+- API/DTO contract diff and contract delta reducer paths.
+- Release-review report with opt-in deterministic review priority scoring.
+- Static HTML evidence explorer first slice.
+- Obsidian/vault export with hidden/local safety fixes.
+- Legacy .NET evidence families including WebForms, WinForms, ASMX/SOAP, WCF,
+  Remoting, legacy ASP.NET routes, legacy build diagnostics, legacy data
+  metadata, and legacy sample evidence packs.
+- Static `tracemap.tools` site under `site/`, built by Amplify from `site/dist`.
 
 Current CLI surface includes:
 
@@ -48,108 +48,103 @@ Current CLI surface includes:
 - `tracemap endpoints`
 - `tracemap combine`
 - `tracemap paths`
+- `tracemap route-flow`
+- `tracemap property-flow`
 - `tracemap diff`
 - `tracemap impact`
 - `tracemap reverse`
 - `tracemap snapshot-diff`
 - `tracemap portfolio`
+- `tracemap package-impact`
+- `tracemap vault`
+- `tracemap docs-export`
+- `tracemap contract-diff`
+- `tracemap baseline`
+- `tracemap evidence-pack`
+- `tracemap explorer generate`
+- `tracemap release-review`
 
-Public site surface:
+## Runway Interpretation Rules
 
-- `site/src/` is the editable static site source.
-- `site/dist/` is generated and ignored.
-- Amplify app root is `site`; publish directory is `dist`.
-- Future site specs should use the `site-` prefix and include an `implementation-state.md` file.
+- Treat `Status: implemented*` as shipped for the implemented slice, even if
+  the spec still has unchecked continuation tasks.
+- Treat `Status: continuation-ready` or `follow-up-slices-available` as backlog,
+  not abandoned current work.
+- Do not use raw unchecked checkbox count as the source of truth. Read the
+  implementation-state header first.
+- Site specs are owned by the site lane unless explicitly handed back to core.
+- Main promotions remain human-mediated.
 
-## Spec Status
+## Core Specs With Follow-Up Value
 
-### Implemented Or Mostly Implemented
+These are good next implementation choices after this cleanup, ordered by
+practical value:
 
-- `combined-change-impact`
-- `combined-dependency-diff`
-- `combined-dependency-paths`
-- `combined-dependency-reporting`
-- `contract-delta-impact-v2`
-- `cross-app-endpoint-alignment`
-- `jvm-indexer`
-- `multi-index-portfolio-report`
-- `package-dependency-surfaces`
-- `public-demo-workflow`
-- `python-depth-pass`
-- `python-endpoint-sql-details`
-- `python-indexer`
-- `query-pattern-reporting`
-- `query-pattern-reporting-v2`
-- `release-review-report`
-- `reverse-impact-query`
-- `snapshot-diff-by-sha`
-- `sql-dependency-surfaces`
-- `site-tracemap-tools-launch`
-- `typescript-indexer`
+1. `route-centered-endpoint-trace-completeness`
+   - First touched-file/touched-symbol slice is implemented.
+   - Follow-up value: selector trace metadata, method/service grouping,
+     data/query/dependency rows, value-origin/fact-symbol projection, and
+     stronger downgrade tests.
 
-Notes:
+2. `route-flow-service-data-composition`
+   - First composition slice is implemented.
+   - Follow-up value: richer service/data grouping and projection polish for
+     endpoint-centered reports.
 
-- `python-indexer` and `jvm-indexer` now have `implementation-state.md` files because their original task lists contain both shipped MVP work and explicit post-MVP backlog.
-- `snapshot-diff-by-sha` still has single-index graph and contract-shape projector work open. Combined-index delegation plus single-index endpoint, surface, malformed-metadata, and analysis-gap diff slices are implemented.
-- `public-demo-workflow` has the first script/scan/summary slice implemented. Combine/report/path/reverse/portfolio demo sections remain follow-up slices.
+3. `ui-field-property-lineage`
+   - V1 `property-flow` is implemented.
+   - Follow-up value: deeper property-to-property mapping, route-flow joins,
+     and optional browser/computer-use evidence as labeled external context.
 
-### Spec-Ready, Not Yet Implemented
+4. `legacy-data-model-metadata-extraction`
+   - Earlier legacy data metadata and reporting slices are implemented.
+   - Follow-up value: deeper relationship extraction, unsupported-shape gaps,
+     and old ORM metadata normalization.
 
-- `api-dto-contract-diff`
-- `public-combined-path-validation`
-- `sql-schema-change-impact`
+5. `legacy-data-model-reporting-integration`
+   - First descriptor projection/reporting slice is implemented.
+   - Follow-up value: vault/RAG/export integration and richer selector support.
 
-### Partial Or Future-Heavy Specs
+6. `static-html-evidence-explorer`
+   - First explorer slice is implemented.
+   - Follow-up value: richer rendering, provenance conflict UI, stronger
+     public/demo safety parity, and no-JavaScript/accessibility hardening.
 
-- `parameter-value-origin-flow`
+7. `event-message-surfaces`
+   - V1 message surfaces are implemented.
+   - Follow-up value: semantic extraction, direction filtering, route-flow async
+     message-hop rendering, and adapter parity in TypeScript/Python/JVM.
 
-This is the deeper analysis layer for request/object/value movement. It is intentionally more cautious and should stay high-value but bounded.
+## Site Lane
 
-## Backlog Snapshot
+- Keep site changes in a separate worktree.
+- Site specs use the `site-` prefix and include `implementation-state.md`.
+- `site/src/` is editable source. `site/dist/` and `site/output/` are generated
+  and ignored.
+- Validate site changes with `npm run build` from `site/`; layout or
+  interaction changes also need desktop and mobile browser sanity checks.
+- Public claims must stay evidence-bound: rule IDs, evidence tiers, coverage
+  labels, limitations, generated artifacts, and no LLM/AI impact-analysis
+  claims.
 
-Highest-value next implementation choices:
+## Recommended Next Move
 
-1. `api-dto-contract-diff`
-   - Good public demo value.
-   - Builds on endpoint/type/DTO facts.
-   - Must avoid claiming runtime serializer behavior without evidence.
+1. Open a small PR for this spec-state/runway cleanup.
+2. After merge, run the Feature Delivery Loop on the highest-value ready core
+   follow-up:
+   - first choice: `route-centered-endpoint-trace-completeness`
+   - second choice: `route-flow-service-data-composition`
+   - third choice: `ui-field-property-lineage`
+3. In parallel, keep no more than 2 to 4 reviewed specs ahead of
+   implementation. Avoid creating a large spec pile that outruns the product.
 
-2. `sql-schema-change-impact`
-   - Strong consulting and legacy-system value.
-   - Builds on SQL dependency surfaces and query pattern reporting.
-   - Needs careful dynamic SQL and reduced-coverage labeling.
+## Notes For Future Agents
 
-3. `public-combined-path-validation`
-   - Good trust-building slice for sample validation and repeatability.
-   - Useful before a larger main/public push.
-
-4. `parameter-value-origin-flow`
-   - High-value explanation layer.
-   - Higher risk and should likely follow one more report/diff-oriented feature.
-
-Site coordinator track:
-
-- Keep site changes in separate worktrees.
-- Create future site specs with the `site-` prefix.
-- Do not edit `site/dist/` by hand.
-- Validate site changes with `npm run build` from `site/` and browser/mobile sanity checks for layout changes.
-
-Future demo/export concept:
-
-- Add an optional Obsidian/vault export demo so managers and skeptical reviewers can browse TraceMap dependency evidence visually.
-- Treat Obsidian as a human exploration layer over existing facts, reports, paths, reverse queries, and portfolio evidence.
-- Candidate shape: `reports/obsidian/Start Here.md`, one note per source/endpoint/symbol/dependency surface, wikilinks for evidence-backed edges, and frontmatter for rule IDs, evidence tiers, commit SHAs, coverage labels, supporting IDs, and limitations.
-- Treat generated vault files as public-shareable artifacts that must be covered by the generated-output sentinel scan before the demo succeeds.
-- Keep SQLite, facts, reports, and rule catalog as source of truth. Do not introduce a new analyzer, runtime topology claim, LLM classification, raw source snippets, raw SQL/config values, local absolute paths, raw remotes, or secrets.
-
-## Cleanup Done In This Branch
-
-- Checked off task lists for implemented specs that still looked unstarted.
-- Added `implementation-state.md` for foundational Python and JVM specs.
-- Updated this report so future agents can tell which specs are shipped, queued, partial, or future-heavy.
-
-## My Recommended Next Move
-
-Wait for PR #61 review bots to finish. If PR #61 remains clean, merge `dev` to `main` so `tracemap.tools` can be configured from `main`.
-
-After the promotion settles, run the Feature Delivery Loop for `api-dto-contract-diff` first. While that implementation runs, queue specs or site updates in separate worktrees so the core and public-site tracks do not collide.
+- Do not rewrite old spec histories to pretend all future work is complete.
+  Mark shipped slices and leave continuation tasks visible.
+- If a spec says `implemented-v1-with-follow-ups`, consume it only after
+  choosing a specific follow-up slice.
+- If a required tool is missing, check Homebrew and known local tool locations
+  before stopping, per `AGENTS.md`.
+- Do not merge or auto-promote `main`; report merge readiness and let Joe make
+  the owner call.

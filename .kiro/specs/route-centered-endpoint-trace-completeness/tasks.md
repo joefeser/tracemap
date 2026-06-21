@@ -1,8 +1,11 @@
 # Route-Centered Endpoint Trace Completeness Tasks
 
-Status: reviewed-with-caveat
+Status: implemented-first-slice-with-follow-ups
 
-Readiness: ready-for-implementation
+Readiness: follow-up-slices-available
+
+Post-promotion note: PR #241 implemented the touched-file/touched-symbol first
+slice. Remaining unchecked items are follow-up slices.
 
 ## Spec Delivery Tasks
 

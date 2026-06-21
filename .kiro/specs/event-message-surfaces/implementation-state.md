@@ -1,6 +1,10 @@
 # Event And Message Dependency Surfaces Implementation State
 
-Status: implementation-in-progress
+Status: implemented-v1-with-follow-ups
+
+Post-promotion note: PR #225 implemented the first event/message surface slice
+and PR #247 promoted it to `main`. Remaining unchecked task items are follow-up
+depth, not current unmerged work.
 
 ## Branch
 
