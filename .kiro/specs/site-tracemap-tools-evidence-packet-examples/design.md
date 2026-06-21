@@ -216,11 +216,12 @@ Future implementation validation should check:
 - metadata and discovery claim level if standalone
 - sitemap metadata if standalone
 - internal link resolution in generated site output
-- rendered word count between 450 and 1300 words unless section placement
-  records a justified tighter or higher bound; any higher bound must explain
-  why complete examples cannot fit without truncating required fields, and the
-  default assumes compact table, accordion, or short-card rendering instead of
-  repeated long-form prose for every field
+- rendered word count between 450 and 1300 words unless
+  `implementation-state.md` records a justified tighter or higher bound; any
+  higher bound must explain why complete examples cannot fit without
+  truncating required fields, and the default assumes compact table,
+  accordion, or short-card rendering instead of repeated long-form prose for
+  every field
 - forbidden claims and unsupported upgrades
 - forbidden private, raw, customer-like, credential-like, local-path, and raw
   command-output material

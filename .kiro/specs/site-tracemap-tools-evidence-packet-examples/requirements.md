@@ -131,7 +131,8 @@ Acceptance criteria:
   must be labeled `synthetic public-safe example` and may describe the row as
   a "demo-backed shape" rather than a demo-backed result.
 - The reduced-coverage packet must keep reduced or partial coverage visible in
-  the claim label, coverage label, limitation, and validation evidence.
+  the claim label, coverage label, limitation, validation evidence, and next
+  owner.
 - The gap-labeled packet must use an evidence tier and coverage label that make
   the gap visible. `Tier4Unknown` is acceptable when the example demonstrates
   an analysis gap.
