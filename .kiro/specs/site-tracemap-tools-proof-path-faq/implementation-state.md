@@ -162,7 +162,7 @@ Implementation validation completed on 2026-06-21:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
-- `cd site && npm test`: passed, 341 tests.
+- `cd site && npm test`: passed, 343 tests.
 - `cd site && npm run validate`: passed, generated 55 HTML files, 1840
   internal references, and 54 sitemap URLs.
 - `cd site && npm run build`: passed.

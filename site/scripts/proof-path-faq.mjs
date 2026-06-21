@@ -161,8 +161,7 @@ const unsupportedVerbPatterns = [
 ];
 
 const blamePatterns = [/\bfailed\b/i, /\bfault\b/i, /\bto blame\b/i, /\bnegligent\b/i, /\bcareless\b/i];
-const sanctionedBoundarySectionPattern =
-  /<section\b(?=[^>]*\bdata-proof-faq-boundary\s*=\s*["'][^"']+["'])[^>]*>[\s\S]*?<\/section>/gi;
+const sanctionedBoundaryNames = new Set(["non-claims", "private-material", "unsafe-patterns"]);
 
 export async function validateProofPathFaqDist({ baseUrl = "https://tracemap.tools", dist, errors }) {
   const localErrors = [];
@@ -599,7 +598,85 @@ function hasId(html, id) {
 }
 
 function stripSanctionedBoundaryRegions(html) {
-  return html.replace(sanctionedBoundarySectionPattern, " ");
+  let result = "";
+  let index = 0;
+
+  while (index < html.length) {
+    const start = findNextSectionStart(html, index);
+    if (!start) {
+      result += html.slice(index);
+      break;
+    }
+
+    result += html.slice(index, start.start);
+
+    const boundaryName = getAttribute(start.attributes, "data-proof-faq-boundary");
+    if (!sanctionedBoundaryNames.has(boundaryName ?? "")) {
+      result += html.slice(start.start, start.end);
+      index = start.end;
+      continue;
+    }
+
+    const end = findMatchingSectionEnd(html, start.end);
+    if (end === -1) {
+      result += html.slice(start.start, start.end);
+      index = start.end;
+      continue;
+    }
+
+    result += " ";
+    index = end;
+  }
+
+  return result;
+}
+
+function findNextSectionStart(html, from) {
+  const pattern = /<section\b/gi;
+  pattern.lastIndex = from;
+  const match = pattern.exec(html);
+  if (!match) {
+    return null;
+  }
+
+  const endIndex = findTagEnd(html, match.index);
+  if (endIndex === -1) {
+    return null;
+  }
+
+  return {
+    attributes: html.slice(match.index + match[0].length, endIndex),
+    end: endIndex + 1,
+    start: match.index
+  };
+}
+
+function findMatchingSectionEnd(html, from) {
+  const pattern = /<\/?section\b[^>]*>/gi;
+  pattern.lastIndex = from;
+  let depth = 1;
+
+  for (let match = pattern.exec(html); match; match = pattern.exec(html)) {
+    const tagStart = match.index;
+    const tagEnd = findTagEnd(html, tagStart);
+    if (tagEnd === -1) {
+      return -1;
+    }
+
+    const rawTag = html.slice(tagStart, tagEnd + 1);
+    if (/^<\/section\b/i.test(rawTag)) {
+      depth -= 1;
+      if (depth === 0) {
+        return tagEnd + 1;
+      }
+    } else {
+      depth += 1;
+    }
+
+    pattern.lastIndex = tagEnd + 1;
+  }
+
+  return -1;
 }
 
 function collectMetadataText(html) {

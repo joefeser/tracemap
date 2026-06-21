@@ -107,6 +107,36 @@ test("validateProofPathFaqDist permits bounded private-material and unsafe wordi
   assert.deepEqual(errors, []);
 });
 
+test("validateProofPathFaqDist rejects unknown boundary names", async (t) => {
+  const source = await proofPathFaqPage();
+  const root = await createManagedProofPathFaqFixture(t, {
+    faqHtml: source.replace(
+      "</main>",
+      '<section data-proof-faq-boundary="custom"><p>TraceMap proves runtime behavior.</p></section></main>'
+    )
+  });
+  const errors = [];
+
+  await validateProofPathFaqDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim/);
+});
+
+test("validateProofPathFaqDist strips approved boundary sections with nested sections", async (t) => {
+  const source = await proofPathFaqPage();
+  const root = await createManagedProofPathFaqFixture(t, {
+    faqHtml: source.replace(
+      "</main>",
+      '<section data-proof-faq-boundary="unsafe-patterns"><section><p>Do not say TraceMap proves runtime behavior or publishes raw facts.</p></section></section></main>'
+    )
+  });
+  const errors = [];
+
+  await validateProofPathFaqDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateProofPathFaqDist rejects hard private material in attributes", async (t) => {
   const source = await proofPathFaqPage();
   const root = await createManagedProofPathFaqFixture(t, {
