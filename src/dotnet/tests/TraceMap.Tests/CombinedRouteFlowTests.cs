@@ -702,11 +702,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Empty(result.Report.DependencySurfaces);
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
-        Assert.NotNull(result.Report.Query.SelectorTrace);
-        Assert.Equal("route", result.Report.Query.SelectorTrace!.SelectorKind);
-        Assert.Equal("ReducedCoverage", result.Report.Query.SelectorTrace.Coverage);
-        Assert.Equal(EvidenceTiers.Tier4Unknown, result.Report.Query.SelectorTrace.EvidenceTier);
-        Assert.Empty(result.Report.Query.SelectorTrace.SupportingFactIds);
+        Assert.Null(result.Report.Query.SelectorTrace);
         var json = await File.ReadAllTextAsync(outputPath);
         Assert.Contains("\"reportType\": \"route-flow\"", json);
         Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
