@@ -32,6 +32,7 @@ import {
 import { managerFaqRoute } from "./manager-faq.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
+import { reviewerQuickstartRoute } from "./reviewer-quickstart.mjs";
 import { reviewPacketAssemblyRoute } from "./review-packet-assembly.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
@@ -152,6 +153,7 @@ async function createDistFixture({
       managerFaqRoute,
       proofPathTourRoute,
       proofSourceCatalogRoute,
+      reviewerQuickstartRoute,
       reviewPacketAssemblyRoute,
       reviewClaimChecklistRoute,
       reviewRoomRoute,
@@ -191,6 +193,7 @@ async function createDistFixture({
     managerFaqRoute,
     proofPathTourRoute,
     proofSourceCatalogRoute,
+    reviewerQuickstartRoute,
     "/manager-packet/",
     "/packets/",
     reviewPacketAssemblyRoute,
@@ -295,6 +298,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === proofSourceCatalogRoute) {
     return proofSourceCatalogPage();
+  }
+
+  if (route === reviewerQuickstartRoute) {
+    return reviewerQuickstartPage();
   }
 
   if (route === reviewPacketAssemblyRoute) {
@@ -605,6 +612,19 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
+        path: reviewerQuickstartRoute,
+        title: "Reviewer Quickstart",
+        summary: "Five-minute concept-level guide for inspecting a public-safe TraceMap evidence packet before repeating or routing a claim.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["The fixture route remains bounded to first-stop reviewer orientation over existing public-safe proof surfaces."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, autonomous approval, or replacement of tests proof."
+        ]
+      },
+      {
         path: reviewPacketAssemblyRoute,
         title: "Review Packet Assembly",
         summary: "Concept-level checklist for assembling public-safe review handoff material from existing TraceMap evidence surfaces.",
@@ -734,6 +754,10 @@ async function proofSourceCatalogPage() {
   return readFile(new URL("../src/proof-source-catalog/index.html", import.meta.url), "utf8");
 }
 
+async function reviewerQuickstartPage() {
+  return readFile(new URL("../src/reviewer-quickstart/index.html", import.meta.url), "utf8");
+}
+
 function reviewPacketAssemblyPage() {
   const filler = Array.from({ length: 80 }, (_, index) => `bounded evidence assembly ${index}`).join(" ");
   return page(`
@@ -778,6 +802,7 @@ function reviewPacketAssemblyPage() {
     <a href="/team-evidence-handoff/">Team evidence handoff</a>
     <a href="/incident-evidence-handoff/">Incident evidence handoff</a>
     <a href="/review-room/">Review room</a>
+    <a href="${reviewerQuickstartRoute}">Reviewer quickstart</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
     <a href="/proof-source-catalog/">Proof source catalog</a>
     <a href="/proof-paths/">Proof paths</a>
@@ -1200,6 +1225,7 @@ function reviewRoomPage() {
     <a href="/use-cases/incident-review/">Incident review</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
     <a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>
+    <a href="${reviewerQuickstartRoute}">Reviewer quickstart</a>
     <p>${filler}</p>
   `);
 }
