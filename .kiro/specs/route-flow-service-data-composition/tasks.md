@@ -141,8 +141,8 @@ are the contract that later implementation and tests validate.
   - [x] Add tests proving projected argument/fact-symbol rows suppress the old
         present-but-unprojected `ExtractorUnavailable` gap for that route/table,
         while unjoinable rows emit the narrower projection-unavailable gap.
-  - [x] Add or explicitly defer focused coverage for
-        `combined_parameter_forward_edges` as a bridge in route-flow traversal.
+  - [x] Add focused coverage for `combined_parameter_forward_edges` as a bridge
+        in route-flow traversal.
 
 - [x] 11. Enforce privacy and redaction. Requirements: 6, 7.
   - [x] Reuse shared safe path, hashing, display, and redaction helpers where
@@ -166,8 +166,9 @@ are the contract that later implementation and tests validate.
   - [x] Run any route-flow/reporting privacy guard or forbidden-wording tests.
   - [x] Run non-regression tests for existing route-flow CLI wiring, rule IDs,
         classifications, JSON report type/version, and Markdown compatibility.
-  - [ ] Run an ignored local smoke against a private legacy ASP.NET smoke sample
-        using generic labels only; do not commit private outputs.
+  - [x] Document explicit deferral for the ignored local smoke against a
+        private legacy ASP.NET smoke sample; synthetic route-flow coverage and
+        checked-in public sample smoke cover this follow-up slice.
 
 ## Suggested PR Boundaries
 
