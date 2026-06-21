@@ -1,16 +1,15 @@
 # TraceMap Kiro Review Packet
 
-Status: not-started
+Status: in-review
 Readiness: ready-for-implementation
 Public claim level: concept
 
-Review the `site-tracemap-tools-team-evidence-handoff` spec for merge
+Review the `site-tracemap-tools-team-evidence-handoff` implementation for merge
 readiness.
 
-This is a spec-only public site phase for a future
-`/team-evidence-handoff/` page or section. The future page should help someone
-share a TraceMap evidence packet with a teammate, reviewer, manager, or agent
-without losing proof boundaries.
+This public site phase implements the `/team-evidence-handoff/` concept page.
+The page should help someone share a TraceMap evidence packet with a teammate,
+reviewer, manager, or agent without losing proof boundaries.
 
 Please inspect:
 
@@ -22,14 +21,14 @@ Please inspect:
 
 Review focus:
 
-- Does the spec satisfy the requested spec-only scope without requiring site
-  code changes in this phase?
-- Are `Status: not-started`, `Readiness: ready-for-implementation`, and
-  `Public claim level: concept` present after review findings are patched?
+- Does the implementation satisfy the bounded public-site scope without
+  changing scanner, reducer, generated artifact, or agent automation behavior?
+- Are `Status: in-review`, `Readiness: ready-for-implementation`, and `Public
+  claim level: concept` present after review findings are patched?
 - Does the spec state that final readiness should become
   `ready-for-implementation` only after Medium or higher findings are patched
   or recorded as not applicable?
-- Are future implementation tasks unchecked?
+- Are completed implementation and validation tasks checked?
 - Does the spec define handoff language around summary, proof path, rule
   ID/rule family, evidence tier, coverage label, limitations, non-claims,
   local-only artifacts, and next owner/action?

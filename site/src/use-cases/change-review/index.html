@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap brief for preparing change review conversations with static evidence, proof paths, coverage labels, limitations, and next owners."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Change Review Brief | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/use-cases/change-review/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Change Review Brief">
+    <meta
+      property="og:description"
+      content="How engineers, reviewers, architects, managers, release reviewers, and agents can prepare bounded review questions from deterministic static evidence."
+    >
+    <meta property="og:url" content="https://tracemap.tools/use-cases/change-review/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Change review brief</p>
+        <h1>Prepare the review conversation from static evidence.</h1>
+        <p class="hero-subhead">
+          A change review brief is a bounded static-evidence packet for a PR,
+          release, or change-review conversation. It records what changed,
+          visible static dependency surfaces, evidence backing the review
+          question, partial or unknown coverage, and the owner for next
+          verification.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          The brief reduces meeting fog by keeping every statement attached to
+          proof, limits, and ownership.
+        </p>
+        <nav class="hero-actions" aria-label="Change review links">
+          <a class="button primary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/packets/">Packet vocabulary</a>
+          <a class="button secondary" href="/review-room/">Review room</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Audience</p>
+          <h2>One packet can serve several review roles without changing the proof boundary.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Engineers</strong><span>Use the brief to see the changed area, nearby static surfaces, and the review question before reading source.</span></div>
+          <div><strong>Code reviewers</strong><span>Use it to ask which rule-backed path, tier, file span, or limitation supports a review prompt.</span></div>
+          <div><strong>Architects and managers</strong><span>Use it to keep scope, tradeoffs, and ownership visible without turning the packet into certainty.</span></div>
+          <div><strong>Release reviewers and agents</strong><span>Use it as handoff context for questions that still require tests, runtime owners, source review, release process, or human judgment.</span></div>
+        </div>
+      </section>
+
+      <section id="change-context" class="section split-section">
+        <div>
+          <p class="section-kicker">Change Context</p>
+          <h2>Start with the question before listing evidence.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>review question</code><span>What specific change-review question is this brief preparing, and who asked for the review?</span></div>
+          <div><code>changed area</code><span>Which public-safe branch, commit context, component name, contract, route family, package family, or file area frames the conversation?</span></div>
+          <div><code>review trigger</code><span>Was the prompt a PR, planned release discussion, architecture concern, owner handoff, or agent-prepared review packet?</span></div>
+          <div><code>outside scope</code><span>Which runtime, incident, deployment, ownership, or release-process questions must move to a different owner or route?</span></div>
+        </div>
+      </section>
+
+      <section id="evidence-packet" class="section">
+        <div class="section-header">
+          <p class="section-kicker">Evidence Packet</p>
+          <h2>The packet carries provenance, support, and limits together.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Proof path</h3>
+            <p>Name the public-safe path a reviewer can follow from summary to evidence. If the path is missing, keep the statement as a question.</p>
+          </article>
+          <article>
+            <h3>Rule ID or rule family</h3>
+            <p>Use a rule ID when it is public-safe and specific. Use a rule-family label only with the limitation that the exact rule is not available for this public brief.</p>
+          </article>
+          <article>
+            <h3>Visible static dependency surfaces</h3>
+            <p>List HTTP route references, HTTP client references, SQL-facing references, package references, or config references as visible review inputs, not behavior proof.</p>
+          </article>
+          <article>
+            <h3>Evidence tier</h3>
+            <p>Transcribe Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown without upgrading the tier in meeting notes.</p>
+          </article>
+          <article>
+            <h3>Coverage label</h3>
+            <p>Keep complete, partial, reduced, unavailable, future-only, or unknown coverage labels visible so the next question does not sound stronger than the packet.</p>
+          </article>
+          <article>
+            <h3>Public-safe source context</h3>
+            <p>Include file path and line span when public-safe, plus commit SHA and extractor version as provenance for the repository snapshot and extractor behavior.</p>
+          </article>
+          <article>
+            <h3>Limitations</h3>
+            <p>Carry parser gaps, semantic-load gaps, syntax-only evidence, framework gaps, and public-summary omissions beside the review prompt.</p>
+          </article>
+          <article>
+            <h3>Non-claims</h3>
+            <p>Record which conclusions the packet does not support so a summary cannot be upgraded by confidence, seniority, meeting repetition, manager pressure, or agent summary.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="review-questions" class="section split-section">
+        <div>
+          <p class="section-kicker">Review Questions</p>
+          <h2>Turn static evidence into prompts, not conclusions.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Code review</strong><span>Which changed file span, proof path, or rule family should a reviewer inspect first?</span></div>
+          <div><strong>Test review</strong><span>Which test owner should decide whether the visible surface needs deterministic test coverage?</span></div>
+          <div><strong>Runtime review</strong><span>Which service or runtime owner should answer questions that require logs, traces, metrics, dashboards, or deployment facts?</span></div>
+          <div><strong>Release review</strong><span>Which release reviewer should decide how this static packet fits the existing release process?</span></div>
+          <div><strong>Architecture review</strong><span>Which architect should review repeated dependency-surface questions or cross-component ownership boundaries?</span></div>
+          <div><strong>Agent handoff</strong><span>What proof path, tier, limitation, and next owner must an agent include before handing the question to a human?</span></div>
+        </div>
+      </section>
+
+      <section id="change-review-stop-conditions" class="section split-section">
+        <div>
+          <p class="section-kicker">Stop Conditions</p>
+          <h2>Stop when the packet cannot support the review wording.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>missing proof path</code><span>Do not publish or repeat a conclusion when the proof path is absent.</span></div>
+          <div><code>private-only evidence</code><span>Do not convert private-only evidence into public copy until a reviewed public-safe summary exists.</span></div>
+          <div><code>unknown or reduced coverage</code><span>Keep Tier4Unknown, unknown coverage, reduced coverage, unavailable coverage, and partial analysis visible as review limits.</span></div>
+          <div><code>unsupported runtime or release wording</code><span>Stop wording that claims runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, or deployment state.</span></div>
+          <div><code>raw artifact exposure</code><span>Do not expose raw facts, facts.ndjson, raw SQLite, index.sqlite, report.md, scan-manifest.json, logs/analyzer.log, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, credentials, connection strings, table dumps, or database contents.</span></div>
+          <div><code>no named next owner</code><span>Do not close the handoff when no code owner, reviewer, test owner, runtime/service owner, release reviewer, architect, or agent handoff owner is named.</span></div>
+        </div>
+      </section>
+
+      <section id="next-owners" class="section">
+        <div class="section-header">
+          <p class="section-kicker">Next Owners</p>
+          <h2>Every unresolved question needs a named receiver.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Code owner</h3>
+            <p>Owns source-area interpretation and decides where source review should continue.</p>
+          </article>
+          <article>
+            <h3>Reviewer</h3>
+            <p>Owns the review prompt and checks that the summary still matches its cited evidence.</p>
+          </article>
+          <article>
+            <h3>Test owner</h3>
+            <p>Owns questions about deterministic tests or test gaps raised by visible static surfaces.</p>
+          </article>
+          <article>
+            <h3>Runtime or service owner</h3>
+            <p>Owns questions that need runtime systems, deployment facts, service context, or operational interpretation.</p>
+          </article>
+          <article>
+            <h3>Release reviewer</h3>
+            <p>Owns how the packet enters release review without treating static evidence as release outcome proof.</p>
+          </article>
+          <article>
+            <h3>Architect</h3>
+            <p>Owns recurring dependency-surface or ownership-boundary questions that outlive one PR.</p>
+          </article>
+          <article>
+            <h3>Agent handoff owner</h3>
+            <p>Owns the final proof path, limitation, and receiver list before an agent-prepared packet leaves the thread.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="change-review-limitations" class="section split-section">
+        <div>
+          <p class="section-kicker">Limitations</p>
+          <h2>Reduced evidence stays visible.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Partial analysis</strong><span>Semantic load failures, parser limits, framework gaps, or syntax-only evidence can reduce coverage.</span></div>
+          <div><strong>Unknown proof</strong><span>Tier4Unknown, unavailable proof, future-only proof, and unknown coverage are review inputs, not conclusions.</span></div>
+          <div><strong>Public boundary</strong><span>Private repository evidence needs private review before any public-safe summary is written.</span></div>
+          <div><strong>Static boundary</strong><span>Static evidence can prepare a review conversation, but human reviewers, tests, runtime observability, source review, owner confirmation, release review, and human judgment remain responsible for their own decisions.</span></div>
+        </div>
+      </section>
+
+      <section id="change-review-non-claims" class="section split-section">
+        <div>
+          <p class="section-kicker">Non-Claims</p>
+          <h2>This brief names what TraceMap is not claiming.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>release boundary</code><span>A change review brief is not release approval and does not approve a release.</span></div>
+          <div><code>replacement boundary</code><span>The brief does not replace tests, code review, source review, runtime observability, release review, owner confirmation, or human judgment.</span></div>
+          <div><code>runtime boundary</code><span>The brief is not runtime proof, production safety proof, operational safety proof, production traffic proof, endpoint performance proof, outage cause proof, production proven evidence, operational assurance, or a production observability tool.</span></div>
+          <div><code>certainty boundary</code><span>The brief does not say a system, endpoint, dependency, feature, or release is safe, unsafe, approved, blocked, validated for release, or completely covered.</span></div>
+          <div><code>analysis boundary</code><span>The brief is not AI impact analysis, LLM analysis, prompt-based classification, embedding search, vector database analysis, or complete product coverage proof.</span></div>
+        </div>
+      </section>
+
+      <section id="adjacent-routes" class="section link-section">
+        <div>
+          <p class="section-kicker">Adjacent routes</p>
+          <h2>Use the nearest route for the question you actually have.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/use-cases/">Use-case index</a>
+          <a href="/use-cases/endpoint-review/">Endpoint review use case</a>
+          <a href="/use-cases/incident-review/">Incident review use case</a>
+          <a href="/static-vs-runtime/">Static versus runtime</a>
+          <a href="/validation/">Validation limits</a>
+          <a href="/limitations/">Limitations</a>
+        </div>
+        <p>
+          This page is narrower than the <a href="/review-room/">review room</a>
+          because it prepares a brief packet before or during a conversation. It
+          is narrower than <a href="/packets/">packet vocabulary</a> because it
+          focuses on change-review questions and next owners. It differs from
+          <a href="/team-evidence-handoff/">team evidence handoff</a> by framing
+          one PR, release, or change-review conversation rather than moving the
+          same evidence fields between receivers. Use
+          <a href="/static-triage/">static triage</a> for triage framing,
+          <a href="/manager-brief/">manager brief</a> or
+          <a href="/manager-packet/">manager packet</a> for leadership framing,
+          and <a href="/deploy-audit/">deploy audit</a> for static-site deploy
+          output checks.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Change review connects
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/packets/">packet vocabulary</a>,
+        <a href="/review-room/">review room</a>,
+        and the
+        <a href="/review-claim-checklist/">claim checklist</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

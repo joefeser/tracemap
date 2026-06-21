@@ -1,9 +1,12 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Security.Cryptography;
 using System.Reflection;
 using TraceMap.Cli;
 using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
+using TraceMap.Reporting.ReviewPriority;
 using TraceMap.Storage;
 
 namespace TraceMap.Tests;
@@ -82,6 +85,8 @@ public sealed class ReleaseReviewTests
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "release-review.json"));
         Assert.Contains("TraceMap Release Review Report", markdown);
         Assert.Contains("\"reportType\": \"release-review\"", json);
+        Assert.DoesNotContain("\"reviewPriority\"", json);
+        Assert.DoesNotContain("## Review Priority", markdown);
         Assert.DoesNotContain("https://example.invalid", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from orders", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
@@ -97,6 +102,353 @@ public sealed class ReleaseReviewTests
             ContractDeltaPath: deltaPath));
         Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "release-review.md")));
         Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOutDir, "release-review.json")));
+    }
+
+    [Fact]
+    public async Task Release_review_include_priority_writes_scored_markdown_and_json_sidecar()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var outDir = Path.Combine(temp.Path, "release");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            RouteFact(after, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10),
+            QueryPatternFact(after, "/private/tmp/secret/OrderRepository.cs", 30)
+        ]);
+        var beforeHash = Sha256(beforeIndex);
+        var afterHash = Sha256(afterIndex);
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            outDir,
+            IncludePriority: true));
+
+        Assert.NotNull(result.ReviewPriority);
+        Assert.NotNull(result.ReviewPriorityRows);
+        Assert.Equal(ReviewPriorityStatuses.Available, result.ReviewPriority!.Status);
+        Assert.Equal(ReviewPriorityRules.ModelVersion, result.ReviewPriority.ModelVersion);
+        Assert.Null(result.ReviewPriority.PriorityScore);
+        Assert.Contains(result.ReviewPriority.AttentionLevel, new[]
+        {
+            ReviewPriorityAttentionLevels.HighAttention,
+            ReviewPriorityAttentionLevels.ModerateAttention,
+            ReviewPriorityAttentionLevels.Unknown
+        });
+        Assert.NotEmpty(result.ReviewPriorityRows!);
+        Assert.All(result.ReviewPriorityRows!, row =>
+        {
+            Assert.Contains(row.SeverityHint, new[]
+            {
+                ReviewPrioritySeverityHints.CriticalReview,
+                ReviewPrioritySeverityHints.HighReview,
+                ReviewPrioritySeverityHints.MediumReview,
+                ReviewPrioritySeverityHints.LowReview,
+                ReviewPrioritySeverityHints.Info,
+                ReviewPrioritySeverityHints.Unknown
+            });
+            Assert.Null(row.PriorityScore);
+            Assert.NotEmpty(row.Components);
+            Assert.All(row.Components, component =>
+            {
+                Assert.StartsWith("review.priority.", component.RuleId, StringComparison.Ordinal);
+                Assert.Null(component.ComponentValue);
+                Assert.NotEmpty(component.Limitations);
+                Assert.True(component.SourceEvidence.Count > 0 || component.Metadata.Count > 0);
+            });
+        });
+        Assert.Contains(result.ReviewPriorityRows!, row => row.Components.Any(component => component.ComponentKind == "coverage_gap" && component.Direction == "cap"));
+        Assert.DoesNotContain(result.ReviewPriorityRows!, row => row.SeverityHint == ReviewPrioritySeverityHints.CriticalReview);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "release-review.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "release-review.json"));
+        Assert.Contains("## Review Priority", markdown);
+        Assert.Contains("\"reviewPriority\"", json);
+        Assert.Contains("\"reviewPriorityRows\"", json);
+        Assert.Contains("\"priorityScore\": null", json);
+        Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("select * from orders", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("select * from orders", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(beforeHash, Sha256(beforeIndex));
+        Assert.Equal(afterHash, Sha256(afterIndex));
+
+        var root = JsonNode.Parse(json)!.AsObject();
+        Assert.Equal("review-priority.v1", root["reviewPriority"]!["modelVersion"]!.GetValue<string>());
+        Assert.Equal(ReviewPriorityStatuses.Available, root["reviewPriority"]!["status"]!.GetValue<string>());
+        Assert.True(root["reviewPriorityRows"]!.AsArray().Count > 0);
+    }
+
+    [Fact]
+    public async Task Release_review_include_priority_does_not_change_later_opt_out_output()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            RouteFact(after, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)
+        ]);
+
+        var firstOptOutDir = Path.Combine(temp.Path, "first-opt-out");
+        await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            firstOptOutDir));
+        var firstMarkdown = await File.ReadAllTextAsync(Path.Combine(firstOptOutDir, "release-review.md"));
+        var firstJson = await File.ReadAllTextAsync(Path.Combine(firstOptOutDir, "release-review.json"));
+
+        await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "scored"),
+            IncludePriority: true));
+
+        var secondOptOutDir = Path.Combine(temp.Path, "second-opt-out");
+        await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            secondOptOutDir,
+            IncludePriority: false));
+        var secondMarkdown = await File.ReadAllTextAsync(Path.Combine(secondOptOutDir, "release-review.md"));
+        var secondJson = await File.ReadAllTextAsync(Path.Combine(secondOptOutDir, "release-review.json"));
+
+        Assert.Equal(firstMarkdown, secondMarkdown);
+        Assert.Equal(firstJson, secondJson);
+        Assert.DoesNotContain("## Review Priority", secondMarkdown);
+        Assert.DoesNotContain("\"reviewPriority\"", secondJson);
+        Assert.DoesNotContain("\"reviewPriorityRows\"", secondJson);
+    }
+
+    [Fact]
+    public async Task Release_review_priority_output_is_byte_stable_for_identical_inputs()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            RouteFact(after, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)
+        ]);
+
+        var firstDir = Path.Combine(temp.Path, "first");
+        var secondDir = Path.Combine(temp.Path, "second");
+        await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(beforeIndex, afterIndex, firstDir, IncludePriority: true));
+        await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(beforeIndex, afterIndex, secondDir, IncludePriority: true));
+
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstDir, "release-review.md")),
+            await File.ReadAllTextAsync(Path.Combine(secondDir, "release-review.md")));
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstDir, "release-review.json")),
+            await File.ReadAllTextAsync(Path.Combine(secondDir, "release-review.json")));
+    }
+
+    [Fact]
+    public void Release_review_priority_cap_semantics_do_not_upgrade_low_or_info_rows()
+    {
+        var method = typeof(ReleaseReviewPriorityScorer).GetMethod("SeverityFromComponents", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var cap = PriorityComponent("review_tier_evidence", "cap", ReviewPriorityRules.Downgrade, EvidenceTiers.Tier3SyntaxOrTextual);
+
+        var strongCapped = (string)method!.Invoke(null, [CombinedDependencyDiffClassifications.Added, EvidenceTiers.Tier2Structural, new[] { cap }])!;
+        var infoCapped = (string)method.Invoke(null, [ReleaseReviewClassifications.NoActionableEvidence, EvidenceTiers.Tier3SyntaxOrTextual, new[] { cap }])!;
+
+        Assert.Equal(ReviewPrioritySeverityHints.MediumReview, strongCapped);
+        Assert.Equal(ReviewPrioritySeverityHints.Info, infoCapped);
+    }
+
+    [Fact]
+    public void Release_review_priority_markdown_escapes_scoring_limitations()
+    {
+        var report = MinimalReleaseReviewDocument();
+        var unsafeLimitation = "pipe | bracket [x] paren (y) tick `z` angle <q>\nnext";
+        var row = new ReviewPriorityRow(
+            "row:unsafe",
+            "finding",
+            "topChangedSurfaces",
+            "api",
+            CombinedDependencyDiffClassifications.Added,
+            "combined.diff.surface.v1",
+            EvidenceTiers.Tier2Structural,
+            ReviewPrioritySeverityHints.HighReview,
+            null,
+            true,
+            [PriorityComponent("static_change_evidence", "increase", ReviewPriorityRules.Component, EvidenceTiers.Tier2Structural)],
+            ["finding:unsafe"],
+            [unsafeLimitation]);
+        var summary = new ReviewPrioritySummary(
+            ReviewPriorityStatuses.Available,
+            ReviewPriorityRules.ModelVersion,
+            ReviewPriorityAttentionLevels.HighAttention,
+            null,
+            true,
+            ["topChangedSurfaces"],
+            [],
+            [PriorityComponent("report_aggregation", "increase", ReviewPriorityRules.Aggregate, EvidenceTiers.Tier2Structural)],
+            [unsafeLimitation]);
+        var priority = new ReleaseReviewPriorityResult(summary, [row]);
+        var method = typeof(ReleaseReviewReporter).GetMethod("RenderMarkdown", BindingFlags.NonPublic | BindingFlags.Static, [typeof(ReleaseReviewDocument), typeof(ReleaseReviewPriorityResult)]);
+
+        var markdown = (string)method!.Invoke(null, [report, priority])!;
+
+        Assert.Contains("pipe \\| bracket \\[x\\] paren \\(y\\) tick \\`z\\` angle \\<q\\> next", markdown);
+    }
+
+    [Fact]
+    public async Task Release_review_priority_selector_no_match_is_unknown_under_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeApi = Path.Combine(temp.Path, "before-api.sqlite");
+        var afterApi = Path.Combine(temp.Path, "after-api.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeApi, before, []);
+        SqliteIndexWriter.Write(afterApi, after, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeApi], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterApi], afterCombined, ["api"]));
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "release"),
+            Scope: "surfaces",
+            Endpoint: "GET /missing",
+            IncludePriority: true));
+
+        Assert.Contains(result.ReviewPriorityRows!, row => row.Components.Any(component => component.ComponentKind == "selector_no_match_uncertain" && component.Direction == "unknown"));
+        Assert.DoesNotContain(result.ReviewPriorityRows!, row => row.Components.Any(component => component.ComponentKind == "selector_no_match_credible"));
+    }
+
+    [Fact]
+    public void Release_review_priority_vocabularies_and_model_version_are_closed()
+    {
+        Assert.Equal("review-priority.v1", ReviewPriorityRules.ModelVersion);
+        Assert.Equal(
+            new[] { "critical_review", "high_review", "medium_review", "low_review", "info", "unknown" },
+            PrioritySeverityVocabulary());
+        Assert.Equal(
+            new[] { "highest_attention", "high_attention", "moderate_attention", "low_attention", "informational", "unknown" },
+            PriorityAttentionVocabulary());
+        Assert.Equal(
+            new[] { "available", "not_requested", "unavailable", "deferred", "truncated" },
+            PriorityStatusVocabulary());
+    }
+
+    [Fact]
+    public async Task Release_review_priority_marks_reduced_coverage_and_truncation_as_incomplete()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeApi = Path.Combine(temp.Path, "before-api.sqlite");
+        var afterApi = Path.Combine(temp.Path, "after-api.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, analysisLevel: "Level1SemanticAnalysisReduced", buildStatus: "FailedOrPartial", commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeApi, before, []);
+        SqliteIndexWriter.Write(afterApi, after, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeApi], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterApi], afterCombined, ["api"]));
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "release"),
+            Scope: "surfaces,api-dto,sql-schema,packages",
+            MaxGaps: 50,
+            MaxChecklistItems: 1,
+            IncludePriority: true));
+
+        Assert.NotNull(result.ReviewPriority);
+        Assert.Equal(ReviewPriorityStatuses.Truncated, result.ReviewPriority!.Status);
+        Assert.False(result.ReviewPriority.Complete);
+        Assert.Equal(ReviewPriorityAttentionLevels.Unknown, result.ReviewPriority.AttentionLevel);
+        Assert.Contains("sourceCoverage", result.ReviewPriority.LimitedSections);
+        Assert.Contains(result.ReviewPriorityRows!, row => row.Components.Any(component => component.RuleId == ReviewPriorityRules.Truncation));
+        Assert.Contains(result.ReviewPriorityRows!, row => row.Components.Any(component => component.RuleId == ReviewPriorityRules.Coverage));
+        Assert.Contains(result.ReviewPriorityRows!, row => row.SeverityHint == ReviewPrioritySeverityHints.Unknown);
+    }
+
+    [Fact]
+    public async Task Release_review_cli_include_priority_uses_boolean_flag()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var outDir = Path.Combine(temp.Path, "release");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            RouteFact(after, "GET", "/api/orders", "/api/orders", "Controllers/OrdersController.cs", 10)
+        ]);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync([
+            "release-review",
+            "--before", beforeIndex,
+            "--after", afterIndex,
+            "--out", outDir,
+            "--include-priority"
+        ], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("TraceMap release-review completed:", output.ToString());
+        Assert.Contains("\"reviewPriority\"", await File.ReadAllTextAsync(Path.Combine(outDir, "release-review.json")));
+        Assert.Contains("## Review Priority", await File.ReadAllTextAsync(Path.Combine(outDir, "release-review.md")));
+    }
+
+    [Fact]
+    public async Task Include_priority_is_scoped_to_release_review_command()
+    {
+        using var temp = new TempDirectory();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync([
+            "scan",
+            "--repo", temp.Path,
+            "--out", Path.Combine(temp.Path, "scan"),
+            "--include-priority"
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("Missing value for --include-priority", error.ToString());
+    }
+
+    [Fact]
+    public void Release_review_priority_rule_ids_are_documented()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        foreach (var ruleId in new[]
+                 {
+                     ReviewPriorityRules.Component,
+                     ReviewPriorityRules.Aggregate,
+                     ReviewPriorityRules.Downgrade,
+                     ReviewPriorityRules.Coverage,
+                     ReviewPriorityRules.Identity,
+                     ReviewPriorityRules.Commit,
+                     ReviewPriorityRules.Schema,
+                     ReviewPriorityRules.Truncation,
+                     ReviewPriorityRules.Workflow,
+                     ReviewPriorityRules.Selector
+                 })
+        {
+            Assert.Contains($"id: {ruleId}", catalog, StringComparison.Ordinal);
+            var start = catalog.IndexOf($"id: {ruleId}", StringComparison.Ordinal);
+            var block = catalog[start..Math.Min(catalog.Length, start + 900)];
+            Assert.Contains("limitations:", block, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -636,5 +988,160 @@ public sealed class ReleaseReviewTests
             [],
             [],
             []);
+    }
+
+    private static string Sha256(string path)
+    {
+        return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+    }
+
+    private static ReviewPriorityComponent PriorityComponent(string kind, string direction, string ruleId, string tier)
+    {
+        return new ReviewPriorityComponent(
+            $"component:{kind}:{direction}:{ruleId}:{tier}",
+            kind,
+            null,
+            direction,
+            ruleId,
+            tier,
+            [
+                new ReviewPriorityEvidenceRef(
+                    "evidence:test",
+                    "test",
+                    ruleId,
+                    tier,
+                    "api",
+                    "1111111",
+                    "Controllers/TestController.cs",
+                    10,
+                    10)
+            ],
+            ["test limitation"],
+            []);
+    }
+
+    private static ReleaseReviewDocument MinimalReleaseReviewDocument()
+    {
+        var query = new ReleaseReviewQuery(
+            ["all"],
+            false,
+            false,
+            null,
+            null,
+            null,
+            null,
+            false,
+            false,
+            false,
+            100,
+            50,
+            25,
+            1000,
+            50,
+            [],
+            "release-review-composition",
+            "1.0");
+        var source = new ReleaseReviewSourceInfo(
+            "api",
+            "csharp",
+            "scan-api",
+            "1111111",
+            "repo-hash",
+            "root-hash",
+            "Full",
+            "Succeeded",
+            "Level1SemanticAnalysis",
+            []);
+        var snapshot = new ReleaseReviewSnapshot("before", "single", [source], "Full", [], []);
+        var summary = new ReleaseReviewSummary(
+            ReleaseReviewClassifications.ActionableStaticEvidence,
+            "release.review.rollup.v1",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            false,
+            "Static evidence requires review.");
+        var section = new ReleaseReviewSection(ReleaseReviewStatuses.Available, [], [], []);
+        return new ReleaseReviewDocument(
+            "release-review",
+            "1.0",
+            "ReleaseReviewSingleV1",
+            query,
+            snapshot,
+            snapshot with { Side = "after" },
+            summary,
+            [],
+            section,
+            section,
+            section,
+            section,
+            section,
+            section,
+            section,
+            [],
+            [],
+            []);
+    }
+
+    private static string[] PrioritySeverityVocabulary()
+    {
+        return
+        [
+            ReviewPrioritySeverityHints.CriticalReview,
+            ReviewPrioritySeverityHints.HighReview,
+            ReviewPrioritySeverityHints.MediumReview,
+            ReviewPrioritySeverityHints.LowReview,
+            ReviewPrioritySeverityHints.Info,
+            ReviewPrioritySeverityHints.Unknown
+        ];
+    }
+
+    private static string[] PriorityAttentionVocabulary()
+    {
+        return
+        [
+            ReviewPriorityAttentionLevels.HighestAttention,
+            ReviewPriorityAttentionLevels.HighAttention,
+            ReviewPriorityAttentionLevels.ModerateAttention,
+            ReviewPriorityAttentionLevels.LowAttention,
+            ReviewPriorityAttentionLevels.Informational,
+            ReviewPriorityAttentionLevels.Unknown
+        ];
+    }
+
+    private static string[] PriorityStatusVocabulary()
+    {
+        return
+        [
+            ReviewPriorityStatuses.Available,
+            ReviewPriorityStatuses.NotRequested,
+            ReviewPriorityStatuses.Unavailable,
+            ReviewPriorityStatuses.Deferred,
+            ReviewPriorityStatuses.Truncated
+        ];
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }

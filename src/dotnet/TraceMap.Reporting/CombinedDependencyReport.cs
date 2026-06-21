@@ -121,7 +121,41 @@ public sealed record CombinedDependencySurfaceRow(
     string? DependencyGroup = null,
     string? PackageManager = null,
     string? VersionHash = null,
-    string? RedactionReason = null);
+    string? RedactionReason = null,
+    string? FrameworkFamily = null,
+    string? FrameworkFeature = null,
+    string? OperationDirection = null,
+    string? OperationKind = null,
+    string? DestinationIdentityStatus = null,
+    string? NormalizedDestinationKey = null,
+    string? DestinationHash = null,
+    string? EventTypeIdentity = null,
+    string? HandlerSymbolId = null,
+    string? PublisherSymbolId = null,
+    string? SafeMetadataHash = null,
+    string? StableMessageSurfaceKey = null,
+    string? LegacyDataDescriptorId = null,
+    string? LegacyDataProjectionRuleId = null,
+    string? LegacyDataMetadataFormat = null,
+    string? LegacyDataSourceArtifactType = null,
+    string? LegacyDataModelKind = null,
+    string? LegacyDataDescriptorRole = null,
+    string? LegacyDataStableModelKey = null,
+    string? LegacyDataDisplayNameHash = null,
+    string? LegacyDataContainerName = null,
+    string? LegacyDataContainerHash = null,
+    string? LegacyDataStorageKind = null,
+    string? LegacyDataMappingKind = null,
+    string? LegacyDataModelRelationshipKind = null,
+    string? LegacyDataSourceMetadataFactId = null,
+    IReadOnlyList<string>? LegacyDataSupportingFactIds = null,
+    IReadOnlyList<string>? LegacyDataSupportingEdgeIds = null,
+    string? LegacyDataCoverageLabel = null,
+    IReadOnlyList<string>? LegacyDataLimitations = null,
+    IReadOnlyList<string>? LegacyDataRedactions = null,
+    bool LegacyDataDisplayClearance = false,
+    string? LegacyDataClaimLevelContextId = null,
+    string? LegacyDataExtractorVersion = null);
 
 public sealed record CombinedDependencyEdgeRow(
     string EdgeKind,
@@ -195,6 +229,10 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
     IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts);
 
+internal sealed record MessageCandidateEdgeResult(
+    IReadOnlyList<CombinedDependencyEdgeRow> Edges,
+    IReadOnlyList<string> Warnings);
+
 internal sealed record CombinedSourceReadRow(
     CombinedReportSource Source,
     string ManifestJson);
@@ -215,6 +253,8 @@ public static class CombinedDependencyReporter
 {
     private const string Version = "1.0";
     private const int MarkdownRowLimit = 200;
+    private const int MaxMessageCandidateEdges = 1000;
+    private const int MaxMessageCandidateEdgesPerDestination = 100;
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -229,6 +269,8 @@ public static class CombinedDependencyReporter
     [
         "Endpoint alignment is static method/path evidence. It does not prove runtime traffic, runtime reachability, auth behavior, proxy behavior, deployment base paths, CORS behavior, or user exercise.",
         "SQL query/persistence rows are static shape, hash, or mapping evidence. They do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.",
+        "Legacy data rows are static descriptor evidence only. They do not prove database existence, runtime provider selection, query execution, migration execution, production data access, or runtime database use.",
+        "Event/message rows are static evidence only. They do not prove runtime delivery, broker topology, live subscriptions, production traffic, ordering, retries, dead-letter behavior, schema compatibility, or payload compatibility.",
         "Call and creation edges are static code evidence. They do not prove dynamic dispatch targets, runtime DI registrations, reflection targets, branch feasibility, or collection contents.",
         "Parameter-forwarding rows are direct static argument-to-parameter evidence, not full taint analysis.",
         "Reduced coverage means absence of evidence is not evidence of absence."
@@ -258,9 +300,12 @@ public static class CombinedDependencyReporter
 
         var read = await ReadAsync(connection, cancellationToken);
         var endpointFindings = MatchEndpoints(read.Sources, read.Facts);
-        var surfaces = BuildSurfaces(read.Facts);
+        var surfaces = BuildSurfaces(read.Facts, read.Sources);
+        var messageCandidateEdges = BuildMessageCandidateEdges(surfaces);
+        var dependencyEdges = read.Edges.Concat(messageCandidateEdges.Edges).ToArray();
         var needsReview = BuildNeedsReview(endpointFindings, read.Facts);
         var warnings = read.CoverageWarnings
+            .Concat(messageCandidateEdges.Warnings)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var report = new CombinedDependencyReportDocument(
@@ -271,15 +316,15 @@ public static class CombinedDependencyReporter
             new CombinedReportSummary(
                 read.Sources.Count,
                 read.Facts.Count,
-                read.Edges.Count,
+                dependencyEdges.Length,
                 endpointFindings.Count,
                 CountBy(endpointFindings, finding => finding.Classification),
                 CountBy(surfaces, surface => surface.SurfaceKind),
-                CountBy(read.Edges, edge => edge.EdgeKind),
+                CountBy(dependencyEdges, edge => edge.EdgeKind),
                 read.ValueOriginEvidenceCounts),
             endpointFindings,
             surfaces,
-            read.Edges
+            dependencyEdges
                 .Select(SanitizeEdge)
                 .OrderBy(edge => edge.EdgeKind, StringComparer.Ordinal)
                 .ThenBy(edge => edge.SourceLabel, StringComparer.Ordinal)
@@ -804,9 +849,11 @@ public static class CombinedDependencyReporter
             notes);
     }
 
-    internal static IReadOnlyList<CombinedDependencySurfaceRow> BuildSurfaces(IReadOnlyList<CombinedFactRow> facts)
+    internal static IReadOnlyList<CombinedDependencySurfaceRow> BuildSurfaces(IReadOnlyList<CombinedFactRow> facts, IReadOnlyList<CombinedReportSource>? sources = null)
     {
-        return CombinedSurfaceProjection.BuildSurfaces(facts.Select(ToSurfaceProjectionInput).ToArray())
+        var extractorVersionsBySource = sources?.ToDictionary(source => source.SourceIndexId, source => source.ScannerVersion, StringComparer.Ordinal)
+            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        return CombinedSurfaceProjection.BuildSurfaces(facts.Select(fact => ToSurfaceProjectionInput(fact, extractorVersionsBySource.GetValueOrDefault(fact.SourceIndexId))).ToArray())
             .Select(ToSurfaceRow)
             .OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ThenBy(surface => surface.SourceLabel, StringComparer.Ordinal)
@@ -816,7 +863,7 @@ public static class CombinedDependencyReporter
             .ToArray();
     }
 
-    private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact)
+    private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact, string? extractorVersion = null)
     {
         return new CombinedSurfaceFactInput(
             fact.CombinedFactId,
@@ -831,7 +878,8 @@ public static class CombinedDependencyReporter
             fact.FilePath,
             fact.StartLine,
             fact.EndLine,
-            fact.Properties);
+            fact.Properties,
+            extractorVersion);
     }
 
     private static CombinedDependencySurfaceRow ToSurfaceRow(CombinedSurfaceProjectionRow surface)
@@ -869,7 +917,41 @@ public static class CombinedDependencyReporter
             surface.DependencyGroup,
             surface.PackageManager,
             surface.VersionHash,
-            surface.RedactionReason);
+            surface.RedactionReason,
+            surface.FrameworkFamily,
+            surface.FrameworkFeature,
+            surface.OperationDirection,
+            surface.OperationKind,
+            surface.DestinationIdentityStatus,
+            surface.NormalizedDestinationKey,
+            surface.DestinationHash,
+            surface.EventTypeIdentity,
+            surface.HandlerSymbolId,
+            surface.PublisherSymbolId,
+            surface.SafeMetadataHash,
+            surface.StableMessageSurfaceKey,
+            surface.LegacyDataDescriptorId,
+            surface.LegacyDataProjectionRuleId,
+            surface.LegacyDataMetadataFormat,
+            surface.LegacyDataSourceArtifactType,
+            surface.LegacyDataModelKind,
+            surface.LegacyDataDescriptorRole,
+            surface.LegacyDataStableModelKey,
+            surface.LegacyDataDisplayNameHash,
+            surface.LegacyDataContainerName,
+            surface.LegacyDataContainerHash,
+            surface.LegacyDataStorageKind,
+            surface.LegacyDataMappingKind,
+            surface.LegacyDataModelRelationshipKind,
+            surface.LegacyDataSourceMetadataFactId,
+            surface.LegacyDataSupportingFactIds,
+            surface.LegacyDataSupportingEdgeIds,
+            surface.LegacyDataCoverageLabel,
+            surface.LegacyDataLimitations,
+            surface.LegacyDataRedactions,
+            surface.LegacyDataDisplayClearance,
+            surface.LegacyDataClaimLevelContextId,
+            surface.LegacyDataExtractorVersion);
     }
 
     private static IReadOnlyList<CombinedNeedsReviewRow> BuildNeedsReview(IReadOnlyList<CombinedEndpointFinding> endpointFindings, IReadOnlyList<CombinedFactRow> facts)
@@ -935,6 +1017,110 @@ public static class CombinedDependencyReporter
         return edge with { FilePath = SafePath(edge.FilePath) };
     }
 
+    private static MessageCandidateEdgeResult BuildMessageCandidateEdges(IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
+    {
+        var publishersByDestination = surfaces
+            .Where(surface => surface.OperationDirection == "publish"
+                && surface.DestinationIdentityStatus == "static"
+                && !string.IsNullOrWhiteSpace(surface.NormalizedDestinationKey))
+            .GroupBy(MessageDestinationKey, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(surface => surface.SourceLabel, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.DisplayName, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.StartLine)
+                    .ThenBy(surface => surface.CombinedFactId, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+        var consumersByDestination = surfaces
+            .Where(surface => surface.OperationDirection == "consume"
+                && surface.DestinationIdentityStatus == "static"
+                && !string.IsNullOrWhiteSpace(surface.NormalizedDestinationKey))
+            .GroupBy(MessageDestinationKey, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(surface => surface.SourceLabel, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.DisplayName, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
+                    .ThenBy(surface => surface.StartLine)
+                    .ThenBy(surface => surface.CombinedFactId, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+
+        var edges = new List<CombinedDependencyEdgeRow>();
+        var warnings = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var key in publishersByDestination.Keys.Intersect(consumersByDestination.Keys, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+        {
+            var perDestinationCount = 0;
+            foreach (var publisher in publishersByDestination[key])
+            {
+                foreach (var consumer in consumersByDestination[key])
+                {
+                    if (edges.Count >= MaxMessageCandidateEdges)
+                    {
+                        warnings.Add($"Message candidate edge generation truncated at {MaxMessageCandidateEdges} rows; candidate async edge evidence is reduced coverage.");
+                        return new MessageCandidateEdgeResult(edges, warnings.ToArray());
+                    }
+
+                    if (perDestinationCount >= MaxMessageCandidateEdgesPerDestination)
+                    {
+                        warnings.Add($"Message candidate edge generation truncated for destination hash {Hash(key, 16)} at {MaxMessageCandidateEdgesPerDestination} rows; candidate async edge evidence is reduced coverage.");
+                        goto NextDestination;
+                    }
+
+                    edges.Add(new CombinedDependencyEdgeRow(
+                        "message-publish-consume",
+                        publisher.SourceIndexId,
+                        $"{publisher.SourceLabel}->{consumer.SourceLabel}",
+                        $"message-edge:{Hash($"{publisher.CombinedFactId}|{consumer.CombinedFactId}", 24)}",
+                        $"{publisher.OriginalFactId};{consumer.OriginalFactId}",
+                        publisher.DisplayName,
+                        consumer.DisplayName,
+                        null,
+                        null,
+                        RuleIds.MessageSurfaceCandidateEdge,
+                        WeakestEvidenceTier(publisher.EvidenceTier, consumer.EvidenceTier),
+                        publisher.FilePath,
+                        publisher.StartLine,
+                        publisher.EndLine));
+                    perDestinationCount++;
+                }
+            }
+
+        NextDestination:
+            continue;
+        }
+
+        return new MessageCandidateEdgeResult(edges, warnings.ToArray());
+    }
+
+    private static string MessageDestinationKey(CombinedDependencySurfaceRow surface)
+    {
+        return $"{surface.SurfaceKind}|{surface.NormalizedDestinationKey}";
+    }
+
+    private static string WeakestEvidenceTier(string left, string right)
+    {
+        var leftRank = EvidenceTierRank(left);
+        var rightRank = EvidenceTierRank(right);
+        return leftRank >= rightRank ? left : right;
+    }
+
+    private static int EvidenceTierRank(string tier)
+    {
+        return tier switch
+        {
+            EvidenceTiers.Tier1Semantic => 1,
+            EvidenceTiers.Tier2Structural => 2,
+            EvidenceTiers.Tier3SyntaxOrTextual => 3,
+            EvidenceTiers.Tier4Unknown => 4,
+            _ => 4
+        };
+    }
+
     private static async Task<(string? MarkdownPath, string? JsonPath)> WriteOutputsAsync(string outputPath, string format, CombinedDependencyReportDocument report, CancellationToken cancellationToken)
     {
         var fullPath = Path.GetFullPath(outputPath);
@@ -995,6 +1181,8 @@ public static class CombinedDependencyReporter
         builder.AppendLine("## Dependency Surfaces");
         builder.AppendLine();
         builder.AppendLine("- SQL query rows are static shape or hash evidence only; they do not prove runtime execution, database schema existence, dialect validity, generated SQL equivalence, or branch feasibility.");
+        builder.AppendLine("- Legacy data rows are static descriptor evidence only; they do not prove database existence, runtime provider selection, query execution, migration execution, production data access, or runtime database use.");
+        builder.AppendLine("- Event/message rows are static evidence only. They do not prove runtime delivery, broker topology, live subscriptions, production traffic, ordering, retries, dead-letter behavior, schema compatibility, or payload compatibility.");
         builder.AppendLine();
         AppendRows(builder, report.DependencySurfaces, "| Kind | Source | Name | Details | Evidence |", "| --- | --- | --- | --- | --- |",
             surface => $"| {Cell(surface.SurfaceKind)} | {Cell(surface.SourceLabel)} | {Cell(surface.DisplayName)} | {Cell(SurfaceDetails(surface))} | {Cell($"{surface.RuleId} {surface.EvidenceTier} {surface.FilePath}:{surface.StartLine}")} |");
@@ -1091,8 +1279,22 @@ public static class CombinedDependencyReporter
             "sql-query" => $"op {surface.OperationName ?? "unknown"} table {surface.TableName ?? "n/a"} columns {surface.ColumnNames ?? "n/a"} source {surface.SourceKind ?? "unknown"} shape {surface.ShapeHash ?? surface.TextHash ?? "n/a"}",
             "sql-persistence" => $"table {surface.TableName ?? "n/a"} columns {surface.ColumnNames ?? "n/a"}",
             "package-config" => $"package {surface.PackageName ?? "n/a"} ecosystem {surface.Ecosystem ?? "unknown"} version {surface.Version ?? surface.VersionHash ?? "n/a"} scope {surface.DependencyScope ?? "unknown"} manifest {surface.ManifestKind ?? "unknown"} key {surface.ConfigKey ?? "n/a"}",
+            "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" =>
+                $"framework {surface.FrameworkFamily ?? "unknown"} direction {surface.OperationDirection ?? "unknown"} operation {surface.OperationKind ?? "unknown"} identity {surface.DestinationIdentityStatus ?? "unknown"} destination {surface.NormalizedDestinationKey ?? ShortHash(surface.DestinationHash) ?? "n/a"} caveat static-only",
+            "legacy-data" =>
+                $"descriptor {surface.LegacyDataDescriptorId ?? "unknown"} format {surface.LegacyDataMetadataFormat ?? "unknown"} role {surface.LegacyDataDescriptorRole ?? "unknown"} model {surface.LegacyDataModelKind ?? "unknown"} displayClearance {surface.LegacyDataDisplayClearance.ToString().ToLowerInvariant()} coverage {surface.LegacyDataCoverageLabel ?? "unknown"} extractor {surface.LegacyDataExtractorVersion ?? "n/a"} projectionRule {surface.LegacyDataProjectionRuleId ?? "n/a"} limitations {Joined(surface.LegacyDataLimitations)}",
             _ => string.Empty
         };
+    }
+
+    private static string Joined(IReadOnlyList<string>? values)
+    {
+        return values is null || values.Count == 0 ? "n/a" : string.Join(";", values);
+    }
+
+    private static string? ShortHash(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : $"hash:{value[..Math.Min(16, value.Length)]}";
     }
 
     private static string EvidenceLabel(string? sourceLabel, string? filePath, int? startLine)

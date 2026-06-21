@@ -13,7 +13,11 @@ import { validateDeployAuditDist } from "./deploy-audit.mjs";
 import { validateDemoEvidenceTrailDist } from "./demo-evidence-trail.mjs";
 import { validateDemoRunbookDist } from "./demo-runbook.mjs";
 import { validateEndpointReviewDist } from "./endpoint-review.mjs";
+import { validateChangeReviewDist } from "./change-review.mjs";
+import { validateGlossaryDist } from "./glossary.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
+import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff.mjs";
+import { validateLegacyModernizationEvidenceMap } from "./legacy-modernization-evidence-map.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
 import { validateManagerFaqDist } from "./manager-faq.mjs";
@@ -23,6 +27,8 @@ import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
+import { validateStakeholderQuestionIndexDist } from "./stakeholder-question-index.mjs";
+import { validateTeamEvidenceHandoffDist } from "./team-evidence-handoff.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -33,10 +39,11 @@ export async function validateSite(options = {}) {
   await buildSite({ log, root });
   await validateDemoSummary({ root });
   const legacyStoryResult = await validateLegacyStorySafety({ root });
+  const legacyModernizationResult = await validateLegacyModernizationEvidenceMap({ root });
   const result = await validateDist({ root });
 
   log(
-    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, and ${legacyStoryResult.scannedFileCount} legacy story safety targets.`
+    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, ${legacyStoryResult.scannedFileCount} legacy story safety targets, and ${legacyModernizationResult.rowCount} legacy modernization evidence-map rows.`
   );
 
   return result;
@@ -76,8 +83,11 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDemoEvidenceTrailDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoRunbookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEndpointReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateChangeReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateGlossaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateIncidentEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
@@ -86,6 +96,8 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateRoadmapClaimLedgerDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateStakeholderQuestionIndexDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateTeamEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
   await validateTopNavigation({ dist, errors, htmlFiles });

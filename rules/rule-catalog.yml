@@ -1,4 +1,333 @@
 rules:
+  - id: explorer.input.unsupported-schema.v1
+    name: Static HTML explorer unsupported input schema
+    description: Records generated artifacts that the local static HTML evidence explorer discovered but cannot safely parse in the current implementation slice.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer generation gap
+      - unsupported artifact row
+    limitations:
+      - Unsupported input gaps describe explorer compatibility only and do not prove that the artifact lacks evidence.
+      - The explorer must not merge unsupported generated artifacts silently or render raw unsupported content.
+
+  - id: explorer.input.provenance-conflict.v1
+    name: Static HTML explorer provenance conflict
+    description: Records commit, source identity, schema, or claim-level conflicts between generated artifacts selected for the same explorer output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer generation gap
+      - partial section label
+    limitations:
+      - Provenance conflicts make affected explorer sections partial or unavailable; they do not prove source changes, runtime impact, or evidence absence.
+      - Conflict rows must identify the conflict kind using safe artifact IDs or closed labels rather than raw paths, remotes, hosts, or private names.
+      - PR 1 records commit conflicts with a closed gapKind; claim-level weakening, schema mismatch, and identity mismatch subtypes are deferred and must remain explicit limitations until implemented.
+
+  - id: explorer.input.missing-commit.v1
+    name: Static HTML explorer missing commit metadata
+    description: Records missing, unknown, or unusable commit SHA metadata in generated TraceMap artifacts used by the explorer.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer source identity gap
+      - partial coverage label
+    limitations:
+      - Missing commit metadata limits provenance and history-completeness language but does not prove source changes are present or absent.
+      - The explorer may surface safe commit SHA values when available, but it must not expose raw remotes, local paths, or private repository names.
+
+  - id: explorer.render.redacted-display-value.v1
+    name: Static HTML explorer redacted display value
+    description: Records unsafe or non-public display values that were replaced with safe hashes, stable IDs, or closed placeholders before explorer rendering.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer redaction row
+      - safe display value
+    limitations:
+      - Redacted values preserve safety and provenance shape but may reduce human readability and must not be interpreted as concrete source identities.
+      - Redaction rows do not authorize publishing raw snippets, raw SQL, config values, remotes, endpoint addresses, hostnames, secrets, or local absolute paths.
+
+  - id: explorer.render.omitted-unsafe-value.v1
+    name: Static HTML explorer omitted unsafe value
+    description: Records unsafe values or categories omitted from explorer visible UI, embedded data, downloadable data, or generated README output.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer omission count
+      - explorer limitation or gap
+    limitations:
+      - Omitted unsafe values make affected sections partial and must not be treated as evidence that no source behavior exists.
+      - Omission diagnostics must report rule ID, safe category, and generated artifact scope without printing the unsafe raw value.
+      - PR 1 intentionally omits raw fact property values and raw scan manifest identity fields; raw SQL property classification beyond existing unsafe categories is deferred.
+
+  - id: explorer.render.catalog-unavailable.v1
+    name: Static HTML explorer rule catalog unavailable
+    description: Records that a compatible rule catalog artifact was unavailable, so the explorer can show observed rule IDs and built-in explorer rule stubs only.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer rule catalog gap
+    limitations:
+      - Catalog-unavailable gaps affect rule descriptions and limitations only; they do not delete or strengthen underlying evidence rows.
+      - The explorer must continue showing rule IDs from evidence rows even when full catalog metadata is unavailable.
+
+  - id: explorer.render.no-network-assets.v1
+    name: Static HTML explorer local no-network assets
+    description: Documents that the generated explorer uses bundled local HTML, CSS, JavaScript, and data files with no remote scripts, fonts, images, stylesheets, telemetry, or service calls.
+    evidenceTier: Tier2Structural
+    emits:
+      - explorer validation result
+      - bundled asset metadata
+    limitations:
+      - No-network validation covers generated explorer assets and does not prove anything about the scanned repository's runtime behavior.
+      - Generated assets must fail validation or omit features rather than falling back to remote assets.
+
+  - id: explorer.render.partial-section.v1
+    name: Static HTML explorer partial section
+    description: Marks explorer sections as partial, unavailable, not provided, or unsupported when compatible generated artifacts are missing or intentionally not rendered in the current slice.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer generation gap
+      - partial section label
+    limitations:
+      - Partial sections are compatibility and coverage labels, not proof of evidence absence or runtime safety.
+      - The explorer must distinguish not-provided, unsupported, and no-evidence-under-credible-coverage states when enough input metadata is available.
+
+  - id: explorer.validation.generated-file-stale.v1
+    name: Static HTML explorer stale generated file guard
+    description: Prevents overwriting stale or unverified generated explorer files without explicit operator intent.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer validation failure
+    limitations:
+      - Generated-file validation protects output directories only and does not validate scanner or reducer conclusions.
+      - Failure messages must use generated artifact paths and rule IDs without printing unsafe source values.
+
+  - id: explorer.validation.user-file-collision.v1
+    name: Static HTML explorer user file collision guard
+    description: Prevents overwriting user-authored files in the requested explorer output directory.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer validation failure
+    limitations:
+      - Collision validation is an output safety guard and does not prove anything about input artifact quality.
+      - Force options may replace TraceMap-generated explorer output, but must not silently overwrite user-authored files.
+
+  - id: explorer.validation.unsafe-value-rejected.v1
+    name: Static HTML explorer unsafe generated value rejected
+    description: Fails explorer generation when post-render safety validation finds unsafe material in HTML, CSS, JavaScript, JSON data, manifest, README, metadata, or generated paths.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer validation failure
+    limitations:
+      - Safety rejection proves only that generated explorer output failed the selected safety profile; it does not classify source code behavior.
+      - Rejection diagnostics must identify the safety rule and generated artifact location without printing the unsafe raw value.
+
+  - id: message.surface.publish.v1
+    name: Static message publisher surface
+    description: Records deterministic static publish, send, produce, or enqueue evidence for broker-backed or external message surfaces when a safe destination identity is visible.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MessagePublisherSurface
+    limitations:
+      - Publisher evidence is static only and does not prove broker connectivity, runtime delivery, topic existence, production traffic, retries, ordering, auth, retention, dead-letter behavior, deployment reachability, or payload compatibility.
+      - Individual publisher facts may carry Tier1Semantic or Tier2Structural source evidence when available, but the catalog rule is capped at Tier3SyntaxOrTextual because v1 includes syntax fallback extraction.
+      - Dynamic, ambiguous, wildcard, unsafe, or unsupported destinations must emit message.surface.gap.v1 AnalysisGap evidence instead of guessed concrete destinations.
+
+  - id: message.surface.consume.v1
+    name: Static message consumer surface
+    description: Records deterministic static consume, subscribe, receive, handler, or trigger evidence for broker-backed or external message surfaces when a safe destination identity is visible.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MessageConsumerSurface
+    limitations:
+      - Consumer evidence is static only and does not prove live subscriptions, consumer liveness, runtime delivery, broker topology, production traffic, auth, ordering, retries, retention, dead-letter behavior, or payload compatibility.
+      - Individual consumer facts may carry Tier1Semantic or Tier2Structural source evidence when available, but the catalog rule is capped at Tier3SyntaxOrTextual because v1 includes syntax fallback extraction.
+      - In-process mediator or notification patterns are excluded from broker-backed message surfaces in v1.
+
+  - id: message.surface.binding.v1
+    name: Static message binding declaration
+    description: Records deterministic static binding, declaration, attribute, or config evidence for message destinations that is not by itself a publisher or consumer claim.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MessageBindingDeclared
+    limitations:
+      - Binding evidence does not prove runtime binding creation, broker topology, deployment reachability, permissions, traffic, delivery, subscription activity, or payload compatibility.
+      - Individual binding facts may carry Tier2Structural source evidence for framework/config patterns, but the catalog rule is capped at Tier3SyntaxOrTextual because v1 includes syntax fallback extraction.
+      - Binding-only evidence remains visible as a surface row when identity is safe and otherwise becomes an explicit message gap.
+
+  - id: message.surface.identity.v1
+    name: Message destination identity normalization
+    description: Normalizes safe static queue, topic, subscription, exchange, stream, event, and channel identities and hashes unsafe raw destination values with full lowercase SHA-256.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - message destination identity metadata
+    limitations:
+      - Identity normalization does not expand environment interpolation, expression languages, reflection, runtime variables, wildcard subscriptions, pattern topics, or broker aliases.
+      - Identity metadata may be derived from Tier2Structural or Tier3SyntaxOrTextual source evidence, but the catalog rule is capped at Tier3SyntaxOrTextual because v1 preserves safe static strings and hashes unsupported values.
+      - Rendered reports may show shortened hash prefixes, but persisted destinationHash values and stable-key inputs use full 64-character lowercase SHA-256.
+
+  - id: message.surface.combine.v1
+    name: Combined message surface projection
+    description: Projects message publisher, consumer, and binding facts into combined dependency surface summaries and safe report rows.
+    evidenceTier: Tier4Unknown
+    emits:
+      - combined message surface row
+    limitations:
+      - Combined projection preserves static source evidence only and does not prove runtime delivery, topology, traffic, compatibility, or deployment reachability.
+      - Projected rows preserve the source message fact evidence tier in row metadata, but the projection rule itself is Tier4Unknown because it does not independently prove source behavior.
+      - Hashed, dynamic, ambiguous, unsafe, reduced-coverage, or syntax-only rows remain review-tier context.
+
+  - id: message.surface.candidate-edge.v1
+    name: Static message publish-consume candidate edge
+    description: Adds report-level async candidate edge rows when publisher and consumer message surfaces share the same safe static destination identity.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - message-publish-consume
+    limitations:
+      - Candidate edges are static destination-level evidence only; they are not call edges and do not prove runtime delivery, subscription topology, consumer liveness, ordering, exactly-once behavior, or payload compatibility.
+      - Candidate edge rows preserve the weakest supporting message evidence tier in row metadata, but the catalog rule is capped at Tier3SyntaxOrTextual because v1 can be derived from syntax fallback message facts.
+      - Dynamic, hashed, ambiguous, or unsafe omitted identities do not create candidate edges in v1.
+
+  - id: message.surface.paths.v1
+    name: Message surfaces in path and reverse selectors
+    description: Allows message surface kinds to participate as terminal dependency surfaces in path and reverse queries where existing graph evidence reaches the surface fact.
+    evidenceTier: Tier4Unknown
+    emits:
+      - paths message surface node
+      - reverse message selected surface
+    limitations:
+      - Path and reverse evidence is bounded static graph evidence only; it does not prove runtime ordering, delivery, broker routing, consumer liveness, branch feasibility, or request/response behavior.
+      - Path and reverse rows preserve attached source evidence tiers in row metadata, but this selector rule is Tier4Unknown because reachability context depends on graph completeness.
+      - Direction filtering is not implemented in this slice; unsupported direction-specific queries must remain explicit gaps or validation errors.
+
+  - id: message.surface.reducer.v1
+    name: Message context for reducer workflows
+    description: Documents how reducer workflows may use message surfaces as conservative context when stable destination, handler, publisher, DTO, package, config, or bounded path evidence exists.
+    evidenceTier: Tier4Unknown
+    emits:
+      - reducer message context
+    limitations:
+      - Message context does not prove payload compatibility, deserialization success, schema compatibility, runtime consumer breakage, topology, traffic, or deployment reachability.
+      - Reducer findings must preserve their supporting evidence tiers separately; this context rule is Tier4Unknown because it documents conservative use of message evidence rather than proving impact by itself.
+      - Name-only, syntax-only, dynamic, hashed, ambiguous, generic, or high-fan-out evidence must downgrade to review-needed or gap-aware classifications.
+
+  - id: message.surface.gap.v1
+    name: Message surface analysis gap
+    description: Records unsupported, dynamic, wildcard, ambiguous, unsafe, missing destination, or reduced-coverage message-surface evidence as AnalysisGap facts.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Gap facts preserve uncertainty and must not be read as evidence that no publisher, consumer, binding, route, topology, or runtime delivery exists.
+      - Gap reasons include dynamic-destination, wildcard-pattern-destination, missing-destination-identity, unsupported-framework, unsafe-omitted, ambiguous-destination, and direction-filter-not-supported.
+
+  - id: review.priority.component.v1
+    name: Deterministic review priority component
+    description: Emits ordinal-only review-priority components over already-built report rows such as release-review findings, gaps, and checklist items while preserving source classifications and rule IDs.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority component
+      - review priority row
+    limitations:
+      - Review priority is deterministic static review prioritization only; it is not runtime risk prediction, release approval, vulnerability scanning, compliance, business criticality, production impact, or AI judgment.
+      - V1 emits ordinal severityHint and attentionLevel values only; priorityScore and componentValue remain null and no numeric weights, bands, learned tuning, or environment-specific scoring are used.
+      - Components preserve supporting report evidence tiers in component metadata, but the component rule itself is Tier4Unknown because it is prioritization metadata rather than source-code proof.
+      - Components may raise review attention only from existing TraceMap evidence such as classifications, evidence tiers, public-surface sections, bounded path or reverse context, source counts, and checklist provenance.
+      - V1 component kinds include report_aggregation, static_change_evidence, evidence_tier_strength, public_surface, cross_repo_reach, path_context, reverse_context, checklist_attention, no_actionable_evidence, and analysis_gap where the release-review row or gap supplies matching evidence.
+      - The fan_out component kind is reserved for a follow-up release-review slice with explicit deterministic fan-out inputs; v1 does not infer fan-out from row count or source count alone.
+
+  - id: review.priority.aggregate.v1
+    name: Deterministic review priority aggregation
+    description: Aggregates row-level review-priority components into closed-vocabulary severityHint and attentionLevel values with deterministic ordering and visible completeness limits.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority summary
+      - review priority ordering
+    limitations:
+      - Aggregation preserves underlying report classifications and cannot relabel a source row into a stronger product conclusion.
+      - Aggregation components may be derived from Tier2Structural or Tier4Unknown source evidence, but the aggregate rule itself is capped at Tier4Unknown because completeness gaps can make the report-level priority incomplete.
+      - Unknown, unavailable, reduced, or truncated evidence can make report-level priority incomplete or unknown; low attention is emitted only under credible coverage for the requested evidence.
+      - Tie-breaking is deterministic by completeness, severity, source classification, evidence tier, source label, section, stable safe path or line span, and stable row ID.
+
+  - id: review.priority.downgrade.v1
+    name: Review priority downgrade and cap
+    description: Emits visible cap or downgrade components when evidence quality prevents a stronger ordinal review-priority hint.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority downgrade component
+      - review priority cap component
+    limitations:
+      - Tier3, syntax-only, textual, hash-only, ambiguous, duplicate, name-only, fallback, coverage-relative, and noisy fan-out evidence is capped at review-tier priority unless separate documented non-noisy evidence supports a stronger hint.
+      - Downgrade components may be triggered by Tier3SyntaxOrTextual or Tier4Unknown source evidence, but the downgrade rule itself is capped at Tier4Unknown because it records evidence-quality limits rather than source-code proof.
+      - Downgrades do not delete positive evidence; the positive component and cap component must remain visible together.
+
+  - id: review.priority.coverage.v1
+    name: Review priority coverage limitation
+    description: Records reduced or coverage-relative analysis as a scoring cap or unknown component rather than clean absence or high-confidence change evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority coverage component
+    limitations:
+      - Reduced before coverage makes newly observed after evidence coverage-relative rather than definite new risk.
+      - Reduced after coverage makes missing after evidence coverage-relative rather than definite removal.
+      - Coverage gaps preserve uncertainty and do not prove absence of source behavior or low review attention.
+
+  - id: review.priority.identity.v1
+    name: Review priority source identity limitation
+    description: Records missing, duplicated, unverified, one-sided, or conflicting source identity as a scoring cap or unknown component.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority identity component
+    limitations:
+      - Missing or conflicting source identity prevents history-completeness and cross-source comparability claims.
+      - Source labels and identity hashes are static report evidence only and do not infer ownership, deployment topology, runtime coupling, or business reach.
+
+  - id: review.priority.commit.v1
+    name: Review priority commit identity limitation
+    description: Records missing or unknown commit SHA evidence as a scoring gap for rows or reports that depend on before/after history comparison.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority commit component
+    limitations:
+      - Unknown commit SHA limits history-completeness language and must not be treated as a clean comparable snapshot.
+      - Commit gaps do not prove source changes are present or absent.
+
+  - id: review.priority.schema.v1
+    name: Review priority schema limitation
+    description: Records required or optional schema availability limits carried by the underlying report workflow.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority schema component
+    limitations:
+      - Required schema gaps make affected scoring unavailable or unknown using sanitized section or table names only.
+      - Optional precision schema gaps cap affected priority and do not prove absence of evidence.
+
+  - id: review.priority.truncation.v1
+    name: Review priority truncation limitation
+    description: Records row, gap, checklist, path, reverse, or section cap truncation as incomplete scoring evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority truncation component
+    limitations:
+      - Truncated scoring is partial and must not be read as exhaustive prioritization or evidence absence.
+      - Omitted counts and cap metadata are report bounds, not source complexity or runtime behavior claims.
+
+  - id: review.priority.workflow.v1
+    name: Review priority unavailable workflow limitation
+    description: Records requested or represented report sections that are unavailable or deferred as explicit scoring uncertainty.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority unavailable-workflow component
+    limitations:
+      - Deferred or unavailable workflow sections are not treated as low priority or no evidence.
+      - The component describes static report workflow availability only and does not infer source behavior, deployment readiness, or release safety.
+
+  - id: review.priority.selector.v1
+    name: Review priority selector outcome
+    description: Records selector no-match, ignored-selector, ambiguity, or unsafe-selector outcomes for review-priority scoring.
+    evidenceTier: Tier4Unknown
+    emits:
+      - review priority selector component
+    limitations:
+      - Selector no-match is informational only under credible requested coverage and identity.
+      - Selector no-match under reduced, unknown, or unavailable coverage remains uncertain and does not prove absence of evidence.
+
   - id: docs-export.chunk.source-overview.v1
     name: Docs export source overview chunk
     description: Packages indexed source identity, commit, coverage, build, language, extractor, artifact, gap, and limitation metadata into deterministic evidence documentation.
@@ -417,6 +746,9 @@ rules:
     limitations:
       - Model-binding target evidence does not prove runtime binding success, serializer behavior, validation outcome, route selection, auth, or branch feasibility.
       - Convention-only or syntax-only model-binding evidence remains review-tier unless semantic facts support the link.
+      - Convention-based ViewModel/InputModel/FormModel type-name matching emits review-tier RazorModelBindingTarget facts for matching type properties without requiring a proven route, action parameter, handler parameter, or model directive.
+      - Syntax fallback only expands action and handler parameter types declared in the same syntax file; unresolved cross-file parameter types emit RazorBindingGap facts instead of hidden target winners.
+      - Duplicate simple type names in the same syntax file are treated as ambiguous for parameter property expansion and emit RazorBindingGap facts instead of merging properties across candidate types.
 
   - id: csharp.razor.binding-gap.v1
     name: Razor binding analysis gap

@@ -120,7 +120,7 @@ names, local absolute paths, or source snippets.
 
 For combined dependency report, path-query, route-flow, reverse-query, diff, contract-diff, or snapshot-diff changes, run a combine/report/paths/route-flow/reverse/diff/contract-diff/snapshot-diff smoke over any two existing local scan outputs:
 For combined change-impact changes, include the `impact` command in the same smoke.
-For release-review changes, include `release-review` in the same smoke and verify `release-review.md` plus `release-review.json` are produced.
+For release-review changes, include `release-review` in the same smoke and verify `release-review.md` plus `release-review.json` are produced. For review-priority scoring changes, also run release-review with `--include-priority` and verify the Markdown Review Priority section plus JSON `reviewPriority` and `reviewPriorityRows` sidecar fields.
 
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- combine \

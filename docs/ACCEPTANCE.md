@@ -48,6 +48,8 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `parameter_forward_edges` omits ambiguous constructor field origins and alias chains beyond the documented bound instead of inventing a flow path.
 - .NET scans that encounter DBML, EDMX, typed DataSet XSD/TableAdapter, data-provider config, or generated legacy data designers emit `LegacyData*` facts or explicit `AnalysisGap` facts with rule IDs and evidence tiers.
 - DBML, EDMX, typed DataSet, and TableAdapter descriptor facts include additive normalized model identity metadata such as `metadataFormat`, `modelKind`, `descriptorRole`, and `stableModelKey` while preserving source rule IDs and Tier2 descriptor ceilings.
+- DBML associations, EDMX associations, unambiguous EDMX MSL association-set mappings, typed DataSet relations, and resolvable typed DataSet key/keyref constraints emit `LegacyDataMappingDeclared` relationship metadata such as `modelRelationshipKind`, endpoint names or hashes, endpoint coverage, supporting IDs, and limitations without claiming runtime database access.
+- Unsupported inherited EDMX model shapes emit an `UnsupportedLegacyOrmMappingShape` gap rather than invented relationship evidence.
 - Legacy data metadata rows appear in `facts.ndjson`, `index.sqlite`, and the scan report as static design-time metadata evidence, not runtime data access, SQL execution, provider compatibility, database existence, or production usage.
 - Legacy data metadata facts and reports do not include raw SQL, connection strings, config values, server/catalog names, URLs, local absolute paths, raw remotes, secrets, source snippets, or private sample identities.
 - Unrelated `.xsd` files without typed DataSet/TableAdapter indicators do not become legacy data descriptor facts.
@@ -303,6 +305,11 @@ For every successful `tracemap release-review --before <before.sqlite> --after <
 - contract delta context is included when `--contract-delta` is provided and the reducer workflow is available.
 - API/DTO, SQL/schema, and package-upgrade workflows render explicit `unavailable` or `deferred` sections when they are not implemented or not requested; missing sections are never silently treated as clean evidence.
 - `--include-paths` and `--include-reverse` are off by default; single-index mode renders requested path/reverse context as unavailable with a rule-backed gap.
+- `--include-priority` is off by default; when omitted, release-review Markdown and JSON remain unscored and do not include `reviewPriority` or `reviewPriorityRows`.
+- when `--include-priority` is supplied, Markdown includes a Review Priority section and JSON includes top-level `reviewPriority` plus sidecar `reviewPriorityRows` keyed by stable row IDs.
+- review priority output uses model version `review-priority.v1`, closed-vocabulary `severityHint`, `attentionLevel`, and status values, and emits `priorityScore: null` plus `componentValue: null` because v1 is ordinal-only.
+- every review-priority component cites a `review.priority.*` rule ID, evidence tier, source evidence or metadata, and at least one limitation.
+- review priority preserves underlying release-review classifications and rule IDs, treats reduced coverage, identity, commit, schema, workflow, selector, and truncation limits as visible components, and does not claim release approval, runtime risk, production impact, vulnerability, compliance, business criticality, or AI analysis.
 - checklist items are derived only from findings and gaps and do not include release approval, readiness, or runtime-risk language.
 - caps such as `--max-findings`, `--max-surface-rows`, `--max-paths`, `--max-gaps`, and `--max-checklist-items` apply deterministically and emit truncation gaps when rows are omitted.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.

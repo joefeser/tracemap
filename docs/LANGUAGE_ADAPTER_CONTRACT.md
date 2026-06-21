@@ -82,6 +82,56 @@ Facts intended to participate in existing contract reduction should reuse existi
 
 Language-specific fact types can be added, but they need rule catalog entries and documented reducer/report behavior.
 
+### Event And Message Surface Facts
+
+Adapters that emit broker-backed or external event/message evidence must use the
+shared fact vocabulary below. In-process mediator, notification, EventEmitter,
+or callback patterns are not message dependency surfaces by default.
+
+| Fact type | Purpose | Safe metadata |
+| --- | --- | --- |
+| `MessagePublisherSurface` | Static publish, send, produce, enqueue, or event publish evidence. | `frameworkFamily`, `frameworkFeature`, `operationDirection=publish`, `operationKind`, `surfaceKind`, `destinationIdentityStatus`, `normalizedDestinationKey`, `destinationHash`, `eventTypeIdentity`, `publisherSymbolId`, `safeMetadataHash`, `stableMessageSurfaceKey` |
+| `MessageConsumerSurface` | Static consume, subscribe, receive, handler, listener, or trigger evidence. | `frameworkFamily`, `frameworkFeature`, `operationDirection=consume`, `operationKind`, `surfaceKind`, `destinationIdentityStatus`, `normalizedDestinationKey`, `destinationHash`, `eventTypeIdentity`, `handlerSymbolId`, `safeMetadataHash`, `stableMessageSurfaceKey` |
+| `MessageBindingDeclared` | Static framework binding, declaration, annotation, attribute, decorator, config, or manifest evidence that is not itself a publisher or consumer claim. | `frameworkFamily`, `frameworkFeature`, `operationDirection=bind|declare`, `operationKind`, `surfaceKind`, `destinationIdentityStatus`, `normalizedDestinationKey`, `destinationHash`, `safeMetadataHash`, `stableMessageSurfaceKey` |
+| `AnalysisGap` | Dynamic, unsupported, ambiguous, unsafe, missing, wildcard, or reduced-coverage message evidence. | `gapKind=message-surface`, `gapReason`, `frameworkFamily`, `frameworkFeature`, `operationDirection`, `operationKind`, `surfaceKind`, `destinationIdentityStatus`, `destinationHash`, `safeMetadataHash` |
+
+Shared message `surfaceKind` values are `message-queue`, `message-topic`,
+`message-subscription`, `message-exchange`, `message-stream`, `message-event`,
+`message-channel`, and `message-unknown`. `message-publish-consume` is an async
+candidate edge kind, not a surface kind, and report/query validators must reject
+it where a surface kind is expected. In this slice, `safeMetadataHash` is the
+stable-key metadata hash and intentionally excludes handler/publisher symbol
+identity for static destination rows.
+
+`destinationIdentityStatus` is one of `static`, `hashed`, `dynamic`, `unknown`,
+`ambiguous`, or `unsafe-omitted`. Static identities may render
+`normalizedDestinationKey` only when the shared safe-value helper allows it.
+Unsafe raw destinations, queue/topic names with secret-like or environment-like
+content, URLs, hostnames, connection strings, config values, local absolute
+paths, raw remotes, credentials, and source snippets must be omitted or replaced
+with a full 64-character lowercase SHA-256 `destinationHash`. Reports may show a
+short hash prefix for readability, but persisted properties and stable-key input
+must use the full hash.
+
+Message stable keys are derived from `message-surface/v1`, source label,
+language, surface kind, framework family, operation direction, operation kind,
+destination identity status, the safe destination key or full destination hash,
+an occurrence discriminator only when needed, and a safe metadata hash. Handler
+and publisher symbol IDs are evidence metadata and must not be used as stable
+key material for static destination rows; a handler rename must not churn a
+static destination surface key when destination, direction, and operation are
+unchanged.
+
+Adapters should attach `handlerSymbolId` and `publisherSymbolId` as properties
+only in this slice. They are not portable `fact_symbols` role rows until a future
+contract update defines cross-adapter symbol semantics for those roles.
+
+These facts are deterministic static evidence only. They do not prove broker
+connection, runtime delivery, live subscriptions, topology, production traffic,
+authorization, ordering, retries, retention, dead-letter behavior, deployment
+reachability, schema compatibility, payload compatibility, deserialization
+success, or runtime impact.
+
 ### UI Field And Property Facts
 
 Adapters that emit UI field, form-control, template binding, Razor helper, or
@@ -205,7 +255,7 @@ The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX, typ
 | `LegacyDataEntityDeclared` | Records static conceptual/generated entity, context, DataSet, row, or TableAdapter descriptors. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `entityName`, `typeName`, hash variants |
 | `LegacyDataStorageObjectDeclared` | Records static table, view, routine, DataTable, or storage entity-set descriptors. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `storageObjectKind`, `storageObjectName`, `tableName`, hash variants |
 | `LegacyDataColumnDeclared` | Records static property/field/column descriptors from metadata. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `ownerName`, `propertyName`, `fieldName`, `columnName`, hash variants |
-| `LegacyDataMappingDeclared` | Records unambiguous descriptor-to-descriptor mappings such as entity-table or property-column. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `mappingKind`, `entityName`, `tableName`, `propertyName`, `columnName`, hash variants |
+| `LegacyDataMappingDeclared` | Records unambiguous descriptor-to-descriptor mappings such as entity-table, property-column, DBML/EDMX associations, and typed DataSet relations. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `mappingKind`, `modelRelationshipKind`, `modelRelationshipRuleId`, `relationshipEndpointCoverage`, `sourceEndpointName`, `targetEndpointName`, `entityName`, `tableName`, `propertyName`, `columnName`, hash variants |
 | `LegacyDataProviderConfigDeclared` | Records safe provider, connection-name, provider factory, and EF provider metadata without raw values. | `configKind`, `connectionName`, `providerName`, `connectionNameHash`, `providerNameHash`, `valueHash` |
 | `LegacyDataGeneratedCodeLinked` | Links metadata descriptors to generated files or compiler-resolved symbols when deterministic. | `linkKind`, `symbolRole`, `typeName`, `generatedCodeFileName`, `supportingFactIds` |
 

@@ -456,6 +456,44 @@ public sealed class CombinedReverseQueryTests
     }
 
     [Fact]
+    public async Task Reverse_allows_legacy_data_surface_selection()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "reverse");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Read(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            LegacyDataEntityFact(server, repository, "Customer|Ledger", "Models/Store.dbml", 21)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedReverseReporter.WriteAsync(
+            new CombinedReverseOptions(
+                combinedPath,
+                outDir,
+                Surface: "legacy-data",
+                To: "all"));
+
+        var surface = Assert.Single(result.Report.SelectedSurfaces);
+        Assert.Equal("legacy-data", surface.SurfaceKind);
+        Assert.StartsWith("entity:hash:", surface.DisplayName, StringComparison.Ordinal);
+        Assert.DoesNotContain("Customer|Ledger", surface.DisplayName, StringComparison.Ordinal);
+        Assert.Contains(result.Report.Paths, path => path.Nodes.Any(node => node.SurfaceKind == "legacy-data"));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.json"));
+        Assert.Contains("legacy-data", markdown);
+        Assert.DoesNotContain("Customer|Ledger", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("Customer|Ledger", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Reverse_rejects_single_language_index()
     {
         using var temp = new TempDirectory();
@@ -613,6 +651,29 @@ public sealed class CombinedReverseQueryTests
                 ["columnNames"] = "id;status",
                 ["sqlSourceKind"] = sourceKind,
                 ["queryShapeHash"] = shapeHash
+            });
+    }
+
+    private static CodeFact LegacyDataEntityFact(ScanManifest manifest, string sourceSymbol, string displayName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: displayName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "full",
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = displayName,
+                ["metadataFormat"] = "dbml",
+                ["metadataHash"] = "metadata-hash",
+                ["metadataKind"] = "Dbml",
+                ["modelKind"] = "entity",
+                ["stableModelKey"] = "ldm:reverse-model-key"
             });
     }
 

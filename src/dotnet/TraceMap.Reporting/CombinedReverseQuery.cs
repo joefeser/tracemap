@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using TraceMap.Core;
 
 namespace TraceMap.Reporting;
 
@@ -183,7 +184,16 @@ public static class CombinedReverseReporter
         "sql-persistence",
         "http-route",
         "http-client",
-        "package-config"
+        "package-config",
+        "legacy-data",
+        "message-queue",
+        "message-topic",
+        "message-subscription",
+        "message-exchange",
+        "message-stream",
+        "message-event",
+        "message-channel",
+        "message-unknown"
     };
 
     private static readonly HashSet<string> TargetKinds = new(StringComparer.Ordinal)
@@ -278,6 +288,29 @@ public static class CombinedReverseReporter
             .Select(group => group.Key)
             .ToHashSet(StringComparer.Ordinal);
         var selectedSurfaces = selectedSurfaceNodes.Select(node => ToSurface(node, sourcesById, duplicateSurfaceKeys.Contains(SurfaceStableKey(node)))).ToArray();
+        if (selectedSurfaceNodes.Any(node => IsMessageSurfaceKind(node.SurfaceKind)))
+        {
+            var messageNode = selectedSurfaceNodes.First(node => IsMessageSurfaceKind(node.SurfaceKind));
+            gaps.Add(new CombinedReverseGap(
+                $"gap:message-direction-filter:{messageNode.NodeId}",
+                "DirectionFilterNotSupported",
+                CombinedReverseClassifications.UnknownAnalysisGap,
+                RuleIds.MessageSurfaceGap,
+                EvidenceTiers.Tier4Unknown,
+                "Message surface direction filtering is not supported in this reverse-query slice; publisher, consumer, and binding evidence may be selected together.",
+                messageNode.SourceIndexId,
+                messageNode.SourceLabel,
+                selectedSurfaces.FirstOrDefault(surface => surface.SupportingFactIds.Contains(messageNode.CombinedFactId ?? string.Empty))?.SurfaceId,
+                null,
+                null,
+                messageNode.NodeId,
+                messageNode.CombinedFactId,
+                messageNode.FilePath,
+                messageNode.StartLine,
+                messageNode.EndLine,
+                "direction-filter-not-supported",
+                SortedMetadata([new("gapReason", "direction-filter-not-supported")])));
+        }
         foreach (var duplicate in selectedSurfaces.GroupBy(surface => surface.StableKey, StringComparer.Ordinal).Where(group => group.Count() > 1))
         {
             gaps.Add(new CombinedReverseGap(
@@ -614,7 +647,12 @@ public static class CombinedReverseReporter
 
         if (!string.IsNullOrWhiteSpace(options.Surface) && !SurfaceKinds.Contains(options.Surface.Trim()))
         {
-            throw new ArgumentException("reverse --surface must be one of sql-query, sql-persistence, http-route, http-client, or package-config.");
+            if (string.Equals(options.Surface.Trim(), "message-publish-consume", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("reverse --surface 'message-publish-consume' is an edge kind, not a dependency surface kind.");
+            }
+
+            throw new ArgumentException("reverse --surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, legacy-data, message-queue, message-topic, message-subscription, message-exchange, message-stream, message-event, message-channel, or message-unknown.");
         }
 
         if (!TargetKinds.Contains(NormalizeTarget(options.To)))
@@ -1201,6 +1239,18 @@ public static class CombinedReverseReporter
             && !HasSqlValue(node.OperationName)
             && !HasSqlValue(node.TableName)
             && !HasSqlValue(node.ColumnNames);
+    }
+
+    private static bool IsMessageSurfaceKind(string? surfaceKind)
+    {
+        return surfaceKind is "message-queue"
+            or "message-topic"
+            or "message-subscription"
+            or "message-exchange"
+            or "message-stream"
+            or "message-event"
+            or "message-channel"
+            or "message-unknown";
     }
 
     private static bool HasSqlValue(string? value)

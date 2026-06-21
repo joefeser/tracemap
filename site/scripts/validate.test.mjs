@@ -13,7 +13,13 @@ import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
+import { changeReviewRoute } from "./change-review.mjs";
+import { glossaryRoute } from "./glossary.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
+import {
+  incidentEvidenceHandoffRequiredLinks,
+  incidentEvidenceHandoffRoute
+} from "./incident-evidence-handoff.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
@@ -22,6 +28,11 @@ import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import { stakeholderQuestionIndexRoute } from "./stakeholder-question-index.mjs";
+import {
+  teamEvidenceHandoffRequiredLinks,
+  teamEvidenceHandoffRoute
+} from "./team-evidence-handoff.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -112,20 +123,29 @@ async function createDistFixture({
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
   sitemapUrls = [
-    ...deployAuditRequiredRoutes,
-    adoptionPlaybookRoute,
-    demoEvidenceTrailRoute,
-    demoRunbookRoute,
-    endpointReviewRoute,
-    incidentCallRoute,
-    managerBriefRoute,
-    managerFaqRoute,
-    proofSourceCatalogRoute,
-    reviewClaimChecklistRoute,
-    reviewRoomRoute,
-    roadmapClaimLedgerRoute,
-    staticTriageRoute,
-    staticVsRuntimeRoute
+    ...new Set([
+      ...deployAuditRequiredRoutes,
+      adoptionPlaybookRoute,
+      demoEvidenceTrailRoute,
+      demoRunbookRoute,
+      endpointReviewRoute,
+      changeReviewRoute,
+      glossaryRoute,
+      incidentCallRoute,
+      incidentEvidenceHandoffRoute,
+      ...incidentEvidenceHandoffRequiredLinks,
+      teamEvidenceHandoffRoute,
+      ...teamEvidenceHandoffRequiredLinks,
+      managerBriefRoute,
+      managerFaqRoute,
+      proofSourceCatalogRoute,
+      reviewClaimChecklistRoute,
+      reviewRoomRoute,
+      roadmapClaimLedgerRoute,
+      staticTriageRoute,
+      staticVsRuntimeRoute,
+      stakeholderQuestionIndexRoute
+    ])
   ].map((route) => `https://tracemap.tools${route}`)
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
@@ -142,10 +162,15 @@ async function createDistFixture({
     demoEvidenceTrailRoute,
     demoRunbookRoute,
     endpointReviewRoute,
+    changeReviewRoute,
     "/evidence/",
     "/examples/",
     incidentCallRoute,
+    incidentEvidenceHandoffRoute,
+    teamEvidenceHandoffRoute,
+    "/legacy-modernization/evidence-map/",
     "/legacy-validation/",
+    glossaryRoute,
     managerBriefRoute,
     managerFaqRoute,
     proofSourceCatalogRoute,
@@ -156,9 +181,11 @@ async function createDistFixture({
     roadmapClaimLedgerRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    stakeholderQuestionIndexRoute,
     "/use-cases/",
     "/outputs/",
     "/use-cases/incident-review/",
+    "/vault-export/",
     "/workflows/"
   ]);
 
@@ -169,41 +196,7 @@ async function createDistFixture({
 
     const path = route.replace(/^\/|\/$/g, "");
     await mkdir(join(dist, path), { recursive: true });
-    await writeFile(
-      join(dist, path, "index.html"),
-      route === "/deploy-audit/"
-        ? deployAuditPage()
-        : route === adoptionPlaybookRoute
-          ? adoptionPage()
-          : route === demoEvidenceTrailRoute
-            ? demoEvidenceTrailPage()
-            : route === demoRunbookRoute
-              ? demoRunbookPage()
-              : route === endpointReviewRoute
-                ? endpointReviewPage()
-              : route === incidentCallRoute
-                ? incidentCallPage()
-                : route === managerBriefRoute
-                  ? managerBriefPage()
-                  : route === managerFaqRoute
-                    ? managerFaqPage()
-                    : route === proofSourceCatalogRoute
-                      ? await proofSourceCatalogPage()
-                      : route === reviewClaimChecklistRoute
-                        ? reviewClaimChecklistPage()
-                      : route === reviewRoomRoute
-                        ? reviewRoomPage()
-                        : route === roadmapClaimLedgerRoute
-                          ? roadmapClaimLedgerPage()
-                          : route === staticTriageRoute
-                            ? staticTriagePage()
-                            : route === staticVsRuntimeRoute
-                              ? staticVsRuntimePage()
-                              : page(
-                                `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
-                              ),
-      "utf8"
-    );
+    await writeFile(join(dist, path, "index.html"), await fixturePageHtml(route, path), "utf8");
   }
 
   await writeFile(join(dist, "index.html"), indexHtml, "utf8");
@@ -215,6 +208,88 @@ async function createDistFixture({
   await writeDiscoveryFiles(dist);
 
   return root;
+}
+
+async function fixturePageHtml(route, path) {
+  if (route === "/deploy-audit/") {
+    return deployAuditPage();
+  }
+
+  if (route === adoptionPlaybookRoute) {
+    return adoptionPage();
+  }
+
+  if (route === demoEvidenceTrailRoute) {
+    return demoEvidenceTrailPage();
+  }
+
+  if (route === demoRunbookRoute) {
+    return demoRunbookPage();
+  }
+
+  if (route === endpointReviewRoute) {
+    return endpointReviewPage();
+  }
+
+  if (route === changeReviewRoute) {
+    return changeReviewPage();
+  }
+
+  if (route === glossaryRoute) {
+    return glossaryPage();
+  }
+
+  if (route === incidentCallRoute) {
+    return incidentCallPage();
+  }
+
+  if (route === incidentEvidenceHandoffRoute) {
+    return incidentEvidenceHandoffPage();
+  }
+
+  if (route === teamEvidenceHandoffRoute) {
+    return teamEvidenceHandoffPage();
+  }
+
+  if (route === managerBriefRoute) {
+    return managerBriefPage();
+  }
+
+  if (route === managerFaqRoute) {
+    return managerFaqPage();
+  }
+
+  if (route === proofSourceCatalogRoute) {
+    return proofSourceCatalogPage();
+  }
+
+  if (route === reviewClaimChecklistRoute) {
+    return reviewClaimChecklistPage();
+  }
+
+  if (route === reviewRoomRoute) {
+    return reviewRoomPage();
+  }
+
+  if (route === roadmapClaimLedgerRoute) {
+    return roadmapClaimLedgerPage();
+  }
+
+  if (route === staticTriageRoute) {
+    return staticTriagePage();
+  }
+
+  if (route === staticVsRuntimeRoute) {
+    return staticVsRuntimePage();
+  }
+
+  if (route === stakeholderQuestionIndexRoute) {
+    return stakeholderQuestionIndexPage();
+  }
+
+  return page(
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
+  );
 }
 
 async function writeDiscoveryFiles(dist) {
@@ -279,6 +354,37 @@ async function writeDiscoveryFiles(dist) {
         ]
       },
       {
+        path: changeReviewRoute,
+        title: "Change Review Brief",
+        summary: "Fixture change review brief route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture change review limitations remain bounded."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+          "No release approval proof, raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, facts.ndjson, index.sqlite, report.md, scan-manifest.json, or logs/analyzer.log are published."
+        ]
+      },
+      {
+        path: glossaryRoute,
+        title: "Evidence Glossary",
+        summary: "Concept-level vocabulary for public-safe TraceMap evidence terms before readers repeat public claims.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "Glossary definitions are vocabulary guidance, not scanner or reducer coverage evidence.",
+          "Terms must stay attached to route-specific proof paths, coverage labels, and limitations."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
+          "No raw artifact publication, raw facts, raw SQLite indexes, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details."
+        ]
+      },
+      {
         path: incidentCallRoute,
         title: "Incident Call",
         summary: "Fixture incident call route for validation.",
@@ -288,6 +394,30 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture incident call limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: incidentEvidenceHandoffRoute,
+        title: "Incident Evidence Handoff",
+        summary: "Fixture incident evidence handoff route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture incident evidence handoff limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: teamEvidenceHandoffRoute,
+        title: "Team Evidence Handoff",
+        summary: "Fixture team evidence handoff route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture team evidence handoff limitations remain bounded."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof."
+        ]
       },
       {
         path: managerBriefRoute,
@@ -381,6 +511,22 @@ async function writeDiscoveryFiles(dist) {
         ]
       },
       {
+        path: stakeholderQuestionIndexRoute,
+        title: "Stakeholder Question Index",
+        summary: "Concept-level orientation route from stakeholder questions to public-safe proof paths.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "Rows preserve route-specific proof paths, rule IDs or rule families, evidence tiers, coverage labels, limitations, and non-claims."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, private-repo behavior, or complete product coverage proof.",
+          "No AI impact analysis, LLM analysis, prompt-based classification, raw facts, raw SQLite, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details are published."
+        ]
+      },
+      {
         url: "https://github.com/joefeser/tracemap/blob/main/README.md",
         title: "Fixture README",
         summary: "Fixture source document for validation.",
@@ -423,6 +569,14 @@ async function proofSourceCatalogPage() {
   return readFile(new URL("../src/proof-source-catalog/index.html", import.meta.url), "utf8");
 }
 
+async function glossaryPage() {
+  return readFile(new URL("../src/glossary/index.html", import.meta.url), "utf8");
+}
+
+async function stakeholderQuestionIndexPage() {
+  return readFile(new URL("../src/questions/index.html", import.meta.url), "utf8");
+}
+
 function incidentCallPage() {
   return page(`
     <p>Public claim level: concept</p>
@@ -439,6 +593,90 @@ function incidentCallPage() {
     <a href="/use-cases/incident-review/">Incident review orientation</a>
     <a href="/static-triage/">static triage checklist</a>
   `);
+}
+
+function incidentEvidenceHandoffPage() {
+  const filler = Array.from({ length: 110 }, (_, index) => `incident evidence handoff boundary ${index}`).join(" ");
+  return `<!doctype html>
+<html>
+  <head>
+    <title>Incident Evidence Handoff Packet | TraceMap</title>
+    <meta name="description" content="Fixture incident evidence handoff packet.">
+    <link rel="canonical" href="https://tracemap.tools/incident-evidence-handoff/">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="TraceMap Incident Evidence Handoff Packet">
+    <meta property="og:description" content="Fixture static evidence handoff packet.">
+    <meta property="og:url" content="https://tracemap.tools/incident-evidence-handoff/">
+  </head>
+  <body>
+    ${topNav()}
+    <main>
+      <p>Public claim level: concept</p>
+      <p>No public conclusion without evidence</p>
+      <p>Incident evidence handoff is the packet of static evidence, proof paths, limits, and next owners; it is not runtime proof or incident command.</p>
+      <p>Static triage frames the question; the incident evidence handoff packet carries the already-framed evidence, proof paths, limits, and next owners into the next conversation.</p>
+      <p>static evidence proof path rule ID/evidence tier coverage label limitation next owner</p>
+      <p>route existence DTO shape package reference dependency edge SQL-facing reference</p>
+      <p>telemetry logs traces APM release controls tests database ownership service ownership incident command</p>
+      <a href="/proof-paths/">Proof paths</a>
+      <a href="/validation/">Validation</a>
+      <a href="/limitations/">Limitations</a>
+      <a href="/demo/result/">Demo result</a>
+      <a href="/incident-call/">Incident call</a>
+      <a href="/static-triage/">Static triage</a>
+      <a href="/review-room/">Review room</a>
+      <a href="/manager-faq/">Manager FAQ</a>
+      <a href="/packets/">Packets</a>
+      <a href="/manager-packet/">Manager packet</a>
+      <a href="/manager-brief/">Manager brief</a>
+      <a href="/use-cases/incident-review/">Incident review</a>
+      <a href="/docs/">Docs</a>
+      <p>${filler}</p>
+    </main>
+  </body>
+</html>`;
+}
+
+function teamEvidenceHandoffPage() {
+  const filler = Array.from({ length: 110 }, (_, index) => `team evidence handoff boundary ${index}`).join(" ");
+  return `<!doctype html>
+<html>
+  <head>
+    <title>Team Evidence Handoff | TraceMap</title>
+    <meta name="description" content="Fixture team evidence handoff route.">
+    <link rel="canonical" href="https://tracemap.tools/team-evidence-handoff/">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="TraceMap Team Evidence Handoff">
+    <meta property="og:description" content="Fixture team evidence handoff route.">
+    <meta property="og:url" content="https://tracemap.tools/team-evidence-handoff/">
+  </head>
+  <body>
+    ${topNav()}
+    <main>
+      <p>Public claim level: concept</p>
+      <p>No public conclusion without evidence</p>
+      <p>A handoff is complete only when the summary, proof path, rule ID/rule family, evidence tier, coverage label, limitations, non-claims, local-only artifacts, and next owner/action travel together.</p>
+      <p>The summary is a bounded statement of what static evidence supports, and the proof path points to public-safe proof surfaces or private review locations, not private scanner output on the public site.</p>
+      <p>summary proof path rule ID/rule family evidence tier coverage label limitations non-claims local-only artifacts next owner/action.</p>
+      <p>Teammate Reviewer Manager Agent teammate reviewer manager agent.</p>
+      <p>Use /packets/ for packet artifact families. Use /manager-packet/ for manager-ready summaries. Use /review-room/ for a shared agenda. Use /manager-faq/ for stakeholder questions. Use /proof-source-catalog/ for proof-source families.</p>
+      <a href="/proof-paths/">Proof paths</a>
+      <a href="/packets/">Packets</a>
+      <a href="/manager-packet/">Manager packet</a>
+      <a href="/review-room/">Review room</a>
+      <a href="/manager-faq/">Manager FAQ</a>
+      <a href="/proof-source-catalog/">Proof-source catalog</a>
+      <a href="/limitations/">Limitations</a>
+      <a href="/validation/">Validation</a>
+      <section data-boundary-region>
+        <p>It does not claim runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, autonomous approval, or complete product coverage.</p>
+        <p>It does not replace human ownership, tests, telemetry, release review, code review, source review, logs, traces, incident response, or manager judgment.</p>
+        <p>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, credential-like values, or private URLs. Private repository evidence needs private review before any public-safe summary is written.</p>
+      </section>
+      <p>${filler}</p>
+    </main>
+  </body>
+</html>`;
 }
 
 function adoptionPage() {
@@ -558,6 +796,62 @@ function endpointReviewPage() {
     <a href="/review-room/">Review room</a>
     <a href="/static-triage/">Static triage</a>
     <a href="/demo/runbook/">Demo runbook</a>
+    <p>${filler}</p>
+  `);
+}
+
+function changeReviewPage() {
+  const filler = Array.from({ length: 150 }, (_, index) => `change review boundary ${index}`).join(" ");
+
+  return page(`
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>A change review brief is a bounded static-evidence packet for a PR, release, or change-review conversation.</p>
+    <p>Engineers Code reviewers Architects and managers Release reviewers and agents</p>
+    <meta property="og:type" content="article">
+    <section id="change-context">
+      <h2>Change Context</h2>
+      <p>review question changed area commit or branch context review trigger outside scope</p>
+    </section>
+    <section id="evidence-packet">
+      <h2>Evidence Packet</h2>
+      <p>proof path Rule ID or rule family Visible static dependency surfaces coverage label file path and line span commit SHA extractor version limitations non-claims</p>
+      <p>Tier1Semantic Tier2Structural Tier3SyntaxOrTextual Tier4Unknown</p>
+    </section>
+    <section id="review-questions">
+      <h2>Review Questions</h2>
+      <p>Which code review, test review, runtime review, release review, architecture review, or agent handoff question remains open?</p>
+    </section>
+    <section id="change-review-stop-conditions">
+      <h2>Stop Conditions</h2>
+      <p>missing proof path private-only evidence unknown or reduced coverage unsupported runtime or release wording raw artifact exposure no named next owner raw facts facts.ndjson raw SQLite index.sqlite report.md scan-manifest.json logs/analyzer.log analyzer logs raw source snippets raw SQL config values secrets local paths raw remotes generated scan directories private sample names raw command output hidden validation details credentials connection strings</p>
+    </section>
+    <section id="next-owners">
+      <h2>Next Owners</h2>
+      <p>code owner reviewer test owner runtime/service owner release reviewer architect agent handoff owner</p>
+    </section>
+    <section id="change-review-limitations">
+      <h2>Limitations</h2>
+      <p>partial analysis syntax-only evidence unknown unavailable future-only coverage The brief does not replace tests, code review, source review, runtime observability, release review, owner confirmation, or human judgment.</p>
+    </section>
+    <section id="change-review-non-claims">
+      <h2>Non-Claims</h2>
+      <p>A change review brief is not release approval and does not approve a release.</p>
+      <p>runtime behavior production traffic endpoint performance outage cause release safety operational safety AI impact analysis LLM analysis complete product coverage impacted safe unsafe approved blocked root cause validated for release production proven operational assurance production observability tool</p>
+    </section>
+    <section id="adjacent-routes">
+      <p>team evidence handoff manager packet static triage manager brief deploy audit</p>
+    </section>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/packets/">Packet vocabulary</a>
+    <a href="/review-room/">Review room</a>
+    <a href="/validation/">Validation limits</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/use-cases/endpoint-review/">Endpoint review use case</a>
+    <a href="/use-cases/incident-review/">Incident review use case</a>
+    <a href="/static-vs-runtime/">Static versus runtime</a>
+    <a href="/review-claim-checklist/">Claim checklist</a>
+    <a href="/use-cases/">Use-case index</a>
     <p>${filler}</p>
   `);
 }
