@@ -141,6 +141,18 @@ Not safe to claim:
   claim topics, `publicClaimLevel` metadata option, and the dedicated
   `site/scripts/<name>.mjs` plus `<name>.test.mjs` validation convention.
 
+## PR Loop Log
+
+- Initial PR loop command:
+  `npm run dev -- pr-loop --repo joefeser/tracemap --pr 252 --base main --require-codex-review --quiet --json`.
+- Initial PR loop decision: `actionable_findings`.
+- Initial PR loop stop reason: `ACTIONABLE_BOT_FINDINGS`.
+- Initial PR loop next action: `patch_actionable_findings`.
+- Actionable finding patched: Qodo reported the spec-delivery checkbox in
+  `tasks.md` still showed the PR/PR-loop step as unchecked after that work had
+  begun. The checkbox is now checked to keep Kiro task state aligned with the
+  delivery status.
+
 ## Oddities
 
 - Initial review wrappers completed with reduced coverage because Kiro denied a
