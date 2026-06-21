@@ -86,10 +86,23 @@ approval changes.
 - Local review artifacts and local absolute paths are intentionally omitted
   from tracked spec notes.
 
+## Residual Risks
+
+- Kiro spec reviews completed with reduced coverage because Kiro denied its
+  own shell/write tools in non-interactive mode. The reviewer text still
+  returned no High or Medium findings, and local Codex-run validation covered
+  the required spec-only checks.
+- Future implementation must validate the live discovery `hintCategory` and
+  conditional manager-script route against the site source before adding
+  route metadata or links.
+- Site test, validate, build, and browser sanity remain future implementation
+  tasks because this PR intentionally changes only the Kiro spec packet.
+
 ## Follow-Ups
 
-- Run Kiro spec reviews with `claude-opus-4.8` and `claude-sonnet-4.6` when
-  available.
-- Patch or disposition Medium or higher findings.
-- Move readiness to `ready-for-implementation` only after findings are patched
-  or dispositioned.
+- At implementation start, confirm this spec remains
+  `ready-for-implementation` before editing site source.
+- Recheck the selected `/reviewer-quickstart/` placement and record any
+  changed placement decision before implementation.
+- Run the future implementation validation suite listed in `tasks.md` after
+  site source changes are made.
