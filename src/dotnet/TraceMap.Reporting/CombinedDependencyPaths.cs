@@ -390,7 +390,7 @@ public static class CombinedDependencyPathReporter
             throw new ArgumentException("paths --classification must be one of StrongStaticPath, ProbableStaticPath, NeedsReviewStaticPath, NoBackendEvidence, ReducedCoverage, or AnalysisGap.");
         }
 
-        NormalizeMessageDirection(options.MessageDirection, "paths");
+        CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths");
     }
 
     private static CombinedDependencyPathReport BuildReport(
@@ -569,7 +569,7 @@ public static class CombinedDependencyPathReporter
                 options.MaxFrontier,
                 Algorithm,
                 AlgorithmVersion,
-                NormalizeMessageDirection(options.MessageDirection, "paths")),
+                CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths")),
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -2481,7 +2481,7 @@ public static class CombinedDependencyPathReporter
     {
         var surfaceKind = string.IsNullOrWhiteSpace(options.ToSurface) ? null : options.ToSurface.Trim();
         var surfaceName = string.IsNullOrWhiteSpace(options.SurfaceName) ? null : options.SurfaceName.Trim();
-        var messageDirection = NormalizeMessageDirection(options.MessageDirection, "paths");
+        var messageDirection = CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths");
         var explicitSurfaceKind = surfaceKind is not null;
         var startFactIds = startNodes
             .Select(node => node.CombinedFactId)
@@ -2496,27 +2496,6 @@ public static class CombinedDependencyPathReporter
             .Where(node => messageDirection is null || !IsMessageSurfaceKind(node.SurfaceKind) || string.Equals(node.OperationDirection, messageDirection, StringComparison.Ordinal))
             .Select(node => node.NodeId)
             .ToHashSet(StringComparer.Ordinal);
-    }
-
-    private static string? NormalizeMessageDirection(string? value, string commandName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var trimmed = value.Trim().ToLowerInvariant();
-        if (trimmed == "all")
-        {
-            return null;
-        }
-
-        if (trimmed is "publish" or "consume" or "bind" or "declare")
-        {
-            return trimmed;
-        }
-
-        throw new ArgumentException($"{commandName} --message-direction must be one of publish, consume, bind, declare, or all.");
     }
 
     private static bool IsDefaultTerminalSurface(GraphNode node, IReadOnlySet<string> startFactIds)
