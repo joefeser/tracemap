@@ -218,6 +218,8 @@ public sealed class PropertyFlowTests
     [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"captureMode":"production-login"}}]}""", "unsafe observed evidence metadata")]
     [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"noteCode":"live-http"}}]}""", "unsafe observed evidence metadata")]
     [InlineData("""{"observedEvidence":[{"label":"local-demo-field-check","safeMetadata":{"noteCode":"apiKey=abc123"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"C:/workspace/private-field","safeMetadata":{"artifactHash":"abc123"}}]}""", "unsafe observed evidence metadata")]
+    [InlineData("""{"observedEvidence":[{"label":"\\\\server\\share\\private-field","safeMetadata":{"artifactHash":"abc123"}}]}""", "unsafe observed evidence metadata")]
     public async Task Property_flow_rejects_observed_demo_metadata_without_safe_evidence_or_with_runtime_markers(string observedJson, string expectedMessage)
     {
         using var temp = new TempDirectory();
@@ -236,6 +238,42 @@ public sealed class PropertyFlowTests
         Assert.Contains(expectedMessage, exception.Message);
         Assert.DoesNotContain(temp.Path, exception.Message);
         Assert.DoesNotContain("apiKey=abc123", exception.Message);
+    }
+
+    [Fact]
+    public async Task Property_flow_rejects_unbounded_observed_demo_metadata_inputs()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _) = await CreatePropertyFlowCombinedIndexAsync(temp);
+
+        var oversizedPath = Path.Combine(temp.Path, "observed-oversized.json");
+        await File.WriteAllTextAsync(oversizedPath, "{\"observedEvidence\":[{\"label\":\"local-demo-field-check\",\"safeMetadata\":{\"artifactHash\":\"" + new string('a', 300_000) + "\"}}]}");
+
+        var oversizedException = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "oversized-out"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: oversizedPath)));
+
+        Assert.Contains("size limit", oversizedException.Message);
+        Assert.DoesNotContain(temp.Path, oversizedException.Message);
+
+        var manyRowsPath = Path.Combine(temp.Path, "observed-many-rows.json");
+        var rows = Enumerable.Range(1, 201).Select(index => "{\"label\":\"demo-field-" + index + "\",\"safeMetadata\":{\"artifactHash\":\"hash" + index + "\"}}");
+        await File.WriteAllTextAsync(manyRowsPath, """{"observedEvidence":[""" + string.Join(",", rows) + """]}""");
+
+        var manyRowsException = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "many-rows-out"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: manyRowsPath)));
+
+        Assert.Contains("row limit", manyRowsException.Message);
+        Assert.DoesNotContain(temp.Path, manyRowsException.Message);
     }
 
     [Fact]

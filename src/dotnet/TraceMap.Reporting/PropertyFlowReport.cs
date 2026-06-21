@@ -267,6 +267,8 @@ public static class PropertyFlowReporter
     private const string SchemaRuleId = "property-flow.schema.v1";
     private const string TruncationRuleId = "property-flow.truncation.v1";
     private const string ObservedRuleId = "property-flow.observed-evidence.v1";
+    private const int MaxObservedEvidenceBytes = 256 * 1024;
+    private const int MaxObservedEvidenceRows = 200;
 
     private static readonly HashSet<string> GenericNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -616,6 +618,11 @@ public static class PropertyFlowReporter
             throw new ArgumentException("property-flow observed evidence file was not found.");
         }
 
+        if (new FileInfo(path).Length > MaxObservedEvidenceBytes)
+        {
+            throw new ArgumentException("property-flow observed evidence file exceeds the supported size limit.");
+        }
+
         await using var stream = OpenObservedEvidenceFile(path);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var rowsElement = document.RootElement;
@@ -635,13 +642,18 @@ public static class PropertyFlowReporter
         var rows = new List<(string Label, IReadOnlyDictionary<string, string> Metadata)>();
         foreach (var row in rowsElement.EnumerateArray())
         {
+            if (rows.Count >= MaxObservedEvidenceRows)
+            {
+                throw new ArgumentException("property-flow observed evidence row limit exceeded.");
+            }
+
             if (row.ValueKind != JsonValueKind.Object)
             {
                 throw new ArgumentException("property-flow observed evidence rows must be objects.");
             }
 
             var label = RequiredString(row, "label", "observed evidence label");
-            if (!IsSafeValue(label) || SensitiveObservedToken(label))
+            if (!IsSafeObservedEvidenceString(label))
             {
                 throw new ArgumentException("property-flow rejected unsafe observed evidence metadata.");
             }
@@ -725,7 +737,7 @@ public static class PropertyFlowReporter
             }
 
             var value = property.Value.GetString()?.Trim() ?? string.Empty;
-            if (!IsSafeObservedMetadataValue(value))
+            if (!IsSafeObservedEvidenceString(value))
             {
                 throw new ArgumentException("property-flow rejected unsafe observed evidence metadata.");
             }
@@ -741,7 +753,7 @@ public static class PropertyFlowReporter
         return Regex.IsMatch(value, "(secret|token|password|cookie|credential|authorization|bearer|connectionstring|rawsql|snippet|hostname|remoteurl|apikey|api_key|api-key|production|prod-|live-|live_|runtime|http)", RegexOptions.IgnoreCase);
     }
 
-    private static bool IsSafeObservedMetadataValue(string value)
+    private static bool IsSafeObservedEvidenceString(string value)
     {
         if (!IsSafeValue(value) || SensitiveObservedToken(value))
         {
