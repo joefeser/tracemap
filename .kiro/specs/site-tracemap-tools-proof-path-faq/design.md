@@ -248,11 +248,15 @@ with structured HTML tools where practical. It should verify:
 - no forbidden private/raw material in visible text, decoded HTML, raw HTML,
   attributes, alt text, captions, metadata, fixtures, tests, discovery output,
   sitemap output, or bot-facing metadata;
-- placeholder rule IDs, commit-like values, extractor versions, claim labels,
-  and review-packet labels are visibly marked illustrative and are not
-  presented as real TraceMap findings;
-- example outbound links resolve only to allowed public-safe target families,
-  or implementation-state records the deferral, substitution, or omission;
+- validation verifies that placeholder rule IDs, commit-like values,
+  extractor versions, claim labels, and review-packet labels are visibly
+  marked illustrative and are not presented as real TraceMap findings;
+- validation verifies that example outbound links resolve only to allowed
+  public-safe target families: checked-in public pages, public-safe generated
+  summaries, documentation, rule catalog pages, reports, sanctioned demo
+  artifacts, validation pages, limitations pages, proof paths, or
+  review-packet surfaces. If an example link is unavailable at implementation
+  time, implementation-state records the deferral, substitution, or omission;
 - no blame language in visible copy, metadata, examples, or validation
   errors, checking at least a recorded advisory set of representative blame
   indicators such as `failed`, `fault`, `to blame`, `negligent`, `careless`,
