@@ -25,8 +25,9 @@ Review focus:
 
 - Does the spec stay implementation-free and leave future implementation tasks
   unchecked?
-- Are `Status: not-started`, `Readiness: spec-review`, and
-  `Public claim level: concept` present at review start?
+- Are `Status: not-started`, `Readiness: ready-for-implementation`, and
+  `Public claim level: concept` present in the delivered packet, with the
+  spec-review-to-ready transition recorded in `implementation-state.md`?
 - Does the spec require visible `Public claim level: concept` and
   `No public conclusion without evidence` for the future page or section?
 - Does the spec evaluate the required candidate placements:
