@@ -30,6 +30,7 @@ import {
   managerDemoScriptRoute
 } from "./manager-demo-script.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
+import { proofPathFaqRoute } from "./proof-path-faq.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reviewerQuickstartRoute } from "./reviewer-quickstart.mjs";
@@ -142,6 +143,7 @@ async function createDistFixture({
       demoRunbookRoute,
       endpointReviewRoute,
       changeReviewRoute,
+      "/evidence/",
       glossaryRoute,
       incidentCallRoute,
       incidentEvidenceHandoffRoute,
@@ -151,6 +153,7 @@ async function createDistFixture({
       managerBriefRoute,
       managerDemoScriptRoute,
       managerFaqRoute,
+      proofPathFaqRoute,
       proofPathTourRoute,
       proofSourceCatalogRoute,
       reviewerQuickstartRoute,
@@ -191,6 +194,7 @@ async function createDistFixture({
     glossaryRoute,
     managerBriefRoute,
     managerFaqRoute,
+    proofPathFaqRoute,
     proofPathTourRoute,
     proofSourceCatalogRoute,
     reviewerQuickstartRoute,
@@ -296,6 +300,10 @@ async function fixturePageHtml(route, path) {
     return readFile(new URL("../src/proof-paths/tour/index.html", import.meta.url), "utf8");
   }
 
+  if (route === proofPathFaqRoute) {
+    return readFile(new URL("../src/proof-paths/faq/index.html", import.meta.url), "utf8");
+  }
+
   if (route === proofSourceCatalogRoute) {
     return proofSourceCatalogPage();
   }
@@ -333,7 +341,7 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
   );
 }
 
@@ -576,6 +584,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, product behavior proof, autonomous approval, or replacement for tests, code review, source review, runtime observability, or human judgment.",
           "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, raw command output, or credential-like values are public proof material."
+        ]
+      },
+      {
+        path: proofPathFaqRoute,
+        title: "Proof Path FAQ",
+        summary: "Concept-level FAQ for reading proof paths, evidence tiers, coverage labels, limitations, review-packet context, missing-evidence gaps, and static-evidence boundaries.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The FAQ is concept-level explanation over existing public-safe evidence surfaces, not a generated proof source, scanner result, reducer result, approval workflow, or validation result.",
+          "Claims repeated from the FAQ must keep proof path, rule family, tier, coverage label, limitation, non-claim, public claim level, source context, and next-owner handoff attached."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, autonomous approval, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human judgment.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public FAQ material."
         ]
       },
       {

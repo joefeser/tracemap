@@ -1,6 +1,6 @@
 # Site TraceMap Tools Proof Path FAQ Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -8,22 +8,25 @@ Public claim level: concept
 
 Spec branch: `codex/spec-site-proof-path-faq`
 
+Implementation branch: `codex/impl-site-proof-path-faq`
+
 Base: `origin/dev`
 
 Target PR base: `dev`
 
-Worktree: dedicated isolated spec worktree; local absolute path intentionally
-omitted from spec notes.
+Worktree: dedicated isolated implementation worktree; local absolute path
+intentionally omitted from checked-in spec notes.
 
-Scope: spec-only packet for a future public proof-path FAQ page or section.
-Only this spec directory is in scope for the spec branch.
+Scope: public site implementation for the proof-path FAQ plus focused site
+validation and spec bookkeeping. Scanner, reducer, generated site output,
+runtime telemetry, review automation, and AI/LLM behavior remain out of scope.
 
 ## Current State
 
-This packet defines a future concept-level public-site FAQ for proof paths.
-It has not implemented site source, generated output, scanner code, reducer
-code, validation scripts, AI/LLM behavior, runtime telemetry, release
-approval, or review automation.
+Implemented as a standalone concept-level public route at `/proof-paths/faq/`.
+The route is generated from `site/src/proof-paths/faq/index.html` and is
+registered in sitemap and discovery metadata. It is linked from the existing
+proof-path index as secondary proof-path-family discovery, not primary nav.
 
 ## Claim-Level Decision
 
@@ -51,13 +54,29 @@ Candidate placements:
 - Section on `/questions/`: allowed if implementation treats the content as a
   proof-path cluster inside the broader question index.
 
-Final route or placement: not selected. The future implementation must record
-the selected placement and rejected alternatives before changing site source.
+Final route or placement: `/proof-paths/faq/`.
+
+Selected because the FAQ is long enough to crowd the proof-path overview, and
+the existing guided tour is intentionally a one-claim reading flow. A
+standalone route keeps repeated stakeholder and reviewer questions near the
+proof-path concept while preserving the neighboring page roles.
+
+Rejected alternatives:
+
+- Section on `/proof-paths/`: rejected because the overview is already a dense
+  demo-backed index and should not absorb a long concept-level FAQ.
+- Section on `/proof-paths/tour/`: rejected because the tour remains a guided
+  sequence for one proof path, while the FAQ answers recurring objections and
+  edge cases.
+- Section on `/questions/`: rejected because `/questions/` remains the broad
+  question-to-surface orientation index; this FAQ starts after readers choose
+  the proof-path topic.
 
 ## Scope Decisions
 
-- Keep this branch spec-only.
-- Write only files in this spec directory.
+- Implement a standalone concept-level static page under `site/src/`.
+- Do not edit `site/dist` or `site/output` by hand; generated output remains
+  ignored and rebuilt by site scripts.
 - Keep future public copy visibly concept-level.
 - Require visible `No public conclusion without evidence`.
 - Require answers about proof-path definition, reading order, evidence tiers,
@@ -78,6 +97,20 @@ the selected placement and rejected alternatives before changing site source.
   private sample names, command output, hidden validation details, and
   credential-like values in public page content.
 - Avoid blame language.
+- Keep the FAQ out of primary navigation. The implemented inbound link is from
+  `/proof-paths/` hero/link-grid only, because that improves discovery inside
+  the proof-path route family without bloating the global nav.
+- Use a static list rather than accordions, so every answer is present in the
+  static HTML. Accordion/progressive-disclosure validation is not applicable.
+- Section-placement metadata reconciliation and `faq-` prefixed host anchors
+  are not applicable because the implementation chose a standalone route.
+- The standalone route still validates duplicate IDs, required anchors,
+  sitemap/discovery metadata, public links, safe/unsafe answer regions, and
+  forbidden claim/private-material boundaries.
+- Adjacent routes existed at implementation time: `/questions/`,
+  `/proof-paths/`, `/proof-paths/tour/`, `/evidence/`, `/limitations/`,
+  `/static-vs-runtime/`, and `/review-claim-checklist/`. No substitutions or
+  omissions were needed.
 
 ## Review Commands
 
@@ -125,13 +158,35 @@ review entirely.
 
 ## Validation
 
-Spec-branch validation completed on 2026-06-21:
+Implementation validation completed on 2026-06-21:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
+- `cd site && npm test`: passed, 341 tests.
+- `cd site && npm run validate`: passed, generated 55 HTML files, 1840
+  internal references, and 54 sitemap URLs.
+- `cd site && npm run build`: passed.
+- Focused FAQ validator: `site/scripts/proof-path-faq.mjs`, wired into
+  `site/scripts/validate.mjs`.
+- Focused FAQ tests: `site/scripts/proof-path-faq.test.mjs`, including
+  required questions, stable anchors, route metadata, required adjacent links,
+  safe/unsafe answer regions, illustrative example safety, forbidden claims,
+  unsupported verbs, raw/private material, hard private material, duplicate
+  IDs, inbound links, and bounded unsafe/private sections.
+- Desktop browser sanity: passed at `http://localhost:4174/proof-paths/faq/`,
+  screenshot captured in ignored local output.
+- Mobile browser sanity: passed at `http://localhost:4174/proof-paths/faq/`,
+  screenshot captured in ignored local output.
 
-Future implementation validation must also run site tests, validation, build,
-and browser sanity checks when site source changes.
+Validation oddity: an initial parallel run of `npm run validate` and
+`npm run build` raced over `site/dist` and produced an `ENOENT` while the
+build rewrote generated files. Both commands passed when rerun serially.
+
+## PR Loop Outcome
+
+Pending. Fill in PR-loop decision, stop reason, actionable findings, checks,
+review-thread state, and residual risk after the implementation PR is opened
+and the required `agent-control pr-loop` command completes.
 
 ## Oddities
 
@@ -140,13 +195,14 @@ and browser sanity checks when site source changes.
   static-versus-runtime explainer, or claim checklist.
 - Unsafe examples may include forbidden terms only inside explicitly bounded
   rejection context.
+- `apply_patch` initially wrote to the root checkout; those implementation
+  edits were moved into the isolated worktree and the root checkout was
+  restored to clean status before continuing.
 
 ## Follow-ups
 
-- Future implementation must choose the final placement and record rejected
-  alternatives before changing site source.
-- Future implementation must rerun site-specific tests, validation, build, and
-  browser sanity checks if site source changes.
-- Review re-runs returned reduced coverage after Kiro denied write-tool
-  attempts, but the saved review text was inspected and Medium findings were
-  patched.
+- After the PR is opened, run the required PR loop and update this file with
+  the exact terminal decision before final handoff.
+- Review re-runs from the spec phase returned reduced coverage after Kiro
+  denied write-tool attempts, but the saved review text was inspected and
+  Medium findings were patched before implementation began.
