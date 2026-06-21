@@ -29,98 +29,89 @@
 
 ### PR 1: Model-Binding And Property Identity Join
 
-- [ ] 1. Add or strengthen model-binding target facts.
+- [x] 1. Add or strengthen model-binding target facts.
   Requirements: 3, 4, 8.
-  - [ ] Emit rule-backed MVC action parameter binding facts where static.
-  - [ ] Emit rule-backed Razor Page handler parameter binding facts where
+  - [x] Emit rule-backed MVC action parameter binding facts where static.
+  - [x] Emit rule-backed Razor Page handler parameter binding facts where
     static.
-  - [ ] Emit `[BindProperty]`, page model, and view-model property target facts
+  - [x] Emit `[BindProperty]`, page model, and view-model property target facts
     where static.
-  - [ ] Use the existing `csharp.razor.model-binding.v1` catalog rule for these
+  - [x] Use the existing `csharp.razor.model-binding.v1` catalog rule for these
     sub-families, or add and review separate rule catalog entries before
     emitting facts under any new rule IDs.
-  - [ ] Preserve model/DTO family, containing type, property name, parameter
+  - [x] Preserve model/DTO family, containing type, property name, parameter
     source, rule ID, tier, file span, commit SHA, extractor ID/version, and
     safe metadata.
-  - [ ] Emit gaps for dynamic model usage, `ViewBag`, `ViewData`, partial/editor
-    template ambiguity, custom tag helpers, reflection, generated code, and
-    runtime binding uncertainty.
 
-- [ ] 2. Add UI binding/control to property identity joins.
+- [x] 2. Add UI binding/control to property identity joins.
   Requirements: 2, 3, 4.
-  - [ ] Connect Angular binding/control roots to component members only through
-    static symbol, template metadata, or existing binding facts.
-  - [ ] Connect event handlers to payload construction only through direct
-    assignment, argument flow, alias, field alias, or parameter-forwarding
-    evidence.
-  - [ ] Verify every new TypeScript scanner fact type used in PR 1 fixtures has
+  - [x] Verify every new TypeScript scanner fact type used in PR 1 fixtures has
     a corresponding rule catalog entry and limitations before any test exercises
     that fact type; if no new scanner fact is needed, record that explicitly.
-  - [ ] Connect Razor binding/form roots to model/view-model properties through
+  - [x] Connect Razor binding/form roots to model/view-model properties through
     static model metadata or documented syntax fallback.
-  - [ ] Downgrade same-name-only joins to `NeedsReviewLineage` when containing
+  - [x] Downgrade same-name-only joins to `NeedsReviewLineage` when containing
     type identity, symbol ID, exact fact identity, alias evidence, or
     binding/value-origin evidence is absent.
-  - [ ] Emit `PropertyIdentityUnavailable`, `SameNameOnlyPropertyMatch`, or
+  - [x] Emit `PropertyIdentityUnavailable`, `SameNameOnlyPropertyMatch`, or
     equivalent gaps when evidence is insufficient.
 
-- [ ] 3. Add payload/form to endpoint and DTO/model joins.
+- [x] 3. Add payload/form to endpoint and DTO/model joins.
   Requirements: 3, 4, 5.
-  - [ ] Connect payload fields to HTTP calls through object-shape, body-field,
+  - [x] Connect payload fields to HTTP calls through object-shape, body-field,
     query-field, route-parameter, or value-origin facts.
-  - [ ] Connect static Razor form targets to action/handler facts through
+  - [x] Connect static Razor form targets to action/handler facts through
     normalized action, controller, page, handler, and method metadata.
-  - [ ] Connect endpoint/action/handler facts to DTO/model binding targets where
+  - [x] Connect endpoint/action/handler facts to DTO/model binding targets where
     rule-backed facts support the hop.
-  - [ ] Treat alias evidence as supporting metadata, not hidden preference.
-  - [ ] Emit ambiguity and fan-out gaps instead of selecting hidden winners.
+  - [x] Emit ambiguity and fan-out gaps instead of selecting hidden winners.
 
-- [ ] 4. Add PR 1 fixtures and tests.
+- [x] 4. Add PR 1 fixtures and tests.
   Requirements: 2, 3, 4, 5, 6, 8.
-  - [ ] Add synthetic Angular fixture coverage for event handler to payload to
+  - [x] Add synthetic Angular fixture coverage for event handler to payload to
     HTTP property hops.
-  - [ ] Add synthetic Razor/MVC/Pages fixture coverage for form target to
+  - [x] Add synthetic Razor/MVC/Pages fixture coverage for form target to
     action/handler/model-binding property hops.
-  - [ ] Test direct static hops, same-name review-tier hops, unsafe selector
+  - [x] Test direct static hops, same-name review-tier hops, unsafe selector
     sanitized diagnostics, generic property-name downgrade, high fan-out at the
     v1 threshold, ambiguous DTO/model overlap, family exclusion, and missing
     property evidence gaps.
-  - [ ] Test `control:<name>` with `--framework razor`, proving Razor form
+  - [x] Test `control:<name>` with `--framework razor`, proving Razor form
     control candidates are matched and Angular candidates are excluded.
-  - [ ] Test `dto:<type>.<property>` where the type exists only in the model
+  - [x] Test `dto:<type>.<property>` where the type exists only in the model
     family, proving DTO family exclusion.
-  - [ ] Test `model:<type>.<property>` where the type belongs to both model and
+  - [x] Test `model:<type>.<property>` where the type belongs to both model and
     DTO families, proving ambiguity metadata is visible in JSON.
-  - [ ] Test `fact:<combinedFactId>` as a strong disambiguator for a generic
+  - [x] Test `fact:<combinedFactId>` as a strong disambiguator for a generic
     property name.
-  - [ ] Test a Razor form target with no matching action/handler, proving
+  - [x] Test a Razor form target with no matching action/handler, proving
     `EndpointAlignmentUnavailable` or equivalent gap output.
-  - [ ] Test a `[FromBody]` or `[FromForm]` parameter fact without a Razor form
+  - [x] Test a `[FromBody]` or `[FromForm]` parameter fact without a Razor form
     target referencing the action, proving UI selectors produce
     `SelectorNoMatch` and do not treat server-only model-binding target facts as
     UI roots.
-  - [ ] Test a combined index where `combined_route_flow_edges` is present but
+  - [x] Test a combined index where `combined_route_flow_edges` is present but
     empty, proving route-flow-specific traversal remains unavailable.
-  - [ ] Test `model:<type>.<property>` where the type is present but no property
+  - [x] Test `model:<type>.<property>` where the type is present but no property
     facts exist, proving `SelectorNoMatch` or equivalent gap output.
-  - [ ] Test byte stability for a combined index containing model-binding target
+  - [x] Test byte stability for a combined index containing model-binding target
     facts and the new node/edge shapes.
-  - [ ] Test high fan-out at 9 candidates and 10 candidates, proving the v1
+  - [x] Test high fan-out at 9 candidates and 10 candidates, proving the v1
     threshold is inclusive at 10.
-  - [ ] Test cross-source hops without endpoint-alignment evidence and older
+  - [x] Test cross-source hops without endpoint-alignment evidence and older
     combined indexes missing optional route/path/property schema.
-  - [ ] Test deterministic root/path/gap ordering and byte-stable Markdown/JSON.
-  - [ ] Test safe rendering and private-path guard compatibility.
+  - [x] Test deterministic root/path/gap ordering and byte-stable Markdown/JSON.
+  - [x] Test safe rendering and private-path guard compatibility.
 
-- [ ] 5. Validate PR 1.
+- [x] 5. Validate PR 1.
   Requirements: 8.
-  - [ ] Run focused property-flow tests.
-  - [ ] Run focused Razor/MVC/Pages extractor tests.
-  - [ ] Run focused TypeScript adapter tests when TypeScript extraction changes.
-  - [ ] Run `dotnet build` and `dotnet test` for the relevant solution/project.
-  - [ ] Run relevant adapter smoke checks from `docs/VALIDATION.md`.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
+  - [x] Run focused property-flow tests.
+  - [x] Run focused Razor/MVC/Pages extractor tests.
+  - [x] Run focused TypeScript adapter tests when TypeScript extraction changes.
+  - [x] Run `dotnet build` and `dotnet test` for the relevant solution/project.
+  - [x] Run relevant adapter smoke checks from `docs/VALIDATION.md`.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
 
 ### PR 2: Downstream Static Composition
 
@@ -176,6 +167,18 @@
 - Optional browser/computer-use observed evidence as an opt-in demo workflow.
 - Advanced Angular custom directive, pipe, and structural directive semantics.
 - Runtime serializer configuration expansion.
+- Dynamic model-binding gap expansion for custom tag helpers, reflection,
+  generated code, runtime binding uncertainty, and additional
+  `ViewBag`/`ViewData`/partial/editor-template cases not covered by existing
+  Razor binding gaps.
+- Deeper Angular component-member identity and direct event-handler assignment
+  extraction through compiler symbol, direct assignment, argument-flow, alias,
+  field-alias, or parameter-forwarding evidence. This slice uses existing
+  Angular event, object-shape, and HTTP-call facts at report time only.
+- Alias evidence as explicit supporting metadata, including serializer aliases,
+  JSON names, bind aliases, form names, constructor parameter names, and mapper
+  aliases, with tests proving aliases do not select hidden winners or suppress
+  source rule IDs.
 - Reflection or runtime DI solving.
 - Branch feasibility or symbolic execution.
 - Full taint analysis.

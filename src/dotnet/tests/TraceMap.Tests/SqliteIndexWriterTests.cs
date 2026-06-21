@@ -69,7 +69,7 @@ public sealed class SqliteIndexWriterTests
 
         var propertiesJson = await ExecuteScalarAsync<string>(
             connection,
-            "select properties_json from facts where fact_type = 'PropertyDeclared' and target_symbol = 'PrimaryEmail';");
+            "select properties_json from facts where fact_type = 'PropertyDeclared' and target_symbol = 'CustomerProfile.PrimaryEmail';");
         using var properties = JsonDocument.Parse(propertiesJson);
         Assert.Equal("PrimaryEmail", properties.RootElement.GetProperty("name").GetString());
     }

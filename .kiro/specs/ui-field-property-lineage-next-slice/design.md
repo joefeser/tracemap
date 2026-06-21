@@ -99,6 +99,7 @@ Safe properties:
   "modelType": "ProfileInput",
   "propertyName": "Email",
   "propertyPath": "Email",
+  "propertyType": "string",
   "parameterName": "input",
   "parameterSource": "body|form|route|query|unknown",
   "actionName": "Save",
@@ -192,7 +193,7 @@ Selector matching is closed and deterministic.
 | Selector | Root families | Notes |
 | --- | --- | --- |
 | `field:<name>` | UI field/control/binding facts | Generic names downgrade unless narrowed; same-name-only hops downgrade per Requirement 3 AC 6. |
-| `control:<name>` | Angular/Razor form control facts | Matches safe control metadata only; same-name-only hops downgrade per Requirement 3 AC 6. |
+| `control:<name>` | Angular and Razor form control facts | Matches safe control metadata only; same-name-only hops downgrade per Requirement 3 AC 6. |
 | `binding:<name>` | Template/Razor binding facts | Static property path or binding name only; same-name-only hops downgrade per Requirement 3 AC 6. |
 | `model:<type>.<property>` | model, view-model, model-binding facts | DTO-only facts are excluded; facts classified as both families remain candidates with ambiguity metadata. |
 | `dto:<type>.<property>` | DTO/serializer/body contract facts | Model-only facts are excluded; facts classified as both families remain candidates with ambiguity metadata. |
