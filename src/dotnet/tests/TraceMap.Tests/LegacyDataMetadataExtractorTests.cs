@@ -1095,7 +1095,9 @@ public sealed class LegacyDataMetadataExtractorTests
                 <property name="Status" column="Status" not-null="true" />
                 <many-to-one name="Account" class="Account" column="AccountId" />
                 <set name="Orders">
-                  <key column="CustomerId" />
+                  <key>
+                    <column name="CustomerId" />
+                  </key>
                   <one-to-many class="Order" />
                 </set>
               </class>
@@ -1160,6 +1162,7 @@ public sealed class LegacyDataMetadataExtractorTests
               <class name="Server=prod;Password=secret" table="Customers;DROP" catalog="SensitiveCatalog">
                 <id name="Id" column="CustomerId" />
                 <property name="TokenSecret" formula="SELECT ApiSecret FROM Customers" />
+                <component name="Address" />
                 <filter name="tenant">TenantSecret = :tenant</filter>
                 <sql-query name="UnsafeQuery">SELECT ApiSecret FROM Customers</sql-query>
               </class>

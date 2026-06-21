@@ -650,4 +650,16 @@ Kiro implementation review:
 
 PR review-loop follow-up:
 
-- Pending. PR should target `dev`; do not merge from the implementation agent.
+- Initial agent-control loop on PR #273 returned actionable unresolved review
+  threads from Gemini/Qodo. Patched both current-slice findings:
+  `<component>` now emits an unsupported-shape gap, and collection
+  `<key><column name="..." /></key>` column evidence is recognized.
+- After the PR-thread patch, reran
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataMetadataExtractorTests|LegacyDataModelDescriptorProjectionTests"`:
+  passed, 32 tests.
+- After the PR-thread patch, reran `dotnet test src/dotnet/TraceMap.sln`:
+  passed, 592 tests.
+- After the PR-thread patch, reran `./scripts/check-private-paths.sh`: passed.
+- After the PR-thread patch, reran `git diff --check`: passed.
+- Final agent-control loop result is pending. PR should target `dev`; do not
+  merge from the implementation agent.
