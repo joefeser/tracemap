@@ -88,6 +88,18 @@ rules:
       - Partial sections are compatibility and coverage labels, not proof of evidence absence or runtime safety.
       - The explorer must distinguish not-provided, unsupported, and no-evidence-under-credible-coverage states when enough input metadata is available.
 
+  - id: explorer.render.section-status.v1
+    name: Static HTML explorer section status
+    description: Records deterministic section availability labels derived from compatible generated artifacts, safe view models, and rule-backed explorer gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer section status row
+      - generated coverage table row
+    limitations:
+      - Section status rows describe explorer rendering coverage only and do not prove runtime behavior, source reachability, production use, or absence of evidence outside compatible inputs.
+      - First-slice not-rendered or not-provided labels must stay visibly partial and must not be converted into no-evidence conclusions.
+      - Support IDs must use stable artifact IDs, rule IDs, or generated data paths rather than raw source paths, remotes, hostnames, or private repository names.
+
   - id: explorer.validation.generated-file-stale.v1
     name: Static HTML explorer stale generated file guard
     description: Prevents overwriting stale or unverified generated explorer files without explicit operator intent.
