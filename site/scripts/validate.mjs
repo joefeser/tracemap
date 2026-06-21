@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
+import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import {
   validateDiscoveryDist,
   validateDiscoveryNotInSitemap,
@@ -89,6 +90,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateChangeReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateGlossaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateBlogProofPathSeriesDist({ baseUrl: normalizedBaseUrl, dist, errors, root: resolve(root, "src") });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
