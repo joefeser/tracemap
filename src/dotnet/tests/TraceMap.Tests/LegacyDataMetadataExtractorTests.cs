@@ -1021,6 +1021,9 @@ public sealed class LegacyDataMetadataExtractorTests
               <SubSonicService defaultProvider="Server=prod-db;Password=super-secret" />
             </configuration>
             """);
+        File.WriteAllText(Path.Combine(temp.Path, "RootSubSonic.config"), """
+            <SubSonicService defaultProvider="Server=prod-db;Password=super-secret" />
+            """);
         File.WriteAllText(Path.Combine(temp.Path, "Domain", "Customer.cs"), """
             using Castle.ActiveRecord;
 
@@ -1029,6 +1032,13 @@ public sealed class LegacyDataMetadataExtractorTests
             {
                 [PrimaryKey]
                 public int Id { get; set; }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Noise.cs"), """
+            public static class Noise
+            {
+                // This project is not using SubSonic or LLBLGen.
+                public const string Message = "MyBatis and iBATIS are not configured here";
             }
             """);
 
@@ -1048,7 +1058,10 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("descriptorFamily") == "iBATIS.NET");
         Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("descriptorFamily") == "LLBLGen");
         Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("descriptorFamily") == "SubSonic");
+        Assert.Contains(gaps, fact => fact.Evidence.FilePath == "RootSubSonic.config"
+            && fact.Properties.GetValueOrDefault("descriptorFamily") == "SubSonic");
         Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("descriptorFamily") == "Castle ActiveRecord");
+        Assert.DoesNotContain(gaps, fact => fact.Evidence.FilePath == "Domain/Noise.cs");
         Assert.All(gaps, fact =>
         {
             Assert.Equal("UnsupportedLegacyOrmDescriptor", fact.Properties.GetValueOrDefault("classification"));

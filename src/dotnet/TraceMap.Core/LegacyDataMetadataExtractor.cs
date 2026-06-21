@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -125,13 +126,13 @@ public static class LegacyDataMetadataExtractor
             return;
         }
 
+        var root = CSharpSyntaxTree.ParseText(source).GetRoot();
         var families = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        AddCSharpFamilyIfPresent(source, "Castle ActiveRecord", "ActiveRecord", families);
-        AddCSharpFamilyIfPresent(source, "SubSonic", "SubSonic", families);
-        AddCSharpFamilyIfPresent(source, "LLBLGen", "LLBLGen", families);
-        AddCSharpFamilyIfPresent(source, "iBATIS.NET", "IBatisNet", families);
-        AddCSharpFamilyIfPresent(source, "iBATIS.NET", "IBatis", families);
-        AddCSharpFamilyIfPresent(source, "MyBatis.NET", "MyBatis", families);
+        AddCSharpFamilyIfPresent(root, "Castle ActiveRecord", new[] { "ActiveRecord" }, families);
+        AddCSharpFamilyIfPresent(root, "SubSonic", new[] { "SubSonic" }, families);
+        AddCSharpFamilyIfPresent(root, "LLBLGen", new[] { "LLBLGen" }, families);
+        AddCSharpFamilyIfPresent(root, "iBATIS.NET", new[] { "IBatisNet", "IBatis" }, families);
+        AddCSharpFamilyIfPresent(root, "MyBatis.NET", new[] { "MyBatis" }, families);
 
         foreach (var (family, line) in families)
         {
@@ -1377,7 +1378,10 @@ public static class LegacyDataMetadataExtractor
     private static IReadOnlySet<string> UnsupportedOrmFamiliesFromConfig(XDocument document)
     {
         var families = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var value in document.Descendants()
+        var elements = document.Root is null
+            ? Enumerable.Empty<XElement>()
+            : document.Root.DescendantsAndSelf();
+        foreach (var value in elements
             .SelectMany(element => element.Attributes().Select(attribute => attribute.Name.LocalName + " " + attribute.Value).Append(element.Name.LocalName)))
         {
             var normalized = value.ToLowerInvariant();
@@ -1410,15 +1414,59 @@ public static class LegacyDataMetadataExtractor
         return families;
     }
 
-    private static void AddCSharpFamilyIfPresent(string source, string family, string token, IDictionary<string, int> families)
+    private static void AddCSharpFamilyIfPresent(SyntaxNode root, string family, IReadOnlyCollection<string> tokens, IDictionary<string, int> families)
     {
-        var index = source.IndexOf(token, StringComparison.OrdinalIgnoreCase);
-        if (index < 0 || families.ContainsKey(family))
+        if (families.ContainsKey(family))
         {
             return;
         }
 
-        families[family] = source.AsSpan(0, index).Count('\n') + 1;
+        foreach (var node in root.DescendantNodes())
+        {
+            if (!IsUnsupportedOrmSyntaxEvidence(node, tokens))
+            {
+                continue;
+            }
+
+            families[family] = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            return;
+        }
+    }
+
+    private static bool IsUnsupportedOrmSyntaxEvidence(SyntaxNode node, IReadOnlyCollection<string> tokens)
+    {
+        return node switch
+        {
+            UsingDirectiveSyntax usingDirective => MentionsUnsupportedOrmToken(usingDirective.Name?.ToString(), tokens),
+            AttributeSyntax attribute => MentionsUnsupportedOrmToken(attribute.Name.ToString(), tokens),
+            ObjectCreationExpressionSyntax objectCreation => MentionsUnsupportedOrmToken(objectCreation.Type.ToString(), tokens),
+            IdentifierNameSyntax identifier => MentionsUnsupportedOrmToken(identifier.Identifier.ValueText, tokens),
+            GenericNameSyntax generic => MentionsUnsupportedOrmToken(generic.Identifier.ValueText, tokens),
+            QualifiedNameSyntax qualified => MentionsUnsupportedOrmToken(qualified.ToString(), tokens),
+            MemberAccessExpressionSyntax memberAccess => MentionsUnsupportedOrmToken(memberAccess.ToString(), tokens),
+            _ => false
+        };
+    }
+
+    private static bool MentionsUnsupportedOrmToken(string? value, IReadOnlyCollection<string> tokens)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var segment in Regex.Split(value, @"[^A-Za-z0-9_]+").Where(segment => segment.Length > 0))
+        {
+            var normalized = segment.EndsWith("Attribute", StringComparison.OrdinalIgnoreCase)
+                ? segment[..^"Attribute".Length]
+                : segment;
+            if (tokens.Any(token => string.Equals(normalized, token, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string NormalizeUnsupportedOrmFamily(string family)
