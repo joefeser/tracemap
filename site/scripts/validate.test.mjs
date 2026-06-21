@@ -26,6 +26,7 @@ import {
   managerDemoScriptRoute
 } from "./manager-demo-script.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
+import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reviewPacketAssemblyRoute } from "./review-packet-assembly.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
@@ -144,6 +145,7 @@ async function createDistFixture({
       managerBriefRoute,
       managerDemoScriptRoute,
       managerFaqRoute,
+      proofPathTourRoute,
       proofSourceCatalogRoute,
       reviewPacketAssemblyRoute,
       reviewClaimChecklistRoute,
@@ -181,6 +183,7 @@ async function createDistFixture({
     glossaryRoute,
     managerBriefRoute,
     managerFaqRoute,
+    proofPathTourRoute,
     proofSourceCatalogRoute,
     "/manager-packet/",
     "/packets/",
@@ -272,6 +275,10 @@ async function fixturePageHtml(route, path) {
     return managerFaqPage();
   }
 
+  if (route === proofPathTourRoute) {
+    return readFile(new URL("../src/proof-paths/tour/index.html", import.meta.url), "utf8");
+  }
+
   if (route === proofSourceCatalogRoute) {
     return proofSourceCatalogPage();
   }
@@ -305,7 +312,7 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a>` : ""}`
   );
 }
 
@@ -479,6 +486,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture manager FAQ limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: proofPathTourRoute,
+        title: "Guided Proof-Path Tour",
+        summary: "Concept-level guided reading flow for inspecting one public claim through proof path, rule family, evidence tier, coverage label, source context, limitation, non-claim, and next owner.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The tour is concept-level reading guidance over existing public-safe evidence surfaces, not a proof engine, runtime trace, approval workflow, validation result, or new evidence source.",
+          "Missing rule, tier, coverage, source context, extractor version, limitation, or public-safe support means the public claim stops or moves to owner follow-up."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, product behavior proof, autonomous approval, or replacement for tests, code review, source review, runtime observability, or human judgment.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, raw command output, or credential-like values are public proof material."
+        ]
       },
       {
         path: "/packets/",

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap guided proof-path tour: follow one concept-level public claim through rule, evidence, coverage, source context, limitation, non-claim, and next-owner fields."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Guided Proof-Path Tour | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/proof-paths/tour/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Guided Proof-Path Tour">
+    <meta
+      property="og:description"
+      content="A concept-level walkthrough for reading a public claim without turning the tour into a proof engine or approval flow."
+    >
+    <meta property="og:url" content="https://tracemap.tools/proof-paths/tour/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Guided proof-path tour</p>
+        <h1>Start with one public claim, then stop where evidence stops.</h1>
+        <p class="hero-subhead">
+          This tour shows how a teammate or reviewer can read an existing
+          public-safe evidence surface: name the claim, follow the proof path,
+          check the rule, tier, coverage, source context, limitation, and
+          owner, then decide whether the public wording must stop.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This is a guided explanation, not a proof engine, runtime trace, AI
+          analysis, release approval, or operational approval flow.
+        </p>
+        <nav class="hero-actions" aria-label="Guided proof-path tour links">
+          <a class="button primary" href="#claim-label">Start the tour</a>
+          <a class="button secondary" href="/proof-paths/">Proof path index</a>
+          <a class="button secondary" href="/proof-source-catalog/">Source catalog</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+          <a class="button secondary" href="/glossary/">Glossary</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Positioning</p>
+          <h2>The tour reads one claim; nearby routes keep their own jobs.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/proof-paths/">/proof-paths/</a></strong><span>Canonical proof-path overview and route families; this tour is the guided reading flow for one claim.</span></div>
+          <div><strong><a href="/proof-source-catalog/">/proof-source-catalog/</a></strong><span>Source-family catalog; the tour uses it as a reference, not a replacement catalog.</span></div>
+          <div><strong><a href="/demo/evidence-trail/">/demo/evidence-trail/</a></strong><span>Demo evidence trail; the tour stays concept-level and claim-to-proof-path focused.</span></div>
+          <div><strong><a href="/review-room/">/review-room/</a></strong><span>Review agenda; the tour is not a workspace, queue, approval, or decision room.</span></div>
+          <div><strong><a href="/packets/">/packets/</a> and <a href="/packets/assembly/">/packets/assembly/</a></strong><span>Packet guidance; the tour does not publish or assemble delivery packets.</span></div>
+          <div><strong><a href="/validation/">/validation/</a> and <a href="/limitations/">/limitations/</a></strong><span>Validation and broad boundaries stay separate; this page links to them without presenting itself as a validation result.</span></div>
+          <div><strong><a href="/demo/runbook/">/demo/runbook/</a></strong><span>Demo runbook; the tour avoids operational runbook and release-readiness language.</span></div>
+          <div><strong><a href="/review-claim-checklist/">/review-claim-checklist/</a> and <a href="/glossary/">/glossary/</a></strong><span>The checklist decides repeat, downgrade, hold, internal, or do-not-repeat; the glossary defines terms. This tour applies those ideas to one reading path.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Tour steps</p>
+          <h2>Each field either carries evidence or keeps the conclusion bounded.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article id="claim-label" data-proof-tour-step="claim label">
+            <h3>1. Claim label</h3>
+            <p><strong>Check:</strong> name the public claim being inspected before stronger wording appears.</p>
+            <p><strong>Stop condition:</strong> if the label is vague or combines several claims, split it before continuing.</p>
+          </article>
+          <article id="public-claim-level" data-proof-tour-step="public claim level">
+            <h3>2. Public claim level</h3>
+            <p><strong>Check:</strong> confirm whether the claim is concept, demo, main, future, hidden, or another visible level from <a href="/glossary/">the glossary</a>.</p>
+            <p><strong>Stop condition:</strong> concept-level copy cannot be promoted into demo or main wording by this tour.</p>
+          </article>
+          <article id="proof-path" data-proof-tour-step="proof path">
+            <h3>3. Proof path</h3>
+            <p><strong>Check:</strong> follow the public route, checked-in doc, or public-safe reference trail that supports the claim.</p>
+            <p><strong>Stop condition:</strong> a local-only or private trail is not a public proof path.</p>
+          </article>
+          <article id="supporting-public-route-artifact" data-proof-tour-step="supporting public route/artifact">
+            <h3>4. Supporting public route/artifact</h3>
+            <p><strong>Check:</strong> link to a route such as <a href="/proof-source-catalog/">the source catalog</a>, <a href="/validation/">validation</a>, <a href="/limitations/">limitations</a>, or a reviewed public summary.</p>
+            <p><strong>Stop condition:</strong> if the route is missing or private, the public claim must stop or move to owner follow-up.</p>
+          </article>
+          <article id="rule-id-family" data-proof-tour-step="rule ID/family">
+            <h3>5. Rule ID/family</h3>
+            <p><strong>Check:</strong> record the deterministic rule ID, extractor family, or documented judgment that produced the evidence.</p>
+            <p><strong>Stop condition:</strong> no evidence-bearing conclusion without a rule ID or rule family.</p>
+          </article>
+          <article id="evidence-tier" data-proof-tour-step="evidence tier">
+            <h3>6. Evidence tier</h3>
+            <p><strong>Check:</strong> identify <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</p>
+            <p><strong>Stop condition:</strong> unknown or syntax-only evidence must remain labeled.</p>
+          </article>
+          <article id="coverage-label" data-proof-tour-step="coverage label">
+            <h3>7. Coverage label</h3>
+            <p><strong>Check:</strong> keep full, partial, reduced, unknown, unavailable, or gap-labeled coverage visible.</p>
+            <p><strong>Stop condition:</strong> missing coverage blocks complete or absence-style wording.</p>
+          </article>
+          <article id="commit-source-context" data-proof-tour-step="commit SHA">
+            <h3>8. Commit SHA/source context</h3>
+            <p><strong>Check:</strong> record the commit SHA or public-safe source revision context that bounds the scan or summary.</p>
+            <p><strong>Stop condition:</strong> if the source context is absent, do not repeat the evidence as current.</p>
+          </article>
+          <article id="extractor-version" data-proof-tour-step="extractor version">
+            <h3>9. Extractor version</h3>
+            <p><strong>Check:</strong> record the extractor, schema, or rule-family version behind the evidence.</p>
+            <p><strong>Stop condition:</strong> if the extractor version is missing, the deterministic support is incomplete.</p>
+          </article>
+          <article id="limitation" data-proof-tour-step="limitation">
+            <h3>10. Limitation</h3>
+            <p><strong>Check:</strong> state the limitation beside the evidence field it bounds, not as a generic footer.</p>
+            <p><strong>Stop condition:</strong> a claim without its limitation is not ready to repeat.</p>
+          </article>
+          <article id="step-non-claim" data-proof-tour-step="non-claim">
+            <h3>11. Non-claim</h3>
+            <p><strong>Check:</strong> say what the inspected evidence does not prove before the reader carries the wording onward.</p>
+            <p><strong>Stop condition:</strong> if the non-claim is missing, send the wording to <a href="/review-claim-checklist/">the claim checklist</a>.</p>
+          </article>
+          <article id="next-owner" data-proof-tour-step="next owner">
+            <h3>12. Next owner</h3>
+            <p><strong>Check:</strong> name the reviewer, implementation owner, validation owner, or human decision maker for the next action.</p>
+            <p><strong>Stop condition:</strong> if no owner is named, the tour ends with owner follow-up, not a stronger conclusion.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section" id="worked-example" data-worked-example="illustrative-not-real">
+        <div>
+          <p class="section-kicker">Illustrative worked example</p>
+          <h2>This placeholder example is not a real product claim.</h2>
+          <p>
+            It demonstrates the reading shape only. The claim label, commit
+            SHA, extractor version, and conclusion are authored placeholders.
+          </p>
+        </div>
+        <div class="detail-list">
+          <div data-proof-tour-example-field="claim label"><strong>Claim label</strong><span>Placeholder claim: public demo summary row is inspectable through a proof path.</span></div>
+          <div data-proof-tour-example-field="public claim level"><strong>Public claim level</strong><span>concept.</span></div>
+          <div data-proof-tour-example-field="proof path"><strong>Proof path</strong><span><a href="/proof-paths/">Proof path index</a> to <a href="/proof-source-catalog/">source catalog</a> to <a href="/validation/">validation expectations</a>.</span></div>
+          <div data-proof-tour-example-field="rule ID/family"><strong>Rule ID/family</strong><span><code>public.demo.summary.v1</code> as an illustrative rule family.</span></div>
+          <div data-proof-tour-example-field="evidence tier"><strong>Evidence tier</strong><span><code>Tier2Structural</code> for the authored example; <code>Tier4Unknown</code> would stop stronger wording.</span></div>
+          <div data-proof-tour-example-field="coverage label"><strong>Coverage label</strong><span><code>PartialAnalysis</code>, so the reading outcome must stay bounded.</span></div>
+          <div data-proof-tour-example-field="commit SHA"><strong>Commit SHA/source context</strong><span><code>abc1234</code>, illustrative only and not a TraceMap finding.</span></div>
+          <div data-proof-tour-example-field="extractor version"><strong>Extractor version</strong><span><code>example-extractor-v0</code>, illustrative only.</span></div>
+          <div data-proof-tour-example-field="supporting public route/artifact"><strong>Supporting public route/artifact</strong><span><a href="/demo/evidence-trail/">Demo evidence trail</a> and checked-in public-safe route metadata, not raw local artifacts.</span></div>
+          <div data-proof-tour-example-field="limitation"><strong>Limitation</strong><span>The row shape can orient a reviewer, but partial coverage blocks broad or absence-style wording.</span></div>
+          <div data-proof-tour-example-field="non-claim"><strong>Non-claim</strong><span>The example does not prove product behavior, runtime behavior, release approval, or complete coverage.</span></div>
+          <div data-proof-tour-example-field="next owner"><strong>Next owner</strong><span>Reviewer checks the public route; validation owner supplies missing evidence if the claim needs stronger wording.</span></div>
+          <div data-proof-tour-example-field="bounded non-claim conclusion"><strong>Bounded non-claim conclusion</strong><span>The placeholder claim may be read as concept-level orientation only; stop before repeating it as a real TraceMap finding.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="where-to-stop" data-tm-boundary="where-to-stop">
+        <div>
+          <p class="section-kicker">Where to stop</p>
+          <h2>Stop when an evidence-bearing field is absent or incomplete.</h2>
+        </div>
+        <ul>
+          <li>Stop when rule ID/family, evidence tier, coverage label, commit/source context, extractor version, limitation, or supporting public route/artifact is absent or incomplete.</li>
+          <li>Claim label, public claim level, proof path, non-claim, and next owner are framing or handoff fields; if one is missing, the tour is incomplete even when it is not the evidence-presence gate.</li>
+          <li>Stop when a supporting path points only to raw material, private review notes, hidden validation details, or generated local output.</li>
+          <li>Stop when wording would outgrow the visible public claim level, especially when the page is concept-level guidance.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-tm-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The tour is not stronger than the evidence it reads.</h2>
+        </div>
+        <ul>
+          <li>Do not claim runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, or complete coverage from this tour.</li>
+          <li>Do not present TraceMap as AI/LLM impact analysis, embeddings, vector databases, prompt classification, autonomous approval, or a replacement for tests, code review, source review, runtime observability, or human judgment.</li>
+          <li>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, raw command output, or credential-like values.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Continue</p>
+          <h2>Use public-safe routes for deeper context.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/proof-source-catalog/">Proof source catalog</a>
+          <a href="/demo/evidence-trail/">Demo evidence trail</a>
+          <a href="/review-room/">Review room</a>
+          <a href="/packets/">Packet guide</a>
+          <a href="/packets/assembly/">Packet assembly checklist</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/demo/runbook/">Demo runbook</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/glossary/">Glossary</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/proof-paths/">proof path index</a>,
+        <a href="/proof-source-catalog/">proof source catalog</a>,
+        or
+        <a href="/review-claim-checklist/">review claim checklist</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
