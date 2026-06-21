@@ -137,8 +137,21 @@ to serve as the first proof-path reading guide.
 
 ## PR Loop Log
 
-- Pending. The PR loop will run after commit, push, ready PR creation, and the
-  required three-minute wait.
+- Initial PR: `https://github.com/joefeser/tracemap/pull/263`.
+- Initial PR loop command:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 263 --base dev --require-codex-review --quiet --json`.
+- Initial PR loop head:
+  `d9b661f47896329191d94c48bb2ddbb5c8abb468`.
+- Initial PR loop decision: `merge_ready`.
+- Initial PR loop stop reason: `NONE`.
+- Initial PR loop next action: `merge_ready`.
+- Initial PR loop residual risk: `medium`; required Codex review was satisfied
+  by configured `trustedCodeReview` quorum after Qodo returned, with missing
+  Codex review recorded as residual risk by policy.
+- Initial PR loop gates: merge state `CLEAN`, unresolved threads `0`, pending
+  checks `0`, failed checks `0`, actionable bot findings `0`.
+- Follow-up: this state note was updated to record the PR-loop outcome, so the
+  branch needs a normal follow-up push and a fresh PR-loop run on the new head.
 
 ## Oddities
 
