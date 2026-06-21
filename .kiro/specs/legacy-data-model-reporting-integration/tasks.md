@@ -52,8 +52,8 @@ for follow-up PRs unless review shows a narrower safe path.
         graph tables, unsupported ORM gaps, or generated-code uncertainty.
   - [ ] Before emitting any no-path gap, confirm or register its rule ID in the
         rule catalog. Record the chosen rule ID here before implementation PR
-        merge: `[TBD - must be filled in before PR merges]`.
-  - [ ] If reusing an existing combined reverse rule for no-path gaps, verify
+        merge: `combined.reverse.root.v1` for `NoReversePathEvidence` gaps.
+  - [x] If reusing an existing combined reverse rule for no-path gaps, verify
         its documented limitations explicitly cover the `legacy-data` surface
         kind and update the catalog entry if they do not.
 
@@ -63,6 +63,12 @@ for follow-up PRs unless review shows a narrower safe path.
   - [ ] Render supporting descriptor rows separately from terminal rows.
   - [ ] Cap classification by weakest evidence, ambiguity, high fan-out,
         generated-code uncertainty, and reduced coverage.
+  - [x] Record the route-flow gap rule or gap code used when a credible bridge
+        resolves to zero combined-index symbols:
+        `combined.route-flow.gap.v1` / `LinkedSymbolAbsentFromIndex`.
+  - [ ] Add tests proving supporting descriptor rows use a distinct
+        `routeFlowSupportingRowId` namespace and are not mistakable for terminal
+        rows in JSON output.
   - [ ] Add tests that route-flow wording avoids runtime database claims.
 
 - [ ] 5. Extend diff, impact, and release-review consumers. Follow-up PR.
@@ -79,6 +85,10 @@ for follow-up PRs unless review shows a narrower safe path.
 - [ ] 6. Extend vault/RAG/evidence graph export. Follow-up PR.
   - [ ] Export `legacy-data` descriptor surfaces as graph nodes with safe
         labels or hashes.
+  - [x] Export terminal legacy data model descriptors as deterministic
+        docs-export/RAG `data-surface` chunks with hash-only labels, source
+        rule IDs, `legacy.data.model.surface.v1`, citations, and static-only
+        limitations.
   - [ ] Apply claim-level filtering to descriptor labels, endpoints, symbols,
         table/column names, and relationship names.
   - [ ] Emit exporter-specific gaps only under documented exporter rule IDs.
@@ -102,12 +112,18 @@ for follow-up PRs unless review shows a narrower safe path.
   - [ ] Unknown future `legacy.data.*` rule or descriptor role.
   - [x] Duplicate stable identity.
   - [x] Public/demo redaction for descriptor labels and hashes.
+  - [x] Docs-export/RAG chunks for legacy data descriptors avoid raw descriptor
+        names and include source/projection rule IDs.
   - [x] Safe display labels and hashes containing Markdown-sensitive characters
         are escaped in Markdown table cells.
   - [ ] Release-review checklist output is covered by public/demo safety tests.
   - [x] JSON output omits or encodes unsafe raw values rather than relying on
         Markdown escaping.
   - [x] Byte-stable Markdown and JSON where touched.
+  - [ ] JSON output for source-only non-derived descriptor rows emits
+        `projectionRuleId: null` as a present field rather than omitting it.
+  - [ ] JSON output for derived descriptor rows emits
+        `projectionRuleId: "legacy.data.model.surface.v1"`.
 
 - [ ] 9. Update docs and rule catalog when implementation emits new rules.
   - [ ] Reuse existing source and workflow rules where possible.
