@@ -64,6 +64,20 @@ test("validateReviewPacketAssemblyDist reports route metadata regressions", asyn
   assert.match(errors.join("\n"), /nonClaims are missing required term: production traffic/);
 });
 
+test("validateReviewPacketAssemblyDist accepts case variations in route nonClaims", async (t) => {
+  const root = await createManagedReviewPacketAssemblyFixture(t);
+  await rewriteRouteEntry(join(root, "dist"), {
+    nonClaims: [
+      "no runtime behavior, production traffic, endpoint performance, outage cause, release approval or safety, operational safety, ai impact analysis, llm analysis, autonomous review, generated packet-builder behavior, or complete coverage proof."
+    ]
+  });
+  const errors = [];
+
+  await validateReviewPacketAssemblyDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateReviewPacketAssemblyDist reports missing required adjacent link", async (t) => {
   const root = await createManagedReviewPacketAssemblyFixture(t, {
     assemblyHtml: reviewPacketAssemblyPage().replaceAll('href="/manager-packet/"', 'href="/manager-packet-missing/"')
@@ -100,6 +114,17 @@ test("validateReviewPacketAssemblyDist rejects data-href in place of a required 
 test("validateReviewPacketAssemblyDist rejects positive generated packet-builder claims", async (t) => {
   const root = await createManagedReviewPacketAssemblyFixture(t, {
     assemblyHtml: reviewPacketAssemblyPage("<p>TraceMap generated packet-builder output for the user.</p>")
+  });
+  const errors = [];
+
+  await validateReviewPacketAssemblyDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim/);
+});
+
+test("validateReviewPacketAssemblyDist rejects forbidden claims split across tags", async (t) => {
+  const root = await createManagedReviewPacketAssemblyFixture(t, {
+    assemblyHtml: reviewPacketAssemblyPage("<p>TraceMap pro<em>ves</em> runtime behavior.</p>")
   });
   const errors = [];
 
@@ -149,6 +174,17 @@ test("validateReviewPacketAssemblyDist rejects raw material outside sanctioned s
 test("validateReviewPacketAssemblyDist rejects encoded hard private text", async (t) => {
   const root = await createManagedReviewPacketAssemblyFixture(t, {
     assemblyHtml: reviewPacketAssemblyPage("<p>file&#58;//private/report</p>")
+  });
+  const errors = [];
+
+  await validateReviewPacketAssemblyDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /hard private material/);
+});
+
+test("validateReviewPacketAssemblyDist rejects hard private text split across tags", async (t) => {
+  const root = await createManagedReviewPacketAssemblyFixture(t, {
+    assemblyHtml: reviewPacketAssemblyPage("<p>file<span></span>://private/report</p>")
   });
   const errors = [];
 
