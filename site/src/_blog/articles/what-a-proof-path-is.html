@@ -1,0 +1,209 @@
+<p>
+  Public technical copy often has a quiet problem: the sentence sounds
+  reasonable, but the reader cannot tell what evidence is supposed to support
+  it. A page may say that a demo result is evidence-backed, that a packet is
+  public-safe, or that a review should start from static facts. Without a proof
+  path, the next reader has to guess which route, artifact family, rule, tier,
+  limitation, or owner follow-up made the sentence repeatable.
+</p>
+
+<p>
+  TraceMap uses proof paths to keep that guessing out of the public story. A
+  proof path does not make a claim larger. It makes a claim easier to inspect:
+  here is the public route, here is the kind of evidence, here is the evidence
+  strength, here is the coverage label, here is the limitation, and here is the
+  question that still belongs to a reviewer or owner.
+</p>
+
+<section data-proof-blog-block="opening-problem">
+  <h2>The problem is claim drift.</h2>
+
+  <p>
+    Claim drift happens when a useful static observation gets repeated as a
+    stronger conclusion. A reviewer may start with a careful sentence such as
+    "this demo route links to a public-safe summary row." A few handoffs later,
+    the sentence can become a broader statement about product behavior, release
+    confidence, or operational certainty. The original evidence may still be
+    useful, but the wording has outrun it.
+  </p>
+
+  <p>
+    A proof path gives the reader a stopping rule. If the public claim cannot
+    point to a supporting route, evidence family, rule ID or rule family,
+    evidence tier, coverage label, limitation, and next question, the wording
+    should pause before it travels further.
+  </p>
+</section>
+
+<section data-proof-blog-block="evidence-backed-claim-example">
+  <h2>An evidence-backed claim names what would support it.</h2>
+
+  <p>
+    Consider this bounded claim: "The public demo result is a static evidence
+    orientation page backed by public-safe summary data and explicit
+    limitations." Before repeating it, a reader should expect links to the
+    <a href="/demo/result/">demo result</a>, the <a href="/evidence/">evidence
+    model</a>, and the <a href="/limitations/">limitations</a>. The reader
+    should also expect the claim to stay attached to route-level metadata,
+    generated public-safe summary families, rule IDs or rule families, evidence
+    tiers, and coverage labels.
+  </p>
+
+  <p>
+    The proof path does not need to publish raw internals to be useful. It can
+    name an artifact family, a rule family, a tier such as
+    <code>Tier2Structural</code>, a coverage label such as partial or reduced,
+    and the public route that explains the boundary. That is enough for another
+    person to inspect the public support without turning the page into a raw
+    artifact browser.
+  </p>
+</section>
+
+<section data-proof-blog-block="proof-path-reading-steps">
+  <h2>Read a proof path in order.</h2>
+
+  <ol>
+    <li>
+      Start with the claim. Write down the sentence you want to repeat before
+      you look for stronger wording.
+    </li>
+    <li>
+      Check the public claim level. For this article, the level is visible:
+      <strong>Public claim level: concept</strong>.
+    </li>
+    <li>
+      Open the closest proof surface, usually the
+      <a href="/proof-paths/">proof path index</a> or the
+      <a href="/proof-paths/tour/">guided proof-path tour</a>.
+    </li>
+    <li>
+      Follow the source family in the
+      <a href="/proof-source-catalog/">proof-source catalog</a>. Look for the
+      route, public-safe summary family, repository doc, or demo surface that
+      supports the wording.
+    </li>
+    <li>
+      Read the evidence vocabulary on <a href="/evidence/">evidence tiers</a>.
+      A compiler-resolved fact, a structural route pattern, and a syntax-only
+      clue should not be repeated with the same confidence.
+    </li>
+    <li>
+      Check the limitation beside the evidence. If coverage is partial,
+      reduced, unavailable, or unknown, the public wording should carry that
+      boundary.
+    </li>
+    <li>
+      Use the <a href="/review-claim-checklist/">review claim checklist</a> to
+      decide whether the claim can be repeated, should be downgraded, needs an
+      owner follow-up, or should not be repeated publicly.
+    </li>
+  </ol>
+</section>
+
+<section data-proof-blog-block="proof-surfaces">
+  <h2>The supporting surfaces each have a job.</h2>
+
+  <p>
+    The <a href="/proof-paths/">proof path index</a> organizes public evidence
+    routes. The <a href="/proof-paths/tour/">guided tour</a> walks one claim
+    through the fields a reader should check. The
+    <a href="/proof-source-catalog/">proof-source catalog</a> explains source
+    families. The <a href="/evidence/">evidence model</a> defines rule IDs,
+    tiers, and coverage labels. The <a href="/packets/">packet guide</a> and
+    <a href="/packets/assembly/">packet assembly checklist</a> show how to
+    carry public-safe evidence into a review handoff.
+  </p>
+
+  <p>
+    The <a href="/static-vs-runtime/">static vs runtime boundary</a>,
+    <a href="/limitations/">limitations</a>, and
+    <a href="/validation/">validation</a> pages explain where static evidence
+    stops. The <a href="/demo/result/">demo result</a> is useful when a claim
+    is explicitly demo-backed. The <a href="/questions/">questions index</a>
+    gives reviewers a place to move unresolved runtime, ownership, or evidence
+    questions instead of answering them with stronger public copy.
+  </p>
+</section>
+
+<section data-proof-blog-block="limitations-and-non-claims" data-tm-boundary="claim-boundary">
+  <h2>Limitations and non-claims are part of the proof path.</h2>
+
+  <p>
+    TraceMap proof paths are static evidence guides. They do not prove runtime
+    behavior, production traffic, endpoint performance, outage cause, release
+    safety, operational safety, release approval, complete coverage, or product
+    behavior. They do not replace telemetry, logs, traces, tests, source
+    review, code review, service owners, release process, or human judgment.
+  </p>
+
+  <p>
+    They also do not publish raw facts, raw SQLite content, analyzer logs, raw
+    source snippets, raw SQL, config values, secrets, local paths, raw remotes,
+    generated scan directories, private sample names, hidden validation
+    details, raw command output, or credential-like values. Artifact names such
+    as <code>scan-manifest.json</code>, <code>facts.ndjson</code>,
+    <code>index.sqlite</code>, <code>report.md</code>, and
+    <code>logs/analyzer.log</code> can be discussed as local output families,
+    not as public raw content.
+  </p>
+
+  <p>
+    TraceMap is not AI impact analysis, LLM analysis, embedding-based impact
+    analysis, vector-database analysis, prompt classification, AI-powered
+    review, or autonomous approval. The public claim stays useful because it
+    stays narrow.
+  </p>
+</section>
+
+<section data-proof-blog-block="safe-language-examples">
+  <h2>Safe language examples</h2>
+
+  <ul>
+    <li>
+      "This proof path shows where the public claim is supported and what
+      limits still apply."
+    </li>
+    <li>
+      "Static evidence can help prepare review questions before runtime
+      telemetry, logs, traces, tests, and owner input are inspected."
+    </li>
+    <li>
+      "The claim should link to rule IDs, evidence tiers, coverage labels,
+      limitations, and the relevant proof surface."
+    </li>
+    <li>
+      "When the question is about runtime behavior, take the static context to
+      the owner and the runtime evidence."
+    </li>
+  </ul>
+</section>
+
+<section data-proof-blog-block="unsafe-language-examples" data-tm-boundary="wording-to-avoid">
+  <h2>Unsafe language examples, framed as wording to avoid</h2>
+
+  <ul>
+    <li>"TraceMap proves this endpoint is safe in production."</li>
+    <li>"The proof path confirms release safety."</li>
+    <li>"The scan identifies the root cause of the outage."</li>
+    <li>"AI impact analysis determines the affected services."</li>
+    <li>"Static evidence replaces telemetry and tests."</li>
+  </ul>
+</section>
+
+<section data-proof-blog-block="closing-handoff-action">
+  <h2>Close the loop with a handoff, not a bigger claim.</h2>
+
+  <p>
+    A good proof path gives the next reader a practical action. If the evidence
+    is enough for the public sentence, repeat the sentence with the same limits.
+    If the evidence is weaker than the sentence, downgrade the wording. If the
+    question needs runtime context, take the static evidence to the service
+    owner, telemetry, logs, traces, tests, or release review.
+  </p>
+
+  <p>
+    That is the point of the proof path: not to make static evidence sound more
+    powerful, but to make every public claim easier to check, easier to bound,
+    and easier to hand off.
+  </p>
+</section>
