@@ -1517,7 +1517,7 @@ public static class PropertyFlowReporter
             && StringEqualsAny(formAction!, bindingAction)
             && (string.IsNullOrWhiteSpace(formController) || StringEqualsAny(formController!, bindingController));
         var handlerMatches = !string.IsNullOrWhiteSpace(formHandler)
-            && (StringEqualsAny(formHandler!, bindingHandler) || StringEqualsAny("OnPost" + formHandler, bindingHandler));
+            && HandlerNamesAlign(formHandler, bindingHandler);
         return actionMatches || handlerMatches;
     }
 
@@ -1550,8 +1550,51 @@ public static class PropertyFlowReporter
             && StringEqualsAny(routeAction!, bindingAction)
             && (string.IsNullOrWhiteSpace(routeController) || StringEqualsAny(routeController!, bindingController));
         var handlerMatches = !string.IsNullOrWhiteSpace(routeHandler)
-            && StringEqualsAny(routeHandler!, bindingHandler);
+            && RouteBindingMethodsAlign(route, binding)
+            && HandlerNamesAlign(routeHandler, bindingHandler);
         return actionMatches || handlerMatches;
+    }
+
+    private static bool RouteBindingMethodsAlign(PropertyFactRow route, PropertyFactRow binding)
+    {
+        var bindingMethod = CombinedDependencyReporter.FirstValue(binding.Properties, "httpMethod");
+        if (string.IsNullOrWhiteSpace(bindingMethod) || bindingMethod.Equals("ANY", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var routeMethods = (CombinedDependencyReporter.FirstValue(route.Properties, "httpMethods", "methodName") ?? route.ContractElement ?? string.Empty)
+            .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return routeMethods.Length == 0
+            || routeMethods.Contains("ANY", StringComparer.OrdinalIgnoreCase)
+            || routeMethods.Contains(bindingMethod, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool HandlerNamesAlign(string? expected, string? actual)
+    {
+        var expectedToken = HandlerComparisonToken(expected);
+        var actualToken = HandlerComparisonToken(actual);
+        return !string.IsNullOrWhiteSpace(expectedToken)
+            && expectedToken.Equals(actualToken, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string HandlerComparisonToken(string? handlerName)
+    {
+        var value = (handlerName ?? string.Empty).Trim();
+        if (value.EndsWith("Async", StringComparison.Ordinal))
+        {
+            value = value[..^"Async".Length];
+        }
+
+        foreach (var prefix in new[] { "OnGet", "OnPost", "OnPut", "OnDelete", "OnPatch" })
+        {
+            if (value.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return value[prefix.Length..];
+            }
+        }
+
+        return value;
     }
 
     private static HashSet<string> FamilyTokens(PropertyFactRow fact)

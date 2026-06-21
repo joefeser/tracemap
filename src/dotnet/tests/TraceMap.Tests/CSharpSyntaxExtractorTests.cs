@@ -298,6 +298,31 @@ public sealed class CSharpSyntaxExtractorTests
                 public string Email { get; set; } = "";
             }
             """);
+        File.WriteAllText(Path.Combine(temp.Path, "AmbiguousController.cs"), """
+            using System;
+
+            public sealed class PublicOptions
+            {
+                public sealed class ProfileOptions
+                {
+                    public string Email { get; set; } = "";
+                }
+            }
+
+            public sealed class AdminOptions
+            {
+                public sealed class ProfileOptions
+                {
+                    public string Email { get; set; } = "";
+                }
+            }
+
+            public sealed class AmbiguousController
+            {
+                [HttpPost("ambiguous")]
+                public void SaveAmbiguous(ProfileOptions input) { }
+            }
+            """);
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
 
@@ -330,6 +355,14 @@ public sealed class CSharpSyntaxExtractorTests
             && fact.Properties["bindingKind"] == "action-parameter"
             && fact.Properties["modelType"] == "ExternalProfileDto"
             && fact.Properties["actionName"] == "SaveExternal");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RazorBindingGap
+            && fact.RuleId == RuleIds.RazorBindingGap
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && fact.Properties["gapKind"] == "ambiguous-parameter-type"
+            && fact.Properties["bindingKind"] == "action-parameter"
+            && fact.Properties["modelType"] == "ProfileOptions"
+            && fact.Properties["actionName"] == "SaveAmbiguous");
         Assert.DoesNotContain(temp.Path, string.Join("|", result.Facts.SelectMany(fact => fact.Properties.Values)));
     }
 

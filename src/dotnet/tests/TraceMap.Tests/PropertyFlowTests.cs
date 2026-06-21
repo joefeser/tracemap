@@ -328,6 +328,19 @@ public sealed class PropertyFlowTests
             Framework: "razor"));
         Assert.Contains(noHandler.Gaps, gap => gap.GapKind == "EndpointAlignmentUnavailable");
 
+        var pageFormIndex = Path.Combine(temp.Path, "page-form.sqlite");
+        var pageFormCombined = Path.Combine(temp.Path, "page-form-combined.sqlite");
+        var pageForm = RazorPageFormTargetFact(server, "Save", "POST", "Pages/Profile/Edit.cshtml", 2);
+        var pageHandlerBinding = ModelBindingFact(server, "ProfileInput", "Email", "view-model", "handler-parameter", "form", null, null, "OnPostSaveAsync", "POST", "Pages/Profile/Edit.cshtml.cs", 11);
+        SqliteIndexWriter.Write(pageFormIndex, server, [pageForm, pageHandlerBinding]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([pageFormIndex], pageFormCombined, ["server"]));
+        var pageHandlerReport = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            pageFormCombined,
+            Path.Combine(temp.Path, "page-form-out"),
+            "binding:POST",
+            Framework: "razor"));
+        Assert.Contains(pageHandlerReport.LineagePaths, path => path.Edges.Any(edge => edge.EdgeKind == "form-target-binds-model"));
+
         var written = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
             combinedPath,
             Path.Combine(temp.Path, "stable-out"),
@@ -428,7 +441,7 @@ public sealed class PropertyFlowTests
         ]);
         SqliteIndexWriter.Write(serverIndex, server, [
             RazorPageRouteFact(server, "POST", "/Profile/Edit", "/Profile/Edit", "OnPostSave", "Pages/Profile/Edit.cshtml.cs", 8),
-            ModelBindingFact(server, "ProfileInput", "email", "view-model", "handler-parameter", "form", null, null, "OnPostSave", "POST", "Pages/Profile/Edit.cshtml.cs", 8)
+            ModelBindingFact(server, "ProfileInput", "email", "view-model", "handler-parameter", "form", null, null, "OnPostSaveAsync", "POST", "Pages/Profile/Edit.cshtml.cs", 8)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
 
@@ -719,6 +732,27 @@ public sealed class PropertyFlowTests
                 ["bindingKind"] = "form-action",
                 ["controllerName"] = controllerName,
                 ["controlKind"] = "form",
+                ["httpMethod"] = httpMethod,
+                ["uiFramework"] = "razor",
+                ["valueStored"] = "safe-metadata-only"
+            });
+    }
+
+    private static CodeFact RazorPageFormTargetFact(ScanManifest manifest, string handlerName, string httpMethod, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RazorFormTarget,
+            RuleIds.RazorFormTarget,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "RazorBindingExtractor", ScannerVersions.RazorBindingExtractor),
+            targetSymbol: handlerName,
+            contractElement: httpMethod,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["bindingKind"] = "form-action",
+                ["controlKind"] = "form",
+                ["handlerName"] = handlerName,
                 ["httpMethod"] = httpMethod,
                 ["uiFramework"] = "razor",
                 ["valueStored"] = "safe-metadata-only"
