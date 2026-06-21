@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 - [x] 1. Add a site validation command.
   - Build the site before validation.
   - Check generated `sitemap.xml` exists and its TraceMap URLs resolve in

@@ -1,7 +1,7 @@
 # Site TraceMap Tools Demo Evidence Trail Implementation State
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: demo
 
 ## Branch

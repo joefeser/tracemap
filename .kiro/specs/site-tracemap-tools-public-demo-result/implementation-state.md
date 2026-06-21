@@ -1,6 +1,7 @@
 # site-tracemap-tools-public-demo-result implementation state
 
 Status: implemented
+Readiness: implemented
 Public claim level: demo
 
 ## Branch

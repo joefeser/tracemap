@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 - [x] 1. Add a blog template source structure.
   - Add article metadata for the current three blog posts.
   - Move article body HTML into private blog source fragments.

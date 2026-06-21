@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 - [x] 1. Add the public demo result spec and implementation state.
   - Include `Public claim level: demo`.
   - Record current first-slice demo boundaries and deferred sections.

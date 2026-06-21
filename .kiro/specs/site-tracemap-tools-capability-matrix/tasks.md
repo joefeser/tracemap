@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 - [x] 1. Add a public capability map.
   - Add `/capabilities/` with shipped workflow groups and command names.
   - Add public claim level `demo` and row-level status/proof text.

@@ -1,7 +1,7 @@
 # Site TraceMap Tools Incident Call Use Case Tasks
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: implementation tasks should be completed before validation

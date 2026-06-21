@@ -1,7 +1,7 @@
 # Site TraceMap Tools Live Deploy Audit Tasks
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: demo
 
 - [x] Add `/deploy-audit/` as a bounded public demo route.

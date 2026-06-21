@@ -1,9 +1,12 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 Last verified: 2026-06-14
 Branch: codex/site-link-validation
-Source of truth: working tree
+Source of truth: origin/main
 
 ## Summary
 

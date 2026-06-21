@@ -1,7 +1,7 @@
 # Site TraceMap Tools Team Evidence Handoff Tasks
 
-Status: in-review
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: this implementation phase ships the public concept route and

@@ -1,7 +1,7 @@
 # Implementation State
 
 Status: implemented
-Readiness: validation-passed
+Readiness: implemented
 Last verified: 2026-06-18
 Branch: codex/impl-site-public-demo-runbook
 Worktree: dedicated implementation worktree, path intentionally omitted to satisfy the private absolute-path guardrail

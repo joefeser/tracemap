@@ -1,13 +1,13 @@
 # Implementation State
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Last verified: 2026-06-18
 Branch: codex/impl-site-endpoint-review-playbook
 Worktree: not recorded (private-text guardrail)
 Worktree path is intentionally omitted to satisfy the private absolute-path
 guardrail in this spec and `check-private-paths.sh`.
-Source of truth: spec files in branch `codex/impl-site-endpoint-review-playbook`
+Source of truth: origin/main
 Public claim level: concept
 
 ## Summary
@@ -39,8 +39,9 @@ not claim a specific endpoint finding.
 
 ## Scope
 
-- Define requirements for a future `/use-cases/endpoint-review/` page.
-- Define future implementation tasks, leaving all tasks unchecked.
+- Maintain the implemented `/use-cases/endpoint-review/` page.
+- Keep completed implementation tasks aligned with published site code,
+  metadata, and validation.
 - Keep the public claim level at `concept`.
 - Frame endpoint review professionally around static coupling, dependency
   surfaces, gaps, and review friction without blaming teams, vendors, or code
@@ -57,8 +58,8 @@ not claim a specific endpoint finding.
 - Public claim level is `concept` because this spec defines an endpoint review
   workflow and safe public framing. It does not claim a specific public demo
   endpoint has an evidence-backed finding.
-- The future page may link to demo and proof surfaces for orientation, but those
-  links do not upgrade this page to a demo-level endpoint conclusion.
+- The page may link to demo and proof surfaces for orientation, but those links
+  do not upgrade this page to a demo-level endpoint conclusion.
 - Static evidence may route inspection and human review. It cannot prove runtime
   behavior, production traffic, endpoint performance, outage cause, release
   safety, operational safety, AI impact analysis, LLM analysis, complete product

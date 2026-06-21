@@ -1,7 +1,7 @@
 # Site TraceMap Tools Change Review Brief Implementation State
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 ## Branch
