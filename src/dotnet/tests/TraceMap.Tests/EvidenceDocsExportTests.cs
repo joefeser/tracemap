@@ -275,6 +275,39 @@ public sealed class EvidenceDocsExportTests
     }
 
     [Fact]
+    public async Task Docs_export_projects_legacy_data_descriptors_as_data_surface_chunks_without_raw_names()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = CreateCombinedIndex(temp.Path, includeLegacyDataDescriptor: true);
+        var secondIndexPath = CreateCombinedIndex(temp.Path, reverseFactOrder: true, includeLegacyDataDescriptor: true);
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            indexPath,
+            Path.Combine(temp.Path, "legacy-data-docs-a"),
+            Families: "data-surface,gap,limitation"));
+        await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            secondIndexPath,
+            Path.Combine(temp.Path, "legacy-data-docs-b"),
+            Families: "data-surface,gap,limitation"));
+
+        var chunk = Assert.Single(result.Chunks, chunk =>
+            chunk.ChunkFamily == "data-surface"
+            && chunk.SupportingIds.Contains("source-api:fact-legacy-data"));
+        Assert.Contains("data-surface-question", chunk.QuestionFamilies);
+        Assert.Contains(RuleIds.LegacyDataDbml, chunk.RuleIds);
+        Assert.Contains(RuleIds.LegacyDataModelSurface, chunk.RuleIds);
+        Assert.Contains("docs-export.chunk.data-surface.v1", chunk.RuleIds);
+        Assert.Contains("Legacy data model descriptor", chunk.BodyMarkdown);
+        Assert.Contains("static legacy data model descriptor evidence", chunk.BodyMarkdown);
+        Assert.Contains("descriptor-display-hash-only-without-claim-context", chunk.BodyMarkdown);
+        Assert.DoesNotContain("CustomerSecretToken", chunk.BodyMarkdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CustomerSecretToken", JsonSerializer.Serialize(chunk), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "legacy-data-docs-a", "chunks.jsonl")),
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "legacy-data-docs-b", "chunks.jsonl")));
+    }
+
+    [Fact]
     public async Task Docs_export_rejects_unsafe_values_without_echoing_them()
     {
         using var temp = new TempDirectory();
@@ -429,7 +462,7 @@ public sealed class EvidenceDocsExportTests
         return path;
     }
 
-    private static string CreateCombinedIndex(string root, bool reverseFactOrder = false)
+    private static string CreateCombinedIndex(string root, bool reverseFactOrder = false, bool includeLegacyDataDescriptor = false)
     {
         var path = Path.Combine(root, $"combined-{Guid.NewGuid():N}.sqlite");
         using var connection = new SqliteConnection($"Data Source={path}");
@@ -518,7 +551,7 @@ public sealed class EvidenceDocsExportTests
             """;
         command.ExecuteNonQuery();
 
-        var facts = new[]
+        var facts = new List<object[]>
         {
             new object[]
             {
@@ -542,8 +575,29 @@ public sealed class EvidenceDocsExportTests
                 """{"reason":"reduced-coverage"}"""
             }
         };
+        if (includeLegacyDataDescriptor)
+        {
+            facts.Add(new object[]
+            {
+                "source-api:fact-legacy-data", "source-api", "fact-legacy-data", "scan-api", "scan-api",
+                "1111111111111111111111111111111111111111", FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataDbml,
+                EvidenceTiers.Tier2Structural, null!, null!, null!, "Models/Store.dbml", 12, 12,
+                """
+                {
+                  "metadataFormat":"dbml",
+                  "metadataKind":"Dbml",
+                  "modelKind":"entity",
+                  "descriptorRole":"conceptual",
+                  "entityName":"CustomerSecretToken",
+                  "displayNameHash":"abcdef1234567890abcdef1234567890",
+                  "stableModelKey":"legacy-data-model:entity:customer-secret-token",
+                  "coverageLabel":"reduced"
+                }
+                """
+            });
+        }
 
-        foreach (var fact in reverseFactOrder ? facts.Reverse() : facts)
+        foreach (var fact in reverseFactOrder ? facts.AsEnumerable().Reverse() : facts)
         {
             using var insert = connection.CreateCommand();
             insert.CommandText = """

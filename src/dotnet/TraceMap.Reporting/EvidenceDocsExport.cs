@@ -1002,9 +1002,15 @@ public static class EvidenceDocsExporter
 
     private static EvidenceDocChunk CreateFactChunk(DocFact fact, string family)
     {
+        var legacyDataDescriptor = TryProjectLegacyDataDescriptor(fact);
         var packagingRuleId = PackagingRuleForFamily(family);
         var sourceRef = ToSourceRef(fact.Source);
         var citation = CreateFactCitation(fact);
+        if (legacyDataDescriptor is not null)
+        {
+            return CreateLegacyDataDescriptorChunk(fact, family, legacyDataDescriptor, packagingRuleId, sourceRef, citation);
+        }
+
         var safeMetadata = SafeFactMetadata(fact);
         var body = $"""
             ## {TitleForFamily(family)}
@@ -1039,6 +1045,71 @@ public static class EvidenceDocsExporter
             [fact.Source.CoverageLabel],
             GapsForFact(fact, family),
             [LimitationForFamily(family, [fact.FactId])]);
+    }
+
+    private static EvidenceDocChunk CreateLegacyDataDescriptorChunk(
+        DocFact fact,
+        string family,
+        LegacyDataModelDescriptorProjectionRow descriptor,
+        string packagingRuleId,
+        EvidenceDocSourceRef sourceRef,
+        EvidenceDocCitation citation)
+    {
+        var ruleIds = DistinctSorted([fact.RuleId, RuleIds.LegacyDataModelSurface, packagingRuleId]);
+        var supportingIds = DistinctSorted([fact.FactId, descriptor.DescriptorId, .. descriptor.SupportingFactIds]);
+        var limitations = new[]
+        {
+            LimitationForFamily(family, supportingIds),
+            new EvidenceDocLimitation(
+                StableId("limitation", "docs-export/limitation/v1", [new("ruleId", RuleIds.LegacyDataModelSurface), new("descriptor", descriptor.DescriptorId)]),
+                RuleIds.LegacyDataModelSurface,
+                EvidenceTiers.Tier4Unknown,
+                "Legacy data descriptor chunks preserve static model metadata only; they do not prove runtime database access, SQL execution, provider selection, live schema existence, production usage, or migration behavior.",
+                family,
+                supportingIds)
+        };
+        var body = $"""
+            ## Legacy data model descriptor
+
+            This chunk packages static legacy data model descriptor evidence from `{EscapeInline(fact.Source.Label)}` for retrieval.
+
+            | Field | Value |
+            | --- | --- |
+            | Source | `{EscapeInline(fact.Source.Label)}` |
+            | Commit SHA | `{EscapeInline(DisplayCommitSha(fact.CommitSha))}` |
+            | Coverage label | `{EscapeInline(fact.Source.CoverageLabel)}` |
+            | Fact type | `{EscapeInline(fact.FactType)}` |
+            | Descriptor ID | `{EscapeInline(descriptor.DescriptorId)}` |
+            | Display label | `{EscapeInline(descriptor.DisplayName)}` |
+            | Display clearance | `{EscapeInline(descriptor.DisplayClearance.ToString().ToLowerInvariant())}` |
+            | Metadata format | `{EscapeInline(descriptor.MetadataFormat)}` |
+            | Source artifact type | `{EscapeInline(descriptor.SourceArtifactType)}` |
+            | Model kind | `{EscapeInline(descriptor.ModelKind)}` |
+            | Descriptor role | `{EscapeInline(descriptor.DescriptorRole)}` |
+            | Projection rule | `{EscapeInline(RuleIds.LegacyDataModelSurface)}` |
+            | Source rule | `{EscapeInline(fact.RuleId)}` |
+            | Evidence tier | `{EscapeInline(fact.EvidenceTier)}` |
+            | File span | `{EscapeInline(FormatSpan(fact))}` |
+            | Limitations | `{EscapeInline(string.Join(", ", descriptor.Limitations))}` |
+
+            Citations preserve source facts, descriptor projection metadata, and static evidence tiers. This chunk does not claim that a database exists, SQL executed, a provider was selected at runtime, a migration ran, or production data was accessed.
+            """;
+
+        return CreateChunk(
+            family,
+            "claim",
+            fact.Source.ClaimLevel,
+            "Legacy data model descriptor evidence",
+            "Static legacy data model descriptor evidence with TraceMap citations.",
+            body,
+            [citation],
+            [sourceRef],
+            supportingIds,
+            ruleIds,
+            DistinctSorted([fact.EvidenceTier, descriptor.EvidenceTier]),
+            DistinctSorted([fact.Source.CoverageLabel, descriptor.CoverageLabel]),
+            GapsForFact(fact, family),
+            limitations);
     }
 
     private static EvidenceDocChunk CreateFactGapChunk(DocFact fact)
@@ -2102,6 +2173,11 @@ public static class EvidenceDocsExporter
             return "gap";
         }
 
+        if (TryProjectLegacyDataDescriptor(fact) is not null)
+        {
+            return "data-surface";
+        }
+
         if (type is FactTypes.HttpRouteBinding or FactTypes.HttpCallDetected or FactTypes.HttpClientCreated or FactTypes.RazorFormTarget)
         {
             return "endpoint";
@@ -2146,6 +2222,34 @@ public static class EvidenceDocsExporter
         }
 
         return "dependency-surface";
+    }
+
+    private static LegacyDataModelDescriptorProjectionRow? TryProjectLegacyDataDescriptor(DocFact fact)
+    {
+        if (fact.FilePath is null || fact.StartLine is null || fact.EndLine is null)
+        {
+            return null;
+        }
+
+        return LegacyDataModelDescriptorProjection.TryProject(
+            new CombinedSurfaceFactInput(
+                fact.FactId,
+                fact.Source.SourceId,
+                fact.Source.Label,
+                fact.OriginalFactId ?? fact.FactId,
+                fact.ScanId ?? fact.Source.ScanId ?? "unknown",
+                fact.CommitSha ?? fact.Source.CommitSha ?? "unknown",
+                fact.FactType,
+                fact.RuleId,
+                fact.EvidenceTier,
+                fact.FilePath,
+                fact.StartLine.Value,
+                fact.EndLine.Value,
+                fact.Properties,
+                fact.Source.ExtractorVersion),
+            new LegacyDataModelDescriptorProjectionOptions(
+                AllowClearDisplayLabels: false,
+                ClaimLevelContextId: $"docs-export:{fact.Source.ClaimLevel}"));
     }
 
     private static string PackagingRuleForFamily(string family)

@@ -165,6 +165,68 @@ Latest PR-loop decision after the target-symbol linkage fix:
 - Keep vault/RAG export deterministic. No embeddings, vector database writes,
   prompt summaries, or AI classifications are part of TraceMap core.
 
+## Follow-Up Slice: Docs-Export Legacy Data Descriptor Chunks
+
+Branch: `codex/implement-legacy-data-reporting-integration-followup`
+
+Selected slice:
+
+- Package terminal legacy data model descriptors as `docs-export`
+  `data-surface` chunks for RAG/import workflows.
+- Reuse existing descriptor projection over current facts; no scanner or
+  metadata-extraction changes were added.
+- Cite the source `legacy.data.*` rule, `legacy.data.model.surface.v1`, and
+  `docs-export.chunk.data-surface.v1`.
+- Keep descriptor display hash-only by default and preserve static-only
+  limitations in the chunk body.
+
+Validation:
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter EvidenceDocsExportTests
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Results:
+
+- Focused docs-export tests: passed, 9 tests, including descriptor-specific
+  byte-stability, source/projection rule citation, and hash-only descriptor
+  rendering.
+- Full .NET build: passed.
+- Full .NET tests: passed, 584 tests.
+- Private path guard: passed.
+- `git diff --check`: passed.
+- Existing NuGet vulnerability warnings for `SQLitePCLRaw.lib.e_sqlite3` were
+  printed during restore/build and are not new to this slice.
+
+Kiro implementation review:
+
+- Sonnet implementation review returned reduced coverage because Kiro reported
+  denied tool access.
+- Artifact prefix:
+  `.tmp/kiro-reviews/legacy-data-model-reporting-integration/2026-06-21T192822-664Z-implementation-claude-sonnet-4.6`.
+- Medium+ spec hygiene findings were patched where narrow and applicable:
+  reverse no-path rule gate clarity, route-flow zero-symbol gap gate clarity,
+  route-flow supporting-row ID namespace, diff ambiguous identity wording,
+  unknown-vocabulary catalog coverage, and docs-export validation checklist
+  coverage.
+- Sonnet re-review also returned reduced coverage because Kiro reported denied
+  tool access.
+- Re-review artifact prefix:
+  `.tmp/kiro-reviews/legacy-data-model-reporting-integration/2026-06-21T193334-783Z-re-review-claude-sonnet-4.6`.
+- Re-review remaining Medium findings were patched without another re-review
+  cycle: `combined.reverse.root.v1` now documents legacy-data no-path gap
+  causes, `combined.route-flow.gap.v1` now documents
+  `LinkedSymbolAbsentFromIndex`, and the task placeholders now record those
+  chosen rule/gap decisions.
+
+Pending before PR:
+
+- PR URL and PR-loop result.
+
 ## Privacy And Safety Notes
 
 - Spec examples are synthetic and schema-shaped only.
