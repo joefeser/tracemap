@@ -219,6 +219,23 @@
     ]
   },
   {
+    "path": "/demo/manager-script/",
+    "title": "Manager Demo Script",
+    "summary": "Concept-level presenter script for showing TraceMap static evidence routes, bounded answer shapes, stop conditions, and public handoff links.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The script is a presenter guide over existing public pages, not a new evidence source.",
+      "Questions about runtime, production, release, incident, ownership, or complete coverage require the appropriate owners and evidence outside this page."
+    ],
+    "nonClaims": [
+      "No runtime behavior proof, production traffic proof, endpoint performance proof, outage cause proof, release approval, operational safety proof, complete coverage, or complete dependency understanding.",
+      "No AI analysis, LLM impact analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details."
+    ]
+  },
+  {
     "path": "/demo/proof-upgrades/",
     "title": "Demo Proof Upgrades",
     "summary": "Evidence ledger for demo rows that moved from deferred to reproducible public-demo proof with coverage labels.",
