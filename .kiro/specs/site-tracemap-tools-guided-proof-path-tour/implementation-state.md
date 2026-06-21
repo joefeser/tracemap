@@ -99,6 +99,31 @@ and non-claim wording use `data-tm-boundary`, including `#where-to-stop` and
 affirmative forbidden-claim and raw/private-material checks, while still
 checking hard private material across the full page.
 
+## Historical Spec Review Status
+
+The spec packet restored from `origin/main` already had the spec-review tasks
+checked off. The historical review record is retained here so the checked
+spec-review tasks in `tasks.md` remain traceable.
+
+- `claude-opus-4.8` initial Kiro spec review command exited 0 with reduced
+  coverage because Kiro reported denied tool access.
+- `claude-sonnet-4.6` initial Kiro spec review command exited 1 with reduced
+  coverage because Kiro reported denied tool access.
+- Medium or higher spec findings were patched or explicitly dispositioned
+  before the packet was marked ready for implementation.
+- Follow-up re-review passes for both models repeatedly reported reduced
+  coverage from denied tool access after patched findings were applied.
+- Patched spec findings included where-to-stop field clarity, required worked
+  example traversal, illustrative example labeling, per-step `#step-non-claim`
+  anchor naming, route-choice open-question state, folded-section
+  reconciliation guidance, `hintCategory` vocabulary recording, distinction
+  from `/review-claim-checklist/` and `/glossary/`, sanctioned-section markup
+  convention, public-site accessibility validation, and review-packet checklist
+  sync.
+- The packet readiness was updated after those patches, and no Medium or
+  higher spec-review findings were known when implementation began.
+- Local Kiro review artifacts were intentionally not committed.
+
 ## Validation
 
 Passed before commit:
