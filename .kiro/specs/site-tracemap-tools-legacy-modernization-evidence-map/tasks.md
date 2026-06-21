@@ -4,10 +4,10 @@ Status: implemented
 Readiness: implemented
 Public claim level: concept
 
-These tasks are future implementation work. They remain unchecked because this
-branch is spec creation only.
+These tasks track the published legacy modernization evidence-map
+implementation.
 
-Note: validation tasks must pass before future implementation tasks are checked
+Note: validation tasks passed before implementation tasks were checked
 complete.
 
 - [x] Confirm or update this spec-local `implementation-state.md` with branch,

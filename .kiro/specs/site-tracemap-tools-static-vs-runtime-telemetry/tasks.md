@@ -4,7 +4,7 @@ Status: implemented
 Readiness: implemented
 Public claim level: concept
 
-Note: validation tasks must pass before future implementation tasks are checked
+Note: validation tasks passed before implementation tasks were checked
 complete.
 
 - [x] Confirm or update this spec-local `implementation-state.md` with branch,
