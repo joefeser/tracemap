@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -40,9 +41,18 @@ public static class LegacyDataMetadataExtractor
                     break;
                 case "Config":
                     ExtractDataConfig(repoPath, manifest, item, facts);
+                    DetectUnsupportedOrmConfig(repoPath, manifest, item, facts);
                     break;
                 case "CSharp" when IsDesigner(item.RelativePath):
                     AddGeneratedDesignerInventory(manifest, item, facts);
+                    break;
+                case "CSharp":
+                case "WebFormsCodeBehind":
+                case "WinFormsDesigner":
+                    DetectUnsupportedOrmCSharp(repoPath, manifest, item, facts);
+                    break;
+                case "LegacyOrmMetadata":
+                    DetectUnsupportedOrmMetadata(repoPath, manifest, item, facts);
                     break;
             }
         }
@@ -57,6 +67,77 @@ public static class LegacyDataMetadataExtractor
             .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static void DetectUnsupportedOrmMetadata(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
+    {
+        var family = UnsupportedOrmFamilyFromPath(item.RelativePath);
+        var fullPath = Path.Combine(repoPath, item.RelativePath);
+        try
+        {
+            var document = SafeXml.LoadDocument(fullPath);
+            family ??= UnsupportedOrmFamilyFromDocument(document);
+            if (family is null)
+            {
+                return;
+            }
+
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family, "metadata-file", "UnsupportedLegacyOrmDescriptor", "Recognized unsupported legacy ORM metadata descriptor; no entity, table, column, or relationship facts were inferred.", document.Root);
+        }
+        catch (SafeXmlException ex)
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family ?? "UnknownLegacyOrm", "metadata-file", Classification(ex), "Unsupported legacy ORM descriptor could not be parsed safely.", null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family ?? "UnknownLegacyOrm", "metadata-file", "MalformedLegacyDataMetadata", $"Unsupported legacy ORM descriptor could not be read: {ex.GetType().Name}.", null);
+        }
+    }
+
+    private static void DetectUnsupportedOrmConfig(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
+    {
+        var fullPath = Path.Combine(repoPath, item.RelativePath);
+        XDocument document;
+        try
+        {
+            document = SafeXml.LoadDocument(fullPath);
+        }
+        catch (Exception ex) when (ex is SafeXmlException or IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        foreach (var family in UnsupportedOrmFamiliesFromConfig(document).Order(StringComparer.Ordinal))
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family, "config", "UnsupportedLegacyOrmDescriptor", "Recognized unsupported legacy ORM config descriptor; no entity, table, column, or relationship facts were inferred.", document.Root);
+        }
+    }
+
+    private static void DetectUnsupportedOrmCSharp(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
+    {
+        var fullPath = Path.Combine(repoPath, item.RelativePath);
+        string source;
+        try
+        {
+            source = File.ReadAllText(fullPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var root = CSharpSyntaxTree.ParseText(source).GetRoot();
+        var families = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        AddCSharpFamilyIfPresent(root, "Castle ActiveRecord", new[] { "ActiveRecord" }, families);
+        AddCSharpFamilyIfPresent(root, "SubSonic", new[] { "SubSonic" }, families);
+        AddCSharpFamilyIfPresent(root, "LLBLGen", new[] { "LLBLGen" }, families);
+        AddCSharpFamilyIfPresent(root, "iBATIS.NET", new[] { "IBatisNet", "IBatis" }, families);
+        AddCSharpFamilyIfPresent(root, "MyBatis.NET", new[] { "MyBatis" }, families);
+
+        foreach (var (family, line) in families)
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family, "csharp", "UnsupportedLegacyOrmDescriptor", "Recognized unsupported legacy ORM code descriptor; no entity, table, column, or relationship facts were inferred.", null, line);
+        }
     }
 
     private static void ExtractDbml(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
@@ -986,6 +1067,38 @@ public static class LegacyDataMetadataExtractor
             }));
     }
 
+    private static void AddUnsupportedOrmGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string relativePath,
+        string descriptorFamily,
+        string descriptorSignal,
+        string classification,
+        string message,
+        XObject? node,
+        int? explicitLine = null)
+    {
+        var family = NormalizeUnsupportedOrmFamily(descriptorFamily);
+        var signal = NormalizeToken(descriptorSignal, "descriptor");
+        var line = explicitLine ?? (node is null ? 1 : GetLine(node));
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyDataOrmUnsupported,
+            EvidenceTiers.Tier4Unknown,
+            Evidence(relativePath, line, $"{relativePath}:{line}:{family}:{signal}:{classification}"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = classification,
+                ["coverage"] = "reduced",
+                ["descriptorFamily"] = family,
+                ["descriptorSignal"] = signal,
+                ["message"] = message,
+                ["runtimeProof"] = "False",
+                ["unsupportedLegacyOrmDescriptor"] = "True"
+            }));
+    }
+
     private static CodeFact CreateLegacyFact(
         ScanManifest manifest,
         string factType,
@@ -1190,6 +1303,205 @@ public static class LegacyDataMetadataExtractor
     private static string? FirstPresent(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static string? UnsupportedOrmFamilyFromPath(string relativePath)
+    {
+        var lower = relativePath.ToLowerInvariant();
+        if (lower.Contains("llblgen", StringComparison.Ordinal)
+            || lower.EndsWith(".llblgenproj", StringComparison.Ordinal)
+            || lower.EndsWith(".lgp", StringComparison.Ordinal)
+            || lower.EndsWith(".lgpx", StringComparison.Ordinal))
+        {
+            return "LLBLGen";
+        }
+
+        if (lower.Contains("subsonic", StringComparison.Ordinal))
+        {
+            return "SubSonic";
+        }
+
+        if (lower.Contains("activerecord", StringComparison.Ordinal))
+        {
+            return "Castle ActiveRecord";
+        }
+
+        if (lower.Contains("mybatis", StringComparison.Ordinal))
+        {
+            return "MyBatis.NET";
+        }
+
+        if (lower.Contains("ibatis", StringComparison.Ordinal)
+            || lower.Contains("sqlmap", StringComparison.Ordinal)
+            || lower.EndsWith(".sqlmap", StringComparison.Ordinal))
+        {
+            return "iBATIS.NET";
+        }
+
+        return null;
+    }
+
+    private static string? UnsupportedOrmFamilyFromDocument(XDocument document)
+    {
+        var rootName = document.Root?.Name.LocalName ?? string.Empty;
+        var rootNamespace = document.Root?.Name.NamespaceName ?? string.Empty;
+        var text = $"{rootName} {rootNamespace}".ToLowerInvariant();
+
+        if (text.Contains("llblgen", StringComparison.Ordinal))
+        {
+            return "LLBLGen";
+        }
+
+        if (text.Contains("subsonic", StringComparison.Ordinal))
+        {
+            return "SubSonic";
+        }
+
+        if (text.Contains("activerecord", StringComparison.Ordinal))
+        {
+            return "Castle ActiveRecord";
+        }
+
+        if (text.Contains("mybatis", StringComparison.Ordinal))
+        {
+            return "MyBatis.NET";
+        }
+
+        if (text.Contains("ibatis", StringComparison.Ordinal) || text.Contains("sqlmap", StringComparison.Ordinal))
+        {
+            return "iBATIS.NET";
+        }
+
+        return null;
+    }
+
+    private static IReadOnlySet<string> UnsupportedOrmFamiliesFromConfig(XDocument document)
+    {
+        var families = new HashSet<string>(StringComparer.Ordinal);
+        var elements = document.Root is null
+            ? Enumerable.Empty<XElement>()
+            : document.Root.DescendantsAndSelf();
+        foreach (var value in elements
+            .SelectMany(element => element.Attributes().Select(attribute => attribute.Name.LocalName + " " + attribute.Value).Append(element.Name.LocalName)))
+        {
+            var normalized = value.ToLowerInvariant();
+            if (normalized.Contains("llblgen", StringComparison.Ordinal))
+            {
+                families.Add("LLBLGen");
+            }
+
+            if (normalized.Contains("subsonic", StringComparison.Ordinal))
+            {
+                families.Add("SubSonic");
+            }
+
+            if (normalized.Contains("activerecord", StringComparison.Ordinal))
+            {
+                families.Add("Castle ActiveRecord");
+            }
+
+            if (normalized.Contains("mybatis", StringComparison.Ordinal))
+            {
+                families.Add("MyBatis.NET");
+            }
+
+            if (normalized.Contains("ibatis", StringComparison.Ordinal) || normalized.Contains("sqlmap", StringComparison.Ordinal))
+            {
+                families.Add("iBATIS.NET");
+            }
+        }
+
+        return families;
+    }
+
+    private static void AddCSharpFamilyIfPresent(SyntaxNode root, string family, IReadOnlyCollection<string> tokens, IDictionary<string, int> families)
+    {
+        if (families.ContainsKey(family))
+        {
+            return;
+        }
+
+        foreach (var node in root.DescendantNodes())
+        {
+            if (!IsUnsupportedOrmSyntaxEvidence(node, tokens))
+            {
+                continue;
+            }
+
+            families[family] = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            return;
+        }
+    }
+
+    private static bool IsUnsupportedOrmSyntaxEvidence(SyntaxNode node, IReadOnlyCollection<string> tokens)
+    {
+        return node switch
+        {
+            UsingDirectiveSyntax usingDirective => MentionsUnsupportedOrmToken(usingDirective.Name?.ToString(), tokens),
+            AttributeSyntax attribute => MentionsUnsupportedOrmToken(attribute.Name.ToString(), tokens),
+            ObjectCreationExpressionSyntax objectCreation => MentionsUnsupportedOrmToken(objectCreation.Type.ToString(), tokens),
+            IdentifierNameSyntax identifier => MentionsUnsupportedOrmToken(identifier.Identifier.ValueText, tokens),
+            GenericNameSyntax generic => MentionsUnsupportedOrmToken(generic.Identifier.ValueText, tokens),
+            QualifiedNameSyntax qualified => MentionsUnsupportedOrmToken(qualified.ToString(), tokens),
+            MemberAccessExpressionSyntax memberAccess => MentionsUnsupportedOrmToken(memberAccess.ToString(), tokens),
+            _ => false
+        };
+    }
+
+    private static bool MentionsUnsupportedOrmToken(string? value, IReadOnlyCollection<string> tokens)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var segment in Regex.Split(value, @"[^A-Za-z0-9_]+").Where(segment => segment.Length > 0))
+        {
+            var normalized = segment.EndsWith("Attribute", StringComparison.OrdinalIgnoreCase)
+                ? segment[..^"Attribute".Length]
+                : segment;
+            if (tokens.Any(token => string.Equals(normalized, token, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string NormalizeUnsupportedOrmFamily(string family)
+    {
+        return family switch
+        {
+            "LLBLGen" => "LLBLGen",
+            "SubSonic" => "SubSonic",
+            "Castle ActiveRecord" => "Castle ActiveRecord",
+            "MyBatis.NET" => "MyBatis.NET",
+            "iBATIS.NET" => "iBATIS.NET",
+            _ => "UnknownLegacyOrm"
+        };
+    }
+
+    private static string NormalizeToken(string value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value.Trim())
+        {
+            builder.Append(char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '-');
+        }
+
+        var normalized = builder.ToString().Trim('-');
+        while (normalized.Contains("--", StringComparison.Ordinal))
+        {
+            normalized = normalized.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        return normalized.Length == 0 ? fallback : normalized;
     }
 
     private static string? AttributeValue(XElement? element, string name)

@@ -109,14 +109,17 @@
         family.
 
 - [ ] 5. Add unsupported old ORM descriptor gaps. Requirements: 1, 3, 8.
-  - [ ] Recognize public-safe indicators for unsupported old ORM descriptor
-        families such as LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, Castle
-        ActiveRecord, and project-local mapping DSLs.
-  - [ ] Emit `AnalysisGap` facts under `legacy.data.orm.unsupported.v1` with
+  - [x] Recognize public-safe indicators for unsupported old ORM descriptor
+        families such as LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, and Castle
+        ActiveRecord.
+  - [ ] Recognize project-local mapping DSLs.
+        Deferred: requires a separate deterministic signal taxonomy so local
+        helper names do not become false-positive ORM descriptors.
+  - [x] Emit `AnalysisGap` facts under `legacy.data.orm.unsupported.v1` with
         safe descriptor family labels and limitations.
-  - [ ] Avoid storing raw mapping content, config values, SQL, paths, URLs, or
+  - [x] Avoid storing raw mapping content, config values, SQL, paths, URLs, or
         provider values.
-  - [ ] Add tests proving unsupported descriptors produce gaps, not invented
+  - [x] Add tests proving unsupported descriptors produce gaps, not invented
         entity/table facts.
 
 - [ ] 6. Harden generated-code and mapped-symbol linkage. Requirements: 4, 5, 8.
@@ -188,11 +191,11 @@
         or filter text, URLs, remotes, local paths, and private labels are absent.
 
 - [ ] 10. Update docs and validation guidance. Requirements: 8.
-  - [ ] Update `docs/ACCEPTANCE.md` for new data model identity, ORM descriptor,
+  - [x] Update `docs/ACCEPTANCE.md` for new data model identity, ORM descriptor,
         and surface behavior.
-  - [ ] Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` for any new facts, properties,
+  - [x] Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` for any new facts, properties,
         or surface keys.
-  - [ ] Update `docs/VALIDATION.md` with focused legacy data model test and
+  - [x] Update `docs/VALIDATION.md` with focused legacy data model test and
         smoke guidance.
   - [ ] Update legacy smoke catalog guidance when a public-safe fixture or
         neutral sample is added.
