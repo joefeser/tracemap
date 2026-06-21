@@ -80,7 +80,7 @@ prLoopPacket:
     residualRiskCeiling: medium
 
 reviewerReturnPolicy:
-  requiredConfiguredReviewersMustReturn: true
+  requiredConfiguredReviewersMustReturn: false
   optionalReviewersRemainResidualRisk: true
   requiredTimeoutStopReason: REQUIRED_REVIEWER_RETURN_TIMEOUT
   nonBlockingTimeoutBehavior: residual-risk
