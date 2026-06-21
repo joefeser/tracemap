@@ -61,6 +61,19 @@ test("validateManagerDemoScriptDist reports route metadata regressions", async (
   assert.match(errors.join("\n"), /expected preferredProofPath \/proof-paths\/, got \/validation\//);
 });
 
+test("validateManagerDemoScriptDist reports missing route metadata", async (t) => {
+  const root = await createManagedManagerDemoScriptDistFixture(t, {
+    discoveryRoutes: [],
+    sitemapRoutes: []
+  });
+  const errors = [];
+
+  await validateManagerDemoScriptDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /sitemap is missing required route/);
+  assert.match(errors.join("\n"), /routes-index\.json is missing required route: \/demo\/manager-script\//);
+});
+
 test("validateManagerDemoScriptDist reports target route claim-level regressions", async (t) => {
   const root = await createManagedManagerDemoScriptDistFixture(t);
   await rewriteManagerDemoScriptRoutesIndexEntry(join(root, "dist"), { publicClaimLevel: "demo" }, "/questions/");
