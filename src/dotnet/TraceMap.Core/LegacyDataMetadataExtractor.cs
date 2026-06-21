@@ -315,7 +315,7 @@ public static class LegacyDataMetadataExtractor
         AddSafeName(properties, "associationName", "associationHash", relationshipName);
         AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", className);
         AddSafeName(properties, "targetEndpointName", "targetEndpointHash", targetClass);
-        AddSafeName(properties, "columnName", "columnHash", AttributeValue(relationship, "column") ?? AttributeValue(relationship.Elements().FirstOrDefault(element => element.Name.LocalName == "key"), "column"));
+        AddSafeName(properties, "columnName", "columnHash", AttributeValue(relationship, "column") ?? NHibernateKeyColumn(relationship));
         AddRelationshipSemantics(properties, sourceMetadataFactId, coverageLabel == "full" ? "full" : "unidirectional", limitations);
         AddModelIdentity(properties, "NHibernateHbm", "relationship", "mapping", relativePath, "nhibernate-relationship", relationshipName, className, sourceMetadataFactId, Parts(("class", className), ("relationship", relationshipName), ("target-class", targetClass), ("descriptor", relationship.Name.LocalName)), coverageLabel);
         facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, relationship, TargetFrom(properties, "associationName", "associationHash"), properties));
@@ -1562,6 +1562,7 @@ public static class LegacyDataMetadataExtractor
             or "joined-subclass"
             or "union-subclass"
             or "composite-id"
+            or "component"
             or "dynamic-component"
             or "filter"
             or "filter-def"
@@ -1572,6 +1573,13 @@ public static class LegacyDataMetadataExtractor
             or "sql-update"
             or "sql-delete"
             or "formula";
+    }
+
+    private static string? NHibernateKeyColumn(XElement relationship)
+    {
+        var key = relationship.Elements().FirstOrDefault(element => element.Name.LocalName == "key");
+        return AttributeValue(key, "column")
+            ?? AttributeValue(key?.Elements().FirstOrDefault(element => element.Name.LocalName == "column"), "name");
     }
 
     private static string NHibernateUnsupportedClassification(XElement element)
