@@ -845,6 +845,16 @@ public static class StaticHtmlEvidenceExplorer
         var reportProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "markdown-report");
         var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
         var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
+        var evidenceRowsStatus = factsProvided
+            ? (context.EvidenceRows.Count == 0
+                ? "no-evidence-under-current-coverage"
+                : SectionStatusFromGaps(context.Gaps, "evidence-rows", true))
+            : "not-provided";
+        var evidenceRowsMessage = factsProvided
+            ? (context.EvidenceRows.Count == 0
+                ? "facts.ndjson was provided and compatible, but no static evidence rows were present under the current coverage."
+                : "Evidence rows are rendered from facts.ndjson after safety filtering and deterministic ordering.")
+            : "Evidence rows are unavailable because no compatible fact stream was provided.";
         var rows = new List<ExplorerSectionStatus>
         {
             SectionStatus(
@@ -873,15 +883,9 @@ public static class StaticHtmlEvidenceExplorer
             SectionStatus(
                 "evidence-rows",
                 "Evidence Rows",
-                factsProvided
-                    ? context.EvidenceRows.Count == 0 ? "no-evidence-under-current-coverage" : SectionStatusFromGaps(context.Gaps, "evidence-rows", true)
-                    : "not-provided",
+                evidenceRowsStatus,
                 coverageLabel,
-                factsProvided
-                    ? context.EvidenceRows.Count == 0
-                        ? "facts.ndjson was provided and compatible, but no static evidence rows were present under the current coverage."
-                        : "Evidence rows are rendered from facts.ndjson after safety filtering and deterministic ordering."
-                    : "Evidence rows are unavailable because no compatible fact stream was provided.",
+                evidenceRowsMessage,
                 factsProvided ? ["artifact:facts-ndjson"] : ["input-directory"]),
             SectionStatus(
                 "surfaces",
@@ -1307,7 +1311,7 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("      <h2 id=\"coverage-heading\">Coverage</h2>");
         builder.AppendLine("      <p>Section status rows describe explorer rendering coverage only. They do not prove runtime behavior or evidence absence outside compatible inputs.</p>");
         builder.AppendLine("      <table><caption>Rule-backed section availability and coverage labels</caption><thead><tr><th>Section</th><th>Status</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Support IDs</th><th>Message</th></tr></thead><tbody>");
-        foreach (var row in sectionStatuses.OrderBy(row => row.SectionId, StringComparer.Ordinal))
+        foreach (var row in sectionStatuses)
         {
             var supportIds = Html(string.Join(", ", row.SupportIds));
             builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.Label)}</th><td>{Html(row.Status)}</td><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.CoverageLabel)}</td><td>{supportIds}</td><td>{Html(row.Message)}</td></tr>");
@@ -1383,7 +1387,7 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("    <section id=\"redactions\" aria-labelledby=\"redactions-heading\">");
         builder.AppendLine("      <h2 id=\"redactions-heading\">Safety &amp; Redactions</h2>");
         builder.AppendLine("      <table><caption>Safe redaction, hash, category-only, and omission counts</caption><thead><tr><th>Redaction</th><th>Rule ID</th><th>Category</th><th>Location</th><th>Action</th><th>Count</th></tr></thead><tbody>");
-        foreach (var redaction in redactions.OrderBy(row => row.RuleId, StringComparer.Ordinal).ThenBy(row => row.Category, StringComparer.Ordinal).ThenBy(row => row.Location, StringComparer.Ordinal).ThenBy(row => row.Action, StringComparer.Ordinal))
+        foreach (var redaction in redactions)
         {
             builder.AppendLine($"        <tr><th scope=\"row\">{Html(redaction.RedactionId)}</th><td>{Html(redaction.RuleId)}</td><td>{Html(redaction.Category)}</td><td>{Html(redaction.Location)}</td><td>{Html(redaction.Action)}</td><td>{redaction.Count}</td></tr>");
         }
