@@ -185,6 +185,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/demo/manager-script/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/proof-paths/",
     "changefreq": "monthly",
     "priority": "0.8"
