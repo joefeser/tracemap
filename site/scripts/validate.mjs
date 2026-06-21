@@ -20,6 +20,7 @@ import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff
 import { validateLegacyModernizationEvidenceMap } from "./legacy-modernization-evidence-map.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
+import { validateManagerDemoScriptDist } from "./manager-demo-script.mjs";
 import { validateManagerFaqDist } from "./manager-faq.mjs";
 import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
 import { validateReviewClaimChecklistDist } from "./review-claim-checklist.mjs";
@@ -89,6 +90,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateManagerDemoScriptDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewClaimChecklistDist({ baseUrl: normalizedBaseUrl, dist, errors });

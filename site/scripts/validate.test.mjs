@@ -21,6 +21,10 @@ import {
   incidentEvidenceHandoffRoute
 } from "./incident-evidence-handoff.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
+import {
+  managerDemoScriptInboundLinkRoutes,
+  managerDemoScriptRoute
+} from "./manager-demo-script.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
@@ -137,6 +141,7 @@ async function createDistFixture({
       teamEvidenceHandoffRoute,
       ...teamEvidenceHandoffRequiredLinks,
       managerBriefRoute,
+      managerDemoScriptRoute,
       managerFaqRoute,
       proofSourceCatalogRoute,
       reviewClaimChecklistRoute,
@@ -161,6 +166,7 @@ async function createDistFixture({
     "/demo/proof-assets/",
     demoEvidenceTrailRoute,
     demoRunbookRoute,
+    managerDemoScriptRoute,
     endpointReviewRoute,
     changeReviewRoute,
     "/evidence/",
@@ -227,6 +233,10 @@ async function fixturePageHtml(route, path) {
     return demoRunbookPage();
   }
 
+  if (route === managerDemoScriptRoute) {
+    return managerDemoScriptPage();
+  }
+
   if (route === endpointReviewRoute) {
     return endpointReviewPage();
   }
@@ -288,7 +298,7 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
   );
 }
 
@@ -337,6 +347,28 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "demo",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture runbook limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: managerDemoScriptRoute,
+        title: "Manager Demo Script",
+        summary: "Fixture manager demo script route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "demo",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture manager demo script limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: "/capabilities/",
+        title: "Capabilities",
+        summary: "Fixture capabilities route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "start",
+        preferredProofPath: "/docs/",
+        limitations: ["Fixture capabilities limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -579,6 +611,9 @@ async function stakeholderQuestionIndexPage() {
 
 function incidentCallPage() {
   return page(`
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Manager Demo Script">
+    <meta property="og:description" content="Fixture manager demo script description.">
     <p>Public claim level: concept</p>
     <p>No public conclusion without evidence</p>
     <p>static dependency evidence and not runtime observability</p>
@@ -756,6 +791,65 @@ function demoRunbookPage() {
     <section data-runbook-section="red-flag">
       <p>AI impact analysis, LLM analysis, runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, and complete product coverage are red flags.</p>
     </section>
+  `);
+}
+
+function managerDemoScriptPage() {
+  const filler = Array.from({ length: 170 }, (_, index) => `manager demo script evidence boundary ${index}`).join(" ");
+  const links = [
+    "/",
+    "/capabilities/",
+    "/proof-paths/",
+    "/proof-source-catalog/",
+    "/demo/result/",
+    "/demo/runbook/",
+    "/questions/",
+    "/limitations/",
+    "/validation/",
+    "/static-vs-runtime/"
+  ]
+    .map((route) => `<a href="${route}">${route}</a>`)
+    .join("\n");
+  const families = [
+    "value",
+    "trust",
+    "completeness",
+    "release-decision",
+    "production-behavior",
+    "incident-use",
+    "team-handoff",
+    "next"
+  ]
+    .map((family) => `<article data-question-family="${family}"><p>${family}</p></article>`)
+    .join("\n");
+
+  return page(`
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Manager Demo Script">
+    <meta property="og:description" content="Fixture manager demo script description.">
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>bounded demo script, not a product capability proof</p>
+    <h2>Opening context</h2>
+    <h2>2-minute tour</h2>
+    <h2>5-minute proof walkthrough</h2>
+    <h2>Manager questions and safe answer shapes</h2>
+    <h2>Engineer questions and proof routes</h2>
+    <h2>Stop conditions</h2>
+    <h2>Follow-up handoff</h2>
+    <h2>Non-claims</h2>
+    <p>rule ID or rule family, evidence tier, coverage label, proof path, limitation, raw facts, SQLite content, analyzer logs.</p>
+    <p>Where are the rule IDs and evidence tiers?</p>
+    <p>How does source mapping stay public-safe?</p>
+    <p>What does the demo result status mean?</p>
+    <p>Where do validation and static-versus-runtime boundaries live?</p>
+    <p>What stays out of public copy?</p>
+    ${links}
+    ${families}
+    <section data-manager-script-section="non-claims">
+      <p>Do not claim runtime proof, release approval, operational safety, complete coverage, AI analysis, or root cause.</p>
+    </section>
+    <p>${filler}</p>
   `);
 }
 
