@@ -2,6 +2,32 @@
 
 Status: implemented-continuation-slice-with-follow-up.
 
+## Follow-up Slice: Parameter-Forward Route-Flow Bridge
+
+2026-06-20 branch
+`codex/implement-route-flow-service-data-composition-followup` started from
+`origin/dev` to complete the deferred parameter-forward route-flow fixture from
+the continuation notes.
+
+- Selected scope: route-flow endpoint composition over existing
+  `combined_parameter_forward_edges`, with no runtime value, taint, mutation, DI,
+  branch feasibility, or database execution claims.
+- Added a source-local parameter-forward seed from an endpoint handler method to
+  parameter-forward source nodes when the parameter-forward edge already proves
+  the method/parameter relationship. This lets route-centered reports traverse
+  method -> source parameter -> forwarded parameter -> terminal data surface
+  without broad short-name stitching or cross-source merging.
+- Added focused synthetic coverage for a normalized API route whose handler
+  forwards a request parameter into a service parameter with a SQL surface
+  attached to that parameter. The test asserts the `argument-flow` seed row, the
+  `parameter-forward` row, flow-boundary logic metadata, terminal data surface,
+  touched symbol summary, deterministic safe output, and absence of generic
+  `DataSurfaceAttachmentMissing` / `NoRouteFlowEvidence` gaps.
+- The private legacy ASP.NET smoke sample remains intentionally unchecked and
+  local-only; no private output or local paths are committed.
+
+Validation for this follow-up is recorded below as commands complete.
+
 Post-promotion note: PR #222 completed the route-flow service/data composition
 slice and PR #247 promoted it to `main`. Remaining unchecked task items are
 follow-up polish or broader projection work.
@@ -153,12 +179,10 @@ implements the first suggested PR boundary:
   route-flow schema gap in this slice. A synthetic creates-edge fixture now
   verifies route-flow emits an `object-creation` flow row and connected terminal
   query surface when that evidence exists.
-- `combined_parameter_forward_edges` traversal is explicitly deferred for
-  focused fixture coverage beyond the current path-engine support. The shared
-  path graph already exposes `parameter-forward` edges and route-flow keeps that
-  edge kind traversable, but a dedicated parameter-forward route-flow fixture is
-  reserved for a follow-up bridge coverage PR to avoid expanding this
-  continuation slice.
+- `combined_parameter_forward_edges` traversal was deferred in the original
+  continuation slice, then completed by the 2026-06-20 follow-up branch with a
+  focused route-flow fixture and source-local endpoint method to parameter
+  bridge.
 - Sonnet Kiro implementation review ran with reduced coverage because Kiro
   reported denied tool access. Actionable blocking findings were patched:
   route-flow CLI completion output now prints a safe path, interface candidate
@@ -253,12 +277,56 @@ implements the first suggested PR boundary:
   private smoke remains a follow-up for downstream traversal/data-surface PRs
   where private legacy route-flow validation is materially broader.
 
+## 2026-06-20 Follow-Up Validation And Review
+
+- Focused validation:
+  `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests` passed
+  with 24 route-flow tests.
+- Full validation:
+  `dotnet build src/dotnet/TraceMap.sln` passed with existing
+  `SQLitePCLRaw.lib.e_sqlite3` advisory warnings and no errors;
+  `dotnet test src/dotnet/TraceMap.sln` passed with 571 tests;
+  `git diff --check` passed; `./scripts/check-private-paths.sh` passed.
+- Checked-in sample smoke:
+  `./scripts/smoke-combined-paths.sh /tmp/tracemap-route-flow-followup-smoke`
+  passed after installing locked local TypeScript dependencies with
+  `npm --prefix src/typescript ci`.
+- Sonnet Kiro implementation review (`claude-sonnet-4.6`) completed with full
+  coverage. Blocking findings patched in this branch:
+  `combined.route-flow.gap.v1` documents the
+  `ControllerToServiceBridgeMissing` substitution, fact-symbol projection
+  metadata now emits public-safe `evidenceKind` instead of internal `factType`,
+  and fact-symbol projection SQL no longer falls back to
+  `facts.source_symbol = <selected symbol>`.
+- Sonnet Kiro re-review completed with reduced coverage because shell/tool
+  access was denied to the reviewer, but it confirmed the prior blocking
+  findings were resolved. Its remaining pre-merge recommendation was to split
+  unsupported attached fact-symbol types from unjoinable fact-symbol projection
+  gaps. Patched by emitting `FactSymbolUnsupportedTypeSkipped` for unsupported
+  attached context while preserving `FactSymbolProjectionUnavailable` for rows
+  that cannot be connected by source-local symbol evidence. Smaller follow-ups
+  for route-root-in-gap IDs, fuller symbol role guards, and broader context
+  fixtures remain deferred.
+- Final allowed Sonnet Kiro re-review completed with reduced coverage because
+  shell/tool access was denied, but reported no blocking issues. Added a test
+  fixture comment for the subtle unsupported fact-symbol context shape it noted.
+- Validation after the unsupported fact-symbol split:
+  `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests` passed
+  with 24 route-flow tests; `dotnet build src/dotnet/TraceMap.sln` passed with
+  existing `SQLitePCLRaw.lib.e_sqlite3` advisory warnings and no errors;
+  `dotnet test src/dotnet/TraceMap.sln` passed with 571 tests;
+  `./scripts/check-private-paths.sh` passed; `git diff --check` passed; and
+  `./scripts/smoke-combined-paths.sh /tmp/tracemap-route-flow-followup-smoke`
+  passed.
+- Private legacy ASP.NET smoke remains explicitly deferred and local-only for
+  this follow-up. The slice is covered by synthetic combined-index tests and the
+  checked-in public sample smoke; no private paths, private sample names,
+  private routes, or local outputs are committed.
+
 ## Remaining Follow-Up For Implementation
 
-- Add broader focused fixtures for object-shape, repository-like, data-surface,
-  and `combined_parameter_forward_edges` traversal shapes beyond the current
-  synthetic query/data fixtures.
-- Run broader validation, Kiro implementation review, PR review loop, and
-  record final results below before merge.
-- Private legacy ASP.NET smoke remains local-only and was not run for this
-  continuation slice.
+- Add broader focused fixtures for object-shape, repository-like, and
+  data-surface traversal shapes beyond the current synthetic query/data
+  fixtures.
+- Run broader private legacy route-flow validation only when a future slice
+  materially changes private legacy traversal/data-surface behavior.
