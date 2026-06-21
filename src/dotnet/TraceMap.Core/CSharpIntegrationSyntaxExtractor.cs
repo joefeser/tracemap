@@ -789,7 +789,8 @@ public static class CSharpIntegrationSyntaxExtractor
         {
             "QueueDeclare" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, "rabbitmq", "queue-declare", "declare", "declare", "message-queue", 0),
             "ExchangeDeclare" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, "rabbitmq", "exchange-declare", "declare", "declare", "message-exchange", 0),
-            "Bind" or "BindQueue" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "binding-call", "bind", "bind", "message-channel", 0),
+            "BindQueue" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "binding-call", "bind", "bind", "message-channel", 0),
+            "Bind" when HasMessageBrokerBindEvidence(receiverName, invocation) => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "binding-call", "bind", "bind", "message-channel", 0),
             "ReceiveEndpoint" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, "masstransit", "receive-endpoint", "bind", "bind", "message-queue", 0),
             _ => null
         };
@@ -803,7 +804,7 @@ public static class CSharpIntegrationSyntaxExtractor
         return name switch
         {
             "QueueTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "queue-trigger-attribute", "consume", "handle", "message-queue", 0),
-            "ServiceBusTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "servicebus-trigger-attribute", "consume", "handle", arguments.Count >= 2 ? "message-topic" : "message-queue", 0),
+            "ServiceBusTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "servicebus-trigger-attribute", "consume", "handle", PositionalArgumentCount(arguments) >= 2 ? "message-topic" : "message-queue", 0),
             "EventHubTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "eventhub-trigger-attribute", "consume", "handle", "message-stream", 0),
             "TimerTrigger" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "azure-functions", "timer-trigger-attribute", "declare", "bind", "message-event", 0),
             "QueueOutput" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "azure-functions", "queue-output-attribute", "bind", "bind", "message-queue", 0),
@@ -811,6 +812,33 @@ public static class CSharpIntegrationSyntaxExtractor
             "Topic" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "dapr", "topic-attribute", "bind", "bind", "message-topic", 1),
             _ => null
         };
+    }
+
+    private static bool HasMessageBrokerBindEvidence(string? receiverName, InvocationExpressionSyntax invocation)
+    {
+        if (LooksLikeExternalMessageReceiver(receiverName))
+        {
+            return true;
+        }
+
+        if (receiverName is not null
+            && receiverName.Contains("channel", StringComparison.OrdinalIgnoreCase)
+            && PositionalArgumentCount(invocation.ArgumentList.Arguments) >= 2)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int PositionalArgumentCount(SeparatedSyntaxList<AttributeArgumentSyntax> arguments)
+    {
+        return arguments.Count(argument => argument.NameColon is null && argument.NameEquals is null);
+    }
+
+    private static int PositionalArgumentCount(SeparatedSyntaxList<ArgumentSyntax> arguments)
+    {
+        return arguments.Count(argument => argument.NameColon is null);
     }
 
     private static bool IsInProcessMediatorInvocation(string invocationName, string? receiverName, InvocationExpressionSyntax invocation)

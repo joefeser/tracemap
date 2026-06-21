@@ -22,12 +22,14 @@ public sealed class MessageSurfaceTests
                 {
                     kafkaProducer.ProduceAsync(OrdersTopic, message);
                     channel.QueueDeclare("orders-work");
+                    channel.Bind("orders-bound", "orders-exchange");
                     channel.BasicPublish("orders-exchange", "created", null, message);
                     channel.BasicPublish("", "orders-default", null, message);
                     daprClient.PublishEventAsync("pubsub", "orders.created", message);
                     serviceBusSender.SendAsync("orders-sent", message);
                     kafkaProducer.ProduceAsync(tenantTopic, message);
                     _mediator.Publish(message);
+                    AddOptions<Messaging>().Bind("orders-options");
                 }
 
                 [QueueTrigger("orders-work")]
@@ -37,6 +39,11 @@ public sealed class MessageSurfaceTests
 
                 [ServiceBusTrigger("orders-servicebus-queue")]
                 public void HandleServiceBusQueue(string payload)
+                {
+                }
+
+                [ServiceBusTrigger("orders-named-queue", Connection = "ServiceBusConnection")]
+                public void HandleNamedServiceBusQueue(string payload)
                 {
                 }
 
@@ -68,6 +75,14 @@ public sealed class MessageSurfaceTests
             && fact.RuleId == RuleIds.MessageSurfaceBinding
             && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-work");
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MessageBindingDeclared
+            && fact.RuleId == RuleIds.MessageSurfaceBinding
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-bound");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.MessageBindingDeclared
+            && fact.RuleId == RuleIds.MessageSurfaceBinding
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-options");
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MessagePublisherSurface
             && fact.Properties.GetValueOrDefault("frameworkFeature") == "basic-publish-default-exchange"
             && fact.Properties.GetValueOrDefault("surfaceKind") == "message-queue"
@@ -83,6 +98,10 @@ public sealed class MessageSurfaceTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MessageConsumerSurface
             && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-servicebus-queue"
+            && fact.Properties.GetValueOrDefault("surfaceKind") == "message-queue");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MessageConsumerSurface
+            && fact.Properties.GetValueOrDefault("normalizedDestinationKey") == "orders-named-queue"
             && fact.Properties.GetValueOrDefault("surfaceKind") == "message-queue");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MessageConsumerSurface
