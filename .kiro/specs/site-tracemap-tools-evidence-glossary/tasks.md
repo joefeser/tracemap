@@ -1,7 +1,7 @@
 # Site TraceMap Tools Evidence Glossary Tasks
 
-Status: implemented; PR loop pending
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: run available Kiro spec reviews before implementation, patch or

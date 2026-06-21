@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 - [x] 1. Add the site-facing concept page.
   - Create `/vault-export/` with future-facing copy.
   - Explain the manager, reviewer, architect, and engineer audience.

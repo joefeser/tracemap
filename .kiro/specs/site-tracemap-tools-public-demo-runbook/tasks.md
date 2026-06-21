@@ -1,7 +1,7 @@
 # Site TraceMap Tools Public Demo Runbook Tasks
 
 Status: implemented
-Readiness: validation-passed
+Readiness: implemented
 Public claim level: demo
 
 These implementation tasks are complete. Validation tasks were checked only

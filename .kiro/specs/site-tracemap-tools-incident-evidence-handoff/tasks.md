@@ -1,7 +1,7 @@
 # Site TraceMap Tools Incident Evidence Handoff Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: this is a spec-only branch. Leave implementation tasks unchecked

@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 - [x] 1. Record the discovery slice scope and launch state.
   - [x] Add this `site-tracemap-tools-discovery` spec.
   - [x] Add or update implementation-state notes for the launch and discovery site

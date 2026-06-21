@@ -1,7 +1,7 @@
 # Site TraceMap Tools Stakeholder Question Index Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 <!-- Site-code implementation is deferred to a future phase. This spec is
 ready for a future implementer to pick up, not a signal to implement on this
 spec branch. -->

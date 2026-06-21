@@ -1,6 +1,7 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
 Branch: codex/site-manager-packet
 Public claim level: demo
 

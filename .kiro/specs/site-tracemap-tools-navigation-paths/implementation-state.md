@@ -1,6 +1,7 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
 Branch: codex/site-navigation-paths
 Public claim level: demo
 

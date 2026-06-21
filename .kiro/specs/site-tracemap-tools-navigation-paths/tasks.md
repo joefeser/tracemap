@@ -1,5 +1,7 @@
 # Site TraceMap Tools Navigation Paths Tasks
 
+Status: implemented
+Readiness: implemented
 Public claim level: demo
 
 - [x] Add role-based pathing to the homepage without changing top navigation.

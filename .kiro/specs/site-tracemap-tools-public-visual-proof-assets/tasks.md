@@ -1,5 +1,7 @@
 # Site TraceMap Tools Public Visual Proof Assets Tasks
 
+Status: implemented
+Readiness: implemented
 Public claim level: demo
 
 - [x] Create `/demo/proof-assets/` using existing static site layout patterns.

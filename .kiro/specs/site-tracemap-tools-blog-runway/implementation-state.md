@@ -1,9 +1,12 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 Last verified: 2026-06-14
 Branch: codex/site-build-process-blog
-Source of truth: pending PR
+Source of truth: origin/main
 
 ## Summary
 
