@@ -61,6 +61,18 @@ test("validateManagerDemoScriptDist reports route metadata regressions", async (
   assert.match(errors.join("\n"), /expected preferredProofPath \/proof-paths\/, got \/validation\//);
 });
 
+test("validateManagerDemoScriptDist rejects route metadata overclaims", async (t) => {
+  const root = await createManagedManagerDemoScriptDistFixture(t);
+  await rewriteManagerDemoScriptRoutesIndexEntry(join(root, "dist"), {
+    summary: "TraceMap proves runtime behavior for manager demos."
+  });
+  const errors = [];
+
+  await validateManagerDemoScriptDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /routes-index\.json summary contains forbidden proof claim/);
+});
+
 test("validateManagerDemoScriptDist reports missing route metadata", async (t) => {
   const root = await createManagedManagerDemoScriptDistFixture(t, {
     discoveryRoutes: [],
