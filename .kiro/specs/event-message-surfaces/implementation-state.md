@@ -27,6 +27,9 @@ depth, not current unmerged work.
     direction filtering.
   - Moved message-direction normalization into `CombinedReportHelpers` after
     PR-loop feedback flagged duplicate helpers in paths and reverse reporters.
+  - Tightened the `declare` direction test fixture after PR-loop feedback so
+    the fixture creates a queue declare surface before asserting selected
+    declare surfaces.
 - Still out of scope:
   - Route-flow async message-hop rendering.
   - Reducer context over message surfaces.
@@ -39,6 +42,11 @@ depth, not current unmerged work.
   - `./scripts/check-private-paths.sh`: passed.
   - `git diff --check`: passed.
   - After PR-loop duplicate-helper fix:
+    `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`,
+    `dotnet build src/dotnet/TraceMap.sln`,
+    `dotnet test src/dotnet/TraceMap.sln`,
+    `./scripts/check-private-paths.sh`, and `git diff --check` passed.
+  - After PR-loop declare-fixture fix:
     `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`,
     `dotnet build src/dotnet/TraceMap.sln`,
     `dotnet test src/dotnet/TraceMap.sln`,
