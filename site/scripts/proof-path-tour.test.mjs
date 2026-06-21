@@ -156,6 +156,32 @@ test("validateProofPathTourDist rejects raw material outside sanctioned sections
   assert.match(errors.join("\n"), /forbidden raw\/private material/);
 });
 
+test("validateProofPathTourDist rejects exact raw artifact tokens outside sanctioned sections", async (t) => {
+  const root = await createManagedProofPathTourFixture(t, {
+    tourHtml: proofPathTourPage("<p>facts.ndjson index.sqlite scan-manifest.json report.md logs/analyzer.log secrets local paths private sample names</p>")
+  });
+  const errors = [];
+
+  await validateProofPathTourDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden raw\/private material/);
+});
+
+test("validateProofPathTourDist permits exact raw artifact tokens inside sanctioned sections", async (t) => {
+  const root = await createManagedProofPathTourFixture(t, {
+    tourHtml: proofPathTourPage(`
+      <section data-tm-boundary="artifact-boundary">
+        <p>Do not publish facts.ndjson, index.sqlite, scan-manifest.json, report.md, logs/analyzer.log, secrets, local paths, or private sample names.</p>
+      </section>
+    `)
+  });
+  const errors = [];
+
+  await validateProofPathTourDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateProofPathTourDist rejects encoded hard private text", async (t) => {
   const root = await createManagedProofPathTourFixture(t, {
     tourHtml: proofPathTourPage("<p>file&#58;//private/report</p>")

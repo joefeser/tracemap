@@ -101,14 +101,22 @@ const metadataNonClaimTerms = [
 ];
 
 const rawMaterialPatterns = [
+  /\bfacts\.ndjson\b/i,
+  /\bindex\.sqlite\b/i,
+  /\bscan-manifest\.json\b/i,
+  /\breport\.md\b/i,
+  /\blogs\/analyzer\.log\b/i,
   /\braw facts?\b/i,
   /\braw SQLite(?: content)?\b/i,
   /\banalyzer logs?\b/i,
   /\braw source snippets?\b/i,
   /\braw SQL\b/i,
   /\bconfig values?\b/i,
+  /\bsecrets?\b/i,
+  /\blocal paths?\b/i,
   /\braw remotes?\b/i,
   /\bgenerated scan directories\b/i,
+  /\bprivate sample names?\b/i,
   /\bhidden validation details\b/i,
   /\braw command output\b/i,
   /\bcredential-like values\b/i
