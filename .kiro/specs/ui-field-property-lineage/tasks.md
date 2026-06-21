@@ -81,11 +81,11 @@ items below are continuation work.
   - [x] Prove Markdown and JSON byte stability for identical inputs.
   - [x] Cover non-combined-index rejection, required-versus-optional table behavior, route-flow-unavailable gaps, source/framework filters, top-N ambiguity, truncation, confidence mapping, cross-source boundary rendering, and full-versus-reduced no-lineage classifications.
 
-- [ ] 9. Add optional browser-observed evidence support only after core static reporting. Requirements: 11, 14.
-  - [ ] Keep browser/computer-use capture outside the core deterministic scanner/reporting requirement.
-  - [ ] Label observed DOM evidence as demo/validation metadata only.
-  - [ ] Reject workflows that require production login, credentials, private data capture, or live secret-bearing HTTP.
-  - [ ] Add tests proving observed evidence cannot upgrade static classifications by itself.
+- [x] 9. Add optional browser-observed evidence support only after core static reporting. Requirements: 11, 14.
+  - [x] Keep browser/computer-use capture outside the core deterministic scanner/reporting requirement.
+  - [x] Label observed DOM evidence as demo/validation metadata only.
+  - [x] Reject workflows that require production login, credentials, private data capture, or live secret-bearing HTTP.
+  - [x] Add tests proving observed evidence cannot upgrade static classifications by itself.
 
 - [x] 10. Wire CLI and docs. Requirements: 1, 12, 13, 14.
   - [x] Add `tracemap property-flow --help`.
