@@ -274,6 +274,276 @@ public sealed class PropertyFlowTests
         Assert.Equal("server", Assert.Single(modelReport.SelectedRoots).SourceLabel);
     }
 
+    [Fact]
+    public async Task Property_flow_connects_razor_binding_and_form_target_to_model_binding_property()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone16");
+        var binding = RazorBindingFact(server, "ProfileInput", "Email", "Views/Profile/Edit.cshtml", 4);
+        var form = RazorFormTargetFact(server, "Profile", "Save", "POST", "Views/Profile/Edit.cshtml", 2);
+        var modelBinding = ModelBindingFact(server, "ProfileInput", "Email", "view-model", "action-parameter", "form", "Profile", "Save", null, "POST", "Controllers/ProfileController.cs", 11);
+        SqliteIndexWriter.Write(serverIndex, server, [binding, form, modelBinding]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "binding:Email",
+            Framework: "razor"));
+
+        Assert.Contains(report.LineagePaths, path => path.Edges.Any(edge => edge.EdgeKind == "razor-binding-binds-property"));
+        Assert.Contains(report.LineagePaths, path => path.Edges.Any(edge => edge.EdgeKind == "form-target-binds-model"));
+        Assert.Contains(report.Inventory.EvidenceNodes.Concat(report.LineagePaths.SelectMany(path => path.Nodes)), node => node.NodeKind == "ModelBindingTarget");
+
+        var serverOnly = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out-server-only"),
+            "field:Email",
+            Framework: "razor",
+            Source: "server"));
+        Assert.Single(serverOnly.SelectedRoots);
+
+        var modelOnlyIndex = Path.Combine(temp.Path, "model-only.sqlite");
+        var modelOnlyCombined = Path.Combine(temp.Path, "model-only-combined.sqlite");
+        SqliteIndexWriter.Write(modelOnlyIndex, server, [modelBinding]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([modelOnlyIndex], modelOnlyCombined, ["server"]));
+        var noUiRoot = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            modelOnlyCombined,
+            Path.Combine(temp.Path, "model-only-out"),
+            "field:Email",
+            Framework: "razor"));
+        Assert.Empty(noUiRoot.SelectedRoots);
+        Assert.Contains(noUiRoot.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+
+        var formOnlyIndex = Path.Combine(temp.Path, "form-only.sqlite");
+        var formOnlyCombined = Path.Combine(temp.Path, "form-only-combined.sqlite");
+        SqliteIndexWriter.Write(formOnlyIndex, server, [form]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([formOnlyIndex], formOnlyCombined, ["server"]));
+        var noHandler = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            formOnlyCombined,
+            Path.Combine(temp.Path, "form-only-out"),
+            "binding:POST",
+            Framework: "razor"));
+        Assert.Contains(noHandler.Gaps, gap => gap.GapKind == "EndpointAlignmentUnavailable");
+
+        var written = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "stable-out"),
+            "binding:Email",
+            Framework: "razor"));
+        var markdown = await File.ReadAllTextAsync(written.MarkdownPath!);
+        var json = await File.ReadAllTextAsync(written.JsonPath!);
+        await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "stable-out"),
+            "binding:Email",
+            Framework: "razor"));
+        Assert.Equal(markdown, await File.ReadAllTextAsync(written.MarkdownPath!));
+        Assert.Equal(json, await File.ReadAllTextAsync(written.JsonPath!));
+        Assert.DoesNotContain(temp.Path, markdown);
+        Assert.DoesNotContain(temp.Path, json);
+
+        var clientIndex = Path.Combine(temp.Path, "client-control.sqlite");
+        var mixedCombined = Path.Combine(temp.Path, "mixed-control-combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        SqliteIndexWriter.Write(clientIndex, client, [AngularControlFact(client, "Email", "src/profile.component.html", 3)]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], mixedCombined, ["client", "server"]));
+        var razorControl = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            mixedCombined,
+            Path.Combine(temp.Path, "razor-control-out"),
+            "control:Email",
+            Framework: "razor"));
+        Assert.Equal("server", Assert.Single(razorControl.SelectedRoots).SourceLabel);
+        var angularControl = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            mixedCombined,
+            Path.Combine(temp.Path, "angular-control-out"),
+            "control:Email",
+            Framework: "angular"));
+        Assert.Equal("client", Assert.Single(angularControl.SelectedRoots).SourceLabel);
+    }
+
+    [Fact]
+    public async Task Property_flow_connects_angular_event_payload_http_endpoint_to_dto_property()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone16");
+        SqliteIndexWriter.Write(clientIndex, client, [
+            AngularEventFact(client, "save", "email", "src/profile.component.html", 6),
+            ObjectShapeFact(client, "save", "email", "src/profile.component.ts", 15),
+            HttpClientFact(client, "POST", "/api/profile", "/api/profile", "src/profile.service.ts", 18, "save")
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/profile", "/api/profile", "Server.ProfileController.Save(ProfileDto)", "Controllers/ProfileController.cs", 8),
+            ModelBindingFact(server, "ProfileDto", "email", "dto", "action-parameter", "body", "Profile", "Save", null, "POST", "Controllers/ProfileController.cs", 8)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "binding:save",
+            Framework: "angular",
+            Source: "client"));
+
+        var path = Assert.Single(report.LineagePaths, path => path.Edges.Any(edge => edge.EdgeKind == "endpoint-binds-model"));
+        Assert.Contains(path.Nodes, node => node.NodeKind == "PayloadField");
+        Assert.Contains(path.Nodes, node => node.NodeKind == "DtoProperty");
+        Assert.Equal(PropertyFlowClassifications.NeedsReviewLineage, path.Classification);
+
+        var noRouteIndex = Path.Combine(temp.Path, "client-only.sqlite");
+        var noRouteCombined = Path.Combine(temp.Path, "client-only-combined.sqlite");
+        SqliteIndexWriter.Write(noRouteIndex, client, [
+            AngularEventFact(client, "save", "email", "src/profile.component.html", 6),
+            ObjectShapeFact(client, "save", "email", "src/profile.component.ts", 15),
+            HttpClientFact(client, "POST", "/api/profile", "/api/profile", "src/profile.service.ts", 18, "save")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([noRouteIndex], noRouteCombined, ["client"]));
+        var noRoute = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            noRouteCombined,
+            Path.Combine(temp.Path, "no-route-out"),
+            "binding:save",
+            Framework: "angular"));
+        Assert.Contains(noRoute.Gaps, gap => gap.GapKind == "EndpointAlignmentUnavailable");
+    }
+
+    [Fact]
+    public async Task Property_flow_connects_angular_event_payload_http_endpoint_to_razor_page_handler_model_property()
+    {
+        using var temp = new TempDirectory();
+        var clientIndex = Path.Combine(temp.Path, "client.sqlite");
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var client = Manifest("client", "tracemap-typescript/0.1.0");
+        var server = Manifest("server", "tracemap-milestone16");
+        SqliteIndexWriter.Write(clientIndex, client, [
+            AngularEventFact(client, "save", "email", "src/profile.component.html", 6),
+            ObjectShapeFact(client, "save", "email", "src/profile.component.ts", 15),
+            HttpClientFact(client, "POST", "/Profile/Edit", "/Profile/Edit", "src/profile.service.ts", 18, "save")
+        ]);
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RazorPageRouteFact(server, "POST", "/Profile/Edit", "/Profile/Edit", "OnPostSave", "Pages/Profile/Edit.cshtml.cs", 8),
+            ModelBindingFact(server, "ProfileInput", "email", "view-model", "handler-parameter", "form", null, null, "OnPostSave", "POST", "Pages/Profile/Edit.cshtml.cs", 8)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "binding:save",
+            Framework: "angular",
+            Source: "client"));
+
+        var path = Assert.Single(report.LineagePaths, path => path.Edges.Any(edge => edge.EdgeKind == "endpoint-binds-model"));
+        Assert.Contains(path.Nodes, node => node.NodeKind == "PayloadField");
+        Assert.Contains(path.Nodes, node => node.NodeKind == "ModelBindingTarget");
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "PropertyIdentityUnavailable");
+    }
+
+    [Fact]
+    public async Task Property_flow_handles_family_exclusion_overlap_and_generic_fanout_threshold()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone16");
+        var facts = new List<CodeFact>
+        {
+            TypeFact(server, "ProfileEmpty", "Models/ProfileEmpty.cs", 3),
+            PropertyFact(server, "ProfileModel", "Email", "model", "Models/ProfileModel.cs", 4),
+            PropertyFact(server, "ProfileShared", "Email", "model;dto", "Models/ProfileShared.cs", 5),
+            PropertyFact(server, "StatusReview", "status", "model", "Models/StatusReview.cs", 6)
+        };
+        for (var i = 0; i < 10; i++)
+        {
+            facts.Add(RazorBindingFact(server, $"StatusModel{i}", "status", $"Views/Profile/Edit{i}.cshtml", 3));
+        }
+
+        SqliteIndexWriter.Write(index, server, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var dtoExclusion = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "dto-out"),
+            "dto:ProfileModel.Email"));
+        Assert.Empty(dtoExclusion.SelectedRoots);
+        Assert.Contains(dtoExclusion.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+
+        var missingProperty = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "missing-property-out"),
+            "model:ProfileEmpty.Email"));
+        Assert.Empty(missingProperty.SelectedRoots);
+        Assert.Contains(missingProperty.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+
+        var overlap = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "overlap-out"),
+            "model:ProfileShared.Email"));
+        Assert.Equal("model;dto", Assert.Single(overlap.SelectedRoots).SafeDisplay["modelKind"]);
+
+        var sameName = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "same-name-out"),
+            "binding:status",
+            Framework: "razor",
+            MaxRoots: 1));
+        Assert.Contains(sameName.Gaps, gap => gap.GapKind == "SameNameOnlyPropertyMatch");
+
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            var statusFactId = await ScalarAsync(connection, "select combined_fact_id from combined_facts where fact_type = 'RazorBinding' and contract_element = 'status' order by combined_fact_id limit 1;");
+            var factReport = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "fact-status-out"),
+                $"fact:{statusFactId}"));
+            Assert.Single(factReport.SelectedRoots);
+            Assert.DoesNotContain(factReport.Gaps, gap => gap.GapKind is "AmbiguousSelector" or "GenericPropertyFanOut");
+        }
+
+        var fanoutNineIndex = Path.Combine(temp.Path, "fanout-nine.sqlite");
+        var fanoutNineCombined = Path.Combine(temp.Path, "fanout-nine-combined.sqlite");
+        SqliteIndexWriter.Write(fanoutNineIndex, server, facts.Where(fact => fact.FactType != FactTypes.RazorBinding || !fact.Evidence.FilePath.EndsWith("Edit9.cshtml", StringComparison.Ordinal)).ToArray());
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([fanoutNineIndex], fanoutNineCombined, ["server"]));
+        var nine = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            fanoutNineCombined,
+            Path.Combine(temp.Path, "nine-out"),
+            "field:status",
+            Framework: "razor",
+            MaxRoots: 25));
+        Assert.DoesNotContain(nine.Gaps, gap => gap.GapKind == "GenericPropertyFanOut");
+
+        var ten = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "ten-out"),
+            "field:status",
+            Framework: "razor",
+            MaxRoots: 25));
+        Assert.Contains(ten.Gaps, gap => gap.GapKind == "GenericPropertyFanOut");
+
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "create table combined_route_flow_edges(edge_id text);";
+            await command.ExecuteNonQueryAsync();
+        }
+        var emptyRouteFlow = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "empty-route-flow-out"),
+            "field:status",
+            Framework: "razor",
+            MaxRoots: 25));
+        Assert.Equal("empty", emptyRouteFlow.Snapshot.Schema.RouteFlowSignal);
+        Assert.Contains(emptyRouteFlow.Gaps, gap => gap.GapKind == "RouteFlowUnavailable");
+    }
+
     private static async Task<(string CombinedPath, string RootFactId)> CreatePropertyFlowCombinedIndexAsync(TempDirectory temp)
     {
         var clientIndex = Path.Combine(temp.Path, "client.sqlite");
@@ -366,6 +636,8 @@ public sealed class PropertyFlowTests
 
     private static CodeFact RouteFact(ScanManifest manifest, string method, string template, string key, string methodSymbol, string file, int line)
     {
+        var methodName = methodSymbol.Split('.').Last().Split('(')[0];
+        var controllerName = methodSymbol.Split('.').Reverse().Skip(1).FirstOrDefault()?.Replace("Controller", string.Empty, StringComparison.Ordinal) ?? string.Empty;
         return FactFactory.Create(
             manifest,
             FactTypes.HttpRouteBinding,
@@ -377,11 +649,231 @@ public sealed class PropertyFlowTests
             contractElement: template,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["actionName"] = methodName,
+                ["controllerName"] = controllerName,
                 ["httpMethods"] = method,
                 ["methodName"] = method,
                 ["normalizedPathTemplate"] = template,
                 ["normalizedPathKey"] = key,
                 ["routeTemplates"] = template
+            });
+    }
+
+    private static CodeFact RazorPageRouteFact(ScanManifest manifest, string method, string template, string key, string handlerName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.HttpRouteBinding,
+            RuleIds.CSharpSyntaxAspNetRoute,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: handlerName,
+            targetSymbol: handlerName,
+            contractElement: template,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["handlerName"] = handlerName,
+                ["httpMethods"] = method,
+                ["methodName"] = method,
+                ["normalizedPathTemplate"] = template,
+                ["normalizedPathKey"] = key,
+                ["routeTemplates"] = template
+            });
+    }
+
+    private static CodeFact RazorBindingFact(ScanManifest manifest, string modelType, string propertyName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RazorBinding,
+            RuleIds.RazorBinding,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "RazorBindingExtractor", ScannerVersions.RazorBindingExtractor),
+            targetSymbol: propertyName,
+            contractElement: propertyName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["uiFramework"] = "razor",
+                ["bindingKind"] = "asp-for",
+                ["controlKind"] = "input",
+                ["modelType"] = modelType,
+                ["propertyName"] = propertyName,
+                ["propertyPath"] = propertyName,
+                ["valueStored"] = "safe-metadata-only"
+            });
+    }
+
+    private static CodeFact RazorFormTargetFact(ScanManifest manifest, string controllerName, string actionName, string httpMethod, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RazorFormTarget,
+            RuleIds.RazorFormTarget,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "RazorBindingExtractor", ScannerVersions.RazorBindingExtractor),
+            targetSymbol: actionName,
+            contractElement: httpMethod,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["actionName"] = actionName,
+                ["bindingKind"] = "form-action",
+                ["controllerName"] = controllerName,
+                ["controlKind"] = "form",
+                ["httpMethod"] = httpMethod,
+                ["uiFramework"] = "razor",
+                ["valueStored"] = "safe-metadata-only"
+            });
+    }
+
+    private static CodeFact ModelBindingFact(
+        ScanManifest manifest,
+        string modelType,
+        string propertyName,
+        string modelKind,
+        string bindingKind,
+        string parameterSource,
+        string? controllerName,
+        string? actionName,
+        string? handlerName,
+        string httpMethod,
+        string file,
+        int line)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["bindingKind"] = bindingKind,
+            ["httpMethod"] = httpMethod,
+            ["modelKind"] = modelKind,
+            ["modelType"] = modelType,
+            ["parameterName"] = "input",
+            ["parameterSource"] = parameterSource,
+            ["propertyName"] = propertyName,
+            ["propertyPath"] = propertyName,
+            ["propertyType"] = "string",
+            ["uiFramework"] = "razor",
+            ["valueStored"] = "safe-metadata-only"
+        };
+        if (controllerName is not null)
+        {
+            properties["controllerName"] = controllerName;
+        }
+        if (actionName is not null)
+        {
+            properties["actionName"] = actionName;
+        }
+        if (handlerName is not null)
+        {
+            properties["handlerName"] = handlerName;
+        }
+
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RazorModelBindingTarget,
+            RuleIds.RazorModelBinding,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "CSharpSyntaxExtractor", ScannerVersions.CSharpSyntaxExtractor),
+            sourceSymbol: actionName ?? handlerName ?? modelType,
+            targetSymbol: $"{modelType}.{propertyName}",
+            contractElement: propertyName,
+            properties: properties);
+    }
+
+    private static CodeFact AngularEventFact(ScanManifest manifest, string handlerName, string propertyName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.UiEventBinding,
+            "typescript.angular.event-binding.v1",
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "typescript-angular-template", "typescript-angular-template/0.1.0"),
+            sourceSymbol: "ProfileComponent",
+            targetSymbol: handlerName,
+            contractElement: handlerName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["bindingKind"] = "event",
+                ["eventName"] = "submit",
+                ["handlerName"] = handlerName,
+                ["propertyName"] = propertyName,
+                ["uiFramework"] = "angular"
+            });
+    }
+
+    private static CodeFact AngularControlFact(ScanManifest manifest, string controlName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.UiFormControlBinding,
+            "typescript.angular.form-binding.v1",
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "typescript-angular-template", "typescript-angular-template/0.1.0"),
+            sourceSymbol: "ProfileComponent",
+            targetSymbol: controlName,
+            contractElement: controlName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["bindingKind"] = "form-control",
+                ["controlName"] = controlName,
+                ["formControlName"] = controlName,
+                ["propertyName"] = controlName,
+                ["uiFramework"] = "angular"
+            });
+    }
+
+    private static CodeFact ObjectShapeFact(ScanManifest manifest, string sourceMethod, string fieldName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ObjectShapeInferred,
+            "typescript.syntax.objectshape.v1",
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "typescript-syntax", "typescript-syntax/0.1.0"),
+            sourceSymbol: sourceMethod,
+            targetSymbol: "object-literal",
+            contractElement: "object-literal",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["fieldCount"] = "1",
+                ["fieldNames"] = fieldName,
+                ["objectKind"] = "object-literal",
+                ["shapeHash"] = FactFactory.Hash(fieldName, 32),
+                ["sourceMethod"] = sourceMethod
+            });
+    }
+
+    private static CodeFact PropertyFact(ScanManifest manifest, string containingType, string propertyName, string modelKind, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.PropertyDeclared,
+            RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "CSharpSyntaxExtractor", ScannerVersions.CSharpSyntaxExtractor),
+            sourceSymbol: containingType,
+            targetSymbol: $"{containingType}.{propertyName}",
+            contractElement: propertyName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = containingType,
+                ["modelKind"] = modelKind,
+                ["propertyName"] = propertyName
+            });
+    }
+
+    private static CodeFact TypeFact(ScanManifest manifest, string typeName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.TypeDeclared,
+            RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "CSharpSyntaxExtractor", ScannerVersions.CSharpSyntaxExtractor),
+            targetSymbol: typeName,
+            contractElement: typeName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["kind"] = "class",
+                ["name"] = typeName
             });
     }
 

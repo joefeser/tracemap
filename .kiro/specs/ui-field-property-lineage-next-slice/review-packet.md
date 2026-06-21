@@ -5,20 +5,21 @@ files.
 
 Repository: joefeser/tracemap
 Phase: ui-field-property-lineage-next-slice
-Kind: spec
+Kind: implementation
 
 ## Review Goal
 
-Review this continuation Kiro spec for the next UI field/property lineage
-implementation slice. The original `.kiro/specs/ui-field-property-lineage`
-spec and initial property-flow implementation slices already exist. This new
-spec should be focused, implementable, public-safe, and static-evidence-only.
+Review this continuation Kiro spec and the first implementation slice for UI
+field/property lineage. The original `.kiro/specs/ui-field-property-lineage`
+spec and initial property-flow implementation slices already exist. This branch
+implements the first next-slice product-code boundary while keeping the spec
+state current.
 
 ## Key Boundary
 
-This is a spec-only PR. It should not require product-code changes.
+This is an implementation PR, not the earlier spec-only PR.
 
-The next product-code slice should connect existing Angular/Razor
+This product-code slice connects existing Angular/Razor
 field/control/binding evidence to DTO/model properties and downstream static
 route/path/reverse/data/dependency/export evidence. Browser/computer-use
 evidence should remain deferred/demo-only unless a future opt-in workflow is

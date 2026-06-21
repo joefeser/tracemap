@@ -51,7 +51,7 @@ public sealed class CSharpSyntaxExtractorTests
         Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
         Assert.Contains(result.Manifest.KnownGaps, gap => gap.Contains("Workspace diagnostic category", StringComparison.OrdinalIgnoreCase));
         AssertFact(result, FactTypes.TypeDeclared, "CustomerProfile", "src/Broken/CustomerProfile.cs", 6, 18);
-        AssertFact(result, FactTypes.PropertyDeclared, "PrimaryEmail", "src/Broken/CustomerProfile.cs", 9, 9);
+        AssertFact(result, FactTypes.PropertyDeclared, "CustomerProfile.PrimaryEmail", "src/Broken/CustomerProfile.cs", 9, 9);
         AssertFact(result, FactTypes.MethodDeclared, "LoadAsync", "src/Broken/CustomerProfile.cs", 11, 17);
         AssertFact(result, FactTypes.EnumDeclared, "CustomerStatus", "src/Broken/CustomerProfile.cs", 20, 24);
         AssertFact(result, FactTypes.AttributeUsed, "Obsolete", "src/Broken/CustomerProfile.cs", 6, 6);
@@ -238,6 +238,99 @@ public sealed class CSharpSyntaxExtractorTests
         Assert.Contains("Status", objectShape.Properties["fieldNames"]);
         Assert.Contains("Total", objectShape.Properties["fieldNames"]);
         Assert.True(objectShape.Properties["shapeHash"].Length > 0);
+    }
+
+    [Fact]
+    public void Scan_extracts_model_binding_targets_from_mvc_and_razor_pages_syntax()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Pages", "Profile"));
+        File.WriteAllText(Path.Combine(temp.Path, "ProfileController.cs"), """
+            using System;
+
+            public sealed class RouteAttribute(string template) : Attribute { }
+            public sealed class HttpPostAttribute(string template) : Attribute { }
+            public sealed class FromBodyAttribute : Attribute { }
+
+            [Route("api/profile")]
+            public sealed class ProfileController
+            {
+                [HttpPost("save")]
+                public void Save([FromBody] ProfileDto input) { }
+            }
+
+            public sealed class ProfileDto
+            {
+                public string Email { get; set; } = "";
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Pages", "Profile", "Edit.cs"), """
+            using System;
+
+            public sealed class BindPropertyAttribute : Attribute { }
+            public class PageModel { }
+
+            public sealed class EditModel : PageModel
+            {
+                [BindProperty]
+                public ProfileInput Input { get; set; } = new();
+
+                public void OnPostSave(ProfileInput input) { }
+            }
+
+            public sealed class ProfileInput
+            {
+                public string DisplayName { get; set; } = "";
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "ExternalController.cs"), """
+            using System;
+
+            public sealed class ExternalController
+            {
+                [HttpPost("external")]
+                public void SaveExternal(ExternalProfileDto input) { }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "ExternalProfileDto.cs"), """
+            public sealed class ExternalProfileDto
+            {
+                public string Email { get; set; } = "";
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RazorModelBindingTarget
+            && fact.RuleId == RuleIds.RazorModelBinding
+            && fact.Properties["bindingKind"] == "action-parameter"
+            && fact.Properties["modelKind"] == "dto"
+            && fact.Properties["modelType"] == "ProfileDto"
+            && fact.Properties["propertyName"] == "Email"
+            && fact.Properties["parameterSource"] == "body"
+            && fact.Properties["actionName"] == "Save"
+            && fact.Properties["controllerName"] == "Profile");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RazorModelBindingTarget
+            && fact.Properties["bindingKind"] == "handler-parameter"
+            && fact.Properties["handlerName"] == "OnPostSave"
+            && fact.Properties["modelType"] == "ProfileInput"
+            && fact.Properties["propertyName"] == "DisplayName");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RazorModelBindingTarget
+            && fact.Properties["bindingKind"] == "bind-property"
+            && fact.Properties["modelType"] == "EditModel"
+            && fact.Properties["propertyName"] == "Input");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.RazorBindingGap
+            && fact.RuleId == RuleIds.RazorBindingGap
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && fact.Properties["gapKind"] == "cross-file-parameter-type"
+            && fact.Properties["bindingKind"] == "action-parameter"
+            && fact.Properties["modelType"] == "ExternalProfileDto"
+            && fact.Properties["actionName"] == "SaveExternal");
+        Assert.DoesNotContain(temp.Path, string.Join("|", result.Facts.SelectMany(fact => fact.Properties.Values)));
     }
 
     private static void AssertFact(ScanResult result, string factType, string targetSymbol, string filePath, int startLine, int endLine)
