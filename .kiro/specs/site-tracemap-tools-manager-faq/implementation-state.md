@@ -1,7 +1,7 @@
 # Implementation State
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 ## Summary

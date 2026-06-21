@@ -1,7 +1,7 @@
 # Site TraceMap Tools Endpoint Review Playbook Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 Implementation completed on branch `codex/impl-site-endpoint-review-playbook`.

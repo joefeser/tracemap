@@ -1,7 +1,7 @@
 # Site TraceMap Tools Review Claim Checklist Tasks
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 These implementation tasks are checked only after the corresponding site change or validation completed.

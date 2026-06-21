@@ -1,5 +1,7 @@
 # Site TraceMap Tools Manager Packet Tasks
 
+Status: implemented
+Readiness: implemented
 Public claim level: demo
 
 - [x] Create `/manager-packet/` using existing static site layout patterns.

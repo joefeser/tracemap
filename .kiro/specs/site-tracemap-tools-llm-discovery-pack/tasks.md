@@ -1,7 +1,7 @@
 # Site TraceMap Tools LLM Discovery Pack Tasks
 
 Public claim level: demo
-Status: completed
+Status: implemented
 Readiness: implemented
 
 - [x] 1. Add the static discovery entry point. Requirements: 1, 3, 4.

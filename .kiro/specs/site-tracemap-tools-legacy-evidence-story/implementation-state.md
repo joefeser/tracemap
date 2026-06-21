@@ -1,7 +1,7 @@
 # site-tracemap-tools-legacy-evidence-story implementation state
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 ## Branch

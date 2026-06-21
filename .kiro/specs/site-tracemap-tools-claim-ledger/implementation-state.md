@@ -1,7 +1,7 @@
 # Implementation State
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Last verified: 2026-06-18
 Branch: codex/impl-site-claim-ledger
 Worktree: dedicated implementation worktree; absolute path omitted from this note

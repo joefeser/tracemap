@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 - [x] 1. Decide the initial blog structure.
   - Choose URL shape, for example `/blog/why-tracemap-exists/` and
     `/blog/building-tracemap-with-codex-kiro-qodo/`.

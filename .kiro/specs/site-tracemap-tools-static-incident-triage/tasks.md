@@ -1,7 +1,7 @@
 # Site TraceMap Tools Static Incident Triage Tasks
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 - [x] Confirm or create this spec-local `implementation-state.md` with branch,

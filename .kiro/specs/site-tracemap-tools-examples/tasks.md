@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 - [x] 1. Add the examples spec and implementation state.
   - Record scope, validation expectations, and follow-ups.
 
