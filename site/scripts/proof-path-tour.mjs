@@ -612,6 +612,12 @@ function stripTagsTight(html) {
     }
 
     if (char === "<") {
+      if (html.startsWith("<!--", index)) {
+        const end = html.indexOf("-->", index + 4);
+        index = end === -1 ? html.length : end + 2;
+        continue;
+      }
+
       insideTag = true;
       quote = "";
       continue;

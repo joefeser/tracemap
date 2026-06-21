@@ -108,6 +108,17 @@ test("validateProofPathTourDist rejects forbidden claims split across tags", asy
   assert.match(errors.join("\n"), /forbidden public claim/);
 });
 
+test("validateProofPathTourDist rejects split forbidden claims after apostrophe comments", async (t) => {
+  const root = await createManagedProofPathTourFixture(t, {
+    tourHtml: proofPathTourPage("<!-- don't hide the following text --><p>TraceMap pro<em>ves</em> runtime behavior.</p>")
+  });
+  const errors = [];
+
+  await validateProofPathTourDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim/);
+});
+
 test("validateProofPathTourDist rejects runtime proof wording in attributes", async (t) => {
   const root = await createManagedProofPathTourFixture(t, {
     tourHtml: proofPathTourPage('<img alt="TraceMap proves runtime behavior">')
