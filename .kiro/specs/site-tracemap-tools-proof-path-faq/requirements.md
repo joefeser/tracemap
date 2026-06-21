@@ -298,9 +298,9 @@ Acceptance criteria:
   that the FAQ section's stable anchors resolve in generated output and are
   unique within the host document.
 - Validate forbidden runtime, production, endpoint-performance, outage-cause,
-  release-safety, operational-safety, complete-coverage, AI/LLM, release-
-  approval, autonomous-approval, and replacement-of-review wording across
-  rendered text, decoded HTML, raw HTML attributes, alt text, captions,
+  release-safety, operational-safety, complete-coverage, AI/LLM,
+  release-approval, autonomous-approval, and replacement-of-review wording
+  across rendered text, decoded HTML, raw HTML attributes, alt text, captions,
   metadata, fixtures, tests, sitemap/discovery output, and bot-oriented
   surfaces, allowing forbidden terms only inside explicitly bounded non-claim,
   limitation, or unsafe-pattern contexts.
