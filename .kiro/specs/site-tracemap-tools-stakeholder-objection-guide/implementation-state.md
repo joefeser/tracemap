@@ -12,8 +12,9 @@ Base: `origin/dev`
 
 Target PR base: `dev`
 
-Worktree:
-`/Users/josephfeser/src/gh-joe/tracemap-spec-stakeholder-objection-guide`
+Worktree: isolated worktree requested by the operator. The machine-local path
+is not repeated in this committed spec state to keep repository docs free of
+private local path material.
 
 Scope: spec-only packet for a future public-site stakeholder objection guide.
 Allowed files are limited to
@@ -207,6 +208,14 @@ Results:
   `No public conclusion without evidence`, and future implementation task
   checkboxes.
 
+PR-loop patch validation:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- Focused text check confirmed no `/Users/` machine-local path remains in the
+  spec packet and that the patched forbidden-positioning pattern includes
+  `prompt[- ]?classification`.
+
 Future implementation validation is listed in `requirements.md` and
 `tasks.md`.
 
@@ -220,13 +229,29 @@ Future implementation validation is listed in `requirements.md` and
 
 ## PR Loop
 
-Pending. After the spec-only PR is opened, run:
+Initial PR-loop command:
 
 ```bash
-agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER> --base dev --require-codex-review --quiet --json
+agent-control pr-loop --repo joefeser/tracemap --pr 266 --base dev --require-codex-review --quiet --json
 ```
 
-Use repo-local `.agent-control/lanes/pr-review-loop.yaml` from this worktree.
+Result: `actionable_findings`, `stopReason: UNRESOLVED_REVIEW_THREADS`,
+`canMerge: false`.
+
+Findings patched:
+
+- Gemini Medium: the forbidden-positioning pattern omitted
+  `prompt[- ]?classification`. Patched the starting pattern.
+- Gemini Medium: the overclaim pattern used space-only separators for
+  hyphenated forbidden terms. Patched `production[- ]traffic`,
+  `endpoint[- ]performance`, `runtime[- ]behavior`, `outage[- ]cause`,
+  `root[- ]cause`, `complete[- ]coverage`, and `autonomous[- ]approval`.
+- Qodo action required: `implementation-state.md` contained a machine-local
+  worktree path. Patched the state note to avoid committing the private local
+  path.
+
+Use repo-local `.agent-control/lanes/pr-review-loop.yaml` from this worktree
+for reruns.
 
 ## Follow-Ups
 

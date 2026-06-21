@@ -346,12 +346,12 @@ Acceptance criteria:
   vector database, prompt-classification, autonomous-approval, and
   absence-of-impact wording does not appear as a claim.
 - A suitable starting forbidden-positioning pattern is
-  `/\b(AI[- ]?powered|AI impact analysis|LLM[- ]?powered|LLM analysis|machine learning impact analysis|artificial intelligence impact analysis|embedding[- ]?based impact|vector database impact|prompt[- ]?classified impact|intelligent impact|automated release approval|release approval|operational assurance|runtime proof|production proven|absence of impact|no impact proven)\b/i`.
+  `/\b(AI[- ]?powered|AI impact analysis|LLM[- ]?powered|LLM analysis|machine learning impact analysis|artificial intelligence impact analysis|embedding[- ]?based impact|vector database impact|prompt[- ]?classification|prompt[- ]?classified impact|intelligent impact|automated release approval|release approval|operational assurance|runtime proof|production proven|absence of impact|no impact proven)\b/i`.
   Apply this pattern outside explicit objection titles, safe-answer,
   stop-condition, non-claim, limitation, and other objection-boundary contexts
   so the required objection questions themselves do not fail validation.
 - A suitable starting overclaim pattern is
-  `/\b(proves?|guarantees?|certifies?|approves?|blocks?|safe to release|validated for release|approved for release|deployment[- ]safe|production traffic|endpoint performance|runtime behavior|outage cause|root cause|complete coverage|no impact|not impacted|autonomous approval)\b/i`,
+  `/\b(proves?|guarantees?|certifies?|approves?|blocks?|safe to release|validated for release|approved for release|deployment[- ]safe|production[- ]traffic|endpoint[- ]performance|runtime[- ]behavior|outage[- ]cause|root[- ]cause|complete[- ]coverage|no impact|not impacted|autonomous[- ]approval)\b/i`,
   applied to rendered guide body copy outside explicit non-claim, limitation,
   or objection-boundary contexts.
 - Focused validation should explicitly allow the eight verbatim required
