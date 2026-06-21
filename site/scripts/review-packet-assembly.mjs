@@ -199,7 +199,7 @@ async function readRouteContext({ dist, errors }) {
   if (await fileExists(sitemapPath)) {
     for (const loc of await readSitemapLocSet(sitemapPath)) {
       try {
-        sitemapRoutes.add(new URL(loc).pathname);
+        sitemapRoutes.add(normalizeRouteHref(new URL(loc).pathname));
       } catch {
         // The aggregate validator reports malformed sitemap URLs separately.
       }
@@ -225,11 +225,11 @@ async function readRouteContext({ dist, errors }) {
 
   for (const entry of parsed.entries) {
     if (typeof entry?.path === "string") {
-      routes.add(entry.path);
+      routes.add(normalizeRouteHref(entry.path));
     }
   }
 
-  routeEntry = parsed.entries.find((entry) => entry?.path === reviewPacketAssemblyRoute) ?? null;
+  routeEntry = parsed.entries.find((entry) => normalizeRouteHref(entry?.path ?? "") === reviewPacketAssemblyRoute) ?? null;
   validateRouteEntry(routeEntry, errors);
 
   return { routeEntry, routes, sitemapRoutes };
@@ -536,11 +536,12 @@ function normalizeRouteHref(href) {
 }
 
 function hasHref(html, href) {
-  return extractHrefs(html).includes(href);
+  const normalizedHref = normalizeRouteHref(href);
+  return extractHrefs(html).some((candidate) => normalizeRouteHref(candidate) === normalizedHref);
 }
 
 function getAttribute(attributes, name) {
-  const match = attributes.match(new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*("[^"]*"|'[^']*')`, "i"));
+  const match = attributes.match(new RegExp(`(?:^|\\s)${escapeRegExp(name)}\\s*=\\s*("[^"]*"|'[^']*')`, "i"));
   return match ? decodeHtmlEntities(unquoteAttributeValue(match[1])) : null;
 }
 
