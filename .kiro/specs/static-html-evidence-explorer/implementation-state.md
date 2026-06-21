@@ -254,3 +254,93 @@ PR status:
   no pending or failed checks, merge state `CLEAN`, required Codex review
   completed on the current head, Qodo actionable findings dispositioned with
   evidence, and optional Gemini/Sourcery reviews absent only as residual risk.
+
+## Implementation Follow-Up Slice: Section Status And Safety Rendering
+
+Branch: `codex/implement-static-html-explorer-followup`
+Base: `origin/dev`
+Selected slice: narrow PR 2/PR 4 crossover follow-up for richer local explorer
+rendering and safety visibility.
+
+Scope completed:
+
+- Added rule-backed `ExplorerSectionStatus` rows to `explorer-data.json`.
+- Rendered a new no-JavaScript `Coverage` table in `index.html` for
+  deterministic section availability labels.
+- Rendered a new `Safety & Redactions` table in `index.html` using existing
+  safe redaction rows.
+- Added `explorer.render.section-status.v1` to the rule catalog.
+- Recorded omitted scan manifest branch, solution, and project identity fields
+  as safe omission/redaction rows.
+- Added a visible `explorer.input.provenance-conflict.v1` limitation for the
+  deferred claim-level conflict detection subtype.
+- Renamed the production generated-output safety validator from the
+  test-oriented name to `ValidateGeneratedFilesForSafety`.
+- Documented the `public-demo` safety profile versus `public-safe` claim-level
+  vocabulary in `docs/STATIC_HTML_EVIDENCE_EXPLORER.md`.
+
+Kiro implementation review:
+
+- Initial implementation review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifacts:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-21T200430-696Z-implementation-claude-sonnet-4.6.*`.
+  Patched blocking findings for the generated-output validator naming and the
+  nullable legacy artifact evidence-span boundary. Also patched scanner-version
+  redaction accounting and validator local-path coverage.
+- First re-review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifacts:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-21T201024-265Z-re-review-claude-sonnet-4.6.*`.
+  Patched the task 3 bookkeeping blocker by splitting implemented provenance
+  checks from deferred claim-level conflict detection.
+- Second and final re-review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifacts:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-21T201414-603Z-re-review-claude-sonnet-4.6.*`.
+  Patched the remaining concrete findings for omitted scan manifest
+  branch/solution/project identity fields and visible claim-level conflict
+  detection deferral. No further Kiro re-review was run because the requested
+  maximum of two re-review cycles had been reached.
+
+Validation:
+
+- Focused explorer tests passed:
+  `dotnet test src/dotnet/TraceMap.sln --filter StaticHtmlEvidenceExplorerTests`
+  with 16 passing tests.
+- Required .NET build passed:
+  `dotnet build src/dotnet/TraceMap.sln` with 0 errors and existing
+  `SQLitePCLRaw.lib.e_sqlite3` advisory warnings.
+- Required .NET tests passed:
+  `dotnet test src/dotnet/TraceMap.sln` with 585 passing tests.
+- Private-path guard passed:
+  `./scripts/check-private-paths.sh`.
+- Whitespace check passed:
+  `git diff --check`.
+- Sample smoke passed:
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>/scan`
+  followed by
+  `dotnet run --project src/dotnet/TraceMap.Cli -- explorer generate --input <tmp>/scan --out <tmp>/explorer`.
+  The smoke verified `index.html`, `data/explorer-data.json`, the `Coverage`
+  section, `Safety & Redactions`, `sectionStatuses`,
+  `not-rendered-in-current-slice`, and the
+  `claim-level-conflict-detection-deferred` limitation.
+
+PR status:
+
+- PR URL: pending.
+- PR loop: pending.
+
+Follow-ups still intentionally deferred:
+
+- Full combined index/report, reducer output, path, surface, and rule-catalog
+  artifact readers.
+- Claim-level conflict detection across multiple compatible structured
+  artifacts.
+- Comprehensive public/demo fixture parity tests, copy/download affordance
+  tests, and browser accessibility/no-JavaScript validation.
+- Broader hostname and Unix absolute path classification beyond the existing
+  generated-output safety validator categories.

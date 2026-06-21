@@ -63,6 +63,7 @@ public sealed record ExplorerManifestCounts(
 public sealed record ExplorerData(
     string SchemaVersion,
     ExplorerSummary Summary,
+    IReadOnlyList<ExplorerSectionStatus> SectionStatuses,
     IReadOnlyList<ExplorerSource> Sources,
     IReadOnlyList<ExplorerInputArtifact> Artifacts,
     IReadOnlyList<ExplorerEvidenceRow> EvidenceRows,
@@ -89,6 +90,16 @@ public sealed record ExplorerSummary(
     int OmittedCount,
     IReadOnlyList<string> CoverageLabels,
     bool ReducerOutputPresent);
+
+public sealed record ExplorerSectionStatus(
+    string SectionId,
+    string Label,
+    string Status,
+    string RuleId,
+    string EvidenceTier,
+    string CoverageLabel,
+    string Message,
+    IReadOnlyList<string> SupportIds);
 
 public sealed record ExplorerSource(
     string SourceId,
@@ -185,6 +196,7 @@ public static class StaticHtmlEvidenceExplorer
     public const string CatalogUnavailableRuleId = "explorer.render.catalog-unavailable.v1";
     public const string NoNetworkAssetsRuleId = "explorer.render.no-network-assets.v1";
     public const string PartialSectionRuleId = "explorer.render.partial-section.v1";
+    public const string SectionStatusRuleId = "explorer.render.section-status.v1";
     public const string GeneratedFileStaleRuleId = "explorer.validation.generated-file-stale.v1";
     public const string UserFileCollisionRuleId = "explorer.validation.user-file-collision.v1";
     public const string UnsafeRejectedRuleId = "explorer.validation.unsafe-value-rejected.v1";
@@ -232,7 +244,7 @@ public static class StaticHtmlEvidenceExplorer
         var manifest = BuildManifest(context, data);
         var files = BuildGeneratedFiles(manifest, data);
 
-        ValidateGeneratedStringsForTesting(files);
+        ValidateGeneratedFilesForSafety(files);
         ValidateExistingFiles(options.OutputPath, files, options.Force);
 
         var outputDirectory = Path.GetFullPath(options.OutputPath);
@@ -439,6 +451,15 @@ public static class StaticHtmlEvidenceExplorer
         await AddOptionalArtifactAsync(inputDirectory, "report.md", "markdown-report", "Markdown report", "report.md.v1", safetyProfile, artifacts, gaps, cancellationToken);
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
 
+        limitations.Add(CreateLimitation(
+            "claim-level-conflict-detection-deferred",
+            ProvenanceConflictRuleId,
+            "claim-level-conflict-detection-deferred",
+            "artifacts",
+            "claim-level",
+            "Claim-level conflict detection across multiple compatible structured artifacts is deferred in this explorer slice. Existing rendered data still uses the selected safety profile and documents this limitation.",
+            ["input-directory"]));
+
         if (artifacts.All(artifact => artifact.ArtifactKind != "sqlite-index"))
         {
             gaps.Add(CreateGap(
@@ -505,6 +526,7 @@ public static class StaticHtmlEvidenceExplorer
         return new ExplorerData(
             SchemaVersion,
             summary,
+            BuildSectionStatuses(context),
             context.Sources,
             context.Artifacts,
             context.EvidenceRows,
@@ -686,13 +708,13 @@ public static class StaticHtmlEvidenceExplorer
         IReadOnlyList<ExplorerInputArtifact> artifacts,
         IReadOnlyList<ExplorerGap> gaps,
         IReadOnlyList<ExplorerLimitation> limitations,
-        IReadOnlyDictionary<(string RuleId, string Category, string Location, string Action), int> redactions,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions,
         IReadOnlyCollection<string> coverageLabels)
     {
         var extractorVersions = new SortedSet<string>(StringComparer.Ordinal);
         if (!string.IsNullOrWhiteSpace(manifest?.ScannerVersion))
         {
-            extractorVersions.Add(SafeClosedText(manifest.ScannerVersion, "scanner-version", null));
+            extractorVersions.Add(SafeClosedText(manifest.ScannerVersion, "scanner-version", redactions));
         }
 
         return new ExplorerSource(
@@ -774,6 +796,29 @@ public static class StaticHtmlEvidenceExplorer
             .ToArray());
     }
 
+    private static ExplorerLimitation CreateLimitation(
+        string idPart,
+        string ruleId,
+        string limitationKind,
+        string affectedSection,
+        string claimEffect,
+        string message,
+        IReadOnlyList<string> supportIds)
+    {
+        return new ExplorerLimitation(
+            $"limitation:{idPart}",
+            ruleId,
+            Tier4Unknown,
+            limitationKind,
+            affectedSection,
+            "input-directory",
+            claimEffect,
+            message,
+            (supportIds.Count == 0 ? ["input-directory"] : supportIds)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray());
+    }
+
     private static IReadOnlyList<ExplorerRule> ExplorerRules()
     {
         return
@@ -786,10 +831,137 @@ public static class StaticHtmlEvidenceExplorer
             Rule(CatalogUnavailableRuleId, "Explorer rule catalog unavailable", "Records that only observed rule IDs and built-in explorer rule stubs are rendered."),
             Rule(NoNetworkAssetsRuleId, "Explorer local no-network assets", "Documents that generated HTML uses only bundled local CSS and JavaScript assets."),
             Rule(PartialSectionRuleId, "Explorer partial section", "Marks unavailable first-slice sections and missing optional artifacts as partial rather than empty."),
+            Rule(SectionStatusRuleId, "Explorer section status", "Records deterministic section availability labels derived from compatible generated artifacts and rule-backed gaps."),
             Rule(GeneratedFileStaleRuleId, "Explorer stale generated file", "Prevents overwriting stale generated explorer output without explicit force."),
             Rule(UserFileCollisionRuleId, "Explorer user file collision", "Prevents overwriting user-authored files in an explorer output directory."),
             Rule(UnsafeRejectedRuleId, "Explorer unsafe generated value rejected", "Fails generation when a generated asset contains an unsafe value after redaction.")
         ];
+    }
+
+    private static IReadOnlyList<ExplorerSectionStatus> BuildSectionStatuses(ExplorerBuildContext context)
+    {
+        var factsProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "facts-ndjson");
+        var sqliteProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "sqlite-index");
+        var reportProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "markdown-report");
+        var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
+        var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
+        var rows = new List<ExplorerSectionStatus>
+        {
+            SectionStatus(
+                "overview",
+                "Evidence Overview",
+                context.CoverageStatus,
+                coverageLabel,
+                "Overview counts are generated from safe explorer view models and preserve partial coverage labels.",
+                ["data/explorer-manifest.json", "data/explorer-data.json"]),
+            SectionStatus(
+                "sources",
+                "Sources",
+                SectionStatusFromGaps(context.Gaps, "sources", context.Sources.Count > 0),
+                coverageLabel,
+                "Source identity uses safe generated labels, safe commit SHA when available, and rule-backed gaps for missing identity.",
+                context.Sources.Select(source => source.SourceId).ToArray()),
+            SectionStatus(
+                "artifacts",
+                "Artifacts",
+                SectionStatusFromGaps(context.Gaps, "artifacts", context.Artifacts.Count > 0),
+                coverageLabel,
+                unsupportedJsonProvided
+                    ? "Artifacts include unsupported JSON entries labeled unavailable without rendering raw content."
+                    : "Artifacts are listed by stable ID, schema label, compatibility, and content hash.",
+                context.Artifacts.Select(artifact => artifact.ArtifactId).ToArray()),
+            SectionStatus(
+                "evidence-rows",
+                "Evidence Rows",
+                factsProvided
+                    ? context.EvidenceRows.Count == 0 ? "no-evidence-under-current-coverage" : SectionStatusFromGaps(context.Gaps, "evidence-rows", true)
+                    : "not-provided",
+                coverageLabel,
+                factsProvided
+                    ? context.EvidenceRows.Count == 0
+                        ? "facts.ndjson was provided and compatible, but no static evidence rows were present under the current coverage."
+                        : "Evidence rows are rendered from facts.ndjson after safety filtering and deterministic ordering."
+                    : "Evidence rows are unavailable because no compatible fact stream was provided.",
+                factsProvided ? ["artifact:facts-ndjson"] : ["input-directory"]),
+            SectionStatus(
+                "surfaces",
+                "Surfaces",
+                sqliteProvided ? "not-rendered-in-current-slice" : "not-provided",
+                "PartialAnalysis",
+                sqliteProvided
+                    ? "index.sqlite was hashed as provenance, but static surface extraction from SQLite is deferred in this explorer slice."
+                    : "Surface rendering requires a compatible surface artifact or future SQLite reader and is unavailable here.",
+                sqliteProvided ? ["artifact:sqlite-index"] : ["input-directory"]),
+            SectionStatus(
+                "paths",
+                "Paths",
+                sqliteProvided ? "not-rendered-in-current-slice" : "not-provided",
+                "PartialAnalysis",
+                sqliteProvided
+                    ? "index.sqlite was hashed as provenance, but dependency and route path rendering from SQLite is deferred in this explorer slice."
+                    : "Path rendering requires a compatible path artifact or future SQLite reader and is unavailable here.",
+                sqliteProvided ? ["artifact:sqlite-index"] : ["input-directory"]),
+            SectionStatus(
+                "reducer-results",
+                "Reducer Results",
+                reportProvided ? "not-rendered-in-current-slice" : "not-provided",
+                "PartialAnalysis",
+                reportProvided
+                    ? "Markdown report input was hashed as provenance, but reducer-backed result parsing is deferred until a compatible structured reducer artifact is provided."
+                    : "Reducer-backed rows are not provided; scanner-only rows are not described as impact.",
+                reportProvided ? ["artifact:markdown-report"] : ["input-directory"]),
+            SectionStatus(
+                "rules",
+                "Rules",
+                "built-in-stubs",
+                coverageLabel,
+                "The explorer renders built-in explorer rules and observed rule IDs; compatible full rule catalog artifact loading is deferred.",
+                context.Rules.Select(rule => rule.RuleId).ToArray()),
+            SectionStatus(
+                "redactions",
+                "Safety & Redactions",
+                context.Redactions.Count == 0 ? "none-recorded" : "recorded",
+                coverageLabel,
+                context.Redactions.Count == 0
+                    ? "No redaction rows were recorded for the compatible first-slice inputs."
+                    : "Unsafe values were redacted, hashed, categorized, or omitted before visible UI and embedded data were written.",
+                context.Redactions.Select(redaction => redaction.RedactionId).ToArray())
+        };
+
+        return rows
+            .OrderBy(row => row.SectionId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static ExplorerSectionStatus SectionStatus(
+        string sectionId,
+        string label,
+        string status,
+        string coverageLabel,
+        string message,
+        IReadOnlyList<string> supportIds)
+    {
+        return new ExplorerSectionStatus(
+            sectionId,
+            label,
+            status,
+            SectionStatusRuleId,
+            Tier4Unknown,
+            coverageLabel,
+            message,
+            supportIds.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+    }
+
+    private static string SectionStatusFromGaps(IReadOnlyList<ExplorerGap> gaps, string section, bool provided)
+    {
+        if (!provided)
+        {
+            return "not-provided";
+        }
+
+        return gaps.Any(gap => gap.AffectedSection.Equals(section, StringComparison.Ordinal))
+            ? "partial"
+            : "available";
     }
 
     private static ExplorerRule Rule(string ruleId, string title, string description)
@@ -827,6 +999,46 @@ public static class StaticHtmlEvidenceExplorer
                 OmittedUnsafeValueRuleId,
                 UnsafeCategory(manifest.RepoName) ?? "repo-name",
                 "scan-manifest.repoName",
+                "omit");
+        }
+
+        if (!string.IsNullOrWhiteSpace(manifest.Branch))
+        {
+            AddRedaction(
+                redactions,
+                OmittedUnsafeValueRuleId,
+                UnsafeCategory(manifest.Branch) ?? "branch-name",
+                "scan-manifest.branch",
+                "omit");
+        }
+
+        foreach (var solution in manifest.Solutions ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(solution))
+            {
+                continue;
+            }
+
+            AddRedaction(
+                redactions,
+                OmittedUnsafeValueRuleId,
+                UnsafeCategory(solution) ?? "solution-name",
+                "scan-manifest.solutions",
+                "omit");
+        }
+
+        foreach (var project in manifest.Projects ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(project))
+            {
+                continue;
+            }
+
+            AddRedaction(
+                redactions,
+                OmittedUnsafeValueRuleId,
+                UnsafeCategory(project) ?? "project-path",
+                "scan-manifest.projects",
                 "omit");
         }
     }
@@ -1041,10 +1253,12 @@ public static class StaticHtmlEvidenceExplorer
 
         builder.AppendLine("  <main>");
         RenderOverview(builder, data.Summary);
+        RenderCoverage(builder, data.SectionStatuses);
         RenderSources(builder, data.Sources);
         RenderArtifacts(builder, data.Artifacts);
         RenderGaps(builder, data.Gaps);
         RenderLimitations(builder, data.Limitations);
+        RenderRedactions(builder, data.Redactions);
         RenderRules(builder, data.Rules);
         RenderEvidenceRows(builder, data.EvidenceRows, data.Artifacts.Any(artifact => artifact.ArtifactKind == "facts-ndjson"));
         RenderAbout(builder);
@@ -1085,6 +1299,21 @@ public static class StaticHtmlEvidenceExplorer
     private static void SummaryItem(StringBuilder builder, string key, string value)
     {
         builder.AppendLine($"        <div><dt>{Html(key)}</dt><dd>{Html(value)}</dd></div>");
+    }
+
+    private static void RenderCoverage(StringBuilder builder, IReadOnlyList<ExplorerSectionStatus> sectionStatuses)
+    {
+        builder.AppendLine("    <section id=\"coverage\" aria-labelledby=\"coverage-heading\">");
+        builder.AppendLine("      <h2 id=\"coverage-heading\">Coverage</h2>");
+        builder.AppendLine("      <p>Section status rows describe explorer rendering coverage only. They do not prove runtime behavior or evidence absence outside compatible inputs.</p>");
+        builder.AppendLine("      <table><caption>Rule-backed section availability and coverage labels</caption><thead><tr><th>Section</th><th>Status</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Support IDs</th><th>Message</th></tr></thead><tbody>");
+        foreach (var row in sectionStatuses.OrderBy(row => row.SectionId, StringComparer.Ordinal))
+        {
+            var supportIds = Html(string.Join(", ", row.SupportIds));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.Label)}</th><td>{Html(row.Status)}</td><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.CoverageLabel)}</td><td>{supportIds}</td><td>{Html(row.Message)}</td></tr>");
+        }
+        builder.AppendLine("      </tbody></table>");
+        builder.AppendLine("    </section>");
     }
 
     private static void RenderSources(StringBuilder builder, IReadOnlyList<ExplorerSource> sources)
@@ -1149,6 +1378,23 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("    </section>");
     }
 
+    private static void RenderRedactions(StringBuilder builder, IReadOnlyList<ExplorerRedaction> redactions)
+    {
+        builder.AppendLine("    <section id=\"redactions\" aria-labelledby=\"redactions-heading\">");
+        builder.AppendLine("      <h2 id=\"redactions-heading\">Safety &amp; Redactions</h2>");
+        builder.AppendLine("      <table><caption>Safe redaction, hash, category-only, and omission counts</caption><thead><tr><th>Redaction</th><th>Rule ID</th><th>Category</th><th>Location</th><th>Action</th><th>Count</th></tr></thead><tbody>");
+        foreach (var redaction in redactions.OrderBy(row => row.RuleId, StringComparer.Ordinal).ThenBy(row => row.Category, StringComparer.Ordinal).ThenBy(row => row.Location, StringComparer.Ordinal).ThenBy(row => row.Action, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(redaction.RedactionId)}</th><td>{Html(redaction.RuleId)}</td><td>{Html(redaction.Category)}</td><td>{Html(redaction.Location)}</td><td>{Html(redaction.Action)}</td><td>{redaction.Count}</td></tr>");
+        }
+        if (redactions.Count == 0)
+        {
+            builder.AppendLine("        <tr><td colspan=\"6\">No redaction rows were recorded for the compatible first-slice inputs.</td></tr>");
+        }
+        builder.AppendLine("      </tbody></table>");
+        builder.AppendLine("    </section>");
+    }
+
     private static void RenderRules(StringBuilder builder, IReadOnlyList<ExplorerRule> rules)
     {
         builder.AppendLine("    <section id=\"rules\" aria-labelledby=\"rules-heading\">");
@@ -1204,10 +1450,12 @@ public static class StaticHtmlEvidenceExplorer
         return
         [
             ("overview", "Evidence Overview"),
+            ("coverage", "Coverage"),
             ("sources", "Sources"),
             ("artifacts", "Artifacts"),
             ("gaps", "Gaps"),
             ("limitations", "Limitations"),
+            ("redactions", "Safety & Redactions"),
             ("rules", "Rules"),
             ("evidence-rows", "Evidence Rows"),
             ("about", "About This Local Explorer")
@@ -1391,7 +1639,7 @@ public static class StaticHtmlEvidenceExplorer
         return builder.ToString().ReplaceLineEndings("\n");
     }
 
-    internal static void ValidateGeneratedStringsForTesting(IReadOnlyDictionary<string, string> files)
+    internal static void ValidateGeneratedFilesForSafety(IReadOnlyDictionary<string, string> files)
     {
         foreach (var (path, content) in files)
         {

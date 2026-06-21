@@ -36,6 +36,9 @@ In this first slice, that includes report JSON artifacts such as
 `dependency-report.json`, `release-review.json`, `demo-summary.json`, and
 other combined/reducer report JSON files; compatible readers for those
 artifacts are deferred to later slices.
+Claim-level conflict detection across multiple compatible structured artifacts
+is also deferred in this slice and is rendered as a visible
+`explorer.input.provenance-conflict.v1` limitation.
 Analyzer logs, raw SQLite content, raw facts, raw snippets, raw SQL, config
 values, raw remotes, hostnames, endpoint addresses, query strings, private
 sample names, and local absolute paths are not rendered.
@@ -58,6 +61,21 @@ limitations, rule IDs, and a deterministic baseline of evidence rows readable
 without JavaScript. JavaScript is local-only progressive enhancement over safe
 rendered table fields.
 
+The follow-up rendering slice also includes:
+
+- a `Coverage` table with rule-backed section status rows for overview,
+  sources, artifacts, evidence rows, surfaces, paths, reducer results, rules,
+  and redactions;
+- a `Safety & Redactions` table showing safe categories, actions, locations,
+  and counts for redacted, hashed, category-only, or omitted values;
+- matching `sectionStatuses` and `redactions` data in `data/explorer-data.json`
+  so downloadable data is no less redacted than the visible UI.
+
+First-slice rows such as `not-rendered-in-current-slice` and `not-provided`
+are explorer compatibility labels only. They do not prove runtime behavior,
+source reachability, production use, or absence of evidence outside compatible
+inputs.
+
 The generated files use stable ordering, deterministic asset names, normalized
 line endings, and no wall-clock timestamp. The manifest records
 `generationTimestampPolicy: "omitted-deterministic"` and does not include a
@@ -68,6 +86,10 @@ self-referential hash of generated output.
 The default safety profile is `public-demo`. It uses safe source labels,
 commit-SHA-only repository identity, stable artifact IDs, content hashes, safe
 repository-relative paths, and hashed placeholders for unsafe display values.
+The generated manifest records `safetyProfile: "public-demo"` and
+`claimLevel: "public-safe"` for this mode so downstream readers can distinguish
+the selected safety profile from the public-safe claim vocabulary used by other
+TraceMap reports.
 
 `hidden-local` is visibly labeled in the page and manifest. This first slice
 still uses the same conservative safe rendering path, but records redaction,
