@@ -226,24 +226,26 @@ rules:
   - id: review.priority.aggregate.v1
     name: Deterministic review priority aggregation
     description: Aggregates row-level review-priority components into closed-vocabulary severityHint and attentionLevel values with deterministic ordering and visible completeness limits.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier4Unknown
     emits:
       - review priority summary
       - review priority ordering
     limitations:
       - Aggregation preserves underlying report classifications and cannot relabel a source row into a stronger product conclusion.
+      - Aggregation components may be derived from Tier2Structural or Tier4Unknown source evidence, but the aggregate rule itself is capped at Tier4Unknown because completeness gaps can make the report-level priority incomplete.
       - Unknown, unavailable, reduced, or truncated evidence can make report-level priority incomplete or unknown; low attention is emitted only under credible coverage for the requested evidence.
       - Tie-breaking is deterministic by completeness, severity, source classification, evidence tier, source label, section, stable safe path or line span, and stable row ID.
 
   - id: review.priority.downgrade.v1
     name: Review priority downgrade and cap
     description: Emits visible cap or downgrade components when evidence quality prevents a stronger ordinal review-priority hint.
-    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    evidenceTier: Tier4Unknown
     emits:
       - review priority downgrade component
       - review priority cap component
     limitations:
       - Tier3, syntax-only, textual, hash-only, ambiguous, duplicate, name-only, fallback, coverage-relative, and noisy fan-out evidence is capped at review-tier priority unless separate documented non-noisy evidence supports a stronger hint.
+      - Downgrade components may be triggered by Tier3SyntaxOrTextual or Tier4Unknown source evidence, but the downgrade rule itself is capped at Tier4Unknown because it records evidence-quality limits rather than source-code proof.
       - Downgrades do not delete positive evidence; the positive component and cap component must remain visible together.
 
   - id: review.priority.coverage.v1
