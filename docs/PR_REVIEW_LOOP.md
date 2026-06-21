@@ -7,10 +7,11 @@ review readiness:
 .agent-control/lanes/pr-review-loop.yaml
 ```
 
-The lane requires Codex and Qodo review evidence. Both reviewers use
-`waitUntilReturnedBeforeProcessing`, so the loop waits for both required
-reviewers to return, or for the bounded wait policy to hand control back to the
-owner, before processing partial findings.
+The lane treats Codex and Qodo as a trusted review group. Both reviewers are
+preferred, but the `dev` lane may proceed after the configured wait when at
+least one trusted reviewer has returned and all mechanical gates are clean.
+Missing reviewers remain residual risk for `dev`; `main`, `master`, and
+`release/**` remain human-mediated promotion targets.
 
 Operational boundaries:
 

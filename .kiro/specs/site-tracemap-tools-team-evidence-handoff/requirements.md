@@ -1,12 +1,12 @@
 # Site TraceMap Tools Team Evidence Handoff Requirements
 
-Status: not-started
+Status: in-review
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Summary
 
-Define a future public site concept page or section for
+Publish a public site concept page for
 `/team-evidence-handoff/`. The page should help someone share a TraceMap
 evidence packet with a teammate, reviewer, manager, or agent without losing the
 proof boundaries that make the packet useful.
@@ -15,9 +15,9 @@ The page is about handoff language and receiver-specific packet framing. It is
 not another artifact taxonomy, a generic review-room agenda, a manager FAQ, a
 packet landing page, or a proof-source catalog.
 
-This is a spec-only site phase. It does not implement site code, scanner
-behavior, reducer behavior, generated artifacts, validation scripts, or agent
-automation.
+This implementation phase adds public-site code, route/discovery metadata, and
+focused validation for the concept page. It does not implement scanner
+behavior, reducer behavior, generated artifacts, or agent automation.
 
 ## Shared Site Principle
 
@@ -25,12 +25,12 @@ No public conclusion without evidence.
 
 ## Claim Boundaries
 
-The future page may explain a concept-level communication model for
+The page may explain a concept-level communication model for
 deterministic static evidence: summary, proof path, rule ID or rule family,
 evidence tier, coverage label, limitations, non-claims, local-only artifacts,
 and next owner/action.
 
-The future page must not claim runtime behavior, production traffic, endpoint
+The page must not claim runtime behavior, production traffic, endpoint
 performance, outage cause, release safety, operational safety, AI impact
 analysis, LLM analysis, or complete product coverage. It must not imply that a
 handoff packet replaces human ownership, tests, telemetry, release review, code
@@ -40,7 +40,7 @@ review, source review, logs, traces, incident response, or manager judgment.
 
 ### Requirement 1: Publish a bounded team evidence handoff route
 
-The future implementation shall publish a concept-level public page or section
+The implementation shall publish a concept-level public page
 for receiver-specific evidence handoff language.
 
 Acceptance criteria:
@@ -55,7 +55,7 @@ Acceptance criteria:
 - The page explains that the handoff keeps a conclusion attached to its proof
   path, rule ID or rule family, evidence tier, coverage label, limitations,
   non-claims, local-only artifacts, and next owner/action.
-- The page uses concept-level language and does not imply a shipped workflow,
+- The page uses concept-level language and does not imply a completed workflow,
   collaboration product, review-room tool, runtime monitor, release gate, or
   autonomous agent handoff.
 - The page reuses existing static site layout, navigation, metadata,

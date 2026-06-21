@@ -45,6 +45,7 @@ public static class CSharpSyntaxExtractor
                 AddQueryPatternFacts(manifest, facts, file.RelativePath, root);
                 AddObjectShapeFacts(manifest, facts, file.RelativePath, root);
                 AddAspNetRouteFacts(manifest, facts, file.RelativePath, root);
+                AddRazorModelBindingTargetFacts(manifest, facts, file.RelativePath, root);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -85,16 +86,17 @@ public static class CSharpSyntaxExtractor
                         }));
                     break;
                 case TypeDeclarationSyntax typeDeclaration:
+                    var typeName = typeDeclaration.Identifier.ValueText;
                     facts.Add(CreateSyntaxFact(
                         manifest,
                         FactTypes.TypeDeclared,
                         RuleIds.CSharpSyntaxDeclarations,
                         filePath,
                         typeDeclaration,
-                        targetSymbol: typeDeclaration.Identifier.ValueText,
+                        targetSymbol: typeName,
                         properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                         {
-                            ["name"] = typeDeclaration.Identifier.ValueText,
+                            ["name"] = typeName,
                             ["kind"] = typeDeclaration.Keyword.ValueText
                         }));
                     break;
@@ -118,16 +120,24 @@ public static class CSharpSyntaxExtractor
 
         foreach (var property in root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
         {
+            var containingType = property.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? string.Empty;
+            var propertyName = property.Identifier.ValueText;
             facts.Add(CreateSyntaxFact(
                 manifest,
                 FactTypes.PropertyDeclared,
                 RuleIds.CSharpSyntaxDeclarations,
                 filePath,
                 property,
-                targetSymbol: property.Identifier.ValueText,
+                sourceSymbol: containingType,
+                targetSymbol: string.IsNullOrWhiteSpace(containingType) ? propertyName : $"{containingType}.{propertyName}",
+                contractElement: propertyName,
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["name"] = property.Identifier.ValueText
+                    ["containingType"] = containingType,
+                    ["declaredType"] = property.Type.ToString(),
+                    ["modelKind"] = ModelKindForType(containingType),
+                    ["name"] = propertyName,
+                    ["propertyName"] = propertyName
                 }));
         }
     }
@@ -512,6 +522,355 @@ public static class CSharpSyntaxExtractor
         }
     }
 
+    private static void AddRazorModelBindingTargetFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    {
+        var classPropertyGroups = root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .GroupBy(type => type.Identifier.ValueText, StringComparer.Ordinal)
+            .ToArray();
+        var ambiguousTypeNames = classPropertyGroups
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var propertyMap = classPropertyGroups
+            .Where(group => group.Count() == 1)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Single().Members
+                    .OfType<PropertyDeclarationSyntax>()
+                    .Where(property => !string.IsNullOrWhiteSpace(property.Identifier.ValueText))
+                    .Select(property => new ModelProperty(property.Identifier.ValueText, property.Type.ToString(), property))
+                    .OrderBy(property => property.Name, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+
+        foreach (var type in root.DescendantNodes().OfType<ClassDeclarationSyntax>().OrderBy(type => type.Identifier.ValueText, StringComparer.Ordinal))
+        {
+            var controllerName = GetControllerName(type);
+            var isController = LooksLikeController(type, controllerName);
+            var isPageModel = LooksLikePageModel(type, filePath);
+
+            if (isController)
+            {
+                foreach (var method in type.Members.OfType<MethodDeclarationSyntax>().OrderBy(method => method.Identifier.ValueText, StringComparer.Ordinal))
+                {
+                    var httpMethods = HttpMethodAttributes(method.AttributeLists)
+                        .Select(attribute => attribute.Method)
+                        .Concat(AttributeRoutes(method.AttributeLists, "Route").Any() ? ["ANY"] : [])
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(value => value, StringComparer.Ordinal)
+                        .ToArray();
+                    if (httpMethods.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    foreach (var parameter in method.ParameterList.Parameters.OrderBy(parameter => parameter.Identifier.ValueText, StringComparer.Ordinal))
+                    {
+                        AddParameterBindingTargets(
+                            manifest,
+                            facts,
+                            filePath,
+                            parameter,
+                            "action-parameter",
+                            controllerName,
+                            method.Identifier.ValueText,
+                            null,
+                            httpMethods,
+                            propertyMap,
+                            ambiguousTypeNames);
+                    }
+                }
+            }
+
+            if (isPageModel)
+            {
+                foreach (var method in type.Members.OfType<MethodDeclarationSyntax>()
+                    .Where(method => method.Identifier.ValueText.StartsWith("On", StringComparison.Ordinal))
+                    .OrderBy(method => method.Identifier.ValueText, StringComparer.Ordinal))
+                {
+                    foreach (var parameter in method.ParameterList.Parameters.OrderBy(parameter => parameter.Identifier.ValueText, StringComparer.Ordinal))
+                    {
+                        AddParameterBindingTargets(
+                            manifest,
+                            facts,
+                            filePath,
+                            parameter,
+                            "handler-parameter",
+                            null,
+                            null,
+                            method.Identifier.ValueText,
+                            [PageHandlerHttpMethod(method.Identifier.ValueText)],
+                            propertyMap,
+                            ambiguousTypeNames);
+                    }
+                }
+            }
+
+            foreach (var property in type.Members.OfType<PropertyDeclarationSyntax>().OrderBy(property => property.Identifier.ValueText, StringComparer.Ordinal))
+            {
+                if (HasAttribute(property.AttributeLists, "BindProperty"))
+                {
+                    AddModelBindingFact(
+                        manifest,
+                        facts,
+                        filePath,
+                        property,
+                        "bind-property",
+                        "view-model",
+                        type.Identifier.ValueText,
+                        property.Identifier.ValueText,
+                        property.Identifier.ValueText,
+                        property.Type.ToString(),
+                        null,
+                        "form",
+                        null,
+                        null,
+                        null,
+                        "POST");
+                }
+                else if (isPageModel)
+                {
+                    AddModelBindingFact(
+                        manifest,
+                        facts,
+                        filePath,
+                        property,
+                        "page-model",
+                        "view-model",
+                        type.Identifier.ValueText,
+                        property.Identifier.ValueText,
+                        property.Identifier.ValueText,
+                        property.Type.ToString(),
+                        null,
+                        "unknown",
+                        null,
+                        null,
+                        null,
+                        string.Empty);
+                }
+            }
+
+            if (LooksLikeViewModelType(type.Identifier.ValueText))
+            {
+                foreach (var property in type.Members.OfType<PropertyDeclarationSyntax>().OrderBy(property => property.Identifier.ValueText, StringComparer.Ordinal))
+                {
+                    AddModelBindingFact(
+                        manifest,
+                        facts,
+                        filePath,
+                        property,
+                        "view-model",
+                        "view-model",
+                        type.Identifier.ValueText,
+                        property.Identifier.ValueText,
+                        property.Identifier.ValueText,
+                        property.Type.ToString(),
+                        null,
+                        "unknown",
+                        null,
+                        null,
+                        null,
+                        string.Empty);
+                }
+            }
+        }
+    }
+
+    private static void AddParameterBindingTargets(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        ParameterSyntax parameter,
+        string bindingKind,
+        string? controllerName,
+        string? actionName,
+        string? handlerName,
+        IReadOnlyList<string> httpMethods,
+        IReadOnlyDictionary<string, ModelProperty[]> propertyMap,
+        IReadOnlySet<string> ambiguousTypeNames)
+    {
+        var parameterType = CleanTypeName(parameter.Type?.ToString() ?? string.Empty);
+        var parameterTypeName = LastTypePart(parameterType);
+        if (ambiguousTypeNames.Contains(parameterTypeName))
+        {
+            AddModelBindingGap(
+                manifest,
+                facts,
+                filePath,
+                parameter,
+                "ambiguous-parameter-type",
+                bindingKind,
+                parameterTypeName,
+                parameter.Identifier.ValueText,
+                ParameterSource(parameter),
+                controllerName,
+                actionName,
+                handlerName,
+                httpMethods);
+            return;
+        }
+
+        if (!propertyMap.TryGetValue(parameterTypeName, out var properties) || properties.Length == 0)
+        {
+            if (IsLikelyModelBindingParameterType(parameterType))
+            {
+                AddModelBindingGap(
+                    manifest,
+                    facts,
+                    filePath,
+                    parameter,
+                    "cross-file-parameter-type",
+                    bindingKind,
+                    parameterTypeName,
+                    parameter.Identifier.ValueText,
+                    ParameterSource(parameter),
+                    controllerName,
+                    actionName,
+                    handlerName,
+                    httpMethods);
+            }
+
+            return;
+        }
+
+        var parameterSource = ParameterSource(parameter);
+        var modelKind = parameterSource == "body" || LooksLikeDtoType(parameterType)
+            ? "dto"
+            : parameterSource == "form" ? "view-model" : "model";
+        foreach (var httpMethod in httpMethods)
+        {
+            foreach (var property in properties)
+            {
+                AddModelBindingFact(
+                    manifest,
+                    facts,
+                    filePath,
+                    parameter,
+                    bindingKind,
+                    modelKind,
+                    parameterTypeName,
+                    property.Name,
+                    property.Name,
+                    property.TypeName,
+                    parameter.Identifier.ValueText,
+                    parameterSource,
+                    controllerName,
+                    actionName,
+                    handlerName,
+                    httpMethod);
+            }
+        }
+    }
+
+    private static void AddModelBindingFact(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        SyntaxNode node,
+        string bindingKind,
+        string modelKind,
+        string modelType,
+        string propertyName,
+        string propertyPath,
+        string propertyType,
+        string? parameterName,
+        string parameterSource,
+        string? controllerName,
+        string? actionName,
+        string? handlerName,
+        string httpMethod)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["bindingKind"] = bindingKind,
+            ["httpMethod"] = httpMethod,
+            ["modelKind"] = modelKind,
+            ["modelType"] = modelType,
+            ["parameterName"] = parameterName ?? string.Empty,
+            ["parameterSource"] = parameterSource,
+            ["propertyName"] = propertyName,
+            ["propertyPath"] = propertyPath,
+            ["propertyType"] = propertyType,
+            ["uiFramework"] = "razor",
+            ["valueStored"] = "safe-metadata-only"
+        };
+        if (!string.IsNullOrWhiteSpace(actionName))
+        {
+            properties["actionName"] = actionName!;
+        }
+        if (!string.IsNullOrWhiteSpace(controllerName))
+        {
+            properties["controllerName"] = controllerName!;
+        }
+        if (!string.IsNullOrWhiteSpace(handlerName))
+        {
+            properties["handlerName"] = handlerName!;
+        }
+
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.RazorModelBindingTarget,
+            RuleIds.RazorModelBinding,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            ToEvidenceSpan(filePath, node),
+            sourceSymbol: actionName ?? handlerName ?? modelType,
+            targetSymbol: $"{modelType}.{propertyName}",
+            contractElement: propertyName,
+            properties: properties));
+    }
+
+    private static void AddModelBindingGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        SyntaxNode node,
+        string gapKind,
+        string bindingKind,
+        string modelType,
+        string parameterName,
+        string parameterSource,
+        string? controllerName,
+        string? actionName,
+        string? handlerName,
+        IReadOnlyList<string> httpMethods)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["bindingKind"] = bindingKind,
+            ["gapKind"] = gapKind,
+            ["httpMethods"] = string.Join(";", httpMethods.OrderBy(value => value, StringComparer.Ordinal)),
+            ["modelType"] = modelType,
+            ["parameterName"] = parameterName,
+            ["parameterSource"] = parameterSource,
+            ["uiFramework"] = "razor",
+            ["valueStored"] = "safe-metadata-only"
+        };
+        if (!string.IsNullOrWhiteSpace(actionName))
+        {
+            properties["actionName"] = actionName!;
+        }
+        if (!string.IsNullOrWhiteSpace(controllerName))
+        {
+            properties["controllerName"] = controllerName!;
+        }
+        if (!string.IsNullOrWhiteSpace(handlerName))
+        {
+            properties["handlerName"] = handlerName!;
+        }
+
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.RazorBindingGap,
+            RuleIds.RazorBindingGap,
+            EvidenceTiers.Tier4Unknown,
+            ToEvidenceSpan(filePath, node),
+            sourceSymbol: actionName ?? handlerName ?? modelType,
+            targetSymbol: modelType,
+            contractElement: parameterName,
+            properties: properties));
+    }
+
     private static CodeFact CreateObjectShapeFact(ScanManifest manifest, string filePath, SyntaxNode node, string objectKind, IReadOnlyList<string> fields)
     {
         return FactFactory.Create(
@@ -671,6 +1030,40 @@ public static class CSharpSyntaxExtractor
         return separator >= 0 && separator + 1 < withoutGeneric.Length
             ? withoutGeneric[(separator + 1)..]
             : withoutGeneric;
+    }
+
+    private static bool IsLikelyModelBindingParameterType(string typeName)
+    {
+        var value = LastTypePart(typeName);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var scalarTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "bool",
+            "byte",
+            "CancellationToken",
+            "char",
+            "DateOnly",
+            "DateTime",
+            "DateTimeOffset",
+            "decimal",
+            "double",
+            "float",
+            "Guid",
+            "int",
+            "long",
+            "short",
+            "string",
+            "TimeOnly",
+            "TimeSpan",
+            "uint",
+            "ulong",
+            "ushort"
+        };
+        return !scalarTypes.Contains(value);
     }
 
     private static bool IsCalculationExpression(BinaryExpressionSyntax binary)
@@ -925,6 +1318,106 @@ public static class CSharpSyntaxExtractor
         }
     }
 
+    private static string ParameterSource(ParameterSyntax parameter)
+    {
+        if (HasAttribute(parameter.AttributeLists, "FromBody"))
+        {
+            return "body";
+        }
+
+        if (HasAttribute(parameter.AttributeLists, "FromForm"))
+        {
+            return "form";
+        }
+
+        if (HasAttribute(parameter.AttributeLists, "FromRoute"))
+        {
+            return "route";
+        }
+
+        if (HasAttribute(parameter.AttributeLists, "FromQuery"))
+        {
+            return "query";
+        }
+
+        return LooksLikeBodyType(parameter.Type?.ToString() ?? string.Empty) ? "body" : "unknown";
+    }
+
+    private static bool LooksLikePageModel(ClassDeclarationSyntax type, string filePath)
+    {
+        return type.Identifier.ValueText.EndsWith("Model", StringComparison.Ordinal)
+            && (filePath.Contains("/Pages/", StringComparison.OrdinalIgnoreCase)
+                || type.BaseList?.Types.Any(baseType => baseType.Type.ToString().Contains("PageModel", StringComparison.Ordinal)) == true
+                || type.Members.OfType<MethodDeclarationSyntax>().Any(method => method.Identifier.ValueText.StartsWith("OnGet", StringComparison.Ordinal) || method.Identifier.ValueText.StartsWith("OnPost", StringComparison.Ordinal)));
+    }
+
+    private static bool LooksLikeViewModelType(string typeName)
+    {
+        return typeName.EndsWith("ViewModel", StringComparison.Ordinal)
+            || typeName.EndsWith("InputModel", StringComparison.Ordinal)
+            || typeName.EndsWith("FormModel", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeDtoType(string typeName)
+    {
+        return typeName.EndsWith("Dto", StringComparison.Ordinal)
+            || typeName.EndsWith("Request", StringComparison.Ordinal)
+            || typeName.EndsWith("Response", StringComparison.Ordinal)
+            || typeName.EndsWith("Command", StringComparison.Ordinal);
+    }
+
+    private static string ModelKindForType(string typeName)
+    {
+        if (LooksLikeDtoType(typeName))
+        {
+            return "dto";
+        }
+
+        return LooksLikeViewModelType(typeName) ? "view-model" : "model";
+    }
+
+    private static string CleanTypeName(string typeName)
+    {
+        var clean = typeName.Trim().TrimEnd('?');
+        if (clean.StartsWith("global::", StringComparison.Ordinal))
+        {
+            clean = clean["global::".Length..];
+        }
+
+        var genericStart = clean.IndexOf('<', StringComparison.Ordinal);
+        if (genericStart >= 0)
+        {
+            clean = clean[..genericStart];
+        }
+
+        return clean;
+    }
+
+    private static string PageHandlerHttpMethod(string handlerName)
+    {
+        if (handlerName.StartsWith("OnPost", StringComparison.Ordinal))
+        {
+            return "POST";
+        }
+
+        if (handlerName.StartsWith("OnPut", StringComparison.Ordinal))
+        {
+            return "PUT";
+        }
+
+        if (handlerName.StartsWith("OnPatch", StringComparison.Ordinal))
+        {
+            return "PATCH";
+        }
+
+        if (handlerName.StartsWith("OnDelete", StringComparison.Ordinal))
+        {
+            return "DELETE";
+        }
+
+        return handlerName.StartsWith("OnGet", StringComparison.Ordinal) ? "GET" : "ANY";
+    }
+
     private static bool LooksLikeBodyType(string type)
     {
         var lowered = type.Trim().ToLowerInvariant();
@@ -959,6 +1452,8 @@ public static class CSharpSyntaxExtractor
     }
 
     private sealed record HttpAttribute(string Method, string Template);
+
+    private sealed record ModelProperty(string Name, string TypeName, PropertyDeclarationSyntax Syntax);
 
     private static bool IsGeneratedSource(string fullPath)
     {

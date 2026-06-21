@@ -46,6 +46,44 @@ public static class CSharpIntegrationSyntaxExtractor
         "SqlQueryRaw"
     };
 
+    private static readonly HashSet<string> MessagePublisherMethods = new(StringComparer.Ordinal)
+    {
+        "Publish",
+        "PublishAsync",
+        "PublishEventAsync",
+        "Send",
+        "SendAsync",
+        "SendToQueue",
+        "Produce",
+        "ProduceAsync",
+        "BasicPublish",
+        "Enqueue",
+        "EnqueueAsync",
+        "QueueMessageAsync"
+    };
+
+    private static readonly HashSet<string> MessageConsumerMethods = new(StringComparer.Ordinal)
+    {
+        "Subscribe",
+        "SubscribeAsync",
+        "Consume",
+        "ConsumeAsync",
+        "BasicConsume",
+        "Receive",
+        "ReceiveAsync",
+        "OnMessage",
+        "OnMessageAsync"
+    };
+
+    private static readonly HashSet<string> MessageBindingMethods = new(StringComparer.Ordinal)
+    {
+        "QueueDeclare",
+        "ExchangeDeclare",
+        "Bind",
+        "BindQueue",
+        "ReceiveEndpoint"
+    };
+
     public static IReadOnlyList<CodeFact> Extract(string repoPath, ScanManifest manifest, IEnumerable<FileInventoryItem> inventory)
     {
         var facts = new List<CodeFact>();
@@ -70,6 +108,7 @@ public static class CSharpIntegrationSyntaxExtractor
                 var root = CSharpSyntaxTree.ParseText(SourceText.From(source), path: file.RelativePath).GetCompilationUnitRoot();
                 AddDbContextFacts(manifest, facts, file.RelativePath, root);
                 AddInvocationFacts(manifest, facts, file.RelativePath, root);
+                AddMessageAttributeFacts(manifest, facts, file.RelativePath, root);
                 AddSqlCommandFacts(manifest, facts, file.RelativePath, root);
                 AddSqlStringFacts(manifest, facts, file.RelativePath, root);
             }
@@ -144,6 +183,7 @@ public static class CSharpIntegrationSyntaxExtractor
 
     private static void AddInvocationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
     {
+        var constants = ExtractStringConstants(root);
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var invocationName = GetInvocationName(invocation.Expression);
@@ -228,7 +268,253 @@ public static class CSharpIntegrationSyntaxExtractor
             {
                 AddDynamicSqlBoundaryIfNeeded(manifest, facts, filePath, invocation, invocationName);
             }
+
+            AddMessageInvocationFact(manifest, facts, filePath, invocation, invocationName, receiverName, constants);
         }
+    }
+
+    private static void AddMessageInvocationFact(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        string invocationName,
+        string? receiverName,
+        IReadOnlyDictionary<string, string?> constants)
+    {
+        if (IsInProcessMediatorInvocation(invocationName, receiverName, invocation))
+        {
+            return;
+        }
+
+        if (MessagePublisherMethods.Contains(invocationName))
+        {
+            var pattern = MessagePublisherPattern(invocationName, receiverName, invocation);
+            if (pattern is null)
+            {
+                return;
+            }
+
+            AddMessageSurfaceFromInvocation(manifest, facts, filePath, invocation, pattern, constants);
+            return;
+        }
+
+        if (MessageConsumerMethods.Contains(invocationName))
+        {
+            var pattern = MessageConsumerPattern(invocationName, receiverName, invocation);
+            if (pattern is null)
+            {
+                return;
+            }
+
+            AddMessageSurfaceFromInvocation(manifest, facts, filePath, invocation, pattern, constants);
+            return;
+        }
+
+        if (MessageBindingMethods.Contains(invocationName))
+        {
+            var pattern = MessageBindingPattern(invocationName, receiverName, invocation);
+            if (pattern is null)
+            {
+                return;
+            }
+
+            AddMessageSurfaceFromInvocation(manifest, facts, filePath, invocation, pattern, constants);
+        }
+    }
+
+    private static void AddMessageSurfaceFromInvocation(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        MessagePattern pattern,
+        IReadOnlyDictionary<string, string?> constants)
+    {
+        pattern = NormalizeMessagePatternForInvocation(pattern, invocation, constants);
+        var destination = TryGetStaticString(invocation.ArgumentList.Arguments, pattern.DestinationArgumentIndex, constants, out var rawDestination)
+            ? MessageSurfaceIdentity.FromRaw(rawDestination)
+            : new MessageDestinationIdentity("dynamic", null, MessageSurfaceIdentity.Sha256(invocation.ToString()), "dynamic-destination");
+
+        var evidence = ToEvidenceSpan(filePath, invocation);
+        // Hashed identities are still useful static surfaces: the raw unsafe
+        // destination is omitted, but the full digest keeps matching deterministic.
+        if (ShouldEmitMessageGap(destination))
+        {
+            AddMessageGap(manifest, facts, evidence, pattern, destination, GetContainingMemberName(invocation), GetContainingType(invocation), manifest.RepoName);
+            return;
+        }
+
+        AddMessageSurface(manifest, facts, evidence, pattern, destination, GetContainingMemberName(invocation), GetContainingType(invocation), manifest.RepoName);
+    }
+
+    private static void AddMessageAttributeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    {
+        var constants = ExtractStringConstants(root);
+        foreach (var attribute in root.DescendantNodes().OfType<AttributeSyntax>())
+        {
+            var attributeName = attribute.Name.ToString();
+            var arguments = attribute.ArgumentList?.Arguments ?? default(SeparatedSyntaxList<AttributeArgumentSyntax>);
+            var pattern = MessageAttributePattern(attributeName, arguments);
+            if (pattern is null)
+            {
+                continue;
+            }
+
+            var destination = TryGetStaticString(arguments, pattern.DestinationArgumentIndex, constants, out var rawDestination)
+                ? MessageSurfaceIdentity.FromRaw(rawDestination)
+                : new MessageDestinationIdentity("dynamic", null, MessageSurfaceIdentity.Sha256(attribute.ToString()), "dynamic-destination");
+            var evidence = ToEvidenceSpan(filePath, attribute);
+            if (ShouldEmitMessageGap(destination))
+            {
+                AddMessageGap(manifest, facts, evidence, pattern, destination, GetContainingMemberName(attribute), GetContainingType(attribute), manifest.RepoName);
+                continue;
+            }
+
+            AddMessageSurface(manifest, facts, evidence, pattern, destination, GetContainingMemberName(attribute), GetContainingType(attribute), manifest.RepoName);
+        }
+    }
+
+    private static MessagePattern NormalizeMessagePatternForInvocation(
+        MessagePattern pattern,
+        InvocationExpressionSyntax invocation,
+        IReadOnlyDictionary<string, string?> constants)
+    {
+        if (pattern.FrameworkFamily == "rabbitmq"
+            && pattern.FrameworkFeature == "basic-publish"
+            && TryGetStaticString(invocation.ArgumentList.Arguments, 0, constants, out var exchange)
+            && string.IsNullOrEmpty(exchange))
+        {
+            return pattern with
+            {
+                FrameworkFeature = "basic-publish-default-exchange",
+                SurfaceKind = "message-queue",
+                DestinationArgumentIndex = 1
+            };
+        }
+
+        return pattern;
+    }
+
+    private static bool ShouldEmitMessageGap(MessageDestinationIdentity destination)
+    {
+        if (destination.Status is "dynamic" or "unknown" or "ambiguous")
+        {
+            return true;
+        }
+
+        return destination.GapReason is not null && destination.Status != "hashed";
+    }
+
+    private static void AddMessageSurface(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        EvidenceSpan evidence,
+        MessagePattern pattern,
+        MessageDestinationIdentity destination,
+        string? containingMethod,
+        string? containingType,
+        string sourceLabel)
+    {
+        var metadata = MessageMetadata(pattern, destination, evidence, containingMethod, containingType, sourceLabel);
+        facts.Add(FactFactory.Create(
+            manifest,
+            pattern.FactType,
+            pattern.RuleId,
+            pattern.EvidenceTier,
+            evidence,
+            sourceSymbol: containingMethod,
+            targetSymbol: destination.NormalizedDestinationKey ?? destination.DestinationHash ?? pattern.OperationKind,
+            contractElement: destination.NormalizedDestinationKey ?? destination.DestinationHash,
+            properties: metadata));
+    }
+
+    private static void AddMessageGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        EvidenceSpan evidence,
+        MessagePattern pattern,
+        MessageDestinationIdentity destination,
+        string? containingMethod,
+        string? containingType,
+        string sourceLabel)
+    {
+        var metadata = MessageMetadata(pattern, destination, evidence, containingMethod, containingType, sourceLabel);
+        metadata["gapKind"] = "message-surface";
+        metadata["gapReason"] = destination.GapReason ?? "missing-destination-identity";
+        metadata["message"] = "Message surface evidence was visible, but TraceMap could not derive a safe static destination identity.";
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.MessageSurfaceGap,
+            EvidenceTiers.Tier4Unknown,
+            evidence,
+            sourceSymbol: containingMethod,
+            targetSymbol: containingType,
+            properties: metadata));
+    }
+
+    private static SortedDictionary<string, string> MessageMetadata(
+        MessagePattern pattern,
+        MessageDestinationIdentity destination,
+        EvidenceSpan evidence,
+        string? containingMethod,
+        string? containingType,
+        string sourceLabel)
+    {
+        var metadata = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["frameworkFamily"] = pattern.FrameworkFamily,
+            ["frameworkFeature"] = pattern.FrameworkFeature,
+            ["operationDirection"] = pattern.OperationDirection,
+            ["operationKind"] = pattern.OperationKind,
+            ["surfaceKind"] = pattern.SurfaceKind,
+            ["destinationIdentityStatus"] = destination.Status,
+            ["ruleLimitations"] = "static-message-evidence-only;no-runtime-delivery-or-topology-claim"
+        };
+        if (!string.IsNullOrWhiteSpace(destination.NormalizedDestinationKey))
+        {
+            metadata["normalizedDestinationKey"] = destination.NormalizedDestinationKey!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(destination.DestinationHash))
+        {
+            metadata["destinationHash"] = destination.DestinationHash!;
+        }
+
+        var stableKeyMetadataHash = MessageSurfaceIdentity.SafeMetadataHash(metadata);
+
+        if (!string.IsNullOrWhiteSpace(containingMethod))
+        {
+            metadata[pattern.OperationDirection == "consume" ? "handlerSymbolId" : "publisherSymbolId"] = containingMethod!;
+            metadata["containingMethod"] = containingMethod!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(containingType))
+        {
+            metadata["containingType"] = containingType!;
+        }
+
+        metadata["safeMetadataHash"] = stableKeyMetadataHash;
+        // Static destination-backed keys intentionally exclude file/line and handler
+        // identity so small refactors do not churn cross-scan surface identity.
+        var occurrenceDiscriminator = destination.Status == "static"
+            ? null
+            : MessageSurfaceIdentity.OccurrenceDiscriminator(evidence.FilePath, evidence.StartLine, evidence.EndLine, pattern.RuleId, stableKeyMetadataHash);
+        metadata["stableMessageSurfaceKey"] = MessageSurfaceIdentity.StableKey(
+            sourceLabel,
+            "csharp",
+            pattern.SurfaceKind,
+            pattern.FrameworkFamily,
+            pattern.OperationDirection,
+            pattern.OperationKind,
+            destination.Status,
+            destination.NormalizedDestinationKey,
+            destination.DestinationHash,
+            null,
+            occurrenceDiscriminator,
+            stableKeyMetadataHash);
+        return metadata;
     }
 
     private static void AddSqlCommandFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
@@ -428,6 +714,286 @@ public static class CSharpIntegrationSyntaxExtractor
         };
     }
 
+    private static MessagePattern? MessagePublisherPattern(string invocationName, string? receiverName, InvocationExpressionSyntax invocation)
+    {
+        if (invocationName is "PublishEventAsync")
+        {
+            return new MessagePattern(FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, EvidenceTiers.Tier3SyntaxOrTextual, "dapr", "client-call", "publish", "publish", "message-topic", 1);
+        }
+
+        if (invocationName is "Produce" or "ProduceAsync")
+        {
+            return new MessagePattern(FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, EvidenceTiers.Tier3SyntaxOrTextual, "kafka", "producer-call", "publish", "produce", "message-stream", 0);
+        }
+
+        if (invocationName is "SendToQueue" or "QueueMessageAsync" or "Enqueue" or "EnqueueAsync")
+        {
+            return new MessagePattern(FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, EvidenceTiers.Tier3SyntaxOrTextual, "queue-client", "client-call", "publish", "enqueue", "message-queue", 0);
+        }
+
+        if (invocationName is "BasicPublish")
+        {
+            return new MessagePattern(FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, EvidenceTiers.Tier3SyntaxOrTextual, "rabbitmq", "basic-publish", "publish", "publish", "message-exchange", 0);
+        }
+
+        if (invocationName is "Publish" or "PublishAsync")
+        {
+            if (LooksLikeExternalMessageReceiver(receiverName))
+            {
+                return new MessagePattern(FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "publish-call", "publish", "publish", "message-topic", 0);
+            }
+
+            if (invocation.Expression is MemberAccessExpressionSyntax)
+            {
+                return null;
+            }
+        }
+
+        if (invocationName is "Send" or "SendAsync")
+        {
+            if (LooksLikeExternalMessageReceiver(receiverName))
+            {
+                return new MessagePattern(FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "send-call", "publish", "send", "message-queue", 0);
+            }
+        }
+
+        return null;
+    }
+
+    private static MessagePattern? MessageConsumerPattern(string invocationName, string? receiverName, InvocationExpressionSyntax invocation)
+    {
+        if (invocationName is "BasicConsume" or "Receive" or "ReceiveAsync")
+        {
+            return new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier3SyntaxOrTextual, "queue-client", "consumer-call", "consume", "receive", "message-queue", 0);
+        }
+
+        if (invocationName is "Consume" or "ConsumeAsync")
+        {
+            return new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "consumer-call", "consume", "consume", "message-stream", 0);
+        }
+
+        if (invocationName is "Subscribe" or "SubscribeAsync" or "OnMessage" or "OnMessageAsync")
+        {
+            if (LooksLikeExternalMessageReceiver(receiverName) || invocationName.StartsWith("OnMessage", StringComparison.Ordinal))
+            {
+                return new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "subscribe-call", "consume", "subscribe", "message-topic", 0);
+            }
+        }
+
+        return null;
+    }
+
+    private static MessagePattern? MessageBindingPattern(string invocationName, string? receiverName, InvocationExpressionSyntax invocation)
+    {
+        return invocationName switch
+        {
+            "QueueDeclare" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, "rabbitmq", "queue-declare", "declare", "declare", "message-queue", 0),
+            "ExchangeDeclare" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, "rabbitmq", "exchange-declare", "declare", "declare", "message-exchange", 0),
+            "BindQueue" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "binding-call", "bind", "bind", "message-channel", 0),
+            "Bind" when HasMessageBrokerBindEvidence(receiverName, invocation) => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, FrameworkFromReceiver(receiverName), "binding-call", "bind", "bind", "message-channel", 0),
+            "ReceiveEndpoint" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier3SyntaxOrTextual, "masstransit", "receive-endpoint", "bind", "bind", "message-queue", 0),
+            _ => null
+        };
+    }
+
+    private static MessagePattern? MessageAttributePattern(string attributeName, SeparatedSyntaxList<AttributeArgumentSyntax> arguments)
+    {
+        var name = attributeName.EndsWith("Attribute", StringComparison.Ordinal)
+            ? attributeName[..^"Attribute".Length]
+            : attributeName;
+        return name switch
+        {
+            "QueueTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "queue-trigger-attribute", "consume", "handle", "message-queue", 0),
+            "ServiceBusTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "servicebus-trigger-attribute", "consume", "handle", PositionalArgumentCount(arguments) >= 2 ? "message-topic" : "message-queue", 0),
+            "EventHubTrigger" => new MessagePattern(FactTypes.MessageConsumerSurface, RuleIds.MessageSurfaceConsume, EvidenceTiers.Tier2Structural, "azure-functions", "eventhub-trigger-attribute", "consume", "handle", "message-stream", 0),
+            "TimerTrigger" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "azure-functions", "timer-trigger-attribute", "declare", "bind", "message-event", 0),
+            "QueueOutput" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "azure-functions", "queue-output-attribute", "bind", "bind", "message-queue", 0),
+            "ServiceBusOutput" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "azure-functions", "servicebus-output-attribute", "bind", "bind", "message-topic", 0),
+            "Topic" => new MessagePattern(FactTypes.MessageBindingDeclared, RuleIds.MessageSurfaceBinding, EvidenceTiers.Tier2Structural, "dapr", "topic-attribute", "bind", "bind", "message-topic", 1),
+            _ => null
+        };
+    }
+
+    private static bool HasMessageBrokerBindEvidence(string? receiverName, InvocationExpressionSyntax invocation)
+    {
+        if (LooksLikeExternalMessageReceiver(receiverName))
+        {
+            return true;
+        }
+
+        if (receiverName is not null
+            && receiverName.Contains("channel", StringComparison.OrdinalIgnoreCase)
+            && PositionalArgumentCount(invocation.ArgumentList.Arguments) >= 2)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int PositionalArgumentCount(SeparatedSyntaxList<AttributeArgumentSyntax> arguments)
+    {
+        return arguments.Count(argument => argument.NameColon is null && argument.NameEquals is null);
+    }
+
+    private static int PositionalArgumentCount(SeparatedSyntaxList<ArgumentSyntax> arguments)
+    {
+        return arguments.Count(argument => argument.NameColon is null);
+    }
+
+    private static bool IsInProcessMediatorInvocation(string invocationName, string? receiverName, InvocationExpressionSyntax invocation)
+    {
+        if (invocationName is not ("Publish" or "PublishAsync" or "Send" or "SendAsync"))
+        {
+            return false;
+        }
+
+        var receiver = receiverName ?? string.Empty;
+        return receiver.Contains("mediator", StringComparison.OrdinalIgnoreCase)
+            || invocation.Expression.ToString().Contains("MediatR", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeExternalMessageReceiver(string? receiverName)
+    {
+        if (string.IsNullOrWhiteSpace(receiverName))
+        {
+            return false;
+        }
+
+        return receiverName.Contains("bus", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("queue", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("topic", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("kafka", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("producer", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("consumer", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("dapr", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("rabbit", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("channel", StringComparison.OrdinalIgnoreCase)
+            || receiverName.Contains("endpoint", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FrameworkFromReceiver(string? receiverName)
+    {
+        var receiver = receiverName ?? string.Empty;
+        if (receiver.Contains("kafka", StringComparison.OrdinalIgnoreCase) || receiver.Contains("producer", StringComparison.OrdinalIgnoreCase) || receiver.Contains("consumer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "kafka";
+        }
+
+        if (receiver.Contains("dapr", StringComparison.OrdinalIgnoreCase))
+        {
+            return "dapr";
+        }
+
+        if (receiver.Contains("rabbit", StringComparison.OrdinalIgnoreCase) || receiver.Contains("channel", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rabbitmq";
+        }
+
+        if (receiver.Contains("bus", StringComparison.OrdinalIgnoreCase) || receiver.Contains("endpoint", StringComparison.OrdinalIgnoreCase))
+        {
+            return "message-bus";
+        }
+
+        return "message-framework";
+    }
+
+    private static IReadOnlyDictionary<string, string?> ExtractStringConstants(CompilationUnitSyntax root)
+    {
+        var constants = new SortedDictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var declaration in root.DescendantNodes().OfType<VariableDeclaratorSyntax>())
+        {
+            var fieldOrLocal = declaration.Parent?.Parent;
+            var isConst = fieldOrLocal switch
+            {
+                FieldDeclarationSyntax field => field.Modifiers.Any(SyntaxKind.ConstKeyword),
+                LocalDeclarationStatementSyntax local => local.Modifiers.Any(SyntaxKind.ConstKeyword),
+                _ => false
+            };
+            if (!isConst || declaration.Initializer?.Value is not LiteralExpressionSyntax literal || !IsStringLiteralToken(literal.Token))
+            {
+                continue;
+            }
+
+            var name = declaration.Identifier.ValueText;
+            AddConstant(constants, name, literal.Token.ValueText);
+
+            if (fieldOrLocal is FieldDeclarationSyntax)
+            {
+                var typePath = string.Join(
+                    ".",
+                    declaration.Ancestors()
+                        .OfType<TypeDeclarationSyntax>()
+                        .Reverse()
+                        .Select(type => type.Identifier.ValueText));
+                if (!string.IsNullOrWhiteSpace(typePath))
+                {
+                    AddConstant(constants, $"{typePath}.{name}", literal.Token.ValueText);
+                }
+            }
+        }
+
+        return constants;
+    }
+
+    private static void AddConstant(SortedDictionary<string, string?> constants, string name, string value)
+    {
+        if (constants.TryGetValue(name, out var existing))
+        {
+            constants[name] = existing == value ? existing : null;
+        }
+        else
+        {
+            constants[name] = value;
+        }
+    }
+
+    private static bool TryGetStaticString(SeparatedSyntaxList<ArgumentSyntax> arguments, int index, IReadOnlyDictionary<string, string?> constants, out string value)
+    {
+        value = string.Empty;
+        if (arguments.Count <= index)
+        {
+            return false;
+        }
+
+        return TryGetStaticString(arguments[index].Expression, constants, out value);
+    }
+
+    private static bool TryGetStaticString(SeparatedSyntaxList<AttributeArgumentSyntax> arguments, int index, IReadOnlyDictionary<string, string?> constants, out string value)
+    {
+        value = string.Empty;
+        if (arguments.Count <= index)
+        {
+            return false;
+        }
+
+        return TryGetStaticString(arguments[index].Expression, constants, out value);
+    }
+
+    private static bool TryGetStaticString(ExpressionSyntax expression, IReadOnlyDictionary<string, string?> constants, out string value)
+    {
+        value = string.Empty;
+        if (expression is LiteralExpressionSyntax literal && IsStringLiteralToken(literal.Token))
+        {
+            value = literal.Token.ValueText;
+            return true;
+        }
+
+        if (expression is IdentifierNameSyntax identifier && constants.TryGetValue(identifier.Identifier.ValueText, out var constantValue) && constantValue is not null)
+        {
+            value = constantValue;
+            return true;
+        }
+
+        if (expression is MemberAccessExpressionSyntax memberAccess && constants.TryGetValue(memberAccess.WithoutTrivia().ToString(), out var memberConstantValue) && memberConstantValue is not null)
+        {
+            value = memberConstantValue;
+            return true;
+        }
+
+        return false;
+    }
+
     private static bool TryGetLiteralArgument(InvocationExpressionSyntax invocation, int index, out string value)
     {
         value = string.Empty;
@@ -569,4 +1135,15 @@ public static class CSharpIntegrationSyntaxExtractor
         return prefix.Contains("<auto-generated", StringComparison.OrdinalIgnoreCase)
             || prefix.Contains("This code was generated", StringComparison.OrdinalIgnoreCase);
     }
+
+    private sealed record MessagePattern(
+        string FactType,
+        string RuleId,
+        string EvidenceTier,
+        string FrameworkFamily,
+        string FrameworkFeature,
+        string OperationDirection,
+        string OperationKind,
+        string SurfaceKind,
+        int DestinationArgumentIndex);
 }

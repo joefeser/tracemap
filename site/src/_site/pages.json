@@ -10,6 +10,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/glossary/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/outputs/",
     "changefreq": "monthly",
     "priority": "0.8"
@@ -40,12 +45,22 @@
     "priority": "0.8"
   },
   {
+    "path": "/questions/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/adoption/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
   {
     "path": "/use-cases/incident-review/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/use-cases/change-review/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
@@ -65,6 +80,16 @@
     "priority": "0.7"
   },
   {
+    "path": "/incident-evidence-handoff/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/team-evidence-handoff/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/static-vs-runtime/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -76,6 +101,11 @@
   },
   {
     "path": "/legacy-evidence/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/legacy-modernization/evidence-map/",
     "changefreq": "monthly",
     "priority": "0.7"
   },

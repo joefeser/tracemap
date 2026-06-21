@@ -335,6 +335,7 @@ public static class PropertyFlowReporter
         var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
         var facts = await ReadFactsAsync(connection, cancellationToken);
         var missingOptional = await MissingOptionalObjectsAsync(connection, cancellationToken);
+        var routeFlowSignal = await RouteFlowSignalAsync(connection, missingOptional, cancellationToken);
         var sources = read.Sources.Select(ToSource).OrderBy(source => source.SourceLabel, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray();
         var sourceIds = sources.Select(source => source.SourceIndexId).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var sourceCommitShas = sources.Select(source => source.CommitSha).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
@@ -375,13 +376,15 @@ public static class PropertyFlowReporter
             });
         }
 
-        if (missingOptional.Contains("combined_route_flow_edges", StringComparer.Ordinal))
+        if (routeFlowSignal != "available")
         {
             gaps.Add(new PropertyFlowGap(
                 "gap:schema:route-flow-unavailable",
                 "RouteFlowUnavailable",
                 PropertyFlowClassifications.UnknownAnalysisGap,
-                "No route-flow schema signal was available; route-flow-specific downstream traversal is not promoted by property-flow.",
+                routeFlowSignal == "empty"
+                    ? "Route-flow schema signal was available but contained no rows; route-flow-specific downstream traversal is not promoted by property-flow."
+                    : "No route-flow schema signal was available; route-flow-specific downstream traversal is not promoted by property-flow.",
                 SchemaRuleId,
                 EvidenceTiers.Tier4Unknown,
                 null,
@@ -440,7 +443,31 @@ public static class PropertyFlowReporter
             });
         }
 
-        var paths = BuildPaths(roots, selectedFacts, graph, options, gaps);
+        if (selector.Kind is "field" or "control" or "binding"
+            && GenericNames.Contains(selector.Value)
+            && totalCandidateCount >= 10)
+        {
+            gaps.Add(new PropertyFlowGap(
+                $"gap:selector:generic-fan-out:{selector.Kind}",
+                "GenericPropertyFanOut",
+                PropertyFlowClassifications.NeedsReviewLineage,
+                "A generic property selector matched the v1 high fan-out threshold; lineage is capped at review-tier.",
+                SelectorRuleId,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                sourceFilter,
+                null,
+                null,
+                null,
+                null,
+                selectedFacts.Select(fact => fact.CombinedFactId).ToArray(),
+                ["Generic/common property names require exact fact, symbol, source, type, or alias evidence before stronger lineage is reported."])
+            {
+                SupportingSourceIds = selectedFacts.Select(fact => fact.SourceIndexId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                CommitShas = selectedFacts.Select(fact => fact.CommitSha).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
+            });
+        }
+
+        var paths = BuildPaths(roots, selectedFacts, facts, graph, options, gaps);
         var truncated = roots.Length < totalCandidateCount || paths.Truncated || gaps.Count > options.MaxGaps;
         if (truncated)
         {
@@ -528,7 +555,7 @@ public static class PropertyFlowReporter
                 RepositoryIdentityHash(sources),
                 sources.Length,
                 sources,
-                new PropertyFlowSchemaSummary(true, missingOptional.OrderBy(item => item, StringComparer.Ordinal).ToArray(), missingOptional.Contains("combined_route_flow_edges", StringComparer.Ordinal) ? "unavailable" : "available")),
+                new PropertyFlowSchemaSummary(true, missingOptional.OrderBy(item => item, StringComparer.Ordinal).ToArray(), routeFlowSignal)),
             new PropertyFlowSummary(
                 classification,
                 reportCoverage,
@@ -686,6 +713,18 @@ public static class PropertyFlowReporter
         return missing;
     }
 
+    private static async Task<string> RouteFlowSignalAsync(SqliteConnection connection, IReadOnlyList<string> missingOptional, CancellationToken cancellationToken)
+    {
+        if (missingOptional.Contains("combined_route_flow_edges", StringComparer.Ordinal))
+        {
+            return "unavailable";
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from combined_route_flow_edges;";
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) == 0 ? "empty" : "available";
+    }
+
     private static async Task<IReadOnlyList<PropertyFactRow>> ReadFactsAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -780,10 +819,9 @@ public static class PropertyFlowReporter
     {
         return selectorKind switch
         {
-            // RazorModelBindingTarget is reserved for the follow-up MVC/Razor Pages model-binding extractor.
-            "field" or "control" or "binding" => fact.FactType is "UiTemplateBinding" or "UiFormControlBinding" or "UiEventBinding" or "UiTemplateVariable" or "RazorBinding" or "RazorFormTarget" or "RazorModelBindingTarget",
+            "field" or "control" or "binding" => fact.FactType is "UiTemplateBinding" or "UiFormControlBinding" or "UiEventBinding" or "UiTemplateVariable" or "RazorBinding" or "RazorFormTarget",
             "model" => fact.FactType is "RazorBinding" or "RazorModelBindingTarget" or "PropertyDeclared" or "SerializerContractMember",
-            "dto" => fact.FactType is "PropertyDeclared" or "SerializerContractMember" or "ParameterDeclared",
+            "dto" => fact.FactType is "RazorModelBindingTarget" or "PropertyDeclared" or "SerializerContractMember" or "ParameterDeclared",
             "symbol" => true,
             "fact" => true,
             _ => false
@@ -812,10 +850,10 @@ public static class PropertyFlowReporter
                 return false;
             }
 
-            var family = CombinedDependencyReporter.FirstValue(fact.Properties, "contractFamily", "propertyFamily", "modelKind", "typeRole");
+            var families = FamilyTokens(fact);
             return selector.Kind == "model"
-                ? !string.Equals(family, "dto", StringComparison.OrdinalIgnoreCase)
-                : string.Equals(family, "dto", StringComparison.OrdinalIgnoreCase) || fact.FactType == "SerializerContractMember";
+                ? !families.SetEquals(["dto"])
+                : families.Contains("dto") || fact.FactType == "SerializerContractMember";
         }
 
         var value = selector.Value;
@@ -922,7 +960,7 @@ public static class PropertyFlowReporter
     private static IReadOnlyDictionary<string, string> SafeDisplay(PropertyFactRow fact)
     {
         var values = new SortedDictionary<string, string>(StringComparer.Ordinal);
-        foreach (var key in new[] { "uiFramework", "bindingKind", "controlKind", "controlName", "formControlName", "propertyPath", "propertyName", "memberName", "modelType", "dtoType", "handlerName", "actionName", "controllerName", "httpMethod", "normalizedPathKey", "shapeHash" })
+        foreach (var key in new[] { "uiFramework", "bindingKind", "controlKind", "controlName", "formControlName", "propertyPath", "propertyName", "memberName", "modelType", "dtoType", "contractFamily", "propertyFamily", "modelKind", "typeRole", "handlerName", "actionName", "controllerName", "httpMethod", "normalizedPathKey", "shapeHash" })
         {
             if (fact.Properties.TryGetValue(key, out var value) && IsSafeValue(value))
             {
@@ -979,6 +1017,7 @@ public static class PropertyFlowReporter
     private static (IReadOnlyList<PropertyFlowPath> Paths, bool Truncated) BuildPaths(
         IReadOnlyList<PropertyFlowRoot> roots,
         IReadOnlyList<PropertyFactRow> rootFacts,
+        IReadOnlyList<PropertyFactRow> allFacts,
         CombinedPathGraphInventory graph,
         PropertyFlowOptions options,
         List<PropertyFlowGap> gaps)
@@ -1075,12 +1114,602 @@ public static class PropertyFlowReporter
             }
         }
 
+        if (paths.Count < options.MaxPaths)
+        {
+            var derived = BuildDerivedPaths(roots, rootFacts, allFacts, options, gaps, paths.Count + 1);
+            paths.AddRange(derived.Paths.Take(options.MaxPaths - paths.Count));
+            truncated |= derived.Truncated;
+        }
+
         if (paths.Count >= options.MaxPaths)
         {
             truncated = true;
         }
 
         return (paths.OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray(), truncated);
+    }
+
+    private static (IReadOnlyList<PropertyFlowPath> Paths, bool Truncated) BuildDerivedPaths(
+        IReadOnlyList<PropertyFlowRoot> roots,
+        IReadOnlyList<PropertyFactRow> rootFacts,
+        IReadOnlyList<PropertyFactRow> allFacts,
+        PropertyFlowOptions options,
+        List<PropertyFlowGap> gaps,
+        int firstOrdinal)
+    {
+        var paths = new List<PropertyFlowPath>();
+        var ordinal = firstOrdinal;
+        for (var index = 0; index < roots.Count && paths.Count < options.MaxPaths; index++)
+        {
+            var root = roots[index];
+            var fact = rootFacts[index];
+            var derived = fact.FactType.StartsWith("Razor", StringComparison.Ordinal)
+                ? BuildRazorDerivedPaths(root, fact, allFacts, gaps)
+                : BuildAngularDerivedPaths(root, fact, allFacts, gaps);
+            foreach (var path in derived)
+            {
+                paths.Add(path with
+                {
+                    PathId = $"path-{ordinal:D4}-{CombinedReportHelpers.Hash(root.RootId + ":" + string.Join(">", path.Edges.Select(edge => edge.EdgeId)), 12)}"
+                });
+                ordinal++;
+                if (paths.Count >= options.MaxPaths)
+                {
+                    return (paths, true);
+                }
+            }
+        }
+
+        return (paths.OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray(), false);
+    }
+
+    private static IReadOnlyList<PropertyFlowPath> BuildRazorDerivedPaths(
+        PropertyFlowRoot root,
+        PropertyFactRow rootFact,
+        IReadOnlyList<PropertyFactRow> allFacts,
+        List<PropertyFlowGap> gaps)
+    {
+        var paths = new List<PropertyFlowPath>();
+        var propertyName = PropertyName(rootFact);
+        if (string.IsNullOrWhiteSpace(propertyName))
+        {
+            return paths;
+        }
+
+        if (rootFact.FactType == FactTypes.RazorBinding)
+        {
+            var modelType = CombinedDependencyReporter.FirstValue(rootFact.Properties, "modelType");
+            var exactPropertyTargets = allFacts
+                .Where(fact => fact.SourceIndexId == rootFact.SourceIndexId
+                    && IsModelPropertyFact(fact)
+                    && StringEqualsAny(propertyName, PropertyName(fact))
+                    && !string.IsNullOrWhiteSpace(modelType)
+                    && StringEqualsAny(modelType!, ModelType(fact)))
+                .OrderBy(fact => fact.FactType, StringComparer.Ordinal)
+                .ThenBy(fact => fact.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.StartLine)
+                .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+                .Take(3)
+                .ToArray();
+            foreach (var target in exactPropertyTargets)
+            {
+                paths.Add(DerivedPath(root, [rootFact, target], ["razor-binding-binds-property"], PropertyFlowClassifications.ProbableStaticLineage));
+            }
+
+            var formTargets = allFacts
+                .Where(fact => fact.SourceIndexId == rootFact.SourceIndexId
+                    && fact.FactType == FactTypes.RazorFormTarget
+                    && fact.FilePath.Equals(rootFact.FilePath, StringComparison.Ordinal)
+                    && fact.StartLine <= rootFact.StartLine)
+                .OrderByDescending(fact => fact.StartLine)
+                .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+                .Take(1)
+                .ToArray();
+            foreach (var formTarget in formTargets)
+            {
+                var modelTargets = allFacts
+                    .Where(fact => fact.SourceIndexId == rootFact.SourceIndexId
+                        && fact.FactType == FactTypes.RazorModelBindingTarget
+                        && StringEqualsAny(propertyName, PropertyName(fact))
+                        && FormMatchesModelBinding(formTarget, fact))
+                    .OrderBy(fact => fact.FilePath, StringComparer.Ordinal)
+                    .ThenBy(fact => fact.StartLine)
+                    .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+                    .Take(3)
+                    .ToArray();
+                foreach (var modelTarget in modelTargets)
+                {
+                    paths.Add(DerivedPath(root, [rootFact, formTarget, modelTarget], ["razor-binding-in-form", "form-target-binds-model"], PropertyFlowClassifications.ProbableStaticLineage));
+                }
+            }
+
+            if (paths.Count == 0)
+            {
+                AddPropertyIdentityGap(root, rootFact, gaps);
+            }
+        }
+        else if (rootFact.FactType == FactTypes.RazorFormTarget)
+        {
+            var targets = allFacts
+                .Where(fact => fact.SourceIndexId == rootFact.SourceIndexId
+                    && fact.FactType == FactTypes.RazorModelBindingTarget
+                    && FormMatchesModelBinding(rootFact, fact))
+                .OrderBy(fact => PropertyName(fact), StringComparer.Ordinal)
+                .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+                .Take(5)
+                .ToArray();
+            foreach (var target in targets)
+            {
+                paths.Add(DerivedPath(root, [rootFact, target], ["form-target-binds-model"], PropertyFlowClassifications.ProbableStaticLineage));
+            }
+            if (targets.Length == 0)
+            {
+                AddEndpointAlignmentGap(root, rootFact, gaps);
+            }
+        }
+
+        var sameNameTargets = paths.Count == 0
+            ? allFacts.Where(fact => fact.SourceIndexId == rootFact.SourceIndexId && IsModelPropertyFact(fact) && StringEqualsAny(propertyName, PropertyName(fact))).Take(2).ToArray()
+            : [];
+        foreach (var target in sameNameTargets)
+        {
+            AddSameNameGap(root, rootFact, target, gaps);
+            paths.Add(DerivedPath(root, [rootFact, target], ["same-name-property-match"], PropertyFlowClassifications.NeedsReviewLineage));
+        }
+
+        return paths;
+    }
+
+    private static IReadOnlyList<PropertyFlowPath> BuildAngularDerivedPaths(
+        PropertyFlowRoot root,
+        PropertyFactRow rootFact,
+        IReadOnlyList<PropertyFactRow> allFacts,
+        List<PropertyFlowGap> gaps)
+    {
+        if (!rootFact.FactType.StartsWith("Ui", StringComparison.Ordinal))
+        {
+            return [];
+        }
+
+        var propertyName = PropertyName(rootFact);
+        if (string.IsNullOrWhiteSpace(propertyName))
+        {
+            return [];
+        }
+
+        var handlerName = CombinedDependencyReporter.FirstValue(rootFact.Properties, "handlerName") ?? rootFact.TargetSymbol;
+        var payloads = allFacts
+            .Where(fact => fact.SourceIndexId == rootFact.SourceIndexId
+                && fact.FactType == FactTypes.ObjectShapeInferred
+                && FieldNames(fact).Contains(propertyName!, StringComparer.OrdinalIgnoreCase)
+                && (string.IsNullOrWhiteSpace(handlerName) || StringEqualsAny(handlerName!, fact.SourceSymbol, CombinedDependencyReporter.FirstValue(fact.Properties, "sourceMethod"))))
+            .OrderBy(fact => fact.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.StartLine)
+            .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        if (payloads.Length == 0)
+        {
+            return [];
+        }
+
+        var paths = new List<PropertyFlowPath>();
+        foreach (var payload in payloads)
+        {
+            var httpCalls = allFacts
+                .Where(fact => fact.SourceIndexId == rootFact.SourceIndexId
+                    && fact.FactType == FactTypes.HttpCallDetected
+                    && (string.IsNullOrWhiteSpace(handlerName)
+                        || StringEqualsAny(handlerName!, fact.SourceSymbol, CombinedDependencyReporter.FirstValue(fact.Properties, "sourceMethod"))
+                        || fact.FilePath.Equals(payload.FilePath, StringComparison.Ordinal)))
+                .OrderBy(fact => fact.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.StartLine)
+                .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+                .Take(2)
+                .ToArray();
+
+            foreach (var http in httpCalls)
+            {
+                var route = allFacts
+                    .Where(fact => fact.FactType == FactTypes.HttpRouteBinding && EndpointMatches(http, fact))
+                    .OrderBy(fact => fact.SourceLabel, StringComparer.Ordinal)
+                    .ThenBy(fact => fact.FilePath, StringComparer.Ordinal)
+                    .ThenBy(fact => fact.StartLine)
+                    .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+                    .FirstOrDefault();
+                if (route is null)
+                {
+                    AddEndpointAlignmentGap(root, http, gaps);
+                    paths.Add(DerivedPath(root, [rootFact, payload, http], ["control-value-assigned", "payload-field-sent-by-http"], PropertyFlowClassifications.NeedsReviewLineage));
+                    continue;
+                }
+
+                var modelTarget = allFacts
+                    .Where(fact => fact.SourceIndexId == route.SourceIndexId
+                        && fact.FactType == FactTypes.RazorModelBindingTarget
+                        && StringEqualsAny(propertyName, PropertyName(fact))
+                        && RouteMatchesModelBinding(route, fact))
+                    .OrderBy(fact => fact.FilePath, StringComparer.Ordinal)
+                    .ThenBy(fact => fact.StartLine)
+                    .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+                    .FirstOrDefault();
+                if (modelTarget is null)
+                {
+                    AddPropertyIdentityGap(root, route, gaps);
+                    paths.Add(DerivedPath(root, [rootFact, payload, http, route], ["control-value-assigned", "payload-field-sent-by-http", "endpoint-aligned"], PropertyFlowClassifications.NeedsReviewLineage));
+                    continue;
+                }
+
+                paths.Add(DerivedPath(root, [rootFact, payload, http, route, modelTarget], ["control-value-assigned", "payload-field-sent-by-http", "endpoint-aligned", "endpoint-binds-model"], PropertyFlowClassifications.NeedsReviewLineage));
+            }
+        }
+
+        return paths;
+    }
+
+    private static PropertyFlowPath DerivedPath(PropertyFlowRoot root, IReadOnlyList<PropertyFactRow> facts, IReadOnlyList<string> edgeKinds, string classification)
+    {
+        var nodes = facts.Select((fact, index) => ToFactNode(fact, index == 0 ? RootKind(fact) : DerivedNodeKind(fact))).ToArray();
+        var edges = new List<PropertyFlowEdge>();
+        for (var index = 0; index < nodes.Length - 1; index++)
+        {
+            var fromFact = facts[index];
+            var toFact = facts[index + 1];
+            var edgeKind = edgeKinds[Math.Min(index, edgeKinds.Count - 1)];
+            edges.Add(DerivedEdge(edgeKind, nodes[index], nodes[index + 1], classification, fromFact, toFact));
+        }
+
+        return new PropertyFlowPath(
+            "path-derived-pending",
+            classification,
+            Confidence(classification),
+            edges.Count,
+            root.RootId,
+            nodes.Last().NodeId,
+            nodes,
+            edges,
+            facts.Select(fact => fact.CombinedFactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            [],
+            []);
+    }
+
+    private static PropertyFlowNode ToFactNode(PropertyFactRow fact, string nodeKind)
+    {
+        return new PropertyFlowNode(
+            $"fact-node:{CombinedReportHelpers.Hash(fact.CombinedFactId + ":" + nodeKind, 16)}",
+            nodeKind,
+            SafeDisplay(SafeDisplayName(fact)),
+            fact.SourceIndexId,
+            SafeSourceLabel(fact.SourceLabel),
+            null,
+            fact.ScanId,
+            fact.CommitSha,
+            CombinedDependencyReporter.FirstValue(fact.Properties, "symbolId", "memberSymbolId", "targetSymbolId"),
+            fact.CombinedFactId,
+            fact.RuleId,
+            fact.EvidenceTier,
+            CombinedReportHelpers.SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            SortedMetadata(fact.Properties
+                .Where(pair => pair.Key is "uiFramework" or "bindingKind" or "propertyName" or "propertyPath" or "modelType" or "modelKind" or "parameterSource" or "actionName" or "controllerName" or "handlerName" or "httpMethod" or "normalizedPathKey" or "shapeHash")
+                .Select(pair => Pair(pair.Key, IsSafeValue(pair.Value) ? pair.Value : HashUnsafe(pair.Value)))));
+    }
+
+    private static PropertyFlowEdge DerivedEdge(string edgeKind, PropertyFlowNode from, PropertyFlowNode to, string classification, PropertyFactRow fromFact, PropertyFactRow toFact)
+    {
+        return new PropertyFlowEdge(
+            $"derived-edge:{CombinedReportHelpers.Hash(edgeKind + ":" + from.NodeId + ":" + to.NodeId, 16)}",
+            edgeKind,
+            from.NodeId,
+            to.NodeId,
+            classification,
+            EdgeRuleId,
+            StrongestReviewTier(fromFact.EvidenceTier, toFact.EvidenceTier),
+            [fromFact.CombinedFactId, toFact.CombinedFactId],
+            [],
+            [],
+            CombinedReportHelpers.SafePath(fromFact.FilePath),
+            fromFact.StartLine,
+            fromFact.EndLine)
+        {
+            SourceIndexId = fromFact.SourceIndexId,
+            SourceLabel = SafeSourceLabel(fromFact.SourceLabel),
+            ScanId = fromFact.ScanId,
+            CommitSha = fromFact.CommitSha,
+            ExtractorId = "property-flow",
+            ExtractorVersion = "property-flow/1.0"
+        };
+    }
+
+    private static string StrongestReviewTier(string left, string right)
+    {
+        if (left == EvidenceTiers.Tier4Unknown || right == EvidenceTiers.Tier4Unknown)
+        {
+            return EvidenceTiers.Tier4Unknown;
+        }
+
+        if (left == EvidenceTiers.Tier3SyntaxOrTextual || right == EvidenceTiers.Tier3SyntaxOrTextual)
+        {
+            return EvidenceTiers.Tier3SyntaxOrTextual;
+        }
+
+        if (left == EvidenceTiers.Tier2Structural || right == EvidenceTiers.Tier2Structural)
+        {
+            return EvidenceTiers.Tier2Structural;
+        }
+
+        return EvidenceTiers.Tier1Semantic;
+    }
+
+    private static string DerivedNodeKind(PropertyFactRow fact)
+    {
+        return fact.FactType switch
+        {
+            FactTypes.ObjectShapeInferred => "PayloadField",
+            FactTypes.HttpCallDetected => "HttpClientCall",
+            FactTypes.HttpRouteBinding => "EndpointRoute",
+            FactTypes.RazorModelBindingTarget => FamilyTokens(fact).Contains("dto") ? "DtoProperty" : "ModelBindingTarget",
+            FactTypes.PropertyDeclared => "ModelProperty",
+            FactTypes.SerializerContractMember => "DtoProperty",
+            FactTypes.RazorFormTarget => "FormAction",
+            _ => RootKind(fact)
+        };
+    }
+
+    private static bool IsModelPropertyFact(PropertyFactRow fact)
+    {
+        return fact.FactType is FactTypes.RazorModelBindingTarget or FactTypes.PropertyDeclared or FactTypes.SerializerContractMember;
+    }
+
+    private static string? PropertyName(PropertyFactRow fact)
+    {
+        return CombinedDependencyReporter.FirstValue(fact.Properties, "propertyName", "memberName", "name")
+            ?? fact.ContractElement
+            ?? LastPathSegment(CombinedDependencyReporter.FirstValue(fact.Properties, "propertyPath"))
+            ?? fact.TargetSymbol?.Split('.').LastOrDefault();
+    }
+
+    private static string? ModelType(PropertyFactRow fact)
+    {
+        return CombinedDependencyReporter.FirstValue(fact.Properties, "modelType", "typeName", "containingType", "declaringType", "dtoType")
+            ?? ContainingType(fact.TargetSymbol);
+    }
+
+    private static string? ContainingType(string? symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol) || !symbol.Contains('.', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return symbol[..symbol.LastIndexOf('.')];
+    }
+
+    private static IReadOnlyList<string> FieldNames(PropertyFactRow fact)
+    {
+        return (CombinedDependencyReporter.FirstValue(fact.Properties, "fieldNames", "bodyFieldNames", "queryParameterNames") ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static bool FormMatchesModelBinding(PropertyFactRow formTarget, PropertyFactRow binding)
+    {
+        var formMethod = CombinedDependencyReporter.FirstValue(formTarget.Properties, "httpMethod");
+        var bindingMethod = CombinedDependencyReporter.FirstValue(binding.Properties, "httpMethod");
+        if (!string.IsNullOrWhiteSpace(formMethod)
+            && !string.IsNullOrWhiteSpace(bindingMethod)
+            && !bindingMethod.Equals("ANY", StringComparison.OrdinalIgnoreCase)
+            && !formMethod.Equals(bindingMethod, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var formAction = CombinedDependencyReporter.FirstValue(formTarget.Properties, "actionName");
+        var bindingAction = CombinedDependencyReporter.FirstValue(binding.Properties, "actionName");
+        var formController = CombinedDependencyReporter.FirstValue(formTarget.Properties, "controllerName");
+        var bindingController = CombinedDependencyReporter.FirstValue(binding.Properties, "controllerName");
+        var formHandler = CombinedDependencyReporter.FirstValue(formTarget.Properties, "handlerName");
+        var bindingHandler = CombinedDependencyReporter.FirstValue(binding.Properties, "handlerName");
+        var actionMatches = !string.IsNullOrWhiteSpace(formAction)
+            && StringEqualsAny(formAction!, bindingAction)
+            && (string.IsNullOrWhiteSpace(formController) || StringEqualsAny(formController!, bindingController));
+        var handlerMatches = !string.IsNullOrWhiteSpace(formHandler)
+            && RazorPageIdentitiesAlign(formTarget, binding)
+            && HandlerNamesAlign(formHandler, bindingHandler);
+        return actionMatches || handlerMatches;
+    }
+
+    private static bool EndpointMatches(PropertyFactRow httpCall, PropertyFactRow route)
+    {
+        var callKey = CombinedDependencyReporter.FirstValue(httpCall.Properties, "normalizedPathKey");
+        var routeKey = CombinedDependencyReporter.FirstValue(route.Properties, "normalizedPathKey");
+        if (string.IsNullOrWhiteSpace(callKey) || string.IsNullOrWhiteSpace(routeKey) || !callKey.Equals(routeKey, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var callMethod = CombinedDependencyReporter.FirstValue(httpCall.Properties, "httpMethod", "methodName") ?? httpCall.ContractElement;
+        var routeMethods = (CombinedDependencyReporter.FirstValue(route.Properties, "httpMethods", "methodName") ?? route.ContractElement ?? string.Empty)
+            .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return routeMethods.Length == 0
+            || routeMethods.Contains("ANY", StringComparer.OrdinalIgnoreCase)
+            || routeMethods.Contains(callMethod ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool RouteMatchesModelBinding(PropertyFactRow route, PropertyFactRow binding)
+    {
+        var routeAction = CombinedDependencyReporter.FirstValue(route.Properties, "actionName");
+        var bindingAction = CombinedDependencyReporter.FirstValue(binding.Properties, "actionName");
+        var routeController = CombinedDependencyReporter.FirstValue(route.Properties, "controllerName");
+        var bindingController = CombinedDependencyReporter.FirstValue(binding.Properties, "controllerName");
+        var routeHandler = CombinedDependencyReporter.FirstValue(route.Properties, "handlerName");
+        var bindingHandler = CombinedDependencyReporter.FirstValue(binding.Properties, "handlerName");
+        var actionMatches = !string.IsNullOrWhiteSpace(routeAction)
+            && StringEqualsAny(routeAction!, bindingAction)
+            && (string.IsNullOrWhiteSpace(routeController) || StringEqualsAny(routeController!, bindingController));
+        var handlerMatches = !string.IsNullOrWhiteSpace(routeHandler)
+            && RouteBindingMethodsAlign(route, binding)
+            && HandlerNamesAlign(routeHandler, bindingHandler);
+        return actionMatches || handlerMatches;
+    }
+
+    private static bool RouteBindingMethodsAlign(PropertyFactRow route, PropertyFactRow binding)
+    {
+        var bindingMethod = CombinedDependencyReporter.FirstValue(binding.Properties, "httpMethod");
+        if (string.IsNullOrWhiteSpace(bindingMethod) || bindingMethod.Equals("ANY", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var routeMethods = (CombinedDependencyReporter.FirstValue(route.Properties, "httpMethods", "methodName") ?? route.ContractElement ?? string.Empty)
+            .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return routeMethods.Length == 0
+            || routeMethods.Contains("ANY", StringComparer.OrdinalIgnoreCase)
+            || routeMethods.Contains(bindingMethod, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool HandlerNamesAlign(string? expected, string? actual)
+    {
+        var expectedToken = HandlerComparisonToken(expected);
+        var actualToken = HandlerComparisonToken(actual);
+        return !string.IsNullOrWhiteSpace(expectedToken)
+            && expectedToken.Equals(actualToken, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string HandlerComparisonToken(string? handlerName)
+    {
+        var value = (handlerName ?? string.Empty).Trim();
+        if (value.EndsWith("Async", StringComparison.Ordinal))
+        {
+            value = value[..^"Async".Length];
+        }
+
+        foreach (var prefix in new[] { "OnGet", "OnPost", "OnPut", "OnDelete", "OnPatch" })
+        {
+            if (value.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return value[prefix.Length..];
+            }
+        }
+
+        return value;
+    }
+
+    private static bool RazorPageIdentitiesAlign(PropertyFactRow formTarget, PropertyFactRow binding)
+    {
+        var formPage = RazorPageIdentity(formTarget);
+        var bindingPage = RazorPageIdentity(binding);
+        return !string.IsNullOrWhiteSpace(formPage)
+            && formPage.Equals(bindingPage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string RazorPageIdentity(PropertyFactRow fact)
+    {
+        var path = fact.FilePath.Replace('\\', '/').Trim();
+        if (path.EndsWith(".cshtml.cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return path[..^".cshtml.cs".Length];
+        }
+
+        if (path.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase))
+        {
+            return path[..^".cshtml".Length];
+        }
+
+        return string.Empty;
+    }
+
+    private static HashSet<string> FamilyTokens(PropertyFactRow fact)
+    {
+        var raw = CombinedDependencyReporter.FirstValue(fact.Properties, "contractFamily", "propertyFamily", "modelKind", "typeRole");
+        var tokens = (raw ?? string.Empty)
+            .Split([';', ',', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => value.ToLowerInvariant())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (tokens.Count == 0)
+        {
+            tokens.Add(fact.FactType == FactTypes.SerializerContractMember ? "dto" : "model");
+        }
+
+        return tokens;
+    }
+
+    private static void AddPropertyIdentityGap(PropertyFlowRoot root, PropertyFactRow fact, List<PropertyFlowGap> gaps)
+    {
+        gaps.Add(new PropertyFlowGap(
+            $"gap:property-identity:{CombinedReportHelpers.Hash(root.RootId + ":" + fact.CombinedFactId, 12)}",
+            "PropertyIdentityUnavailable",
+            PropertyFlowClassifications.UnknownAnalysisGap,
+            "No DTO/model property identity could be proven for this static hop.",
+            EdgeRuleId,
+            EvidenceTiers.Tier4Unknown,
+            root.SourceLabel,
+            fact.CombinedFactId,
+            CombinedReportHelpers.SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            [root.CombinedFactId, fact.CombinedFactId],
+            ["Property identity requires exact type, fact, symbol, endpoint/model-binding, or rule-backed value-origin evidence."])
+        {
+            SourceIndexId = root.SourceIndexId,
+            ScanId = root.ScanId,
+            CommitSha = root.CommitSha,
+            CommitShas = [root.CommitSha],
+            SupportingSourceIds = [root.SourceIndexId]
+        });
+    }
+
+    private static void AddEndpointAlignmentGap(PropertyFlowRoot root, PropertyFactRow fact, List<PropertyFlowGap> gaps)
+    {
+        gaps.Add(new PropertyFlowGap(
+            $"gap:endpoint-alignment:{CombinedReportHelpers.Hash(root.RootId + ":" + fact.CombinedFactId, 12)}",
+            "EndpointAlignmentUnavailable",
+            PropertyFlowClassifications.UnknownAnalysisGap,
+            "Static form or HTTP evidence did not align to an action/handler/model-binding target.",
+            EdgeRuleId,
+            EvidenceTiers.Tier4Unknown,
+            root.SourceLabel,
+            fact.CombinedFactId,
+            CombinedReportHelpers.SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            [root.CombinedFactId, fact.CombinedFactId],
+            ["Endpoint alignment absence is a static evidence gap, not proof of no runtime route."])
+        {
+            SourceIndexId = root.SourceIndexId,
+            ScanId = root.ScanId,
+            CommitSha = root.CommitSha,
+            CommitShas = [root.CommitSha],
+            SupportingSourceIds = [root.SourceIndexId]
+        });
+    }
+
+    private static void AddSameNameGap(PropertyFlowRoot root, PropertyFactRow rootFact, PropertyFactRow targetFact, List<PropertyFlowGap> gaps)
+    {
+        gaps.Add(new PropertyFlowGap(
+            $"gap:same-name:{CombinedReportHelpers.Hash(rootFact.CombinedFactId + ":" + targetFact.CombinedFactId, 12)}",
+            "SameNameOnlyPropertyMatch",
+            PropertyFlowClassifications.NeedsReviewLineage,
+            "A same-name property match exists, but stronger type, symbol, alias, or value-origin evidence is absent.",
+            EdgeRuleId,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            root.SourceLabel,
+            rootFact.CombinedFactId,
+            CombinedReportHelpers.SafePath(rootFact.FilePath),
+            rootFact.StartLine,
+            rootFact.EndLine,
+            [rootFact.CombinedFactId, targetFact.CombinedFactId],
+            ["Same-name-only joins are capped at review-tier."])
+        {
+            SourceIndexId = root.SourceIndexId,
+            ScanId = root.ScanId,
+            CommitSha = root.CommitSha,
+            CommitShas = [root.CommitSha],
+            SupportingSourceIds = [root.SourceIndexId]
+        });
     }
 
     private static IEnumerable<CombinedPathNode> FindStartNodes(PropertyFlowRoot root, PropertyFactRow fact, IReadOnlyList<CombinedPathNode> nodes)

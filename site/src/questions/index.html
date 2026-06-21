@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap stakeholder question index: a concept-level route from reader questions to public-safe proof paths, limitations, and evidence surfaces."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Stakeholder Question Index | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/questions/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Stakeholder Question Index">
+    <meta
+      property="og:description"
+      content="Start with a stakeholder question, then follow the public-safe proof path without upgrading the claim."
+    >
+    <meta property="og:url" content="https://tracemap.tools/questions/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Stakeholder question index</p>
+        <h1>Start with the question. Then follow the proof path.</h1>
+        <p class="hero-subhead">
+          This concept-level index routes managers, engineers, reviewers,
+          architects, incident participants, modernization planners, and agents
+          to public-safe TraceMap evidence surfaces.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page is an orientation index, not a proof claim, capability
+          matrix, claim ledger, or FAQ replacement.
+        </p>
+        <nav class="hero-actions" aria-label="Question index quick links">
+          <a class="button primary" href="#question-matrix">Open matrix</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="how-to-read">
+        <div>
+          <p class="section-kicker">How to read a row</p>
+          <h2>Each row routes inspection work without turning inspection into a conclusion.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Question first</strong><span>Use the reader's question to choose a public-safe evidence surface before repeating a claim.</span></div>
+          <div><strong>Safe answer shape</strong><span>Look for verbs such as inspect, compare, follow, review, check, route to, record, or escalate.</span></div>
+          <div><strong>Claim level</strong><span>The page and rows use <code>concept</code>; linked routes may have their own public claim levels.</span></div>
+          <div><strong>Proof path and limit</strong><span>Keep the proof path, rule ID or rule family, evidence tier, coverage label, limitation, and non-claim attached.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="question-matrix" aria-labelledby="question-matrix-heading">
+        <div class="section-header">
+          <p class="section-kicker">Question matrix</p>
+          <h2 id="question-matrix-heading">Route the stakeholder question to the bounded evidence surface.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-stakeholder-question-index>
+            <caption>
+              Every row is concept-level orientation. Target-route claim levels
+              remain separate from this page-level claim level.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Audience</th>
+                <th scope="col">Question</th>
+                <th scope="col">Safe answer shape</th>
+                <th scope="col">Target route</th>
+                <th scope="col">Evidence surface</th>
+                <th scope="col">Public claim level</th>
+                <th scope="col">Proof path</th>
+                <th scope="col">Rule ID or family</th>
+                <th scope="col">Limitation</th>
+                <th scope="col">Non-claim</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="question-manager-planning" data-question-row data-question-family="manager-planning">
+                <td data-field="audience">Managers and leads</td>
+                <td data-field="question">What public-safe evidence can I bring into planning without overclaiming?</td>
+                <td data-field="safeAnswerShape">Inspect manager-facing summaries, proof paths, coverage labels, and limitations before planning discussion.</td>
+                <td data-field="targetRoute"><a href="/manager-packet/"><code>/manager-packet/</code></a></td>
+                <td data-field="evidenceSurface">Manager packet, proof paths, limitations, and public-safe summary vocabulary.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="proofPath"><a href="/manager-packet/">manager packet</a>, <a href="/proof-paths/">proof paths</a>, and <a href="/limitations/">limitations</a></td>
+                <td data-field="ruleIdOrFamily">Manager packet and public-safe summary rule family.</td>
+                <td data-field="limitation">Planning rows do not decide staffing, priority, ownership, release readiness, or operational safety.</td>
+                <td data-field="nonClaim">Does not replace manager judgment or service-owner decisions.</td>
+              </tr>
+              <tr id="question-engineer-endpoint-change-review" data-question-row data-question-family="engineer-endpoint-change-review">
+                <td data-field="audience">Engineers and reviewers</td>
+                <td data-field="question">Where can I inspect static evidence around this endpoint or change before review?</td>
+                <td data-field="safeAnswerShape">Review static endpoint/change evidence, demo boundaries, validation status, and gaps.</td>
+                <td data-field="targetRoute"><a href="/use-cases/endpoint-review/"><code>/use-cases/endpoint-review/</code></a></td>
+                <td data-field="evidenceSurface">Endpoint/change review route, demo result, validation, and proof-path index.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="proofPath"><a href="/use-cases/endpoint-review/">endpoint review</a>, <a href="/demo/result/">demo result</a>, and <a href="/validation/">validation</a></td>
+                <td data-field="ruleIdOrFamily">Endpoint evidence rule family unless a target proof row exposes a public-safe rule ID.</td>
+                <td data-field="limitation">Static review input does not say a change is safe, unsafe, approved, blocked, production-proven, or fully mapped.</td>
+                <td data-field="nonClaim">Does not replace tests, code review, telemetry, or service-owner review.</td>
+              </tr>
+              <tr id="question-incident-adjacent-handoff" data-question-row data-question-family="incident-adjacent-handoff">
+                <td data-field="audience">Incident participants and service owners</td>
+                <td data-field="question">What static evidence can I hand to the runtime or incident owner without claiming cause?</td>
+                <td data-field="safeAnswerShape">Route static context to runtime owners while recording gaps and runtime-boundary questions.</td>
+                <td data-field="targetRoute"><a href="/incident-evidence-handoff/"><code>/incident-evidence-handoff/</code></a></td>
+                <td data-field="evidenceSurface">Incident handoff, static-versus-runtime boundary, validation, and limitations surfaces.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="proofPath"><a href="/incident-evidence-handoff/">incident handoff</a>, <a href="/static-vs-runtime/">static vs runtime</a>, and <a href="/limitations/">limitations</a></td>
+                <td data-field="ruleIdOrFamily">Static evidence handoff rule family unless a public-safe rule ID is exposed.</td>
+                <td data-field="limitation">Does not prove outage cause, incident timeline, traffic, endpoint performance, or runtime behavior.</td>
+                <td data-field="nonClaim">Does not replace incident command, telemetry, logs, traces, or human judgment.</td>
+              </tr>
+              <tr id="question-modernization-planning" data-question-row data-question-family="modernization-planning">
+                <td data-field="audience">Architects and modernization planners</td>
+                <td data-field="question">What evidence map can help plan modernization questions while preserving gaps?</td>
+                <td data-field="safeAnswerShape">Inspect modernization evidence maps, proof paths, validation notes, and known gaps.</td>
+                <td data-field="targetRoute"><a href="/legacy-modernization/evidence-map/"><code>/legacy-modernization/evidence-map/</code></a></td>
+                <td data-field="evidenceSurface">Modernization evidence map, proof paths, validation, and limitations.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="proofPath"><a href="/legacy-modernization/evidence-map/">evidence map</a>, <a href="/proof-paths/">proof paths</a>, and <a href="/validation/">validation</a></td>
+                <td data-field="ruleIdOrFamily">Legacy modernization or dependency evidence rule family unless a public-safe rule ID is exposed.</td>
+                <td data-field="limitation">Does not prove complete migration scope, complete dependency understanding, or production safety.</td>
+                <td data-field="nonClaim">Does not replace architects, service owners, tests, or modernization planning.</td>
+              </tr>
+              <tr id="question-reviewer-claim-checking" data-question-row data-question-family="reviewer-claim-checking">
+                <td data-field="audience">Reviewers, managers, and agents</td>
+                <td data-field="question">Can this sentence be repeated, and what proof must stay attached?</td>
+                <td data-field="safeAnswerShape">Check whether a claim keeps proof fields, coverage labels, limitations, and non-claims attached.</td>
+                <td data-field="targetRoute"><a href="/review-claim-checklist/"><code>/review-claim-checklist/</code></a></td>
+                <td data-field="evidenceSurface">Claim checklist, proof paths, proof-source catalog, validation, and limitations.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="proofPath"><a href="/review-claim-checklist/">claim checklist</a>, <a href="/proof-paths/">proof paths</a>, and <a href="/proof-source-catalog/">proof-source catalog</a></td>
+                <td data-field="ruleIdOrFamily">Rule ID when the claim cites one; otherwise rule family plus limitation.</td>
+                <td data-field="limitation">Repetition, confidence, or seniority cannot upgrade the public claim level.</td>
+                <td data-field="nonClaim">Does not allow dropping rule ID or rule family, tier, coverage, proof path, limitation, non-claim, or public claim level.</td>
+              </tr>
+              <tr id="question-demo-evaluation" data-question-row data-question-family="demo-evaluation">
+                <td data-field="audience">Evaluators, engineers, and managers</td>
+                <td data-field="question">What does the public demo show, and which limits still apply?</td>
+                <td data-field="safeAnswerShape">Compare demo rows with proof paths, validation notes, coverage labels, and limitations.</td>
+                <td data-field="targetRoute"><a href="/demo/result/"><code>/demo/result/</code></a></td>
+                <td data-field="evidenceSurface">Demo result, proof paths, validation, and limitations.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="proofPath"><a href="/demo/result/">demo result</a>, <a href="/proof-paths/">proof paths</a>, <a href="/validation/">validation</a>, and <a href="/limitations/">limitations</a></td>
+                <td data-field="ruleIdOrFamily"><code>public.demo.summary.v1</code> when cited by the target proof surface; otherwise demo evidence rule family.</td>
+                <td data-field="limitation">Does not prove private-repo behavior, runtime behavior, release safety, or complete product coverage.</td>
+                <td data-field="nonClaim">Does not turn demo evidence into production proof.</td>
+              </tr>
+              <tr id="question-proof-source-inspection" data-question-row data-question-family="proof-source-inspection">
+                <td data-field="audience">Reviewers, bots, and engineers</td>
+                <td data-field="question">Where does this public claim point for source-of-truth evidence?</td>
+                <td data-field="safeAnswerShape">Inspect the public-safe source mapping behind a claim and compare it with validation boundaries.</td>
+                <td data-field="targetRoute"><a href="/proof-source-catalog/"><code>/proof-source-catalog/</code></a></td>
+                <td data-field="evidenceSurface">Proof-source catalog, proof paths, validation, limitations, and vault export boundaries.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="proofPath"><a href="/proof-source-catalog/">proof-source catalog</a>, <a href="/proof-paths/">proof paths</a>, <a href="/validation/">validation</a>, and <a href="/vault-export/">vault export</a></td>
+                <td data-field="ruleIdOrFamily">Rule ID or rule-family field transcribed from the proof-source row when available.</td>
+                <td data-field="limitation">Does not publish raw facts, raw SQLite, analyzer logs, source snippets, SQL, configs, private samples, raw remotes, or scan directories.</td>
+                <td data-field="nonClaim">Does not make local-only artifacts public proof.</td>
+              </tr>
+              <tr id="question-agent-bot-discovery" data-question-row data-question-family="agent-bot-discovery">
+                <td data-field="audience">Crawlers and automated reviewers</td>
+                <td data-field="question">Which routes and metadata should an agent use without dropping proof fields?</td>
+                <td data-field="safeAnswerShape">Follow sitemap and discovery metadata to proof routes while preserving evidence fields and boundaries.</td>
+                <td data-field="targetRoute"><a href="/proof-paths/"><code>/proof-paths/</code></a></td>
+                <td data-field="evidenceSurface">Sitemap, discovery metadata, proof paths, validation, limitations, and claim-checking surfaces.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="proofPath"><a href="/proof-paths/">proof paths</a>, <a href="/validation/">validation</a>, <a href="/limitations/">limitations</a>, and <a href="/review-claim-checklist/">claim checklist</a></td>
+                <td data-field="ruleIdOrFamily">Rule ID or rule family from the target proof route; discovery metadata alone is not a rule source.</td>
+                <td data-field="limitation">Does not authorize autonomous approval, claim upgrades, hidden-detail disclosure, or unsupported reuse.</td>
+                <td data-field="nonClaim">Does not imply AI impact analysis, LLM analysis, prompt-based classification, or permission to repeat claims after dropping limitations.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="route-targets">
+        <div>
+          <p class="section-kicker">Route targets</p>
+          <h2>Every link stays on an existing public-safe route.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>planning</code><span><a href="/manager-packet/">/manager-packet/</a>, <a href="/proof-paths/">/proof-paths/</a>, and <a href="/limitations/">/limitations/</a></span></div>
+          <div><code>review</code><span><a href="/use-cases/endpoint-review/">/use-cases/endpoint-review/</a>, <a href="/review-claim-checklist/">/review-claim-checklist/</a>, and <a href="/proof-source-catalog/">/proof-source-catalog/</a></span></div>
+          <div><code>handoff</code><span><a href="/incident-evidence-handoff/">/incident-evidence-handoff/</a> and <a href="/static-vs-runtime/">/static-vs-runtime/</a></span></div>
+          <div><code>modernization</code><span><a href="/legacy-modernization/evidence-map/">/legacy-modernization/evidence-map/</a></span></div>
+          <div><code>demo</code><span><a href="/demo/result/">/demo/result/</a>, <a href="/validation/">/validation/</a>, and <a href="/vault-export/">/vault-export/</a></span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>This index does not turn static evidence into operational proof.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, staffing decisions, priority decisions, ownership decisions, service ownership, complete migration scope, complete dependency understanding, private-repo behavior, or complete product coverage.</li>
+          <li>TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis.</li>
+          <li>TraceMap does not replace managers, service owners, architects, tests, telemetry, logs, traces, source review, code review, incident command, release review, governance, or human judgment.</li>
+          <li>Agents and reviewers must not repeat a row after dropping its proof path, rule ID or rule family, evidence tier, coverage label, limitation, non-claim, or public claim level.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Use this route with the
+        <a href="/proof-paths/">proof path index</a>,
+        <a href="/proof-source-catalog/">proof-source catalog</a>,
+        and <a href="/review-claim-checklist/">review claim checklist</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

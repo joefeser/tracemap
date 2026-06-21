@@ -56,21 +56,30 @@
         tests.
 
 - [ ] 3. Add relationship extraction and ambiguity gaps. Requirements: 2, 5, 8.
-  - [ ] Emit deterministic relationship evidence for DBML associations.
-  - [ ] Emit deterministic relationship evidence for EDMX associations and
+  - [x] Emit deterministic relationship evidence for DBML associations.
+  - [x] Emit deterministic relationship evidence for EDMX associations and
         unambiguous MSL relationship mapping where supported.
-  - [ ] Emit deterministic relationship evidence for typed DataSet relations and
+  - [x] Emit deterministic relationship evidence for typed DataSet relations and
         constraints.
-  - [ ] Represent relationships as `LegacyDataMappingDeclared` while preserving
+  - [x] Represent relationships as `LegacyDataMappingDeclared` while preserving
         existing source `mappingKind` values and adding
         `modelRelationshipKind = relationship` or an equivalent derived surface
         field when deterministic.
-  - [ ] Emit unidirectional relationship evidence with a limitation when only
+  - [x] Emit unidirectional relationship evidence with a limitation when only
         one endpoint is deterministic.
   - [ ] Emit needs-review or analysis-gap evidence for ambiguous, duplicate,
         inherited, split, conditional, many-to-many, or unsupported shapes.
+    - [x] Completed in slice 3: duplicate DBML relationship names, ambiguous
+          EDMX association endpoints, ambiguous MSL association-set endpoints,
+          and inherited EDMX model shapes.
+    - [ ] Deferred: exhaustive split-entity, conditional, many-to-many, and
+          other unsupported relationship-shape detection.
   - [ ] Add exact gap classification tests, including relationship ambiguity and
         selector downgrade behavior.
+    - [x] Completed in slice 3: relationship ambiguity and inherited
+          unsupported-shape classification tests.
+    - [ ] Deferred: selector downgrade behavior tests for downstream
+          surface/query workflows.
 
 - [ ] 4. Add NHibernate mapping XML MVP. Requirements: 1, 3, 7, 8.
   - [ ] Safely parse checked-in `.hbm.xml` files with DTD/entity resolution
