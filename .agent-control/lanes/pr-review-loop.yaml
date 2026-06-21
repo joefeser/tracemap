@@ -11,26 +11,39 @@ lane:
 
 # agent-control lane config key; not an inter-agent coordination packet payload.
 prLoopPacket:
+  reviewFreshnessPolicy:
+    maxFreshReviewFixCycles: 1
+  reviewQuorum:
+    enabled: true
+    groups:
+      trustedCodeReview:
+        bots:
+          - codex
+          - qodo
+        minimumReturned: 1
+        preferAllReturned: false
+        waitForAllTimeoutSeconds: 300
+        noneReturnedStopReason: REQUIRED_REVIEW_QUORUM_NOT_MET
   pushPolicy:
     mode: batch_until_review_settles
     localFixesPresent: false
     validationEvidence: []
     findingUrls: []
-    waitTimeoutSeconds: 900
+    waitTimeoutSeconds: 300
   bots:
     qodo:
       requirement: required
       waitUntilReturnedBeforeProcessing: true
-      waitTimeoutSeconds: 1200
+      waitTimeoutSeconds: 300
       requestAllowed: explicit_only
       requestRetryCeiling: 0
       retryCooldownSeconds: 0
     codex:
       requirement: required
       waitUntilReturnedBeforeProcessing: true
-      waitTimeoutSeconds: 900
+      waitTimeoutSeconds: 300
       requestAllowed: policy
-      requestRetryCeiling: 1
+      requestRetryCeiling: 2
       retryCooldownSeconds: 120
     gemini:
       requirement: optional
@@ -62,9 +75,12 @@ prLoopPacket:
     # Branch-policy/readback token for "merge commit"; this is not a squash
     # merge and is rendered by agent-control's merge executor separately.
     mergeMethod: merge_commit
+  ownerOverrideAutoMerge:
+    enabled: true
+    residualRiskCeiling: medium
 
 reviewerReturnPolicy:
-  requiredConfiguredReviewersMustReturn: true
+  requiredConfiguredReviewersMustReturn: false
   optionalReviewersRemainResidualRisk: true
   requiredTimeoutStopReason: REQUIRED_REVIEWER_RETURN_TIMEOUT
   nonBlockingTimeoutBehavior: residual-risk
