@@ -990,6 +990,98 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal(EvidenceTiers.Tier2Structural, link.EvidenceTier);
     }
 
+    [Fact]
+    public async Task Scan_emits_unsupported_old_orm_gaps_without_inventing_model_facts_or_leaking_content()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "sqlmap"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Orm"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Domain"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Customer.sqlmap.xml"), """
+            <sqlMap namespace="CustomerSecret" xmlns="http://ibatis.apache.org/mapping">
+              <select id="GetCustomers">SELECT * FROM Customers WHERE ApiSecret = 'hidden'</select>
+            </sqlMap>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "sqlmap", "order.xml"), """
+            <sqlMap namespace="OrderSecret" xmlns="http://ibatis.apache.org/mapping">
+              <select id="GetOrders">SELECT * FROM Orders WHERE ApiSecret = 'hidden'</select>
+            </sqlMap>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Orm", "Model.llblgenproj"), """
+            <LLBLGenProject>
+              <ConnectionString>Server=prod-db;Password=super-secret</ConnectionString>
+            </LLBLGenProject>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "SubSonic.config"), """
+            <configuration>
+              <configSections>
+                <section name="SubSonicService" type="SubSonic.SubSonicSection, SubSonic" />
+              </configSections>
+              <SubSonicService defaultProvider="Server=prod-db;Password=super-secret" />
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "RootSubSonic.config"), """
+            <SubSonicService defaultProvider="Server=prod-db;Password=super-secret" />
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Customer.cs"), """
+            using Castle.ActiveRecord;
+
+            [ActiveRecord("Server=prod-db;Password=super-secret")]
+            public sealed class CustomerRecord
+            {
+                [PrimaryKey]
+                public int Id { get; set; }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Noise.cs"), """
+            public static class Noise
+            {
+                // This project is not using SubSonic or LLBLGen.
+                public const string Message = "MyBatis and iBATIS are not configured here";
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var report = MarkdownReportWriter.Build(result);
+        var indexPath = Path.Combine(temp.Path, "out", "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+        var allProperties = await ReadAllPropertiesAsync(indexPath);
+
+        Assert.Contains(result.Inventory, item => item.Kind == "LegacyOrmMetadata" && item.RelativePath == "Mappings/Customer.sqlmap.xml");
+        Assert.Contains(result.Inventory, item => item.Kind == "LegacyOrmMetadata" && item.RelativePath == "sqlmap/order.xml");
+        Assert.Contains(result.Inventory, item => item.Kind == "LegacyOrmMetadata" && item.RelativePath == "Orm/Model.llblgenproj");
+
+        var gaps = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyDataOrmUnsupported)
+            .ToArray();
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("descriptorFamily") == "iBATIS.NET");
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("descriptorFamily") == "LLBLGen");
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("descriptorFamily") == "SubSonic");
+        Assert.Contains(gaps, fact => fact.Evidence.FilePath == "RootSubSonic.config"
+            && fact.Properties.GetValueOrDefault("descriptorFamily") == "SubSonic");
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("descriptorFamily") == "Castle ActiveRecord");
+        Assert.DoesNotContain(gaps, fact => fact.Evidence.FilePath == "Domain/Noise.cs");
+        Assert.All(gaps, fact =>
+        {
+            Assert.Equal("UnsupportedLegacyOrmDescriptor", fact.Properties.GetValueOrDefault("classification"));
+            Assert.Equal(EvidenceTiers.Tier4Unknown, fact.EvidenceTier);
+            Assert.Equal("False", fact.Properties.GetValueOrDefault("runtimeProof"));
+        });
+
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.LegacyDataOrmUnsupported
+            && fact.FactType is FactTypes.LegacyDataEntityDeclared
+                or FactTypes.LegacyDataStorageObjectDeclared
+                or FactTypes.LegacyDataColumnDeclared
+                or FactTypes.LegacyDataMappingDeclared);
+        Assert.DoesNotContain("super-secret", report);
+        Assert.DoesNotContain("prod-db", report);
+        Assert.DoesNotContain("ApiSecret", report);
+        Assert.DoesNotContain("super-secret", allProperties);
+        Assert.DoesNotContain("prod-db", allProperties);
+        Assert.DoesNotContain("ApiSecret", allProperties);
+    }
+
     private static async Task<string> ReadAllPropertiesAsync(string sqlitePath)
     {
         await using var connection = new SqliteConnection($"Data Source={sqlitePath}");

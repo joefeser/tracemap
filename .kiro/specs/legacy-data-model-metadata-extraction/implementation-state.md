@@ -2,13 +2,37 @@
 
 Status: continuation-ready
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
-Current implementation branch: codex/implement-legacy-data-model-metadata-extraction-slice2
+Current implementation branch: codex/implement-legacy-data-model-metadata-followup
 Public claim level: hidden
 
 Post-promotion note: several legacy-data model identity/reporting slices have
 landed, including PR #199 and PR #236. This spec still has follow-up work, but
 there is no active implementation branch running for it after the PR #247
 promotion.
+
+## Current Branch Scope
+
+This branch is a partial follow-up slice, not a full-spec closeout. It is
+merge-ready only as a contained gap-evidence improvement for unsupported old
+ORM descriptors.
+
+- [x] Task 5 partial: LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, and Castle
+  ActiveRecord descriptor signals emit `legacy.data.orm.unsupported.v1`
+  `AnalysisGap` facts.
+- [ ] Task 5 project-local mapping DSL detection remains deferred because it
+  needs a separate deterministic signal taxonomy.
+- [ ] Task 4 NHibernate `.hbm.xml` MVP remains deferred.
+- [ ] Task 6 generated-code and mapped-symbol linkage hardening remains
+  deferred.
+- [ ] Tasks 7-9 downstream surface/report/path/reverse/graph/vault integration
+  remain deferred.
+- [ ] Task 10 broader docs/fixtures work remains partially deferred; this slice
+  updates only acceptance, validation, language-adapter contract, and rule
+  limitations for unsupported ORM gaps.
+
+The unchecked tasks above are intentional runway, not hidden completed work.
+They must not be interpreted as clean absence of legacy ORM metadata or as a
+runtime database conclusion.
 
 ## Why This Spec Exists
 
@@ -449,3 +473,68 @@ PR review-loop follow-up:
   Patched by marking inherited EDMX entities/properties and CSDL associations
   involving inherited endpoint types as reduced coverage with explicit
   limitations while preserving endpoint completeness separately.
+
+## Implementation Slice 4 State
+
+Branch: `codex/implement-legacy-data-model-metadata-followup`
+Base: `origin/dev` at `7a8bb97c`
+PR: https://github.com/joefeser/tracemap/pull/260
+
+Selected scope: partial Task 5. This slice adds conservative unsupported old
+ORM descriptor gaps for recognized LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET,
+and Castle ActiveRecord signals. It does not parse those mappings, infer
+entities, infer tables, infer columns, infer relationships, execute queries, or
+claim runtime ORM behavior.
+
+Implementation boundary:
+
+- Added file-inventory recognition for public-safe legacy ORM metadata
+  candidates such as LLBLGen project files and SQL map XML files with
+  recognizable path or filename signals.
+- Added gap-only extraction for unsupported legacy ORM metadata files,
+  unsupported ORM config sections/attributes, and C# code descriptors such as
+  Castle ActiveRecord attributes/usings.
+- Emitted only `AnalysisGap` facts under `legacy.data.orm.unsupported.v1` with
+  `Tier4Unknown`, safe descriptor family labels, reduced coverage, runtime
+  proof set to false, and closed descriptor-signal tokens.
+- Added focused synthetic tests proving recognized unsupported descriptors
+  produce gaps, not invented legacy entity/storage/column/mapping facts, and
+  proving raw SQL-like text, connection-ish values, and unsafe config content
+  do not persist into Markdown or SQLite properties.
+
+Deferred within Task 5:
+
+- Project-local mapping DSL detection remains unchecked. It needs a separate
+  deterministic taxonomy so local helper names and fluent methods do not become
+  false-positive ORM descriptors.
+- NHibernate `.hbm.xml` parsing remains Task 4, not part of this unsupported
+  descriptor-gap slice.
+
+Validation executed so far:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 28 tests. Existing NuGet audit warning for `SQLitePCLRaw.lib.e_sqlite3` was reported during restore/build output.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 583 tests, with the same existing NU1903 advisory warnings.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke`: passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log` with 27 facts.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review had full coverage and reported blockers
+  because it evaluated the entire long-running spec as if this branch intended
+  to complete Tasks 3-11. Patched by adding the Current Branch Scope section
+  above and by clarifying the `legacy.data.orm.unsupported.v1` limitation for
+  project-local mapping DSLs.
+- Sonnet re-review had full coverage and found no blocking issues. It reported
+  remaining non-blocking documentation concerns around unchecked future tasks;
+  this implementation-state section records the slice boundary and validation
+  explicitly.
+
+PR review-loop follow-up:
+
+- Initial PR loop on commit `d085fa767551dd22c1f37a32991b786549cf15c9`
+  returned `merge_ready` with clean checks, clean merge state, no unresolved
+  threads, no actionable bot findings, Qodo returned, and Codex satisfied by
+  the configured trusted review quorum. A state-only follow-up commit records
+  the PR URL and loop result.
