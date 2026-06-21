@@ -23,7 +23,7 @@ Public claim level: concept
   and PR-loop work stays tracked below.
 - [x] Run spec-only validation: `git diff --check`,
   `./scripts/check-private-paths.sh`, and focused text checks.
-- [ ] Commit, push, create a ready PR to `main`, and run the required PR loop.
+- [x] Commit, push, create a ready PR to `main`, and run the required PR loop.
 
 ## Future Implementation Tasks
 
