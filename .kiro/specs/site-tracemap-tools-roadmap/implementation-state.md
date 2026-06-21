@@ -1,6 +1,7 @@
 # Site TraceMap Tools Roadmap Implementation State
 
 Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Branch

@@ -1,7 +1,7 @@
 # Site TraceMap Tools Evidence Review Room Tasks
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: run available Kiro spec reviews before implementation, patch

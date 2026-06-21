@@ -1,6 +1,9 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 Last verified: 2026-06-14
 Branch: codex/site-tracemap-tools-next
 PR: https://github.com/joefeser/tracemap/pull/68

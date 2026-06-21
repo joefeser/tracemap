@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 - [x] 1. Wire validation into Amplify.
   - Change the Amplify site build command to `npm run validate`.
   - Keep `site/dist` as the published artifact directory.

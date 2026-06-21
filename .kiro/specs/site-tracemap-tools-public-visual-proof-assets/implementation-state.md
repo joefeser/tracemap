@@ -1,6 +1,7 @@
 # Implementation State
 
 Status: implemented
+Readiness: implemented
 Branch: codex/site-public-visual-proof-assets
 Public claim level: demo
 

@@ -1,7 +1,7 @@
 # Tasks
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 - [x] 1. Confirm promotion and proof state before writing public copy.

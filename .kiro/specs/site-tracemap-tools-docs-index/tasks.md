@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 - [x] 1. Add a public docs index page.
   - Add `/docs/` with links to PRD, validation, acceptance, language adapter
     contract, decisions, and next execution report.

@@ -1,7 +1,7 @@
 # Site TraceMap Tools Evidence Glossary Implementation State
 
-Status: implemented; PR loop pending
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Branch
