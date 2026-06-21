@@ -215,6 +215,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/reviewer-quickstart/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/manager-packet/",
     "changefreq": "monthly",
     "priority": "0.8"
