@@ -1,7 +1,7 @@
 # Site TraceMap Tools Manager Demo Script Implementation State
 
 Status: implemented
-Readiness: ready-for-pr-loop
+Readiness: pr-loop-merge-ready
 Public claim level: concept
 
 ## Current Scope
@@ -30,8 +30,7 @@ client-side data fetch, form, or new generated evidence artifact was added.
 - Branch: `codex/impl-site-manager-demo-script`.
 - Base: `origin/dev`.
 - PR target: `dev`.
-- Implementation status: implemented locally; PR loop not run until after PR
-  creation.
+- Implementation status: implemented and published in PR 258.
 - Spec sync note: `origin/dev` did not contain this spec directory at
   implementation start, so the spec packet was restored from `origin/main`
   before editing. This records the temporary main/dev sync gap without adding
@@ -138,16 +137,39 @@ Completed:
 
 ## PR Loop State
 
-Not run yet because the PR has not been created. After the ready PR is opened
-against `dev`, run:
+Initial PR-loop command after the ready PR was opened against `dev`:
 
 ```bash
-agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER> --base dev --require-codex-review --quiet --json
+agent-control pr-loop --repo joefeser/tracemap --pr 258 --base dev --require-codex-review --quiet --json
 ```
 
-Record the final decision, stop reason, checks, review-thread state,
-actionable findings, and any owner-ready stale-review residual risk here after
-the loop returns.
+Initial result for head `671ab0f6789dda98795a8b466bd1049b3338f733`:
+
+- Decision: `merge_ready`.
+- Stop reason: `NONE`.
+- Next action: `merge_ready`.
+- Human next action: `merge_current_head`.
+- Merge state: `CLEAN`.
+- Pending checks: none.
+- Failed checks: none.
+- Unresolved review threads: 0.
+- Actionable bot findings: 0.
+- Qodo state: `review_completed`.
+- Gemini state: `review_completed`.
+- Codex state: `not_requested`; treated as residual risk, not a blocker, by
+  configured `trustedCodeReview` quorum.
+- Sourcery state: `not_requested`; optional residual risk, not a blocker.
+- Review quorum: enabled; group `trustedCodeReview`; returned bots `qodo`;
+  missing bots `codex`; minimum returned `1`; quorum met; residual risk
+  `medium`; required Codex review satisfied by quorum on `dev`.
+- Lane config: loaded from `.agent-control/lanes/pr-review-loop.yaml`.
+- Push batching: no local push batching action active.
+- Recommended human action: Joe can merge the current head if he accepts the
+  configured policy evidence.
+
+This file was updated after the initial PR-loop result to record the outcome,
+so a follow-up state-only commit must be pushed and the PR loop rerun for the
+new head before final merge-readiness reporting.
 
 ## Oddities
 
@@ -163,6 +185,5 @@ the loop returns.
 
 ## Follow-Up Items
 
-- After PR-loop completion, update this file with the exact PR-loop outcome if
-  doing so is required by the handoff policy, then rerun validation and the PR
-  loop for the new head.
+- Rerun PR loop after the state-only follow-up commit that records the initial
+  PR-loop result.
