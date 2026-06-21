@@ -140,6 +140,7 @@ const rawMaterialPatterns = [
   /\braw source snippets?\b/i,
   /\braw SQL\b/i,
   /\bconfig values?\b/i,
+  /\bsecrets?\b/i,
   /\braw remotes?\b/i,
   /\bgenerated scan directories\b/i,
   /\bprivate sample names?\b/i,

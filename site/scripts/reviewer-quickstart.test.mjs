@@ -150,6 +150,17 @@ test("validateReviewerQuickstartDist rejects raw material outside sanctioned sec
   assert.match(errors.join("\n"), /forbidden raw\/private material/);
 });
 
+test("validateReviewerQuickstartDist rejects secrets outside sanctioned sections", async (t) => {
+  const root = await createManagedReviewerQuickstartFixture(t, {
+    reviewerHtml: reviewerQuickstartPage("<p>Share secrets in the public handoff.</p>")
+  });
+  const errors = [];
+
+  await validateReviewerQuickstartDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden raw\/private material/);
+});
+
 test("validateReviewerQuickstartDist rejects encoded hard private text", async (t) => {
   const root = await createManagedReviewerQuickstartFixture(t, {
     reviewerHtml: reviewerQuickstartPage("<p>file&#58;//private/review</p>")
