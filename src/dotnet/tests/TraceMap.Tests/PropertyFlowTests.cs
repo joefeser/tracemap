@@ -127,6 +127,91 @@ public sealed class PropertyFlowTests
     }
 
     [Fact]
+    public async Task Property_flow_accepts_safe_observed_demo_metadata_without_upgrading_static_classification()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _) = await CreatePropertyFlowCombinedIndexAsync(temp);
+        var observedPath = Path.Combine(temp.Path, "observed.json");
+        await File.WriteAllTextAsync(observedPath, """
+            {
+              "observedEvidence": [
+                {
+                  "label": "local-demo-field-check",
+                  "safeMetadata": {
+                    "artifactHash": "abc123",
+                    "captureMode": "local-demo",
+                    "field": "email",
+                    "selector": "binding:user.email",
+                    "tool": "browser-observation"
+                  }
+                }
+              ]
+            }
+            """);
+
+        var withoutObserved = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "without-observed"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular"));
+        var withObserved = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "with-observed"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: observedPath));
+
+        Assert.Equal(withoutObserved.Summary.Classification, withObserved.Report.Summary.Classification);
+        Assert.Equal(withoutObserved.LineagePaths.Select(path => path.Classification), withObserved.Report.LineagePaths.Select(path => path.Classification));
+        var observed = Assert.Single(withObserved.Report.ObservedEvidence);
+        Assert.Equal(PropertyFlowClassifications.ObservedDemoContext, observed.Classification);
+        Assert.Equal("property-flow.observed-evidence.v1", observed.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, observed.EvidenceTier);
+        Assert.Equal("email", observed.SafeMetadata["field"]);
+        Assert.Equal("abc123", observed.SafeMetadata["artifactHash"]);
+
+        var markdown = await File.ReadAllTextAsync(withObserved.MarkdownPath!);
+        var json = await File.ReadAllTextAsync(withObserved.JsonPath!);
+        Assert.Contains("Observed evidence is demo/validation metadata only", markdown);
+        Assert.Contains("local-demo-field-check", markdown);
+        Assert.Contains("\"classification\": \"ObservedDemoContext\"", json);
+        Assert.DoesNotContain(temp.Path, markdown);
+        Assert.DoesNotContain(temp.Path, json);
+    }
+
+    [Fact]
+    public async Task Property_flow_rejects_unsafe_observed_demo_metadata()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _) = await CreatePropertyFlowCombinedIndexAsync(temp);
+        var observedPath = Path.Combine(temp.Path, "observed-unsafe.json");
+        await File.WriteAllTextAsync(observedPath, """
+            {
+              "observedEvidence": [
+                {
+                  "label": "local-demo-field-check",
+                  "safeMetadata": {
+                    "secretToken": "nope"
+                  }
+                }
+              ]
+            }
+            """);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "unsafe-out"),
+            "binding:user.email",
+            Source: "client",
+            Framework: "angular",
+            ObservedEvidencePath: observedPath)));
+        Assert.Contains("unsafe observed evidence metadata", exception.Message);
+        Assert.DoesNotContain("secretToken", exception.Message);
+    }
+
+    [Fact]
     public async Task Property_flow_reports_generic_ambiguous_and_selector_no_match_states()
     {
         using var temp = new TempDirectory();
