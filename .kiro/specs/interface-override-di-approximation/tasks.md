@@ -17,14 +17,14 @@
 
 ### Phase 1: Baseline Audit and Tests
 
-- [ ] 1.1 Audit current C# relationship extraction, rule catalog entries, SQLite rows, combine import, export, paths, reverse, route-flow, impact/include-paths, and report consumers.
+- [x] 1.1 Audit current C# relationship extraction, rule catalog entries, SQLite rows, combine import, export, paths, reverse, route-flow, impact/include-paths, and report consumers.
 - [ ] 1.2 Add fixture tests that lock current behavior for direct interface implementation, explicit interface implementation, inheritance, overrides, and current relationship export/combine behavior.
 - [ ] 1.3 Add byte-stability tests for relationship facts, symbol relationship rows, combined relationship rows, and exported relationship evidence.
 - [ ] 1.4 Document any existing behavior gaps before changing scanner or graph code.
-- [ ] 1.5 Before any product code emits or changes a relationship,
+- [x] 1.5 Before any product code emits or changes a relationship,
   registration, dispatch-candidate, or dispatch-gap rule ID, update
   `rules/rule-catalog.yml` for that rule ID with documented limitations.
-- [ ] 1.6 Add rule-catalog validation or focused tests proving any newly
+- [x] 1.6 Add rule-catalog validation or focused tests proving any newly
   emitted or changed rule ID has a catalog entry before scanner, graph,
   export, or consumer tests assert the emitted evidence.
 
@@ -58,29 +58,29 @@
 ### Phase 5: Shared Candidate Graph Builder
 
 - [ ] 5.1 Add or extract a shared reporting/query service that derives candidate dispatch edges from call edges, symbol relationships, DI registration facts, and source coverage.
-- [ ] 5.2 Derive interface member implementation candidates only from supported relationship evidence.
-- [ ] 5.3 Derive override candidates only from supported override relationship evidence.
+- [x] 5.2 Derive interface member implementation candidates only from supported relationship evidence.
+- [x] 5.3 Derive override candidates only from supported override relationship evidence.
 - [ ] 5.4 Annotate candidates with DI registration support only when service/implementation symbols and relationship compatibility are proven.
 - [ ] 5.5 Emit gaps for missing implementation candidates, missing override candidates, unsupported registration shapes, runtime binding not proven, ambiguous candidates, high fan-out, missing schema, and reduced coverage.
-- [ ] 5.6 Keep candidate derivation deterministic, bounded, cycle-safe, and source-local unless a future rule defines cross-source identity.
+- [x] 5.6 Keep candidate derivation deterministic, bounded, cycle-safe, and source-local unless a future rule defines cross-source identity.
 - [ ] 5.7 Add tests for candidate ordering, fan-out caps, ambiguity, reduced coverage, and no-candidate behavior under full versus reduced coverage.
 - [ ] 5.8 Add tests for registration-supported candidate labels, registration-supported-before-relationship-only ordering, and `RegistrationCompatibilityUnproven` gaps.
 - [ ] 5.9 Add tests proving scanner-level `DynamicDispatchCandidate` facts are not conflated with derived combined candidate edges.
 
 ### Phase 6: Consumer Integration
 
-- [ ] 6.1 Update `tracemap paths` to traverse candidate edges with `NeedsReviewPath` cap and candidate limitations.
+- [x] 6.1 Update `tracemap paths` to traverse candidate edges with `NeedsReviewPath` cap and candidate limitations.
 - [ ] 6.2 Update `tracemap route-flow` to consume the shared candidate builder through `combined.route-flow.interface-bridge.v1` or a documented successor.
 - [ ] 6.3 Update `tracemap reverse` to traverse candidate edges with `NeedsReviewReversePath` cap and runtime-binding limitations.
 - [ ] 6.4 Update `tracemap impact --include-paths` so candidate path context does not become definite impact by itself.
 - [ ] 6.5 Update combined report and portfolio report summaries with relationship counts, DI registration counts, candidate counts, fan-out, gaps, and limitations.
 - [ ] 6.6 Update evidence graph and vault export to render candidate edges and gaps safely with rule IDs, tiers, supporting IDs, and limitations.
-- [ ] 6.7 Add consumer tests proving classifications remain conservative and wording avoids runtime certainty.
+- [x] 6.7 Add consumer tests proving classifications remain conservative and wording avoids runtime certainty.
 - [ ] 6.8 Add forbidden-wording tests for DI-supported candidate edges across paths, route-flow, reverse, impact/include-paths, report, and export.
 
 ### Phase 7: Documentation and Catalog Drift Check
 
-- [ ] 7.1 Re-check `rules/rule-catalog.yml` for drift after scanner, graph,
+- [x] 7.1 Re-check `rules/rule-catalog.yml` for drift after scanner, graph,
   export, and consumer work, and patch any limitation or wording gaps before
   final validation.
 - [ ] 7.2 Update `docs/ACCEPTANCE.md` with relationship, DI registration, candidate edge, and consumer acceptance scenarios.
