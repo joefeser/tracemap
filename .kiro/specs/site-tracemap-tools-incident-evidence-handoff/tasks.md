@@ -4,8 +4,8 @@ Status: implemented
 Readiness: implemented
 Public claim level: concept
 
-Ordering note: this is a spec-only branch. Leave implementation tasks unchecked
-until a future site implementation branch performs the work.
+Ordering note: the site implementation has landed; completed implementation
+tasks below reflect the published `/incident-evidence-handoff/` route.
 
 ## Spec Review Tasks
 
@@ -18,7 +18,7 @@ until a future site implementation branch performs the work.
 - [x] Update `Readiness` to `ready-for-implementation` only after review
   findings are patched or exact unavailable-tool/model errors are recorded.
 
-## Future Implementation Tasks
+## Implementation Tasks
 
 - [x] Confirm or update this spec-local `implementation-state.md` with branch,
   scope, public claim level, review status, validation plan, oddities, and

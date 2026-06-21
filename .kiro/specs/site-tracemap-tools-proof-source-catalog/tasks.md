@@ -4,20 +4,17 @@ Status: implemented
 Readiness: implemented
 Public claim level: demo
 
-These tasks are future implementation work. They remain unchecked because this
-phase is spec-only.
+These tasks track the published proof source catalog implementation.
 
-## Spec-Only Delivery Validation
+## Delivery Validation
 
-- Before merging this spec branch, validate that the branch is spec-only and
-  that all future implementation tasks below remain unchecked. CI enforcement
-  for this gate is deferred to a future tooling task; reviewers must verify it
-  manually.
+- Before merging implementation changes, validate that completed tasks match
+  published site code, metadata, and validation.
 - Confirm or update this spec-local `implementation-state.md` with branch,
   scope, review results, validation results, oddities, and follow-ups before
   changing site code.
 
-## Future Implementation Tasks
+## Implementation Tasks
 - [x] Reconfirm that the page-level public claim level remains `demo`; if
   implementation evidence changes, record the justification before changing the
   page-level claim level. Confirm that page-level `demo` is not a ceiling: a
@@ -124,14 +121,13 @@ phase is spec-only.
   format `proof-source-{route-slug}-{claim-slug}` derived from `route` and
   `claimLabel`.
 - [x] Add validation that every catalog row anchor is unique.
-- [x] Record the future implementation's chosen word-count bound in
+- [x] Record the implementation's chosen word-count bound in
   `implementation-state.md` before checking word-count validation complete.
 
 ## Final Validation Gate
 
-Note: these tasks are implementation-phase gate checks. They are not runnable
-on this spec-only branch. Do not mark them complete until a site implementation
-branch changes site code.
+Note: these implementation-phase gate checks passed after the site code,
+metadata, validation, and state changes landed.
 
 - [x] Run `git diff --check`.
 - [x] Run `npm test` from `site/` after implementation changes.
