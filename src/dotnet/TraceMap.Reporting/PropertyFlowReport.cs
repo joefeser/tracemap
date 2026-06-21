@@ -1517,6 +1517,7 @@ public static class PropertyFlowReporter
             && StringEqualsAny(formAction!, bindingAction)
             && (string.IsNullOrWhiteSpace(formController) || StringEqualsAny(formController!, bindingController));
         var handlerMatches = !string.IsNullOrWhiteSpace(formHandler)
+            && RazorPageIdentitiesAlign(formTarget, binding)
             && HandlerNamesAlign(formHandler, bindingHandler);
         return actionMatches || handlerMatches;
     }
@@ -1595,6 +1596,30 @@ public static class PropertyFlowReporter
         }
 
         return value;
+    }
+
+    private static bool RazorPageIdentitiesAlign(PropertyFactRow formTarget, PropertyFactRow binding)
+    {
+        var formPage = RazorPageIdentity(formTarget);
+        var bindingPage = RazorPageIdentity(binding);
+        return !string.IsNullOrWhiteSpace(formPage)
+            && formPage.Equals(bindingPage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string RazorPageIdentity(PropertyFactRow fact)
+    {
+        var path = fact.FilePath.Replace('\\', '/').Trim();
+        if (path.EndsWith(".cshtml.cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return path[..^".cshtml.cs".Length];
+        }
+
+        if (path.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase))
+        {
+            return path[..^".cshtml".Length];
+        }
+
+        return string.Empty;
     }
 
     private static HashSet<string> FamilyTokens(PropertyFactRow fact)
