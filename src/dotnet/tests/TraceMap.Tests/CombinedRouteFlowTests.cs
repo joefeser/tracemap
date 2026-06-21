@@ -30,6 +30,13 @@ public sealed class CombinedRouteFlowTests
         Assert.True(File.Exists(Path.Combine(outDir, "route-flow-report.json")));
         Assert.Equal("route-flow", result.Report.ReportType);
         Assert.Equal(result.Report.ReportCoverage, result.Report.Summary.ReportCoverage);
+        Assert.NotNull(result.Report.Query.SelectorTrace);
+        Assert.Equal("route", result.Report.Query.SelectorTrace!.SelectorKind);
+        Assert.Equal("GET /api/orders/{}", result.Report.Query.SelectorTrace.SafeNormalizedKey);
+        Assert.Equal("NormalizedMethodPath", result.Report.Query.SelectorTrace.MatchMode);
+        Assert.Equal("normalized", result.Report.Query.SelectorTrace.RedactionState);
+        Assert.Equal("combined.route-flow.selector.v1", result.Report.Query.SelectorTrace.RuleId);
+        Assert.NotEmpty(result.Report.Query.SelectorTrace.SupportingFactIds);
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "aligned-route-pair");
         Assert.DoesNotContain(result.Report.FlowRows, row => row.EdgeKind == "client-server-alignment");
@@ -167,6 +174,7 @@ public sealed class CombinedRouteFlowTests
         var node = JsonNode.Parse(json)!.AsObject();
         node.Remove("touchedFiles");
         node.Remove("touchedSymbols");
+        node["query"]!.AsObject().Remove("selectorTrace");
         var oldReport = JsonSerializer.Deserialize<RouteFlowReport>(node.ToJsonString(), CombinedDependencyReporter.JsonOptions);
 
         var render = typeof(CombinedRouteFlowReporter).GetMethod("RenderMarkdown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
@@ -175,6 +183,7 @@ public sealed class CombinedRouteFlowTests
 
         Assert.Contains("- Touched files: `0`", markdown);
         Assert.Contains("- Touched symbols: `0`", markdown);
+        Assert.Contains("- Selector trace: `unavailable`", markdown);
         Assert.Contains("## Touched Files", markdown);
         Assert.Contains("## Touched Symbols", markdown);
     }
@@ -693,6 +702,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Empty(result.Report.DependencySurfaces);
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.Null(result.Report.Query.SelectorTrace);
         var json = await File.ReadAllTextAsync(outputPath);
         Assert.Contains("\"reportType\": \"route-flow\"", json);
         Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
@@ -712,6 +722,11 @@ public sealed class CombinedRouteFlowTests
             ToSurface: "sql-query"));
 
         Assert.Equal("GET /api/orders/{}", result.Report.Query.Route);
+        Assert.NotNull(result.Report.Query.SelectorTrace);
+        Assert.Equal("route", result.Report.Query.SelectorTrace!.SelectorKind);
+        Assert.Equal("GET /api/orders/{}", result.Report.Query.SelectorTrace.SafeNormalizedKey);
+        Assert.Equal("normalized-redacted", result.Report.Query.SelectorTrace.RedactionState);
+        Assert.Contains("Selector values are normalized or redacted before rendering.", result.Report.Query.SelectorTrace.Limitations);
         var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.json"));
         Assert.DoesNotContain(rawSelector, json, StringComparison.Ordinal);
         Assert.DoesNotContain("example.test", json, StringComparison.OrdinalIgnoreCase);
@@ -749,6 +764,9 @@ public sealed class CombinedRouteFlowTests
 
         Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
         Assert.Equal("ReducedCoverage", result.Report.Summary.ReportCoverage);
+        Assert.NotNull(result.Report.Query.SelectorTrace);
+        Assert.Equal("ReducedCoverage", result.Report.Query.SelectorTrace!.Coverage);
+        Assert.Contains("Reduced coverage caps selector-trace conclusions.", result.Report.Query.SelectorTrace.Limitations);
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ReducedCoverage" && gap.SourceLabel == "server");
     }
 

@@ -278,3 +278,47 @@
   - Patched `design.md` to state source scan IDs remain available through
     `RouteFlowSnapshot` source entries and entry rows should not invent a
     duplicate field unless a future schema change adds it explicitly.
+
+## 2026-06-20 Follow-Up Slice: Safe Selector Trace Metadata
+
+- Branch: `codex/implement-route-centered-endpoint-trace-completeness-followup`
+- Selected slice: Task 5, safe selector trace metadata.
+- Scope:
+  - Added additive `RouteFlowSelectorTrace` metadata under `RouteFlowQuery`.
+  - Reused existing route/client/from-* selector normalization and `SafeSelector` redaction helpers.
+  - Recorded selector kind, safe normalized key, match mode, redaction state, coverage, rule ID, evidence tier, supporting fact IDs, and limitations.
+  - Added a compact Markdown query line for selector trace metadata.
+  - Preserved older JSON compatibility by making selector trace nullable and rendering missing traces as unavailable.
+- Privacy and evidence notes:
+  - Raw route selector values, dynamic URLs, hostnames, tokens, absolute paths, SQL/config-like values, and private local paths are not rendered by the selector trace.
+  - Selector trace uses `combined.route-flow.selector.v1` and remains static, coverage-relative query metadata; it does not claim runtime execution.
+- Validation:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`: passed with 23 tests.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed with 570 tests.
+  - `./scripts/smoke-combined-paths.sh /tmp/tracemap-selector-trace-smoke`: passed after local `npm --prefix src/typescript ci` populated ignored TypeScript dependencies.
+  - Direct route-flow smoke over `/tmp/tracemap-selector-trace-smoke/combined.sqlite`: passed and verified `query.selectorTrace` rule ID, evidence tier, selector kind, and safe normalized key.
+  - Smoke-output sentinel over route-flow Markdown/JSON: passed.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+- Kiro implementation review:
+  - Command: `node scripts/kiro-review.mjs --phase route-centered-endpoint-trace-completeness --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  - Artifact: `.tmp/kiro-reviews/route-centered-endpoint-trace-completeness/2026-06-21T024705-297Z-implementation-claude-sonnet-4.6.clean.md`
+  - Coverage: Full.
+  - Result: no Medium+ findings. Patched narrow Low clarifications for candidate-boundary gap names, selector trace model documentation, and probable-classification test expectations.
+  - Re-review command: `node scripts/kiro-review.mjs --phase route-centered-endpoint-trace-completeness --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  - Re-review artifact: `.tmp/kiro-reviews/route-centered-endpoint-trace-completeness/2026-06-21T024939-882Z-re-review-claude-sonnet-4.6.clean.md`
+  - Re-review coverage: Full.
+  - Re-review result: no Medium+ findings. Patched the two narrow Low clarification requests for Strong/Probable classification wording and normalized selector ordering wording.
+- Pending validation:
+  - None for this slice.
+- PR:
+  - URL: `https://github.com/joefeser/tracemap/pull/253`
+  - Initial PR-loop command: `agent-control pr-loop --repo joefeser/tracemap --pr 253 --base dev --require-codex-review --json`
+  - Initial PR-loop result: `merge_ready`, stop reason `NONE`, canMerge `true`, merge state `CLEAN`, unresolved threads `0`, pending checks `0`, failed checks `0`, actionable bot findings `0`.
+  - Bot lifecycle evidence: Qodo and Gemini returned; Codex was satisfied by configured trusted-code-review quorum with residual risk noted by the lane policy.
+  - Follow-up Qodo patch: selector traces are now omitted when selector entry evidence has no supporting fact IDs; Markdown keeps rendering missing selector traces as unavailable.
+- Follow-ups remaining from this spec:
+  - Task 8 method/service row grouping.
+  - Task 9 data/query/dependency and value-origin row polish.
+  - Task 10 broader coverage/gap/classification downgrade hardening.
