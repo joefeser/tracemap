@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level proof-path FAQ for reading TraceMap static evidence trails, tiers, coverage labels, limitations, review-packet context, and missing-evidence handoffs."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Proof Path FAQ | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/proof-paths/faq/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Proof Path FAQ">
+    <meta
+      property="og:description"
+      content="Concept-level answers for reading proof paths without upgrading static evidence into broader product, runtime, or approval claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/proof-paths/faq/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Proof path FAQ</p>
+        <h1>Answer proof-path questions without losing the evidence boundary.</h1>
+        <p class="hero-subhead">
+          This FAQ is for readers who already know they need a proof path and
+          want bounded answers about fields, tiers, coverage, limitations,
+          gaps, review packets, and public-safe material.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          The FAQ explains how to read deterministic static evidence trails; it
+          does not create a new proof source or approval flow.
+        </p>
+        <nav class="hero-actions" aria-label="Proof path FAQ links">
+          <a class="button primary" href="#what-is-a-proof-path">Start with definition</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/proof-paths/tour/">Guided tour</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+          <a class="button secondary" href="/questions/">Question index</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Placement</p>
+          <h2>This FAQ answers repeated proof-path questions after topic selection.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/questions/">/questions/</a></strong><span>Broad question-to-surface routing; this FAQ starts after the reader has chosen proof paths.</span></div>
+          <div><strong><a href="/proof-paths/">/proof-paths/</a></strong><span>Canonical proof-path overview and route family entry point; this page uses question-and-answer explanations.</span></div>
+          <div><strong><a href="/proof-paths/tour/">/proof-paths/tour/</a></strong><span>Guided step-by-step reading flow; this FAQ handles repeated objections and edge cases.</span></div>
+          <div><strong><a href="/evidence/">/evidence/</a></strong><span>Broader evidence vocabulary and artifact-shape explanation; this page applies those terms to proof-path questions.</span></div>
+          <div><strong><a href="/limitations/">/limitations/</a></strong><span>Canonical boundary surface; this page explains why a limitation travels inside a proof path.</span></div>
+          <div><strong><a href="/static-vs-runtime/">/static-vs-runtime/</a></strong><span>Static evidence versus operational telemetry boundary; this page explains how static proof paths should be read.</span></div>
+          <div><strong><a href="/review-claim-checklist/">/review-claim-checklist/</a></strong><span>Decision ritual for repeat, downgrade, hold, or internal-only wording; this FAQ explains the reading questions before that decision.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">FAQ</p>
+          <h2>Each answer keeps the claim, fields, limitation, and next owner attached.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article id="what-is-a-proof-path" data-proof-faq-question="What is a proof path?">
+            <h3>What is a proof path?</h3>
+            <p>A proof path is a public-safe route or reference trail from a public claim to supporting static evidence, rule ID or rule family, evidence tier, coverage label, limitation, and source context.</p>
+            <p>Stop if the trail cannot name the fields that carry the evidence.</p>
+          </article>
+          <article id="how-to-read" data-proof-faq-question="How do I read a proof path?">
+            <h3>How do I read a proof path?</h3>
+            <p>Read in this order: claim, public claim level, proof path, rule ID or rule family, evidence tier, coverage label, commit or public-safe source context, extractor version or schema family, limitation, non-claim, and next owner.</p>
+            <p>If a required field is missing or private-only, stop, downgrade, hold, or route the question to the next owner.</p>
+          </article>
+          <article id="evidence-tiers" data-proof-faq-question="What do evidence tiers mean?">
+            <h3>What do evidence tiers mean?</h3>
+            <p><code>Tier1Semantic</code> is compiler-resolved symbol evidence, <code>Tier2Structural</code> is known framework or project structure evidence, <code>Tier3SyntaxOrTextual</code> is syntax-only or text evidence, and <code>Tier4Unknown</code> is an analysis gap.</p>
+            <p>A higher tier does not mean complete coverage. A lower tier can still be useful when the uncertainty stays visible.</p>
+          </article>
+          <article id="coverage-labels" data-proof-faq-question="What do coverage labels mean?">
+            <h3>What do coverage labels mean?</h3>
+            <p>Coverage labels are visibility and confidence boundaries. They can be full, partial, reduced, unknown, unavailable, future-only, or gap-labeled states.</p>
+            <p>Preserve reduced or unknown labels instead of normalizing them upward.</p>
+          </article>
+          <article id="limitations" data-proof-faq-question="Why do limitations matter?">
+            <h3>Why do limitations matter?</h3>
+            <p>A limitation is part of the claim boundary, not a footer. It must travel with any repeated claim because it says what the static evidence can and cannot support.</p>
+            <p>Do not repeat the claim after dropping the limitation, non-claim, or owner follow-up.</p>
+          </article>
+          <article id="public-claim-levels" data-proof-faq-question="What do public claim levels mean?">
+            <h3>What do public claim levels mean?</h3>
+            <p>A public claim level tells the reader how strong the public surface is allowed to be. This FAQ is concept-level guidance even when it links to demo-backed pages.</p>
+            <p>Do not upgrade concept wording into demo or main wording unless a recorded public-safe evidence surface supports that stronger claim.</p>
+          </article>
+          <article id="missing-evidence" data-proof-faq-question="What should I do when evidence is missing?">
+            <h3>What should I do when evidence is missing?</h3>
+            <p>Stop, downgrade, label the gap, keep the claim internal, or hand off to the next owner. Missing evidence is not filled by confidence, seniority, repetition, or pressure.</p>
+            <p>The public answer is the gap or owner follow-up until the evidence-bearing field exists.</p>
+          </article>
+          <article id="review-packets" data-proof-faq-question="How do proof paths relate to review packets?">
+            <h3>How do proof paths relate to review packets?</h3>
+            <p>A review packet can gather proof paths, limitations, review notes, public claim levels, and owner follow-ups so a human can inspect what is known, partial, missing, or private-only.</p>
+            <p>The packet carries evidence and questions; it does not convert missing evidence into a stronger answer.</p>
+          </article>
+          <article id="agents-and-reviewers" data-proof-faq-question="What should agents and reviewers preserve?">
+            <h3>What should agents and reviewers preserve?</h3>
+            <p>Human and automated readers must preserve the proof path, rule ID or rule family, evidence tier, coverage label, limitation, non-claim, and public claim level.</p>
+            <p>Do not repeat or summarize a claim after dropping those fields.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="static-evidence-cannot-prove" data-proof-faq-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Static Evidence Non-Claims</p>
+          <h2>What can static evidence not prove?</h2>
+        </div>
+        <ul>
+          <li>Do not claim runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete coverage, release approval, or autonomous approval from a proof path.</li>
+          <li>Do not present TraceMap as AI/LLM analysis, embeddings, vector databases, prompt classification, or autonomous review.</li>
+          <li>Do not replace tests, source review, code review, human review, service-owner judgment, runtime observability, telemetry, release controls, or human judgment with a proof path.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="private-or-raw-artifacts" data-proof-faq-boundary="private-material">
+        <div>
+          <p class="section-kicker">Public-Safe Material</p>
+          <h2>Can a proof path use private or raw artifacts?</h2>
+        </div>
+        <p>
+          Public proof paths link only to public-safe summaries, checked-in
+          docs, public routes, or sanctioned demo artifacts. Raw facts,
+          raw SQLite, analyzer logs, raw source snippets, raw SQL, config
+          values, secrets, local paths, raw remotes, generated scan directories,
+          private sample names, raw command output, hidden validation details,
+          and credential-like values are not public proof material.
+        </p>
+      </section>
+
+      <section class="section split-section" id="safe-answer-patterns">
+        <div>
+          <p class="section-kicker">Safe Answer Patterns</p>
+          <h2>Use bounded verbs and keep the limitation in the sentence.</h2>
+        </div>
+        <div class="detail-list">
+          <div data-proof-faq-safe-pattern><strong>Inspect</strong><span>This proof path shows a static reference under Rule <code>example.rule.family</code> with reduced coverage; the limitation still applies. This is an illustrative pattern, not a real TraceMap finding.</span></div>
+          <div data-proof-faq-safe-pattern><strong>Label the gap</strong><span>The evidence is missing, so the public answer is a gap or owner follow-up, not a stronger conclusion.</span></div>
+          <div data-proof-faq-safe-pattern><strong>Carry the packet</strong><span>The review packet can carry this proof path and limitation to a reviewer; it does not approve the release.</span></div>
+          <div data-proof-faq-safe-pattern><strong>Use bounded verbs</strong><span><code>inspect</code>, <code>follow</code>, <code>compare</code>, <code>check</code>, <code>record</code>, <code>downgrade</code>, <code>hold</code>, <code>label the gap</code>, <code>hand off</code>, and <code>escalate</code>.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="unsafe-answer-patterns" data-proof-faq-boundary="unsafe-patterns">
+        <div>
+          <p class="section-kicker">Unsafe Answer Patterns</p>
+          <h2>Do not say or imply unsupported conclusions.</h2>
+        </div>
+        <ul>
+          <li>Do not say a proof path proves, guarantees, certifies, approves, replaces, resolves, or shows unqualified impacted results.</li>
+          <li>Do not imply runtime proof, production proof, endpoint performance proof, outage-cause claims, release-safety claims, operational-safety claims, complete-coverage claims, AI/LLM analysis claims, autonomous approval, or release approval.</li>
+          <li>Do not say raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, local paths, raw remotes, generated scan directories, private sample names, command output, hidden validation details, secrets, or credential-like values should be pasted into public FAQ copy.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Continue</p>
+          <h2>Use the neighboring route that matches the reader's next question.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/questions/">Question index</a>
+          <a href="/proof-paths/">Proof path overview</a>
+          <a href="/proof-paths/tour/">Guided proof-path tour</a>
+          <a href="/evidence/">Evidence vocabulary</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/static-vs-runtime/">Static versus runtime</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/packets/assembly/">Review packet assembly</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/proof-paths/">proof path overview</a>,
+        <a href="/proof-paths/tour/">guided proof-path tour</a>,
+        or
+        <a href="/review-claim-checklist/">review claim checklist</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
