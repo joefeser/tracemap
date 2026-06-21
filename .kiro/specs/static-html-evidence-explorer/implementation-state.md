@@ -331,7 +331,8 @@ Validation:
 
 PR status:
 
-- PR URL: pending.
+- Ready PR opened against `dev`: https://github.com/joefeser/tracemap/pull/264
+- Initial pushed follow-up commit: `a67e50e8`.
 - PR loop: pending.
 
 Follow-ups still intentionally deferred:
