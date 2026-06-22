@@ -43,6 +43,7 @@ manifest.json
 chunks.jsonl
 README.md
 index.md
+chunks/<family>/index.md
 chunks/<family>/<chunk-id>.md
 ```
 
@@ -52,6 +53,12 @@ Each JSONL line is one chunk object with `schemaVersion`, `chunkId`,
 source refs, supporting IDs, rule IDs, evidence tiers, coverage labels, gaps,
 limitations, redactions, and links. `bodyMarkdown` is rendered from the same
 structured evidence fields and does not become source evidence by itself.
+
+Each chunk includes deterministic navigation links to its Markdown file, the
+family index, and the top-level docs index. Markdown output renders the same
+links near the top of each chunk and writes one family index per emitted chunk
+family. These navigation pages are generated presentation metadata only; they do
+not add evidence, promote claim levels, or prove runtime behavior.
 
 Markdown files start with generated frontmatter containing the schema,
 generator, content hash, chunk or summary identity, claim level, and source

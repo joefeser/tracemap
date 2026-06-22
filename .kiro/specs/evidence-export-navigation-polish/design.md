@@ -78,10 +78,17 @@ Name derivation should be a closed pipeline:
 1. Gather candidate parts from known-safe fields.
 2. Normalize whitespace and punctuation.
 3. Remove or category-label unsafe tokens using the existing safety classifier.
+   If a preferred candidate such as a route path key fails classification, treat
+   it as absent and continue to fallback derivation.
 4. Apply length limits.
 5. Detect case-insensitive and normalized collisions.
 6. Append stable evidence-ID-derived hash disambiguators where needed.
 7. Preserve stable IDs in metadata/frontmatter/JSON.
+
+Slug derivation follows the same closed-field rule: generated safe slugs are
+derived from stable IDs or already-safe normalized display fields and must not
+depend on raw paths, raw endpoint URLs, raw remotes, raw SQL/config values, or
+source snippets.
 
 Examples:
 
@@ -154,6 +161,12 @@ third navigation-specific unsupported-input rule unless implementation discovers
 a genuinely new finding class outside both boundaries and documents the
 distinction in the rule catalog.
 
+Absent-family behavior is chosen per output surface. Vault may omit a family
+index when no compatible graph nodes exist, while docs-export may omit a family
+index or emit a family-level gap depending on the requested `--families` input.
+If those behaviors diverge, the generated docs and tests must name the
+divergence explicitly rather than implying cross-surface parity.
+
 ## Compatibility
 
 This spec should prefer additive fields over schema breaks.
@@ -165,8 +178,12 @@ Compatibility rules:
 - Existing docs-export JSONL consumers should ignore new optional fields.
 - If a schema version bump is required, document old and new behavior and add
   old-format tolerance tests where the previous format is parseable.
-- `--force` is only stale-generated-output replacement after new content passes
-  safety validation.
+- If no schema version bump is introduced, old-format tolerance tests are
+  intentionally deferred, but migration notes still describe additive optional
+  fields before or concurrent with the slice that changes them.
+- `--force` retains existing replacement semantics and never bypasses safety
+  validation, user-file collision checks, claim-level gates, or private-path
+  guards.
 - A schema version bump is warranted when chunk ID formats change, existing
   field semantics change, a previously optional field becomes required, or old
   consumers can no longer safely ignore a new field.
@@ -182,9 +199,14 @@ Prefer existing rules:
 Only add new rule IDs if the implementation emits a new class of finding or
 gap. Candidate rule IDs, if needed:
 
-- `vault-export.navigation.safe-name.v1`
-- `vault-export.gap.navigation-collision.v1`
-- `docs-export.navigation.chunk-boundary.v1`
+- `vault-export.navigation.safe-name.v1`: emitted only if vault creates a
+  first-class safe-name/navigation finding separate from existing node metadata.
+- `vault-export.gap.navigation-collision.v1`: emitted only when vault detects a
+  name/slug collision that cannot be resolved by deterministic stable-ID
+  disambiguation and must be represented as a gap.
+- `docs-export.navigation.chunk-boundary.v1`: emitted only if docs-export
+  creates explicit chunk-boundary evidence or validation findings beyond the
+  existing chunk metadata.
 
 Do not add `docs-export.gap.navigation-unsupported-input.v1` for additive
 question-family absence; use `docs-export.gap.unsupported-question-family.v1`
@@ -216,12 +238,19 @@ Focused tests should cover:
 - public/demo unsafe-name rejection;
 - hidden/local context-labeled evidence locations;
 - hidden/local rejection or omission of absolute paths, raw remotes, raw URLs,
-  hostnames, connection strings, and source snippets;
+  hostnames, raw SQL, raw config values, connection strings, and source
+  snippets;
 - stable ID preservation in metadata;
 - route-flow navigation when compatible report evidence exists;
 - unsupported additive question-family gaps;
 - Markdown and JSONL parity for chunk titles, citations, anchors, and
   limitations.
+- chunk size or sectioning policy enforcement, including a test that oversized
+  generated text is either sectioned or rejected according to the documented
+  policy.
+- documented absent-family behavior per output surface, including a test that a
+  wholly absent family is not confused with a present family that has one
+  missing neighbor.
 
 ## Risks
 
