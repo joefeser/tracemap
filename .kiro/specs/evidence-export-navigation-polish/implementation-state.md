@@ -4,7 +4,7 @@ Status: implemented
 Readiness: ready-for-pr-loop
 Branch: codex/implement-evidence-export-navigation-polish
 PR target: dev
-PR: pending
+PR: https://github.com/joefeser/tracemap/pull/295
 Primary issue: #189
 Public claim level: hidden/local export behavior only; generated navigation remains presentation metadata over deterministic evidence
 
@@ -164,8 +164,11 @@ Completed:
 
 ## Implementation PR State
 
-- Implementation branch not pushed yet.
-- Ready implementation PR pending.
+- Implementation branch pushed to
+  `origin/codex/implement-evidence-export-navigation-polish`.
+- Ready implementation PR opened to `dev`:
+  https://github.com/joefeser/tracemap/pull/295.
+- PR loop pending.
 
 ## Follow-Ups For Implementation
 
