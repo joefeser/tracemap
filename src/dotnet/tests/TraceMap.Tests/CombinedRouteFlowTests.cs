@@ -170,7 +170,8 @@ public sealed class CombinedRouteFlowTests
             combinedPath,
             Path.Combine(temp.Path, "route-flow"),
             Route: "GET /api/orders/{id}",
-            ToSurface: "sql-query"));
+            ToSurface: "sql-query",
+            Classification: RouteFlowClassifications.StrongStaticRouteFlow));
         var json = JsonSerializer.Serialize(result.Report, CombinedDependencyReporter.JsonOptions);
         var node = JsonNode.Parse(json)!.AsObject();
         node.Remove("touchedFiles");
@@ -762,6 +763,29 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_classification_filter_empty_rows_preserves_matched_selector_trace()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp);
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query",
+            Classification: RouteFlowClassifications.NoRouteFlowEvidence));
+
+        Assert.Empty(result.Report.FlowRows);
+        Assert.Empty(result.Report.LogicRows);
+        Assert.Empty(result.Report.DependencySurfaces);
+        Assert.NotEmpty(result.Report.Gaps);
+        Assert.NotNull(result.Report.Query.SelectorTrace);
+        Assert.Equal("route", result.Report.Query.SelectorTrace!.SelectorKind);
+        Assert.NotEmpty(result.Report.Query.SelectorTrace.SupportingFactIds);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+    }
+
+    [Fact]
     public async Task Route_flow_query_omits_raw_route_selector_values()
     {
         using var temp = new TempDirectory();
@@ -817,6 +841,9 @@ public sealed class CombinedRouteFlowTests
 
         Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
         Assert.Equal("ReducedCoverage", result.Report.Summary.ReportCoverage);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.NotEqual(RouteFlowClassifications.NoRouteFlowEvidence, result.Report.Summary.Classification);
         Assert.NotNull(result.Report.Query.SelectorTrace);
         Assert.Equal("ReducedCoverage", result.Report.Query.SelectorTrace!.Coverage);
         Assert.Contains("Reduced coverage caps selector-trace conclusions.", result.Report.Query.SelectorTrace.Limitations);
@@ -864,6 +891,43 @@ public sealed class CombinedRouteFlowTests
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.RuleId is "combined.route-flow.argument-projection.v1" or "combined.route-flow.fact-symbol-projection.v1");
+    }
+
+    [Fact]
+    public async Task Route_flow_missing_optional_projection_tables_emit_schema_gaps_without_silent_projection_loss()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp);
+
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = combinedPath
+        }.ToString()))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                drop table combined_argument_flows;
+                drop table combined_fact_symbols;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SchemaMissing"
+            && gap.Message.Contains("combined_argument_flows", StringComparison.Ordinal));
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "SchemaMissing"
+            && gap.Message.Contains("combined_fact_symbols", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.RuleId is "combined.route-flow.argument-projection.v1" or "combined.route-flow.fact-symbol-projection.v1");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "ArgumentProjectionUnavailable" or "FactSymbolProjectionUnavailable");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
     }
 
     [Fact]
