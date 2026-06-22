@@ -1,6 +1,7 @@
 # UI Field Property Lineage Continuation Tasks
 
-Status: ready-for-implementation after spec review
+Status: ready-for-implementation
+Readiness: ready-for-implementation
 
 ## Spec-Only PR Scope
 
