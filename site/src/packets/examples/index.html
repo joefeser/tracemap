@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap evidence packet examples showing synthetic public-safe claim shapes, proof paths, evidence tiers, limitations, non-claims, owners, and validation evidence."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Evidence Packet Examples | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/packets/examples/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Packet Examples">
+    <meta
+      property="og:description"
+      content="Synthetic public-safe packet shapes for reading TraceMap claims with proof paths, coverage labels, limitations, and next-owner questions."
+    >
+    <meta property="og:url" content="https://tracemap.tools/packets/examples/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Evidence packet examples</p>
+        <h1>Read the packet shape before repeating the claim.</h1>
+        <p class="hero-subhead">
+          These examples show how a claim label, proof path, rule family,
+          evidence tier, coverage label, limitation, non-claim, next owner, and
+          validation summary travel together.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          Every example below is a synthetic public-safe example, including the
+          demo-backed shape.
+        </p>
+        <nav class="hero-actions" aria-label="Evidence packet example links">
+          <a class="button primary" href="#examples">Inspect examples</a>
+          <a class="button secondary" href="/packets/">Packet guide</a>
+          <a class="button secondary" href="/packets/assembly/">Packet assembly</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+        </nav>
+      </section>
+
+      <section class="section" id="examples">
+        <div class="section-header">
+          <p class="section-kicker">Synthetic packet shapes</p>
+          <h2>Four compact rows keep evidence, limits, and ownership visible.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-evidence-packet-examples>
+            <caption>
+              Paths, spans, commits, extractor versions, and validation notes
+              are placeholders for public teaching only.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Demo-backed packet</th>
+                <th scope="col">Reduced-coverage packet</th>
+                <th scope="col">Gap-labeled packet</th>
+                <th scope="col">Stop-condition packet</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-packet-example-field="claim label">
+                <td>Claim label</td>
+                <td data-example-category="demo-backed packet">Demo-backed shape: static route evidence appears in a public demo summary.</td>
+                <td data-example-category="reduced-coverage packet">Reduced-coverage claim: syntax fallback found a review trail, but semantic load was partial.</td>
+                <td data-example-category="gap-labeled packet">Gap-labeled claim: the scanner cannot prove or disprove the requested dependency path.</td>
+                <td data-example-category="stop-condition packet">Stop condition: public copy waits because the proof trail is not public-safe.</td>
+              </tr>
+              <tr data-packet-example-field="public claim level">
+                <td>Public claim level</td>
+                <td>concept; synthetic public-safe example</td>
+                <td>concept; synthetic public-safe example</td>
+                <td>concept; synthetic public-safe example</td>
+                <td>concept; synthetic public-safe example</td>
+              </tr>
+              <tr data-packet-example-field="proof path">
+                <td>Proof path</td>
+                <td><a href="/demo/result/">/demo/result/</a> public-safe demo summary shape.</td>
+                <td><a href="/examples/scan-packet/">/examples/scan-packet/</a> reduced coverage pattern.</td>
+                <td><a href="/packets/assembly/">/packets/assembly/</a> gap handoff pattern.</td>
+                <td>blocked: missing public-safe proof trail owned by release review process.</td>
+              </tr>
+              <tr data-packet-example-field="rule ID or family">
+                <td>Rule ID or family</td>
+                <td>csharp.syntax.aspnetroute.v1 family</td>
+                <td>csharp.semantic.workspace.v1 family</td>
+                <td>csharp.semantic.workspace.v1 family</td>
+                <td>N/A: public-copy stop condition; no scanner-emitted rule placeholder</td>
+              </tr>
+              <tr data-packet-example-field="evidence tier">
+                <td>Evidence tier</td>
+                <td>Tier2Structural</td>
+                <td>Tier3SyntaxOrTextual</td>
+                <td>Tier4Unknown</td>
+                <td>Tier4Unknown</td>
+              </tr>
+              <tr data-packet-example-field="coverage label">
+                <td>Coverage label</td>
+                <td>demo-backed shape, synthetic public-safe example</td>
+                <td>reduced coverage, partial semantic analysis visible</td>
+                <td>gap-labeled, unknown coverage visible</td>
+                <td>stopped, private-only support not publishable</td>
+              </tr>
+              <tr data-packet-example-field="synthetic public-safe path/span">
+                <td>Synthetic public-safe path/span</td>
+                <td><code>examples/public-demo/Controllers/OrdersController.cs:42-58</code></td>
+                <td><code>examples/public-demo/Contracts/OrderDto.cs:12-24</code></td>
+                <td><code>examples/public-demo/Project/Orders.Api.csproj:1-1</code></td>
+                <td><code>examples/public-demo/Review/claim-boundary.md:7-11</code></td>
+              </tr>
+              <tr data-packet-example-field="commit or extractor placeholder">
+                <td>Commit or extractor placeholder</td>
+                <td>commit: demo-sha-placeholder; extractor: tracemap-demo-extractor@x.y.z</td>
+                <td>commit: reduced-sha-placeholder; extractor: tracemap-syntax-fallback@x.y.z</td>
+                <td>commit: gap-sha-placeholder; extractor: tracemap-gap-recorder@x.y.z</td>
+                <td>commit: blocked-sha-placeholder; extractor: pending-public-safe-summary</td>
+              </tr>
+              <tr data-packet-example-field="limitation">
+                <td>Limitation</td>
+                <td>Shows a demo-backed packet shape only; it does not publish raw artifacts or real repository evidence.</td>
+                <td>Reduced semantic coverage means the row routes review work without claiming complete repository coverage.</td>
+                <td>The evidence is an analysis gap, so the packet preserves the question instead of answering it.</td>
+                <td>The proof path is blocked until a public-safe summary or explicit limitation exists.</td>
+              </tr>
+              <tr data-packet-example-field="non-claim">
+                <td>Non-claim</td>
+                <td>No runtime behavior, production traffic, endpoint performance, release approval, release safety, or customer evidence.</td>
+                <td>No absence-of-impact proof, complete coverage claim, operational safety claim, or release approval.</td>
+                <td>No proof that the dependency exists, does not exist, caused an outage, or is safe to ignore.</td>
+                <td>No public conclusion, autonomous approval, AI impact analysis, LLM analysis, or replacement of human review.</td>
+              </tr>
+              <tr data-packet-example-field="next owner">
+                <td>Next owner</td>
+                <td>reviewing engineer</td>
+                <td>service owner role and release review process</td>
+                <td>reviewing engineer and future validation owner</td>
+                <td>release review process</td>
+              </tr>
+              <tr data-packet-example-field="validation evidence">
+                <td>Validation evidence</td>
+                <td>public example schema check passed; demo artifact link remains illustrative.</td>
+                <td>reduced-coverage label check passed; semantic gap remains visible.</td>
+                <td>gap label and Tier4Unknown check passed; no stronger claim emitted.</td>
+                <td>blocked marker check passed; public-copy checklist should stop the sentence.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Neighboring surfaces</p>
+          <h2>This gallery shows shapes; adjacent pages keep their own jobs.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/packets/">/packets/</a></strong><span>General packet artifact model.</span></div>
+          <div><strong><a href="/packets/assembly/">/packets/assembly/</a></strong><span>Human workflow for assembling a review packet.</span></div>
+          <div><strong><a href="/examples/scan-packet/">/examples/scan-packet/</a></strong><span>Scan-oriented public example material.</span></div>
+          <div><strong><a href="/demo/result/">/demo/result/</a></strong><span>Checked-in public demo result summary.</span></div>
+          <div><strong><a href="/proof-source-catalog/">/proof-source-catalog/</a></strong><span>Proof-source lookup for public routes and claim levels.</span></div>
+          <div><strong><a href="/review-claim-checklist/">/review-claim-checklist/</a></strong><span>Checklist for deciding whether a sentence can be repeated.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-packet-example-boundary>
+        <div>
+          <p class="section-kicker">Public boundaries</p>
+          <h2>Public-safe examples do not make private or operational proof public.</h2>
+        </div>
+        <ul>
+          <li>Do not publish raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+          <li>Do not claim runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, autonomous approval, autonomous review, or replacement of human review.</li>
+          <li>Use these examples to preserve deterministic static evidence, limitations, non-claims, and owner questions before public wording is repeated.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Evidence packet examples sit beside the
+        <a href="/packets/">packet guide</a>,
+        <a href="/packets/assembly/">assembly checklist</a>,
+        and
+        <a href="/review-claim-checklist/">claim checklist</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
