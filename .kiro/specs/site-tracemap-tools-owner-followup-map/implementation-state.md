@@ -169,6 +169,17 @@ navigation.
   legacy story safety targets, and 13 legacy modernization evidence-map
   rows.`).
 - Passed on 2026-06-22 after review fix: `cd site && npm run build`.
+- Passed on 2026-06-22 after test-hardening fix: `git diff --check`.
+- Passed on 2026-06-22 after test-hardening fix:
+  `./scripts/check-private-paths.sh`.
+- Passed on 2026-06-22 after test-hardening fix:
+  `cd site && node --test scripts/owner-followup-map.test.mjs`.
+- Passed on 2026-06-22 after test-hardening fix: `cd site && npm test`.
+- Passed on 2026-06-22 after test-hardening fix:
+  `cd site && npm run validate` (`Validated 59 HTML files, 1993 internal
+  references, 58 sitemap URLs, 1 legacy story safety targets, and 13 legacy
+  modernization evidence-map rows.`).
+- Passed on 2026-06-22 after test-hardening fix: `cd site && npm run build`.
 - Passed on 2026-06-22: desktop browser sanity for `/owners/follow-up/` at
   1280x900. The page rendered title `Owner Follow-Up Map | TraceMap`, 8 owner
   rows, visible `Public claim level: concept. No public conclusion without
@@ -196,7 +207,15 @@ build, private-path, diff, and browser sanity checks.
   forbidden-claim match with a global clone of each regex and keeps the
   negated-context guard per occurrence. Added regression coverage for a safe
   negated occurrence before a later unsafe occurrence.
-- Latest PR loop outcome: pending rerun after the review-fix commit is pushed.
+- PR loop follow-up outcome on head
+  `5bdb52f7d1a6a5a110ce1e24758a0721d7d1a255`: Qodo reported brittle test
+  fixture mutation in `site/scripts/owner-followup-map.test.mjs` because the
+  negative test depended on exact serialized HTML spacing and copy.
+- Follow-up fix: the owner-followup test now removes required fixture
+  fragments through attribute-targeted patterns and asserts that each fixture
+  mutation actually changed the page before validating the expected error.
+- Latest PR loop outcome: pending rerun after the test-hardening commit is
+  pushed.
 
 ## Oddities
 
@@ -211,5 +230,5 @@ build, private-path, diff, and browser sanity checks.
 
 ## Follow-Up Items
 
-- Create PR to `dev`, wait 3 minutes, run the required PR loop, and record the
-  final exact decision/stop reason here before final handoff.
+- Push the test-hardening follow-up commit, rerun the required PR loop, and
+  record the final exact decision/stop reason here before final handoff.
