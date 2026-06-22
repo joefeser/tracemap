@@ -2402,19 +2402,14 @@ public static class CombinedRouteFlowReporter
                     .ToArray();
                 var first = rows[0];
                 var supportingRowIds = rows.Select(row => row.RowId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-                var ruleIds = SummaryRuleIds(rows.Select(row => row.Evidence));
                 var tiers = rows.Select(row => row.Evidence.EvidenceTier).Distinct(StringComparer.Ordinal).OrderBy(EvidenceTierRank).ThenBy(value => value, StringComparer.Ordinal).ToArray();
                 var classification = rows.Select(row => row.Classification).Aggregate(RouteFlowClassifications.StrongStaticRouteFlow, WeakestClassification);
                 var coverage = rows.Select(row => row.Coverage).Aggregate("FullEvidenceAvailable", WeakestCoverage);
                 var evidenceTier = WeakestEvidenceTier(rows.Select(row => row.Evidence.EvidenceTier));
                 var valueSafety = ValueSafetyFor(rows.Select(row => row.Evidence), rows.Select(row => row.SafeMetadata), first.DisplayName);
+                var ruleIds = ContextGroupRuleIds(rows.Select(row => row.Evidence), valueSafety);
                 var sourceLabel = rows.Select(row => row.Evidence.SourceLabel).OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault() ?? "unknown";
-                var commitSha = rows.Select(row => row.Evidence.CommitSha).Where(KnownCommit).OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault() ?? "unknown";
-                var filePath = rows.Select(row => row.Evidence.FilePath).Where(value => !string.IsNullOrWhiteSpace(value)).OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault();
-                var startLine = rows.Select(row => row.Evidence.StartLine).Where(value => value.HasValue).Select(value => value!.Value).DefaultIfEmpty().Min();
-                var endLine = rows.Select(row => row.Evidence.EndLine).Where(value => value.HasValue).Select(value => value!.Value).DefaultIfEmpty().Max();
-                int? firstStartLine = startLine == 0 ? null : startLine;
-                int? lastEndLine = endLine == 0 ? null : endLine;
+                var location = ContextGroupLocation(rows.Select(row => row.Evidence));
                 var facts = rows.SelectMany(row => row.Evidence.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                 var edges = rows.SelectMany(row => row.Evidence.SupportingEdgeIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                 var limitations = rows.SelectMany(row => row.Evidence.Limitations)
@@ -2446,10 +2441,10 @@ public static class CombinedRouteFlowReporter
                         ReportRuleId,
                         evidenceTier,
                         sourceLabel,
-                        SafeCommitSha(commitSha),
-                        filePath,
-                        firstStartLine,
-                        lastEndLine,
+                        SafeCommitSha(location.CommitSha),
+                        location.FilePath,
+                        location.StartLine,
+                        location.EndLine,
                         "route-flow",
                         Version,
                         facts,
@@ -2640,7 +2635,7 @@ public static class CombinedRouteFlowReporter
 
     private static string ValueSafetyFor(
         IEnumerable<RouteFlowEvidenceRef> evidence,
-        IEnumerable<IReadOnlyDictionary<string, string>> metadata,
+        IEnumerable<IReadOnlyDictionary<string, string>?> metadata,
         string displayName)
     {
         if (string.Equals(displayName, "redacted", StringComparison.Ordinal)
@@ -2651,7 +2646,7 @@ public static class CombinedRouteFlowReporter
 
         if (displayName.StartsWith("redacted-hash:", StringComparison.Ordinal)
             || evidence.Any(item => item.SupportingRuleIds.Contains(RedactionRuleId, StringComparer.Ordinal))
-            || metadata.SelectMany(item => item).Any(pair => pair.Key.Contains("Hash", StringComparison.Ordinal) || pair.Value.Contains("-hash:", StringComparison.Ordinal)))
+            || metadata.Where(item => item is not null).SelectMany(item => item!).Any(pair => pair.Key.Contains("Hash", StringComparison.Ordinal) || pair.Value.Contains("-hash:", StringComparison.Ordinal)))
         {
             return "hashed";
         }
@@ -2659,19 +2654,63 @@ public static class CombinedRouteFlowReporter
         return "safe";
     }
 
+    private static IReadOnlyList<string> ContextGroupRuleIds(IEnumerable<RouteFlowEvidenceRef> evidence, string valueSafety)
+    {
+        var ruleIds = SummaryRuleIds(evidence);
+        return valueSafety is "hashed" or "omitted"
+            ? ruleIds.Append(RedactionRuleId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
+            : ruleIds;
+    }
+
+    private sealed record ContextGroupEvidenceLocation(
+        string? CommitSha,
+        string? FilePath,
+        int? StartLine,
+        int? EndLine);
+
+    private static ContextGroupEvidenceLocation ContextGroupLocation(IEnumerable<RouteFlowEvidenceRef> evidence)
+    {
+        var locations = evidence
+            .Where(item => !string.IsNullOrWhiteSpace(item.FilePath))
+            .GroupBy(item => $"{item.SourceLabel}\0{item.CommitSha}\0{item.FilePath}", StringComparer.Ordinal)
+            .ToArray();
+        if (locations.Length != 1)
+        {
+            return new ContextGroupEvidenceLocation("unknown", null, null, null);
+        }
+
+        var rows = locations[0].ToArray();
+        var first = rows[0];
+        var startLine = rows.Select(row => row.StartLine).OfType<int>().DefaultIfEmpty().Min();
+        var endLine = rows.Select(row => row.EndLine).OfType<int>().DefaultIfEmpty().Max();
+        return new ContextGroupEvidenceLocation(
+            first.CommitSha,
+            first.FilePath,
+            startLine == 0 ? null : startLine,
+            endLine == 0 ? null : endLine);
+    }
+
     private static IReadOnlyDictionary<string, string> MergeMetadata(
-        IReadOnlyDictionary<string, string> baseMetadata,
-        IEnumerable<IReadOnlyDictionary<string, string>> metadataRows)
+        IReadOnlyDictionary<string, string>? baseMetadata,
+        IEnumerable<IReadOnlyDictionary<string, string>?> metadataRows)
     {
         var values = new SortedDictionary<string, string>(StringComparer.Ordinal);
-        foreach (var pair in baseMetadata.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        if (baseMetadata is not null)
         {
-            values[pair.Key] = pair.Value;
+            foreach (var pair in baseMetadata)
+            {
+                values[pair.Key] = pair.Value;
+            }
         }
 
         foreach (var row in metadataRows)
         {
-            foreach (var pair in row.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            if (row is null)
+            {
+                continue;
+            }
+
+            foreach (var pair in row)
             {
                 if (values.ContainsKey(pair.Key))
                 {
