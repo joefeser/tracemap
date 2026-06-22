@@ -536,7 +536,7 @@ async function validateInboundLinks({ dist, errors }) {
   }
 }
 
-function validateForbiddenClaims({ errors, text, label, artifact }) {
+function validateForbiddenClaims({ errors, text, label, artifact = pageArtifact }) {
   for (const pattern of forbiddenClaimPatterns) {
     const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
     const globalPattern = new RegExp(pattern.source, flags);
