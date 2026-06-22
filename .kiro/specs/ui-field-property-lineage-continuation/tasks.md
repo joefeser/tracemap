@@ -20,7 +20,7 @@ Readiness: ready-for-implementation
 - [x] Run at most two re-review cycles.
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
-- [ ] Commit, push, open a ready PR into `dev`, and run the PR loop.
+- [x] Commit, push, open a ready PR into `dev`, and run the PR loop.
 
 ## Recommended Implementation Slices
 
