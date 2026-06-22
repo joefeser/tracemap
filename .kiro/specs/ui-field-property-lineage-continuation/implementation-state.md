@@ -1,7 +1,7 @@
 # UI Field Property Lineage Continuation Implementation State
 
-Status: spec-drafting
-Readiness: draft
+Status: ready-for-implementation
+Readiness: ready-for-implementation
 Branch: codex/spec-ui-field-property-lineage-continuation
 Target PR base: dev
 Public claim level: hidden
