@@ -64,7 +64,7 @@ NavigationEntry
   ruleIds: sorted string[]
   supportingIds: sorted string[]
   relatedStableIds: sorted string[]
-  safetyProfile: public | demo | hidden
+  safetyProfile: hidden | demo-safe | public-safe
   limitations: sorted stable limitation IDs
 ```
 
