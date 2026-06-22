@@ -16,6 +16,7 @@ import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
+import { evidenceDecisionRecordRoute } from "./evidence-decision-record.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
 import { evidencePacketExamplesRoute } from "./evidence-packet-examples.mjs";
 import { changeReviewRoute } from "./change-review.mjs";
@@ -176,6 +177,7 @@ async function createDistFixture({
       blogProofPathSeriesRoute,
       demoEvidenceTrailRoute,
       demoRunbookRoute,
+      evidenceDecisionRecordRoute,
       endpointReviewRoute,
       changeReviewRoute,
       "/evidence/",
@@ -223,6 +225,7 @@ async function createDistFixture({
     "/demo/proof-assets/",
     demoEvidenceTrailRoute,
     demoRunbookRoute,
+    evidenceDecisionRecordRoute,
     managerDemoScriptRoute,
     endpointReviewRoute,
     changeReviewRoute,
@@ -280,8 +283,34 @@ async function createDistFixture({
   await writeFile(join(dist, "robots.txt"), robots, "utf8");
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
   await writeDiscoveryFiles(dist);
+  await writeEvidenceDecisionRecordImplementationState(root);
 
   return root;
+}
+
+async function writeEvidenceDecisionRecordImplementationState(root) {
+  const statePath = join(
+    root,
+    "..",
+    ".kiro",
+    "specs",
+    "site-tracemap-tools-evidence-decision-record",
+    "implementation-state.md"
+  );
+  await mkdir(join(statePath, ".."), { recursive: true });
+  await writeFile(
+    statePath,
+    `Selected placement: \`/decisions/evidence-record/\`
+
+Rejected alternatives:
+- \`/review-room/decision-record/\` because this route is a standalone decision-after-evidence record.
+- section on \`/review-room/\` because the review-room agenda stays separate.
+- section on \`/packets/assembly/\` because the packet assembly checklist stays separate.
+
+This decision-after-evidence record is not a claim checklist, manager packet, objection guide, proof-path tour, release gate, runtime workflow, approval workflow, or autonomous decision system.
+`,
+    "utf8"
+  );
 }
 
 async function fixturePageHtml(route, path) {
@@ -307,6 +336,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === demoRunbookRoute) {
     return demoRunbookPage();
+  }
+
+  if (route === evidenceDecisionRecordRoute) {
+    return readFile(new URL("../src/decisions/evidence-record/index.html", import.meta.url), "utf8");
   }
 
   if (route === managerDemoScriptRoute) {
@@ -535,6 +568,24 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/docs/",
         limitations: ["Fixture capabilities limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: evidenceDecisionRecordRoute,
+        title: "Evidence Decision Record",
+        summary: "Concept-level template for documenting a human owner decision after TraceMap evidence review while preserving proof path, limitation, follow-up, and residual risk.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route is a record template over existing public-safe evidence surfaces, not a new proof source, workflow engine, or authority system.",
+          "Every record must keep the proof path, rule ID or family, evidence tier, coverage label, limitation, non-claim, follow-up owner, and residual risk attached."
+        ],
+        nonClaims: [
+          "No autonomous decision, approval workflow, release approval, release safety, operational safety, runtime proof, production proof, endpoint performance proof, outage cause, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, or prompt classification.",
+          "No replacement of tests, code review, source review, runtime observability, telemetry, release process, service-owner review, governance, or human judgment.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public record material."
+        ]
       },
       {
         path: endpointReviewRoute,
@@ -1386,6 +1437,7 @@ function managerFaqPage() {
     <a href="/manager-brief/">Manager brief</a>
     <a href="/manager-packet/">Manager packet</a>
     <a href="/review-room/">Review room</a>
+    <a href="${evidenceDecisionRecordRoute}">Evidence decision record</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
     <a href="/limitations/">Limitations</a>
     <a href="/validation/">Validation</a>
@@ -1412,6 +1464,7 @@ function reviewRoomPage() {
     <a href="/use-cases/incident-review/">Incident review</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
     <a href="${releaseReviewBoundaryRoute}">Release review boundary</a>
+    <a href="${evidenceDecisionRecordRoute}">Evidence decision record</a>
     <a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>
     <a href="${reviewerQuickstartRoute}">Reviewer quickstart</a>
     <p>${filler}</p>

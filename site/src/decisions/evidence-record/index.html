@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap evidence decision record template for documenting human owner decisions after static evidence review."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Evidence Decision Record | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/decisions/evidence-record/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Decision Record">
+    <meta
+      property="og:description"
+      content="A bounded public-safe record template for keeping TraceMap evidence, limitations, owner judgment, follow-up, and residual risk together."
+    >
+    <meta property="og:url" content="https://tracemap.tools/decisions/evidence-record/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" id="evidence-decision-record">
+        <p class="eyebrow">Evidence decision record</p>
+        <h1>Record the owner decision after the proof path is inspected.</h1>
+        <p class="hero-subhead">
+          TraceMap provides deterministic static evidence, rule context, coverage
+          labels, and limitations. The human owner records the decision, the
+          rejected interpretation, the follow-up owner, and the residual risk.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          TraceMap provides evidence, not the decision.
+        </p>
+        <nav class="hero-actions" aria-label="Evidence decision record links">
+          <a class="button primary" href="#record-template">Open record template</a>
+          <a class="button secondary" href="/review-room/">Review room</a>
+          <a class="button secondary" href="/packets/assembly/">Packet assembly</a>
+          <a class="button secondary" href="/proof-paths/tour/">Proof-path tour</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="why-record-the-decision">
+        <div>
+          <p class="section-kicker">Why record the decision</p>
+          <h2>Keep evidence, limits, judgment, and follow-up in one place.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Evidence trail</strong><span>The record keeps the decision question attached to a proof path, rule ID or family, evidence tier, coverage label, commit context, extractor version, and validation summary.</span></div>
+          <div><strong>Owner judgment</strong><span>The record names the public role category that made the bounded decision after inspecting evidence. It does not let the static map make the decision.</span></div>
+          <div><strong>Limits that travel</strong><span>The limitation, non-claim, rejected interpretation, follow-up owner, review date placeholder, and residual risk stay visible so later readers do not repeat a stronger conclusion.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="record-template" aria-labelledby="record-template-heading">
+        <div class="section-header">
+          <p class="section-kicker">Record template</p>
+          <h2 id="record-template-heading">Every field stays present, even when the value is pending or private-only.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-evidence-decision-template>
+            <caption>Concept-level evidence decision record fields. Missing fields are labeled unavailable, private-only, not public-safe, or pending.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Public-safe guidance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-record-field="decision question"><th scope="row">decision question</th><td>Name the exact question being answered without expanding it into broader release, runtime, production, safety, or governance claims.</td></tr>
+              <tr data-record-field="decision owner"><th scope="row">decision owner</th><td>Use a public role category or placeholder, such as reviewer role placeholder or service owner role.</td></tr>
+              <tr data-record-field="public claim level"><th scope="row">public claim level</th><td><code>concept</code> for this page and examples unless a separate evidence-backed upgrade is recorded.</td></tr>
+              <tr data-record-field="proof path"><th scope="row">proof path</th><td>Link a public-safe route, summary, documentation page, report-family summary, or named private review location without raw material.</td></tr>
+              <tr data-record-field="rule ID/family"><th scope="row">rule ID/family</th><td>Name the specific public-safe rule ID, or use a rule family and keep the limitation visible.</td></tr>
+              <tr data-record-field="evidence tier"><th scope="row">evidence tier</th><td>Use only <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</td></tr>
+              <tr data-record-field="coverage label"><th scope="row">coverage label</th><td>Transcribe the cited coverage label without strengthening it.</td></tr>
+              <tr data-record-field="commit SHA"><th scope="row">commit SHA</th><td>Use a public-safe scan commit identifier when exposed, otherwise keep a visible unavailable or not public-safe limitation.</td></tr>
+              <tr data-record-field="extractor version"><th scope="row">extractor version</th><td>Use the public-safe extractor version when exposed, otherwise keep the field and record the limitation.</td></tr>
+              <tr data-record-field="limitation" data-tracemap-validation-context="limitation"><th scope="row">limitation</th><td>Name the rule, coverage, data, publication, or analysis boundary that travels with the decision.</td></tr>
+              <tr data-record-field="non-claim" data-tracemap-validation-context="non-claim"><th scope="row">non-claim</th><td>State what the decision must not imply, including runtime, production, release, safety, approval, absence-of-impact, complete-coverage, AI/LLM, or autonomous-decision claims when relevant.</td></tr>
+              <tr data-record-field="validation evidence"><th scope="row">validation evidence</th><td>Name a public-safe validation summary, review evidence, command family, test summary, or manual review note without raw output.</td></tr>
+              <tr data-record-field="rejected interpretation" data-tracemap-validation-context="rejected-interpretation"><th scope="row">rejected interpretation</th><td>Record the stronger conclusion the owner did not make because evidence was insufficient, private-only, reduced, or outside static analysis.</td></tr>
+              <tr data-record-field="follow-up owner"><th scope="row">follow-up owner</th><td>Name the role category responsible for the next answer.</td></tr>
+              <tr data-record-field="review date placeholder"><th scope="row">review date placeholder</th><td>Use <code>YYYY-MM-DD</code> or another placeholder pattern, not a real internal review date.</td></tr>
+              <tr data-record-field="residual risk" data-tracemap-validation-context="residual-risk"><th scope="row">residual risk</th><td>Record what remains unknown, reduced, private-only, runtime-only, owner-pending, or outside TraceMap evidence.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="example-safe-record" data-evidence-decision-section="safe-example" aria-labelledby="safe-record-heading">
+        <div class="section-header">
+          <p class="section-kicker">Example safe record</p>
+          <h2 id="safe-record-heading">Synthetic example: keep the decision bounded.</h2>
+        </div>
+        <div class="detail-list">
+          <div data-safe-record-field="decision question"><strong>decision question</strong><span>Can this public summary say reviewers have static evidence for a dependency question?</span></div>
+          <div data-safe-record-field="decision owner"><strong>decision owner</strong><span>reviewer role placeholder</span></div>
+          <div data-safe-record-field="public claim level"><strong>public claim level</strong><span><code>concept</code></span></div>
+          <div data-safe-record-field="proof path"><strong>proof path</strong><span><a href="/proof-paths/tour/">guided proof-path tour</a> plus public-safe packet summary.</span></div>
+          <div data-safe-record-field="rule ID/family"><strong>rule ID/family</strong><span>dependency-reference rule family; exact rule ID not public-safe in this example.</span></div>
+          <div data-safe-record-field="evidence tier"><strong>evidence tier</strong><span><code>Tier2Structural</code></span></div>
+          <div data-safe-record-field="coverage label"><strong>coverage label</strong><span>reduced public-demo coverage label as cited.</span></div>
+          <div data-safe-record-field="commit SHA"><strong>commit SHA</strong><span><code>example-public-sha</code>; synthetic placeholder.</span></div>
+          <div data-safe-record-field="extractor version"><strong>extractor version</strong><span><code>example-extractor-version</code>; synthetic placeholder.</span></div>
+          <div data-safe-record-field="limitation" data-tracemap-validation-context="limitation"><strong>limitation</strong><span>Static evidence only; reduced coverage remains visible.</span></div>
+          <div data-safe-record-field="non-claim" data-tracemap-validation-context="non-claim"><strong>non-claim</strong><span>Does not prove runtime behavior, release safety, production traffic, approval, complete coverage, AI analysis, or absence of impact.</span></div>
+          <div data-safe-record-field="validation evidence"><strong>validation evidence</strong><span>Public-safe validation summary and manual review note; detailed output is not included.</span></div>
+          <div data-safe-record-field="rejected interpretation" data-tracemap-validation-context="rejected-interpretation"><strong>rejected interpretation</strong><span>Do not say the dependency is safe, unsafe, production-proven, or approved for release.</span></div>
+          <div data-safe-record-field="follow-up owner"><strong>follow-up owner</strong><span>service owner or runtime observability owner role.</span></div>
+          <div data-safe-record-field="review date placeholder"><strong>review date placeholder</strong><span><code>YYYY-MM-DD</code></span></div>
+          <div data-safe-record-field="residual risk" data-tracemap-validation-context="residual-risk"><strong>residual risk</strong><span>Runtime behavior and release decision remain outside TraceMap evidence.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="unsafe-record-examples" data-evidence-decision-section="unsafe-examples">
+        <div>
+          <p class="section-kicker">Unsafe record examples</p>
+          <h2>Downgrade, block, or keep these records internal.</h2>
+        </div>
+        <ul data-tracemap-validation-context="unsafe-example">
+          <li><strong>Missing proof path:</strong> the record repeats an owner decision but drops the evidence trail.</li>
+          <li><strong>Hidden evidence strength:</strong> the record omits evidence tier or coverage label, then makes reduced analysis sound stronger than it is.</li>
+          <li><strong>Unsupported release wording:</strong> the record says static evidence approves, certifies, validates, or clears a release.</li>
+          <li><strong>Runtime or production proof wording:</strong> the record treats repository evidence as runtime behavior, production traffic, endpoint performance, or outage cause.</li>
+          <li><strong>Absence-of-impact wording:</strong> the record turns missing evidence into no-impact proof.</li>
+          <li><strong>Autonomous decision wording:</strong> the record says TraceMap decided, approved, certified, blocked, or replaced the owner.</li>
+          <li><strong>Raw/private leakage:</strong> the record shares raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+          <li><strong>No follow-up owner:</strong> the record leaves runtime, test, security, release, review, or service questions without a public role category.</li>
+          <li><strong>Blame wording:</strong> the record frames a limitation as the fault of a person, vendor, reviewer, team, or codebase.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-evidence-decision-section="stop-conditions" data-tracemap-validation-context="stop-condition">
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Stop public reuse when a mandatory boundary is missing.</h2>
+        </div>
+        <ul>
+          <li>Stop when proof path, rule ID/family, evidence tier, coverage label, limitation, non-claim, decision owner, follow-up owner, or validation evidence is missing.</li>
+          <li>Stop when support is private-only without a public-safe summary, or when a field is silently removed instead of labeled unavailable, private-only, not public-safe, or pending.</li>
+          <li>Stop when copy claims autonomous decisions, approval workflow, release approval, release safety, operational safety, runtime proof, production proof, endpoint performance proof, outage cause, absence-of-impact proof, complete coverage, AI/LLM analysis, embeddings, vector databases, prompt classification, or replacement of human judgment.</li>
+          <li>Stop when the record would publish raw artifacts, private material, hidden validation details, credential-like values, or blame language.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="follow-up-owners">
+        <div>
+          <p class="section-kicker">Follow-up owners</p>
+          <h2>Route remaining questions to public role categories.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>service owner</strong><span>Owns service behavior interpretation and code-level follow-up.</span></div>
+          <div><strong>runtime observability owner</strong><span>Owns logs, traces, metrics, dashboards, production traffic, endpoint performance, and runtime evidence.</span></div>
+          <div><strong>release owner</strong><span>Owns release gates, deployment policy, and final release decisions.</span></div>
+          <div><strong>test owner</strong><span>Owns test evidence, reproduction, regression coverage, and verification strategy.</span></div>
+          <div><strong>reviewer</strong><span>Owns claim checking, proof-path review, and repeatability of public or internal statements.</span></div>
+          <div><strong>security owner</strong><span>Owns raw artifact sharing, secrets, sensitive configuration, and publication decisions.</span></div>
+          <div><strong>repository owner</strong><span>Owns repository publication boundaries, remotes, paths, and source-sharing choices.</span></div>
+          <div><strong>manager</strong><span>Owns prioritization and coordination after evidence and owner inputs are identified.</span></div>
+          <div><strong>TraceMap owner</strong><span>Owns scanner or reducer evidence boundaries, rule documentation, public site copy, validation, and implementation gaps.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-evidence-decision-section="non-claims" data-tracemap-validation-context="non-claim">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The record preserves a human decision; it does not create authority.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not make autonomous decisions, run an approval workflow, approve releases, prove release safety, prove operational safety, prove runtime behavior, prove production behavior, prove endpoint performance, identify outage cause, prove absence of impact, or prove complete coverage.</li>
+          <li>TraceMap does not use AI analysis, LLM analysis, embeddings, vector databases, or prompt classification in the core scanner or reducer.</li>
+          <li>TraceMap does not replace tests, code review, source review, runtime observability, telemetry, release process, service-owner review, governance, or human judgment.</li>
+          <li>The record does not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="adjacent-surfaces">
+        <div>
+          <p class="section-kicker">Adjacent surfaces</p>
+          <h2>Use the neighboring page that matches the job.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/review-room/">/review-room/</a></strong><span>Meeting agenda for known, partial, and missing evidence; this record captures what the owner decided after review.</span></div>
+          <div><strong><a href="/packets/assembly/">/packets/assembly/</a></strong><span>Pre-handoff ingredient checklist; this record captures one owner decision and residual risk.</span></div>
+          <div><strong><a href="/review-claim-checklist/">/review-claim-checklist/</a></strong><span>Repeatability ritual for a sentence; this record is not a claim approval verdict.</span></div>
+          <div><strong><a href="/manager-packet/">/manager-packet/</a></strong><span>Manager-facing orientation; this record is a compact evidence-to-decision artifact.</span></div>
+          <div><strong><a href="/questions/objections/">/questions/objections/</a></strong><span>Skeptical question handling; this record logs the resolved question, rejected interpretation, follow-up owner, and residual risk.</span></div>
+          <div><strong><a href="/proof-paths/tour/">/proof-paths/tour/</a></strong><span>Proof-path education; this record cites a proof path but does not teach the whole proof-path process.</span></div>
+          <div><strong><a href="/proof-paths/">/proof-paths/</a>, <a href="/limitations/">/limitations/</a>, <a href="/validation/">/validation/</a></strong><span>Use proof, boundary, and validation surfaces when the record needs public-safe support.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Evidence decision records sit after
+        <a href="/review-room/">review-room inspection</a>,
+        <a href="/packets/assembly/">packet assembly</a>,
+        and
+        <a href="/review-claim-checklist/">claim checking</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
