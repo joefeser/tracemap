@@ -104,6 +104,10 @@ property roots, and requiring consumer inspection in PR 1 and PR 2 when new row
 kinds are introduced. No third review cycle was run because this workflow caps
 re-review at two cycles.
 
+PR-loop review patch: added the already-catalogued `property-flow.edge.v1` rule
+to the continuation spec's reuse list so implementers do not mint a duplicate
+derived edge rule.
+
 Planned commands:
 
 ```bash
