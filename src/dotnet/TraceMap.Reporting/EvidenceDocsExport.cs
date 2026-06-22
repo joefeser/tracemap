@@ -328,7 +328,7 @@ public static class EvidenceDocsExporter
             throw new InvalidOperationException("InputSchemaUnsupported: docs-export requires a TraceMap index with usable source or fact evidence.");
         }
 
-        chunks = AddNavigationLinks(SortChunks(chunks)).ToList();
+        chunks = AddNavigationLinks(SortChunks(chunks), formats).ToList();
         var limitations = BuildManifestLimitations(chunks, selectedFamilies);
         var manifest = BuildManifest(
             options,
@@ -1714,18 +1714,24 @@ public static class EvidenceDocsExporter
         return builder.ToString();
     }
 
-    private static IReadOnlyList<EvidenceDocChunk> AddNavigationLinks(IReadOnlyList<EvidenceDocChunk> chunks)
+    private static IReadOnlyList<EvidenceDocChunk> AddNavigationLinks(IReadOnlyList<EvidenceDocChunk> chunks, IReadOnlyList<string> formats)
     {
+        var markdownAvailable = formats.Contains("markdown", StringComparer.Ordinal);
         return chunks
             .Select(chunk => chunk with
             {
-                Links = NavigationLinksFor(chunk)
+                Links = NavigationLinksFor(chunk, markdownAvailable)
             })
             .ToArray();
     }
 
-    private static IReadOnlyList<EvidenceDocLink> NavigationLinksFor(EvidenceDocChunk chunk)
+    private static IReadOnlyList<EvidenceDocLink> NavigationLinksFor(EvidenceDocChunk chunk, bool markdownAvailable)
     {
+        if (!markdownAvailable)
+        {
+            return [];
+        }
+
         return
         [
             new EvidenceDocLink("chunk-markdown", "Chunk Markdown", ChunkPath(chunk)),
@@ -1742,20 +1748,21 @@ public static class EvidenceDocsExporter
     private static string RelativeChunkLink(EvidenceDocChunk chunk, string target)
     {
         var currentDirectory = Path.GetDirectoryName(ChunkPath(chunk))?.Replace('\\', '/') ?? string.Empty;
+        var normalizedTarget = target.Replace('\\', '/');
         if (string.IsNullOrWhiteSpace(currentDirectory))
         {
-            return target;
+            return normalizedTarget;
         }
 
-        var targetDirectory = Path.GetDirectoryName(target)?.Replace('\\', '/') ?? string.Empty;
-        var targetFile = Path.GetFileName(target);
+        var targetDirectory = Path.GetDirectoryName(normalizedTarget)?.Replace('\\', '/') ?? string.Empty;
+        var targetFile = Path.GetFileName(normalizedTarget);
         if (string.Equals(currentDirectory, targetDirectory, StringComparison.Ordinal))
         {
             return string.IsNullOrWhiteSpace(targetFile) ? "." : targetFile;
         }
 
         var currentParts = currentDirectory.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var targetParts = target.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var targetParts = normalizedTarget.Split('/', StringSplitOptions.RemoveEmptyEntries);
         var common = 0;
         while (common < currentParts.Length
                && common < targetParts.Length
