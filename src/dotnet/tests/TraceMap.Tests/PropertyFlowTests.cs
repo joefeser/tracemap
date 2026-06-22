@@ -560,6 +560,48 @@ public sealed class PropertyFlowTests
         Assert.Contains(path.Nodes, node => node.NodeKind == "PayloadField");
         Assert.Contains(path.Nodes, node => node.NodeKind == "DtoProperty");
         Assert.Equal(PropertyFlowClassifications.NeedsReviewLineage, path.Classification);
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "RouteFlowNoPropertyContext");
+
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                create table combined_route_flow_edges(edge_id text, http_method text, normalized_path_key text);
+                insert into combined_route_flow_edges(edge_id, http_method, normalized_path_key) values ('route-flow:path:unrelated', 'POST', '/api/other');
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var unrelatedRouteFlow = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-unrelated-out"),
+            "binding:save",
+            Framework: "angular",
+            Source: "client"));
+        Assert.Equal("available", unrelatedRouteFlow.Snapshot.Schema.RouteFlowSignal);
+        Assert.DoesNotContain(unrelatedRouteFlow.Gaps, gap => gap.GapKind == "RouteFlowNoPropertyContext");
+
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "insert into combined_route_flow_edges(edge_id, http_method, normalized_path_key) values ('route-flow:path:001', 'POST', '/api/profile');";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var routeFlowAvailable = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-available-out"),
+            "binding:save",
+            Framework: "angular",
+            Source: "client"));
+        Assert.Equal("available", routeFlowAvailable.Snapshot.Schema.RouteFlowSignal);
+        var routeFlowGap = Assert.Single(routeFlowAvailable.Gaps, gap => gap.GapKind == "RouteFlowNoPropertyContext");
+        Assert.Equal("property-flow.edge.v1", routeFlowGap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, routeFlowGap.EvidenceTier);
+        Assert.Contains(routeFlowGap.SupportingFactIds, id => id == Assert.Single(routeFlowAvailable.SelectedRoots).CombinedFactId);
+        Assert.DoesNotContain(routeFlowAvailable.Gaps, gap => gap.GapKind == "RouteFlowUnavailable");
 
         var noRouteIndex = Path.Combine(temp.Path, "client-only.sqlite");
         var noRouteCombined = Path.Combine(temp.Path, "client-only-combined.sqlite");

@@ -96,7 +96,9 @@ Classification:
 Add terminal context rows only when existing combined evidence exposes a
 property-specific trail. The implementation must not attach every service or
 query reachable from the endpoint unless the selected property participates in
-that trail.
+that trail. Eligible terminal-context facts must be downstream of already
+joined UI/model/backend identity evidence; this slice must not reclassify root
+extraction facts as downstream terminal context.
 
 Eligible evidence families:
 
@@ -135,7 +137,9 @@ Consumers to inspect when implementation changes row shape:
 
 The implementation should prefer backward-compatible additive fields. A report
 version bump is required only when consumers cannot safely ignore new fields or
-row meanings.
+row meanings. Consumer checks include additive metadata on existing row types,
+because static explorer and export surfaces may pass unknown metadata through to
+generated HTML, Markdown, or JSON.
 
 ## Data Model Guidance
 
@@ -248,8 +252,9 @@ claim evidence.
 Existing observed evidence support remains metadata only and must not upgrade
 static classifications.
 
-Future browser-assisted workflows must have a separate spec before becoming a
-tool feature.
+Future browser-assisted workflows must have a separate reviewed spec before any
+browser/computer-use product code is written or promoted from local hidden
+validation into a tool feature.
 
 ## Validation Plan
 
@@ -274,11 +279,13 @@ Implementation PRs:
 
 ## Open Decisions For Implementation
 
-1. Whether the first implementation slice should reuse only existing
-   route-flow JSON/report rows or read route-flow tables directly.
-2. Whether terminal service/data/dependency context should be rendered inside
+1. PR 1 closes the route-flow consumption decision by treating
+   `combined_route_flow_edges` as an optional table/view contract signal only;
+   it does not read route-flow JSON reports and does not recompute route-flow
+   traversal.
+2. PR 1 remains report version `1.0` compatible because it adds only optional
+   gap and note data.
+3. Whether terminal service/data/dependency context should be rendered inside
    existing `Lineage Paths` or a new additive `Downstream Context` subsection.
-3. Whether row additions remain `version: 1.0` compatible or require a `1.1`
-   report version.
 4. Which existing consumer, if any, must be patched in the same PR as new row
    kinds.

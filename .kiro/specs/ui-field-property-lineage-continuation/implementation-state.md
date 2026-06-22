@@ -1,20 +1,31 @@
 # UI Field Property Lineage Continuation Implementation State
 
-Status: ready-for-implementation
-Readiness: ready-for-implementation
-Branch: codex/spec-ui-field-property-lineage-continuation
+Status: partial-implementation-pr-open
+Readiness: implementation-partial-pr-open
+Branch: codex/implement-ui-field-property-lineage-continuation
 Target PR base: dev
 Public claim level: hidden
 
 ## Scope
 
-This is a spec-only branch. It defines the next continuation packet for issue
-#165 after the implemented `property-flow` v1 and
+This implementation branch starts the next continuation packet for issue #165
+after the implemented `property-flow` v1 and
 `ui-field-property-lineage-next-slice` model-binding/property identity join.
 
-No product code, generated site output, generated scan output, scanner logic,
-reporting logic, rules, or docs outside this spec folder should change in this
-PR.
+Selected slice: PR 1 route-flow and endpoint downstream context, narrowed to
+route-flow schema contract hardening and explicit no-property-context evidence.
+The product change is additive and keeps `property-flow` report version `1.0`:
+
+- `PropertyFlowReporter` now emits `RouteFlowNoPropertyContext` when
+  `combined_route_flow_edges` has rows but no selected property trail has
+  rule-backed route-flow-specific context.
+- route-flow-specific path edges, when present, receive a static route-flow
+  context note in JSON/Markdown without upgrading the path classification.
+- `property-flow.edge.v1` documents the new gap in the rule catalog.
+
+This PR does not add new browser/computer-use evidence, does not persist
+derived property-flow rows, and does not attach broad endpoint reachability as
+property lineage.
 
 ## Source Material
 
@@ -52,11 +63,34 @@ PR.
   it is reachable from the same endpoint.
 - Existing `property-flow` report shape should remain backward compatible
   unless an implementation slice explicitly bumps the report version.
+- This slice is report version `1.0` compatible because it only adds an
+  optional gap kind and optional path notes; no existing required fields or row
+  meanings changed.
+- Current combined indexes do not persist route-flow rows into
+  `combined_route_flow_edges` by default. The reporter treats that table/view as
+  an optional contract signal and emits a gap when rows exist but cannot be tied
+  to the selected property trail.
 - No runtime DOM, user interaction, auth/session, production telemetry,
   browser-required scanner logic, LLM/vector/prompt classification, or runtime
   database proof belongs in scope.
 
 ## Review State
+
+Implementation review:
+
+- Sonnet implementation review ran with full coverage. Medium findings were
+  patched by closing the PR 1 route-flow consumption decision to
+  `combined_route_flow_edges` as an optional table/view contract signal and by
+  tightening consumer compatibility language for additive metadata pass-through
+  on existing row types.
+- Low findings patched where narrow: path/reverse context is called out as
+  static-only in requirements, terminal context must be downstream of already
+  joined identity roots, browser/computer-use product code requires a separate
+  reviewed spec, and Razor form target composition explicitly joins
+  already-extracted `RazorFormTarget` facts instead of adding another root
+  extraction pass.
+- Sonnet re-review ran with full coverage and reported no Medium or High
+  findings. Remaining notes were process/clarification-level only.
 
 Opus spec review ran with reduced coverage because Kiro reported denied shell
 tool access after reading the spec and selected source files. Medium findings
@@ -119,30 +153,26 @@ node scripts/kiro-review.mjs --phase ui-field-property-lineage-continuation --ki
 
 Passed:
 
+- `dotnet test src/dotnet/TraceMap.sln --filter PropertyFlow`: 21 passed
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings
+- `dotnet test src/dotnet/TraceMap.sln`: 606 passed with existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings
 - `git diff --check`
 - `./scripts/check-private-paths.sh`
-
-No product code is changed, so full .NET/TypeScript/Python/JVM validation is
-not expected for this spec-only PR.
+- Kiro Sonnet implementation review and one re-review: full coverage; no
+  Medium or High findings remaining
 
 ## PR State
 
-PR: https://github.com/joefeser/tracemap/pull/286
+PR: https://github.com/joefeser/tracemap/pull/293
 
-PR-loop result after review fixes:
-
-- decision: `merge_ready`
-- stop reason: `NONE`
-- unresolved threads: 0
-- pending checks: 0
-- failed checks: 0
-- actionable bot findings: 0
-- residual risk: medium, because Codex review was stale after the final
-  bookkeeping/fix commits but had no stale actionable findings under the
-  repo-local `dev` review policy.
+PR-loop result: not run yet.
 
 ## Follow-Ups For Implementation
 
-1. Route-flow and endpoint downstream context.
+1. Complete route-flow endpoint downstream context by attaching real
+   property-specific route-flow rows once a shared helper or documented table
+   contract exposes them.
 2. Service/data/dependency terminal context.
 3. Export and consumer compatibility.
