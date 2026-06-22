@@ -198,7 +198,7 @@ async function createProofPathFaqFixture({
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-proof-path-faq-test-"));
   const dist = join(root, "dist");
-  const routes = new Set([proofPathFaqRoute, ...proofPathFaqRequiredLinks]);
+  const routes = new Set(discoveryRoutes);
   const pageHtml = faqHtml ?? (await proofPathFaqPage());
 
   for (const route of routes) {
@@ -266,7 +266,15 @@ function proofPathFaqEntry() {
 async function rewriteRouteEntry(dist, patch) {
   const path = join(dist, "routes-index.json");
   const parsed = JSON.parse(await readFile(path, "utf8"));
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.entries)) {
+    throw new Error("Fixture routes-index.json must include an entries array.");
+  }
+
   const index = parsed.entries.findIndex((entry) => entry.path === proofPathFaqRoute);
+  if (index === -1) {
+    throw new Error("Fixture routes-index.json missing proofPathFaqRoute.");
+  }
+
   parsed.entries[index] = { ...parsed.entries[index], ...patch };
   await writeFile(path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
 }

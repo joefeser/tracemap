@@ -75,7 +75,7 @@ const requiredSafeVerbs = [
   "hand off",
   "escalate"
 ];
-const requiredUnsafeVerbs = ["proves", "guarantees", "certifies", "approves", "replaces", "resolves", "impacted"];
+const requiredUnsafeVerbs = ["proves", "guarantees", "certifies", "approves", "replaces", "resolves"];
 
 const metadataNonClaimTerms = [
   "runtime behavior",
@@ -157,7 +157,6 @@ const unsupportedVerbPatterns = [
   /\bapproves?\b/i,
   /\breplaces?\b/i,
   /\bresolves?\b/i,
-  /\bimpacted\b/i
 ];
 
 const blamePatterns = [/\bfailed\b/i, /\bfault\b/i, /\bto blame\b/i, /\bnegligent\b/i, /\bcareless\b/i];
