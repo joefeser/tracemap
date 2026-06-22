@@ -584,9 +584,14 @@ async function validateImplementationState({ dist, errors }) {
 }
 
 async function findImplementationStatePath(dist) {
+  // Check one level up first (dist/../.kiro/...) — this works for both the test
+  // setup (dist = root/dist, so dist/.. = root) and the common production layout
+  // where dist is one directory below the project root.
+  // The two-levels-up candidate (dist/../../.kiro/...) is omitted: in tests it
+  // would escape the temp dir and in production it would point to the wrong root.
   const candidates = [
-    resolve(dist, "..", "..", implementationStateArtifact),
-    resolve(dist, "..", implementationStateArtifact)
+    resolve(dist, "..", implementationStateArtifact),
+    resolve(dist, "..", "..", implementationStateArtifact)
   ];
 
   for (const candidate of candidates) {
@@ -651,6 +656,13 @@ function stripAllowedBoundaryContexts(html) {
 
   stripped = stripped.replace(
     /<div\b(?=[^>]*\bdata-safe-record-field\s*=\s*["'](?:limitation|non-claim|rejected interpretation|residual risk)["'])[^>]*>[\s\S]*?<\/div>/gi,
+    " "
+  );
+
+  // Codex P2: also strip data-tracemap-validation-context="non-claim" containers
+  // so a forbidden positive claim inside such a marker does not trigger a false positive.
+  stripped = stripped.replace(
+    /<div\b(?=[^>]*\bdata-tracemap-validation-context\s*=\s*["'](?:non-claim|limitation|residual-risk)["'])[^>]*>[\s\S]*?<\/div>/gi,
     " "
   );
 
@@ -781,7 +793,12 @@ function normalizeScanText(value) {
 }
 
 function isNegated(value, index) {
-  const prefix = value.slice(Math.max(0, index - 40), index).toLowerCase();
+  // Scope to the sentence containing the match: find the last sentence boundary
+  // before the match position so an unrelated negation in a prior sentence does
+  // not suppress a finding in the current sentence. (Codex P2: limit negation
+  // checks to the matched claim's sentence, not the whole normalized text.)
+  const sentenceStart = Math.max(0, value.lastIndexOf('.', index - 1) + 1, value.lastIndexOf('!', index - 1) + 1, value.lastIndexOf('?', index - 1) + 1);
+  const prefix = value.slice(Math.max(sentenceStart, index - 40), index).toLowerCase();
   return /\b(?:cannot|can't|does not|do not|not|no|without|never)\s*$/.test(prefix);
 }
 
