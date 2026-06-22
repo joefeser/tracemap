@@ -106,15 +106,13 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains("not-rendered-in-current-slice", html);
         Assert.Contains(StaticHtmlEvidenceExplorer.SectionStatusRuleId, html);
         Assert.DoesNotContain("complete analysis", html, StringComparison.OrdinalIgnoreCase);
-        Assert.True(
-            html.IndexOf("<tr><th scope=\"row\">Evidence Overview</th>", StringComparison.Ordinal)
-            < html.IndexOf("<tr><th scope=\"row\">Sources</th>", StringComparison.Ordinal));
-        Assert.True(
-            html.IndexOf("<tr><th scope=\"row\">Sources</th>", StringComparison.Ordinal)
-            < html.IndexOf("<tr><th scope=\"row\">Artifacts</th>", StringComparison.Ordinal));
-        Assert.True(
-            html.IndexOf("<tr><th scope=\"row\">Artifacts</th>", StringComparison.Ordinal)
-            < html.IndexOf("<tr><th scope=\"row\">Evidence Rows</th>", StringComparison.Ordinal));
+        var overviewIndex = SectionRowIndex(html, "Evidence Overview");
+        var sourcesIndex = SectionRowIndex(html, "Sources");
+        var artifactsIndex = SectionRowIndex(html, "Artifacts");
+        var evidenceRowsIndex = SectionRowIndex(html, "Evidence Rows");
+        Assert.True(overviewIndex < sourcesIndex);
+        Assert.True(sourcesIndex < artifactsIndex);
+        Assert.True(artifactsIndex < evidenceRowsIndex);
 
         var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
         Assert.Contains("\"sectionStatuses\"", dataJson);
@@ -576,5 +574,12 @@ public sealed class StaticHtmlEvidenceExplorerTests
     private static string FortyCharCommit(string character)
     {
         return string.Concat(Enumerable.Repeat(character, 40));
+    }
+
+    private static int SectionRowIndex(string html, string label)
+    {
+        var index = html.IndexOf($"<tr><th scope=\"row\">{label}</th>", StringComparison.Ordinal);
+        Assert.True(index >= 0, $"Expected section status row for {label}.");
+        return index;
     }
 }
