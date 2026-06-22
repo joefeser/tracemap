@@ -167,15 +167,28 @@ Completed spec-phase validation on 2026-06-22:
 
 ## PR Loop Outcome
 
-PR: not opened yet.
+PR: https://github.com/joefeser/tracemap/pull/298
 
 Required final command after ready PR creation and the requested wait:
 
 ```bash
-agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER> --base dev --require-codex-review --quiet --json
+agent-control pr-loop --repo joefeser/tracemap --pr 298 --base dev --require-codex-review --quiet --json
 ```
 
-Final PR-loop decision: pending.
+Checked-in PR-loop history:
+
+- Initial run on head `3ef030d2a0d30adbd2524acbb93b085487ef3c03` stopped
+  with `actionable_findings` / `UNRESOLVED_REVIEW_THREADS` for a Gemini inline
+  finding about the no-blame advisory phrase set.
+- Follow-up commit `1011c2976e9f35a16ee9919346613c092b6e52a1` removed
+  `failed` from that advisory phrase set and reran `git diff --check` plus
+  `./scripts/check-private-paths.sh`.
+- PR-loop run on head `1011c2976e9f35a16ee9919346613c092b6e52a1` stopped with
+  `actionable_findings` / `ACTIONABLE_BOT_FINDINGS` for stale PR-loop
+  bookkeeping in this file and pending checks.
+- This state-note update addresses the stale PR-loop bookkeeping finding. The
+  authoritative final merge gate is the latest `agent-control pr-loop` output
+  after this commit is pushed, not this static note.
 
 ## Oddities
 
@@ -196,7 +209,7 @@ Final PR-loop decision: pending.
 
 ## Follow-ups
 
-- Run the requested Kiro spec reviews.
-- Patch Medium or higher findings and rerun re-review where feasible.
-- Move readiness to `ready-for-implementation` only after findings are handled.
-- Open the PR to `dev`, wait 3 minutes, then run the required PR loop.
+- Push this bookkeeping follow-up commit.
+- Rerun the required PR loop command on the new head.
+- Wait for or address any current checks or review findings reported by that
+  latest PR-loop run.
