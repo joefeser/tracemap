@@ -107,6 +107,12 @@ Completed:
   already checked on the latest head, and aligned the design `safetyProfile`
   vocabulary with existing exporter claim levels: `hidden`, `demo-safe`, and
   `public-safe`.
+- Final PR loop returned `merge_ready` for head
+  `6d0ed7e2f4b592ac5dd857648ee24589a7cfea51` after recording an
+  evidence-backed disposition for the stale Codex safety-profile thread. The
+  only residual risk was medium stale-review freshness under the configured
+  `dev` quorum policy; no unresolved threads, pending checks, failed checks, or
+  actionable bot findings remained at that head.
 
 ## Follow-Ups For Implementation
 
