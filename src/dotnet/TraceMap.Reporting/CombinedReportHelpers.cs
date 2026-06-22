@@ -24,6 +24,27 @@ public static class CombinedReportHelpers
         };
     }
 
+    public static string? NormalizeMessageDirection(string? value, string commandName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim().ToLowerInvariant();
+        if (trimmed == "all")
+        {
+            return null;
+        }
+
+        if (trimmed is "publish" or "consume" or "bind" or "declare")
+        {
+            return trimmed;
+        }
+
+        throw new ArgumentException($"{commandName} --message-direction must be one of publish, consume, bind, declare, or all.");
+    }
+
     public static async Task<(string? MarkdownPath, string? JsonPath)> WriteOutputsAsync<T>(
         string outputPath,
         string format,

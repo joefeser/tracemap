@@ -1,188 +1,205 @@
 # Site TraceMap Tools Guided Proof-Path Tour Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Branch
 
-Spec branch: `codex/spec-site-guided-proof-path-tour`
-Base: `origin/main`
-Target PR base: `main`
+Implementation branch: `codex/impl-site-guided-proof-path-tour`
+Base ref: `origin/dev`
+Target PR base: `dev`
+
+Spec sync note: this implementation worktree was created from `origin/dev`.
+The spec packet was absent from `origin/dev` at worktree creation time and was
+restored from `origin/main` before site edits began because `main` and `dev`
+were temporarily out of sync.
 
 ## Scope
 
-This phase creates a spec-only packet for a future public-site guided
-proof-path tour. It intentionally does not implement site code, scanner code,
-reducer code, generated outputs, validation scripts, or existing specs.
+Implemented a standalone public-site guided proof-path tour under `site/src/`
+and focused site validation under `site/scripts/`.
 
-Write scope for this phase is limited to:
+Committed spec packet changes are limited to this spec directory for status,
+task bookkeeping, route decisions, validation notes, and PR-loop status.
 
-- `.kiro/specs/site-tracemap-tools-guided-proof-path-tour/`
+## Route Decision
+
+Selected route: `/proof-paths/tour/`.
+
+Reasons:
+
+- Keeps the guided reading journey near the canonical proof-path route.
+- Allows standalone sitemap, canonical, Open Graph, discovery, link, and
+  route-specific validation.
+- Leaves `/proof-paths/` as the route-family index instead of adding tutorial
+  copy to an already dense page.
+
+Rejected alternatives:
+
+- `/demo/proof-path-tour/`: rejected because the page is concept-level reading
+  guidance, not a demo result or demo evidence trail.
+- Folded section on `/proof-paths/`: rejected because the required worked
+  example, route distinctions, non-claim boundary, and validation anchors are
+  substantial enough to deserve standalone metadata and validation.
+
+Folded-section reconciliation: not applicable because the implementation chose
+a standalone route with `publicClaimLevel: concept`.
+
+Navigation decision: added one inbound link from `/proof-paths/` hero actions
+only. Primary navigation was not changed to avoid bloating global nav with a
+concept-level tutorial route.
+
+All expected related routes existed at implementation time:
+`/proof-paths/`, `/proof-source-catalog/`, `/demo/evidence-trail/`,
+`/review-room/`, `/packets/`, `/packets/assembly/`, `/validation/`,
+`/limitations/`, `/demo/runbook/`, `/review-claim-checklist/`, and
+`/glossary/`.
+
+## Discovery And Metadata
+
+Standalone metadata added:
+
+- Title, description, canonical URL, and Open Graph metadata on the route.
+- Sitemap entry in `site/src/_site/pages.json`.
+- Discovery entry in `site/src/_site/discovery.json`.
+
+Current discovery `hintCategory` vocabulary confirmed from
+`site/scripts/discovery.mjs`: `start`, `evidence`, `limitations`, `demo`,
+`repo-doc`, `roadmap`, and `use-case`.
+
+Selected `hintCategory`: `evidence`, because the page teaches how to read
+public-safe evidence fields rather than presenting a use-case, roadmap item,
+or demo result.
+
+`concept` compatibility confirmed: `site/scripts/discovery.mjs` accepts
+`concept` in the public claim level set, and `npm run validate` passed with
+the standalone route discovery entry.
+
+Preferred proof path: `/proof-paths/`.
 
 ## Claim Boundary
 
-The future page or section is concept-level guidance for reading existing
-public-safe evidence surfaces. It must visibly say
-`Public claim level: concept` and
-`No public conclusion without evidence`.
+Visible route copy includes:
 
-The future tour is not a proof engine, runtime trace, AI analysis, release
-approval, operational approval flow, or production diagnostic surface. It must
-not claim runtime behavior, production traffic, endpoint performance, outage
-cause, release safety, operational safety, complete coverage, AI/LLM impact
-analysis, embeddings, vector databases, or prompt classification.
+- `Public claim level: concept`
+- `No public conclusion without evidence`
 
-The future tour must not publish raw facts, raw SQLite indexes, analyzer logs,
-raw source snippets, raw SQL, config values, secrets, local absolute paths,
-raw repository remotes, generated scan directories, private sample names, or
-hidden validation details.
+The page frames itself as a guided explanation and reviewer journey, not a
+proof engine, runtime trace, AI analysis, release approval, operational
+approval flow, validation result, or packet assembly feature.
 
-## Route Decision Status
+The worked example is authored, public-safe, and visibly labeled illustrative
+and not a real product claim. Its commit SHA and extractor version are
+placeholders.
 
-Status: deferred to future implementation.
+Sanctioned boundary convention: sections that intentionally contain boundary
+and non-claim wording use `data-tm-boundary`, including `#where-to-stop` and
+`#non-claims`. The route validator strips those sections before applying
+affirmative forbidden-claim and raw/private-material checks, while still
+checking hard private material across the full page.
 
-Candidate placements to evaluate:
+## Historical Spec Review Status
 
-- `/proof-paths/tour/`
-- `/demo/proof-path-tour/`
-- Folded section on `/proof-paths/`
+The spec packet restored from `origin/main` already had the spec-review tasks
+checked off. The historical review record is retained here so the checked
+spec-review tasks in `tasks.md` remain traceable.
 
-Non-binding recommendation: `/proof-paths/tour/`, because it keeps the guided
-reading flow close to the canonical proof-path surface while avoiding a claim
-that the tour is itself a demo result or base proof-path reference.
-
-Open question raised in `review-packet.md`: the route or placement choice was
-not resolved before spec review. The future implementer must evaluate all
-three candidates, record the selected route, rejected alternatives, and short
-reasons in this file before beginning site code changes.
-
-Future implementation must record the selected route or placement, rejected
-alternatives, sitemap/discovery consequences, and any route substitutes for
-missing or renamed public-safe targets.
-
-Discovery note: `concept` is already an established public claim level in
-site discovery metadata, so the future implementation confirmation task is a
-quick compatibility check rather than an expected blocker. The final
-`hintCategory` must still be selected from the current discovery vocabulary
-and recorded here with rationale.
-
-Discovery vocabulary reference (non-binding): the current discovery
-`hintCategory` set is `start`, `evidence`, `limitations`, `demo`,
-`repo-doc`, `roadmap`, and `use-case`. For an evidence-reading tour,
-`evidence` is the non-binding recommendation; the final value must still be
-confirmed against the discovery vocabulary at implementation time and recorded
-here with rationale.
-
-## Review Status
-
-- `claude-opus-4.8` initial Kiro review command:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-guided-proof-path-tour --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  exited 0 with reduced coverage because Kiro reported denied tool access.
-  Clean artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-guided-proof-path-tour/2026-06-21T023637-924Z-spec-claude-opus-4.8.clean.md`.
-- `claude-sonnet-4.6` initial Kiro review command:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-guided-proof-path-tour --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with reduced coverage because Kiro reported denied tool access.
-  Clean artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-guided-proof-path-tour/2026-06-21T023917-374Z-spec-claude-sonnet-4.6.clean.md`.
-- Medium findings patched: where-to-stop field clarity, required worked
-  example, illustrative example labeling, per-step non-claim anchor naming,
-  route-choice open-question state, all-file readiness update task, and
-  sanctioned-section markup convention task.
-- Low findings patched: established `concept` note, stable `#where-to-stop`
-  anchor wording, header lockstep requirement, combined proof-path/supporting
-  route anchor clarity, follow-up for sanctioned-section convention, and
-  review-packet checklist detail for `hintCategory` and concept confirmation.
-- `claude-opus-4.8` re-review command:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-guided-proof-path-tour --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with full coverage. Clean artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-guided-proof-path-tour/2026-06-21T024143-487Z-re-review-claude-opus-4.8.clean.md`.
-- Re-review Medium finding patched: added discovery `hintCategory` vocabulary
-  reference and non-binding `evidence` recommendation to requirements and
-  implementation state.
-- Re-review Low findings patched: added worked-example completeness validation
-  and folded-section word-count guidance.
-- `claude-sonnet-4.6` re-review command:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-guided-proof-path-tour --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 0 with reduced coverage because Kiro reported denied tool access.
-  Clean artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-guided-proof-path-tour/2026-06-21T024633-691Z-re-review-claude-sonnet-4.6.clean.md`.
-- Sonnet re-review Medium findings patched: updated the review-packet
-  checklist for the patched spec state and added design guidance for the
-  sanctioned-section markup convention.
-- Sonnet re-review Low findings patched: documented local-only `.tmp/` review
-  artifacts, added a review-packet sync task, and summarized word-count bounds
-  in design.
-- Final `claude-opus-4.8` re-review command:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-guided-proof-path-tour --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  exited 0 with reduced coverage because Kiro reported denied tool access.
-  Clean artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-guided-proof-path-tour/2026-06-21T024838-966Z-re-review-claude-opus-4.8.clean.md`.
-- Final `claude-sonnet-4.6` re-review command:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-guided-proof-path-tour --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with reduced coverage because Kiro reported denied tool access.
-  Clean artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-guided-proof-path-tour/2026-06-21T024839-043Z-re-review-claude-sonnet-4.6.clean.md`.
-- Final re-review Medium findings patched: added folded-section claim-level
-  reconciliation, fixed folded word-count floor/ceiling guidance, and added
-  worked-example traversal validation to design.
-- Final re-review Low findings patched: harmonized folded-section terminology,
-  added `#step-non-claim` to requirements, clarified worked examples as
-  ending in bounded non-claim conclusions, added worked-example traversal to
-  follow-ups, and scoped the review-packet checklist to requirements and
-  design validation sections.
-- Last-pass `claude-opus-4.8` re-review command:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-guided-proof-path-tour --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with reduced coverage because Kiro reported denied tool access.
-  Clean artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-guided-proof-path-tour/2026-06-21T025305-159Z-re-review-claude-opus-4.8.clean.md`.
-- Last-pass `claude-sonnet-4.6` re-review command:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-guided-proof-path-tour --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 with reduced coverage because Kiro reported denied tool access.
-  Clean artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-guided-proof-path-tour/2026-06-21T025305-224Z-re-review-claude-sonnet-4.6.clean.md`.
-- Last-pass Medium findings patched: added differentiation and link
-  requirements for `/review-claim-checklist/` and `/glossary/`, mirrored the
-  `hintCategory` vocabulary reference into requirements and design, and kept
-  the non-binding `evidence` recommendation explicit.
-- Last-pass Low findings patched: clarified Requirement 7's initial-state
-  wording and added public-site accessibility validation expectations.
-- Additional Kiro re-review was deferred after this patch pass because the
-  last two re-reviews both had reduced coverage from denied tool access after
-  repeated review cycles, and the remaining patched findings were direct
-  spec-text clarifications. PR review-loop remains the external gate.
-- Current Medium or higher findings: none known after patches. Review coverage
-  remains reduced where noted above.
-
-Note: `.tmp/` review artifacts are local-only and not committed to the
-repository.
+- `claude-opus-4.8` initial Kiro spec review command exited 0 with reduced
+  coverage because Kiro reported denied tool access.
+- `claude-sonnet-4.6` initial Kiro spec review command exited 1 with reduced
+  coverage because Kiro reported denied tool access.
+- Medium or higher spec findings were patched or explicitly dispositioned
+  before the packet was marked ready for implementation.
+- Follow-up re-review passes for both models repeatedly reported reduced
+  coverage from denied tool access after patched findings were applied.
+- Patched spec findings included where-to-stop field clarity, required worked
+  example traversal, illustrative example labeling, per-step `#step-non-claim`
+  anchor naming, route-choice open-question state, folded-section
+  reconciliation guidance, `hintCategory` vocabulary recording, distinction
+  from `/review-claim-checklist/` and `/glossary/`, sanctioned-section markup
+  convention, public-site accessibility validation, and review-packet checklist
+  sync.
+- The packet readiness was updated after those patches, and no Medium or
+  higher spec-review findings were known when implementation began.
+- Local Kiro review artifacts were intentionally not committed.
 
 ## Validation
 
-Spec-only validation passed on 2026-06-21:
+Passed before commit:
 
-- `git diff --check`: passed.
-- `./scripts/check-private-paths.sh`: passed.
-- Focused text checks for required spec packet fields and forbidden scope
-  edits: passed.
+- `git diff --check`
+- `./scripts/check-private-paths.sh`
+- `cd site && npm test`
+- `cd site && npm run validate`
+- `cd site && npm run build`
 
-Future site implementation validation is listed in `tasks.md` and includes
-site test, validation, build, and browser sanity expectations.
+Sequential site validation result:
+
+- `npm test`: 305 tests passed.
+- `npm run validate`: validated 52 HTML files, 1730 internal references,
+  51 sitemap URLs, 1 legacy story safety target, and 13 legacy modernization
+  evidence-map rows.
+- `npm run build`: built static site to `dist/`.
+
+Browser sanity:
+
+- Local static server served the generated route.
+- Desktop viewport 1440x1200 loaded `/proof-paths/tour/`, showed the expected
+  title, H1, visible required copy, and required public-safe route links.
+- Mobile viewport 390x900 loaded the same route with no horizontal overflow
+  and visible required concept/evidence copy.
+
+Browser oddity: the in-app browser runtime failed during setup with an
+environment metadata error before navigation, so browser sanity used the
+Playwright CLI fallback. Generated Playwright snapshot files were removed
+before commit.
+
+## Review And PR Loop
+
+PR: `#261`
+
+Initial PR-loop run after PR creation stopped with:
+
+- `decision`: `actionable_findings`
+- `stopReason`: `UNRESOLVED_REVIEW_THREADS`
+- `headRefOid`: `be6cf417a875c8096027d7ec89fb32489a647bcb`
+- Finding: one Gemini review thread in `site/scripts/proof-path-tour.mjs`
+  about `stripTagsTight` handling comments with apostrophes.
+
+Patch outcome:
+
+- Added comment handling in `stripTagsTight`.
+- Added a regression test for split forbidden claims after an apostrophe
+  comment.
+- Validation after patch: `npm test` passed with 306 tests, `npm run
+  validate` passed, `npm run build` passed, `git diff --check` passed, and
+  `./scripts/check-private-paths.sh` passed.
+- Pushed fix commit `b37479cf08ee0f04217411d0be5d78a434f5de7c`.
+- Resolved the fixed Gemini review thread.
+
+PR-loop rerun after the fix returned:
+
+- `decision`: `merge_ready`
+- `stopReason`: `NONE`
+- `canMerge`: `true`
+- `nextAction`: `merge_ready`
+- `headRefOid`: `b37479cf08ee0f04217411d0be5d78a434f5de7c`
+- `mergeState`: `CLEAN`
+- `unresolvedThreads`: `0`
+- `pendingChecks`: none
+- `failedChecks`: none
+- `actionableBotFindings`: none
+- `residualRiskLevel`: `medium`
+
+Residual risk recorded by PR loop: required Codex review was satisfied by the
+configured `trustedCodeReview` quorum after Qodo returned; Codex was not
+present and is treated as residual risk, not a merge blocker, under the
+`dev` lane policy.
 
 ## Follow-Ups
 
-- Future implementer must make and record the final route or placement
-  decision.
-- Future implementer must decide and record the sanctioned-section markup
-  convention before writing forbidden-claim and forbidden-private/raw-material
-  validators. See `tasks.md` for the required task.
-- Future implementer must add validation that at least one worked example
-  traverses the required proof-step fields to a bounded non-claim conclusion,
-  not only that an example is present and labeled illustrative.
-- Future implementer must preserve the distinction from
-  `/review-claim-checklist/` and `/glossary/` when choosing the final route
-  and writing public copy.
-- Future implementer must add validation for required copy, links, metadata,
-  discovery metadata, sitemap metadata when standalone, forbidden claims,
-  private/raw material, word count, and desktop/mobile browser sanity.
+- This state update is bookkeeping after the clean PR-loop result. Rerun
+  `agent-control pr-loop --repo joefeser/tracemap --pr 261 --base dev
+  --require-codex-review --quiet --json` after pushing this documentation-only
+  commit and report the exact final head and decision.

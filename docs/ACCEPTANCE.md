@@ -50,6 +50,8 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - DBML, EDMX, typed DataSet, and TableAdapter descriptor facts include additive normalized model identity metadata such as `metadataFormat`, `modelKind`, `descriptorRole`, and `stableModelKey` while preserving source rule IDs and Tier2 descriptor ceilings.
 - DBML associations, EDMX associations, unambiguous EDMX MSL association-set mappings, typed DataSet relations, and resolvable typed DataSet key/keyref constraints emit `LegacyDataMappingDeclared` relationship metadata such as `modelRelationshipKind`, endpoint names or hashes, endpoint coverage, supporting IDs, and limitations without claiming runtime database access.
 - Unsupported inherited EDMX model shapes emit an `UnsupportedLegacyOrmMappingShape` gap rather than invented relationship evidence.
+- Checked-in NHibernate `.hbm.xml` mapping files emit safe static descriptor facts under `legacy.data.orm.nhibernate.v1` for deterministic class, table, property/id/version, and relationship/collection shapes; unsupported mapping/query shapes emit gaps and raw SQL/formula/filter/query text is not stored.
+- Recognized unsupported old ORM descriptors such as LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, and Castle ActiveRecord emit `AnalysisGap` facts under `legacy.data.orm.unsupported.v1`; they do not emit invented entity, table, column, relationship, generated-code, runtime database, or query-execution evidence.
 - Legacy data metadata rows appear in `facts.ndjson`, `index.sqlite`, and the scan report as static design-time metadata evidence, not runtime data access, SQL execution, provider compatibility, database existence, or production usage.
 - Legacy data metadata facts and reports do not include raw SQL, connection strings, config values, server/catalog names, URLs, local absolute paths, raw remotes, secrets, source snippets, or private sample identities.
 - Unrelated `.xsd` files without typed DataSet/TableAdapter indicators do not become legacy data descriptor facts.
@@ -216,7 +218,7 @@ For every successful `tracemap property-flow --index <combined.sqlite> --propert
 - Markdown sections appear in this order: Summary, Query, Sources and Coverage, Selected Roots, Lineage Paths, Gaps, Evidence Inventory, Optional Observed Evidence, Limitations.
 - JSON includes `reportType: property-flow`, `version: 1.0`, `reportCoverage`, `coverageWarnings`, `query`, `snapshot`, `summary`, `sources`, `selectedRoots`, `lineagePaths`, `gaps`, `inventory`, `observedEvidence`, and `limitations`.
 - reports do not include raw SQL, raw source snippets, raw remotes, local absolute paths, raw URLs, connection strings, secrets, credentials, private data, or unsafe literal values.
-- optional observed/browser metadata, when present in a future slice, is labeled demo/validation metadata only and cannot upgrade static classifications.
+- `--observed-evidence <path>`, when supplied, reads a JSON file, accepts only safe demo metadata rows, rejects unsafe keys/values with sanitized diagnostics, labels rows as `ObservedDemoContext`, and cannot upgrade static classifications.
 
 For every successful `tracemap reverse --index <combined.sqlite> --out <out>` run, verify:
 

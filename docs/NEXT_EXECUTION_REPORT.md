@@ -7,9 +7,9 @@ Date: 2026-06-21
 - `main` was promoted through PR #247.
 - `dev` was recreated from `origin/main` after GitHub deleted the old remote
   `dev` branch.
-- Current working branch for this cleanup: `codex/spec-state-runway-cleanup`.
-- Current baseline head: `71c9f440`.
-- Main worktree is clean aside from this spec-state cleanup branch.
+- Spec-state cleanup landed through PR #248.
+- Current working branch: `dev`.
+- Main worktree is clean.
 - No extra core worktrees are currently registered. Keep the site manager
   worktree separate when site work resumes.
 
@@ -129,13 +129,12 @@ practical value:
 
 ## Recommended Next Move
 
-1. Open a small PR for this spec-state/runway cleanup.
-2. After merge, run the Feature Delivery Loop on the highest-value ready core
+1. Run the Feature Delivery Loop on the highest-value ready core
    follow-up:
    - first choice: `route-centered-endpoint-trace-completeness`
    - second choice: `route-flow-service-data-composition`
    - third choice: `ui-field-property-lineage`
-3. In parallel, keep no more than 2 to 4 reviewed specs ahead of
+2. In parallel, keep no more than 2 to 4 reviewed specs ahead of
    implementation. Avoid creating a large spec pile that outruns the product.
 
 ## Notes For Future Agents

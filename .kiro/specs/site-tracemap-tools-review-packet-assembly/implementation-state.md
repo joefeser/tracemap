@@ -1,35 +1,44 @@
 # Implementation State
 
-Status: not-started
+Status: implemented-pr-loop-clean
 Readiness: ready-for-implementation
 Last verified: 2026-06-21
-Branch: codex/spec-site-review-packet-assembly
-Worktree: isolated spec worktree; local absolute path omitted from tracked spec
-Base: origin/main
-PR target: main
+Branch: codex/impl-site-review-packet-assembly
+Worktree: isolated implementation worktree; local absolute path omitted from tracked spec
+Base: origin/dev
+PR target: dev
 Public claim level: concept
 
 ## Summary
 
-This spec-only branch defines a future public-site review packet assembly
-surface. The future surface is a human checklist for preparing public-safe
+This implementation adds the public-site review packet assembly surface at
+`/packets/assembly/`. The page is a human checklist for preparing public-safe
 review handoff material from existing TraceMap evidence surfaces. It is not a
 generated packet-builder feature, scanner change, reducer change, runtime
 proof, release gate, or autonomous review workflow.
 
 ## Scope Decisions
 
-- Write scope is limited to
-  `.kiro/specs/site-tracemap-tools-review-packet-assembly/`.
-- No `site/src`, `site/scripts`, generated output, core scanner code, or
-  existing spec files are changed in this spec-only phase.
-- The future page or section remains `Public claim level: concept`.
+- `origin/dev` did not contain this spec packet at implementation start; the
+  spec directory was restored from `origin/main` before site edits. This is a
+  temporary main/dev sync fact, not a route or claim change.
+- Site source changes are limited to `site/src/` and `site/scripts/`. Generated
+  `site/dist/` and `site/output/` are not hand-edited.
+- The page remains `Public claim level: concept`.
 - The required public principle is `No public conclusion without evidence`.
-- Candidate placements remain undecided until implementation:
-  `/packets/assembly/`, `/review-packet/`, a section on `/packets/`, or a
-  section on `/review-room/`.
-- The future implementation must record the selected placement and rejected
-  alternatives here before changing site source.
+- Final placement: `/packets/assembly/`.
+- Rejected alternative `/review-packet/`: too likely to read like a competing
+  packet taxonomy or generated packet feature.
+- Rejected alternative section on `/packets/`: the workflow needs standalone
+  metadata, sitemap coverage, direct route validation, and enough space for the
+  full ingredient and stop-condition checklist.
+- Rejected alternative section on `/review-room/`: assembly is pre-handoff
+  preparation, while the review room is a meeting agenda.
+- Navigation decision: no top-nav addition. Discovery comes through sitemap,
+  discovery metadata, route-level links from `/packets/` and `/review-room/`,
+  and page-local links to adjacent surfaces.
+- No adjacent route omissions were needed; all required adjacent routes existed
+  at implementation time and are linked from the page.
 
 ## Review Commands
 
@@ -91,14 +100,52 @@ proof, release gate, or autonomous review workflow.
 
 ## Validation
 
-- `git diff --check`: passed on 2026-06-21.
-- `./scripts/check-private-paths.sh`: passed on 2026-06-21.
+- `git diff --check`: passed on 2026-06-21 after implementation.
+- `./scripts/check-private-paths.sh`: passed on 2026-06-21 after
+  implementation.
 - Focused spec text checks: passed on 2026-06-21 for required
   status/readiness/claim-level copy, shared principle, required ingredients,
   workflow sections, stop conditions, adjacent-surface references, and
   forbidden local/private marker patterns.
-- Site tests, site validation, site build, and browser sanity checks are
-  deferred because this branch is spec-only and does not change `site/`.
+- `cd site && npm test`: passed on 2026-06-21.
+- `cd site && npm run validate`: passed on 2026-06-21; generated static site
+  validated 51 HTML files, 1676 internal references, 50 sitemap URLs, 1 legacy
+  story safety target, and 13 legacy modernization evidence-map rows.
+- `cd site && npm run build`: passed on 2026-06-21.
+- Browser sanity: passed on 2026-06-21 using the Playwright CLI fallback
+  against `http://localhost:4183/packets/assembly/`. Desktop 1440x1000 and
+  mobile 390x844 snapshots showed the expected route title, H1, checklist
+  content, required boundary copy, and no page-level horizontal overflow. On
+  mobile the required ingredients table scrolls inside the existing
+  `.claim-ledger-wrap` container.
+- In-app browser control was attempted first but failed before navigation with
+  a browser-control environment metadata error; terminal Playwright CLI was
+  used for the real browser sanity check.
+- PR loop:
+  - Initial run on PR #259 stopped on
+    `PR_BODY_LITERAL_ESCAPED_NEWLINES`; PR body was edited to replace literal
+    escaped newline sequences with real Markdown newlines.
+  - Second run stopped on four unresolved Gemini review threads in
+    `site/scripts/review-packet-assembly.mjs`; fixed by normalizing sitemap
+    paths, route-index paths, and required href checks, and by tightening
+    attribute parsing so `data-href` cannot satisfy required `href` links.
+    Added regression tests for trailing-slash link normalization and
+    `data-href` rejection. Threads were resolved after the fix.
+  - Third run stopped on a Qodo top-level actionable finding for
+    tag-splitting scan bypasses and brittle case-sensitive non-claim metadata
+    checks; fixed by adding tight tag-stripped scan text for forbidden/private
+    checks and case-insensitive metadata topic matching. Added regression tests
+    for tag-split forbidden claims, tag-split private text, and case-varied
+    route nonClaims.
+  - A PR-level disposition was recorded for the Qodo top-level comment with
+    fixing commit `4856f8d1066418304a4f7df34b0ada7addace2f3`, validation
+    evidence, and low residual risk.
+  - Final recorded run before this state-note-only update returned
+    `merge_ready` on head `4856f8d1066418304a4f7df34b0ada7addace2f3`,
+    stop reason `NONE`, no unresolved threads, no pending checks, no failed
+    checks, no actionable bot findings, merge state `CLEAN`, and residual risk
+    `medium` because required Codex review was satisfied by the configured
+    `trustedCodeReview` quorum after Qodo returned.
 
 ## Oddities
 
@@ -108,12 +155,12 @@ proof, release gate, or autonomous review workflow.
   next owners.
 - Tracked spec notes avoid local absolute paths so the repository private-path
   guard can remain strict.
+- `/manager-packet/` exists as a public route but is not currently present in
+  discovery metadata. The new validator accepts adjacent links backed by either
+  discovery metadata or sitemap metadata so route validation matches the live
+  site shape without adding unrelated discovery churn.
 
 ## Follow-ups
 
-- Future implementation must choose placement, add site validation, run site
-  tests/build, and record desktop/mobile browser sanity checks if layout or
-  interaction changes are made.
-- Future implementation should keep title, H1, and metadata centered on human
-  checklist assembly so the route does not read as a generated packet-builder
-  feature.
+- Keep future copy centered on human checklist assembly so the route does not
+  read as a generated packet-builder feature.

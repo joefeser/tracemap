@@ -2,17 +2,21 @@
 
 ## Branch
 
-- Branch: `codex/spec-interface-override-di-approximation`
+- Branch: `codex/implement-interface-override-di-approximation`
 - Base: `origin/dev`
 - Issue: `Refs #35`
-- Scope: spec-only
+- PR: `https://github.com/joefeser/tracemap/pull/271`
+- Scope: implementation slice 1
 
 ## Current Status
 
-This branch creates a Kiro spec for deterministic interface, override,
-inheritance, and DI registration approximation. It intentionally does not
-implement scanner, reducer, reporting, export, rule catalog, docs, or site
-product-code changes.
+Implementation slice implemented in PR #271. The selected slice adds conservative
+`tracemap paths` traversal over method-level interface and override dispatch
+candidates derived from existing combined symbol relationship evidence.
+
+This slice does not implement DI registration narrowing, scanner extraction
+changes, reverse traversal, route-flow changes, impact/include-paths changes,
+portfolio/report summaries, or export/vault rendering.
 
 ## Scope Decisions
 
@@ -26,8 +30,16 @@ product-code changes.
   separate rule limitations.
 - Integrate with route-flow, paths, reverse, report, impact/include-paths, and
   export through shared graph/read helpers where possible.
-- Keep implementation tasks unchecked. Only spec-authoring and review-process
-  tasks should be checked off during this branch.
+- For this slice, only `tracemap paths` consumes derived candidates. Other
+  consumers remain follow-up scope.
+- Derived dispatch candidate edges are in-memory path edges only. No persisted
+  schema rows are added.
+- Candidate derivation is method-level only. Type-level inheritance/interface
+  relationships are not used as member dispatch substitutes.
+- Candidate paths are capped at `NeedsReviewPath` and carry explicit static
+  dispatch limitations.
+- Fan-out is bounded to 10 deterministic candidates per abstraction boundary;
+  additional candidates produce `DispatchCandidateFanOut`.
 
 ## Files
 
@@ -36,6 +48,9 @@ product-code changes.
 - `.kiro/specs/interface-override-di-approximation/tasks.md`
 - `.kiro/specs/interface-override-di-approximation/implementation-state.md`
 - `.kiro/specs/interface-override-di-approximation/review-prompts.md`
+- `rules/rule-catalog.yml`
+- `src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.cs`
+- `src/dotnet/tests/TraceMap.Tests/CombinedDependencyPathTests.cs`
 
 ## Kiro Review State
 
@@ -84,15 +99,25 @@ product-code changes.
 
 ## Validation State
 
-Passed:
+Implementation slice validation so far:
 
 ```bash
-git diff --check
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedDependencyPathTests
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
 ./scripts/check-private-paths.sh
+git diff --check
 ```
 
-Product-code validation such as `dotnet test` and CLI scan smoke tests is
-deferred for the future implementation branch because this branch is spec-only.
+Results:
+
+- Focused path tests passed: 24 tests.
+- `dotnet build` passed.
+- Full .NET suite passed: 588 tests.
+- Private path guard passed.
+- Whitespace diff check passed.
+
+Existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 is unchanged.
 
 ## Safety Notes
 
@@ -103,8 +128,44 @@ not `Closes #35`.
 
 ## Follow-Up Items
 
-- Patch Medium+ Kiro review findings.
-- Keep implementation tasks unchecked after review patches.
-- Validate whitespace and private-path guard before commit.
-- Open a ready PR to `dev`, request Codex review through the configured PR-loop
-  workflow, and do not merge.
+- Add DI registration-supported candidate annotations.
+- Add reverse traversal over candidate edges with `NeedsReviewReversePath`.
+- Add route-flow reuse of a shared candidate builder rather than the current
+  route-flow-specific bridge logic.
+- Add impact/include-paths, report/portfolio, and export/vault candidate
+  rendering.
+- Add full missing-candidate, reduced-coverage, syntax-only, and scanner-level
+  `DynamicDispatchCandidate` non-conflation tests.
+- Add broader scanner-level relationship extraction hardening for syntax-only
+  and reduced-coverage cases.
+
+## Implementation Review Notes
+
+- Sonnet implementation review ran twice with full wrapper coverage:
+  - `.tmp/kiro-reviews/interface-override-di-approximation/2026-06-21T230600-991Z-implementation-claude-sonnet-4.5.clean.md`
+  - `.tmp/kiro-reviews/interface-override-di-approximation/2026-06-21T230830-712Z-implementation-claude-sonnet-4.5.clean.md`
+- The wrapper prompt includes requirements/design/tasks/review-prompts but not
+  implementation diff or this implementation-state file, so both reviews judged
+  the entire multi-phase spec rather than the selected `tracemap paths`
+  implementation slice.
+- Actionable review item applied: added explicit rule-catalog coverage for
+  `combined.dispatch-candidate.v1` and `combined.dispatch-gap.v1`.
+- Remaining review findings are full-spec follow-up work: DI extraction,
+  reverse/route-flow/impact/export integration, broader scanner hardening,
+  and full-spec validation. Those remain unchecked in `tasks.md`.
+
+## PR Review Loop Notes
+
+- First `agent-control pr-loop` run for PR #271 returned
+  `actionable_findings` with unresolved Codex/Gemini review threads.
+- Patched actionable findings:
+  - Materialized dispatch relationship groups before adding candidate edges so
+    candidate derivation does not enumerate a mutating edge collection.
+  - Replaced `string.Contains(char, StringComparison)` with
+    `IndexOf(char, StringComparison)` for the target framework used here.
+  - Suppressed immediate candidate-to-relationship backtracking so derived
+    interface/override candidate edges do not immediately traverse back over
+    the backing relationship and create misleading cycle truncation.
+  - Added source scanner version and end-line metadata to
+    `DispatchCandidateFanOut` gaps, with focused test coverage.
+- Re-ran focused and full validation after the review-loop patch.

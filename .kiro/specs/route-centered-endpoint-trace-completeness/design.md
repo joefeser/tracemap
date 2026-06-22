@@ -103,6 +103,18 @@ public sealed record RouteFlowTouchedSymbol(
     string Coverage,
     IReadOnlyList<string> SupportingRowIds,
     RouteFlowEvidenceRef Evidence);
+
+public sealed record RouteFlowSelectorTrace(
+    string SelectorKind,
+    string MatchMode,
+    string? SafeNormalizedKey,
+    string? SafeSelector,
+    string RedactionState,
+    string Coverage,
+    string RuleId,
+    string EvidenceTier,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> Limitations);
 ```
 
 If these concepts can be represented by existing `RouteFlowLogicRow` and
@@ -236,7 +248,7 @@ paths, line spans, gap kinds, and rule IDs.
 Deterministic ordering:
 
 1. source label;
-2. selector kind and normalized key;
+2. normalized selector kind and normalized selector key;
 3. classification rank;
 4. path length and sequence;
 5. row kind;

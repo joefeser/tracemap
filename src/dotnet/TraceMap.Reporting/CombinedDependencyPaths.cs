@@ -23,7 +23,8 @@ public sealed record CombinedDependencyPathOptions(
     bool IncludeLegacyRoots = false,
     int MaxDepth = 8,
     int MaxPaths = 100,
-    int MaxFrontier = 10000);
+    int MaxFrontier = 10000,
+    string? MessageDirection = null);
 
 public sealed record CombinedDependencyPathResult(
     CombinedDependencyPathReport Report,
@@ -63,7 +64,9 @@ public sealed record CombinedPathQuery(
     int MaxPaths,
     int MaxFrontier,
     string Algorithm,
-    string AlgorithmVersion);
+    string AlgorithmVersion,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? MessageDirection);
 
 public sealed record CombinedPathSummary(
     int SourceCount,
@@ -114,7 +117,9 @@ public sealed record CombinedPathNode(
     string? TextHash,
     string? TextLength,
     string? PackageName,
-    string? ConfigKey);
+    string? ConfigKey,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? OperationDirection = null);
 
 public sealed record CombinedPathEdge(
     string EdgeId,
@@ -148,7 +153,8 @@ public sealed record CombinedPathGap(
     string? Reason,
     string? CommitSha = null,
     string? ExtractorVersion = null,
-    string? EvidenceScope = null);
+    string? EvidenceScope = null,
+    int? EndLine = null);
 
 public sealed record CombinedPathInventory(
     IReadOnlyDictionary<string, int> NodesByKind,
@@ -209,7 +215,10 @@ public static class CombinedDependencyPathReporter
     private const string QueryGapRuleId = "combined.paths.query-gap.v1";
     private const string TruncationGapRuleId = "combined.paths.truncation-gap.v1";
     private const string SymbolReconciliationRuleId = "combined.paths.symbol-reconciliation.v1";
+    private const string DispatchCandidateRuleId = "combined.dispatch-candidate.v1";
+    private const string DispatchGapRuleId = "combined.dispatch-gap.v1";
     private const int SelectorCandidateLimit = 250;
+    private const int DispatchCandidateLimit = 10;
 
     private static readonly HashSet<string> TerminalSurfaceKinds = new(StringComparer.Ordinal)
     {
@@ -248,6 +257,8 @@ public static class CombinedDependencyPathReporter
         "fact-attached-to-symbol",
         "surface-evidence",
         "symbol-reconciliation",
+        "interface-candidate",
+        "override-candidate",
         "message-publish-consume"
     };
 
@@ -384,6 +395,8 @@ public static class CombinedDependencyPathReporter
         {
             throw new ArgumentException("paths --classification must be one of StrongStaticPath, ProbableStaticPath, NeedsReviewStaticPath, NoBackendEvidence, ReducedCoverage, or AnalysisGap.");
         }
+
+        CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths");
     }
 
     private static CombinedDependencyPathReport BuildReport(
@@ -444,28 +457,6 @@ public static class CombinedDependencyPathReporter
         }
         else
         {
-            var messageTerminalNode = terminalNodes
-                .Select(id => graph.Nodes.TryGetValue(id, out var node) ? node : null)
-                .OfType<GraphNode>()
-                .FirstOrDefault(node => IsMessageSurfaceKind(node.SurfaceKind));
-            if (messageTerminalNode is not null)
-            {
-                gaps.Add(new CombinedPathGap(
-                    $"gap:message-direction-filter:{messageTerminalNode.NodeId}",
-                    "DirectionFilterNotSupported",
-                    CombinedDependencyPathClassifications.AnalysisGap,
-                    "Message surface direction filtering is not supported in this path-query slice; publisher, consumer, and binding evidence may be selected together.",
-                    messageTerminalNode.SourceIndexId,
-                    messageTerminalNode.SourceLabel,
-                    messageTerminalNode.NodeId,
-                    messageTerminalNode.CombinedFactId,
-                    RuleIds.MessageSurfaceGap,
-                    EvidenceTiers.Tier4Unknown,
-                    messageTerminalNode.FilePath,
-                    messageTerminalNode.StartLine,
-                    "direction-filter-not-supported"));
-            }
-
             var search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
@@ -583,7 +574,8 @@ public static class CombinedDependencyPathReporter
                 options.MaxPaths,
                 options.MaxFrontier,
                 Algorithm,
-                AlgorithmVersion),
+                AlgorithmVersion,
+                CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths")),
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -762,6 +754,7 @@ public static class CombinedDependencyPathReporter
         }
 
         AddSymbolReconciliationEdges(graph);
+        AddDispatchCandidateEdges(graph);
         graph.Sort();
         return graph;
     }
@@ -1987,6 +1980,82 @@ public static class CombinedDependencyPathReporter
             from.EndLine ?? to.EndLine));
     }
 
+    private static void AddDispatchCandidateEdges(EvidenceGraph graph)
+    {
+        var relationshipGroups = graph.Edges
+            .Where(edge => edge.EdgeKind is "implements" or "overrides")
+            .Where(edge => graph.Nodes.TryGetValue(edge.FromNodeId, out var implementation)
+                && graph.Nodes.TryGetValue(edge.ToNodeId, out var abstraction)
+                && IsMethodNode(implementation)
+                && IsMethodNode(abstraction))
+            .GroupBy(edge => edge.ToNodeId, StringComparer.Ordinal)
+            .OrderBy(group => graph.Nodes.TryGetValue(group.Key, out var node) ? node.SourceLabel : string.Empty, StringComparer.Ordinal)
+            .ThenBy(group => graph.Nodes.TryGetValue(group.Key, out var node) ? node.DisplayName : string.Empty, StringComparer.Ordinal)
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var group in relationshipGroups)
+        {
+            var candidates = group
+                .OrderBy(edge => graph.Nodes[edge.FromNodeId].SourceLabel, StringComparer.Ordinal)
+                .ThenBy(edge => graph.Nodes[edge.FromNodeId].DisplayName, StringComparer.Ordinal)
+                .ThenBy(edge => edge.FilePath, StringComparer.Ordinal)
+                .ThenBy(edge => edge.StartLine ?? 0)
+                .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
+                .ToArray();
+
+            foreach (var relationship in candidates.Take(DispatchCandidateLimit))
+            {
+                var edgeKind = relationship.EdgeKind == "overrides" ? "override-candidate" : "interface-candidate";
+                graph.AddEdge(new GraphEdge(
+                    $"dispatch-candidate:{Hash($"{relationship.EdgeId}:{relationship.ToNodeId}:{relationship.FromNodeId}", 16)}",
+                    edgeKind,
+                    relationship.ToNodeId,
+                    relationship.FromNodeId,
+                    CombinedDependencyPathClassifications.NeedsReviewPath,
+                    DispatchCandidateRuleId,
+                    relationship.EvidenceTier,
+                    relationship.SupportingFactIds,
+                    relationship.SupportingCombinedEdgeIds
+                        .Append(relationship.EdgeId)
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(value => value, StringComparer.Ordinal)
+                        .ToArray(),
+                    relationship.FilePath,
+                    relationship.StartLine,
+                    relationship.EndLine));
+            }
+
+            if (candidates.Length > DispatchCandidateLimit && graph.Nodes.TryGetValue(group.Key, out var abstractionNode))
+            {
+                graph.Gaps.Add(new CombinedPathGap(
+                    $"gap:dispatch:fanout:{Hash($"{group.Key}:{candidates.Length}", 16)}",
+                    "DispatchCandidateFanOut",
+                    CombinedDependencyPathClassifications.NeedsReviewPath,
+                    $"Static dispatch candidate derivation found {candidates.Length} candidates for `{abstractionNode.DisplayName}`; only the first {DispatchCandidateLimit} deterministic candidates were traversed.",
+                    abstractionNode.SourceIndexId,
+                    abstractionNode.SourceLabel,
+                    abstractionNode.NodeId,
+                    null,
+                    DispatchGapRuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    abstractionNode.FilePath,
+                    abstractionNode.StartLine,
+                    "dispatch-candidate-fanout",
+                    abstractionNode.CommitSha,
+                    graph.ScannerVersionFor(abstractionNode.SourceIndexId),
+                    "combined-symbol-relationships",
+                    abstractionNode.EndLine));
+            }
+        }
+    }
+
+    private static bool IsMethodNode(GraphNode node)
+    {
+        return string.Equals(node.NodeKind, "Method", StringComparison.Ordinal)
+            || node.DisplayName.IndexOf('(', StringComparison.Ordinal) >= 0;
+    }
+
     private static SymbolAlias? TryCreateSymbolAlias(string displayName)
     {
         var normalized = displayName.Trim();
@@ -2109,6 +2178,11 @@ public static class CombinedDependencyPathReporter
 
             foreach (var edge in outgoing)
             {
+                if (IsDispatchCandidateCrossHop(graph, state, edge))
+                {
+                    continue;
+                }
+
                 if (state.NodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
                     truncated = true;
@@ -2127,6 +2201,33 @@ public static class CombinedDependencyPathReporter
         }
 
         return new SearchResult(paths, gaps, truncated);
+    }
+
+    private static bool IsDispatchCandidateCrossHop(EvidenceGraph graph, PathState state, GraphEdge edge)
+    {
+        if (state.EdgeIds.Count == 0)
+        {
+            return false;
+        }
+
+        var isRelationshipEdge = edge.EdgeKind is "implements" or "overrides";
+        var isCandidateEdge = edge.EdgeKind is "interface-candidate" or "override-candidate";
+        if (!isRelationshipEdge && !isCandidateEdge)
+        {
+            return false;
+        }
+
+        var hasRelationshipHop = false;
+        var hasCandidateHop = false;
+        foreach (var edgeId in state.EdgeIds)
+        {
+            var prior = graph.EdgesById[edgeId];
+            hasRelationshipHop = hasRelationshipHop || prior.EdgeKind is "implements" or "overrides";
+            hasCandidateHop = hasCandidateHop || prior.EdgeKind is "interface-candidate" or "override-candidate";
+        }
+
+        return (isCandidateEdge && hasRelationshipHop)
+            || (isRelationshipEdge && hasCandidateHop);
     }
 
     private static CombinedPath ToPath(string pathId, EvidenceGraph graph, PathState state)
@@ -2317,7 +2418,8 @@ public static class CombinedDependencyPathReporter
             return CombinedDependencyPathClassifications.UnknownAnalysisGap;
         }
 
-        if (edges.Any(edge => edge.EdgeKind == "endpoint-match" && (edge.Classification != CombinedEndpointClassifications.MatchedEndpoint || edge.EvidenceTier != EvidenceTiers.Tier2Structural))
+        if (edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate")
+            || edges.Any(edge => edge.EdgeKind == "endpoint-match" && (edge.Classification != CombinedEndpointClassifications.MatchedEndpoint || edge.EvidenceTier != EvidenceTiers.Tier2Structural))
             || edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual))
         {
             return CombinedDependencyPathClassifications.NeedsReviewPath;
@@ -2355,6 +2457,11 @@ public static class CombinedDependencyPathReporter
         if (edges.Any(edge => edge.EdgeKind is "calls" or "creates" or "inherits" or "implements" or "overrides"))
         {
             notes.Add(new CombinedPathNote("StaticCodeEvidence", "Code relationship hops do not prove dynamic dispatch, runtime DI, reflection, branch feasibility, collection contents, or serializer behavior."));
+        }
+
+        if (edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate"))
+        {
+            notes.Add(new CombinedPathNote("StaticDispatchCandidate", "Interface or override candidate hops are static review evidence and do not prove runtime dispatch, dependency-injection target selection, or object lifetime."));
         }
 
         if (edges.Any(edge => edge.EdgeKind == "symbol-reconciliation"))
@@ -2495,6 +2602,7 @@ public static class CombinedDependencyPathReporter
     {
         var surfaceKind = string.IsNullOrWhiteSpace(options.ToSurface) ? null : options.ToSurface.Trim();
         var surfaceName = string.IsNullOrWhiteSpace(options.SurfaceName) ? null : options.SurfaceName.Trim();
+        var messageDirection = CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths");
         var explicitSurfaceKind = surfaceKind is not null;
         var startFactIds = startNodes
             .Select(node => node.CombinedFactId)
@@ -2506,6 +2614,7 @@ public static class CombinedDependencyPathReporter
             .Where(node => explicitSurfaceKind || IsDefaultTerminalSurface(node, startFactIds))
             .Where(node => surfaceKind is null || string.Equals(node.SurfaceKind, surfaceKind, StringComparison.Ordinal))
             .Where(node => surfaceName is null || SurfaceNameMatches(node, surfaceName))
+            .Where(node => messageDirection is null || !IsMessageSurfaceKind(node.SurfaceKind) || string.Equals(node.OperationDirection, messageDirection, StringComparison.Ordinal))
             .Select(node => node.NodeId)
             .ToHashSet(StringComparer.Ordinal);
     }
@@ -3221,7 +3330,8 @@ public static class CombinedDependencyPathReporter
             surface.TextHash,
             surface.TextLength,
             surface.PackageName,
-            surface.ConfigKey);
+            surface.ConfigKey,
+            surface.OperationDirection);
     }
 
     private static bool IsMessageSurfaceKind(string? surfaceKind)
@@ -3376,6 +3486,7 @@ public static class CombinedDependencyPathReporter
         builder.AppendLine($"- From source: `{report.Query.FromSource ?? "n/a"}`");
         builder.AppendLine($"- To surface: `{report.Query.ToSurface ?? "all"}`");
         builder.AppendLine($"- Surface name: `{report.Query.SurfaceName ?? "n/a"}`");
+        builder.AppendLine($"- Message direction: `{report.Query.MessageDirection ?? "all"}`");
         builder.AppendLine($"- Source pair: `{report.Query.SourcePair ?? "n/a"}`");
         builder.AppendLine($"- Classification: `{report.Query.Classification ?? "all"}`");
         builder.AppendLine($"- Bounds: depth `{report.Query.MaxDepth}`, paths `{report.Query.MaxPaths}`, frontier `{report.Query.MaxFrontier}`");
@@ -3638,6 +3749,8 @@ public static class CombinedDependencyPathReporter
             "surface-evidence" => 5,
             "remoting-evidence" => 5,
             "remoting-channel-link" => 5,
+            "interface-candidate" => 6,
+            "override-candidate" => 6,
             "fact-attached-to-symbol" => 6,
             "symbol-reconciliation" => 7,
             "inherits" => 8,
@@ -3659,6 +3772,10 @@ public static class CombinedDependencyPathReporter
             "parameterforwarded" => "parameter-forward",
             "factattachedtosymbol" => "fact-attached-to-symbol",
             "surfaceevidence" => "surface-evidence",
+            "inheritsfrom" => "inherits",
+            "implementsinterface" => "implements",
+            "implementsinterfacemember" => "implements",
+            "extendsinterface" => "inherits",
             _ => normalized
         };
     }
@@ -3806,6 +3923,11 @@ public static class CombinedDependencyPathReporter
         public List<CombinedPathGap> Gaps { get; } = [];
         private readonly Dictionary<string, CombinedReportSource> sourcesById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
 
+        public string? ScannerVersionFor(string sourceIndexId)
+        {
+            return sourcesById.TryGetValue(sourceIndexId, out var source) ? source.ScannerVersion : null;
+        }
+
         public void AddNode(GraphNode node)
         {
             Nodes.TryAdd(node.NodeId, node);
@@ -3946,7 +4068,8 @@ public static class CombinedDependencyPathReporter
         string? TextHash,
         string? TextLength,
         string? PackageName,
-        string? ConfigKey)
+        string? ConfigKey,
+        string? OperationDirection = null)
     {
         public CombinedPathNode ToReportNode()
         {
@@ -3977,7 +4100,8 @@ public static class CombinedDependencyPathReporter
                 TextHash,
                 TextLength,
                 PackageName,
-                ConfigKey);
+                ConfigKey,
+                OperationDirection);
         }
     }
 

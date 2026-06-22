@@ -8,6 +8,10 @@ import {
   adoptionPartialAnalysisSentence,
   adoptionPlaybookRoute
 } from "./adoption-playbook.mjs";
+import {
+  blogProofPathRequiredLinks,
+  blogProofPathSeriesRoute
+} from "./blog-proof-path-series.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
@@ -21,8 +25,16 @@ import {
   incidentEvidenceHandoffRoute
 } from "./incident-evidence-handoff.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
+import {
+  managerDemoScriptInboundLinkRoutes,
+  managerDemoScriptRoute
+} from "./manager-demo-script.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
+import { proofPathFaqRoute } from "./proof-path-faq.mjs";
+import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
+import { reviewerQuickstartRoute } from "./reviewer-quickstart.mjs";
+import { reviewPacketAssemblyRoute } from "./review-packet-assembly.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
@@ -126,10 +138,12 @@ async function createDistFixture({
     ...new Set([
       ...deployAuditRequiredRoutes,
       adoptionPlaybookRoute,
+      blogProofPathSeriesRoute,
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       endpointReviewRoute,
       changeReviewRoute,
+      "/evidence/",
       glossaryRoute,
       incidentCallRoute,
       incidentEvidenceHandoffRoute,
@@ -137,8 +151,13 @@ async function createDistFixture({
       teamEvidenceHandoffRoute,
       ...teamEvidenceHandoffRequiredLinks,
       managerBriefRoute,
+      managerDemoScriptRoute,
       managerFaqRoute,
+      proofPathFaqRoute,
+      proofPathTourRoute,
       proofSourceCatalogRoute,
+      reviewerQuickstartRoute,
+      reviewPacketAssemblyRoute,
       reviewClaimChecklistRoute,
       reviewRoomRoute,
       roadmapClaimLedgerRoute,
@@ -155,12 +174,14 @@ async function createDistFixture({
     ...deployAuditRequiredRoutes,
     adoptionPlaybookRoute,
     "/blog/",
+    blogProofPathSeriesRoute,
     "/capabilities/",
     "/demo/start-here/",
     "/demo/proof-upgrades/",
     "/demo/proof-assets/",
     demoEvidenceTrailRoute,
     demoRunbookRoute,
+    managerDemoScriptRoute,
     endpointReviewRoute,
     changeReviewRoute,
     "/evidence/",
@@ -173,9 +194,13 @@ async function createDistFixture({
     glossaryRoute,
     managerBriefRoute,
     managerFaqRoute,
+    proofPathFaqRoute,
+    proofPathTourRoute,
     proofSourceCatalogRoute,
+    reviewerQuickstartRoute,
     "/manager-packet/",
     "/packets/",
+    reviewPacketAssemblyRoute,
     reviewClaimChecklistRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
@@ -219,12 +244,24 @@ async function fixturePageHtml(route, path) {
     return adoptionPage();
   }
 
+  if (route === "/blog/") {
+    return page(`<a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a>`);
+  }
+
+  if (route === blogProofPathSeriesRoute) {
+    return blogProofPathSeriesPage();
+  }
+
   if (route === demoEvidenceTrailRoute) {
     return demoEvidenceTrailPage();
   }
 
   if (route === demoRunbookRoute) {
     return demoRunbookPage();
+  }
+
+  if (route === managerDemoScriptRoute) {
+    return managerDemoScriptPage();
   }
 
   if (route === endpointReviewRoute) {
@@ -259,8 +296,24 @@ async function fixturePageHtml(route, path) {
     return managerFaqPage();
   }
 
+  if (route === proofPathTourRoute) {
+    return readFile(new URL("../src/proof-paths/tour/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === proofPathFaqRoute) {
+    return readFile(new URL("../src/proof-paths/faq/index.html", import.meta.url), "utf8");
+  }
+
   if (route === proofSourceCatalogRoute) {
     return proofSourceCatalogPage();
+  }
+
+  if (route === reviewerQuickstartRoute) {
+    return reviewerQuickstartPage();
+  }
+
+  if (route === reviewPacketAssemblyRoute) {
+    return reviewPacketAssemblyPage();
   }
 
   if (route === reviewClaimChecklistRoute) {
@@ -288,7 +341,60 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
+  );
+}
+
+function blogProofPathSeriesPage() {
+  const links = blogProofPathRequiredLinks.map((link) => `<a href="${link}">${link}</a>`).join(" ");
+  const filler = Array.from(
+    { length: 65 },
+    () =>
+      "The reviewer follows static evidence, checks the rule family, reads the coverage label, records the limitation, and hands unresolved runtime questions to owners."
+  ).join(" ");
+
+  return page(
+    `<article>
+      <meta property="og:type" content="article">
+      <link rel="canonical" href="https://tracemap.tools${blogProofPathSeriesRoute}">
+      <header>
+        <h1>What a proof path is</h1>
+        <p>Public claim level: concept</p>
+      </header>
+      <section data-proof-blog-block="opening-problem">
+        <h2>The problem is claim drift.</h2>
+        <p>${filler}</p>
+      </section>
+      <section data-proof-blog-block="evidence-backed-claim-example">
+        <h2>An evidence-backed claim names what would support it.</h2>
+        <p>${links}</p>
+      </section>
+      <section data-proof-blog-block="proof-path-reading-steps">
+        <h2>Read a proof path in order.</h2>
+        <p>Start with the claim, check the public claim level, open the proof surface, read the tier, keep the limitation visible, and use the checklist.</p>
+      </section>
+      <section data-proof-blog-block="proof-surfaces">
+        <h2>The supporting surfaces each have a job.</h2>
+        <p>${links}</p>
+      </section>
+      <section data-proof-blog-block="limitations-and-non-claims" data-tm-boundary="claim-boundary">
+        <h2>Limitations and non-claims are part of the proof path.</h2>
+        <p>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, or product behavior.</p>
+        <p>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, raw command output, or credential-like values.</p>
+      </section>
+      <section data-proof-blog-block="safe-language-examples">
+        <h2>Safe language examples</h2>
+        <p>This proof path shows where the public claim is supported and what limits still apply.</p>
+      </section>
+      <section data-proof-blog-block="unsafe-language-examples" data-tm-boundary="wording-to-avoid">
+        <h2>Unsafe language examples, framed as wording to avoid</h2>
+        <p>TraceMap proves this endpoint is safe in production.</p>
+      </section>
+      <section data-proof-blog-block="closing-handoff-action">
+        <h2>Close the loop with a handoff, not a bigger claim.</h2>
+        <p>Repeat the sentence with the same limits or take the static evidence to the owner, telemetry, logs, traces, tests, or release review.</p>
+      </section>
+    </article>`
   );
 }
 
@@ -337,6 +443,28 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "demo",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture runbook limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: managerDemoScriptRoute,
+        title: "Manager Demo Script",
+        summary: "Fixture manager demo script route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "demo",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture manager demo script limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: "/capabilities/",
+        title: "Capabilities",
+        summary: "Fixture capabilities route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "start",
+        preferredProofPath: "/docs/",
+        limitations: ["Fixture capabilities limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -442,6 +570,62 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
+        path: proofPathTourRoute,
+        title: "Guided Proof-Path Tour",
+        summary: "Concept-level guided reading flow for inspecting one public claim through proof path, rule family, evidence tier, coverage label, source context, limitation, non-claim, and next owner.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The tour is concept-level reading guidance over existing public-safe evidence surfaces, not a proof engine, runtime trace, approval workflow, validation result, or new evidence source.",
+          "Missing rule, tier, coverage, source context, extractor version, limitation, or public-safe support means the public claim stops or moves to owner follow-up."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, product behavior proof, autonomous approval, or replacement for tests, code review, source review, runtime observability, or human judgment.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, raw command output, or credential-like values are public proof material."
+        ]
+      },
+      {
+        path: proofPathFaqRoute,
+        title: "Proof Path FAQ",
+        summary: "Concept-level FAQ for reading proof paths, evidence tiers, coverage labels, limitations, review-packet context, missing-evidence gaps, and static-evidence boundaries.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The FAQ is concept-level explanation over existing public-safe evidence surfaces, not a generated proof source, scanner result, reducer result, approval workflow, or validation result.",
+          "Claims repeated from the FAQ must keep proof path, rule family, tier, coverage label, limitation, non-claim, public claim level, source context, and next-owner handoff attached."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, autonomous approval, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human judgment.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public FAQ material."
+        ]
+      },
+      {
+        path: "/packets/",
+        title: "Evidence Packet Guide",
+        summary: "Fixture packet guide route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture packet guide limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: "/manager-packet/",
+        title: "Manager Packet",
+        summary: "Fixture manager packet route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture manager packet limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
         path: proofSourceCatalogRoute,
         title: "Proof Source Catalog",
         summary: "Fixture proof source catalog route for validation.",
@@ -451,6 +635,32 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture proof source catalog limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: reviewerQuickstartRoute,
+        title: "Reviewer Quickstart",
+        summary: "Five-minute concept-level guide for inspecting a public-safe TraceMap evidence packet before repeating or routing a claim.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["The fixture route remains bounded to first-stop reviewer orientation over existing public-safe proof surfaces."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, autonomous approval, or replacement of tests proof."
+        ]
+      },
+      {
+        path: reviewPacketAssemblyRoute,
+        title: "Review Packet Assembly",
+        summary: "Concept-level checklist for assembling public-safe review handoff material from existing TraceMap evidence surfaces.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["The fixture route remains bounded to human checklist guidance."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval or safety, operational safety, AI impact analysis, LLM analysis, autonomous review, generated packet-builder behavior, or complete coverage proof."
+        ]
       },
       {
         path: reviewClaimChecklistRoute,
@@ -569,6 +779,64 @@ async function proofSourceCatalogPage() {
   return readFile(new URL("../src/proof-source-catalog/index.html", import.meta.url), "utf8");
 }
 
+async function reviewerQuickstartPage() {
+  return readFile(new URL("../src/reviewer-quickstart/index.html", import.meta.url), "utf8");
+}
+
+function reviewPacketAssemblyPage() {
+  const filler = Array.from({ length: 80 }, (_, index) => `bounded evidence assembly ${index}`).join(" ");
+  return page(`
+    <title>Review Packet Assembly | TraceMap</title>
+    <meta name="description" content="Concept checklist">
+    <link rel="canonical" href="https://tracemap.tools/packets/assembly/">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Review Packet Assembly">
+    <meta property="og:description" content="Concept checklist">
+    <meta property="og:url" content="https://tracemap.tools/packets/assembly/">
+    <p>Public claim level: concept. No public conclusion without evidence. This is not a generated packet-builder feature.</p>
+    <table>
+      <tr data-packet-ingredient="claim being reviewed"><td>claim being reviewed</td></tr>
+      <tr data-packet-ingredient="audience"><td>audience</td></tr>
+      <tr data-packet-ingredient="proof path"><td>proof path</td><td>A public-safe trail or named private review location.</td></tr>
+      <tr data-packet-ingredient="public claim level"><td>public claim level</td></tr>
+      <tr data-packet-ingredient="rule ID or rule family"><td>rule ID or rule family</td></tr>
+      <tr data-packet-ingredient="evidence tier"><td>evidence tier Tier1Semantic Tier2Structural Tier3SyntaxOrTextual Tier4Unknown</td></tr>
+      <tr data-packet-ingredient="coverage label"><td>coverage label</td></tr>
+      <tr data-packet-ingredient="commit SHA"><td>commit SHA</td></tr>
+      <tr data-packet-ingredient="extractor version"><td>extractor version</td></tr>
+      <tr data-packet-ingredient="public-safe file path and line span"><td>public-safe file path and line span</td></tr>
+      <tr data-packet-ingredient="limitations"><td>limitations</td></tr>
+      <tr data-packet-ingredient="non-claims"><td>non-claims</td></tr>
+      <tr data-packet-ingredient="next owner"><td>next owner</td></tr>
+      <tr data-packet-ingredient="validation evidence"><td>validation evidence</td></tr>
+      <tr data-packet-ingredient="unresolved gaps"><td>unresolved gaps</td></tr>
+    </table>
+    <p>Missing fields stay visible as limitations.</p>
+    <h2>Choose the question</h2>
+    <h2>Collect public-safe evidence</h2>
+    <h2>Attach limitations</h2>
+    <h2>Name next owners</h2>
+    <h2>Run claim checklist</h2>
+    <h2>Stop conditions</h2>
+    <h2>Handoff notes</h2>
+    <section data-boundary-region>
+      <p>missing proof path private-only support raw artifact leakage unknown or reduced coverage without label unsupported runtime, release, or safety wording no next owner no validation evidence</p>
+    </section>
+    <a href="/packets/">Packets</a>
+    <a href="/manager-packet/">Manager packet</a>
+    <a href="/team-evidence-handoff/">Team evidence handoff</a>
+    <a href="/incident-evidence-handoff/">Incident evidence handoff</a>
+    <a href="/review-room/">Review room</a>
+    <a href="${reviewerQuickstartRoute}">Reviewer quickstart</a>
+    <a href="/review-claim-checklist/">Review claim checklist</a>
+    <a href="/proof-source-catalog/">Proof source catalog</a>
+    <a href="/proof-paths/">Proof paths</a>
+    <a href="/limitations/">Limitations</a>
+    <a href="/validation/">Validation</a>
+    <p>${filler}</p>
+  `);
+}
+
 async function glossaryPage() {
   return readFile(new URL("../src/glossary/index.html", import.meta.url), "utf8");
 }
@@ -579,6 +847,9 @@ async function stakeholderQuestionIndexPage() {
 
 function incidentCallPage() {
   return page(`
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Manager Demo Script">
+    <meta property="og:description" content="Fixture manager demo script description.">
     <p>Public claim level: concept</p>
     <p>No public conclusion without evidence</p>
     <p>static dependency evidence and not runtime observability</p>
@@ -759,6 +1030,65 @@ function demoRunbookPage() {
   `);
 }
 
+function managerDemoScriptPage() {
+  const filler = Array.from({ length: 170 }, (_, index) => `manager demo script evidence boundary ${index}`).join(" ");
+  const links = [
+    "/",
+    "/capabilities/",
+    "/proof-paths/",
+    "/proof-source-catalog/",
+    "/demo/result/",
+    "/demo/runbook/",
+    "/questions/",
+    "/limitations/",
+    "/validation/",
+    "/static-vs-runtime/"
+  ]
+    .map((route) => `<a href="${route}">${route}</a>`)
+    .join("\n");
+  const families = [
+    "value",
+    "trust",
+    "completeness",
+    "release-decision",
+    "production-behavior",
+    "incident-use",
+    "team-handoff",
+    "next"
+  ]
+    .map((family) => `<article data-question-family="${family}"><p>${family}</p></article>`)
+    .join("\n");
+
+  return page(`
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Manager Demo Script">
+    <meta property="og:description" content="Fixture manager demo script description.">
+    <p>Public claim level: concept</p>
+    <p>No public conclusion without evidence</p>
+    <p>bounded demo script, not a product capability proof</p>
+    <h2>Opening context</h2>
+    <h2>2-minute tour</h2>
+    <h2>5-minute proof walkthrough</h2>
+    <h2>Manager questions and safe answer shapes</h2>
+    <h2>Engineer questions and proof routes</h2>
+    <h2>Stop conditions</h2>
+    <h2>Follow-up handoff</h2>
+    <h2>Non-claims</h2>
+    <p>rule ID or rule family, evidence tier, coverage label, proof path, limitation, raw facts, SQLite content, analyzer logs.</p>
+    <p>Where are the rule IDs and evidence tiers?</p>
+    <p>How does source mapping stay public-safe?</p>
+    <p>What does the demo result status mean?</p>
+    <p>Where do validation and static-versus-runtime boundaries live?</p>
+    <p>What stays out of public copy?</p>
+    ${links}
+    ${families}
+    <section data-manager-script-section="non-claims">
+      <p>Do not claim runtime proof, release approval, operational safety, complete coverage, AI analysis, or root cause.</p>
+    </section>
+    <p>${filler}</p>
+  `);
+}
+
 function endpointReviewPage() {
   const filler = Array.from({ length: 150 }, (_, index) => `endpoint review boundary ${index}`).join(" ");
 
@@ -919,6 +1249,8 @@ function reviewRoomPage() {
     <a href="/incident-call/">Incident call</a>
     <a href="/use-cases/incident-review/">Incident review</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
+    <a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>
+    <a href="${reviewerQuickstartRoute}">Reviewer quickstart</a>
     <p>${filler}</p>
   `);
 }

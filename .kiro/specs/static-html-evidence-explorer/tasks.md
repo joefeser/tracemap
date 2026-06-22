@@ -67,8 +67,10 @@ do not treat them as unfinished PR #231 tasks.
   - [x] Create typed artifact/source records with artifact kind, safe label,
     content hash, schema version, claim level, coverage labels, commit SHA
     where safe, and source IDs.
-  - [ ] Detect missing commit metadata, unsupported schema versions, provenance
-    conflicts, and claim-level conflicts.
+  - [x] Detect missing commit metadata, unsupported schema versions, and
+    commit provenance conflicts.
+  - [ ] Detect claim-level conflicts and weakening across multiple compatible
+    structured artifacts.
   - [x] Emit rule-backed gaps or limitations for partial or incompatible input.
   - [x] Add tests for supported inputs, unsupported inputs, missing commit
     metadata, conflicting provenance, and affected-section partial/stopped UI
@@ -87,12 +89,12 @@ do not treat them as unfinished PR #231 tasks.
 
 - [ ] 5. Render overview, sources, coverage, and artifacts. Requirements: 2,
   3, 4, 8.
-  - [ ] Render `index.html` overview with claim level, coverage status,
+  - [x] Render `index.html` overview with claim level, coverage status,
     counts, redaction/omission totals, and section links.
-  - [ ] Render source and artifact tables with safe labels, commit SHA,
+  - [x] Render source and artifact tables with safe labels, commit SHA,
     extractor versions, artifact IDs, coverage, gaps, limitations, and omitted
     counts.
-  - [ ] Show partial/reduced/unsupported coverage near the top of the page and
+  - [x] Show partial/reduced/unsupported coverage near the top of the page and
     in affected sections.
   - [ ] Add tests for overview counts, source safety, artifact provenance, and
     JavaScript-disabled baseline content.
@@ -170,17 +172,17 @@ do not treat them as unfinished PR #231 tasks.
     JavaScript data agree under the same safety profile.
 
 - [ ] 10. Update rules, docs, and validation. Requirements: 7, 8, 9.
-  - [ ] Add explorer-specific rule IDs and limitations to the rule catalog or
+  - [x] Add explorer-specific rule IDs and limitations to the rule catalog or
     equivalent rule docs.
-  - [ ] Document CLI usage, output layout, manifest schema, supported inputs,
+  - [x] Document CLI usage, output layout, manifest schema, supported inputs,
     safety profiles, deterministic ordering, partial coverage labels, and
     compatibility expectations.
   - [ ] Add public/demo fixture validation for safe claim levels and forbidden
     private/raw material.
-  - [ ] Run focused explorer tests.
-  - [ ] Run relevant .NET build/test checks.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
+  - [x] Run focused explorer tests.
+  - [x] Run relevant .NET build/test checks.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
 
 ## Recommended PR Slices
 

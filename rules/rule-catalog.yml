@@ -88,6 +88,18 @@ rules:
       - Partial sections are compatibility and coverage labels, not proof of evidence absence or runtime safety.
       - The explorer must distinguish not-provided, unsupported, and no-evidence-under-credible-coverage states when enough input metadata is available.
 
+  - id: explorer.render.section-status.v1
+    name: Static HTML explorer section status
+    description: Records deterministic section availability labels derived from compatible generated artifacts, safe view models, and rule-backed explorer gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer section status row
+      - generated coverage table row
+    limitations:
+      - Section status rows describe explorer rendering coverage only and do not prove runtime behavior, source reachability, production use, or absence of evidence outside compatible inputs.
+      - First-slice not-rendered or not-provided labels must stay visibly partial and must not be converted into no-evidence conclusions.
+      - Support IDs must use stable artifact IDs, rule IDs, or generated data paths rather than raw source paths, remotes, hostnames, or private repository names.
+
   - id: explorer.validation.generated-file-stale.v1
     name: Static HTML explorer stale generated file guard
     description: Prevents overwriting stale or unverified generated explorer files without explicit operator intent.
@@ -194,7 +206,7 @@ rules:
     limitations:
       - Path and reverse evidence is bounded static graph evidence only; it does not prove runtime ordering, delivery, broker routing, consumer liveness, branch feasibility, or request/response behavior.
       - Path and reverse rows preserve attached source evidence tiers in row metadata, but this selector rule is Tier4Unknown because reachability context depends on graph completeness.
-      - Direction filtering is not implemented in this slice; unsupported direction-specific queries must remain explicit gaps or validation errors.
+      - Direction filtering is limited to explicit message surface directions publish, consume, bind, and declare; it filters static surface evidence only and does not prove runtime broker flow.
 
   - id: message.surface.reducer.v1
     name: Message context for reducer workflows
@@ -380,12 +392,13 @@ rules:
 
   - id: docs-export.chunk.data-surface.v1
     name: Docs export data-surface chunk
-    description: Packages existing data, project, file, build, and structural surface evidence into deterministic documentation chunks.
+    description: Packages existing data, legacy data model descriptor, project, file, build, and structural surface evidence into deterministic documentation chunks.
     evidenceTier: Inherits weakest supporting evidence tier
     emits:
       - docs-export data-surface chunk
     limitations:
       - Data-surface chunks describe static evidence availability and do not prove runtime data access, database existence, production data, ownership, or deployment.
+      - Legacy data descriptor chunks cite static metadata and projection rules only; they do not prove SQL execution, provider runtime selection, live schema existence, migrations, or production database usage.
 
   - id: docs-export.chunk.package-config.v1
     name: Docs export package and config chunk
@@ -1391,6 +1404,7 @@ rules:
       - Unsupported ORM evidence is a static coverage gap and does not prove data access, runtime mapping validity, query execution, database schema existence, provider compatibility, deployment, or production usage.
       - Recognized family labels are public-safe descriptors only; raw mapping content, SQL, config values, connection strings, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
       - LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, Castle ActiveRecord, Fluent-only mappings, and project-local mapping DSLs remain unsupported unless a future rule defines deterministic parser behavior.
+      - Project-local mapping DSLs are not detected unless they use recognized public family signals; absence of this gap is not absence of ORM metadata.
       - Unsupported descriptors produce gaps, not invented entity, table, column, relationship, or generated-code facts.
 
   - id: legacy.data.model.generated-link.v1
@@ -1414,11 +1428,13 @@ rules:
     evidenceTier: Tier2Structural
     emits:
       - AnalysisGap
+      - unknown-vocabulary schema gap
     limitations:
       - This rule projects the existing legacy-data surface kind with surfaceSubtype data-model; it does not introduce a LegacyDataModelSurfaceProjected scan fact or a parallel legacy-data-model surface kind.
       - Surface rows are static report/export context and do not prove runtime database use, query execution, schema existence, reachability, dependency impact, deployment, provider compatibility, or production usage.
       - AnalysisGap facts under legacy.data.* rules are excluded from terminal surface projection and remain gaps, caveats, or limitations.
       - Already-derived projection rows are not re-consumed by prefix-based legacy data fact readers.
+      - Unknown vocabulary values for descriptor role, metadata format, or source artifact type produce an unknown-vocabulary schema gap under this rule rather than being rendered as free-form display strings; implementations should register a narrower rule ID when a specific unknown vocabulary has a distinct gap cause.
       - Safe properties include surfaceKind, surfaceSubtype, modelKind, metadataFormat, stableSurfaceKey, safeDisplayName or hash label, sourceRuleIds, supportingFactIds, supportingEdgeIds, coverageLabel, and limitations.
       - Surface classification is capped for syntax-only, ambiguous, high fan-out, missing generated-code, unsupported, or reduced-coverage evidence.
       - Raw SQL, source snippets, connection strings, config values, URLs, remotes, local absolute paths, schema/catalog/provider values, private labels, and secrets are hashed or omitted.
@@ -2055,6 +2071,7 @@ rules:
     limitations:
       - Root grouping is bounded static graph evidence and does not prove runtime traffic, runtime dispatch, dependency injection binding, branch feasibility, or production usage.
       - Missing or reduced source coverage makes no-path conclusions unknown rather than proof that no caller exists.
+      - Legacy-data surface no-path gaps under this rule cover missing generated-code links, unsupported ORM gaps, absent relationship metadata, and reduced legacy-data extraction coverage; they do not prove no database caller or runtime data access exists.
       - Endpoint roots must not be substituted with symbol or source roots unless the requested target mode permits them.
 
   - id: combined.reverse.path.v1
@@ -2214,6 +2231,29 @@ rules:
       - Name-only, syntax-only, fallback, cross-source, or cross-language implementation guesses are not strong bridge evidence in v1.
       - Reflection, factories, service locators, configuration-driven bindings, and dynamic dispatch remain analysis gaps unless a future deterministic rule covers them.
 
+  - id: combined.dispatch-candidate.v1
+    name: Combined dispatch candidate edge
+    description: Derives bounded in-memory path edges from interface or override method symbols to statically known implementation or override method candidates using combined symbol-relationship evidence.
+    evidenceTier: Inherits relationship evidence and caps path classification at NeedsReviewPath
+    emits:
+      - interface-candidate path edge
+      - override-candidate path edge
+    limitations:
+      - Candidate edges are static review evidence only and do not prove runtime dispatch, dependency-injection target selection, object lifetime, branch feasibility, or production execution.
+      - Candidates are derived only from source-local method-level relationship evidence; type-level inheritance or interface relationships do not substitute for member-level evidence in v1.
+      - Syntax-only, fallback, reduced-coverage, ambiguous, generated-code uncertain, or high fan-out candidates remain review-tier and must not strengthen downstream classifications.
+
+  - id: combined.dispatch-gap.v1
+    name: Combined dispatch candidate gap
+    description: Emits gap rows when dispatch candidate derivation is capped, ambiguous, unavailable, or otherwise unable to support credible static traversal.
+    evidenceTier: Tier4Unknown
+    emits:
+      - DispatchCandidateFanOut gap
+    limitations:
+      - Gap rows describe limits of the current static evidence graph and must not be read as proof that no runtime target exists.
+      - Candidate caps are deterministic traversal limits; omitted candidates may still be possible static review evidence outside the configured bound.
+      - Missing relationship evidence under reduced coverage must remain an unknown analysis gap rather than a clean absence conclusion.
+
   - id: combined.route-flow.logic-surface.v1
     name: Route-flow business and data logic surface
     description: Emits projection, object-shape, query-shape, validation, guard, branch, async, serializer, contract, and flow-boundary rows as path-context evidence.
@@ -2255,10 +2295,12 @@ rules:
     emits:
       - route-flow fact-symbol projection logic row
       - FactSymbolProjectionUnavailable gap
+      - FactSymbolUnsupportedTypeSkipped gap
     limitations:
       - Fact-symbol projection rows preserve source-local static attachments only; they do not prove runtime request execution, dependency injection binding, dynamic dispatch target selection, SQL execution, database existence, schema compatibility, package loading, or production use.
       - Projection requires source-local symbol identity already present in the selected route-flow path; global short-name stitching and cross-source symbol guesses are not evidence in this rule.
       - Query, data, config, package, and object-shape metadata must use safe descriptors and hashes; raw SQL, config values, connection strings, URLs, remotes, source snippets, local paths, private labels, and secrets must not be rendered.
+      - Unsupported attached fact-symbol types are reported as review-tier skipped context, not silently rendered or inferred as data-flow evidence.
 
   - id: combined.route-flow.classification.v1
     name: Route-flow summary classification
@@ -2288,6 +2330,7 @@ rules:
       - MissingCallEdge gap
       - MissingImplementationBridge gap
       - DataSurfaceAttachmentMissing gap
+      - LinkedSymbolAbsentFromIndex gap
       - SchemaMissing gap
       - ExtractorUnavailable gap
       - ImplementationCandidateUnavailable gap
@@ -2298,6 +2341,7 @@ rules:
       - DynamicClientUrlNeedsReview gap
       - ArgumentProjectionUnavailable gap
       - FactSymbolProjectionUnavailable gap
+      - FactSymbolUnsupportedTypeSkipped gap
       - ReducedCoverage gap
       - UnknownCommitSha gap
       - NoRouteFlowEvidence gap
@@ -2308,6 +2352,8 @@ rules:
     limitations:
       - Gaps are coverage-relative explanations of missing or weak static evidence and must not be rendered as clean absence under reduced coverage.
       - Endpoint composition gaps describe static bridge and terminal surface availability only and do not prove route reachability, request execution, dependency-injection target selection, dynamic dispatch, branch feasibility, database existence, query execution, or downstream absence.
+      - Controller-to-service bridge availability is represented by narrower MissingCallEdge, MissingImplementationBridge, ImplementationCandidateUnavailable, and DataSurfaceAttachmentMissing gaps; v1 does not emit a separate ControllerToServiceBridgeMissing gap code.
+      - LinkedSymbolAbsentFromIndex covers a static bridge evidence record whose referenced symbol is absent from the combined index; it is an extraction or coverage gap, not proof that the bridge is invalid at runtime.
       - Truncation gaps mean the report is partial.
       - Gap messages must not echo unsafe selectors, local paths, raw remotes, raw SQL/config values, snippets, connection strings, private labels, or secret-like values.
 
