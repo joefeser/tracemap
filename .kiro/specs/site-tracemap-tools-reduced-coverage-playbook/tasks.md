@@ -152,7 +152,9 @@ code, or existing specs.
   `/limitations/`, `/validation/`, `/static-vs-runtime/`,
   `/questions/objections/`, `/proof-paths/faq/`, and
   `/review-claim-checklist/`, or records each absent or moved route in
-  `implementation-state.md`.
+  `implementation-state.md`. Relative path validation must split paths into
+  segments and check individual segment sequences instead of using string
+  containment with slash-wrapped substrings.
 - [ ] Add focused validation that every required row's proof/validation link
   field is non-empty, non-placeholder, and resolves to an allowed public-safe
   target or is explicitly recorded as deferred, substituted, or omitted in
