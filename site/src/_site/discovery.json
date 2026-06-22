@@ -356,6 +356,23 @@
     ]
   },
   {
+    "path": "/proof-paths/faq/",
+    "title": "Proof Path FAQ",
+    "summary": "Concept-level FAQ for reading proof paths, evidence tiers, coverage labels, limitations, review-packet context, missing-evidence gaps, and static-evidence boundaries.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The FAQ is concept-level explanation over existing public-safe evidence surfaces, not a generated proof source, scanner result, reducer result, approval workflow, or validation result.",
+      "Claims repeated from the FAQ must keep proof path, rule family, tier, coverage label, limitation, non-claim, public claim level, source context, and next-owner handoff attached."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, autonomous approval, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public FAQ material."
+    ]
+  },
+  {
     "path": "/proof-source-catalog/",
     "title": "Proof Source Catalog",
     "summary": "Public-demo route-to-source catalog mapping public route wording to proof paths, source artifact families, rule families, evidence tiers or coverage labels, limitations, and non-claims.",
