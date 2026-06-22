@@ -1919,7 +1919,7 @@ public static class TraceMapCommand
             Filters:
               --source <label>           Case-insensitive exact source label filter.
               --framework <value>        angular, razor, or any. Default: any.
-              --observed-evidence <json> Optional demo metadata JSON. Does not upgrade static lineage.
+              --observed-evidence <path> Optional demo metadata JSON file. Does not upgrade static lineage.
 
             Bounds:
               --max-roots <n>            Default: 25.
