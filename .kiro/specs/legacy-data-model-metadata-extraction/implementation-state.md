@@ -654,6 +654,11 @@ PR review-loop follow-up:
   threads from Gemini/Qodo. Patched both current-slice findings:
   `<component>` now emits an unsupported-shape gap, and collection
   `<key><column name="..." /></key>` column evidence is recognized.
+- A follow-up agent-control loop surfaced one Codex finding: formula-only
+  NHibernate properties must not fall back to a property-name column descriptor.
+  Patched by emitting an unsupported-shape gap for formula-only properties and
+  by adding a regression assertion that no column fact is produced without
+  static column evidence.
 - After the PR-thread patch, reran
   `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataMetadataExtractorTests|LegacyDataModelDescriptorProjectionTests"`:
   passed, 32 tests.
