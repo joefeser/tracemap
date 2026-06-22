@@ -2385,10 +2385,14 @@ public static class CombinedRouteFlowReporter
         IReadOnlyList<RouteFlowDependencySurface> dependencySurfaces,
         IReadOnlyList<RouteFlowGap> gaps)
     {
+        var commitBySourceAndPath = BuildCommitBySourceAndPath(
+            flowRows.Select(row => row.Evidence)
+                .Concat(logicRows.Select(row => row.Evidence))
+                .Concat(dependencySurfaces.Select(row => row.Evidence)));
         var candidates = flowRows.Select(FlowContextCandidate)
             .Concat(logicRows.Select(LogicContextCandidate))
             .Concat(dependencySurfaces.Select(SurfaceContextCandidate))
-            .Concat(gaps.Select(GapContextCandidate))
+            .Concat(gaps.Select(gap => GapContextCandidate(gap, CommitShaForGap(gap, commitBySourceAndPath))))
             .ToArray();
 
         return candidates
@@ -2520,10 +2524,10 @@ public static class CombinedRouteFlowReporter
             surface.Evidence);
     }
 
-    private static ContextGroupCandidate GapContextCandidate(RouteFlowGap gap)
+    private static ContextGroupCandidate GapContextCandidate(RouteFlowGap gap, string commitSha)
     {
         var displayName = gap.AffectedRowId ?? gap.GapKind;
-        var evidence = EvidenceFromGap(gap, "unknown");
+        var evidence = EvidenceFromGap(gap, commitSha);
         return new ContextGroupCandidate(
             $"gap:{gap.GapKind}:{gap.SourceLabel ?? "unknown"}:{gap.AffectedRowId ?? gap.GapId}",
             gap.GapId,
@@ -2737,18 +2741,10 @@ public static class CombinedRouteFlowReporter
             .Concat(dependencySurfaces.Select(row => new TouchedFileCandidate(row.SurfaceId, row.Classification, row.Coverage, row.Evidence)))
             .Where(row => !string.IsNullOrWhiteSpace(row.Evidence.FilePath))
             .ToArray();
-        var commitBySourceAndPath = rowCandidates
-            .Where(row => KnownCommit(row.Evidence.CommitSha))
-            .GroupBy(row => $"{row.Evidence.SourceLabel}\0{row.Evidence.FilePath}", StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Select(row => row.Evidence.CommitSha!).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).First(),
-                StringComparer.Ordinal);
+        var commitBySourceAndPath = BuildCommitBySourceAndPath(rowCandidates.Select(row => row.Evidence));
         var gapCandidates = gaps.Select(row => new TouchedFileCandidate(row.GapId, GapClassification(row), row.Coverage, EvidenceFromGap(
                 row,
-                row.SourceLabel is not null && row.FilePath is not null && commitBySourceAndPath.TryGetValue($"{row.SourceLabel}\0{row.FilePath}", out var commitSha)
-                    ? commitSha
-                    : "unknown")))
+                CommitShaForGap(row, commitBySourceAndPath))))
             .Where(row => !string.IsNullOrWhiteSpace(row.Evidence.FilePath))
             .ToArray();
         var candidates = rowCandidates.Concat(gapCandidates).ToArray();
@@ -2947,6 +2943,26 @@ public static class CombinedRouteFlowReporter
             [],
             [gap.RuleId],
             gap.Limitations);
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildCommitBySourceAndPath(IEnumerable<RouteFlowEvidenceRef> evidence)
+    {
+        return evidence
+            .Where(row => !string.IsNullOrWhiteSpace(row.FilePath) && KnownCommit(row.CommitSha))
+            .GroupBy(row => $"{row.SourceLabel}\0{row.FilePath}", StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(row => row.CommitSha!).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).First(),
+                StringComparer.Ordinal);
+    }
+
+    private static string CommitShaForGap(RouteFlowGap gap, IReadOnlyDictionary<string, string> commitBySourceAndPath)
+    {
+        return gap.SourceLabel is not null
+            && gap.FilePath is not null
+            && commitBySourceAndPath.TryGetValue($"{gap.SourceLabel}\0{gap.FilePath}", out var commitSha)
+            ? commitSha
+            : "unknown";
     }
 
     private static IReadOnlyList<string> SummaryRuleIds(IEnumerable<RouteFlowEvidenceRef> evidence)
