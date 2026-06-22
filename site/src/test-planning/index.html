@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap handoff for turning deterministic static evidence into human-owned test-planning questions without claiming generated tests or behavior proof."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Test Planning Handoff | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/test-planning/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Test Planning Handoff">
+    <meta
+      property="og:description"
+      content="Concept guide for using proof paths, rule context, evidence tiers, coverage labels, changed surfaces, and limitations as inputs to human test-planning questions."
+    >
+    <meta property="og:url" content="https://tracemap.tools/test-planning/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Test planning handoff</p>
+        <h1>Turn static evidence into better questions for test owners.</h1>
+        <p class="hero-subhead">
+          This concept guide shows how TraceMap proof paths, deterministic rule
+          context, evidence tiers, coverage labels, changed surfaces, and
+          limitations can narrow the next test-planning conversation. Humans
+          still choose, write, run, review, and interpret tests.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page is question framing for static evidence, not validation
+          proof, release approval, or a substitute for QA.
+        </p>
+        <nav class="hero-actions" aria-label="Test planning handoff links">
+          <a class="button primary" href="#static-evidence-input">Start with evidence</a>
+          <a class="button secondary" href="/reviewer-quickstart/">Reviewer quickstart</a>
+          <a class="button secondary" href="/packets/assembly/">Packet assembly</a>
+          <a class="button secondary" href="/validation/">Validation</a>
+        </nav>
+      </section>
+
+      <section class="section" id="static-evidence-input">
+        <div class="section-header">
+          <p class="section-kicker">Static Evidence Input</p>
+          <h2>Carry public-safe evidence fields into the conversation.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-test-planning-fields>
+            <caption>Unavailable fields stay visible as limitations, gaps, or owner follow-up questions.</caption>
+            <thead>
+              <tr><th scope="col">Field</th><th scope="col">Test-planning use</th></tr>
+            </thead>
+            <tbody>
+              <tr data-test-planning-field="claim label"><td>claim label</td><td>A bounded summary of what static evidence supports.</td></tr>
+              <tr data-test-planning-field="proof path"><td>proof path</td><td>The public-safe route, packet, or explanation that backs the claim label.</td></tr>
+              <tr data-test-planning-field="rule ID/family"><td>rule ID/family</td><td>The deterministic rule or documented rule family behind the evidence.</td></tr>
+              <tr data-test-planning-field="evidence tier"><td>evidence tier</td><td><code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code> when applicable.</td></tr>
+              <tr data-test-planning-field="coverage label"><td>coverage label</td><td>Complete, partial, reduced, gap, syntax-only, demo-only, concept-only, or the closest public-site coverage label.</td></tr>
+              <tr data-test-planning-field="changed surface"><td>changed surface</td><td>The route, handler, DTO, dependency edge, package reference, SQL-facing reference, configuration surface, or other public-safe static surface that caused the question.</td></tr>
+              <tr data-test-planning-field="limitation"><td>limitation</td><td>What static evidence cannot prove.</td></tr>
+              <tr data-test-planning-field="suggested test question"><td>suggested test question</td><td>A question for a human test, service, database, release, QA, source-review, or validation owner.</td></tr>
+              <tr data-test-planning-field="next owner"><td>next owner</td><td>The role or review function responsible for the next answer.</td></tr>
+              <tr data-test-planning-field="validation evidence"><td>validation evidence</td><td>The future human evidence that would answer the question, such as unit tests, integration tests, contract tests, manual QA notes, telemetry review, release checklist evidence, or source review.</td></tr>
+              <tr data-test-planning-field="non-claim"><td>non-claim</td><td>What the handoff is not asserting.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="test-planning-questions">
+        <div>
+          <p class="section-kicker">Test-Planning Questions</p>
+          <h2>Change the evidence row into a human-owned question.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Service owner</strong><span>Given this proof path and changed surface, which service behavior should a human review or exercise?</span></div>
+          <div><strong>QA owner</strong><span>Does the cited coverage label suggest a targeted regression, exploratory check, or manual QA note should be added or reviewed?</span></div>
+          <div><strong>Database owner</strong><span>Does the static SQL-facing reference need a migration, schema, or data-contract review outside TraceMap?</span></div>
+          <div><strong>Release owner</strong><span>What validation evidence should be present before this static-evidence question is used in release discussion?</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="coverage-caveats">
+        <div>
+          <p class="section-kicker">Coverage Caveats</p>
+          <h2>Weak or partial evidence narrows questions; it does not certify test coverage.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>partial or reduced</strong><span>Some analyzers, projects, or semantic loads may be missing; ask which focused test or review should cover the changed surface.</span></div>
+          <div><strong>gap or Tier4Unknown</strong><span>The evidence names an analysis gap; stop short of a conclusion and route the missing proof path to an owner.</span></div>
+          <div><strong>syntax-only</strong><span>Syntax or textual evidence can start a question, but a source reviewer or test owner must confirm the behavior being discussed.</span></div>
+          <div><strong>demo-only or concept-only</strong><span>Use the example as a format guide only; do not treat it as real scan evidence for a change.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="safe-handoff-language">
+        <div class="section-header">
+          <p class="section-kicker">Examples Of Safe Handoff Language</p>
+          <h2>Keep proof path, limitation, owner, validation evidence, and non-claim together.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-safe-handoff-example>
+            <h3>Contract question</h3>
+            <p>Claim label: static evidence connects a DTO change to a public-safe proof path. Limitation: it does not prove runtime behavior or test sufficiency. Suggested test question: should the contract owner review a targeted contract test? Next owner: service owner. Validation evidence: human-run contract test or source review. Non-claim: TraceMap did not generate or run the test.</p>
+          </article>
+          <article data-safe-handoff-example>
+            <h3>Reduced coverage question</h3>
+            <p>Claim label: syntax fallback found a changed handler surface. Limitation: semantic coverage is reduced. Suggested test question: which integration check would answer the behavior question? Next owner: QA owner. Validation evidence: integration test result or manual QA note. Non-claim: reduced static evidence is not complete coverage.</p>
+          </article>
+          <article data-safe-handoff-example>
+            <h3>Runtime owner question</h3>
+            <p>Claim label: static evidence identifies a route-facing surface. Limitation: it cannot show production traffic or endpoint performance. Suggested test question: what runtime observability should a human inspect? Next owner: telemetry owner. Validation evidence: telemetry review summary. Non-claim: TraceMap is not proving live behavior.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-test-planning-boundary="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop Conditions</p>
+          <h2>Stop when the evidence cannot support even a bounded test-planning conclusion.</h2>
+        </div>
+        <ul>
+          <li data-stop-condition="missing proof path"><strong>missing proof path</strong>: no public-safe route, packet, or explanation backs the claim label.</li>
+          <li data-stop-condition="private-only evidence"><strong>private-only evidence</strong>: support exists only in material that cannot be used publicly.</li>
+          <li data-stop-condition="reduced coverage"><strong>reduced coverage</strong>: analyzer or semantic coverage is reduced and the question needs owner review before reuse.</li>
+          <li data-stop-condition="concept-only or demo-only evidence"><strong>concept-only or demo-only evidence</strong>: the source is an example or concept page rather than a real scan for the change.</li>
+          <li data-stop-condition="no validation evidence"><strong>no validation evidence</strong>: no future human evidence category is named for answering the question.</li>
+          <li data-stop-condition="uncertain owner"><strong>uncertain owner</strong>: no role or review function can answer the next question.</li>
+          <li data-stop-condition="a question requiring runtime observability"><strong>a question requiring runtime observability</strong>: production, telemetry, endpoint, log, trace, or APM evidence is needed before a human can answer.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="test-owner-handoff">
+        <div>
+          <p class="section-kicker">Test Owner Handoff</p>
+          <h2>Route the next question by role, not blame.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>test owner</code><span>Chooses or reviews unit, integration, contract, regression, or manual QA evidence.</span></div>
+          <div><code>service owner</code><span>Confirms service behavior and source context when static evidence is too narrow.</span></div>
+          <div><code>database owner</code><span>Reviews schema, query, or migration questions raised by static references.</span></div>
+          <div><code>source reviewer</code><span>Checks code-level meaning when proof path, tier, or coverage labels are insufficient.</span></div>
+          <div><code>validation owner</code><span>Names the validation evidence category that would answer the question.</span></div>
+          <div><code>release owner</code><span>Decides what release-process evidence is needed outside TraceMap.</span></div>
+          <div><code>security review</code><span>Handles security-sensitive follow-up questions without publishing private material.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="neighbor-boundaries">
+        <div>
+          <p class="section-kicker">Neighbor Boundaries</p>
+          <h2>This page translates questions; adjacent pages keep their own jobs.</h2>
+        </div>
+        <div class="detail-list">
+          <div data-neighbor-route="/reviewer-quickstart/"><strong><a href="/reviewer-quickstart/">/reviewer-quickstart/</a></strong><span>General reviewer orientation; this page is the narrower test-planning handoff aid.</span></div>
+          <div data-neighbor-route="/packets/assembly/"><strong><a href="/packets/assembly/">/packets/assembly/</a></strong><span>Packet assembly instructions; this page uses assembled evidence as input for questions.</span></div>
+          <div data-neighbor-route="/review-claim-checklist/"><strong><a href="/review-claim-checklist/">/review-claim-checklist/</a></strong><span>Public claim review; this page frames test-owner conversations.</span></div>
+          <div data-neighbor-route="/validation/"><strong><a href="/validation/">/validation/</a></strong><span>Validation proof and quality signals; this page asks what validation evidence a human should seek.</span></div>
+          <div data-neighbor-route="/proof-paths/tour/"><strong><a href="/proof-paths/tour/">/proof-paths/tour/</a></strong><span>Proof-path walkthrough; this page applies proof paths to test conversations.</span></div>
+          <div data-neighbor-route="/questions/objections/"><strong><a href="/questions/objections/">/questions/objections/</a></strong><span>Objection handling; this page gives practical handoff language for the next test-owner question.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-test-planning-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Non-Claims</p>
+          <h2>The handoff stays inside deterministic static evidence.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not generate tests, run tests, prove test sufficiency, prove runtime behavior, prove production traffic, prove endpoint performance, approve releases, or provide complete coverage from this page.</li>
+          <li>TraceMap does not perform AI impact analysis, LLM analysis, embeddings, vector database analysis, or prompt-based classification for this handoff.</li>
+          <li>This page does not replace QA, tests, source review, runtime observability, telemetry, logs, traces, APM, service-owner judgment, database-owner judgment, release-owner judgment, security review, compliance review, or human judgment.</li>
+          <li>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Test planning handoff links
+        <a href="/reviewer-quickstart/">reviewer quickstart</a>,
+        <a href="/packets/assembly/">packet assembly</a>,
+        <a href="/review-claim-checklist/">claim checklist</a>,
+        <a href="/validation/">validation</a>,
+        and
+        <a href="/questions/objections/">objection guide</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
