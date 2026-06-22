@@ -42,9 +42,9 @@ Please inspect:
 
 Review focus:
 
-- Are `Status: not-started`, `Readiness: spec-review`, and `Public claim
-  level: concept` present before review completion, and `Readiness:
-  ready-for-implementation` present only after Medium+ findings are handled?
+- Are `Status`, `Readiness`, and `Public claim level` consistent across all
+  packet files, and was `Readiness` advanced to `ready-for-implementation`
+  only after Medium+ findings were handled or dispositioned?
 - Does the spec keep this branch spec-only and limited to the new spec
   directory?
 - Does the spec require visible `Public claim level: concept` and `No public
