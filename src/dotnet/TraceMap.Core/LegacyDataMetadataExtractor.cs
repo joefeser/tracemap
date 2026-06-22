@@ -26,7 +26,6 @@ public static class LegacyDataMetadataExtractor
     {
         var facts = new List<CodeFact>();
         var generatedCandidates = LoadGeneratedCandidates(repoPath, manifest, inventory, facts);
-        var csharpTypeDeclarations = LoadCSharpTypeDeclarations(repoPath, inventory);
 
         foreach (var item in inventory.OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
@@ -68,7 +67,11 @@ public static class LegacyDataMetadataExtractor
         }
 
         AddGeneratedCodeLinks(manifest, facts, generatedCandidates, existingFacts);
-        AddMappedTypeSyntaxLinks(manifest, facts, csharpTypeDeclarations);
+        if (HasMappedTypeSyntaxLinkCandidates(facts))
+        {
+            var csharpTypeDeclarations = LoadCSharpTypeDeclarations(repoPath, inventory);
+            AddMappedTypeSyntaxLinks(manifest, facts, csharpTypeDeclarations);
+        }
 
         return facts
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
@@ -1177,13 +1180,13 @@ public static class LegacyDataMetadataExtractor
                 || !csharpTypeDeclarations.TryGetValue(mappedTypeName, out var declarations)
                 || declarations.Count == 0)
             {
-                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataModelGeneratedLink, "MissingGeneratedCode", "NHibernate mapped class did not match a checked-in C# type declaration.", null);
+                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataModelGeneratedLink, "MissingGeneratedCode", "NHibernate mapped class did not match a checked-in C# type declaration.", null, fact.Evidence.StartLine);
                 continue;
             }
 
             if (declarations.Count > 1)
             {
-                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataModelGeneratedLink, "AmbiguousGeneratedCodeLink", "Multiple C# type declarations matched an NHibernate mapped class; no mapped-symbol link was inferred.", null);
+                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataModelGeneratedLink, "AmbiguousGeneratedCodeLink", "Multiple C# type declarations matched an NHibernate mapped class; no mapped-symbol link was inferred.", null, fact.Evidence.StartLine);
                 continue;
             }
 
@@ -1214,6 +1217,15 @@ public static class LegacyDataMetadataExtractor
                 contractElement: TargetFrom(properties, "typeName", "typeHash"),
                 properties: properties));
         }
+    }
+
+    private static bool HasMappedTypeSyntaxLinkCandidates(IEnumerable<CodeFact> facts)
+    {
+        return facts.Any(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && string.Equals(fact.Properties.GetValueOrDefault("metadataFormat"), "nhibernate-hbm", StringComparison.Ordinal)
+            && fact.Properties.TryGetValue("mappedTypeName", out var mappedTypeName)
+            && IsQualifiedTypeName(mappedTypeName));
     }
 
     private static IReadOnlyList<GeneratedCandidate> LoadGeneratedCandidates(
@@ -1353,9 +1365,9 @@ public static class LegacyDataMetadataExtractor
         return fact;
     }
 
-    private static void AddGap(ScanManifest manifest, List<CodeFact> facts, string relativePath, string ruleId, string classification, string message, XObject? node)
+    private static void AddGap(ScanManifest manifest, List<CodeFact> facts, string relativePath, string ruleId, string classification, string message, XObject? node, int? explicitLine = null)
     {
-        var line = node is null ? 1 : GetLine(node);
+        var line = explicitLine ?? (node is null ? 1 : GetLine(node));
         facts.Add(FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,

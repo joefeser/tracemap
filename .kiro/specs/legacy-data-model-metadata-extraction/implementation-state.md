@@ -774,6 +774,11 @@ PR review-loop follow-up:
   `MissingGeneratedCode` under `legacy.data.model.generated-link.v1`, and
   mapped-symbol linking now requires `mappedTypeName` so NHibernate
   `entity-name` values are not treated as CLR type identities.
+- Follow-up agent-control loop found one remaining Qodo top-level finding and
+  one optional observability note. Patched both within the current slice: C#
+  declaration indexing is now lazy and only runs when qualified NHibernate
+  mapped-type link candidates exist, and missing/ambiguous mapped-type gaps now
+  anchor to the source mapped-class line rather than line 1.
 - After the PR-thread patch, reran
   `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`:
   passed, 38 tests.

@@ -1265,10 +1265,11 @@ public sealed class LegacyDataMetadataExtractorTests
 
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
             && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
-        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+        var gap = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink
             && fact.Evidence.FilePath == "Mappings/Customer.hbm.xml"
             && fact.Properties.GetValueOrDefault("classification") == "MissingGeneratedCode");
+        Assert.Equal(2, gap.Evidence.StartLine);
     }
 
     [Fact]
@@ -1327,10 +1328,11 @@ public sealed class LegacyDataMetadataExtractorTests
 
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
             && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
-        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+        var gap = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink
             && fact.Evidence.FilePath == "Mappings/Customer.hbm.xml"
             && fact.Properties.GetValueOrDefault("classification") == "AmbiguousGeneratedCodeLink");
+        Assert.Equal(2, gap.Evidence.StartLine);
     }
 
     [Fact]
