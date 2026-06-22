@@ -64,7 +64,9 @@ evidence supports the connection.
    evidence IDs.
 3. WHEN a Razor form target statically identifies action/page/handler and HTTP
    method metadata THEN the report SHALL connect the form target to matching
-   action/handler/model-binding evidence.
+   action/handler/model-binding evidence by joining already-extracted
+   `RazorFormTarget` facts and existing endpoint/model-binding facts, not by
+   adding a new Razor root extraction pass.
 4. WHEN route-flow evidence is available through `combined_route_flow_edges` or
    a documented successor schema THEN the property-flow report SHALL reuse that
    evidence as downstream context rather than reimplementing route traversal.
@@ -94,6 +96,9 @@ trail.
 2. WHEN existing route-flow/path/reverse evidence exposes service or repository
    call context tied to the selected property trail THEN the report SHALL
    include it as supporting static context.
+   Supporting path/reverse context is still static evidence only; it does not
+   prove runtime connectivity, request execution, authorization, or production
+   traffic.
    The connection SHALL be established through rule-backed value-origin,
    parameter-forwarding, assignment, mapping, payload, model-binding,
    fact-symbol, or equivalent property-specific static evidence. Broad
@@ -179,9 +184,10 @@ and bounded public summaries.
    tested for deterministic output, safety redaction, and graceful fallback.
 3. WHEN a new field or row kind cannot be safely ignored by an existing
    consumer, including when an unknown field could be silently forwarded into
-   public output, THEN the same implementation PR SHALL either patch that
-   consumer or introduce a documented report version bump and compatibility gap
-   behavior.
+   public output or when additive metadata on an existing row type could pass
+   through into generated HTML/Markdown/JSON, THEN the same implementation PR
+   SHALL either patch that consumer or introduce a documented report version
+   bump and compatibility gap behavior.
 4. WHEN a generated artifact is public/demo-safe THEN it SHALL contain rule IDs,
    evidence tiers, coverage labels, commit SHA, extractor versions, source
    labels, supporting IDs, and limitations where the consumer supports them.

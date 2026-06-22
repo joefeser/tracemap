@@ -1,7 +1,7 @@
 # UI Field Property Lineage Continuation Tasks
 
-Status: ready-for-implementation
-Readiness: ready-for-implementation
+Status: partial-implementation-in-progress
+Readiness: implementation-partial
 
 ## Spec-Only PR Scope
 
@@ -28,16 +28,16 @@ Readiness: ready-for-implementation
 
 - [ ] 1. Verify current property-flow and route-flow schema contracts.
   Requirements: 1, 2, 4.
-  - [ ] Inventory current `PropertyFlowReporter` route-flow checks and gaps.
-  - [ ] Inventory current route-flow output/tables available in combined
+  - [x] Inventory current `PropertyFlowReporter` route-flow checks and gaps.
+  - [x] Inventory current route-flow output/tables available in combined
     indexes.
-  - [ ] Decide whether new rows remain report version `1.0` compatible or
+  - [x] Decide whether new rows remain report version `1.0` compatible or
     require `1.1`.
-  - [ ] Record schema compatibility decisions in implementation state.
+  - [x] Record schema compatibility decisions in implementation state.
 
 - [ ] 2. Reuse route-flow evidence where property-specific context exists.
   Requirements: 2, 3, 4.
-  - [ ] Add or confirm catalogued rule IDs before emitting any new route-flow
+  - [x] Add or confirm catalogued rule IDs before emitting any new route-flow
     context or gap classifications.
   - [ ] Inspect docs-export, vault, evidence-pack, and static explorer behavior
     when this slice adds new route-flow context row kinds, even if those
@@ -46,16 +46,16 @@ Readiness: ready-for-implementation
     rule-backed endpoint/model/value-origin evidence.
   - [ ] Add route-flow context nodes/edges or supporting rows with supporting
     fact/edge IDs and source labels.
-  - [ ] Emit `RouteFlowNoPropertyContext` or equivalent gap when route-flow
+  - [x] Emit `RouteFlowNoPropertyContext` or equivalent gap when route-flow
     exists but is not property-specific.
-  - [ ] Preserve reduced-coverage downgrades and no-hidden-winner behavior.
+  - [x] Preserve reduced-coverage downgrades and no-hidden-winner behavior.
 
 - [ ] 3. Add endpoint composition tests.
   Requirements: 2, 4, 7.
   - [ ] Test Angular event/control/payload/HTTP/endpoint/route-flow context.
   - [ ] Test Razor form/binding/action-or-handler/model-binding/route-flow
     context.
-  - [ ] Test route-flow missing schema, empty schema, reduced coverage, and
+  - [x] Test route-flow missing schema, empty schema, reduced coverage, and
     no-property-context gaps.
   - [ ] Test deterministic ordering and byte-stable Markdown/JSON.
 
@@ -112,6 +112,8 @@ Readiness: ready-for-implementation
 
 - Browser/computer-use capture as a separate local hidden/manual validation
   workflow.
+  - [ ] Do not add browser/computer-use product code until a separate reviewed
+    spec is opened and approved for that workflow.
 - Advanced Angular custom component, directive, pipe, structural directive, and
   reactive-form builder semantics.
 - Cross-file Razor/model-binding expansion beyond deterministic symbol or
