@@ -201,6 +201,20 @@ Final validation after all review patches:
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
 
+PR-loop follow-up:
+
+- PR #283 opened against `dev`.
+- `agent-control pr-loop` requested Codex review and waited for required
+  reviewer return.
+- Qodo reported a low-relevance maintainability finding about redundant
+  full-coverage branch guards in `BuildSummary`.
+- Codex reported one selector redaction issue: route-flow selector trace
+  normalized keys also needed safety filtering for route/client/endpoint
+  selectors.
+- Patched both findings by redacting normalized selector trace keys, adding a
+  sensitive normalized-key regression test, and removing the redundant
+  coverage checks from already coverage-gated summary branches.
+
 ## Spec Delivery Notes
 
 - Created the spec files only under
