@@ -2317,6 +2317,7 @@ rules:
       - StrongStaticRouteFlow and NoRouteFlowEvidence require full route-flow coverage, known commit SHA, verified source identity, compatible extractor availability, and no blocking gaps.
       - NeedsReviewStaticRouteFlow is required for syntax-only, textual, dynamic URL, fallback, ambiguous, implementation-candidate, generated-code uncertain, high fan-out, or truncated evidence.
       - UnknownAnalysisGap is required when selector matching, schema, extractor availability, source identity, commit SHA, reduced coverage, or caps prevent a clean conclusion.
+      - Classification filtering applies to flow, logic, dependency-surface, and non-blocking gap rows; matched entry evidence remains visible as query context, and blocking coverage/schema/identity gaps are preserved.
       - The v1 high-fan-out threshold is 10 or more candidates, or more than one candidate for generic terminal keys status, id, name, value, result, or response. This conservative threshold requires future calibration against redacted validation data.
       - This rule stamps the overall summary classification; it does not classify business impact or runtime behavior.
 
@@ -2377,8 +2378,11 @@ rules:
     emits:
       - route-flow-report.md
       - route-flow-report.json
+      - touchedFiles route-flow JSON section
+      - touchedSymbols route-flow JSON section
     limitations:
       - The report envelope is a deterministic view over existing combined-index evidence and does not mutate the combined index.
+      - Touched file and symbol sections are additive report summaries derived from cited entry, flow, logic, dependency-surface, and gap rows; they do not add new scanner evidence or prove runtime execution.
       - Markdown and JSON must use static-evidence wording and must not say impacted, executed, called at runtime, authorized, used in production, proves DI target, query runs, or business impact.
       - Directory outputs write both Markdown and JSON; file outputs default to Markdown unless JSON format is requested.
 

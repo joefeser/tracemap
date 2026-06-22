@@ -5,15 +5,30 @@ Status: implemented-partial
 ## Branch
 
 - Current implementation branch:
-  `codex/implement-route-centered-static-flow-report`.
+  `codex/implement-route-flow-report-continuation`.
 
 ## Scope
 
 Status normalized during spec-state cleanup. `origin/dev` contains
 `tracemap route-flow`, `CombinedRouteFlowReport`, CLI wiring, rule catalog
 entries, docs, and focused tests. The state remains partial because the same
-state file and `tasks.md` identify unfinished direct fact-symbol/argument-flow
-readers, broader interface-bridge tests, and expanded scenario coverage.
+state file and `tasks.md` identify unfinished broader interface-bridge tests,
+expanded selector/traversal fixtures, public/private safety matrix tests, and
+additional cap/truncation coverage.
+
+Continuation slice on `codex/implement-route-flow-report-continuation` verified
+that the direct `combined_fact_symbols` and `combined_argument_flows` readers,
+projection rule IDs, projection rows, and scoped projection gaps are already
+implemented on `origin/dev`. This slice adds the missing regression coverage for
+older combined schemas where those optional projection tables are absent, and
+marks task 6 complete. Kiro review also identified route-flow classification
+filter and full-coverage guard hardening that belongs with this slice, so the
+branch preserves blocking gaps through `--classification`, sanitizes normalized
+route query fields defensively, documents additive touched-file/symbol report
+sections, and adds focused reduced-coverage classification assertions. The spec
+remains `implemented-partial` because broader interface bridge tests, expanded
+selector/traversal fixtures, public/private safety matrix tests, and additional
+cap/truncation tests are still explicit follow-up scope.
 
 This implementation adds the first product slice for the route-centered static
 call flow report. It implements `tracemap route-flow` as a deterministic
@@ -150,6 +165,41 @@ Latest local validation after PR review loop patches:
 - `dotnet test src/dotnet/TraceMap.sln`
 - `./scripts/check-private-paths.sh`
 - `git diff --check`
+
+Continuation validation for the projection-reader regression slice:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`: passed, 25 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing SQLitePCLRaw advisory warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 602 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review completed with full coverage and found
+  a blocking issue where classification filtering could remove coverage-blocking
+  gaps before summary recomputation. Patched by preserving blocking gaps through
+  the filter, defensively sanitizing normalized route query fields, and using
+  ordinal source-label comparison.
+- Sonnet re-review completed with reduced coverage because Kiro reported denied
+  tool access. It confirmed the prior filter blocker was addressed and found
+  two small merge-readiness gaps: explicit full-coverage guards for
+  `StrongStaticRouteFlow`/`NoRouteFlowEvidence`, and documenting additive
+  touched-file/symbol report sections. Both were patched.
+- Final Sonnet re-review completed with reduced coverage because Kiro reported
+  denied tool access. Bounded follow-up fixes documented additive fields in the
+  spec, clarified classification-filter entry-evidence behavior, hardened
+  interface bridge source checks to use source index identity, and added a test
+  proving selector trace remains available when a matched selector is emptied by
+  classification filtering.
+
+Final validation after all review patches:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`: passed, 26 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing SQLitePCLRaw advisory warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 603 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 ## Spec Delivery Notes
 
