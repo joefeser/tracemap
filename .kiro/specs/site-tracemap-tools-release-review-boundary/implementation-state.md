@@ -1,6 +1,6 @@
 # Site TraceMap Tools Release Review Boundary Implementation State
 
-Status: not-started
+Status: implementation-in-progress
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -284,3 +284,99 @@ interaction changes are made.
   only after review findings are handled.
 
 All five packet files now carry `Readiness: ready-for-implementation`.
+
+## Implementation Phase
+
+Implementation branch: `codex/impl-site-release-review-boundary`
+
+Target base: `dev` from `origin/dev`
+
+Worktree: isolated worktree requested by the operator. The machine-local path
+is not repeated in this committed spec state.
+
+Scope implemented:
+
+- Added a standalone `/release-review-boundary/` public route under `site/src/`.
+- Added concept-level page metadata, sitemap metadata, and discovery metadata
+  with `publicClaimLevel: concept`.
+- Added the required release-boundary rows: changed source surface,
+  package/config surface, route/endpoint adjacency, SQL/data surface,
+  coverage gap, validation evidence, runtime telemetry need, and
+  release-owner decision.
+- Added focused validation for visible claim level, shared evidence principle,
+  required sections, required rows, row fields, supporting links, route
+  metadata, sitemap/discovery coverage, inbound links, forbidden positive
+  release claims, private/raw leakage outside sanctioned boundary sections,
+  blame language, and word-count bounds.
+- Registered the focused validator in the aggregate site validation workflow.
+- Added inbound discovery links from `/review-room/` and
+  `/use-cases/change-review/`.
+
+Final placement: standalone `/release-review-boundary/`.
+
+Placement rationale: the route is a direct release-review handoff reference for
+release owners, service owners, runtime owners, test owners, security owners,
+managers, and engineers. It is not a release gate, release approval, safety
+claim, deploy audit, validation proof, runtime workflow, checklist
+replacement, manager packet, objection guide, or replacement for human release
+controls.
+
+Rejected alternatives:
+
+- `/review-room/release-boundary/`: rejected because the release boundary
+  should be linkable outside meeting-room context and should not imply the
+  review-room agenda owns release decisions.
+- Section on `/limitations/`: rejected because limitations are site-wide
+  non-claims, while this surface applies those limits to release-review roles
+  and owner handoff.
+- Section on `/static-vs-runtime/`: rejected because runtime separation is one
+  row in the release-boundary matrix, not the whole release-review ownership
+  question.
+- Replacing `/review-claim-checklist/`, `/deploy-audit/`, `/validation/`,
+  `/manager-packet/`, or `/questions/objections/`: rejected because those
+  routes answer adjacent claim-repeatability, deploy-output, validation,
+  manager-facing, and objection-handling questions.
+
+Navigation decision: the route was not added to primary navigation. Discovery
+uses sitemap and route metadata plus inbound links from adjacent review
+surfaces where the release-boundary distinction improves reader routing
+without bloating the primary nav.
+
+Claim-level decision: page-level and row-level public claim level remain
+`concept`. No row was upgraded because the page is an orientation and handoff
+surface, not a new proof source.
+
+Supporting-route decision: all supporting routes used by the matrix and
+adjacent-surfaces section exist in generated output. No substitutions or
+deferrals were needed.
+
+Validation results:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `cd site && npm test`: passed.
+- `cd site && npm run validate`: passed.
+- `cd site && npm run build`: passed.
+- Browser sanity: passed for wide desktop and narrow mobile viewports. The
+  release-boundary page rendered without page-level horizontal overflow; on
+  mobile the release-boundary matrix scrolls inside its table wrapper.
+
+PR-loop outcome: pending until a ready PR exists.
+
+Oddities:
+
+- During implementation, an initial patch was accidentally applied to the root
+  checkout instead of the isolated worktree. Before continuing, the exact edits
+  were transferred to the isolated worktree and the root checkout was restored
+  to clean status for those files. No unrelated root changes were reverted.
+- The standalone `npx playwright screenshot` command could not use a local
+  browser binary in this environment. Browser sanity used the configured
+  Playwright wrapper instead.
+
+Follow-ups:
+
+- Create the ready PR to `dev`.
+- Run the repo-local PR loop after the requested wait period.
+- Update this section with the exact PR-loop decision, stop reason, residual
+  risk, unresolved threads, checks, and actionable findings before final
+  handoff.

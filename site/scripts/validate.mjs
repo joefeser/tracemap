@@ -31,6 +31,7 @@ import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
 import { validateReviewerQuickstartDist } from "./reviewer-quickstart.mjs";
 import { validateReviewPacketAssemblyDist } from "./review-packet-assembly.mjs";
 import { validateReviewClaimChecklistDist } from "./review-claim-checklist.mjs";
+import { validateReleaseReviewBoundaryDist } from "./release-review-boundary.mjs";
 import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
@@ -110,6 +111,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateReviewerQuickstartDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewPacketAssemblyDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewClaimChecklistDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReleaseReviewBoundaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateRoadmapClaimLedgerDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });

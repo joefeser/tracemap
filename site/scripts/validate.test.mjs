@@ -41,6 +41,7 @@ import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reviewerQuickstartRoute } from "./reviewer-quickstart.mjs";
 import { reviewPacketAssemblyRoute } from "./review-packet-assembly.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
+import { releaseReviewBoundaryRoute } from "./release-review-boundary.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
@@ -198,6 +199,7 @@ async function createDistFixture({
       evidencePacketExamplesRoute,
       reviewPacketAssemblyRoute,
       reviewClaimChecklistRoute,
+      releaseReviewBoundaryRoute,
       reviewRoomRoute,
       roadmapClaimLedgerRoute,
       staticTriageRoute,
@@ -247,6 +249,7 @@ async function createDistFixture({
     evidencePacketExamplesRoute,
     reviewPacketAssemblyRoute,
     reviewClaimChecklistRoute,
+    releaseReviewBoundaryRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
     staticTriageRoute,
@@ -376,6 +379,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === reviewClaimChecklistRoute) {
     return reviewClaimChecklistPage();
+  }
+
+  if (route === releaseReviewBoundaryRoute) {
+    return readFile(new URL("../src/release-review-boundary/index.html", import.meta.url), "utf8");
   }
 
   if (route === reviewRoomRoute) {
@@ -788,6 +795,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture review claim checklist limitations remain bounded."],
         nonClaims: ["No runtime behavior, production usage, AI impact analysis, or LLM analysis proof."]
+      },
+      {
+        path: releaseReviewBoundaryRoute,
+        title: "Release Review Boundary",
+        summary: "Concept-level handoff for deterministic static evidence during release review while release-control decisions remain owner-owned.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "This is a static-evidence release-review handoff, not a release gate, approval system, runtime workflow, deploy audit, validation proof, manager packet, or objection guide.",
+          "Static repository evidence can orient questions and gaps but cannot replace release owners, release controls, tests, source review, service-owner judgment, runtime observability, or human judgment."
+        ],
+        nonClaims: [
+          "No release approval, release safety, operational safety, production proof, runtime behavior proof, endpoint performance proof, deployment success proof, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement of release controls.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public release-boundary material."
+        ]
       },
       {
         path: reviewRoomRoute,
@@ -1274,6 +1298,7 @@ function changeReviewPage() {
     <p>Public claim level: concept</p>
     <p>No public conclusion without evidence</p>
     <p>A change review brief is a bounded static-evidence packet for a PR, release, or change-review conversation.</p>
+    <a href="${releaseReviewBoundaryRoute}">Release review boundary</a>
     <p>Engineers Code reviewers Architects and managers Release reviewers and agents</p>
     <meta property="og:type" content="article">
     <section id="change-context">
@@ -1386,6 +1411,7 @@ function reviewRoomPage() {
     <a href="/incident-call/">Incident call</a>
     <a href="/use-cases/incident-review/">Incident review</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
+    <a href="${releaseReviewBoundaryRoute}">Release review boundary</a>
     <a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>
     <a href="${reviewerQuickstartRoute}">Reviewer quickstart</a>
     <p>${filler}</p>
