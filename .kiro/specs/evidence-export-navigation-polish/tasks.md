@@ -13,7 +13,8 @@
 - [x] Run at most two Kiro re-review cycles if needed.
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
-- [ ] Commit, push, open a ready PR to `dev`, and run the PR loop.
+- [x] Commit, push, and open a ready PR to `dev`.
+- [ ] Run the PR loop.
 
 ## Implementation Slice 1: Name And Navigation Model
 

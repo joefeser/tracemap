@@ -4,6 +4,7 @@ Status: spec-reviewed
 Readiness: ready-for-implementation
 Branch: codex/spec-evidence-export-navigation-polish
 PR target: dev
+PR: https://github.com/joefeser/tracemap/pull/284
 Primary issue: #189
 Public claim level: hidden until implemented and validated
 
@@ -96,6 +97,12 @@ Completed:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
+
+## PR State
+
+- Branch pushed to `origin/codex/spec-evidence-export-navigation-polish`.
+- Ready PR opened to `dev`: https://github.com/joefeser/tracemap/pull/284.
+- PR loop pending.
 
 ## Follow-Ups For Implementation
 
