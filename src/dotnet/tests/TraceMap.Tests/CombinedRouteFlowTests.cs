@@ -317,6 +317,32 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_marks_missing_endpoint_bridge_as_reduced_coverage_when_source_is_reduced()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15", buildStatus: "Failed");
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFactWithoutMethodSymbol(server, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}"));
+
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root"
+            && row.BridgeState == "reduced-coverage"
+            && row.Evidence.RuleId == "combined.route-flow.entry.v1");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ReducedCoverage" && gap.SourceLabel == "server");
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+    }
+
+    [Fact]
     public async Task Route_flow_emits_missing_route_root_when_only_matching_client_endpoint_context_exists()
     {
         using var temp = new TempDirectory();
