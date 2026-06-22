@@ -473,6 +473,27 @@ public static class StaticHtmlEvidenceExplorer
                 []));
         }
 
+        var builtInRuleIds = BuiltInExplorerRules().Select(rule => rule.RuleId).ToHashSet(StringComparer.Ordinal);
+        var observedRuleIds = evidenceRows
+            .Select(row => row.RuleId)
+            .Where(ruleId => !builtInRuleIds.Contains(ruleId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(ruleId => ruleId, StringComparer.Ordinal)
+            .ToArray();
+        if (observedRuleIds.Length > 0)
+        {
+            gaps.Add(CreateGap(
+                "rule-catalog-unavailable",
+                CatalogUnavailableRuleId,
+                "catalog-unavailable",
+                "artifact:facts-ndjson",
+                "rules",
+                coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                "facts.ndjson references rule IDs that are rendered with observed metadata only because no compatible rule catalog artifact was provided.",
+                observedRuleIds));
+        }
+
+        var rules = BuildExplorerRules(evidenceRows);
         var source = BuildSource(manifest, safetyProfile, artifacts, gaps, limitations, redactions, coverageLabels);
         var redactionRows = redactions
             .OrderBy(pair => pair.Key.RuleId, StringComparer.Ordinal)
@@ -498,7 +519,7 @@ public static class StaticHtmlEvidenceExplorer
             evidenceRows,
             gaps.OrderBy(gap => gap.RuleId, StringComparer.Ordinal).ThenBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
             limitations.OrderBy(limitation => limitation.RuleId, StringComparer.Ordinal).ThenBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
-            ExplorerRules(),
+            rules,
             redactionRows);
     }
 
@@ -819,7 +840,33 @@ public static class StaticHtmlEvidenceExplorer
             .ToArray());
     }
 
-    private static IReadOnlyList<ExplorerRule> ExplorerRules()
+    private static IReadOnlyList<ExplorerRule> BuildExplorerRules(IReadOnlyList<ExplorerEvidenceRow> evidenceRows)
+    {
+        var builtInRules = BuiltInExplorerRules();
+        var builtInRuleIds = builtInRules.Select(rule => rule.RuleId).ToHashSet(StringComparer.Ordinal);
+        var observedRules = evidenceRows
+            .GroupBy(row => row.RuleId, StringComparer.Ordinal)
+            .Where(group => !builtInRuleIds.Contains(group.Key))
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => new ExplorerRule(
+                group.Key,
+                "Observed evidence rule",
+                "Rule ID observed in safe evidence rows from facts.ndjson. Full rule catalog metadata was not provided in this explorer slice.",
+                ObservedEvidenceTier(group.Select(row => row.EvidenceTier)),
+                [
+                    "Observed rule rows preserve safe evidence-row rule IDs only.",
+                    "Without a compatible rule catalog artifact, title, description, and limitations are partial and must not strengthen the underlying evidence."
+                ],
+                ["evidence-rows", "rules"]))
+            .ToArray();
+
+        return builtInRules
+            .Concat(observedRules)
+            .OrderBy(rule => rule.RuleId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<ExplorerRule> BuiltInExplorerRules()
     {
         return
         [
@@ -836,6 +883,16 @@ public static class StaticHtmlEvidenceExplorer
             Rule(UserFileCollisionRuleId, "Explorer user file collision", "Prevents overwriting user-authored files in an explorer output directory."),
             Rule(UnsafeRejectedRuleId, "Explorer unsafe generated value rejected", "Fails generation when a generated asset contains an unsafe value after redaction.")
         ];
+    }
+
+    private static string ObservedEvidenceTier(IEnumerable<string> tiers)
+    {
+        var distinct = tiers
+            .Where(tier => tier is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier2Structural or EvidenceTiers.Tier3SyntaxOrTextual or EvidenceTiers.Tier4Unknown)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(tier => tier, StringComparer.Ordinal)
+            .ToArray();
+        return distinct.Length == 1 ? distinct[0] : Tier4Unknown;
     }
 
     private static IReadOnlyList<ExplorerSectionStatus> BuildSectionStatuses(ExplorerBuildContext context)
@@ -929,12 +986,10 @@ public static class StaticHtmlEvidenceExplorer
                 context.Redactions.Count == 0
                     ? "No redaction rows were recorded for the compatible first-slice inputs."
                     : "Unsafe values were redacted, hashed, categorized, or omitted before visible UI and embedded data were written.",
-                context.Redactions.Select(redaction => redaction.RedactionId).ToArray())
+                ["data/explorer-data.json", "data/explorer-manifest.json"])
         };
 
-        return rows
-            .OrderBy(row => row.SectionId, StringComparer.Ordinal)
-            .ToArray();
+        return rows.ToArray();
     }
 
     private static ExplorerSectionStatus SectionStatus(
@@ -1235,6 +1290,7 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
         builder.AppendLine("  <meta name=\"tracemap-generated\" content=\"true\">");
         builder.AppendLine("  <title>TraceMap Local Evidence Explorer</title>");
+        // Empty data URI favicon keeps the generated explorer self-contained without embedding remote assets.
         builder.AppendLine("  <link rel=\"icon\" href=\"data:,\">");
         builder.AppendLine("  <link rel=\"stylesheet\" href=\"assets/explorer.css\">");
         builder.AppendLine("</head>");
@@ -1352,14 +1408,15 @@ public static class StaticHtmlEvidenceExplorer
     {
         builder.AppendLine("    <section id=\"gaps\" aria-labelledby=\"gaps-heading\">");
         builder.AppendLine("      <h2 id=\"gaps-heading\">Gaps</h2>");
-        builder.AppendLine("      <table><caption>Rule-backed analysis and generation gaps</caption><thead><tr><th>Gap</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Section</th><th>Coverage</th><th>Message</th></tr></thead><tbody>");
+        builder.AppendLine("      <table><caption>Rule-backed analysis and generation gaps</caption><thead><tr><th>Gap</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Scope</th><th>Section</th><th>Coverage</th><th>Support IDs</th><th>Message</th></tr></thead><tbody>");
         foreach (var gap in gaps)
         {
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(gap.GapId)}</th><td>{Html(gap.RuleId)}</td><td>{Html(gap.EvidenceTier)}</td><td>{Html(gap.GapKind)}</td><td>{Html(gap.AffectedSection)}</td><td>{Html(gap.CoverageLabel)}</td><td>{Html(gap.Message)}</td></tr>");
+            var supportIds = Html(string.Join(", ", gap.SupportIds));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(gap.GapId)}</th><td>{Html(gap.RuleId)}</td><td>{Html(gap.EvidenceTier)}</td><td>{Html(gap.GapKind)}</td><td>{Html(gap.Scope)}</td><td>{Html(gap.AffectedSection)}</td><td>{Html(gap.CoverageLabel)}</td><td>{supportIds}</td><td>{Html(gap.Message)}</td></tr>");
         }
         if (gaps.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"7\">No explorer generation gaps were emitted for the supported first-slice inputs.</td></tr>");
+            builder.AppendLine("        <tr><td colspan=\"9\">No explorer generation gaps were emitted for the supported first-slice inputs.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1369,14 +1426,15 @@ public static class StaticHtmlEvidenceExplorer
     {
         builder.AppendLine("    <section id=\"limitations\" aria-labelledby=\"limitations-heading\">");
         builder.AppendLine("      <h2 id=\"limitations-heading\">Limitations</h2>");
-        builder.AppendLine("      <table><caption>Rule-backed limitations</caption><thead><tr><th>Limitation</th><th>Rule ID</th><th>Kind</th><th>Section</th><th>Claim effect</th><th>Message</th></tr></thead><tbody>");
+        builder.AppendLine("      <table><caption>Rule-backed limitations</caption><thead><tr><th>Limitation</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Scope</th><th>Section</th><th>Claim effect</th><th>Support IDs</th><th>Message</th></tr></thead><tbody>");
         foreach (var limitation in limitations)
         {
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(limitation.LimitationId)}</th><td>{Html(limitation.RuleId)}</td><td>{Html(limitation.LimitationKind)}</td><td>{Html(limitation.AffectedSection)}</td><td>{Html(limitation.ClaimEffect)}</td><td>{Html(limitation.Message)}</td></tr>");
+            var supportIds = Html(string.Join(", ", limitation.SupportIds));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(limitation.LimitationId)}</th><td>{Html(limitation.RuleId)}</td><td>{Html(limitation.EvidenceTier)}</td><td>{Html(limitation.LimitationKind)}</td><td>{Html(limitation.Scope)}</td><td>{Html(limitation.AffectedSection)}</td><td>{Html(limitation.ClaimEffect)}</td><td>{supportIds}</td><td>{Html(limitation.Message)}</td></tr>");
         }
         if (limitations.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"6\">No additional explorer limitations beyond visible gaps and rule catalog limitations.</td></tr>");
+            builder.AppendLine("        <tr><td colspan=\"9\">No additional explorer limitations beyond visible gaps and rule catalog limitations.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1403,11 +1461,12 @@ public static class StaticHtmlEvidenceExplorer
     {
         builder.AppendLine("    <section id=\"rules\" aria-labelledby=\"rules-heading\">");
         builder.AppendLine("      <h2 id=\"rules-heading\">Rules</h2>");
-        builder.AppendLine("      <table><caption>Explorer rule catalog stubs</caption><thead><tr><th>Rule ID</th><th>Title</th><th>Tier</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table><caption>Explorer rule catalog stubs and observed evidence rule IDs</caption><thead><tr><th>Rule ID</th><th>Title</th><th>Description</th><th>Tier</th><th>Related sections</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var rule in rules.OrderBy(rule => rule.RuleId, StringComparer.Ordinal))
         {
             var limitations = Html(string.Join(" ", rule.Limitations));
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(rule.RuleId)}</th><td>{Html(rule.Title)}</td><td>{Html(rule.EvidenceTier)}</td><td>{limitations}</td></tr>");
+            var relatedSections = Html(string.Join(", ", rule.RelatedSections));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(rule.RuleId)}</th><td>{Html(rule.Title)}</td><td>{Html(rule.Description)}</td><td>{Html(rule.EvidenceTier)}</td><td>{relatedSections}</td><td>{limitations}</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1421,21 +1480,22 @@ public static class StaticHtmlEvidenceExplorer
         {
             builder.AppendLine($"      <p>The no-JavaScript baseline renders the first {EvidenceRowNoScriptLimit} deterministic rows out of {rows.Count}. The full safe row set is available in data/explorer-data.json.</p>");
         }
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th></tr></thead><tbody>");
+        builder.AppendLine("      <table data-filterable=\"true\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Artifact ID</th><th>Source ID</th><th>Coverage</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var row in rows.Take(EvidenceRowNoScriptLimit))
         {
             var span = row.FilePath is null ? "n/a" : $"{row.FilePath}:{row.StartLine}-{row.EndLine}";
             var snippetHash = Html(row.SnippetHash ?? "n/a");
             var extractorVersion = Html(row.ExtractorVersion ?? "unknown");
             var commitSha = Html(row.CommitSha ?? "partial");
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td></tr>");
+            var limitations = Html(string.Join(", ", row.Limitations));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{Html(row.ArtifactId)}</td><td>{Html(row.SourceId ?? "unknown")}</td><td>{Html(row.CoverageLabel ?? "UnknownCoverage")}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td><td>{limitations}</td></tr>");
         }
         if (rows.Count == 0)
         {
             var message = factStreamProvided
                 ? "No static evidence rows were found in the provided fact stream under the current coverage."
                 : "Evidence rows are unavailable because no compatible fact stream was provided.";
-            builder.AppendLine($"        <tr><td colspan=\"9\">{Html(message)}</td></tr>");
+            builder.AppendLine($"        <tr><td colspan=\"13\">{Html(message)}</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1735,6 +1795,11 @@ public static class StaticHtmlEvidenceExplorer
         }
 
         if (value.Contains("://", StringComparison.Ordinal))
+        {
+            return "raw-remote-or-url";
+        }
+
+        if (Regex.IsMatch(value, @"(?i)\b[A-Za-z0-9._%+-]+@[A-Za-z0-9._-]+:[^\s""'<>]+", RegexOptions.CultureInvariant))
         {
             return "raw-remote-or-url";
         }
