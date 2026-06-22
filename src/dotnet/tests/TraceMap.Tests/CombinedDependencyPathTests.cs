@@ -182,6 +182,37 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_do_not_fan_out_from_concrete_implementation_through_interface_relationship()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementationA = "Server.OrderServiceA.Get(System.Int32)";
+        var implementationB = "Server.OrderServiceB.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            SymbolRelationshipFact(server, implementationA, service, "Services/OrderServiceA.cs", 18),
+            SymbolRelationshipFact(server, implementationB, service, "Services/OrderServiceB.cs", 28),
+            CallFact(server, implementationB, repository, "Services/OrderServiceB.cs", 31),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 40)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: implementationA,
+                ToSurface: "sql-query"));
+
+        Assert.DoesNotContain(result.Report.Paths, path => path.Edges.Any(edge => edge.EdgeKind == "interface-candidate"));
+        Assert.DoesNotContain(result.Report.Paths, path => path.Nodes.Any(node => node.DisplayName == implementationB));
+    }
+
+    [Fact]
     public void Paths_dispatch_candidate_rule_ids_are_documented()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
