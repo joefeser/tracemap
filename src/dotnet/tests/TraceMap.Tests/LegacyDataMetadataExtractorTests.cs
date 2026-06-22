@@ -1249,6 +1249,59 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_gaps_missing_nhibernate_mapped_class_syntax_declaration()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Customer.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class name="Samples.Domain.Customer" table="Customers">
+                <id name="Id" column="CustomerId" />
+              </class>
+            </hibernate-mapping>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink
+            && fact.Evidence.FilePath == "Mappings/Customer.hbm.xml"
+            && fact.Properties.GetValueOrDefault("classification") == "MissingGeneratedCode");
+    }
+
+    [Fact]
+    public void Scan_does_not_link_nhibernate_entity_name_as_clr_type_identity()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Domain"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Customer.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class entity-name="Samples.Domain.Customer" table="Customers">
+                <id name="Id" column="CustomerId" />
+              </class>
+            </hibernate-mapping>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Customer.cs"), """
+            namespace Samples.Domain;
+            public sealed class Customer { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var entity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate);
+        Assert.Equal("Samples.Domain.Customer", entity.Properties.GetValueOrDefault("typeName"));
+        Assert.False(entity.Properties.ContainsKey("mappedTypeName"));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+    }
+
+    [Fact]
     public void Scan_gaps_ambiguous_nhibernate_mapped_class_syntax_candidates()
     {
         using var temp = new TempDirectory();
