@@ -458,6 +458,24 @@
     ]
   },
   {
+    "path": "/decisions/evidence-record/",
+    "title": "Evidence Decision Record",
+    "summary": "Concept-level template for documenting a human owner decision after TraceMap evidence review while preserving proof path, limitation, follow-up, and residual risk.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is a record template over existing public-safe evidence surfaces, not a new proof source, workflow engine, or authority system.",
+      "Every record must keep the proof path, rule ID or family, evidence tier, coverage label, limitation, non-claim, follow-up owner, and residual risk attached."
+    ],
+    "nonClaims": [
+      "No autonomous decision, approval workflow, release approval, release safety, operational safety, runtime proof, production proof, endpoint performance proof, outage cause, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, or prompt classification.",
+      "No replacement of tests, code review, source review, runtime observability, telemetry, release process, service-owner review, governance, or human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public record material."
+    ]
+  },
+  {
     "path": "/owners/follow-up/",
     "title": "Owner Follow-Up Map",
     "summary": "Concept-level map for routing static-evidence questions to human owner categories while preserving proof paths, limitations, handoff wording, and stop conditions.",

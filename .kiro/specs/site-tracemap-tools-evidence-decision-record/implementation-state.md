@@ -1,12 +1,14 @@
 # Site TraceMap Tools Evidence Decision Record Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
 Spec branch: `codex/spec-site-evidence-decision-record`
+
+Implementation branch: `codex/impl-site-evidence-decision-record`
 
 Base: `origin/dev`
 
@@ -16,19 +18,23 @@ Worktree: isolated worktree requested by the operator. The machine-local path
 is not repeated in this committed spec state to keep repository docs free of
 private local path material.
 
-Scope: spec-only packet for a future public-site evidence decision record.
-Only `.kiro/specs/site-tracemap-tools-evidence-decision-record/` is in scope.
-Site source, generated output, scanner code, reducer code, validation scripts,
-and existing specs stay out of scope.
+Scope: public-site implementation for the evidence decision record, focused on
+`site/src/` source, site validation scripts and tests, and this spec-local
+bookkeeping. Generated output, scanner code, reducer code, runtime telemetry,
+decision automation, approval workflow, and private evidence artifacts stay out
+of scope.
 
 ## Current State
 
-Spec packet drafted, reviewed, patched, and validated for spec-only handoff.
+Implemented as a standalone public route with focused validation and
+secondary discovery.
 
-No site source, scanner code, reducer code, generated `site/dist`, generated
-`site/output`, existing specs, runtime telemetry, AI/LLM analysis, embeddings,
-vector databases, prompt classification, decision automation, approval
-workflow, or generated evidence artifacts have been changed.
+Site source changed under `site/src/`, validation was added under
+`site/scripts/`, and the aggregate site validator now exercises the route.
+Generated `site/dist`, generated `site/output`, scanner code, reducer code,
+runtime telemetry, AI/LLM analysis, embeddings, vector databases, prompt
+classification, decision automation, approval workflow, and generated evidence
+artifacts have not been changed.
 
 The future surface is a decision-after-evidence record. It should show how a
 team records a human owner decision after inspecting TraceMap evidence without
@@ -48,43 +54,63 @@ prove runtime or production behavior.
 Future implementation must include visible `Public claim level: concept` and
 visible `No public conclusion without evidence`.
 
-## Placement Guidance
+## Placement Decision
 
-Candidate placements:
+Selected placement: `/decisions/evidence-record/`
+
+Rationale: a standalone route gives the evidence decision record a durable
+address as a decision-after-evidence record. The route captures a human owner
+decision, rejected interpretation, follow-up owner, and residual risk after a
+proof path is inspected. It does not replace adjacent concept surfaces and it
+does not create a release gate, runtime workflow, approval workflow, or
+autonomous decision system.
+
+Selected namespace decision: `/decisions/` is introduced for this single
+concept-level decision-record surface. It is not being promoted into primary
+navigation and does not imply a family of shipped decision automation features.
+Future sibling decision-record routes would need separate spec and validation
+work.
+
+Candidate placements considered:
 
 - `/decisions/evidence-record/`
 - `/review-room/decision-record/`
 - A section on `/review-room/`
 - A section on `/packets/assembly/`
 
-No final placement is selected in this spec-only phase. Future implementation
-must choose the final placement and record rejected alternatives before
-changing site source.
+Rejected alternatives:
 
-The final placement decision must record why the selected route or section
-won. The rejected-alternatives record must separately name the three unchosen
-candidate placements from this spec and explain why each was rejected.
-Requirement 7 validation should fail if the placement decision record does not
-collectively reference all four spec-defined candidate placements.
+- `/review-room/decision-record/`: rejected because nesting under the review
+  room makes the artifact sound like part of the meeting agenda. The selected
+  page is the post-review record, not the review-room agenda.
+- section on `/review-room/`: rejected because `/review-room/` remains the
+  meeting agenda for known, partial, and missing evidence. Adding the whole
+  template there would blur the line between inspection and the later owner
+  decision.
+- section on `/packets/assembly/`: rejected because `/packets/assembly/`
+  remains the packet assembly checklist before handoff. The evidence decision
+  record captures one owner decision and residual risk after evidence review.
 
-At implementation time, confirm the candidate routes still exist in the live
-site before selecting one. If site information architecture has changed,
-record the substitution and rationale in this file.
+Rejected replace-a-neighbor options:
 
-If `/decisions/evidence-record/` is selected, record whether the new
-`/decisions/` namespace is intended to support future sibling decision-record
-surfaces or only this single concept route.
+- Replacing `/review-room/`: rejected because the review room is the review-room agenda.
+- Replacing `/packets/assembly/`: rejected because packet assembly is the packet assembly checklist.
+- Replacing `/review-claim-checklist/`: rejected because that route is the claim checklist and repeatability ritual, not a decision record.
+- Replacing `/manager-packet/`: rejected because manager packet copy is orientation, not the compact owner decision artifact.
+- Replacing `/questions/objections/`: rejected because that route is the objection guide, while this record logs the owner decision after the question is resolved.
+- Replacing `/proof-paths/tour/`: rejected because the proof-path tour teaches how to follow evidence, while this record cites the proof path after inspection.
+- Replacing a release gate, runtime workflow, approval workflow, or autonomous decision system: rejected because TraceMap provides evidence, not the decision.
+- Adding the route to primary navigation: rejected because this is a concept-level secondary reference; discovery metadata plus inbound links from `/review-room/` and `/packets/assembly/` are sufficient.
 
-Rejected-by-default alternatives unless implementation-state is amended:
+Route availability checked during implementation: `/review-room/`,
+`/packets/assembly/`, `/review-claim-checklist/`, `/manager-packet/`,
+`/questions/objections/`, `/proof-paths/tour/`, `/proof-paths/`,
+`/limitations/`, and `/validation/` are present and linked from the selected
+route.
 
-- Replacing `/review-room/`
-- Replacing `/packets/assembly/`
-- Replacing `/review-claim-checklist/`
-- Replacing `/manager-packet/`
-- Replacing `/questions/objections/`
-- Replacing `/proof-paths/tour/`
-- Adding the route to primary navigation without a recorded
-  information-architecture decision
+Navigation decision: the route is intentionally not in primary navigation.
+Inbound links were added from `/review-room/` and `/packets/assembly/` because
+those pages naturally precede a recorded owner decision.
 
 ## Relationship Decisions
 
@@ -96,6 +122,9 @@ The future evidence decision record must distinguish itself from:
 - `/manager-packet/`: manager-facing orientation and value explanation.
 - `/questions/objections/`: skeptical question handling and owner routing.
 - `/proof-paths/tour/`: proof-path education and navigation.
+
+The implemented page includes an adjacent-surfaces section that distinguishes
+itself from those routes using bounded link text.
 
 ## Scope Decisions
 
@@ -111,10 +140,19 @@ The future evidence decision record must distinguish itself from:
 - Tone must be calm, professional, and non-blaming.
 - No raw artifacts, private material, hidden validation details, local paths,
   raw command output, or credential-like values may appear in public output.
-- Future validation must cover required record fields, required links,
-  metadata, discovery/sitemap metadata if standalone, forbidden approval or
-  decision claims, private/raw material, word count bounds, and desktop/mobile
-  browser sanity.
+Implementation uses the reference structural marker convention
+`data-tracemap-validation-context="<context>"` for allowed boundary contexts.
+No substitute marker convention was used.
+
+Focused validation covers required record fields, required sections, required
+links, metadata, sitemap metadata, discovery metadata, forbidden approval or
+decision claims, private/raw material, word count bounds, route-specific
+non-claims, placement-decision state, structural-boundary negative fixtures,
+placeholder dates, synthetic commit and extractor examples, public-safe
+validation evidence, and template accessibility markers.
+
+Public claim level remains `concept`. No stronger page-level or example-record
+claim level was selected.
 
 ## Review Commands
 
@@ -219,6 +257,39 @@ Results:
 - Focused text sanity confirmed no machine-local worktree path is committed in
   the spec packet and no readiness header remains at `spec-review`.
 
+Implementation validation:
+
+```bash
+git diff --check
+./scripts/check-private-paths.sh
+cd site && npm test
+cd site && npm run validate
+cd site && npm run build
+```
+
+Results:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed with `Private path guard passed.`
+- `cd site && npm test`: passed, 412 tests.
+- `cd site && npm run validate`: passed; generated `site/dist` and validated
+  61 HTML files, 2068 internal references, 60 sitemap URLs, 1 legacy story
+  safety target, and 13 legacy modernization evidence-map rows.
+- `cd site && npm run build`: passed.
+
+Browser sanity:
+
+- Started the local site server on port `4174` because port `4173` was already
+  in use.
+- Desktop viewport `1440x1000`: `/decisions/evidence-record/` loaded with the
+  expected title, H1, required anchors, and no document-level horizontal
+  overflow.
+- Mobile viewport `390x844`: `/decisions/evidence-record/` loaded with the
+  expected title, H1, required anchors, and no document-level horizontal
+  overflow. The record table is wider than the viewport but contained in the
+  existing horizontally scrollable table wrapper used by the site.
+- The local server was stopped after browser sanity.
+
 ## PR Loop
 
 PR: `https://github.com/joefeser/tracemap/pull/281`
@@ -246,14 +317,20 @@ Observed PR-loop history:
   earlier Qodo top-level stale-status finding still applied to this section.
   This section was updated to remove stale pending text.
 
+Implementation PR-loop status: pending until the implementation PR is created
+and the required `agent-control pr-loop --repo joefeser/tracemap --pr
+<PR_NUMBER> --base dev --require-codex-review --quiet --json` command
+returns a terminal decision.
+
 ## Residual Risk
 
 Known residual risks:
 
 - Kiro review coverage was reduced because Kiro reported denied tool access
   during automated spec review and re-review runs.
-- Required review freshness and final PR-loop status must be rechecked after
-  this implementation-state update lands on the PR.
-- This branch remains spec-only. Future implementation still needs route or
-  section selection, site-source changes, focused validation, and browser
-  sanity checks.
+- Required reviewer freshness and final PR-loop status must be checked after
+  this implementation branch opens a PR.
+- The page remains concept-level public copy. It is a record template and does
+  not prove runtime behavior, production behavior, release safety, absence of
+  impact, complete coverage, autonomous decisions, approval workflow behavior,
+  AI/LLM analysis, or replacement of human judgment.

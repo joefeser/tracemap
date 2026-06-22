@@ -55,6 +55,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/decisions/evidence-record/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/owners/follow-up/",
     "changefreq": "monthly",
     "priority": "0.7"
