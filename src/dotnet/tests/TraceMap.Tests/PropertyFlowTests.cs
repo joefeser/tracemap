@@ -567,9 +567,26 @@ public sealed class PropertyFlowTests
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = """
-                create table combined_route_flow_edges(edge_id text);
-                insert into combined_route_flow_edges(edge_id) values ('route-flow:path:001');
+                create table combined_route_flow_edges(edge_id text, http_method text, normalized_path_key text);
+                insert into combined_route_flow_edges(edge_id, http_method, normalized_path_key) values ('route-flow:path:unrelated', 'POST', '/api/other');
                 """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var unrelatedRouteFlow = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-unrelated-out"),
+            "binding:save",
+            Framework: "angular",
+            Source: "client"));
+        Assert.Equal("available", unrelatedRouteFlow.Snapshot.Schema.RouteFlowSignal);
+        Assert.DoesNotContain(unrelatedRouteFlow.Gaps, gap => gap.GapKind == "RouteFlowNoPropertyContext");
+
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "insert into combined_route_flow_edges(edge_id, http_method, normalized_path_key) values ('route-flow:path:001', 'POST', '/api/profile');";
             await command.ExecuteNonQueryAsync();
         }
 
