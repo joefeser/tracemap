@@ -1,12 +1,12 @@
 # Site TraceMap Tools Evidence Packet Examples Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Current Branch
 
-- Branch: `codex/spec-site-evidence-packet-examples`
+- Branch: `codex/impl-site-evidence-packet-examples`
 - Worktree: `<local-worktree>` (absolute local path intentionally omitted to
   satisfy the `./scripts/check-private-paths.sh` private-path guard)
 - Base: `origin/dev`
@@ -14,37 +14,50 @@ Public claim level: concept
 
 ## Scope
 
-Spec-only packet for future public-safe evidence packet examples under
-`.kiro/specs/site-tracemap-tools-evidence-packet-examples/`.
+Implementation of the public-safe evidence packet examples surface under
+`site/src/packets/examples/`, route metadata, discovery metadata, adjacent
+packet-page links, focused site validation, and spec bookkeeping.
 
-No site source, generated output, scanner code, reducer code, existing specs,
-or validation scripts are in scope for this phase.
+Generated site output, scanner code, reducer code, raw scan artifacts, raw
+SQLite, raw facts, analyzer logs, source snippets, SQL values, config values,
+secrets, local paths, raw remotes, private sample names, and generated scan
+directories remain out of scope.
 
 ## Claim-Level Decision
 
-The public claim level is `concept` because the required examples are teaching
-shapes and may be synthetic only. A future implementation may give an
-individual example the `demo-backed` coverage label only when it verifies
-checked-in public demo artifacts and records the proof path. The page-level
-and example-level public claim level remain concept unless a later spec
-defines a stronger claim level and validation contract.
+The public claim level is `concept` because the examples are teaching shapes.
+All four examples are labeled `synthetic public-safe example`, including the
+demo-backed shape. The implementation did not use checked-in demo artifacts as
+real evidence for a stronger example-level claim; demo-backed remains a
+coverage-shape label, not a public result claim.
 
 ## Placement State
 
-Placement is intentionally undecided until future implementation.
+Final placement: `/packets/examples/`.
 
-Candidate placements:
+Route collision check: no existing `site/src/packets/examples/` route existed
+before implementation. The new standalone route is registered in sitemap
+metadata and discovery metadata.
 
-- `/packets/examples/`
-- `/examples/evidence-packets/`
-- section on `/packets/`
-- section on `/packets/assembly/`
+Rejected alternatives:
 
-Recommended default for future implementation: `/packets/examples/`, because
-it keeps the examples in the packet family while avoiding overlap with the
-packet assembly workflow. This is not final; the future implementation must
-record the final placement and rejected alternatives here before editing
-`site/src`.
+- `/examples/evidence-packets/`: rejected because it reads like a broad
+  examples hub and could compete with `/examples/scan-packet/`.
+- Section on `/packets/`: rejected because the four complete examples would
+  lengthen the packet model page and blur model explanation with example
+  details.
+- Section on `/packets/assembly/`: rejected because assembly should remain the
+  human workflow checklist rather than a packet gallery.
+
+Navigation decision: no top-navigation change. Discovery uses adjacent links
+from `/packets/` and `/packets/assembly/`, plus links from the new page to
+`/packets/`, `/packets/assembly/`, `/examples/scan-packet/`,
+`/demo/result/`, `/proof-source-catalog/`, and
+`/review-claim-checklist/`.
+
+Discovery metadata uses `hintCategory: use-case` because the current discovery
+vocabulary does not support `example`. This is the spec-approved fallback; the
+preferred proof path is `/packets/`.
 
 ## Review State
 
@@ -115,6 +128,99 @@ findings were patched or dispositioned and spec-only validation passed.
 
 ## Validation State
 
+Implementation validation passed.
+
+Required implementation checks:
+
+```bash
+git diff --check
+./scripts/check-private-paths.sh
+cd site && npm test
+cd site && npm run validate
+cd site && npm run build
+```
+
+Results:
+
+- `git diff --check`: passed with no output.
+- `./scripts/check-private-paths.sh`: passed with
+  `Private path guard passed.`
+- `cd site && npm test`: passed initially with 359 tests; passed after
+  review fixes with 360 tests.
+- `cd site && npm run validate`: passed; generated output validation reported
+  56 HTML files, 1873 internal references, 55 sitemap URLs, 1 legacy story
+  safety target, and 13 legacy modernization evidence-map rows.
+- `cd site && npm run build`: passed with generated output under `site/dist/`.
+- Browser sanity at `http://localhost:4174/packets/examples/`: desktop check
+  confirmed no body overflow, all four categories, all 12 schema rows, concept
+  label, evidence principle, and no console errors. Mobile check at
+  390x844 confirmed no body overflow, table contained in a horizontal scroll
+  wrapper, stop marker present, boundary copy present, and no console errors.
+
+Focused route validation added:
+
+- `site/scripts/evidence-packet-examples.mjs`
+- `site/scripts/evidence-packet-examples.test.mjs`
+- aggregate registration in `site/scripts/validate.mjs`
+
+The validator checks schema fields, four categories, synthetic labels, route
+metadata, sitemap coverage, adjacent links, inbound links, word count
+450-1300, allowed evidence tiers, stop blocked marker, forbidden claims, hard
+private material, raw/private material outside sanctioned boundaries, and blame
+language.
+
+## PR Review Loop State
+
+PR loop opened one Codex review request and later reported actionable findings.
+
+Patched findings:
+
+- Codex review thread: `.kiro/specs/site-tracemap-tools-evidence-packet-examples/tasks.md`
+  still said `Status: not-started` after the implementation checkboxes were
+  completed. Patch: changed task packet status to `implemented`.
+- Qodo finding: the route validator did not block raw artifact filename tokens
+  such as `facts.ndjson`, `.sqlite`, `scan-manifest.json`,
+  `logs/analyzer.log`, and `.tracemap` outside sanctioned boundary copy.
+  Patch: added explicit raw artifact token patterns and a regression test.
+- Qodo finding: two example rule-family values were not canonical catalog rule
+  IDs. Patch: replaced the gap example with `csharp.semantic.workspace.v1`
+  and marked the stop-condition example as `N/A: public-copy stop condition;
+  no scanner-emitted rule placeholder`.
+
+Validation after patching review findings:
+
+```bash
+git diff --check
+./scripts/check-private-paths.sh
+cd site && npm test
+cd site && npm run build
+cd site && npm run validate
+```
+
+Results: all passed; `npm test` reported 360 tests and `npm run validate`
+reported 56 HTML files, 1873 internal references, 55 sitemap URLs, 1 legacy
+story safety target, and 13 legacy modernization evidence-map rows.
+
+PR-loop result after review fixes:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 275 --base dev --require-codex-review --quiet --json
+```
+
+Result on head `d6434ce016357005ad8b5905c1e1cf2b960ede9b`:
+
+- Decision: `merge_ready`
+- Stop reason: `NONE`
+- Next action: `merge_ready`
+- Checks: no pending or failed checks
+- Review threads: `0` unresolved
+- Actionable bot findings: none
+- Residual risk: `medium`
+- Residual-risk reason: Codex reviewed `7c1071568b645678bf47c76647f16d015f6ea5d8`;
+  current head was `d6434ce016357005ad8b5905c1e1cf2b960ede9b`.
+  The configured `trustedCodeReview` quorum was met by Qodo, with Codex review
+  freshness treated as residual risk by policy.
+
 Spec-only validation passed on 2026-06-21.
 
 ```bash
@@ -138,6 +244,10 @@ Results:
 
 ## Oddities
 
+- Running `npm run validate` and `npm run build` concurrently raced over
+  `site/dist/` and caused one transient missing-file validation failure. The
+  commands were rerun separately; `npm run validate` passed after the race was
+  removed, and `npm run build` also passed.
 - The requested spec has both a spec-review starting state and a requirement
   to move readiness only after review findings are patched or dispositioned.
   The packet started at `Readiness: spec-review` and all spec headers were
@@ -146,17 +256,14 @@ Results:
   execution. This is recorded as residual review coverage risk, but both
   requested models returned content reviews and no final Medium or higher
   findings remain.
-- The required "demo-backed packet" example remains concept-level. A checked-in
-  public demo artifact may justify a `demo-backed` coverage label, not a
-  stronger public claim level.
+- The required "demo-backed packet" example remains concept-level and is
+  labeled as a synthetic public-safe example. A future checked-in demo-backed
+  artifact may justify stronger wording only through a future spec and
+  validation contract.
 
 ## Follow-Up Items
 
-- Future implementation must choose final placement and rejected alternatives
-  before editing `site/src`.
-- Future implementation must verify selected route or section-anchor collision
-  state.
-- Future implementation must record the selected discovery `hintCategory` and
-  justification if a fallback value is used.
-- Future implementation should keep examples compact or record a justified
-  higher word-count bound before validation is added.
+- No known content or validation follow-ups remain.
+- Final spec-state-only PR-loop note may make the latest head newer than the
+  exact `merge_ready` head recorded above; rerun PR loop on the final pushed
+  head before merge and follow that result.

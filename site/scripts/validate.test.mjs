@@ -17,6 +17,7 @@ import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
+import { evidencePacketExamplesRoute } from "./evidence-packet-examples.mjs";
 import { changeReviewRoute } from "./change-review.mjs";
 import { glossaryRoute } from "./glossary.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
@@ -144,6 +145,7 @@ async function createDistFixture({
       endpointReviewRoute,
       changeReviewRoute,
       "/evidence/",
+      "/examples/scan-packet/",
       glossaryRoute,
       incidentCallRoute,
       incidentEvidenceHandoffRoute,
@@ -157,6 +159,7 @@ async function createDistFixture({
       proofPathTourRoute,
       proofSourceCatalogRoute,
       reviewerQuickstartRoute,
+      evidencePacketExamplesRoute,
       reviewPacketAssemblyRoute,
       reviewClaimChecklistRoute,
       reviewRoomRoute,
@@ -186,6 +189,7 @@ async function createDistFixture({
     changeReviewRoute,
     "/evidence/",
     "/examples/",
+    "/examples/scan-packet/",
     incidentCallRoute,
     incidentEvidenceHandoffRoute,
     teamEvidenceHandoffRoute,
@@ -200,6 +204,7 @@ async function createDistFixture({
     reviewerQuickstartRoute,
     "/manager-packet/",
     "/packets/",
+    evidencePacketExamplesRoute,
     reviewPacketAssemblyRoute,
     reviewClaimChecklistRoute,
     reviewRoomRoute,
@@ -313,7 +318,11 @@ async function fixturePageHtml(route, path) {
   }
 
   if (route === reviewPacketAssemblyRoute) {
-    return reviewPacketAssemblyPage();
+    return readFile(new URL("../src/packets/assembly/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === evidencePacketExamplesRoute) {
+    return readFile(new URL("../src/packets/examples/index.html", import.meta.url), "utf8");
   }
 
   if (route === reviewClaimChecklistRoute) {
@@ -341,7 +350,7 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
   );
 }
 
@@ -613,6 +622,30 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture packet guide limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: "/examples/scan-packet/",
+        title: "Scan Packet Example",
+        summary: "Fixture scan packet example route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture scan packet example limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: evidencePacketExamplesRoute,
+        title: "Evidence Packet Examples",
+        summary: "Concept-level gallery of synthetic public-safe packet shapes showing claims, proof paths, tiers, coverage labels, limitations, non-claims, owners, and validation evidence.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/packets/",
+        limitations: ["The fixture route teaches synthetic public-safe packet shapes, not real customer, private repository, production, or raw artifact evidence."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, autonomous approval, autonomous review, or replacement of human review."
+        ]
       },
       {
         path: "/manager-packet/",
