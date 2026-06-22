@@ -173,7 +173,11 @@ Completed:
   emitting chunk navigation links only when Markdown output is requested.
   Patched Sourcery's path normalization finding by normalizing the full target
   path before relative-link calculation. Added a JSONL-only regression test.
-- PR loop rerun pending after the review-fix commit is pushed.
+- PR loop rerun for head `18c5284fe75500b3b7939f0bfba13ed5e36192ae` returned
+  `merge_ready` with stop reason `NONE`. Unresolved review threads, pending
+  checks, failed checks, and actionable bot findings were all zero. Residual
+  risk was medium because Codex reviewed the previous head, but no stale
+  actionable Codex findings remained and Qodo returned on the review-fix path.
 
 ## Follow-Ups For Implementation
 
