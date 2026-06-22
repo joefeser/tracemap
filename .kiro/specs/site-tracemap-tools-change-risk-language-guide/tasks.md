@@ -80,7 +80,7 @@ implementation tasks intentionally remain unchecked.
   route is chosen.
 - [ ] If a standalone route is chosen, ensure discovery metadata includes
   `sourceType: site-page`, a valid existing `hintCategory`,
-  `preferredProofPath`, limitations, and non-claims.
+  `preferredProofPath`, limitations, and `nonClaims`.
 - [ ] If a folded placement is chosen, add stable section anchors and
   discoverable inbound links without conflicting with the containing page's
   claim level.
