@@ -67,12 +67,12 @@ coverage; they are not blockers for the landed partial slice.
   - [x] Emit truncation gaps when caps are reached.
   - [ ] Add tests for direct paths, multi-hop paths, cycles, missing graph tables, old schemas, row permutation stability, and byte-stable output.
 
-- [ ] 6. Add route-flow readers for fact-symbol and argument-flow details. Requirements: 3, 5, 6.
-  - [ ] Read `combined_fact_symbols` for route-flow entry attachment, adjacent logic rows, and symbol-based path context.
-  - [ ] Read `combined_argument_flows` for argument-flow rows when available.
+- [x] 6. Add route-flow readers for fact-symbol and argument-flow details. Requirements: 3, 5, 6.
+  - [x] Read `combined_fact_symbols` for route-flow entry attachment, adjacent logic rows, and symbol-based path context.
+  - [x] Read `combined_argument_flows` for argument-flow rows when available.
   - [x] Emit `SchemaMissing` or `ExtractorUnavailable` gaps when older combined schemas lack these tables.
   - [x] Keep these readers read-only and deterministic.
-  - [ ] Add tests proving missing `combined_fact_symbols` or `combined_argument_flows` does not silently drop logic rows or argument evidence.
+  - [x] Add tests proving missing `combined_fact_symbols` or `combined_argument_flows` does not silently drop logic rows or argument evidence.
 
 - [ ] 7. Implement conservative interface implementation bridges. Requirements: 4, 6.
   - [ ] Detect call targets that are interface members or interface-declared symbols.
@@ -96,9 +96,9 @@ coverage; they are not blockers for the landed partial slice.
   - [x] Implement `StrongStaticRouteFlow`, `ProbableStaticRouteFlow`, `NeedsReviewStaticRouteFlow`, `NoRouteFlowEvidence`, and `UnknownAnalysisGap`.
   - [x] Cap classifications by weakest required evidence tier, reduced coverage, dynamic URLs, fallback facts, implementation candidates, ambiguity, high fan-out, unknown commit SHA, and truncation.
   - [x] Treat `IdentityVerified = false` or placeholder/missing commit SHA as an identity gap that caps affected rows at `NeedsReviewStaticRouteFlow` or `UnknownAnalysisGap` for no-evidence conclusions.
-  - [ ] Treat `IdentityVerified` as the combined source projection's derived identity state; if it is false, it wins even when a commit SHA string is present.
+  - [x] Treat `IdentityVerified` as the combined source projection's derived identity state; if it is false, it wins even when a commit SHA string is present.
   - [x] Map a report whose only gap is `SelectorNoMatch` to overall `UnknownAnalysisGap`.
-  - [ ] Require full route-flow coverage before emitting `StrongStaticRouteFlow` or `NoRouteFlowEvidence`.
+  - [x] Require full route-flow coverage before emitting `StrongStaticRouteFlow` or `NoRouteFlowEvidence`.
   - [x] Emit gaps for schema missing, extractor unavailable, implementation unavailable, runtime binding not proven, dynamic dispatch boundary, reduced coverage, unknown commit SHA, selector no-match, no route-flow evidence, unknown analysis, truncation, and unsafe value omission.
   - [x] Ensure clean no-evidence rows require full route-flow coverage.
   - [ ] Add tests proving weak, ambiguous, dynamic, fallback, or reduced evidence cannot produce `StrongStaticRouteFlow`.

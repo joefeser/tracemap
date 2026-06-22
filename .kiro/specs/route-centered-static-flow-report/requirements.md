@@ -64,7 +64,9 @@ one API interaction.
     report to rows matching that classification and SHALL recompute the overall
     summary classification from the remaining rows. If the filter removes every
     row, TraceMap SHALL emit a `SelectorNoMatch` gap and set the overall
-    classification to `UnknownAnalysisGap`.
+    classification to `UnknownAnalysisGap`. Entry evidence SHALL remain visible
+    as query context when the selector matched; entry evidence is not itself a
+    path, logic, dependency-surface, or gap row.
 
 ### Requirement 2: Evidence Row Provenance
 
@@ -241,8 +243,8 @@ route-flow artifacts that are readable and machine-checkable.
    Surfaces, Gaps, and Limitations.
 4. WHEN JSON is emitted THEN it SHALL include `reportType`, `version`,
    `reportCoverage`, `coverageWarnings`, `query`, `snapshot`, `summary`,
-   `entryEvidence`, `flowRows`, `logicRows`, `dependencySurfaces`, `gaps`, and
-   `limitations`.
+   `entryEvidence`, `flowRows`, `logicRows`, `dependencySurfaces`,
+   `touchedFiles`, `touchedSymbols`, `gaps`, and `limitations`.
 5. WHEN the same input and options are run twice THEN Markdown and JSON SHALL be
    byte-stable.
 6. WHEN arrays or metadata maps are emitted THEN ordering SHALL be
