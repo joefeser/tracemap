@@ -14,7 +14,7 @@
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Commit, push, and open a ready PR to `dev`.
-- [ ] Run the PR loop.
+- [x] Run the PR loop.
 
 ## Implementation Slice 1: Name And Navigation Model
 
