@@ -129,6 +129,6 @@ implementation phase completes them.
 - [x] Run `npm run build` from `site/`.
 - [x] Run desktop and mobile browser sanity checks for layout or interaction
   changes.
-- [ ] Update `implementation-state.md` with final placement decisions,
+- [x] Update `implementation-state.md` with final placement decisions,
   substitutions, validation results, review findings, claim-boundary
   decisions, oddities, PR-loop outcomes, residual risk, and follow-up items.
