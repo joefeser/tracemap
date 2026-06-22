@@ -135,11 +135,22 @@
         succeeds.
   - [ ] Add structural fallback for explicit generated output, custom tool, and
         scoped metadata file links.
+    - [x] Completed in slice 7: hardened existing DBML/EDMX/typed DataSet
+          explicit generated-designer links so they carry sourceMetadataFactId,
+          supportingFactIds, stableModelKey, symbolRole, coverageLabel, and
+          limitations without changing descriptor rule ownership.
+    - [ ] Deferred: custom tool outputs and broader project-file generated
+          output declarations beyond existing descriptor-scoped generated
+          designer hints.
   - [ ] Add scoped syntax fallback for partial classes, DataSet row/table/adapter
         types, context types, and ORM mapped classes.
     - [x] Completed in slice 6: scoped syntax fallback for NHibernate mapped
           classes when the mapping provides a fully qualified type name through
           the `class` name or root/class namespace plus class name.
+    - [x] Completed in slice 7: hardened existing DBML/EDMX/typed DataSet
+          generated-designer scoped syntax fallback so duplicate short-name
+          declarations inside a candidate designer file produce ambiguity gaps
+          instead of arbitrary links.
     - [ ] Deferred: DataSet row/table/adapter types, context types, custom tool
           generated outputs, and compiler-semantic symbol resolution.
   - [ ] Emit gaps for missing generated code, duplicate candidates, ambiguous
@@ -148,6 +159,10 @@
           mapped type emit `AmbiguousGeneratedCodeLink` under
           `legacy.data.model.generated-link.v1`; global short-name matching is
           intentionally not used.
+    - [x] Completed in slice 7: duplicate DBML/EDMX/typed DataSet generated
+          designer type declarations emit `AmbiguousGeneratedCodeLink`, and
+          missing/ambiguous descriptor-scoped generated file gaps anchor to the
+          source descriptor span.
     - [ ] Deferred: missing generated code, stale generated-code hints, and
           broader ambiguous generated-output families.
   - [ ] Prove `Tier1Semantic` links do not upgrade descriptor facts above their

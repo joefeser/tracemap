@@ -1338,14 +1338,15 @@ rules:
   - id: legacy.data.generated-link.v1
     name: Legacy data generated-code linkage
     description: Links DBML, EDMX, and typed DataSet metadata descriptors to checked-in generated files or compiler-resolved generated symbols when deterministic evidence exists.
-    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    evidenceTier: Tier2Structural
     emits:
       - LegacyDataGeneratedCodeLinked
       - AnalysisGap
     limitations:
       - Generated-code linkage is static evidence and does not prove generated files are fresh, runtime code paths execute, query execution occurs, or database access happens.
       - Global short-name matching is not allowed; ambiguous or missing generated-code candidates are gaps.
-      - Safe reducer-facing properties include linkKind, symbolRole, typeName, generatedCodeFileName, supportingFactIds, metadataPath, and hash variants for unsafe identifiers.
+      - Safe reducer-facing properties include linkKind, symbolRole, metadataFormat, stableModelKey, typeName, generatedCodeFileName, sourceMetadataFactId, supportingFactIds, coverageLabel, limitations, and hash variants for unsafe identifiers.
+      - Explicit generated-file links are Tier2Structural; scoped syntax fallback rows are Tier3SyntaxOrTextual; gaps such as missing or ambiguous generated code are Tier4Unknown; future compiler-resolved semantic links require a documented implementation update.
       - Linkage tier is recorded separately and does not upgrade the descriptor tier of the metadata evidence.
 
   - id: legacy.data.model.identity.v1
