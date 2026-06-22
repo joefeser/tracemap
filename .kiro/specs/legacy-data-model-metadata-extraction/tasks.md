@@ -128,16 +128,33 @@
         entity/table facts.
 
 - [ ] 6. Harden generated-code and mapped-symbol linkage. Requirements: 4, 5, 8.
+  - Partial: slice 6 completes NHibernate scoped syntax fallback only; semantic
+        symbol resolution, broader generated-output families, and downstream
+        integrations remain future work.
   - [ ] Resolve generated data model symbols semantically when project load
         succeeds.
   - [ ] Add structural fallback for explicit generated output, custom tool, and
         scoped metadata file links.
   - [ ] Add scoped syntax fallback for partial classes, DataSet row/table/adapter
         types, context types, and ORM mapped classes.
+    - [x] Completed in slice 6: scoped syntax fallback for NHibernate mapped
+          classes when the mapping provides a fully qualified type name through
+          the `class` name or root/class namespace plus class name.
+    - [ ] Deferred: DataSet row/table/adapter types, context types, custom tool
+          generated outputs, and compiler-semantic symbol resolution.
   - [ ] Emit gaps for missing generated code, duplicate candidates, ambiguous
         partial classes, and stale generated-code hints.
+    - [x] Completed in slice 6: duplicate C# declarations for an NHibernate
+          mapped type emit `AmbiguousGeneratedCodeLink` under
+          `legacy.data.model.generated-link.v1`; global short-name matching is
+          intentionally not used.
+    - [ ] Deferred: missing generated code, stale generated-code hints, and
+          broader ambiguous generated-output families.
   - [ ] Prove `Tier1Semantic` links do not upgrade descriptor facts above their
         descriptor tier ceiling.
+    - [x] Completed in slice 6: syntax-only mapped class links are capped at
+          `Tier3SyntaxOrTextual`, while source NHibernate descriptor facts
+          remain `Tier2Structural`.
 
 - [ ] 7. Project model-enriched `legacy-data` dependency surfaces. Requirements: 5, 6, 8.
   - [ ] Not started in the NHibernate extraction MVP. This task is blocked from

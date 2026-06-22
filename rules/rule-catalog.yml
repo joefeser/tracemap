@@ -1418,9 +1418,10 @@ rules:
       - Existing generated-code linkage remains under legacy.data.generated-link.v1 unless a model-normalized link needs this distinct rule ID.
       - Linkage is static repository evidence and does not prove generated files are fresh, runtime code paths execute, database access occurs, query execution occurs, deployment, provider compatibility, or production usage.
       - Global short-name matching is not allowed; semantic links require scoped compiler-resolved symbols, structural links require scoped metadata/file evidence, and syntax fallback remains reduced coverage.
+      - Syntax fallback links only ordinary namespace-qualified type names; nested generic or provider-specific type identity syntax remains unsupported unless future semantic resolution proves it.
       - Ambiguous, stale, missing, duplicate, or reduced-coverage generated-code candidates are gaps rather than arbitrary links.
       - Linkage tier is recorded separately and does not upgrade descriptor facts above their descriptor tier ceiling.
-      - Safe properties include linkKind, symbolRole, metadataFormat, stableModelKey, generatedCodeFileName, supportingFactIds, coverageLabel, and hash variants for unsafe identifiers; source snippets, raw paths, URLs, remotes, config values, and secrets are omitted.
+      - Safe properties include linkKind, symbolRole, metadataFormat, stableModelKey, mappedTypeName, sourceMetadataFactId, generatedCodeFileName, supportingFactIds, coverageLabel, limitations, and hash variants for unsafe identifiers; source snippets, raw paths, URLs, remotes, config values, and secrets are omitted.
 
   - id: legacy.data.model.surface.v1
     name: Legacy data model surface projection

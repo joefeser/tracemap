@@ -2,19 +2,19 @@
 
 Status: continuation-ready
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
-Current implementation branch: codex/implement-legacy-data-model-metadata-followup
+Current implementation branch: codex/implement-legacy-data-model-metadata-continuation
 Public claim level: hidden
 
 Post-promotion note: several legacy-data model identity/reporting slices have
-landed, including PR #199 and PR #236. This spec still has follow-up work, but
-there is no active implementation branch running for it after the PR #247
-promotion.
+landed, including PR #199, PR #236, and the later NHibernate `.hbm.xml` MVP
+slice. This spec still has follow-up work after the current continuation slice.
 
 ## Current Branch Scope
 
 This branch is a partial follow-up slice, not a full-spec closeout. It is
-merge-ready only as a contained NHibernate `.hbm.xml` metadata MVP over
-checked-in static XML descriptors.
+merge-ready only as a contained Task 6 mapped-symbol continuation: scoped
+syntax fallback links from NHibernate mapped classes to checked-in C# type
+declarations when the mapping supplies a fully qualified type identity.
 
 - [x] Task 5 partial: LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, and Castle
   ActiveRecord descriptor signals emit `legacy.data.orm.unsupported.v1`
@@ -26,13 +26,17 @@ checked-in static XML descriptors.
   unsupported-shape gaps under `legacy.data.orm.nhibernate.v1`.
 - [ ] Task 4 component descriptor expansion and broader provider-specific
   descriptor shapes remain deferred.
-- [ ] Task 6 generated-code and mapped-symbol linkage hardening remains
-  deferred.
+- [x] Task 6 partial: NHibernate mapped class descriptors link to a single
+  scoped C# syntax declaration through `legacy.data.model.generated-link.v1`
+  with reduced coverage.
+- [ ] Task 6 semantic symbol resolution, DataSet row/table/adapter linking,
+  context types, custom tool generated outputs, missing/stale generated hints,
+  and broader ambiguity families remain deferred.
 - [ ] Tasks 7-9 downstream surface/report/path/reverse/graph/vault integration
   remain deferred.
 - [ ] Task 10 broader docs/fixtures work remains partially deferred; this slice
-  updates only acceptance, validation, language-adapter contract, and rule
-  limitations for unsupported ORM gaps.
+  updates only the language-adapter contract and rule limitation property list
+  for mapped-symbol link evidence.
 
 The unchecked tasks above are intentional runway, not hidden completed work.
 They must not be interpreted as clean absence of legacy ORM metadata or as a
@@ -674,3 +678,94 @@ PR review-loop follow-up:
 - After the PR-thread patch, reran `git diff --check`: passed.
 - Final agent-control loop result is pending. PR should target `dev`; do not
   merge from the implementation agent.
+
+## Implementation Slice 6 State
+
+Branch: `codex/implement-legacy-data-model-metadata-continuation`
+Base: `origin/dev`
+PR: pending
+
+Selected scope: partial Task 6. This slice adds scoped syntax fallback for
+NHibernate mapped classes. It links a checked-in `.hbm.xml` class descriptor to
+a single checked-in C# type declaration only when the mapping provides a fully
+qualified type identity through the class name or through namespace plus class
+name. It does not perform semantic project loading, runtime ORM validation,
+database access, generated-code freshness checks, or global short-name matching.
+
+Implemented:
+
+- Built a deterministic C# type declaration index over checked-in C# files,
+  bounded by the existing generated-designer size limit.
+- Added `mappedTypeName` metadata to NHibernate class descriptor facts when the
+  XML provides a deterministic full mapped type name.
+- Emitted `LegacyDataGeneratedCodeLinked` facts under
+  `legacy.data.model.generated-link.v1` for exact one-to-one mapped class to C#
+  syntax matches.
+- Marked syntax-only mapped-symbol links as `Tier3SyntaxOrTextual` with
+  `coverageLabel = reduced`, `linkKind = mapped-type-syntax`,
+  `symbolRole = mapped-class`, `limitations =
+  syntax-only-mapped-type-link`, `sourceMetadataFactId`, and
+  `supportingFactIds`.
+- Preserved descriptor tier ceilings: source NHibernate descriptors remain
+  `Tier2Structural`; syntax-only links do not upgrade them, including after
+  generated-link facts are present in the result set.
+- Emitted `AmbiguousGeneratedCodeLink` gaps under
+  `legacy.data.model.generated-link.v1` when multiple C# declarations match the
+  same mapped class.
+- Proved unqualified NHibernate class names do not trigger global short-name
+  matching.
+- Proved both root-namespace plus short class names and assembly-qualified fully
+  qualified class names can link when they resolve to exactly one checked-in C#
+  declaration.
+- Proved new model generated-link facts do not leak local absolute paths through
+  evidence paths, in-memory properties, Markdown reports, or SQLite properties.
+- Updated rule/catalog and adapter contract wording for the safe link
+  properties used by this slice.
+
+Deferred within Task 6:
+
+- Compiler-semantic symbol resolution for loaded projects.
+- DataSet row/table/adapter, context type, and custom tool generated-output
+  linkage.
+- Missing generated-code, stale generated-code hint, and broader ambiguity
+  families.
+- Downstream selector/report/vault/graph integration remains owned by Tasks
+  7-9 and is not claimed by this slice.
+
+Validation executed so far:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 36 tests. Existing NuGet audit warning for `SQLitePCLRaw.lib.e_sqlite3` was reported during restore/build output.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 599 tests, with the same existing NU1903 advisory warnings.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review had reduced coverage because Kiro
+  reported denied shell access, but it inspected source/spec/test files. It
+  reported one blocking documentation mismatch and several important
+  non-blocking clarity/test notes.
+- Patched by documenting `mappedTypeName` in the adapter contract and rule
+  safe-property list, emitting `mappedTypeName` on model generated-link facts,
+  adding a privacy assertion for new generated-link evidence paths, clarifying
+  Task 6 partial status, and documenting namespace extraction behavior in the
+  helper comment.
+- First Sonnet re-review had reduced coverage because Kiro again reported
+  denied shell access. It reported two blocking test-coverage asks and three
+  important notes. Patched by extending the mapped-class link test through
+  Markdown/SQLite privacy checks, adding an explicit post-link descriptor tier
+  assertion, adding a fully qualified/assembly-qualified class-name success
+  fixture, and documenting the nested/generic type identity syntax limitation in
+  the rule catalog.
+- Second Sonnet re-review had reduced coverage and evaluated the entire
+  long-running spec as if this branch intended to close Tasks 7-9. Those
+  findings are not current-slice blockers: downstream surface/report/path/
+  reverse/graph/vault integration remains explicitly deferred and unchecked in
+  this state file and `tasks.md`. No new unpatched current-slice finding was
+  identified after the privacy, tier-ceiling, namespace, and limitation patches
+  above.
+
+PR review-loop follow-up:
+
+- Pending. PR should target `dev`; do not merge from the implementation agent.

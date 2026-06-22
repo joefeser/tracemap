@@ -1160,6 +1160,153 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public async Task Scan_links_nhibernate_mapped_class_to_scoped_csharp_type_syntax()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Domain"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Customer.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2" namespace="Samples.Domain">
+              <class name="Customer" table="Customers">
+                <id name="Id" column="CustomerId" />
+              </class>
+            </hibernate-mapping>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Customer.cs"), """
+            namespace Samples.Domain;
+
+            public partial class Customer
+            {
+                public int Id { get; set; }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var report = MarkdownReportWriter.Build(result);
+        var indexPath = Path.Combine(temp.Path, "out", "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+        var allProperties = await ReadAllPropertiesAsync(indexPath);
+
+        var entity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("typeName") == "Customer");
+        var link = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+
+        Assert.Equal("Samples.Domain.Customer", entity.Properties.GetValueOrDefault("mappedTypeName"));
+        Assert.Equal(EvidenceTiers.Tier2Structural, entity.EvidenceTier);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, link.EvidenceTier);
+        var entityAfterLink = Assert.Single(result.Facts, fact => fact.FactId == entity.FactId);
+        Assert.Equal(EvidenceTiers.Tier2Structural, entityAfterLink.EvidenceTier);
+        Assert.Equal("mapped-type-syntax", link.Properties.GetValueOrDefault("linkKind"));
+        Assert.Equal("mapped-class", link.Properties.GetValueOrDefault("symbolRole"));
+        Assert.Equal("nhibernate-hbm", link.Properties.GetValueOrDefault("metadataFormat"));
+        Assert.Equal("Samples.Domain.Customer", link.Properties.GetValueOrDefault("mappedTypeName"));
+        Assert.Equal("Samples.Domain.Customer", link.Properties.GetValueOrDefault("typeName"));
+        Assert.Equal("Customer.cs", link.Properties.GetValueOrDefault("generatedCodeFileName"));
+        Assert.Equal("reduced", link.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("syntax-only-mapped-type-link", link.Properties.GetValueOrDefault("limitations"));
+        Assert.Equal(entity.FactId, link.Properties.GetValueOrDefault("sourceMetadataFactId"));
+        Assert.Equal(entity.FactId, link.Properties.GetValueOrDefault("supportingFactIds"));
+        Assert.Equal(entity.Properties.GetValueOrDefault("stableModelKey"), link.Properties.GetValueOrDefault("stableModelKey"));
+        Assert.Equal("Domain/Customer.cs", link.Evidence.FilePath);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.LegacyDataModelGeneratedLink
+            && fact.Evidence.FilePath.Contains(temp.Path, StringComparison.Ordinal));
+        Assert.DoesNotContain(temp.Path, report);
+        Assert.DoesNotContain(temp.Path, allProperties);
+        Assert.All(result.Facts.Where(fact => fact.RuleId == RuleIds.LegacyDataModelGeneratedLink), fact =>
+        {
+            Assert.DoesNotContain(temp.Path, fact.Evidence.FilePath);
+            Assert.DoesNotContain(temp.Path, string.Join("\n", fact.Properties.Values));
+        });
+    }
+
+    [Fact]
+    public void Scan_links_fully_qualified_nhibernate_class_name_to_csharp_type_syntax()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Domain"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Order.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class name="Samples.Domain.Order, Samples.Domain" table="Orders">
+                <id name="Id" column="OrderId" />
+              </class>
+            </hibernate-mapping>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Order.cs"), """
+            namespace Samples.Domain;
+            public sealed class Order { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var link = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+        Assert.Equal("Samples.Domain.Order", link.Properties.GetValueOrDefault("mappedTypeName"));
+        Assert.Equal("Samples.Domain.Order", link.Properties.GetValueOrDefault("typeName"));
+        Assert.Equal("Domain/Order.cs", link.Evidence.FilePath);
+    }
+
+    [Fact]
+    public void Scan_gaps_ambiguous_nhibernate_mapped_class_syntax_candidates()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Domain"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Customer.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class name="Samples.Domain.Customer" table="Customers">
+                <id name="Id" column="CustomerId" />
+              </class>
+            </hibernate-mapping>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Customer.Part1.cs"), """
+            namespace Samples.Domain;
+            public partial class Customer { }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Customer.Part2.cs"), """
+            namespace Samples.Domain;
+            public partial class Customer { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink
+            && fact.Evidence.FilePath == "Mappings/Customer.hbm.xml"
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousGeneratedCodeLink");
+    }
+
+    [Fact]
+    public void Scan_does_not_use_global_short_name_matching_for_nhibernate_mapped_classes()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Domain"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Customer.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class name="Customer" table="Customers">
+                <id name="Id" column="CustomerId" />
+              </class>
+            </hibernate-mapping>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Customer.cs"), """
+            namespace Samples.Domain;
+            public partial class Customer { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+    }
+
+    [Fact]
     public void Scan_treats_non_mapping_hbm_xml_as_unsupported_orm_gap()
     {
         using var temp = new TempDirectory();

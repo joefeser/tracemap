@@ -26,6 +26,7 @@ public static class LegacyDataMetadataExtractor
     {
         var facts = new List<CodeFact>();
         var generatedCandidates = LoadGeneratedCandidates(repoPath, manifest, inventory, facts);
+        var csharpTypeDeclarations = LoadCSharpTypeDeclarations(repoPath, inventory);
 
         foreach (var item in inventory.OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
@@ -67,6 +68,7 @@ public static class LegacyDataMetadataExtractor
         }
 
         AddGeneratedCodeLinks(manifest, facts, generatedCandidates, existingFacts);
+        AddMappedTypeSyntaxLinks(manifest, facts, csharpTypeDeclarations);
 
         return facts
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
@@ -194,6 +196,7 @@ public static class LegacyDataMetadataExtractor
         XElement classElement)
     {
         var className = AttributeValue(classElement, "name") ?? AttributeValue(classElement, "entity-name") ?? "mapped-class";
+        var mappedTypeName = NHibernateMappedTypeName(classElement);
         var tableName = AttributeValue(classElement, "table");
         var schemaName = AttributeValue(classElement, "schema");
         var catalogName = AttributeValue(classElement, "catalog");
@@ -201,6 +204,7 @@ public static class LegacyDataMetadataExtractor
         var entityProps = MetadataProperties("NHibernateHbm", metadataHash, "orm-class");
         AddSafeName(entityProps, "entityName", "entityHash", className);
         AddSafeName(entityProps, "typeName", "typeHash", className);
+        AddSafeName(entityProps, "mappedTypeName", "mappedTypeHash", mappedTypeName);
         AddSafeName(entityProps, "tableName", "tableHash", tableName);
         AddHashOnly(entityProps, "schemaHash", schemaName);
         AddHashOnly(entityProps, "catalogHash", catalogName);
@@ -1153,6 +1157,64 @@ public static class LegacyDataMetadataExtractor
         _ = existingFacts;
     }
 
+    private static void AddMappedTypeSyntaxLinks(ScanManifest manifest, List<CodeFact> facts, IReadOnlyDictionary<string, IReadOnlyList<CSharpTypeDeclaration>> csharpTypeDeclarations)
+    {
+        var mappedClassFacts = facts
+            .Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+                && fact.FactType == FactTypes.LegacyDataEntityDeclared
+                && string.Equals(fact.Properties.GetValueOrDefault("metadataFormat"), "nhibernate-hbm", StringComparison.Ordinal)
+                && (fact.Properties.TryGetValue("mappedTypeName", out var typeName) || fact.Properties.TryGetValue("typeName", out typeName))
+                && IsQualifiedTypeName(typeName))
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var fact in mappedClassFacts)
+        {
+            var mappedTypeName = fact.Properties.GetValueOrDefault("mappedTypeName") ?? fact.Properties.GetValueOrDefault("typeName");
+            if (string.IsNullOrWhiteSpace(mappedTypeName)
+                || !csharpTypeDeclarations.TryGetValue(mappedTypeName, out var declarations)
+                || declarations.Count == 0)
+            {
+                continue;
+            }
+
+            if (declarations.Count > 1)
+            {
+                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataModelGeneratedLink, "AmbiguousGeneratedCodeLink", "Multiple C# type declarations matched an NHibernate mapped class; no mapped-symbol link was inferred.", null);
+                continue;
+            }
+
+            var declaration = declarations[0];
+            var properties = MetadataProperties(fact.Properties.GetValueOrDefault("metadataKind") ?? "NHibernateHbm", fact.Properties.GetValueOrDefault("metadataHash") ?? string.Empty, "mapped-symbol-link");
+            properties["coverageLabel"] = "reduced";
+            properties["linkKind"] = "mapped-type-syntax";
+            properties["limitations"] = "syntax-only-mapped-type-link";
+            properties["sourceMetadataFactId"] = fact.FactId;
+            properties["supportingFactIds"] = fact.FactId;
+            properties["symbolRole"] = "mapped-class";
+            if (fact.Properties.TryGetValue("stableModelKey", out var stableModelKey))
+            {
+                properties["stableModelKey"] = stableModelKey;
+            }
+
+            properties["generatedCodeFileName"] = Path.GetFileName(declaration.FilePath);
+            AddSafeName(properties, "mappedTypeName", "mappedTypeHash", mappedTypeName);
+            AddSafeName(properties, "typeName", "typeHash", declaration.FullName);
+
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.LegacyDataGeneratedCodeLinked,
+                RuleIds.LegacyDataModelGeneratedLink,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                Evidence(declaration.FilePath, declaration.Line, $"{declaration.FilePath}:{declaration.FullName}:{fact.FactId}:mapped-type-syntax"),
+                targetSymbol: TargetFrom(properties, "typeName", "typeHash"),
+                contractElement: TargetFrom(properties, "typeName", "typeHash"),
+                properties: properties));
+        }
+    }
+
     private static IReadOnlyList<GeneratedCandidate> LoadGeneratedCandidates(
         string repoPath,
         ScanManifest manifest,
@@ -1190,6 +1252,51 @@ public static class LegacyDataMetadataExtractor
         }
 
         return candidates;
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<CSharpTypeDeclaration>> LoadCSharpTypeDeclarations(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
+    {
+        var declarations = new SortedDictionary<string, List<CSharpTypeDeclaration>>(StringComparer.Ordinal);
+        foreach (var item in inventory
+            .Where(item => item.Kind is "CSharp" or "WebFormsCodeBehind" or "WinFormsDesigner")
+            .Where(item => item.SizeBytes <= MaxGeneratedDesignerBytes)
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
+        {
+            var fullPath = Path.Combine(repoPath, item.RelativePath);
+            try
+            {
+                var source = File.ReadAllText(fullPath);
+                var tree = CSharpSyntaxTree.ParseText(source, path: item.RelativePath);
+                var root = tree.GetCompilationUnitRoot();
+                foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
+                {
+                    var fullName = FullTypeName(type);
+                    if (string.IsNullOrWhiteSpace(fullName))
+                    {
+                        continue;
+                    }
+
+                    if (!declarations.TryGetValue(fullName, out var matches))
+                    {
+                        matches = new List<CSharpTypeDeclaration>();
+                        declarations[fullName] = matches;
+                    }
+
+                    matches.Add(new CSharpTypeDeclaration(item.RelativePath, fullName, Line(tree, type)));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return declarations.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<CSharpTypeDeclaration>)pair.Value
+                .OrderBy(declaration => declaration.FilePath, StringComparer.Ordinal)
+                .ThenBy(declaration => declaration.Line)
+                .ToArray(),
+            StringComparer.Ordinal);
     }
 
     private static bool TryLoadMetadataDocument(
@@ -1613,6 +1720,27 @@ public static class LegacyDataMetadataExtractor
             : "UnsupportedLegacyOrmMappingShape";
     }
 
+    private static string? NHibernateMappedTypeName(XElement classElement)
+    {
+        var className = AttributeValue(classElement, "name");
+        if (string.IsNullOrWhiteSpace(className))
+        {
+            return null;
+        }
+
+        className = className.Split(',', 2, StringSplitOptions.TrimEntries)[0];
+        if (IsQualifiedTypeName(className))
+        {
+            return className;
+        }
+
+        var namespaceName = AttributeValue(classElement, "namespace")
+            ?? classElement.Ancestors().Select(ancestor => AttributeValue(ancestor, "namespace")).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        return !string.IsNullOrWhiteSpace(namespaceName)
+            ? $"{namespaceName.Trim()}.{className.Trim()}"
+            : null;
+    }
+
     private static string? UnsupportedOrmFamilyFromDocument(XDocument document)
     {
         var rootName = document.Root?.Name.LocalName ?? string.Empty;
@@ -1841,6 +1969,38 @@ public static class LegacyDataMetadataExtractor
         return trimmed;
     }
 
+    private static bool IsQualifiedTypeName(string? typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            return false;
+        }
+
+        var trimmed = typeName.Trim();
+        return trimmed.Contains('.', StringComparison.Ordinal)
+            && trimmed.All(ch => char.IsLetterOrDigit(ch) || ch is '_' or '.' or '+');
+    }
+
+    private static string FullTypeName(TypeDeclarationSyntax type)
+    {
+        var parts = new Stack<string>();
+        for (SyntaxNode? current = type; current is not null; current = current.Parent)
+        {
+            switch (current)
+            {
+                case TypeDeclarationSyntax typeDeclaration:
+                    parts.Push(typeDeclaration.Identifier.ValueText);
+                    break;
+                case BaseNamespaceDeclarationSyntax namespaceDeclaration:
+                    // Name.ToString() keeps the full dotted namespace segment for block-scoped and file-scoped namespaces.
+                    parts.Push(namespaceDeclaration.Name.ToString());
+                    break;
+            }
+        }
+
+        return string.Join(".", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
     private static string? LastXPathIdentifier(string? xpath)
     {
         if (string.IsNullOrWhiteSpace(xpath))
@@ -1946,4 +2106,6 @@ public static class LegacyDataMetadataExtractor
             return TypeLines.GetValueOrDefault(typeName, 1);
         }
     }
+
+    private sealed record CSharpTypeDeclaration(string FilePath, string FullName, int Line);
 }
