@@ -1338,7 +1338,7 @@ rules:
   - id: legacy.data.generated-link.v1
     name: Legacy data generated-code linkage
     description: Links DBML, EDMX, and typed DataSet metadata descriptors to checked-in generated files or compiler-resolved generated symbols when deterministic evidence exists.
-    evidenceTier: Tier2Structural
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - LegacyDataGeneratedCodeLinked
       - AnalysisGap

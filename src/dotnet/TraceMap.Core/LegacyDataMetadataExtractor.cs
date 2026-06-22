@@ -1124,8 +1124,8 @@ public static class LegacyDataMetadataExtractor
             var metadataBaseName = Path.GetFileNameWithoutExtension(fact.Evidence.FilePath);
             var scopedMatches = generatedCandidates
                 .Where(candidate => string.IsNullOrWhiteSpace(explicitGeneratedName)
-                    ? Path.GetFileNameWithoutExtension(candidate.FilePath).StartsWith(metadataBaseName, StringComparison.OrdinalIgnoreCase)
-                    : Path.GetFileName(candidate.FilePath).Equals(explicitGeneratedName, StringComparison.OrdinalIgnoreCase))
+                    ? candidate.FileNameWithoutExtension.StartsWith(metadataBaseName, StringComparison.OrdinalIgnoreCase)
+                    : candidate.FileName.Equals(explicitGeneratedName, StringComparison.OrdinalIgnoreCase))
                 .SelectMany(candidate => candidate.LinesFor(expectedType).Select(line => new GeneratedTypeMatch(candidate.FilePath, line)))
                 .ToArray();
 
@@ -1160,13 +1160,47 @@ public static class LegacyDataMetadataExtractor
             }
             else if (scopedMatches.Length > 1)
             {
-                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataGeneratedLink, "AmbiguousGeneratedCodeLink", "Multiple generated-code candidates matched a legacy data descriptor.", null, fact.Evidence.StartLine);
+                AddGeneratedLinkGap(manifest, facts, fact, "AmbiguousGeneratedCodeLink", "Multiple generated-code candidates matched a legacy data descriptor.", expectedType);
             }
             else if (!string.IsNullOrWhiteSpace(explicitGeneratedName))
             {
-                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataGeneratedLink, "MissingGeneratedCode", "Metadata names generated output that was not checked in.", null, fact.Evidence.StartLine);
+                AddGeneratedLinkGap(manifest, facts, fact, "MissingGeneratedCode", "Metadata names generated output that was not checked in.", expectedType);
             }
         }
+    }
+
+    private static void AddGeneratedLinkGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        CodeFact sourceFact,
+        string classification,
+        string message,
+        string expectedType)
+    {
+        var properties = MetadataProperties(
+            sourceFact.Properties.GetValueOrDefault("metadataKind") ?? "LegacyData",
+            sourceFact.Properties.GetValueOrDefault("metadataHash") ?? string.Empty,
+            "generated-code-link-gap");
+        properties["classification"] = classification;
+        properties["coverage"] = "reduced";
+        properties["message"] = message;
+        properties["sourceMetadataFactId"] = sourceFact.FactId;
+        properties["supportingFactIds"] = sourceFact.FactId;
+        properties["symbolRole"] = GeneratedSymbolRole(sourceFact);
+        if (sourceFact.Properties.TryGetValue("stableModelKey", out var stableModelKey))
+        {
+            properties["stableModelKey"] = stableModelKey;
+        }
+
+        AddSafeName(properties, "typeName", "typeHash", expectedType);
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyDataGeneratedLink,
+            EvidenceTiers.Tier4Unknown,
+            Evidence(sourceFact.Evidence.FilePath, sourceFact.Evidence.StartLine, $"{sourceFact.Evidence.FilePath}:{sourceFact.Evidence.StartLine}:{classification}:{sourceFact.FactId}:{expectedType}"),
+            targetSymbol: TargetFrom(properties, "typeName", "typeHash"),
+            properties: properties));
     }
 
     private static string GeneratedSymbolRole(CodeFact fact)
@@ -2140,6 +2174,8 @@ public static class LegacyDataMetadataExtractor
     private sealed record GeneratedCandidate(string FilePath, IReadOnlyDictionary<string, IReadOnlyList<int>> TypeLines)
     {
         public IReadOnlySet<string> TypeNames { get; } = TypeLines.Keys.ToHashSet(StringComparer.Ordinal);
+        public string FileName { get; } = Path.GetFileName(FilePath);
+        public string FileNameWithoutExtension { get; } = Path.GetFileNameWithoutExtension(FilePath);
 
         public IReadOnlyList<int> LinesFor(string typeName)
         {

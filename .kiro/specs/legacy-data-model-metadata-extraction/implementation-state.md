@@ -829,6 +829,9 @@ Implemented:
 - Updated `docs/ACCEPTANCE.md` with explicit generated-file, syntax fallback,
   duplicate designer type, and missing explicit designer generated-link
   acceptance rows.
+- PR-loop patch added cached generated-candidate file names, deterministic
+  source/type discriminators on generated-link gaps, and same-line missing
+  generated-code gap ID regression coverage.
 
 Task checkbox mapping:
 
@@ -860,13 +863,14 @@ Deferred within Task 6:
 Validation executed:
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`:
-  passed, 41 tests. Existing NuGet audit warning for
+  passed, 42 tests after the PR-loop patch. Existing NuGet audit warning for
   `SQLitePCLRaw.lib.e_sqlite3` was reported during restore/build output.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModel`:
   passed, 4 tests, with the same existing NU1903 advisory warnings.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 610 tests, with the same
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 611 tests after the PR-loop
+  patch, with the same
   existing NU1903 advisory warnings.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-sample-generated-link-smoke`:
   passed; emitted 27 facts at `Level1SemanticAnalysis`.
@@ -902,4 +906,17 @@ Kiro implementation review:
   generated-link properties. No further Kiro review cycle was run to respect
   the two re-review limit.
 
-PR review-loop status: pending.
+PR review-loop status:
+
+- Initial agent-control loop on PR #296 waited for required Codex/Qodo batching
+  and then returned `actionable_findings` after Qodo completed. Patched
+  Gemini's duplicate `Path.GetFileName*` allocation comments by caching
+  `FileName` and `FileNameWithoutExtension` on `GeneratedCandidate`.
+- Patched Codex's generated-link rule catalog finding by documenting the actual
+  emitted evidence tiers for `legacy.data.generated-link.v1`:
+  `Tier2Structural`, `Tier3SyntaxOrTextual`, and `Tier4Unknown`.
+- Patched Qodo's generated-link gap FactId collision finding by emitting
+  generated-link gaps with `sourceMetadataFactId`, `supportingFactIds`,
+  stable type safe/hash metadata, and a source fact/type discriminator in the
+  evidence hash seed.
+- Final agent-control rerun after this patch: pending.
