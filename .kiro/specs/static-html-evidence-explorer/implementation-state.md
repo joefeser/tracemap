@@ -349,3 +349,80 @@ Follow-ups still intentionally deferred:
   tests, and browser accessibility/no-JavaScript validation.
 - Broader hostname and Unix absolute path classification beyond the existing
   generated-output safety validator categories.
+
+## Implementation Follow-Up Slice: Richer Rule, Gap, And Evidence Metadata
+
+Branch: `codex/implement-static-html-explorer-followup`
+Base: `origin/dev`
+Selected slice: narrow PR 3 continuation for richer local explorer rendering
+using already-supported `scan-manifest.json` and `facts.ndjson` data.
+
+Scope completed:
+
+- Rendered gap rows with source/artifact scope and support IDs in addition to
+  rule ID, tier, kind, affected section, coverage label, and message.
+- Rendered limitation rows with evidence tier, source/artifact scope, support
+  IDs, and claim effect.
+- Rendered rule rows with description and related sections.
+- Added observed evidence rule IDs from `facts.ndjson` to the rules table when
+  the rule is not one of the built-in explorer rules.
+- Emitted a visible `explorer.render.catalog-unavailable.v1` gap when observed
+  fact rule IDs are rendered without a compatible full rule catalog artifact.
+- Rendered evidence rows with artifact ID, source ID, coverage label, and
+  limitation fields in both no-JavaScript HTML and `explorer-data.json`.
+- Added a focused regression test covering HTML/JSON parity, observed rule
+  ordering, catalog-unavailable gaps, support IDs, and safety redaction.
+
+Scope intentionally deferred:
+
+- Full rule catalog artifact loading.
+- Surface, path, reducer-backed row readers.
+- Search/filter expansion beyond the existing safe evidence-row filter.
+- Browser accessibility and public/demo fixture parity expansion.
+
+Validation status:
+
+- Focused explorer tests passed:
+  `dotnet test src/dotnet/TraceMap.sln --filter StaticHtmlEvidenceExplorerTests`
+  with 17 passing tests. Existing `SQLitePCLRaw.lib.e_sqlite3` advisory
+  warnings were reported by restore/build.
+- Required .NET build passed:
+  `dotnet build src/dotnet/TraceMap.sln` with 0 errors and existing
+  `SQLitePCLRaw.lib.e_sqlite3` advisory warnings.
+- Required .NET tests passed:
+  `dotnet test src/dotnet/TraceMap.sln` with 595 passing tests.
+- Private-path guard passed:
+  `./scripts/check-private-paths.sh`.
+- Whitespace check passed:
+  `git diff --check`.
+- Sample smoke passed:
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>/scan`
+  followed by
+  `dotnet run --project src/dotnet/TraceMap.Cli -- explorer generate --input <tmp>/scan --out <tmp>/explorer`.
+  The smoke verified the explorer wrote `index.html` and
+  `data/explorer-data.json` and included observed rules, catalog-unavailable
+  gaps, support IDs, artifact IDs, and source IDs.
+
+Kiro implementation review status:
+
+- Initial implementation review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifacts:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-22T030712-950Z-implementation-claude-sonnet-4.6.*`.
+  Patched blocking findings for SSH-style remote detection in the generated
+  output validator and semantic section-status ordering shared by HTML and
+  `explorer-data.json`. Also annotated the deferred claim-level conflict task.
+- First re-review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifacts:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-22T031205-091Z-re-review-claude-sonnet-4.6.*`.
+  Findings: no blockers. Patched low-cost non-blocking suggestions for the
+  empty local `data:,` favicon comment, redaction section status support IDs,
+  and documentation of the 200-row no-JavaScript evidence-row baseline.
+
+PR status:
+
+- Ready PR URL: pending.
+- PR-loop result: pending.

@@ -106,10 +106,89 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains("not-rendered-in-current-slice", html);
         Assert.Contains(StaticHtmlEvidenceExplorer.SectionStatusRuleId, html);
         Assert.DoesNotContain("complete analysis", html, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            html.IndexOf("<tr><th scope=\"row\">Evidence Overview</th>", StringComparison.Ordinal)
+            < html.IndexOf("<tr><th scope=\"row\">Sources</th>", StringComparison.Ordinal));
+        Assert.True(
+            html.IndexOf("<tr><th scope=\"row\">Sources</th>", StringComparison.Ordinal)
+            < html.IndexOf("<tr><th scope=\"row\">Artifacts</th>", StringComparison.Ordinal));
+        Assert.True(
+            html.IndexOf("<tr><th scope=\"row\">Artifacts</th>", StringComparison.Ordinal)
+            < html.IndexOf("<tr><th scope=\"row\">Evidence Rows</th>", StringComparison.Ordinal));
 
         var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
         Assert.Contains("\"sectionStatuses\"", dataJson);
         Assert.Contains("\"not-rendered-in-current-slice\"", dataJson);
+        Assert.DoesNotContain("C:\\sample-root", dataJson);
+        Assert.DoesNotContain("git@example.com:internal/example-repo.git", dataJson);
+        using var document = JsonDocument.Parse(dataJson);
+        var sectionIds = document.RootElement.GetProperty("sectionStatuses")
+            .EnumerateArray()
+            .Select(row => row.GetProperty("sectionId").GetString() ?? string.Empty)
+            .ToArray();
+        Assert.Equal(
+            [
+                "overview",
+                "sources",
+                "artifacts",
+                "evidence-rows",
+                "surfaces",
+                "paths",
+                "reducer-results",
+                "rules",
+                "redactions"
+            ],
+            sectionIds);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_renders_richer_rule_gap_limitation_and_evidence_metadata()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("3"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.CatalogUnavailableRuleId
+            && gap.GapKind == "catalog-unavailable"
+            && gap.AffectedSection == "rules"
+            && gap.SupportIds.Contains(RuleIds.CSharpSyntaxDeclarations));
+        Assert.Contains(result.Data.Rules, rule =>
+            rule.RuleId == RuleIds.CSharpSyntaxDeclarations
+            && rule.Title == "Observed evidence rule"
+            && rule.RelatedSections.Contains("evidence-rows")
+            && rule.Limitations.Any(limitation => limitation.Contains("partial", StringComparison.OrdinalIgnoreCase)));
+
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("<th>Scope</th>", html);
+        Assert.Contains("<th>Support IDs</th>", html);
+        Assert.Contains("<th>Description</th>", html);
+        Assert.Contains("<th>Artifact ID</th>", html);
+        Assert.Contains("<th>Source ID</th>", html);
+        Assert.Contains("<th>Coverage</th>", html);
+        Assert.Contains(RuleIds.CSharpSyntaxDeclarations, html);
+        Assert.Contains("Observed evidence rule", html);
+        Assert.Contains("artifact:facts-ndjson", html);
+        Assert.Contains("source:scan-output", html);
+
+        var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
+        using var document = JsonDocument.Parse(dataJson);
+        var rules = document.RootElement.GetProperty("rules").EnumerateArray().ToArray();
+        var ruleIds = rules.Select(rule => rule.GetProperty("ruleId").GetString()).ToArray();
+        Assert.Equal(ruleIds.OrderBy(ruleId => ruleId, StringComparer.Ordinal), ruleIds);
+        Assert.Contains(rules, rule =>
+            rule.GetProperty("ruleId").GetString() == RuleIds.CSharpSyntaxDeclarations
+            && rule.GetProperty("description").GetString()!.Contains("facts.ndjson", StringComparison.Ordinal));
+
+        var evidenceRows = document.RootElement.GetProperty("evidenceRows").EnumerateArray().ToArray();
+        Assert.Contains(evidenceRows, row =>
+            row.GetProperty("artifactId").GetString() == "artifact:facts-ndjson"
+            && row.GetProperty("sourceId").GetString() == "source:scan-output"
+            && row.GetProperty("coverageLabel").GetString() == "Failed");
         Assert.DoesNotContain("C:\\sample-root", dataJson);
         Assert.DoesNotContain("git@example.com:internal/example-repo.git", dataJson);
     }
@@ -136,6 +215,16 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains(StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId, pathFailure.Message);
         Assert.Contains("data/explorer-data.json", pathFailure.Message);
         Assert.DoesNotContain(unsafeLocalPath, pathFailure.Message);
+
+        var sshRemote = "git@example.com:internal/example-repo.git";
+        var sshFailure = Assert.Throws<InvalidOperationException>(() =>
+            StaticHtmlEvidenceExplorer.ValidateGeneratedFilesForSafety(new Dictionary<string, string>
+            {
+                ["data/explorer-data.json"] = $$"""{"remote":"{{sshRemote}}"}"""
+            }));
+        Assert.Contains(StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId, sshFailure.Message);
+        Assert.Contains("data/explorer-data.json", sshFailure.Message);
+        Assert.DoesNotContain(sshRemote, sshFailure.Message);
 
         StaticHtmlEvidenceExplorer.ValidateGeneratedFilesForSafety(new Dictionary<string, string>
         {
