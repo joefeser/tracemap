@@ -167,7 +167,7 @@ const blameLanguagePatterns = [
 ];
 
 const sanctionedBoundarySectionPattern =
-  /<section\b(?=[^>]*\bdata-test-planning-boundary\s*=\s*["'][^"']+["'])[^>]*>[\s\S]*?<\/section>/gi;
+  /<section\b(?=[^>]*\bdata-test-planning-boundary\s*=\s*["'](?:stop-conditions|non-claims)["'])[^>]*>[\s\S]*?<\/section>/gi;
 
 export async function validateTestPlanningHandoffDist({ baseUrl = "https://tracemap.tools", dist, errors }) {
   const localErrors = [];
