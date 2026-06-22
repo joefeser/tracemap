@@ -1058,6 +1058,38 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.Evidence.FilePath == "Model.dbml"
             && fact.Properties.GetValueOrDefault("classification") == "MissingGeneratedCode");
         Assert.Equal(3, gap.Evidence.StartLine);
+        Assert.False(string.IsNullOrWhiteSpace(gap.Properties.GetValueOrDefault("sourceMetadataFactId")));
+        Assert.False(string.IsNullOrWhiteSpace(gap.Properties.GetValueOrDefault("supportingFactIds")));
+        Assert.Equal("Customer", gap.Properties.GetValueOrDefault("typeName"));
+    }
+
+    [Fact]
+    public void Scan_emits_distinct_generated_link_gap_ids_for_same_line_descriptors()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.dbml"), """
+            <Database Name="Store" Class="StoreContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007"><Table Name="Customers" Member="Customers"><Type Name="Customer" /></Table><Table Name="Orders" Member="Orders"><Type Name="Order" /></Table></Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var indexPath = Path.Combine(temp.Path, "out", "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+
+        var gaps = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.RuleId == RuleIds.LegacyDataGeneratedLink
+                && fact.Properties.GetValueOrDefault("classification") == "MissingGeneratedCode")
+            .OrderBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(2, gaps.Length);
+        Assert.Equal(2, gaps.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(gaps, gap =>
+        {
+            Assert.Equal(1, gap.Evidence.StartLine);
+            Assert.False(string.IsNullOrWhiteSpace(gap.Properties.GetValueOrDefault("sourceMetadataFactId")));
+            Assert.Equal(gap.Properties.GetValueOrDefault("sourceMetadataFactId"), gap.Properties.GetValueOrDefault("supportingFactIds"));
+        });
     }
 
     [Fact]
