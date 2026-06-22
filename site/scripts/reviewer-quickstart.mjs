@@ -591,7 +591,49 @@ function extractMainHtml(html) {
 }
 
 function stripTagsTight(html) {
-  return String(html).replace(/<[^>]+>/g, "");
+  let text = "";
+  let insideTag = false;
+  let quote = "";
+  const value = String(html);
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (insideTag) {
+      if (quote) {
+        if (char === quote) {
+          quote = "";
+        }
+        continue;
+      }
+
+      if (char === "\"" || char === "'") {
+        quote = char;
+        continue;
+      }
+
+      if (char === ">") {
+        insideTag = false;
+      }
+      continue;
+    }
+
+    if (char === "<") {
+      if (value.startsWith("<!--", index)) {
+        const end = value.indexOf("-->", index + 4);
+        index = end === -1 ? value.length : end + 2;
+        continue;
+      }
+
+      insideTag = true;
+      quote = "";
+      continue;
+    }
+
+    text += char;
+  }
+
+  return text;
 }
 
 function countWords(text) {

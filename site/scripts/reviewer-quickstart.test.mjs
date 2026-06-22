@@ -123,6 +123,17 @@ test("validateReviewerQuickstartDist rejects forbidden claims split across tags"
   assert.match(errors.join("\n"), /forbidden public claim/);
 });
 
+test("validateReviewerQuickstartDist handles quoted angle brackets while scanning text", async (t) => {
+  const root = await createManagedReviewerQuickstartFixture(t, {
+    reviewerHtml: reviewerQuickstartPage('<p>TraceMap pro<span title="a > b">ves</span> runtime behavior.</p>')
+  });
+  const errors = [];
+
+  await validateReviewerQuickstartDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim/);
+});
+
 test("validateReviewerQuickstartDist permits sanctioned boundary copy", async (t) => {
   const root = await createManagedReviewerQuickstartFixture(t, {
     reviewerHtml: reviewerQuickstartPage(`

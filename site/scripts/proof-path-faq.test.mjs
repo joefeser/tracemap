@@ -56,6 +56,19 @@ test("validateProofPathFaqDist reports route metadata regressions", async (t) =>
   assert.match(errors.join("\n"), /nonClaims do not include required term: production traffic/);
 });
 
+test("validateProofPathFaqDist cites route metadata for metadata-only forbidden claims", async (t) => {
+  const root = await createManagedProofPathFaqFixture(t);
+  await rewriteRouteEntry(join(root, "dist"), {
+    summary: "TraceMap proves runtime behavior."
+  });
+  const errors = [];
+
+  await validateProofPathFaqDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim in metadata/);
+  assert.match(errors.join("\n"), /Evidence: routes-index\.json\./);
+});
+
 test("validateProofPathFaqDist rejects forbidden claims outside bounded sections", async (t) => {
   const source = await proofPathFaqPage();
   const root = await createManagedProofPathFaqFixture(t, {
