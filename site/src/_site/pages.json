@@ -95,6 +95,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/test-planning/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/static-vs-runtime/",
     "changefreq": "monthly",
     "priority": "0.7"
