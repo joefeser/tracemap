@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -40,7 +40,10 @@ import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
-import { stakeholderObjectionGuideRoute } from "./stakeholder-objection-guide.mjs";
+import {
+  stakeholderObjectionGuideRoute,
+  validateStakeholderObjectionGuideDist
+} from "./stakeholder-objection-guide.mjs";
 import { stakeholderQuestionIndexRoute } from "./stakeholder-question-index.mjs";
 import {
   teamEvidenceHandoffRequiredLinks,
@@ -129,6 +132,30 @@ test("validateDist requires robots sitemap directive", async () => {
     validateDist({ root }),
     /robots\.txt must include "Sitemap: https:\/\/tracemap\.tools\/sitemap\.xml"/
   );
+});
+
+test("validateStakeholderObjectionGuideDist reports missing supporting routes", async () => {
+  const root = await createDistFixture();
+  const dist = join(root, "dist");
+  const errors = [];
+
+  await rm(join(dist, "static-vs-runtime"), { recursive: true, force: true });
+  await validateStakeholderObjectionGuideDist({ dist, errors });
+
+  assert.match(errors.join("\n"), /Stakeholder objection guide references missing supporting route: \/static-vs-runtime\//);
+});
+
+test("validateStakeholderObjectionGuideDist rejects hard private leaks inside bounded rows", async () => {
+  const root = await createDistFixture();
+  const pagePath = join(root, "dist", "questions", "objections", "index.html");
+  const hardLeak = ["/", "Users", "/private"].join("");
+  const html = await readFile(pagePath, "utf8");
+  const errors = [];
+
+  await writeFile(pagePath, html.replace("raw facts", hardLeak), "utf8");
+  await validateStakeholderObjectionGuideDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /Stakeholder objection guide contains forbidden private or credential-like text/);
 });
 
 async function createDistFixture({
