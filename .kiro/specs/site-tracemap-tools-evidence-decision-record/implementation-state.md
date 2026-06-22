@@ -277,6 +277,18 @@ Results:
   safety target, and 13 legacy modernization evidence-map rows.
 - `cd site && npm run build`: passed.
 
+Post-review fix validation:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed with `Private path guard passed.`
+- `cd site && npm test`: passed, 413 tests.
+- `cd site && npm run validate`: initially failed when run in parallel with
+  `npm run build` because both commands rewrite `site/dist`; rerun
+  sequentially and passed, validating 61 HTML files, 2068 internal references,
+  60 sitemap URLs, 1 legacy story safety target, and 13 legacy modernization
+  evidence-map rows.
+- `cd site && npm run build`: passed.
+
 Browser sanity:
 
 - Started the local site server on port `4174` because port `4173` was already
@@ -321,6 +333,29 @@ Implementation PR-loop status: pending until the implementation PR is created
 and the required `agent-control pr-loop --repo joefeser/tracemap --pr
 <PR_NUMBER> --base dev --require-codex-review --quiet --json` command
 returns a terminal decision.
+
+Implementation PR: `https://github.com/joefeser/tracemap/pull/294`
+
+Implementation PR-loop history:
+
+- Initial implementation PR-loop command:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 294 --base dev --require-codex-review --quiet --json`.
+- First terminal result stopped with `decision: actionable_findings`,
+  `stopReason: UNRESOLVED_REVIEW_THREADS`, and `nextAction:
+  wait_for_required_reviewers` because the required Codex request was active.
+  No patch was made at that point.
+- After waiting and rerunning the same command, required reviewers reached a
+  terminal batch state: Codex `review_completed`, Qodo
+  `actionable_findings`, `requiredReviewBatch.patchAuthorized: true`, and
+  `nextAction: patch_actionable_findings`.
+- Combined findings patched:
+  unused `lowerPageText` removal; test fixture implementation-state path kept
+  inside the temporary fixture root; allowed validation-context stripping
+  scoped to approved record-template and safe-example containers; negation
+  handling tightened so unrelated negated clauses cannot mask a later positive
+  forbidden claim; regression coverage added.
+- Final PR-loop status after the post-review fix commit: pending rerun after
+  the fix commit is pushed.
 
 ## Residual Risk
 

@@ -91,6 +91,20 @@ test("validateEvidenceDecisionRecordDist rejects mislabeled unsafe-example wrapp
   assert.match(errors.join("\n"), /forbidden positive claim/);
 });
 
+test("validateEvidenceDecisionRecordDist rejects positive claims after unrelated negated clauses", async (t) => {
+  const root = await createManagedEvidenceDecisionRecordFixture(t, {
+    pageHtml: (await canonicalPage()).replace(
+      "</main>",
+      "<p>TraceMap does not prove runtime behavior but approves release decisions.</p></main>"
+    )
+  });
+  const errors = [];
+
+  await validateEvidenceDecisionRecordDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden positive claim/);
+});
+
 test("validateEvidenceDecisionRecordDist rejects raw material outside allowed contexts", async (t) => {
   const root = await createManagedEvidenceDecisionRecordFixture(t, {
     pageHtml: (await canonicalPage()).replace("</main>", "<p>Share raw facts in the public record.</p></main>")

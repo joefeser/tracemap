@@ -291,7 +291,6 @@ async function createDistFixture({
 async function writeEvidenceDecisionRecordImplementationState(root) {
   const statePath = join(
     root,
-    "..",
     ".kiro",
     "specs",
     "site-tracemap-tools-evidence-decision-record",
