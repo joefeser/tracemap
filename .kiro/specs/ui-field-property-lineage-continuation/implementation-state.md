@@ -1,7 +1,7 @@
 # UI Field Property Lineage Continuation Implementation State
 
-Status: partial-implementation-in-progress
-Readiness: implementation-partial
+Status: partial-implementation-pr-open
+Readiness: implementation-partial-pr-open
 Branch: codex/implement-ui-field-property-lineage-continuation
 Target PR base: dev
 Public claim level: hidden
@@ -165,7 +165,7 @@ Passed:
 
 ## PR State
 
-PR: not opened yet
+PR: https://github.com/joefeser/tracemap/pull/293
 
 PR-loop result: not run yet.
 
