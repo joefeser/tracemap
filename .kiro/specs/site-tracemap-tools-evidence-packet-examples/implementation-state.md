@@ -145,7 +145,8 @@ Results:
 - `git diff --check`: passed with no output.
 - `./scripts/check-private-paths.sh`: passed with
   `Private path guard passed.`
-- `cd site && npm test`: passed, 359 tests.
+- `cd site && npm test`: passed initially with 359 tests; passed after
+  review fixes with 360 tests.
 - `cd site && npm run validate`: passed; generated output validation reported
   56 HTML files, 1873 internal references, 55 sitemap URLs, 1 legacy story
   safety target, and 13 legacy modernization evidence-map rows.
@@ -167,6 +168,38 @@ metadata, sitemap coverage, adjacent links, inbound links, word count
 450-1300, allowed evidence tiers, stop blocked marker, forbidden claims, hard
 private material, raw/private material outside sanctioned boundaries, and blame
 language.
+
+## PR Review Loop State
+
+PR loop opened one Codex review request and later reported actionable findings.
+
+Patched findings:
+
+- Codex review thread: `.kiro/specs/site-tracemap-tools-evidence-packet-examples/tasks.md`
+  still said `Status: not-started` after the implementation checkboxes were
+  completed. Patch: changed task packet status to `implemented`.
+- Qodo finding: the route validator did not block raw artifact filename tokens
+  such as `facts.ndjson`, `.sqlite`, `scan-manifest.json`,
+  `logs/analyzer.log`, and `.tracemap` outside sanctioned boundary copy.
+  Patch: added explicit raw artifact token patterns and a regression test.
+- Qodo finding: two example rule-family values were not canonical catalog rule
+  IDs. Patch: replaced the gap example with `csharp.semantic.workspace.v1`
+  and marked the stop-condition example as `N/A: public-copy stop condition;
+  no scanner-emitted rule placeholder`.
+
+Validation after patching review findings:
+
+```bash
+git diff --check
+./scripts/check-private-paths.sh
+cd site && npm test
+cd site && npm run build
+cd site && npm run validate
+```
+
+Results: all passed; `npm test` reported 360 tests and `npm run validate`
+reported 56 HTML files, 1873 internal references, 55 sitemap URLs, 1 legacy
+story safety target, and 13 legacy modernization evidence-map rows.
 
 Spec-only validation passed on 2026-06-21.
 

@@ -95,6 +95,15 @@ const forbiddenClaimPatterns = [
 ];
 
 const rawMaterialPatterns = [
+  /\b[\w.-]+\.ndjson\b/i,
+  /\b[\w.-]+\.sqlite\b/i,
+  /\bfacts\.ndjson\b/i,
+  /\bindex\.sqlite\b/i,
+  /\breport\.md\b/i,
+  /\bscan-manifest\.json\b/i,
+  /\blogs\/analyzer\.log\b/i,
+  /\banalyzer\.log\b/i,
+  /\b\.tracemap\b/i,
   /\braw facts?\b/i,
   /\braw SQLite(?: content)?\b/i,
   /\banalyzer logs?\b/i,
