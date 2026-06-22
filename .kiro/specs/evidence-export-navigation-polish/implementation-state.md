@@ -1,18 +1,21 @@
 # Evidence Export Navigation Polish Implementation State
 
-Status: spec-ready
-Readiness: ready-for-implementation
-Branch: codex/spec-evidence-export-navigation-polish
+Status: implemented
+Readiness: ready-for-pr-loop
+Branch: codex/implement-evidence-export-navigation-polish
 PR target: dev
-PR: https://github.com/joefeser/tracemap/pull/284
+PR: https://github.com/joefeser/tracemap/pull/295
 Primary issue: #189
-Public claim level: hidden until implemented and validated
+Public claim level: hidden/local export behavior only; generated navigation remains presentation metadata over deterministic evidence
 
 ## Scope
 
-This is a spec-only branch for the next evidence export navigation polish
-slice. It creates a follow-up specification over already shipped vault and
-docs-export behavior. It does not implement product code.
+This implementation branch delivers the first product slice for the reviewed
+evidence export navigation polish spec. The slice is intentionally narrow:
+docs-export now emits deterministic family index pages and per-chunk navigation
+links in both JSONL and Markdown. It does not alter vault graph identity,
+claim-level promotion, route/property-flow projection, or external RAG/vector
+systems.
 
 ## Repository Grounding
 
@@ -45,12 +48,17 @@ Reviewed:
 - Preserve public/demo strictness and hidden/local safety labeling.
 - Keep RAG/vector systems as consumers only; their output is not TraceMap
   evidence.
-- Do not add product code, site files, generated output, rule catalog entries,
-  or docs outside this spec packet in the spec PR.
+- Implementation slice chosen for this branch: docs-export chunk navigation.
+  The exporter now populates the existing additive `links` field, writes
+  `chunks/<family>/index.md` files, and renders chunk navigation sections.
+- No schema version bump was introduced. Existing JSONL consumers keep the same
+  chunk schema and receive non-empty `links`.
+- No new rule IDs are emitted in this slice.
+- Vault safe-name and collision hardening remains a follow-up from this spec.
 
 ## Review State
 
-Planned review commands:
+Spec review history:
 
 ```bash
 node scripts/kiro-review.mjs --phase evidence-export-navigation-polish --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
@@ -84,6 +92,33 @@ Review results:
   patched into tasks/design for hidden/local rejection tests and old-format
   tolerance tests if a schema version bump is introduced.
 
+Planned implementation review:
+
+```bash
+node scripts/kiro-review.mjs --phase evidence-export-navigation-polish --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
+```
+
+Implementation review results:
+
+- Sonnet implementation review completed with full coverage and returned
+  Medium/Low spec-traceability findings. Patched the Medium chunk-size test
+  obligation and clarified hidden classifier, slug derivation, and `--force`
+  semantics.
+- Sonnet re-review completed with full coverage and returned one Medium
+  spec-traceability finding about absent-family behavior across vault and
+  docs-export. Patched requirements/design/tasks to document per-surface
+  divergence and testing obligations. Low findings around aliases, migration
+  note location, route/property-flow testability, raw SQL/config tests, and
+  candidate rule triggers were also patched.
+- Final Sonnet re-review completed with full coverage. It reported no blockers
+  to this implementation slice, but named residual Low/Medium future-slice
+  spec polish. Patched the practical Medium migration-doc ordering note and
+  low wording clarifications for RAG citation boundaries, absent-family
+  limitations, unsafe path-key fallback, speculative linking wording, stale-link
+  tests, and old-format tolerance deferral. No further re-review was run after
+  that patch because the two re-review cycle cap was reached and the remaining
+  work was spec clarification, not a product-code blocker.
+
 ## Validation
 
 Planned for this spec-only PR:
@@ -97,11 +132,24 @@ Completed:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
+- `dotnet test src/dotnet/TraceMap.sln --filter EvidenceDocsExportTests`:
+  passed, 10 tests after PR-loop review fixes. Existing NU1903 warnings for
+  `SQLitePCLRaw.lib.e_sqlite3` were reported during restore and are unrelated
+  to this slice.
+- `dotnet test src/dotnet/TraceMap.sln --filter "VaultExport|EvidenceDocs"`:
+  passed, 43 tests after PR-loop review fixes. Existing NU1903 warnings for
+  `SQLitePCLRaw.lib.e_sqlite3` were reported during restore and are unrelated
+  to this slice.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing NU1903 warnings
+  for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 607 tests after PR-loop review
+  fixes. Existing NU1903 warnings for `SQLitePCLRaw.lib.e_sqlite3` were
+  reported during restore and are unrelated to this slice.
+- Final post-review `git diff --check`: passed.
+- Final post-review `./scripts/check-private-paths.sh`: passed.
 
-## PR State
+## Spec PR History
 
-- Branch pushed to `origin/codex/spec-evidence-export-navigation-polish`.
-- Ready PR opened to `dev`: https://github.com/joefeser/tracemap/pull/284.
 - PR loop found actionable Qodo/Codex findings on the first reviewed heads.
   Patched status vocabulary to `spec-ready`, confirmed the PR-open task was
   already checked on the latest head, and aligned the design `safetyProfile`
@@ -114,11 +162,27 @@ Completed:
   `dev` quorum policy; no unresolved threads, pending checks, failed checks, or
   actionable bot findings remained at that head.
 
+## Implementation PR State
+
+- Implementation branch pushed to
+  `origin/codex/implement-evidence-export-navigation-polish`.
+- Ready implementation PR opened to `dev`:
+  https://github.com/joefeser/tracemap/pull/295.
+- Initial PR loop returned actionable unresolved review threads after Codex and
+  Qodo returned. Patched Codex's JSONL-only dead Markdown-link finding by
+  emitting chunk navigation links only when Markdown output is requested.
+  Patched Sourcery's path normalization finding by normalizing the full target
+  path before relative-link calculation. Added a JSONL-only regression test.
+- PR loop rerun for head `18c5284fe75500b3b7939f0bfba13ed5e36192ae` returned
+  `merge_ready` with stop reason `NONE`. Unresolved review threads, pending
+  checks, failed checks, and actionable bot findings were all zero. Residual
+  risk was medium because Codex reviewed the previous head, but no stale
+  actionable Codex findings remained and Qodo returned on the review-fix path.
+
 ## Follow-Ups For Implementation
 
-- Implement the smallest coherent product slice first: deterministic
-  safe-name/collision hardening and navigation indexes.
+- Vault safe-name/collision hardening remains open.
 - Then add route-flow/property-flow navigation entries when compatible report
   inputs are present.
-- Then polish docs-export chunk anchors/backreferences and RAG retrieval
-  boundaries.
+- Then add stable section anchors and richer RAG retrieval boundaries if still
+  useful after this docs-export navigation slice.
