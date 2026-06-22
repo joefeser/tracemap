@@ -364,9 +364,10 @@ Acceptance criteria:
   rationale plus the three unchosen placements as rejected alternatives.
 - Validation checks rendered text, decoded HTML, raw HTML attributes, alt
   text, captions, link anchor text, link title attributes, metadata, sitemap
-  output, discovery output, tests, fixtures, and generated pages for forbidden
-  approval, decision, release, safety, runtime, production, absence-of-impact,
-  complete-coverage, AI/LLM, embedding, vector database,
+  output, discovery output, generated pages, passing validation fixtures, and
+  public-output fixtures for forbidden approval, decision, release, safety,
+  runtime, production, absence-of-impact, complete-coverage, AI/LLM, embedding,
+  vector database,
   prompt-classification, autonomous-decision, and
   replacement-of-human-judgment claims. The check must allow those terms only
   inside explicit non-claim, limitation, stop-condition,
@@ -389,10 +390,13 @@ Acceptance criteria:
   outside any structurally allowed unsafe-example region, and asserts
   validation fails. This fixture proves the validator checks structural
   boundaries, not only marker names.
+- Negative fixtures may contain the forbidden claim text or private/raw tokens
+  they are designed to reject, but only as isolated failing inputs. They must
+  not be included in public-output absence sweeps or passing fixture sweeps.
 - Validation checks rendered text, decoded HTML, raw HTML attributes, alt
-  text, captions, metadata, sitemap output, discovery output, tests, fixtures,
-  and generated pages for forbidden private/raw material and credential-like
-  values.
+  text, captions, metadata, sitemap output, discovery output, generated pages,
+  passing validation fixtures, and public-output fixtures for forbidden
+  private/raw material and credential-like values.
 - Validation enforces rendered word count bounds of 700 to 2500 words unless
   amended in `implementation-state.md`. The 700-word floor ensures all
   required sections and fields are substantively present, and the 2500-word
