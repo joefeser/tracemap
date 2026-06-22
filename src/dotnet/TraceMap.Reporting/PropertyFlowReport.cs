@@ -2054,7 +2054,13 @@ public static class PropertyFlowReporter
             null,
             null,
             null,
-            roots.Select(root => root.CombinedFactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            roots
+                .Where(root => root is not null)
+                .Select(root => root.CombinedFactId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray(),
             ["Route-flow evidence is additive context only when tied to the selected property through rule-backed value-origin, payload, model-binding, assignment, mapping, or equivalent property-specific evidence."])
         {
             SupportingSourceIds = sourceIds,
