@@ -421,11 +421,17 @@ function validateForbiddenText({ errors, text, artifact }) {
   }
 
   for (const pattern of forbiddenClaimPatterns) {
-    const match = text.match(pattern);
-    if (match && !isNegatedClaimContext(text, match.index ?? 0, match[0].length)) {
-      errors.push(withEvidence(`Owner follow-up map contains forbidden claim wording: ${match[0]}`, artifact));
+    for (const match of matchAllPattern(text, pattern)) {
+      if (!isNegatedClaimContext(text, match.index ?? 0, match[0].length)) {
+        errors.push(withEvidence(`Owner follow-up map contains forbidden claim wording: ${match[0]}`, artifact));
+      }
     }
   }
+}
+
+function matchAllPattern(text, pattern) {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  return text.matchAll(new RegExp(pattern.source, flags));
 }
 
 function isNegatedClaimContext(text, index, length) {
