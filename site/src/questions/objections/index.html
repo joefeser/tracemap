@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap objection guide that routes skeptical stakeholder questions to evidence checks, stop conditions, limitations, and next owners."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Stakeholder Objection Guide | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/questions/objections/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Stakeholder Objection Guide">
+    <meta
+      property="og:description"
+      content="Use skeptical questions to check public-safe TraceMap evidence without upgrading static evidence into broader conclusions."
+    >
+    <meta property="og:url" content="https://tracemap.tools/questions/objections/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Stakeholder objection guide</p>
+        <h1>Make hard questions useful before anyone repeats a claim.</h1>
+        <p class="hero-subhead">
+          This guide turns objections from managers, reviewers, engineers, and
+          skeptical stakeholders into evidence checks, stop conditions,
+          limitations, and owner handoffs.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page is an objection-to-evidence handoff, not a proof claim,
+          FAQ replacement, limitation replacement, release gate, or runtime
+          workflow.
+        </p>
+        <nav class="hero-actions" aria-label="Objection guide quick links">
+          <a class="button primary" href="#objection-matrix">Open objection matrix</a>
+          <a class="button secondary" href="/questions/">Question index</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+          <a class="button secondary" href="/static-vs-runtime/">Static vs runtime</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="how-to-use">
+        <div>
+          <p class="section-kicker">How to use it</p>
+          <h2>Start with the objection, then keep the boundary attached.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe short answer</strong><span>Use bounded language such as can orient, can show static evidence, needs owner review, or cannot support that conclusion.</span></div>
+          <div><strong>Evidence to check</strong><span>Look for rule ID or rule family, evidence tier, coverage label, proof path, scan status, limitation, or public-safe summary.</span></div>
+          <div><strong>Stop condition</strong><span>Name the point where the available public evidence becomes insufficient, private-only, raw-only, reduced, unavailable, or outside static boundaries.</span></div>
+          <div><strong>Next owner</strong><span>Route the remaining question to a role category. Do not turn owner routing into accountability assignment.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="objection-matrix" aria-labelledby="objection-matrix-heading">
+        <div class="section-header">
+          <p class="section-kicker">Objection matrix</p>
+          <h2 id="objection-matrix-heading">Each row answers only what public-safe static evidence can support.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-stakeholder-objection-guide>
+            <caption>
+              Every row is concept-level orientation. A safe answer is not an
+              approval, certification, incident finding, runtime finding, or
+              absence-of-impact statement.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Objection</th>
+                <th scope="col">Safe short answer</th>
+                <th scope="col">Evidence to check</th>
+                <th scope="col">Stop condition</th>
+                <th scope="col">Next owner</th>
+                <th scope="col">Public claim level</th>
+                <th scope="col">Limitation/non-claim</th>
+                <th scope="col">Supporting public route</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="objection-runtime-behavior" data-objection-row data-objection-family="runtime-behavior">
+                <td data-field="objection">Does this prove runtime behavior?</td>
+                <td data-field="safeShortAnswer">No. TraceMap can orient static repository evidence; runtime behavior needs runtime evidence and service-owner interpretation.</td>
+                <td data-field="evidenceToCheck">Rule ID or rule family, evidence tier, coverage label, proof path, scan commit context, and the static-versus-runtime boundary.</td>
+                <td data-field="stopCondition">Stop when the question asks what actually ran, failed, served traffic, or behaved in production.</td>
+                <td data-field="nextOwner">Runtime observability owner or service owner.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="limitationNonClaim">Does not prove runtime behavior, production requests, incident timeline, or operational state.</td>
+                <td data-field="supportingRoute"><a href="/static-vs-runtime/"><code>/static-vs-runtime/</code></a></td>
+              </tr>
+              <tr id="objection-release-approval" data-objection-row data-objection-family="release-approval">
+                <td data-field="objection">Can I use this for release approval?</td>
+                <td data-field="safeShortAnswer">No. TraceMap evidence can inform review questions; release decisions need release owners and the release process.</td>
+                <td data-field="evidenceToCheck">Claim level, proof path, limitation, validation status, tests, code review, source review, and release-review inputs.</td>
+                <td data-field="stopCondition">Stop when the answer would approve, block, certify, or declare a release safe.</td>
+                <td data-field="nextOwner">Release owner, test owner, code reviewer, and service owner.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="limitationNonClaim">Does not approve releases, certify safety, replace tests, or replace human release judgment.</td>
+                <td data-field="supportingRoute"><a href="/review-claim-checklist/"><code>/review-claim-checklist/</code></a></td>
+              </tr>
+              <tr id="objection-production-traffic" data-objection-row data-objection-family="production-traffic-performance">
+                <td data-field="objection">Does this show production traffic or endpoint performance?</td>
+                <td data-field="safeShortAnswer">No. Static evidence can show code references or route surfaces when supported; traffic and performance need observability evidence.</td>
+                <td data-field="evidenceToCheck">Endpoint or route evidence surface, public-safe proof path, coverage label, and runtime telemetry boundary.</td>
+                <td data-field="stopCondition">Stop when the question needs live request counts, latency, throughput, errors, dashboards, traces, or metrics.</td>
+                <td data-field="nextOwner">Runtime observability owner or service owner.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="limitationNonClaim">Does not show production traffic, endpoint performance, live request behavior, or runtime errors.</td>
+                <td data-field="supportingRoute"><a href="/static-vs-runtime/"><code>/static-vs-runtime/</code></a></td>
+              </tr>
+              <tr id="objection-ai-analysis" data-objection-row data-objection-family="ai-analysis">
+                <td data-field="objection">Is this AI analysis?</td>
+                <td data-field="safeShortAnswer">No. Core scanner and reducer claims are deterministic, rule-backed, and evidence-tiered.</td>
+                <td data-field="evidenceToCheck">Rule IDs or rule families, extractor version, evidence tier, coverage label, limitations, and generated public-safe summaries.</td>
+                <td data-field="stopCondition">Stop if the claim depends on LLM judgment, embeddings, vector databases, prompt classification, or confidence without rule evidence.</td>
+                <td data-field="nextOwner">TraceMap owner or reviewer.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="limitationNonClaim">Does not provide AI impact analysis, LLM analysis, prompt classification, embeddings, or vector database reasoning in the core scanner or reducer.</td>
+                <td data-field="supportingRoute"><a href="/capabilities/"><code>/capabilities/</code></a></td>
+              </tr>
+              <tr id="objection-missing-evidence" data-objection-row data-objection-family="missing-evidence">
+                <td data-field="objection">Does missing evidence mean no impact?</td>
+                <td data-field="safeShortAnswer">No. Missing evidence is a gap or unknown unless a reducer-backed public-safe proof path says otherwise.</td>
+                <td data-field="evidenceToCheck">Coverage label, analysis gaps, rule family, limitation, proof path, and any reducer-backed public-safe result.</td>
+                <td data-field="stopCondition">Stop when evidence is absent, reduced, syntax-only, private-only, raw-only, or unavailable.</td>
+                <td data-field="nextOwner">Service owner, reviewer, or TraceMap owner depending on the gap.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="limitationNonClaim">Does not prove absence of impact, absence of dependency, or complete coverage.</td>
+                <td data-field="supportingRoute"><a href="/limitations/"><code>/limitations/</code></a></td>
+              </tr>
+              <tr id="objection-raw-artifacts" data-objection-row data-objection-family="raw-artifacts">
+                <td data-field="objection">Can I share raw artifacts?</td>
+                <td data-field="safeShortAnswer">No. Public sharing should use public-safe summaries and proof routes, not raw local artifacts.</td>
+                <td data-field="evidenceToCheck">Public-safe route, redaction boundary, artifact family, snippet hash, limitation, and sharing policy.</td>
+                <td data-field="stopCondition">Stop when sharing would expose raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</td>
+                <td data-field="nextOwner">TraceMap site owner, security owner, or repository owner.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="limitationNonClaim">Does not make raw local artifacts public proof or safe to publish.</td>
+                <td data-field="supportingRoute"><a href="/proof-source-catalog/"><code>/proof-source-catalog/</code></a></td>
+              </tr>
+              <tr id="objection-next-owner" data-objection-row data-objection-family="next-owner">
+                <td data-field="objection">Who owns the next answer?</td>
+                <td data-field="safeShortAnswer">TraceMap can point to the kind of owner needed; it does not assign accountability or organizational authority.</td>
+                <td data-field="evidenceToCheck">Objection category, evidence gap, proof path, limitation, and owner role field.</td>
+                <td data-field="stopCondition">Stop when the question asks for service ownership, incident command, release authority, staffing, priority, or organizational decision rights.</td>
+                <td data-field="nextOwner">Manager, service owner, release owner, runtime observability owner, test owner, security owner, or reviewer as appropriate.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="limitationNonClaim">Does not assign ownership, incident command, release authority, staffing, priority, or accountability.</td>
+                <td data-field="supportingRoute"><a href="/questions/"><code>/questions/</code></a></td>
+              </tr>
+              <tr id="objection-reduced-coverage" data-objection-row data-objection-family="reduced-coverage">
+                <td data-field="objection">What do we do under reduced coverage?</td>
+                <td data-field="safeShortAnswer">Keep reduced coverage visible, downgrade the claim, and route the unknown to an owner.</td>
+                <td data-field="evidenceToCheck">Coverage label, analysis gap, build or scan status, evidence tier, limitation, and proof path.</td>
+                <td data-field="stopCondition">Stop when coverage is partial, reduced, failed, unavailable, or too weak for the requested conclusion.</td>
+                <td data-field="nextOwner">TraceMap owner, reviewer, service owner, or build/tooling owner.</td>
+                <td data-field="publicClaimLevel"><code>concept</code></td>
+                <td data-field="limitationNonClaim">Does not normalize partial evidence into full coverage or clean conclusions.</td>
+                <td data-field="supportingRoute"><a href="/limitations/"><code>/limitations/</code></a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="owner-handoffs">
+        <div>
+          <p class="section-kicker">Owner handoffs</p>
+          <h2>TraceMap can name the next role category, not the organization decision.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>service owner</code><span>Interprets service context, source meaning, and follow-up when static evidence is not enough.</span></div>
+          <div><code>runtime observability owner</code><span>Owns logs, traces, metrics, dashboards, request counts, latency, throughput, and runtime evidence.</span></div>
+          <div><code>release owner</code><span>Owns release gates, deployment policy, release process, and final release decisions.</span></div>
+          <div><code>test owner</code><span>Owns reproduction, regression coverage, test results, and verification strategy.</span></div>
+          <div><code>reviewer</code><span>Checks whether proof path, rule basis, tier, coverage, limitation, non-claim, and owner handoff stay attached.</span></div>
+          <div><code>TraceMap owner</code><span>Owns scanner/reducer evidence boundaries, public site copy, rule documentation, validation, and implementation gaps.</span></div>
+          <div><code>security owner</code><span>Reviews publication risk and sharing boundaries for non-public material.</span></div>
+          <div><code>manager</code><span>Coordinates priority after evidence and owner inputs are named.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-objection-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The guide keeps static evidence in its lane.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete coverage, release approval, autonomous approval, or absence of impact.</li>
+          <li>Core scanner and reducer claims do not use AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or prompt-based classification.</li>
+          <li>TraceMap does not replace tests, code review, source review, runtime observability, service-owner review, release process, or human judgment.</li>
+          <li>Public pages should use public-safe summaries and proof routes. Raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, and credential-like values are non-shareable examples, not public proof.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" id="supporting-routes">
+        <div>
+          <p class="section-kicker">Supporting routes</p>
+          <h2>Use the route that matches the objection instead of stretching this page.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/questions/">Stakeholder questions</a>
+          <a href="/manager-faq/">Manager FAQ</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/static-vs-runtime/">Static vs runtime</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/proof-paths/tour/">Proof-path tour</a>
+          <a href="/demo/manager-script/">Manager demo script</a>
+          <a href="/capabilities/">Capabilities</a>
+          <a href="/proof-source-catalog/">Proof-source catalog</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Use this guide with the
+        <a href="/questions/">stakeholder question index</a>,
+        <a href="/limitations/">limitations</a>,
+        and
+        <a href="/review-claim-checklist/">review claim checklist</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

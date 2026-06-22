@@ -50,6 +50,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/questions/objections/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/adoption/",
     "changefreq": "monthly",
     "priority": "0.7"
