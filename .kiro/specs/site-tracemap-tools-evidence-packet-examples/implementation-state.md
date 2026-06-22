@@ -201,6 +201,26 @@ Results: all passed; `npm test` reported 360 tests and `npm run validate`
 reported 56 HTML files, 1873 internal references, 55 sitemap URLs, 1 legacy
 story safety target, and 13 legacy modernization evidence-map rows.
 
+PR-loop result after review fixes:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 275 --base dev --require-codex-review --quiet --json
+```
+
+Result on head `d6434ce016357005ad8b5905c1e1cf2b960ede9b`:
+
+- Decision: `merge_ready`
+- Stop reason: `NONE`
+- Next action: `merge_ready`
+- Checks: no pending or failed checks
+- Review threads: `0` unresolved
+- Actionable bot findings: none
+- Residual risk: `medium`
+- Residual-risk reason: Codex reviewed `7c1071568b645678bf47c76647f16d015f6ea5d8`;
+  current head was `d6434ce016357005ad8b5905c1e1cf2b960ede9b`.
+  The configured `trustedCodeReview` quorum was met by Qodo, with Codex review
+  freshness treated as residual risk by policy.
+
 Spec-only validation passed on 2026-06-21.
 
 ```bash
@@ -243,6 +263,7 @@ Results:
 
 ## Follow-Up Items
 
-- PR loop pending at implementation-state update time. Record final PR-loop
-  decision after the PR is opened and `agent-control pr-loop` completes.
-- No known content or validation follow-ups remain before PR review.
+- No known content or validation follow-ups remain.
+- Final spec-state-only PR-loop note may make the latest head newer than the
+  exact `merge_ready` head recorded above; rerun PR loop on the final pushed
+  head before merge and follow that result.
