@@ -84,6 +84,10 @@ slice. Remaining unchecked items are follow-up slices.
         implementation candidates, dependency symbols, and missing-symbol gaps.
 
 - [ ] 8. Clarify method/service row grouping. Requirements: 3, 5, 6.
+  - Coordination note: the route-flow service/data composition subset of this
+        task is owned by
+        `.kiro/specs/route-flow-service-data-composition-next`. This task keeps
+        broader endpoint-trace completeness work that is not covered there.
   - [ ] Reuse existing `flowRows` where possible instead of duplicating path
         graph rows.
   - [ ] Add safe grouping labels for method rows, service rows, interface
@@ -95,6 +99,10 @@ slice. Remaining unchecked items are follow-up slices.
 
 - [ ] 9. Complete data/query/dependency and value-origin rows. Requirements:
       4, 5, 6.
+  - Coordination note: grouped data/query/dependency/value-origin context that
+        is already joined to selected route-flow evidence is owned by
+        `.kiro/specs/route-flow-service-data-composition-next`. This task keeps
+        broader endpoint-trace completeness work that is not covered there.
   - [ ] Reuse `logicRows` and `dependencySurfaces` for object-shape,
         query-shape, repository/data, package/config, HTTP, queue/event,
         storage, WCF, remoting, and legacy-data evidence.
@@ -108,6 +116,9 @@ slice. Remaining unchecked items are follow-up slices.
 
 - [ ] 10. Enforce coverage, gap, and classification downgrades. Requirements:
       1, 3, 4, 5.
+  - Coordination note: downgrade tests and gaps for service/data grouping rows
+        are owned by `.kiro/specs/route-flow-service-data-composition-next`.
+        This task keeps broader endpoint-trace completeness downgrade coverage.
   - [ ] Keep classification values limited to the existing
         `RouteFlowClassifications` vocabulary.
   - [ ] Require full route-flow coverage before strong or clean no-evidence
