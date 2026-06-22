@@ -461,9 +461,9 @@ public static class CombinedRouteFlowReporter
             CombinedReportHelpers.SafePath(options.IndexPath),
             CombinedReportHelpers.SafePath(options.OutputPath),
             format,
-            routeSelector,
-            clientSelector,
-            endpointSelector,
+            SafeSelector(routeSelector),
+            SafeSelector(clientSelector),
+            SafeSelector(endpointSelector),
             SafeSelector(options.FromWebFormsEvent),
             SafeSelector(options.FromSymbol),
             SafeSelector(options.FromSource),
@@ -1494,7 +1494,7 @@ public static class CombinedRouteFlowReporter
                 var previous = index == 0 ? null : path.Nodes[index - 1];
                 sequence++;
                 var rowKind = edge is null ? "entry" : RowKind(edge, previous);
-                if (edge is not null && rowKind == "interface-implementation-candidate" && previous is not null && !string.Equals(previous.SourceLabel, node.SourceLabel, StringComparison.Ordinal))
+                if (edge is not null && rowKind == "interface-implementation-candidate" && previous is not null && !EndpointSourcesCompatible(previous, node))
                 {
                     gaps.Add(new RouteFlowGap(
                         $"gap:runtime-binding:cross-source:{CombinedReportHelpers.Hash(edge.EdgeId, 16)}",
@@ -2778,7 +2778,8 @@ public static class CombinedRouteFlowReporter
             classification = RouteFlowClassifications.NeedsReviewStaticRouteFlow;
             reasons.Add("Review-tier, weak, implementation-candidate, dynamic, or truncated static evidence is present.");
         }
-        else if (!HasDownstreamFlowEvidence(flowRows) && surfaces.Count == 0)
+        else if (!HasDownstreamFlowEvidence(flowRows)
+            && surfaces.Count == 0)
         {
             classification = RouteFlowClassifications.NoRouteFlowEvidence;
             reasons.Add("Entry evidence matched but no route-flow path or terminal surface remained after filtering.");
@@ -2840,7 +2841,9 @@ public static class CombinedRouteFlowReporter
         flowRows.RemoveAll(row => !string.Equals(row.Classification, requested, StringComparison.Ordinal));
         logicRows.RemoveAll(row => !string.Equals(row.Classification, requested, StringComparison.Ordinal));
         surfaces.RemoveAll(row => !string.Equals(row.Classification, requested, StringComparison.Ordinal));
-        gaps.RemoveAll(gap => !string.Equals(GapClassification(gap), requested, StringComparison.Ordinal) && !string.Equals(gap.GapKind, requested, StringComparison.Ordinal));
+        gaps.RemoveAll(gap => !IsBlockingGap(gap)
+            && !string.Equals(GapClassification(gap), requested, StringComparison.Ordinal)
+            && !string.Equals(gap.GapKind, requested, StringComparison.Ordinal));
         if (flowRows.Count == 0 && logicRows.Count == 0 && surfaces.Count == 0 && gaps.Count == 0)
         {
             gaps.Add(new RouteFlowGap(
@@ -3035,17 +3038,17 @@ public static class CombinedRouteFlowReporter
     {
         if (!string.IsNullOrWhiteSpace(options.Route))
         {
-            return ("route", options.Route, routeSelector);
+            return ("route", options.Route, SafeSelector(routeSelector));
         }
 
         if (!string.IsNullOrWhiteSpace(options.ClientCall))
         {
-            return ("client-call", options.ClientCall, clientSelector);
+            return ("client-call", options.ClientCall, SafeSelector(clientSelector));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromEndpoint))
         {
-            return ("from-endpoint", options.FromEndpoint, endpointSelector);
+            return ("from-endpoint", options.FromEndpoint, SafeSelector(endpointSelector));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromWebFormsEvent))
@@ -3174,7 +3177,7 @@ public static class CombinedRouteFlowReporter
             return RouteFlowClassifications.NeedsReviewStaticRouteFlow;
         }
 
-        if (node is not null && sources.Any(source => source.SourceLabel == node.SourceLabel && !source.IdentityVerified))
+        if (node is not null && sources.Any(source => string.Equals(source.SourceLabel, node.SourceLabel, StringComparison.Ordinal) && !source.IdentityVerified))
         {
             return RouteFlowClassifications.NeedsReviewStaticRouteFlow;
         }
