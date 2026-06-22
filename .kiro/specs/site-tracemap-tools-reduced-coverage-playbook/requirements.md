@@ -358,7 +358,10 @@ Acceptance criteria:
   `/validation/`, `/static-vs-runtime/`, `/questions/objections/`,
   `/proof-paths/faq/`, and `/review-claim-checklist/`, or records each absent
   or moved route as deferred, substituted, or omitted in
-  `implementation-state.md`.
+  `implementation-state.md`. When validating or checking relative paths for
+  these route segments, split paths into segments and check the individual
+  segment sequence rather than using string containment with slash-wrapped
+  substrings, because relative paths may not have a leading slash.
 - When an adjacent route is recorded as absent or deferred in
   `implementation-state.md`, validation verifies that the page omits the
   hyperlink and uses a visible `(planned)` qualifier, or names the surface in
