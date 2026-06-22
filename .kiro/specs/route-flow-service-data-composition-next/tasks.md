@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Next Tasks
 
-Status: reviewed-ready-for-implementation
+Status: implemented-pr1-followups-deferred
 
 ## Spec Delivery Tasks
 
@@ -31,15 +31,15 @@ Status: reviewed-ready-for-implementation
 
 ## Recommended Implementation Slice
 
-- [ ] 4. Verify live route-flow state before product edits. Requirements: 1.
-  - [ ] Confirm the existing `tracemap route-flow` command, JSON report type,
+- [x] 4. Verify live route-flow state before product edits. Requirements: 1.
+  - [x] Confirm the existing `tracemap route-flow` command, JSON report type,
         classification vocabulary, and rule namespace remain the extension
         points.
-  - [ ] Confirm which route-flow rows already exist for flow, logic,
+  - [x] Confirm which route-flow rows already exist for flow, logic,
         dependency surfaces, touched files, touched symbols, argument
         projection, fact-symbol projection, and parameter-forward bridges.
-  - [ ] Stop or narrow scope if the selected continuation is already complete.
-  - [ ] Reconcile overlap with
+  - [x] Stop or narrow scope if the selected continuation is already complete.
+  - [x] Reconcile overlap with
         `.kiro/specs/route-centered-endpoint-trace-completeness` tasks 8-10 by
         recording the exact sub-scope owned here: grouped service/data
         presentation over already-selected route-flow rows, joined
@@ -48,94 +48,98 @@ Status: reviewed-ready-for-implementation
         summaries, selector trace metadata, broad endpoint-trace completeness,
         or unrelated route-flow backlog.
 
-- [ ] 5. Add service/data grouping view-model support. Requirements: 2, 5.
-  - [ ] Reuse existing `flowRows`, `logicRows`, `dependencySurfaces`,
+- [x] 5. Add service/data grouping view-model support. Requirements: 2, 5.
+  - [x] Reuse existing `flowRows`, `logicRows`, `dependencySurfaces`,
         `touchedFiles`, `touchedSymbols`, and gaps rather than duplicating
         conclusions.
-  - [ ] Add safe grouping labels for method, service, interface-candidate,
+  - [x] Add safe grouping labels for method, service, interface-candidate,
         repository, query, data-surface, dependency, legacy-data,
         value-origin, and gap context where evidence supports them.
-  - [ ] Choose the JSON placement for grouping metadata and record it in
+  - [x] Choose the JSON placement for grouping metadata and record it in
         `implementation-state.md`.
-  - [ ] Preserve supporting fact IDs, edge IDs, symbol IDs, rule IDs, evidence
-        tiers, file spans, source labels, source index IDs, coverage, commit
-        SHA, extractor identity, and limitations.
-  - [ ] Ensure grouped context inherits weakest classification, weakest tier,
+  - [x] Preserve supporting fact IDs, edge IDs, rule IDs, evidence
+        tiers, file spans, source labels, coverage, commit SHA, extractor
+        identity, and limitations.
+  - [x] Ensure grouped context inherits weakest classification, weakest tier,
         and weakest coverage from contributing rows.
 
 - [ ] 6. Harden data/query/dependency and value-origin composition.
       Requirements: 3, 4.
-  - [ ] Render object-shape, DTO/projection, query-shape, repository/data,
+  - [x] Render object-shape, DTO/projection, query-shape, repository/data,
         package/config, HTTP, queue/event, storage, WCF, ASMX, Remoting,
         legacy-data, SQL/persistence, and generic dependency evidence only
         when joined to selected route-flow evidence.
-  - [ ] Render value-origin context from `combined_argument_flows` and
+  - [x] Render value-origin context from `combined_argument_flows` and
         `combined_parameter_forward_edges` only as bounded review context.
-  - [ ] Render fact-symbol context only when selected source-local symbols
+  - [x] Render fact-symbol context only when selected source-local symbols
         support the join.
   - [ ] Emit narrower gaps for adjacent but unjoinable data/query/dependency
-        evidence.
-  - [ ] Preserve candidate wording and review-tier caps for interface,
+        evidence. Deferred beyond PR 1; see `implementation-state.md`.
+  - [x] Preserve candidate wording and review-tier caps for interface,
         override, and DI-adjacent evidence.
 
 - [ ] 7. Enforce coverage, gap, and classification downgrades.
       Requirements: 4.
   - [ ] Require full relevant route-flow coverage before strong or clean
-        no-evidence conclusions.
+        no-evidence conclusions. Deferred beyond PR 1; see
+        `implementation-state.md`.
   - [ ] Downgrade or gap reduced coverage, missing optional tables, missing
         schema columns, unknown commit SHA, missing extractor identity, stale
         generated code, unsupported shapes, unjoinable projection rows,
-        ambiguous service/data matches, high fan-out, and truncation.
+        ambiguous service/data matches, high fan-out, and truncation. Deferred
+        beyond PR 1; see `implementation-state.md`.
   - [ ] Ensure truncation gaps are deterministic and do not imply omitted rows
-        are absent.
+        are absent. Deferred beyond PR 1; see `implementation-state.md`.
   - [ ] Ensure every gap has a rule ID, classification, safe scope, supporting
-        IDs where available, and limitations.
+        IDs where available, and limitations. Deferred beyond PR 1; see
+        `implementation-state.md`.
   - [ ] Use existing `SchemaMissing`, `ExtractorUnavailable`, and
         `TruncatedByLimit` gap codes for missing optional schema, missing
         extractor-family evidence, and cap truncation unless a future rule
-        catalog update documents a narrower code before use.
+        catalog update documents a narrower code before use. Deferred beyond
+        PR 1; see `implementation-state.md`.
 
-- [ ] 8. Protect output safety and determinism. Requirements: 5.
-  - [ ] Keep Markdown, JSON, logs, and safe metadata free of raw local paths,
+- [x] 8. Protect output safety and determinism. Requirements: 5.
+  - [x] Keep Markdown, JSON, logs, and safe metadata free of raw local paths,
         raw remotes, private names, private routes, raw SQL, config values,
         endpoint URLs, connection strings, snippets, generated local artifact
         paths, and secrets.
-  - [ ] Cite `combined.route-flow.redaction.v1` for rows where unsafe values
+  - [x] Cite `combined.route-flow.redaction.v1` for rows where unsafe values
         are hashed or omitted.
-  - [ ] Sort arrays and metadata maps deterministically.
-  - [ ] Derive stable IDs only from safe deterministic inputs.
-  - [ ] Preserve explicit `null`, empty arrays, and closed-set gap codes for
+  - [x] Sort arrays and metadata maps deterministically.
+  - [x] Derive stable IDs only from safe deterministic inputs.
+  - [x] Preserve explicit `null`, empty arrays, and closed-set gap codes for
         uncertainty.
 
 - [ ] 9. Add focused tests and validation. Requirements: 6.
-  - [ ] Add route-flow tests for direct service/repository grouping.
+  - [x] Add route-flow tests for direct service/repository grouping.
   - [ ] Add tests for interface single candidate, multiple candidate, no
         candidate, syntax-only candidate, and high fan-out cases where the
         selected slice touches that behavior.
-  - [ ] Add tests for data/query/dependency context rows from existing
+  - [x] Add tests for data/query/dependency context rows from existing
         route-flow evidence.
   - [ ] Add tests for unjoinable projection rows, unsupported attached context,
         missing optional schema, old combined indexes, reduced coverage,
         unknown commit SHA, and clean full-coverage no-evidence behavior.
-  - [ ] Add deterministic JSON and stable-ID tests.
-  - [ ] Add closed-set metadata tests for `groupKind`, `matchKind`, and
+  - [x] Add deterministic JSON and stable-ID tests.
+  - [x] Add closed-set metadata tests for `groupKind`, `matchKind`, and
         `valueSafety` values emitted by the selected slice.
-  - [ ] If `evidenceKind` is emitted, add closed-set metadata tests for it;
+  - [x] If `evidenceKind` is emitted, add closed-set metadata tests for it;
         otherwise assert it remains omitted or `null` and is not used in
         stable IDs.
-  - [ ] Add a backward-compatibility test proving `reportType = "route-flow"`
+  - [x] Add a backward-compatibility test proving `reportType = "route-flow"`
         and the existing JSON version remain unchanged for this additive slice.
-  - [ ] Add a multi-extractor grouping test when the selected implementation
+  - [x] Add a multi-extractor grouping test when the selected implementation
         emits extractor identity at grouped-context level; otherwise assert the
         grouped context relies on supporting row references instead of choosing
         one extractor arbitrarily.
-  - [ ] Add redaction tests for raw SQL, config, URL, route, snippet, path,
+  - [x] Add redaction tests for raw SQL, config, URL, route, snippet, path,
         remote, and secret-like values.
-  - [ ] Assert every emitted rule ID resolves to the rule catalog.
-  - [ ] Run focused route-flow tests, solution build/tests when product code
+  - [x] Assert every emitted rule ID resolves to the rule catalog.
+  - [x] Run focused route-flow tests, solution build/tests when product code
         changes, `git diff --check`, `./scripts/check-private-paths.sh`, and
         relevant pinned smokes or explicit deferrals.
-  - [ ] Record the private legacy route-flow smoke deferral explicitly in
+  - [x] Record the private legacy route-flow smoke deferral explicitly in
         `implementation-state.md` if that smoke is not run during
         implementation.
 

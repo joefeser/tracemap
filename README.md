@@ -106,7 +106,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index .tracemap-combin
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combined.sqlite --out .tracemap-combined.json --format json
 ```
 
-`tracemap route-flow` writes `route-flow-report.md` and `route-flow-report.json` for directory outputs. It is a route-centered static evidence view over a combined index: it preserves rule IDs, evidence tiers, source labels, commit SHAs, file spans, supporting fact/edge IDs, coverage labels, gaps, and limitations. It does not prove runtime execution, dependency-injection target selection, SQL execution, traffic, auth behavior, deployment, or production use.
+`tracemap route-flow` writes `route-flow-report.md` and `route-flow-report.json` for directory outputs. It is a route-centered static evidence view over a combined index: it preserves rule IDs, evidence tiers, source labels, commit SHAs, file spans, supporting fact/edge IDs, coverage labels, gaps, and limitations. The report includes additive context groups that summarize already-selected method, service, repository, query, data-surface, dependency, value-origin, and gap rows without creating new runtime conclusions. It does not prove runtime execution, dependency-injection target selection, SQL execution, traffic, auth behavior, deployment, or production use.
 
 The combined dependency report writes `dependency-report.md` and `dependency-report.json` when `--out` is a directory. It summarizes source coverage, endpoint alignment, HTTP/SQL/package/config surfaces, dependency edges, needs-review rows, known gaps, and static-analysis limitations without mutating the combined database.
 

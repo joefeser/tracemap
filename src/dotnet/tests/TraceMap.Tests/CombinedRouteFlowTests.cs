@@ -71,6 +71,36 @@ public sealed class CombinedRouteFlowTests
             && row.RuleIds.Contains("combined.route-flow.entry.v1"));
         Assert.Contains(result.Report.TouchedSymbols, row => row.DisplayName.Contains("parameter:", StringComparison.Ordinal)
             && row.SymbolKind == "argument-flow");
+        Assert.NotNull(result.Report.ContextGroups);
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "service"
+            && group.DisplayName.Contains("IOrderService", StringComparison.Ordinal)
+            && group.MatchKind == "direct-call"
+            && group.RuleIds.Contains("combined.route-flow.path.v1")
+            && group.Evidence.RuleId == "combined.route-flow.report.v1"
+            && group.SupportingRowIds.Any(id => id.StartsWith("row:", StringComparison.Ordinal)));
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "repository"
+            && group.DisplayName.Contains("OrderRepository", StringComparison.Ordinal)
+            && group.MatchKind == "direct-call");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "query"
+            && group.MatchKind == "dependency-surface"
+            && group.ValueSafety == "hashed"
+            && group.RuleIds.Contains("combined.route-flow.dependency-surface.v1")
+            && group.SafeMetadata.ContainsKey("surfaceKind")
+            && group.SafeMetadata.ContainsKey("tableNameHash"));
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "value-origin"
+            && group.MatchKind == "argument-flow"
+            && group.ValueSafety == "hashed"
+            && group.RuleIds.Contains("combined.route-flow.argument-projection.v1")
+            && group.RuleIds.Contains("combined.route-flow.redaction.v1"));
+        Assert.All(result.Report.ContextGroups!, group =>
+        {
+            Assert.NotEmpty(group.SupportingRowIds);
+            Assert.NotEmpty(group.RuleIds);
+            Assert.NotEmpty(group.EvidenceTiers);
+            Assert.Equal("combined.route-flow.report.v1", group.Evidence.RuleId);
+            Assert.Contains(group.ValueSafety, new[] { "safe", "hashed", "omitted" });
+            Assert.Contains(group.GroupKind, new[] { "method", "service", "interface-candidate", "repository", "query", "data-surface", "dependency", "legacy-data", "value-origin", "gap" });
+        });
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.Contains(result.Report.Snapshot.Sources, source => source.ScannerVersion == "tracemap-milestone15");
         Assert.All(result.Report.FlowRows, row =>
@@ -96,6 +126,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("candidate implementation", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("## Touched Files", markdown);
         Assert.Contains("## Touched Symbols", markdown);
+        Assert.Contains("## Context Groups", markdown);
+        Assert.Contains("| Kind | Name | Match | Value safety | Classification | Coverage | Supporting rows | Evidence |", markdown);
         Assert.Contains("| Kind | Method | Path key | Bridge | Classification | Evidence |", markdown);
         Assert.Contains("method-symbol", markdown);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
@@ -113,6 +145,11 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(parsed!.EntryEvidence, row => row.EntryKind == "route-root"
             && row.BridgeState == "method-symbol"
             && row.Evidence.RuleId == "combined.route-flow.entry.v1");
+        Assert.NotNull(parsed.ContextGroups);
+        Assert.Contains(parsed.ContextGroups!, group => group.GroupKind == "query"
+            && group.MatchKind == "dependency-surface"
+            && group.ValueSafety == "hashed");
+        Assert.DoesNotContain("select * from", JsonSerializer.Serialize(parsed.ContextGroups), StringComparison.OrdinalIgnoreCase);
         Assert.Contains(parsed.TouchedFiles, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
         Assert.Contains(parsed.TouchedSymbols, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
         Assert.All(parsed.TouchedFiles, row =>
@@ -156,6 +193,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(factSymbolProjection.Evidence.SupportingRuleIds, rule => rule == "combined.route-flow.redaction.v1");
         Assert.Contains("tableNameHash", factSymbolProjection.SafeMetadata.Keys);
         Assert.Contains("evidenceKind", factSymbolProjection.SafeMetadata.Keys);
+        Assert.Contains(factSymbolProjection.SafeMetadata["evidenceKind"], new[] { "object-shape", "query-shape", "data-surface", "dependency-surface", "fact-symbol-attachment" });
         Assert.DoesNotContain("factType", factSymbolProjection.SafeMetadata.Keys);
         Assert.DoesNotContain("orders", JsonSerializer.Serialize(factSymbolProjection.SafeMetadata), StringComparison.OrdinalIgnoreCase);
 
@@ -184,6 +222,7 @@ public sealed class CombinedRouteFlowTests
         var node = JsonNode.Parse(json)!.AsObject();
         node.Remove("touchedFiles");
         node.Remove("touchedSymbols");
+        node.Remove("contextGroups");
         node["query"]!.AsObject().Remove("selectorTrace");
         var oldReport = JsonSerializer.Deserialize<RouteFlowReport>(node.ToJsonString(), CombinedDependencyReporter.JsonOptions);
 
@@ -193,7 +232,9 @@ public sealed class CombinedRouteFlowTests
 
         Assert.Contains("- Touched files: `0`", markdown);
         Assert.Contains("- Touched symbols: `0`", markdown);
+        Assert.Contains("- Context groups: `0`", markdown);
         Assert.Contains("- Selector trace: `unavailable`", markdown);
+        Assert.Contains("## Context Groups", markdown);
         Assert.Contains("## Touched Files", markdown);
         Assert.Contains("## Touched Symbols", markdown);
     }
@@ -450,6 +491,18 @@ public sealed class CombinedRouteFlowTests
             && row.Classification == RouteFlowClassifications.ProbableStaticRouteFlow);
         Assert.All(result.Report.FlowRows.Where(row => row.RowKind == "interface-implementation-candidate"),
             row => Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, row.Classification));
+        Assert.True(result.Report.ContextGroups!.Count(group => group.GroupKind == "interface-candidate") >= 2);
+        Assert.All(result.Report.ContextGroups!.Where(group => group.GroupKind == "interface-candidate"),
+            group =>
+            {
+                Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, group.Classification);
+                Assert.Equal("interface-candidate", group.MatchKind);
+                Assert.Contains("combined.route-flow.interface-bridge.v1", group.RuleIds);
+            });
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "gap"
+            && group.SafeMetadata.TryGetValue("gapKind", out var gapKind)
+            && gapKind == "AmbiguousImplementationCandidates"
+            && group.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
 
         var second = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
             combinedPath,
@@ -588,6 +641,14 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingImplementationBridge");
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ImplementationCandidateUnavailable");
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingCallEdge");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "gap"
+            && group.SafeMetadata.TryGetValue("gapKind", out var gapKind)
+            && gapKind == "ImplementationCandidateUnavailable"
+            && group.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "gap"
+            && group.SafeMetadata.TryGetValue("gapKind", out var gapKind)
+            && gapKind == "MissingImplementationBridge"
+            && group.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
     }
 
@@ -655,6 +716,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Empty(result.Report.FlowRows);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "MissingRouteRoot" or "MissingMethodSymbolBridge" or "MissingCallEdge");
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.All(result.Report.ContextGroups!, group => Assert.Equal("gap", group.GroupKind));
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
     }
 
@@ -1015,6 +1077,30 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("- FactSymbolUnsupportedTypeSkipped gap", catalog);
         Assert.Contains("- TraversalBounds gap", catalog);
         Assert.Contains("- route-flow-report.json", catalog);
+    }
+
+    [Fact]
+    public async Task Route_flow_emitted_rule_ids_resolve_to_rule_catalog()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp);
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var catalogIds = RuleCatalogIds();
+
+        var emittedRuleIds = EmittedRouteFlowRuleIds(result.Report)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var missing = emittedRuleIds
+            .Where(ruleId => !catalogIds.Contains(ruleId))
+            .ToArray();
+
+        Assert.NotEmpty(emittedRuleIds);
+        Assert.Empty(missing);
     }
 
     private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp, string serverBuildStatus = "Succeeded")
@@ -1403,5 +1489,61 @@ public sealed class CombinedRouteFlowTests
         }
 
         throw new DirectoryNotFoundException("Could not locate repository root.");
+    }
+
+    private static HashSet<string> RuleCatalogIds()
+    {
+        return File.ReadAllLines(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"))
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("- id: ", StringComparison.Ordinal))
+            .Select(line => line["- id: ".Length..].Trim())
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<string> EmittedRouteFlowRuleIds(RouteFlowReport report)
+    {
+        foreach (var evidence in report.EntryEvidence.Select(row => row.Evidence)
+            .Concat(report.FlowRows.Select(row => row.Evidence))
+            .Concat(report.LogicRows.Select(row => row.Evidence))
+            .Concat(report.DependencySurfaces.Select(row => row.Evidence))
+            .Concat(report.TouchedFiles.Select(row => row.Evidence))
+            .Concat(report.TouchedSymbols.Select(row => row.Evidence))
+            .Concat((report.ContextGroups ?? []).Select(row => row.Evidence)))
+        {
+            yield return evidence.RuleId;
+            foreach (var ruleId in evidence.SupportingRuleIds)
+            {
+                yield return ruleId;
+            }
+        }
+
+        foreach (var touchedFile in report.TouchedFiles)
+        {
+            foreach (var ruleId in touchedFile.RuleIds)
+            {
+                yield return ruleId;
+            }
+        }
+
+        foreach (var touchedSymbol in report.TouchedSymbols)
+        {
+            foreach (var ruleId in touchedSymbol.RuleIds)
+            {
+                yield return ruleId;
+            }
+        }
+
+        foreach (var contextGroup in report.ContextGroups ?? [])
+        {
+            foreach (var ruleId in contextGroup.RuleIds)
+            {
+                yield return ruleId;
+            }
+        }
+
+        foreach (var gap in report.Gaps)
+        {
+            yield return gap.RuleId;
+        }
     }
 }
