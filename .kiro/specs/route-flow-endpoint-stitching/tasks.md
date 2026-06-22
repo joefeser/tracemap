@@ -44,8 +44,11 @@ spec-only PR.
 - [ ] 5. Implement endpoint root to method-symbol bridge state. Requirements:
       1, 5, 6.
   - [x] Record bridge state for route/client/endpoint selectors:
-        `method-symbol`, `path-node`, `symbol-fallback`, `missing`,
-        `ambiguous`, or `reduced-coverage`.
+        `method-symbol`, `path-node`, `symbol-fallback`, `missing`, or
+        `ambiguous`.
+  - [ ] Record explicit `reduced-coverage` bridge state where coverage, schema,
+        extractor, or source identity prevents credible root bridge
+        classification.
   - [x] Reuse existing `MissingMethodSymbolBridge` when route evidence cannot
         bridge to a method/root node, unless the audit proves a new closed-set
         root-specific gap is required.
