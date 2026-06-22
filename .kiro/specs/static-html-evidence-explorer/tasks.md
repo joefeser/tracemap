@@ -70,7 +70,8 @@ do not treat them as unfinished PR #231 tasks.
   - [x] Detect missing commit metadata, unsupported schema versions, and
     commit provenance conflicts.
   - [ ] Detect claim-level conflicts and weakening across multiple compatible
-    structured artifacts.
+    structured artifacts. Deferred for current slices; a visible
+    `explorer.input.provenance-conflict.v1` limitation records this boundary.
   - [x] Emit rule-backed gaps or limitations for partial or incompatible input.
   - [x] Add tests for supported inputs, unsupported inputs, missing commit
     metadata, conflicting provenance, and affected-section partial/stopped UI
@@ -117,17 +118,20 @@ do not treat them as unfinished PR #231 tasks.
 
 - [ ] 7. Render gaps, limitations, rules, and evidence rows. Requirements: 6,
   8, 9.
-  - [ ] Render gap and limitation sections with rule IDs, kinds, affected
+  - [x] Render gap and limitation sections with rule IDs, kinds, affected
     sections, source/artifact scope, evidence tier, coverage label, and claim
     effect.
-  - [ ] Render rule catalog rows when available and catalog-unavailable gaps
-    when not available.
-  - [ ] Render evidence rows with rule ID, evidence tier, support ID, artifact
+  - [x] Render observed evidence rule rows and catalog-unavailable gaps when a
+    compatible full rule catalog artifact is not available.
+  - [ ] Render compatible full rule catalog artifact rows when a future rule
+    catalog reader is added.
+  - [x] Render evidence rows with rule ID, evidence tier, support ID, artifact
     ID, safe file span, snippet hash, extractor version, coverage labels, and
     limitations.
   - [ ] Add deterministic filtering/sorting over safe fields only.
-  - [ ] Add tests for rule rendering, gap rendering, limitation rendering,
-    stable row ordering, and safe search/filter fields.
+  - [x] Add tests for rule rendering, gap rendering, limitation rendering,
+    and stable rule-row ordering.
+  - [ ] Add tests for safe search/filter fields.
 
 - [ ] 8. Enforce safety profiles and no-network behavior. Requirements: 1, 4,
   7, 9.
