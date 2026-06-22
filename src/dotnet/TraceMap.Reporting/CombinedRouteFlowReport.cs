@@ -654,7 +654,7 @@ public static class CombinedRouteFlowReporter
         IReadOnlyList<CombinedPathEdge> edges,
         IReadOnlyList<RouteFlowSource> sources)
     {
-        var bridgeStates = EndpointMethodBridgeStates(nodes, edges);
+        var bridgeStates = EndpointMethodBridgeStates(nodes, edges, sources);
         var rows = new List<RouteFlowEntryEvidence>();
         if (routeSelector is not null)
         {
@@ -706,9 +706,22 @@ public static class CombinedRouteFlowReporter
 
     private static IReadOnlyDictionary<string, string> EndpointMethodBridgeStates(
         IReadOnlyList<CombinedPathNode> nodes,
-        IReadOnlyList<CombinedPathEdge> edges)
+        IReadOnlyList<CombinedPathEdge> edges,
+        IReadOnlyList<RouteFlowSource> sources)
     {
         var nodesById = nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var sourcesByLabel = sources
+            .GroupBy(source => source.SourceLabel, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var bridgeEdgesByEndpointNodeId = edges
+            .Where(edge => edge.EdgeKind == "fact-attached-to-symbol")
+            .Where(edge => nodesById.TryGetValue(edge.FromNodeId, out var endpoint)
+                && endpoint.NodeKind is "EndpointRoute" or "EndpointClient"
+                && nodesById.TryGetValue(edge.ToNodeId, out var target)
+                && IsMethodSymbolNode(target)
+                && string.Equals(target.SourceIndexId, endpoint.SourceIndexId, StringComparison.Ordinal))
+            .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var states = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var endpointNode in nodes
             .Where(node => node.NodeKind is "EndpointRoute" or "EndpointClient")
@@ -718,14 +731,10 @@ public static class CombinedRouteFlowReporter
             .ThenBy(node => node.StartLine ?? 0)
             .ThenBy(node => node.NodeId, StringComparer.Ordinal))
         {
-            var bridgeCount = edges.Count(edge =>
-                edge.FromNodeId == endpointNode.NodeId
-                && edge.EdgeKind == "fact-attached-to-symbol"
-                && nodesById.TryGetValue(edge.ToNodeId, out var target)
-                && IsMethodSymbolNode(target)
-                && string.Equals(target.SourceIndexId, endpointNode.SourceIndexId, StringComparison.Ordinal));
+            var bridgeCount = bridgeEdgesByEndpointNodeId.GetValueOrDefault(endpointNode.NodeId, []).Length;
             states[endpointNode.NodeId] = bridgeCount switch
             {
+                0 when EndpointBridgeCoverageReduced(endpointNode, sourcesByLabel) => "reduced-coverage",
                 0 => "missing",
                 1 => "method-symbol",
                 _ => "ambiguous"
@@ -733,6 +742,27 @@ public static class CombinedRouteFlowReporter
         }
 
         return states;
+    }
+
+    private static bool EndpointBridgeCoverageReduced(
+        CombinedPathNode endpointNode,
+        IReadOnlyDictionary<string, RouteFlowSource> sourcesByLabel)
+    {
+        if (CoverageFor(endpointNode.EvidenceTier) == "ReducedCoverage")
+        {
+            return true;
+        }
+
+        if (!sourcesByLabel.TryGetValue(endpointNode.SourceLabel, out var source))
+        {
+            return true;
+        }
+
+        return !source.IdentityVerified
+            || !KnownCommit(source.CommitSha)
+            || string.Equals(source.AnalysisLevel, "failed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(source.BuildStatus, "failed", StringComparison.OrdinalIgnoreCase)
+            || source.CoverageWarnings.Count > 0;
     }
 
     private sealed record EndpointCompositionResult(

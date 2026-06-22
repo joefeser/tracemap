@@ -46,7 +46,7 @@ spec-only PR.
   - [x] Record bridge state for route/client/endpoint selectors:
         `method-symbol`, `path-node`, `symbol-fallback`, `missing`, or
         `ambiguous`.
-  - [ ] Record explicit `reduced-coverage` bridge state where coverage, schema,
+  - [x] Record explicit `reduced-coverage` bridge state where coverage, schema,
         extractor, or source identity prevents credible root bridge
         classification.
   - [x] Reuse existing `MissingMethodSymbolBridge` when route evidence cannot
