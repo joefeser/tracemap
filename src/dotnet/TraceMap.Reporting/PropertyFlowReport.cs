@@ -492,7 +492,8 @@ public static class PropertyFlowReporter
         }
 
         var paths = BuildPaths(roots, selectedFacts, facts, graph, options, gaps);
-        AddRouteFlowContextGaps(routeFlowSignal, roots, paths.Paths, sourceIds, sourceCommitShas, gaps);
+        var routeFlowMatchesSelectedEndpoint = await RouteFlowMatchesSelectedEndpointAsync(connection, routeFlowSignal, paths.Paths, cancellationToken);
+        AddRouteFlowContextGaps(routeFlowSignal, routeFlowMatchesSelectedEndpoint, roots, paths.Paths, sourceIds, sourceCommitShas, gaps);
         var truncated = roots.Length < totalCandidateCount || paths.Truncated || gaps.Count > options.MaxGaps;
         if (truncated)
         {
@@ -1988,8 +1989,13 @@ public static class PropertyFlowReporter
             notes);
     }
 
-    private static IReadOnlyList<string> PathNotes(IReadOnlyList<PropertyFlowEdge> edges)
+    private static IReadOnlyList<string> PathNotes(IReadOnlyList<PropertyFlowEdge>? edges)
     {
+        if (edges is null)
+        {
+            return [];
+        }
+
         var notes = new List<string>();
         if (edges.Any(IsRouteFlowSpecificEdge))
         {
@@ -2001,28 +2007,37 @@ public static class PropertyFlowReporter
             .ToArray();
     }
 
-    private static bool IsRouteFlowSpecificEdge(PropertyFlowEdge edge)
+    private static bool IsRouteFlowSpecificEdge(PropertyFlowEdge? edge)
     {
-        return edge.RuleId.StartsWith("combined.route-flow.", StringComparison.Ordinal)
-            || edge.EdgeId.StartsWith("route-flow", StringComparison.Ordinal)
-            || edge.EdgeKind.Contains("route-flow", StringComparison.OrdinalIgnoreCase);
+        return edge is not null
+            && ((edge.RuleId?.StartsWith("combined.route-flow.", StringComparison.Ordinal) ?? false)
+                || (edge.EdgeId?.StartsWith("route-flow", StringComparison.Ordinal) ?? false)
+                || (edge.EdgeKind?.Contains("route-flow", StringComparison.OrdinalIgnoreCase) ?? false));
     }
 
-    private static bool HasRouteFlowSpecificContext(PropertyFlowPath path)
+    private static bool HasRouteFlowSpecificContext(PropertyFlowPath? path)
     {
-        return path.Edges.Any(IsRouteFlowSpecificEdge)
-            || path.Notes.Any(note => note.StartsWith("StaticRouteFlowContext:", StringComparison.Ordinal));
+        return path is not null
+            && ((path.Edges?.Any(IsRouteFlowSpecificEdge) ?? false)
+                || (path.Notes?.Any(note => note?.StartsWith("StaticRouteFlowContext:", StringComparison.Ordinal) ?? false) ?? false));
     }
 
     private static void AddRouteFlowContextGaps(
         string routeFlowSignal,
-        IReadOnlyList<PropertyFlowRoot> roots,
-        IReadOnlyList<PropertyFlowPath> paths,
+        bool routeFlowMatchesSelectedEndpoint,
+        IReadOnlyList<PropertyFlowRoot>? roots,
+        IReadOnlyList<PropertyFlowPath>? paths,
         IReadOnlyList<string> sourceIds,
         IReadOnlyList<string> sourceCommitShas,
-        List<PropertyFlowGap> gaps)
+        List<PropertyFlowGap>? gaps)
     {
-        if (routeFlowSignal != "available" || roots.Count == 0 || paths.Any(HasRouteFlowSpecificContext))
+        if (routeFlowSignal != "available"
+            || !routeFlowMatchesSelectedEndpoint
+            || roots is null
+            || roots.Count == 0
+            || paths is null
+            || paths.Any(HasRouteFlowSpecificContext)
+            || gaps is null)
         {
             return;
         }
@@ -2045,6 +2060,118 @@ public static class PropertyFlowReporter
             SupportingSourceIds = sourceIds,
             CommitShas = sourceCommitShas
         });
+    }
+
+    private static async Task<bool> RouteFlowMatchesSelectedEndpointAsync(
+        SqliteConnection connection,
+        string routeFlowSignal,
+        IReadOnlyList<PropertyFlowPath> paths,
+        CancellationToken cancellationToken)
+    {
+        if (routeFlowSignal != "available")
+        {
+            return false;
+        }
+
+        var endpointScopes = EndpointScopes(paths);
+        if (endpointScopes.Count == 0)
+        {
+            return false;
+        }
+
+        var columns = await ColumnNamesAsync(connection, "combined_route_flow_edges", cancellationToken);
+        var pathColumn = FirstColumn(columns, "normalizedPathKey", "normalized_path_key", "routeKey", "route_key", "pathKey", "path_key");
+        if (pathColumn is null)
+        {
+            return false;
+        }
+
+        var methodColumn = FirstColumn(columns, "httpMethod", "http_method", "method");
+        var sql = methodColumn is null
+            ? $"select {QuoteIdentifier(pathColumn)} from combined_route_flow_edges;"
+            : $"select {QuoteIdentifier(pathColumn)}, {QuoteIdentifier(methodColumn)} from combined_route_flow_edges;";
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var pathKey = Convert.ToString(reader.GetValue(0));
+            var method = methodColumn is null ? null : Convert.ToString(reader.GetValue(1));
+            if (string.IsNullOrWhiteSpace(pathKey))
+            {
+                continue;
+            }
+
+            if (endpointScopes.Any(scope => EndpointScopeMatches(scope, method, pathKey)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private sealed record EndpointScope(string? HttpMethod, string NormalizedPathKey);
+
+    private static IReadOnlyList<EndpointScope> EndpointScopes(IReadOnlyList<PropertyFlowPath>? paths)
+    {
+        if (paths is null)
+        {
+            return [];
+        }
+
+        return paths
+            .SelectMany(path => path.Nodes ?? [])
+            .Select(node =>
+            {
+                node.SafeMetadata.TryGetValue("normalizedPathKey", out var normalizedPathKey);
+                node.SafeMetadata.TryGetValue("httpMethod", out var httpMethod);
+                return string.IsNullOrWhiteSpace(normalizedPathKey)
+                    ? null
+                    : new EndpointScope(NormalizeEndpointMethod(httpMethod), normalizedPathKey);
+            })
+            .OfType<EndpointScope>()
+            .Distinct()
+            .OrderBy(scope => scope.NormalizedPathKey, StringComparer.Ordinal)
+            .ThenBy(scope => scope.HttpMethod, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool EndpointScopeMatches(EndpointScope scope, string? method, string pathKey)
+    {
+        return string.Equals(scope.NormalizedPathKey, pathKey, StringComparison.Ordinal)
+            && (string.IsNullOrWhiteSpace(scope.HttpMethod)
+                || string.IsNullOrWhiteSpace(method)
+                || string.Equals(scope.HttpMethod, NormalizeEndpointMethod(method), StringComparison.Ordinal));
+    }
+
+    private static string? NormalizeEndpointMethod(string? method)
+    {
+        return string.IsNullOrWhiteSpace(method) ? null : method.Trim().ToUpperInvariant();
+    }
+
+    private static async Task<IReadOnlySet<string>> ColumnNamesAsync(SqliteConnection connection, string objectName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"pragma table_info({QuoteIdentifier(objectName)});";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            columns.Add(reader.GetString(1));
+        }
+
+        return columns;
+    }
+
+    private static string? FirstColumn(IReadOnlySet<string> columns, params string[] names)
+    {
+        return names.FirstOrDefault(columns.Contains);
+    }
+
+    private static string QuoteIdentifier(string value)
+    {
+        return "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
     }
 
     private static string ClassifyPath(PropertyFlowRoot root, IReadOnlyList<PropertyFlowNode> nodes, IReadOnlyList<PropertyFlowEdge> edges)
