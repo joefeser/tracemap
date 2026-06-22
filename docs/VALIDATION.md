@@ -209,7 +209,7 @@ Expected behavior: Angular template fixtures emit `UiTemplateBinding`,
 reports reject single-language indexes, keep input SQLite files read-only, emit
 route-flow/schema gaps where needed, and write deterministic Markdown/JSON
 without source snippets, raw SQL, raw URLs, connection strings, secrets, remotes,
-or local absolute paths. If `--observed-evidence <json>` is used, the observed
+or local absolute paths. If `--observed-evidence <path>` is used, the observed
 rows remain demo metadata only, reject unsafe keys/values, and do not change
 static lineage classifications.
 

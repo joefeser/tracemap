@@ -218,7 +218,7 @@ For every successful `tracemap property-flow --index <combined.sqlite> --propert
 - Markdown sections appear in this order: Summary, Query, Sources and Coverage, Selected Roots, Lineage Paths, Gaps, Evidence Inventory, Optional Observed Evidence, Limitations.
 - JSON includes `reportType: property-flow`, `version: 1.0`, `reportCoverage`, `coverageWarnings`, `query`, `snapshot`, `summary`, `sources`, `selectedRoots`, `lineagePaths`, `gaps`, `inventory`, `observedEvidence`, and `limitations`.
 - reports do not include raw SQL, raw source snippets, raw remotes, local absolute paths, raw URLs, connection strings, secrets, credentials, private data, or unsafe literal values.
-- `--observed-evidence <json>`, when supplied, accepts only safe demo metadata rows, rejects unsafe keys/values with sanitized diagnostics, labels rows as `ObservedDemoContext`, and cannot upgrade static classifications.
+- `--observed-evidence <path>`, when supplied, reads a JSON file, accepts only safe demo metadata rows, rejects unsafe keys/values with sanitized diagnostics, labels rows as `ObservedDemoContext`, and cannot upgrade static classifications.
 
 For every successful `tracemap reverse --index <combined.sqlite> --out <out>` run, verify:
 
