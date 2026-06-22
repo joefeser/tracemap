@@ -97,6 +97,29 @@ public sealed class EvidenceDocsExportTests
     }
 
     [Fact]
+    public async Task Docs_export_jsonl_only_does_not_emit_markdown_navigation_links()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = CreateCombinedIndex(temp.Path);
+        var outDir = Path.Combine(temp.Path, "jsonl-only-docs");
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, outDir, Format: "jsonl"));
+
+        Assert.Contains(result.PlannedFiles, path => path == "chunks.jsonl");
+        Assert.DoesNotContain(result.PlannedFiles, path => path.EndsWith(".md", StringComparison.Ordinal));
+        Assert.All(result.Chunks, chunk => Assert.Empty(chunk.Links));
+
+        var jsonl = await File.ReadAllLinesAsync(Path.Combine(outDir, "chunks.jsonl"));
+        Assert.All(jsonl, line =>
+        {
+            using var document = JsonDocument.Parse(line);
+            Assert.True(document.RootElement.TryGetProperty("links", out var links));
+            Assert.Equal(JsonValueKind.Array, links.ValueKind);
+            Assert.Empty(links.EnumerateArray());
+        });
+    }
+
+    [Fact]
     public async Task Docs_export_formats_dry_run_and_cli_argument_errors_are_bounded()
     {
         using var temp = new TempDirectory();

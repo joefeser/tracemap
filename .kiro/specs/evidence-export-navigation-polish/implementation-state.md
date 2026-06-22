@@ -133,18 +133,18 @@ Completed:
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 - `dotnet test src/dotnet/TraceMap.sln --filter EvidenceDocsExportTests`:
-  passed, 9 tests. Existing NU1903 warnings for
+  passed, 10 tests after PR-loop review fixes. Existing NU1903 warnings for
   `SQLitePCLRaw.lib.e_sqlite3` were reported during restore and are unrelated
   to this slice.
 - `dotnet test src/dotnet/TraceMap.sln --filter "VaultExport|EvidenceDocs"`:
-  passed, 42 tests. Existing NU1903 warnings for
+  passed, 43 tests after PR-loop review fixes. Existing NU1903 warnings for
   `SQLitePCLRaw.lib.e_sqlite3` were reported during restore and are unrelated
   to this slice.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with existing NU1903 warnings
   for `SQLitePCLRaw.lib.e_sqlite3`.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 606 tests. Existing NU1903
-  warnings for `SQLitePCLRaw.lib.e_sqlite3` were reported during restore and
-  are unrelated to this slice.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 607 tests after PR-loop review
+  fixes. Existing NU1903 warnings for `SQLitePCLRaw.lib.e_sqlite3` were
+  reported during restore and are unrelated to this slice.
 - Final post-review `git diff --check`: passed.
 - Final post-review `./scripts/check-private-paths.sh`: passed.
 
@@ -168,7 +168,12 @@ Completed:
   `origin/codex/implement-evidence-export-navigation-polish`.
 - Ready implementation PR opened to `dev`:
   https://github.com/joefeser/tracemap/pull/295.
-- PR loop pending.
+- Initial PR loop returned actionable unresolved review threads after Codex and
+  Qodo returned. Patched Codex's JSONL-only dead Markdown-link finding by
+  emitting chunk navigation links only when Markdown output is requested.
+  Patched Sourcery's path normalization finding by normalizing the full target
+  path before relative-link calculation. Added a JSONL-only regression test.
+- PR loop rerun pending after the review-fix commit is pushed.
 
 ## Follow-Ups For Implementation
 
