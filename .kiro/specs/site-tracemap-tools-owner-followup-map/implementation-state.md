@@ -158,6 +158,17 @@ navigation.
   legacy story safety targets, and 13 legacy modernization evidence-map
   rows.`).
 - Passed on 2026-06-22: `cd site && npm run build`.
+- Passed on 2026-06-22 after review fix: `git diff --check`.
+- Passed on 2026-06-22 after review fix:
+  `./scripts/check-private-paths.sh`.
+- Passed on 2026-06-22 after review fix:
+  `cd site && node --test scripts/owner-followup-map.test.mjs`.
+- Passed on 2026-06-22 after review fix: `cd site && npm test`.
+- Passed on 2026-06-22 after review fix: `cd site && npm run validate`
+  (`Validated 59 HTML files, 1993 internal references, 58 sitemap URLs, 1
+  legacy story safety targets, and 13 legacy modernization evidence-map
+  rows.`).
+- Passed on 2026-06-22 after review fix: `cd site && npm run build`.
 - Passed on 2026-06-22: desktop browser sanity for `/owners/follow-up/` at
   1280x900. The page rendered title `Owner Follow-Up Map | TraceMap`, 8 owner
   rows, visible `Public claim level: concept. No public conclusion without
@@ -171,11 +182,21 @@ build, private-path, diff, and browser sanity checks.
 
 ## PR Loop State
 
-- PR loop outcome: pending until the implementation PR is created and the
-  required `agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER>
-  --base dev --require-codex-review --quiet --json` command runs.
-- Current owner handoff risk before PR loop: none known beyond normal review
-  freshness/checks pending on a newly opened PR.
+- PR loop initial outcome on PR #290 head
+  `56033f6de5ef16d281d3e00d9b5b59f766cbc37b`: first run stopped on
+  `ACTIONABLE_BOT_FINDINGS` while `nextAction` was
+  `wait_for_required_reviewers` because the required Codex review request was
+  still active. No patch was made until the review batch settled.
+- PR loop second actionable outcome on the same head:
+  `UNRESOLVED_REVIEW_THREADS`, `nextAction: patch_actionable_findings`.
+  Actionable finding was Codex/Qodo review feedback on
+  `site/scripts/owner-followup-map.mjs` requiring every forbidden-claim
+  occurrence to be checked, not only the first match.
+- Follow-up fix: `validateForbiddenText` now checks every
+  forbidden-claim match with a global clone of each regex and keeps the
+  negated-context guard per occurrence. Added regression coverage for a safe
+  negated occurrence before a later unsafe occurrence.
+- Latest PR loop outcome: pending rerun after the review-fix commit is pushed.
 
 ## Oddities
 
@@ -191,4 +212,4 @@ build, private-path, diff, and browser sanity checks.
 ## Follow-Up Items
 
 - Create PR to `dev`, wait 3 minutes, run the required PR loop, and record the
-  exact decision/stop reason here before final handoff.
+  final exact decision/stop reason here before final handoff.

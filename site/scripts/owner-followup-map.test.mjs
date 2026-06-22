@@ -107,6 +107,20 @@ test("validateOwnerFollowupMapDist rejects forbidden claims, private values, and
   assert.match(errors.join("\n"), /blame-oriented wording/);
 });
 
+test("validateOwnerFollowupMapDist checks forbidden claims after negated occurrences", async (t) => {
+  const root = await createManagedOwnerFollowupDistFixture(t, {
+    ownerHtml: (await ownerFollowupPage()).replace(
+      "</main>",
+      "<p>TraceMap cannot show TraceMap proves runtime behavior. The bounded example stays separated by neutral routing filler around public-safe review context and evidence category wording. Later TraceMap proves runtime behavior.</p></main>"
+    )
+  });
+  const errors = [];
+
+  await validateOwnerFollowupMapDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden claim wording: TraceMap proves runtime behavior/);
+});
+
 test("validateOwnerFollowupMapDist rejects unsubstituted placeholders", async (t) => {
   const root = await createManagedOwnerFollowupDistFixture(t, {
     ownerHtml: (await ownerFollowupPage()).replace("Stop if no proof path exists.", "Stop if [stop condition].")
