@@ -2380,9 +2380,11 @@ rules:
       - route-flow-report.json
       - touchedFiles route-flow JSON section
       - touchedSymbols route-flow JSON section
+      - contextGroups route-flow JSON section
     limitations:
       - The report envelope is a deterministic view over existing combined-index evidence and does not mutate the combined index.
       - Touched file and symbol sections are additive report summaries derived from cited entry, flow, logic, dependency-surface, and gap rows; they do not add new scanner evidence or prove runtime execution.
+      - Context groups are additive report summaries over already-selected route-flow rows; they do not add traversal evidence or prove runtime execution, dependency-injection target selection, branch feasibility, SQL execution, or production use.
       - Markdown and JSON must use static-evidence wording and must not say impacted, executed, called at runtime, authorized, used in production, proves DI target, query runs, or business impact.
       - Directory outputs write both Markdown and JSON; file outputs default to Markdown unless JSON format is requested.
 
