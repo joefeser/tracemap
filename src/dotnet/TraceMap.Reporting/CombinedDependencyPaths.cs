@@ -2178,7 +2178,7 @@ public static class CombinedDependencyPathReporter
 
             foreach (var edge in outgoing)
             {
-                if (IsDispatchCandidateBacktrack(graph, state, edge))
+                if (IsDispatchCandidateCrossHop(graph, state, edge))
                 {
                     continue;
                 }
@@ -2203,17 +2203,31 @@ public static class CombinedDependencyPathReporter
         return new SearchResult(paths, gaps, truncated);
     }
 
-    private static bool IsDispatchCandidateBacktrack(EvidenceGraph graph, PathState state, GraphEdge edge)
+    private static bool IsDispatchCandidateCrossHop(EvidenceGraph graph, PathState state, GraphEdge edge)
     {
-        if (state.EdgeIds.Count == 0 || edge.EdgeKind is not ("implements" or "overrides"))
+        if (state.EdgeIds.Count == 0)
         {
             return false;
         }
 
-        var previous = graph.EdgesById[state.EdgeIds[^1]];
-        return previous.EdgeKind is "interface-candidate" or "override-candidate"
-            && edge.FromNodeId == previous.ToNodeId
-            && edge.ToNodeId == previous.FromNodeId;
+        var isRelationshipEdge = edge.EdgeKind is "implements" or "overrides";
+        var isCandidateEdge = edge.EdgeKind is "interface-candidate" or "override-candidate";
+        if (!isRelationshipEdge && !isCandidateEdge)
+        {
+            return false;
+        }
+
+        var hasRelationshipHop = false;
+        var hasCandidateHop = false;
+        foreach (var edgeId in state.EdgeIds)
+        {
+            var prior = graph.EdgesById[edgeId];
+            hasRelationshipHop = hasRelationshipHop || prior.EdgeKind is "implements" or "overrides";
+            hasCandidateHop = hasCandidateHop || prior.EdgeKind is "interface-candidate" or "override-candidate";
+        }
+
+        return (isCandidateEdge && hasRelationshipHop)
+            || (isRelationshipEdge && hasCandidateHop);
     }
 
     private static CombinedPath ToPath(string pathId, EvidenceGraph graph, PathState state)
