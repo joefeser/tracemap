@@ -734,9 +734,9 @@ Deferred within Task 6:
 
 Validation executed so far:
 
-- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 36 tests. Existing NuGet audit warning for `SQLitePCLRaw.lib.e_sqlite3` was reported during restore/build output.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 38 tests. Existing NuGet audit warning for `SQLitePCLRaw.lib.e_sqlite3` was reported during restore/build output.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 599 tests, with the same existing NU1903 advisory warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 601 tests, with the same existing NU1903 advisory warnings.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
 
@@ -768,4 +768,20 @@ Kiro implementation review:
 
 PR review-loop follow-up:
 
-- Pending. PR should target `dev`; do not merge from the implementation agent.
+- Initial agent-control loop on PR #279 returned two actionable review threads
+  after required Codex and Qodo reviewers returned. Patched both current-slice
+  findings: qualified mapped types with no checked-in C# declaration now emit
+  `MissingGeneratedCode` under `legacy.data.model.generated-link.v1`, and
+  mapped-symbol linking now requires `mappedTypeName` so NHibernate
+  `entity-name` values are not treated as CLR type identities.
+- After the PR-thread patch, reran
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`:
+  passed, 38 tests.
+- After the PR-thread patch, reran `dotnet build src/dotnet/TraceMap.sln`:
+  passed.
+- After the PR-thread patch, reran `dotnet test src/dotnet/TraceMap.sln`:
+  passed, 601 tests.
+- After the PR-thread patch, reran `./scripts/check-private-paths.sh`: passed.
+- After the PR-thread patch, reran `git diff --check`: passed.
+- Final agent-control loop result is pending. PR should target `dev`; do not
+  merge from the implementation agent.

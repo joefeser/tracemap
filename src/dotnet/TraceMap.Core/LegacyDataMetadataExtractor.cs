@@ -1163,8 +1163,8 @@ public static class LegacyDataMetadataExtractor
             .Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate
                 && fact.FactType == FactTypes.LegacyDataEntityDeclared
                 && string.Equals(fact.Properties.GetValueOrDefault("metadataFormat"), "nhibernate-hbm", StringComparison.Ordinal)
-                && (fact.Properties.TryGetValue("mappedTypeName", out var typeName) || fact.Properties.TryGetValue("typeName", out typeName))
-                && IsQualifiedTypeName(typeName))
+                && fact.Properties.TryGetValue("mappedTypeName", out var mappedTypeName)
+                && IsQualifiedTypeName(mappedTypeName))
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
@@ -1172,11 +1172,12 @@ public static class LegacyDataMetadataExtractor
 
         foreach (var fact in mappedClassFacts)
         {
-            var mappedTypeName = fact.Properties.GetValueOrDefault("mappedTypeName") ?? fact.Properties.GetValueOrDefault("typeName");
+            var mappedTypeName = fact.Properties.GetValueOrDefault("mappedTypeName");
             if (string.IsNullOrWhiteSpace(mappedTypeName)
                 || !csharpTypeDeclarations.TryGetValue(mappedTypeName, out var declarations)
                 || declarations.Count == 0)
             {
+                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataModelGeneratedLink, "MissingGeneratedCode", "NHibernate mapped class did not match a checked-in C# type declaration.", null);
                 continue;
             }
 
