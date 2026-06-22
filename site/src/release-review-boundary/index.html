@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap boundary for using deterministic static evidence during release review while release owners keep release-control authority."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Release Review Boundary | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/release-review-boundary/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Release Review Boundary">
+    <meta
+      property="og:description"
+      content="A bounded handoff page for what static repository evidence can contribute to release review and what release review still owns."
+    >
+    <meta property="og:url" content="https://tracemap.tools/release-review-boundary/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" id="release-review-boundary">
+        <p class="eyebrow">Release review boundary</p>
+        <h1>Use static evidence as review input, not a release decision.</h1>
+        <p class="hero-subhead">
+          TraceMap can orient deterministic repository evidence from a specific
+          repo snapshot and commit before or during release review. It cannot
+          decide whether a release proceeds, prove runtime behavior, or replace
+          release controls.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page is a static-evidence handoff for release-review
+          participants, not a gate, approval system, safety proof, deploy
+          audit, validation proof, runtime workflow, checklist replacement,
+          manager packet, or objection guide.
+        </p>
+        <nav class="hero-actions" aria-label="Release review boundary links">
+          <a class="button primary" href="#release-boundary-matrix">Open boundary matrix</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+          <a class="button secondary" href="/static-vs-runtime/">Static vs runtime</a>
+          <a class="button secondary" href="/review-room/">Review room</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="what-static-evidence-can-contribute">
+        <div>
+          <p class="section-kicker">Static contribution</p>
+          <h2>What static evidence can contribute</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Orient review questions</strong><span>TraceMap can show changed source surfaces, package or configuration surfaces, route or endpoint adjacency, SQL or data-facing surfaces, rule IDs or rule families, evidence tiers, file paths, line spans, extractor versions, scan commit, coverage labels, limitations, and analysis gaps when public-safe proof exists.</span></div>
+          <div><strong>Route follow-up</strong><span>Static evidence can help identify adjacent code surfaces, validation evidence to inspect, owners to involve, and gaps that must remain visible.</span></div>
+          <div><strong>Preserve unknowns</strong><span>Reduced, partial, unavailable, future-only, syntax-only, or private-only evidence remains a visible gap and cannot be smoothed into clean release language.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="what-release-review-still-owns">
+        <div>
+          <p class="section-kicker">Release ownership</p>
+          <h2>What release review still owns</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Decision authority</strong><span>The release owner owns go/no-go, hold, exception, risk acceptance, rollback readiness, and release-control decisions.</span></div>
+          <div><strong>Review evidence</strong><span>Test results, code review, source review, service-owner judgment, security review when relevant, and validation interpretation remain outside TraceMap.</span></div>
+          <div><strong>Runtime evidence</strong><span>Runtime observability, operational readiness, deployment verification, logs, traces, metrics, traffic, endpoint performance, and production behavior require the owners of those signals.</span></div>
+          <div><strong>Human controls</strong><span>TraceMap evidence may inform questions for these owners, but does not replace their evidence, judgment, gates, or approvals.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="release-boundary-matrix" aria-labelledby="release-boundary-matrix-heading">
+        <div class="section-header">
+          <p class="section-kicker">Boundary matrix</p>
+          <h2 id="release-boundary-matrix-heading">Every release-review row keeps the next owner visible.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-release-boundary-matrix>
+            <caption>Concept-level release-review boundary rows. Each row is review input, not release approval.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Row</th>
+                <th scope="col">Release-review question</th>
+                <th scope="col">TraceMap contribution</th>
+                <th scope="col">Evidence needed</th>
+                <th scope="col">Boundary or non-claim</th>
+                <th scope="col">Stop condition</th>
+                <th scope="col">Required next owner</th>
+                <th scope="col">Public claim level</th>
+                <th scope="col">Supporting route</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="changed-source-surface" data-release-boundary-row="changed source surface">
+                <th scope="row">changed source surface</th>
+                <td data-field="release-review question">What changed in source that release review should inspect?</td>
+                <td data-field="TraceMap contribution">Can orient changed-source files, symbols, contracts, or references when public-safe proof exists.</td>
+                <td data-field="evidence needed">Rule ID or rule family, evidence tier, coverage label, public-safe file path and line span, scan commit, limitation, and proof path.</td>
+                <td data-field="boundary or non-claim">Does not approve the change, prove the change is safe, or replace source review.</td>
+                <td data-field="stop condition">Stop when the question asks whether the release may proceed or whether the change is acceptable.</td>
+                <td data-field="required next owner">Code reviewer, service owner, test owner, or release owner.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="supporting route"><a href="/review-claim-checklist/">/review-claim-checklist/</a></td>
+              </tr>
+              <tr id="package-config-surface" data-release-boundary-row="package/config surface">
+                <th scope="row">package/config surface</th>
+                <td data-field="release-review question">Are package, project, or configuration surfaces near the release change?</td>
+                <td data-field="TraceMap contribution">Can show static package, project-file, or configuration references or gaps when supported.</td>
+                <td data-field="evidence needed">Public-safe package, project, or config evidence, rule family, evidence tier, coverage label, limitation, and proof path.</td>
+                <td data-field="boundary or non-claim">Does not prove runtime configuration, environment parity, secrets handling, or production behavior.</td>
+                <td data-field="stop condition">Stop when the answer requires environment values, deploy settings, secrets, or runtime config.</td>
+                <td data-field="required next owner">Build or tooling owner, service owner, security owner, or release owner.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="supporting route"><a href="/limitations/">/limitations/</a></td>
+              </tr>
+              <tr id="route-endpoint-adjacency" data-release-boundary-row="route/endpoint adjacency">
+                <th scope="row">route/endpoint adjacency</th>
+                <td data-field="release-review question">Are routes or endpoints adjacent to the changed surface?</td>
+                <td data-field="TraceMap contribution">Can orient static route or endpoint adjacency when rules support it.</td>
+                <td data-field="evidence needed">Route or endpoint evidence surface, rule ID or rule family, evidence tier, coverage label, limitation, and proof path.</td>
+                <td data-field="boundary or non-claim">Does not prove live traffic, endpoint performance, request behavior, production reachability, or service safety.</td>
+                <td data-field="stop condition">Stop when the question needs logs, traces, metrics, traffic, latency, errors, dashboards, or runtime tests.</td>
+                <td data-field="required next owner">Runtime observability owner or service owner.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="supporting route"><a href="/static-vs-runtime/">/static-vs-runtime/</a></td>
+              </tr>
+              <tr id="sql-data-surface" data-release-boundary-row="SQL/data surface">
+                <th scope="row">SQL/data surface</th>
+                <td data-field="release-review question">Are SQL or data-facing surfaces visible near the release change?</td>
+                <td data-field="TraceMap contribution">Can identify SQL or data-facing static surfaces or gaps when public-safe proof exists.</td>
+                <td data-field="evidence needed">Public-safe data-surface summary, rule family, evidence tier, coverage label, limitation, and proof path.</td>
+                <td data-field="boundary or non-claim">Does not publish raw SQL, prove data migration safety, prove data correctness, or replace data-owner review.</td>
+                <td data-field="stop condition">Stop when the answer needs raw SQL, data contents, migration execution, production data behavior, or private schema details.</td>
+                <td data-field="required next owner">Service owner, security owner, or release owner.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="supporting route"><a href="/limitations/">/limitations/</a></td>
+              </tr>
+              <tr id="coverage-gap" data-release-boundary-row="coverage gap">
+                <th scope="row">coverage gap</th>
+                <td data-field="release-review question">Is coverage reduced, partial, unavailable, private-only, or unknown?</td>
+                <td data-field="TraceMap contribution">Can label a gap and keep it visible.</td>
+                <td data-field="evidence needed">Coverage label, analysis gap, scan/build status, evidence tier, limitation, and proof path.</td>
+                <td data-field="boundary or non-claim">Does not prove no impact, no dependency, clean coverage, or absence of risk.</td>
+                <td data-field="stop condition">Stop when a gap is used to strengthen a release claim or hide uncertainty.</td>
+                <td data-field="required next owner">TraceMap site owner, build or tooling owner, code reviewer, or service owner.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="supporting route"><a href="/limitations/">/limitations/</a></td>
+              </tr>
+              <tr id="validation-evidence" data-release-boundary-row="validation evidence">
+                <th scope="row">validation evidence</th>
+                <td data-field="release-review question">What validation evidence exists for public-safe site or demo material?</td>
+                <td data-field="TraceMap contribution">Can point to validation results as review input when public-safe.</td>
+                <td data-field="evidence needed">Public-safe validation status, linked validation page or summary, coverage label, limitation, and implementation-state note.</td>
+                <td data-field="boundary or non-claim">Does not prove release safety, operational safety, deployment success, runtime behavior, or test sufficiency.</td>
+                <td data-field="stop condition">Stop when validation is treated as release approval or production proof.</td>
+                <td data-field="required next owner">Test owner, code reviewer, TraceMap site owner, or release owner.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="supporting route"><a href="/validation/">/validation/</a></td>
+              </tr>
+              <tr id="runtime-telemetry-need" data-release-boundary-row="runtime telemetry need">
+                <th scope="row">runtime telemetry need</th>
+                <td data-field="release-review question">What questions require runtime evidence?</td>
+                <td data-field="TraceMap contribution">Can route runtime-dependent questions away from static evidence.</td>
+                <td data-field="evidence needed">Static/runtime boundary, coverage label, limitation, and linked runtime-boundary page.</td>
+                <td data-field="boundary or non-claim">Does not provide production proof, runtime behavior proof, traffic, endpoint performance, live errors, or operational state.</td>
+                <td data-field="stop condition">Stop when the question asks what ran, served traffic, failed, performed, alerted, or behaved in production.</td>
+                <td data-field="required next owner">Runtime observability owner, service owner, or release owner.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="supporting route"><a href="/static-vs-runtime/">/static-vs-runtime/</a></td>
+              </tr>
+              <tr id="release-owner-decision" data-release-boundary-row="release-owner decision">
+                <th scope="row">release-owner decision</th>
+                <td data-field="release-review question">Who decides go/no-go, hold, exception, or risk acceptance?</td>
+                <td data-field="TraceMap contribution">Cannot own this decision; can provide static-evidence input and visible gaps.</td>
+                <td data-field="evidence needed">Release checklist evidence, tests, code review, runtime evidence, service-owner judgment, validation status, and release-control record.</td>
+                <td data-field="boundary or non-claim">Does not approve, block, certify, guarantee, or replace release controls or human judgment.</td>
+                <td data-field="stop condition">Stop when copy, UI, metadata, or review text implies TraceMap made the release decision.</td>
+                <td data-field="required next owner">Release owner.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="supporting route"><a href="/review-room/">/review-room/</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="forbidden-claims" data-release-boundary-section="forbidden-claims">
+        <div>
+          <p class="section-kicker">Forbidden claims</p>
+          <h2>Do not upgrade static evidence into release certainty.</h2>
+        </div>
+        <ul>
+          <li>No release approval, release safety, operational safety, production proof, runtime behavior proof, endpoint performance proof, deployment success proof, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, embedding search, vector database reasoning, or prompt-based classification.</li>
+          <li>No replacement of tests, code review, source review, runtime observability, service-owner review, security review, release controls, release owners, or human judgment.</li>
+          <li>No claim should say a surface is impacted unless reducer-backed evidence and public-safe support exist.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="safe-wording" data-release-boundary-section="safe-wording">
+        <div>
+          <p class="section-kicker">Safe wording</p>
+          <h2>Use phrases that keep evidence, limits, and owners attached.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>static input</code><span>TraceMap can orient static evidence for release review.</span></div>
+          <div><code>not approval</code><span>This is a review input, not release approval.</span></div>
+          <div><code>owner question</code><span>The evidence suggests a question for the release owner.</span></div>
+          <div><code>visible gap</code><span>Coverage is reduced and must remain visible.</span></div>
+          <div><code>runtime handoff</code><span>Runtime evidence is required for production behavior.</span></div>
+          <div><code>validation limit</code><span>Validation evidence is not release safety proof.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-release-boundary-section="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Stop when the proof, boundary, or owner is missing.</h2>
+        </div>
+        <ul>
+          <li>Stop when proof path, rule ID or rule family, evidence tier, coverage label, limitation, or public-safe summary is missing.</li>
+          <li>Stop when evidence is private-only, raw-only, hidden, local-only, future-only, unavailable, reduced, partial, syntax-only, failed, or unknown.</li>
+          <li>Stop when an answer would expose raw facts, raw SQLite, analyzer logs, source snippets, SQL, config values, secrets, local paths, remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+          <li>Stop when the question needs runtime logs, traces, metrics, dashboards, production traffic, endpoint performance, deployment verification, runtime tests, release approval, rollback readiness, risk acceptance, or operational safety.</li>
+          <li>Stop when confidence, seniority, repetition, manager pressure, AI wording, LLM judgment, embeddings, vector databases, or prompt classification replaces documented rule evidence.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="required-next-owners">
+        <div>
+          <p class="section-kicker">Required next owners</p>
+          <h2>TraceMap routes questions to role categories, not private people.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>release owner</strong><span>Owns go/no-go, hold, exception, risk acceptance, rollback readiness, and release-control decisions.</span></div>
+          <div><strong>service owner</strong><span>Owns service behavior interpretation and service-specific source or runtime questions.</span></div>
+          <div><strong>runtime observability owner</strong><span>Owns logs, traces, metrics, dashboards, alerts, traffic, and endpoint-performance signals.</span></div>
+          <div><strong>test owner</strong><span>Owns test coverage, test results, and test sufficiency.</span></div>
+          <div><strong>code reviewer</strong><span>Owns source review and code-review judgment.</span></div>
+          <div><strong>security owner</strong><span>Owns secrets, sensitive configuration, data exposure, and release security questions.</span></div>
+          <div><strong>build or tooling owner</strong><span>Owns build status, project loading, validation tools, and analysis environment gaps.</span></div>
+          <div><strong>TraceMap site owner</strong><span>Owns public page wording, proof links, metadata, validation scripts, and public-safe summaries.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-release-boundary-section="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>This page does not create a release workflow.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not approve releases, block releases, certify releases, guarantee releases, prove release safety, prove operational safety, prove deployment success, or prove production behavior.</li>
+          <li>TraceMap does not prove no impact, no dependency, no risk, complete coverage, runtime correctness, endpoint performance, traffic shape, alert state, service health, or rollback readiness.</li>
+          <li>TraceMap does not replace release controls, source review, code review, test judgment, security review, runtime observability, service-owner review, release owners, or human judgment. It provides no replacement of release controls.</li>
+          <li>TraceMap core scanner and reducer do not use AI impact analysis, LLM calls, embeddings, vector databases, or prompt-based classification.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="adjacent-surfaces">
+        <div>
+          <p class="section-kicker">Adjacent surfaces</p>
+          <h2>Use the neighboring page that matches the question.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/limitations/">/limitations/</a></strong><span>Site-wide non-claims and coverage limits; this page applies those limits to release-review roles.</span></div>
+          <div><strong><a href="/static-vs-runtime/">/static-vs-runtime/</a></strong><span>Runtime telemetry boundary; use it when release questions need runtime behavior, traffic, or endpoint performance.</span></div>
+          <div><strong><a href="/review-claim-checklist/">/review-claim-checklist/</a></strong><span>Repeatability checklist; this page identifies what release owners still own.</span></div>
+          <div><strong><a href="/deploy-audit/">/deploy-audit/</a></strong><span>Static-site deploy-output audit; it is not deployment success proof or release approval.</span></div>
+          <div><strong><a href="/validation/">/validation/</a></strong><span>Validation evidence boundary; validation is one input and not release approval or runtime safety proof.</span></div>
+          <div><strong><a href="/manager-packet/">/manager-packet/</a></strong><span>Manager-facing evidence conversation; this page is the narrower release-review handoff.</span></div>
+          <div><strong><a href="/questions/objections/">/questions/objections/</a></strong><span>Objection handling; this page answers the release-review ownership question.</span></div>
+          <div><strong><a href="/review-room/">/review-room/</a></strong><span>Meeting agenda for known, partial, and missing evidence; this page is the release boundary reference.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Release review boundary links
+        <a href="/limitations/">limitations</a>,
+        <a href="/static-vs-runtime/">static versus runtime</a>,
+        <a href="/review-claim-checklist/">claim checking</a>,
+        and <a href="/review-room/">review-room agenda</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
