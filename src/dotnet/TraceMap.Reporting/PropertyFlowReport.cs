@@ -492,6 +492,7 @@ public static class PropertyFlowReporter
         }
 
         var paths = BuildPaths(roots, selectedFacts, facts, graph, options, gaps);
+        AddRouteFlowContextGaps(routeFlowSignal, roots, paths.Paths, sourceIds, sourceCommitShas, gaps);
         var truncated = roots.Length < totalCandidateCount || paths.Truncated || gaps.Count > options.MaxGaps;
         if (truncated)
         {
@@ -1972,6 +1973,7 @@ public static class PropertyFlowReporter
         var nodeMap = nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         var pathEdges = edges.Select(edge => ToEdge(edge, nodeMap)).ToArray();
         var classification = ClassifyPath(root, pathNodes, pathEdges);
+        var notes = PathNotes(pathEdges);
         return new PropertyFlowPath(
             $"path-{ordinal:D4}-{CombinedReportHelpers.Hash(root.RootId + ":" + string.Join(">", pathEdges.Select(edge => edge.EdgeId)), 12)}",
             classification,
@@ -1983,7 +1985,66 @@ public static class PropertyFlowReporter
             pathEdges,
             new[] { root.CombinedFactId }.Concat(pathNodes.Select(node => node.CombinedFactId).OfType<string>()).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             pathEdges.SelectMany(edge => edge.SupportingEdgeIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            []);
+            notes);
+    }
+
+    private static IReadOnlyList<string> PathNotes(IReadOnlyList<PropertyFlowEdge> edges)
+    {
+        var notes = new List<string>();
+        if (edges.Any(IsRouteFlowSpecificEdge))
+        {
+            notes.Add("StaticRouteFlowContext: route-flow hops are static endpoint-centered evidence and do not prove runtime execution, authorization, production traffic, dependency-injection target selection, branch feasibility, or persistence.");
+        }
+
+        return notes
+            .OrderBy(note => note, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsRouteFlowSpecificEdge(PropertyFlowEdge edge)
+    {
+        return edge.RuleId.StartsWith("combined.route-flow.", StringComparison.Ordinal)
+            || edge.EdgeId.StartsWith("route-flow", StringComparison.Ordinal)
+            || edge.EdgeKind.Contains("route-flow", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasRouteFlowSpecificContext(PropertyFlowPath path)
+    {
+        return path.Edges.Any(IsRouteFlowSpecificEdge)
+            || path.Notes.Any(note => note.StartsWith("StaticRouteFlowContext:", StringComparison.Ordinal));
+    }
+
+    private static void AddRouteFlowContextGaps(
+        string routeFlowSignal,
+        IReadOnlyList<PropertyFlowRoot> roots,
+        IReadOnlyList<PropertyFlowPath> paths,
+        IReadOnlyList<string> sourceIds,
+        IReadOnlyList<string> sourceCommitShas,
+        List<PropertyFlowGap> gaps)
+    {
+        if (routeFlowSignal != "available" || roots.Count == 0 || paths.Any(HasRouteFlowSpecificContext))
+        {
+            return;
+        }
+
+        gaps.Add(new PropertyFlowGap(
+            "gap:route-flow:no-property-context",
+            "RouteFlowNoPropertyContext",
+            PropertyFlowClassifications.UnknownAnalysisGap,
+            "Route-flow evidence exists in the combined index, but property-flow did not attach route-flow rows to the selected property trail because no rule-backed property-specific bridge was available.",
+            EdgeRuleId,
+            EvidenceTiers.Tier4Unknown,
+            null,
+            null,
+            null,
+            null,
+            null,
+            roots.Select(root => root.CombinedFactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            ["Route-flow evidence is additive context only when tied to the selected property through rule-backed value-origin, payload, model-binding, assignment, mapping, or equivalent property-specific evidence."])
+        {
+            SupportingSourceIds = sourceIds,
+            CommitShas = sourceCommitShas
+        });
     }
 
     private static string ClassifyPath(PropertyFlowRoot root, IReadOnlyList<PropertyFlowNode> nodes, IReadOnlyList<PropertyFlowEdge> edges)
@@ -2369,6 +2430,15 @@ public static class PropertyFlowReporter
                 builder.AppendLine($"### {Cell(path.PathId)}");
                 builder.AppendLine();
                 builder.AppendLine($"Classification: `{Cell(path.Classification)}`; confidence: `{Cell(path.Confidence)}`.");
+                if (path.Notes.Count > 0)
+                {
+                    builder.AppendLine();
+                    foreach (var note in path.Notes)
+                    {
+                        builder.AppendLine($"- {Cell(note)}");
+                    }
+                }
+
                 builder.AppendLine();
                 builder.AppendLine("| # | Node | Edge from previous | Source | Rule | Tier | File |");
                 builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- |");
