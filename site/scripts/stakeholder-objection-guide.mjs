@@ -321,7 +321,7 @@ async function validateObjectionGuidePage({ dist, pagePath, errors }) {
   }
 
   validateObjectionRows(html, errors);
-  validateSupportingRoutesResolve({ dist, html, errors });
+  await validateSupportingRoutesResolve({ dist, html, errors });
   validateForbiddenProofLinks(html, errors);
   validatePrivateAndRawBoundaryText({ decodedHtml, html, pageText, errors });
   validateClaimBoundaryText({ html, errors });
@@ -428,13 +428,14 @@ function validateForbiddenProofLinks(html, errors) {
 }
 
 function validatePrivateAndRawBoundaryText({ decodedHtml, html, pageText, errors }) {
+  const hardLeakScanText = `${html} ${decodedHtml} ${pageText}`;
   const unbounded = stripBoundedClaimContext(html);
   const scanText = `${normalizeRenderedText(unbounded)} ${decodeHtmlEntities(unbounded)} ${stripBoundedClaimContext(decodedHtml)}`;
 
   for (const pattern of forbiddenPrivatePatterns) {
-    const match = scanText.match(pattern);
+    const match = hardLeakScanText.match(pattern);
     if (match) {
-      errors.push(withEvidence(`Stakeholder objection guide contains forbidden private or credential-like text outside a bounded non-shareable example: ${match[0]}`, pageArtifact));
+      errors.push(withEvidence(`Stakeholder objection guide contains forbidden private or credential-like text: ${match[0]}`, pageArtifact));
     }
   }
 
