@@ -221,8 +221,39 @@ Results:
 
 ## PR Loop
 
-Pending PR creation.
+PR: `https://github.com/joefeser/tracemap/pull/281`
+
+PR-loop command:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 281 --base dev --require-codex-review --quiet --json
+```
+
+Observed PR-loop history:
+
+- Initial run after PR creation posted or observed the required Codex review
+  request and stopped with `decision: actionable_findings`,
+  `stopReason: ACTIONABLE_BOT_FINDINGS`, and `nextAction:
+  wait_for_required_reviewers`; no patch was made until the required reviewer
+  lock cleared.
+- Follow-up run after Codex returned stopped with `decision:
+  actionable_findings`, `stopReason: UNRESOLVED_REVIEW_THREADS`, and
+  `nextAction: patch_actionable_findings` for a Codex review thread about
+  negative fixtures being included in forbidden-claim sweeps.
+- The negative-fixture validation wording was patched in follow-up commit
+  `598b7e7a`.
+- Post-patch PR-loop stopped with `decision: actionable_findings` because the
+  earlier Qodo top-level stale-status finding still applied to this section.
+  This section was updated to remove stale pending text.
 
 ## Residual Risk
 
-Pending Kiro review, spec-only validation, PR creation, and PR-loop results.
+Known residual risks:
+
+- Kiro review coverage was reduced because Kiro reported denied tool access
+  during automated spec review and re-review runs.
+- Required review freshness and final PR-loop status must be rechecked after
+  this implementation-state update lands on the PR.
+- This branch remains spec-only. Future implementation still needs route or
+  section selection, site-source changes, focused validation, and browser
+  sanity checks.
