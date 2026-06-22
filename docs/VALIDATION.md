@@ -109,10 +109,11 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
-Focused validation should cover DBML, EDMX, typed DataSet/TableAdapter, config
-provider metadata, generated-code linkage, legacy data model identity keys,
-unrelated XSD gating, malformed XML, DTD/entity rejection, deterministic fact
-IDs, report redaction, and SQLite property redaction. Any local legacy smoke
+Focused validation should cover DBML, EDMX, typed DataSet/TableAdapter,
+NHibernate `.hbm.xml`, config provider metadata, generated-code linkage, legacy
+data model identity keys, unrelated XSD gating, malformed XML, DTD/entity
+rejection, deterministic fact IDs, report redaction, and SQLite property
+redaction. Any local legacy smoke
 must stay ignored/local-only and use neutral labels/counts only; do not commit
 raw facts, SQLite indexes, analyzer
 logs, raw SQL, connection strings, config values, raw remotes, private sample
