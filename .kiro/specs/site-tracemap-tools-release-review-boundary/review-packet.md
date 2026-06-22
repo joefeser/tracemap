@@ -61,9 +61,9 @@ automation, runtime telemetry, AI/LLM analysis, or public copy.
     rows, required links, metadata, discovery/sitemap metadata if standalone,
     forbidden release claims, private/raw material, word count bounds, and
     desktop/mobile browser sanity?
-12. Are `Status: not-started`, `Readiness: spec-review`, and
-    `Public claim level: concept` present before review, and is the intended
-    transition to `ready-for-implementation` clear after findings are handled?
+12. Are `Status: not-started`, `Readiness: ready-for-implementation`, and
+    `Public claim level: concept` present after review, with the completed
+    transition from `spec-review` recorded in `implementation-state.md`?
 
 ## Required Review Commands
 

@@ -264,8 +264,8 @@ Acceptance criteria:
   performance, request behavior, production reachability, or service safety.
 - `SQL/data surface`: static evidence may identify SQL-facing or data-facing
   surfaces when public-safe proof exists; it does not publish raw SQL, prove
-  data migration safety, prove data correctness, or replace database owner
-  review.
+  data migration safety, prove data correctness, or replace service-owner,
+  security-owner, or release-owner review.
 - `coverage gap`: reduced, partial, failed, syntax-only, unavailable,
   private-only, or future-only coverage is a visible gap that must downgrade a
   claim or route owner follow-up; it does not prove no impact or complete

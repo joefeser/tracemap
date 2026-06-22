@@ -63,7 +63,7 @@ spec-only phase.
   production reachability, or service safety.
 - [ ] Preserve row semantics for SQL/data surfaces: static evidence does not
   publish raw SQL, prove data migration safety, prove data correctness, or
-  replace database owner review.
+  replace service-owner, security-owner, or release-owner review.
 - [ ] Preserve row semantics for coverage gaps: reduced, partial, failed,
   syntax-only, unavailable, private-only, or future-only coverage remains a
   visible gap and never proves no impact or complete coverage.
