@@ -2778,15 +2778,13 @@ public static class CombinedRouteFlowReporter
             classification = RouteFlowClassifications.NeedsReviewStaticRouteFlow;
             reasons.Add("Review-tier, weak, implementation-candidate, dynamic, or truncated static evidence is present.");
         }
-        else if (reportCoverage == "FullEvidenceAvailable"
-            && !HasDownstreamFlowEvidence(flowRows)
+        else if (!HasDownstreamFlowEvidence(flowRows)
             && surfaces.Count == 0)
         {
             classification = RouteFlowClassifications.NoRouteFlowEvidence;
             reasons.Add("Entry evidence matched but no route-flow path or terminal surface remained after filtering.");
         }
-        else if (reportCoverage == "FullEvidenceAvailable"
-            && surfaces.Count > 0
+        else if (surfaces.Count > 0
             && flowRows.All(row => row.Evidence.EvidenceTier is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier2Structural)
             && flowRows.Any(row => row.Evidence.EvidenceTier == EvidenceTiers.Tier1Semantic))
         {
@@ -3040,17 +3038,17 @@ public static class CombinedRouteFlowReporter
     {
         if (!string.IsNullOrWhiteSpace(options.Route))
         {
-            return ("route", options.Route, routeSelector);
+            return ("route", options.Route, SafeSelector(routeSelector));
         }
 
         if (!string.IsNullOrWhiteSpace(options.ClientCall))
         {
-            return ("client-call", options.ClientCall, clientSelector);
+            return ("client-call", options.ClientCall, SafeSelector(clientSelector));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromEndpoint))
         {
-            return ("from-endpoint", options.FromEndpoint, endpointSelector);
+            return ("from-endpoint", options.FromEndpoint, SafeSelector(endpointSelector));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromWebFormsEvent))

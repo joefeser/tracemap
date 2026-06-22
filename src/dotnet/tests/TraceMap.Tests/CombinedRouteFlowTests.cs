@@ -811,6 +811,24 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_selector_trace_redacts_sensitive_normalized_keys()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateSensitiveRouteCombinedIndexAsync(temp);
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/token/{id}"));
+
+        Assert.NotNull(result.Report.Query.SelectorTrace);
+        Assert.Equal("route", result.Report.Query.SelectorTrace!.SelectorKind);
+        Assert.StartsWith("redacted-hash:", result.Report.Query.SelectorTrace.SafeNormalizedKey, StringComparison.Ordinal);
+        Assert.StartsWith("redacted-hash:", result.Report.Query.SelectorTrace.SafeSelector, StringComparison.Ordinal);
+        Assert.Equal("redacted", result.Report.Query.SelectorTrace.RedactionState);
+    }
+
+    [Fact]
     public async Task Route_flow_rejects_single_language_index()
     {
         using var temp = new TempDirectory();
@@ -987,6 +1005,20 @@ public sealed class CombinedRouteFlowTests
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
         return (combinedPath, controller, repository);
+    }
+
+    private static async Task<string> CreateSensitiveRouteCombinedIndexAsync(TempDirectory temp)
+    {
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        const string controller = "Server.AuthController.Get(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/token/{id}", "/api/token/{}", controller, "Controllers/AuthController.cs", 10)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+        return combinedPath;
     }
 
     private static async Task<string> CreateUnjoinableProjectionCombinedIndexAsync(TempDirectory temp)
