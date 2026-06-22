@@ -152,6 +152,23 @@
     ]
   },
   {
+    "path": "/packets/examples/",
+    "title": "Evidence Packet Examples",
+    "summary": "Concept-level gallery of synthetic public-safe packet shapes showing claims, proof paths, tiers, coverage labels, limitations, non-claims, owners, and validation evidence.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/packets/",
+    "limitations": [
+      "The route teaches synthetic public-safe packet shapes, not real customer, private repository, production, or raw artifact evidence.",
+      "Every example remains concept-level and must keep limitations, coverage labels, and next-owner questions attached to the claim."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, autonomous approval, autonomous review, or replacement of human review.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public example material."
+    ]
+  },
+  {
     "path": "/packets/assembly/",
     "title": "Review Packet Assembly",
     "summary": "Concept-level checklist for assembling public-safe review handoff material from existing TraceMap evidence surfaces.",
