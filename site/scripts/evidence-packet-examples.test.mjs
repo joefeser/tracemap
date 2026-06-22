@@ -153,6 +153,18 @@ test("validateEvidencePacketExamplesDist rejects raw material outside sanctioned
   assert.match(errors.join("\n"), /forbidden raw\/private material/);
 });
 
+test("validateEvidencePacketExamplesDist rejects raw artifact filename tokens", async (t) => {
+  const html = await sourcePage();
+  const root = await createManagedEvidencePacketExamplesFixture(t, {
+    examplesHtml: html.replace("</main>", "<p>Publish facts.ndjson and logs/analyzer.log with the example.</p></main>")
+  });
+  const errors = [];
+
+  await validateEvidencePacketExamplesDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden raw\/private material/);
+});
+
 test("validateEvidencePacketExamplesDist rejects hard private material in attributes", async (t) => {
   const html = await sourcePage();
   const root = await createManagedEvidencePacketExamplesFixture(t, {
