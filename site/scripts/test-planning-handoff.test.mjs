@@ -128,7 +128,7 @@ test("validateTestPlanningHandoffDist permits sanctioned boundary copy", async (
   const root = await createManagedFixture(t, {
     pageHtml: (await canonicalPage()).replace(
       "</main>",
-      `<section data-test-planning-boundary="fixture">
+      `<section data-test-planning-boundary="non-claims">
         <p>TraceMap does not generate tests, prove test sufficiency, prove runtime behavior, prove production traffic, prove endpoint performance, approve releases, or provide complete coverage.</p>
         <p>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</p>
       </section></main>`
@@ -139,6 +139,22 @@ test("validateTestPlanningHandoffDist permits sanctioned boundary copy", async (
   await validateTestPlanningHandoffDist({ dist: join(root, "dist"), errors });
 
   assert.deepEqual(errors, []);
+});
+
+test("validateTestPlanningHandoffDist rejects lookalike boundary copy", async (t) => {
+  const root = await createManagedFixture(t, {
+    pageHtml: (await canonicalPage()).replace(
+      "</main>",
+      `<section data-test-planning-boundary="fixture">
+        <p>TraceMap generates tests.</p>
+      </section></main>`
+    )
+  });
+  const errors = [];
+
+  await validateTestPlanningHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim/);
 });
 
 test("validateTestPlanningHandoffDist rejects raw material outside sanctioned sections", async (t) => {
