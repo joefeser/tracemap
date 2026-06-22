@@ -1,6 +1,6 @@
 # Evidence Export Navigation Polish Implementation State
 
-Status: spec-reviewed
+Status: spec-ready
 Readiness: ready-for-implementation
 Branch: codex/spec-evidence-export-navigation-polish
 PR target: dev
@@ -102,7 +102,11 @@ Completed:
 
 - Branch pushed to `origin/codex/spec-evidence-export-navigation-polish`.
 - Ready PR opened to `dev`: https://github.com/joefeser/tracemap/pull/284.
-- PR loop pending.
+- PR loop found actionable Qodo/Codex findings on the first reviewed heads.
+  Patched status vocabulary to `spec-ready`, confirmed the PR-open task was
+  already checked on the latest head, and aligned the design `safetyProfile`
+  vocabulary with existing exporter claim levels: `hidden`, `demo-safe`, and
+  `public-safe`.
 
 ## Follow-Ups For Implementation
 
