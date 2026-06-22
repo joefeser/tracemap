@@ -273,8 +273,9 @@ should verify:
   outage-cause, absence-of-impact, complete-coverage, AI/LLM, embedding,
   vector database, prompt-classification, and replacement-of-human-judgment
   wording across rendered text, decoded HTML, raw HTML attributes, alt text,
-  captions, link anchor text, link title attributes, metadata, fixtures,
-  tests, sitemap output, discovery output, and generated pages;
+  captions, link anchor text, link title attributes, metadata, sitemap output,
+  discovery output, generated pages, passing validation fixtures, and
+  public-output fixtures;
 - forbidden terms are allowed only inside bounded non-claim, limitation,
   stop-condition, rejected-interpretation, residual-risk, or unsafe-example
   contexts;
@@ -295,6 +296,9 @@ should verify:
   assert validation fails. A companion positive fixture may place the same
   wording inside the allowed unsafe-example region with explicit non-claim
   framing and assert validation passes;
+- negative fixtures may contain forbidden claim text or private/raw tokens
+  only as isolated failing inputs. They are excluded from public-output
+  absence sweeps and passing fixture sweeps;
 - forbidden private/raw material and credential-like values are absent from
   public output except inside explicit non-shareable artifact category
   examples;

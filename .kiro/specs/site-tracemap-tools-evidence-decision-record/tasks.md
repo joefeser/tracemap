@@ -138,9 +138,9 @@ implementation phase completes them.
   autonomous-decision, and replacement-of-human-judgment wording in rendered
   text, decoded HTML, raw HTML attributes, alt text, captions, link anchor
   text, link title attributes, metadata, sitemap output, discovery output,
-  tests, fixtures, and generated pages, while allowing required non-claim,
-  limitation, stop-condition, rejected-interpretation, residual-risk, and
-  unsafe-example contexts.
+  generated pages, passing validation fixtures, and public-output fixtures,
+  while allowing required non-claim, limitation, stop-condition,
+  rejected-interpretation, residual-risk, and unsafe-example contexts.
 - [ ] Identify allowed forbidden-term contexts through stable structural
   markers such as section anchors, field-level containers, or validator-owned
   data attributes, and add negative tests proving unsupported positive claims
@@ -153,10 +153,13 @@ implementation phase completes them.
   positive claim inside `data-tracemap-validation-context="unsafe-example"`
   but outside any allowed unsafe-example section or field container, then
   asserts validation fails.
+- [ ] Exclude isolated failing negative fixtures from public-output absence
+  sweeps and passing fixture sweeps, while still asserting those negative
+  fixtures fail validation.
 - [ ] Add focused validation for forbidden private/raw material and
   credential-like values in rendered text, decoded HTML, raw HTML attributes,
-  metadata, sitemap output, discovery output, tests, fixtures, and generated
-  pages.
+  metadata, sitemap output, discovery output, generated pages, passing
+  validation fixtures, and public-output fixtures.
 - [ ] Add focused validation that example review date placeholders use a
   placeholder pattern such as `YYYY-MM-DD`, not real private review dates or
   internal cadence.
