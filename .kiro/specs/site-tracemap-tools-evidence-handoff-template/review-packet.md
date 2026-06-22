@@ -50,9 +50,9 @@ Please inspect:
 
 Review focus:
 
-- Are `Status: not-started`, `Readiness: spec-review`, and
-  `Public claim level: concept` present and consistent before review
-  readiness is granted?
+- Are `Status: not-started`, `Readiness: ready-for-implementation`, and
+  `Public claim level: concept` present and consistent after review readiness
+  is granted?
 - Does the spec clearly require the visible copy
   `Public claim level: concept` and
   `No public conclusion without evidence`?
