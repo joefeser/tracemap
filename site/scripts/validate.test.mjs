@@ -40,6 +40,7 @@ import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import { stakeholderObjectionGuideRoute } from "./stakeholder-objection-guide.mjs";
 import { stakeholderQuestionIndexRoute } from "./stakeholder-question-index.mjs";
 import {
   teamEvidenceHandoffRequiredLinks,
@@ -163,6 +164,7 @@ async function createDistFixture({
       roadmapClaimLedgerRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
+      stakeholderObjectionGuideRoute,
       stakeholderQuestionIndexRoute
     ])
   ].map((route) => `https://tracemap.tools${route}`)
@@ -206,6 +208,7 @@ async function createDistFixture({
     roadmapClaimLedgerRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
     "/use-cases/",
     "/outputs/",
@@ -334,6 +337,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === staticVsRuntimeRoute) {
     return staticVsRuntimePage();
+  }
+
+  if (route === stakeholderObjectionGuideRoute) {
+    return stakeholderObjectionGuidePage();
   }
 
   if (route === stakeholderQuestionIndexRoute) {
@@ -721,6 +728,23 @@ async function writeDiscoveryFiles(dist) {
         ]
       },
       {
+        path: stakeholderObjectionGuideRoute,
+        title: "Stakeholder Objection Guide",
+        summary: "Concept-level guide that turns skeptical stakeholder objections into public-safe evidence checks, stop conditions, limitations, and owner handoffs.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The guide is an objection-to-evidence handoff over existing public routes, not a new proof source or release workflow.",
+          "Rows must keep the safe answer, evidence check, stop condition, owner handoff, limitation, non-claim, supporting route, and public claim level attached."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete coverage, release approval, autonomous approval, or absence-of-impact proof.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public objection-guide material."
+        ]
+      },
+      {
         path: stakeholderQuestionIndexRoute,
         title: "Stakeholder Question Index",
         summary: "Concept-level orientation route from stakeholder questions to public-safe proof paths.",
@@ -843,6 +867,10 @@ async function glossaryPage() {
 
 async function stakeholderQuestionIndexPage() {
   return readFile(new URL("../src/questions/index.html", import.meta.url), "utf8");
+}
+
+async function stakeholderObjectionGuidePage() {
+  return readFile(new URL("../src/questions/objections/index.html", import.meta.url), "utf8");
 }
 
 function incidentCallPage() {
