@@ -86,7 +86,7 @@ was changed in this phase.
 
 - `git diff --check`: passed on 2026-06-22.
 - `./scripts/check-private-paths.sh`: passed on 2026-06-22.
-- Focused spec text checks: passed on 2026-06-22 with 75 checks covering
+- Focused spec text checks: passed on 2026-06-22 with 76 checks covering
   required headers, all 15 required fields, required sections, all required
   stop conditions, all six neighbor distinctions, boundary wording, synthetic
   labeling, word-count expectations, and forbidden raw/private patterns.

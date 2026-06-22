@@ -345,7 +345,7 @@ Acceptance criteria:
   may mention forbidden topics only in clearly negated, clearly labeled, or
   clearly cautionary contexts. A forbidden claim or forbidden private/raw
   phrase outside a labeled non-claim, unsafe example, stop-condition,
-  checklist, template-field-description, neighbor-distinction, when-to-use, or
+  handoff-checklist, template-field, neighbor-distinction, when-to-use, or
   caution context fails validation.
 - Forbidden positive-claim checks use phrase-scoped patterns, not bare tokens.
   Example patterns include `proves runtime`, `production proven`,
@@ -361,12 +361,13 @@ Acceptance criteria:
   `neighbor distinction`, `distinguish`, `when to use`, or `caution`,
   or when the containing element uses an explicit context marker such as
   `data-context="non-claim"`, `data-context="unsafe-example"`,
-  `data-context="stop-condition"`, `data-context="template-field"`,
-  `data-context="neighbor-distinction"`, `data-context="when-to-use"`, or
-  `data-context="caution"`. A bare `template` section heading does not by
-  itself label every descendant as an allowed forbidden-term context. Metadata
-  has no rendered section context, so forbidden terms in metadata must appear
-  only in explicit limitations or non-claims fields.
+  `data-context="stop-condition"`, `data-context="handoff-checklist"`,
+  `data-context="template-field"`, `data-context="neighbor-distinction"`,
+  `data-context="when-to-use"`, or `data-context="caution"`. A bare
+  `template` section heading does not by itself label every descendant as an
+  allowed forbidden-term context. Metadata has no rendered section context, so
+  forbidden terms in metadata must appear only in explicit limitations or
+  non-claims fields.
 - Presence checks for `non-claim` field labels, `non-claims` section labels,
   `stop condition` field labels, `stop conditions` section labels, and
   `public claim level` intro or field labels use exact, context-scoped tokens

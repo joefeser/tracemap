@@ -266,10 +266,10 @@ concept-page validator patterns. The validator should check:
   `neighbor distinction`, `distinguish`, `when to use`, or `caution`,
   or by an explicit context marker such as `data-context="non-claim"`,
   `data-context="unsafe-example"`, `data-context="stop-condition"`,
-  `data-context="template-field"`, `data-context="neighbor-distinction"`,
-  `data-context="when-to-use"`, or `data-context="caution"`; a bare
-  `template` section heading does not label every descendant as an allowed
-  forbidden-term context;
+  `data-context="handoff-checklist"`, `data-context="template-field"`,
+  `data-context="neighbor-distinction"`, `data-context="when-to-use"`, or
+  `data-context="caution"`; a bare `template` section heading does not label
+  every descendant as an allowed forbidden-term context;
 - presence checks for similarly named labels, such as `non-claim` versus
   `non-claims`, `stop condition` versus `stop conditions`, and
   `public claim level` intro versus field labels, use exact context-scoped
