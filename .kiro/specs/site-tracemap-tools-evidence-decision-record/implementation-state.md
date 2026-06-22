@@ -354,8 +354,28 @@ Implementation PR-loop history:
   scoped to approved record-template and safe-example containers; negation
   handling tightened so unrelated negated clauses cannot mask a later positive
   forbidden claim; regression coverage added.
-- Final PR-loop status after the post-review fix commit: pending rerun after
-  the fix commit is pushed.
+- PR-loop after the post-review fix commit stopped with `decision:
+  actionable_findings`, `stopReason: UNRESOLVED_REVIEW_THREADS`, `nextAction:
+  patch_actionable_findings`, `reviewFreshnessPosture: hard_blocker`,
+  `residualRiskLevel: high`, and `canMerge: false`.
+- Current pushed head at that readback:
+  `364aed94edaad3031ff15855fd9a1435cfd09ba5`.
+- Checks at that readback: no pending checks and no failed checks.
+- Remaining unresolved review threads at that readback:
+  3 threads. They are the patched temp-fixture state-path thread, the patched
+  validation-context stripping thread, and the patched Codex
+  validation-context stripping thread. I did not manually resolve bot review
+  threads or post disposition comments because that is a GitHub write action
+  outside the normal patch/validate/push loop.
+- Required reviewer state at that readback: Codex reviewed
+  `8b7fcbdc807a5e20a7aec5be5314fa2c91a64c45`; current head was
+  `364aed94edaad3031ff15855fd9a1435cfd09ba5`, so Codex review freshness was
+  stale after the fix commit. Qodo still reported actionable findings because
+  the unresolved Qodo thread remained open.
+- Owner handoff at that readback: not merge-ready. Joe should not merge unless
+  the remaining review threads are resolved or explicitly dispositioned, and
+  the stale required-review risk is accepted for the exact current head or a
+  fresh review returns clean.
 
 ## Residual Risk
 
