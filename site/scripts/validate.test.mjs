@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -41,6 +41,10 @@ import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import {
+  stakeholderObjectionGuideRoute,
+  validateStakeholderObjectionGuideDist
+} from "./stakeholder-objection-guide.mjs";
 import { stakeholderQuestionIndexRoute } from "./stakeholder-question-index.mjs";
 import {
   teamEvidenceHandoffRequiredLinks,
@@ -131,6 +135,30 @@ test("validateDist requires robots sitemap directive", async () => {
   );
 });
 
+test("validateStakeholderObjectionGuideDist reports missing supporting routes", async () => {
+  const root = await createDistFixture();
+  const dist = join(root, "dist");
+  const errors = [];
+
+  await rm(join(dist, "static-vs-runtime"), { recursive: true, force: true });
+  await validateStakeholderObjectionGuideDist({ dist, errors });
+
+  assert.match(errors.join("\n"), /Stakeholder objection guide references missing supporting route: \/static-vs-runtime\//);
+});
+
+test("validateStakeholderObjectionGuideDist rejects hard private leaks inside bounded rows", async () => {
+  const root = await createDistFixture();
+  const pagePath = join(root, "dist", "questions", "objections", "index.html");
+  const hardLeak = ["/", "Users", "/private"].join("");
+  const html = await readFile(pagePath, "utf8");
+  const errors = [];
+
+  await writeFile(pagePath, html.replace("raw facts", hardLeak), "utf8");
+  await validateStakeholderObjectionGuideDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /Stakeholder objection guide contains forbidden private or credential-like text/);
+});
+
 async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
@@ -166,6 +194,7 @@ async function createDistFixture({
       roadmapClaimLedgerRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
+      stakeholderObjectionGuideRoute,
       stakeholderQuestionIndexRoute
     ])
   ].map((route) => `https://tracemap.tools${route}`)
@@ -211,6 +240,7 @@ async function createDistFixture({
     roadmapClaimLedgerRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
     "/use-cases/",
     "/outputs/",
@@ -343,6 +373,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === staticVsRuntimeRoute) {
     return staticVsRuntimePage();
+  }
+
+  if (route === stakeholderObjectionGuideRoute) {
+    return stakeholderObjectionGuidePage();
   }
 
   if (route === stakeholderQuestionIndexRoute) {
@@ -754,6 +788,23 @@ async function writeDiscoveryFiles(dist) {
         ]
       },
       {
+        path: stakeholderObjectionGuideRoute,
+        title: "Stakeholder Objection Guide",
+        summary: "Concept-level guide that turns skeptical stakeholder objections into public-safe evidence checks, stop conditions, limitations, and owner handoffs.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The guide is an objection-to-evidence handoff over existing public routes, not a new proof source or release workflow.",
+          "Rows must keep the safe answer, evidence check, stop condition, owner handoff, limitation, non-claim, supporting route, and public claim level attached."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete coverage, release approval, autonomous approval, or absence-of-impact proof.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public objection-guide material."
+        ]
+      },
+      {
         path: stakeholderQuestionIndexRoute,
         title: "Stakeholder Question Index",
         summary: "Concept-level orientation route from stakeholder questions to public-safe proof paths.",
@@ -876,6 +927,10 @@ async function glossaryPage() {
 
 async function stakeholderQuestionIndexPage() {
   return readFile(new URL("../src/questions/index.html", import.meta.url), "utf8");
+}
+
+async function stakeholderObjectionGuidePage() {
+  return readFile(new URL("../src/questions/objections/index.html", import.meta.url), "utf8");
 }
 
 function incidentCallPage() {
