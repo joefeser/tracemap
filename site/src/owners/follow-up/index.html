@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap owner follow-up map for routing static-evidence questions to human owner categories without claiming real organizational ownership."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Owner Follow-Up Map | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/owners/follow-up/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Owner Follow-Up Map">
+    <meta
+      property="og:description"
+      content="A concept-level map for preserving static evidence boundaries while routing follow-up questions to code, test, runtime, data, release, architecture, reviewer, or manager owner categories."
+    >
+    <meta property="og:url" content="https://tracemap.tools/owners/follow-up/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Owner follow-up map</p>
+        <h1>Route the next static-evidence question without turning it into an ownership claim.</h1>
+        <p class="hero-subhead">
+          This concept map helps a reader preserve what TraceMap can show,
+          what remains unknown, and which human owner category should answer
+          next. It is owner-category routing, not an org chart, ownership
+          detector, release gate, or replacement for human judgment.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+        </p>
+        <nav class="hero-actions" aria-label="Owner follow-up proof links">
+          <a class="button primary" href="#owner-map">Use the map</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+          <a class="button secondary" href="/validation/">Validation</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Purpose</p>
+          <h2>TraceMap can preserve the question; the organization confirms the owner.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Can route</strong><span>Use rule context, tier, coverage label, limitation, and proof path to decide which owner category should review next.</span></div>
+          <div><strong>Cannot identify</strong><span>TraceMap does not know real teams, people, approval chains, on-call rotations, service catalogs, database stewardship, or production ownership.</span></div>
+          <div><strong>Human source of truth</strong><span>Confirm actual ownership through the reader's organization before assigning work, escalating an operational question, or making a release decision.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="neighbor-surfaces">
+        <div>
+          <p class="section-kicker">Neighbor Boundaries</p>
+          <h2>Use this map when the next question is who should answer, not what the packet says.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Team handoff</strong><span><a href="/team-evidence-handoff/">/team-evidence-handoff/</a> gives receiver-specific packet wording; this map starts from a question shape and owner category.</span></div>
+          <div><strong>Incident handoff</strong><span><a href="/incident-evidence-handoff/">/incident-evidence-handoff/</a> carries static evidence into incident-adjacent conversation; this map is not incident command.</span></div>
+          <div><strong>Reviewer quickstart</strong><span><a href="/reviewer-quickstart/">/reviewer-quickstart/</a> is a packet inspection guide; this map names the next owner category when evidence is insufficient or role-specific.</span></div>
+          <div><strong>Questions</strong><span><a href="/questions/">/questions/</a> routes stakeholder questions to evidence surfaces; this map routes follow-up questions to owner categories.</span></div>
+          <div><strong>Objections</strong><span><a href="/questions/objections/">/questions/objections/</a> handles skeptical challenge shapes; this map names who should resolve a gap or decision.</span></div>
+          <div><strong>Packet assembly</strong><span><a href="/packets/assembly/">/packets/assembly/</a> prepares public-safe packets; this map assumes a bounded trail exists or is missing.</span></div>
+          <div><strong>Manager packet</strong><span><a href="/manager-packet/">/manager-packet/</a> frames manager summaries; this map uses manager only as one possible owner category.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="owner-map">
+        <div class="section-header">
+          <p class="section-kicker">Owner Follow-Up Matrix</p>
+          <h2>Each row keeps trigger, proof path, limitation, handoff wording, and stop condition attached.</h2>
+        </div>
+        <div class="workflow-grid" data-owner-followup-map>
+          <article data-owner-row="code path question">
+            <h3>Code path question</h3>
+            <dl class="owner-field-list">
+              <dt>Static evidence trigger</dt><dd data-owner-field="static evidence trigger">Public-safe file, symbol, endpoint, handler, DTO, call-site, or dependency evidence with rule ID or rule family.</dd>
+              <dt>What TraceMap can show</dt><dd data-owner-field="what tracemap can show">Can point to static references and proof paths explaining why code review is needed.</dd>
+              <dt>What TraceMap cannot show</dt><dd data-owner-field="what tracemap cannot show">Cannot show real production owner, runtime behavior, complete impact, or blame.</dd>
+              <dt>Next owner</dt><dd data-owner-field="next owner">code owner or reviewer</dd>
+              <dt>Handoff wording</dt><dd data-owner-field="handoff wording">TraceMap can show the static code reference for this question. It cannot show real production ownership or runtime behavior. Please route this to the code owner or reviewer with the proof path and limitation attached. Stop if no proof path exists.</dd>
+              <dt>Proof path</dt><dd data-owner-field="proof path"><a href="/proof-paths/">Proof paths</a>, public-safe summary, validation page, or private review location described without raw material.</dd>
+              <dt>Limitation</dt><dd data-owner-field="limitation">Static references only; no runtime proof, production ownership proof, or complete impact conclusion.</dd>
+              <dt>Stop condition</dt><dd data-owner-field="stop condition">Stop if proof path, rule ID or rule family, or visible reduced-coverage limitation is missing.</dd>
+            </dl>
+          </article>
+
+          <article data-owner-row="test coverage question">
+            <h3>Test coverage question</h3>
+            <dl class="owner-field-list">
+              <dt>Static evidence trigger</dt><dd data-owner-field="static evidence trigger">Coverage label, validation summary, fixture reference, test-gap note, or reduced-analysis label.</dd>
+              <dt>What TraceMap can show</dt><dd data-owner-field="what tracemap can show">Can list where evidence suggests a test or validation question should be checked.</dd>
+              <dt>What TraceMap cannot show</dt><dd data-owner-field="what tracemap cannot show">Cannot show test sufficiency, release safety, exhaustive coverage, pass status, or failure status.</dd>
+              <dt>Next owner</dt><dd data-owner-field="next owner">test owner or reviewer</dd>
+              <dt>Handoff wording</dt><dd data-owner-field="handoff wording">TraceMap can show the static evidence that raised this test question. It cannot show whether test coverage is sufficient. Please route this to the test owner or reviewer with the proof path and limitation attached. Stop if validation evidence is missing.</dd>
+              <dt>Proof path</dt><dd data-owner-field="proof path"><a href="/validation/">Validation</a>, test-summary surface, proof path, or private review location described without raw command output.</dd>
+              <dt>Limitation</dt><dd data-owner-field="limitation">Static evidence and public-safe validation summaries only; no release-safety or exhaustive-coverage claim.</dd>
+              <dt>Stop condition</dt><dd data-owner-field="stop condition">Stop if validation evidence, coverage label, limitation, or next test owner category is missing.</dd>
+            </dl>
+          </article>
+
+          <article data-owner-row="runtime behavior question">
+            <h3>Runtime behavior question</h3>
+            <dl class="owner-field-list">
+              <dt>Static evidence trigger</dt><dd data-owner-field="static evidence trigger">Static route, dependency, configuration, endpoint, or call-path evidence that raises a runtime question.</dd>
+              <dt>What TraceMap can show</dt><dd data-owner-field="what tracemap can show">Can surface which static repository surface created the runtime follow-up.</dd>
+              <dt>What TraceMap cannot show</dt><dd data-owner-field="what tracemap cannot show">Cannot show logs, traces, metrics, traffic, latency, throughput, errors, reproduction, or production behavior.</dd>
+              <dt>Next owner</dt><dd data-owner-field="next owner">service/runtime owner</dd>
+              <dt>Handoff wording</dt><dd data-owner-field="handoff wording">TraceMap can show the static surface that raised this runtime question. It cannot show runtime behavior. Please route this to the service/runtime owner with the proof path and limitation attached. Stop if runtime evidence is required to answer the question.</dd>
+              <dt>Proof path</dt><dd data-owner-field="proof path"><a href="/static-vs-runtime/">Static-vs-runtime boundary</a>, static proof route, limitation page, or private review location described without telemetry.</dd>
+              <dt>Limitation</dt><dd data-owner-field="limitation">Static repository evidence only; runtime evidence must come from the service/runtime owner.</dd>
+              <dt>Stop condition</dt><dd data-owner-field="stop condition">Stop if the question asks for production behavior, traffic, endpoint performance, outage cause, or operational safety.</dd>
+            </dl>
+          </article>
+
+          <article data-owner-row="data/schema question">
+            <h3>Data/schema question</h3>
+            <dl class="owner-field-list">
+              <dt>Static evidence trigger</dt><dd data-owner-field="static evidence trigger">Public-safe schema, migration, persistence, data-contract, or SQL-facing reference.</dd>
+              <dt>What TraceMap can show</dt><dd data-owner-field="what tracemap can show">Can connect a static data-facing reference to a proof path.</dd>
+              <dt>What TraceMap cannot show</dt><dd data-owner-field="what tracemap cannot show">Cannot show raw SQL, production data safety, live schema state, connection values, or database ownership proof.</dd>
+              <dt>Next owner</dt><dd data-owner-field="next owner">database owner or architect</dd>
+              <dt>Handoff wording</dt><dd data-owner-field="handoff wording">TraceMap can show the static data-facing reference for this question. It cannot show live schema state or database ownership. Please route this to the database owner or architect with the proof path and limitation attached. Stop if raw data or configuration values would be needed.</dd>
+              <dt>Proof path</dt><dd data-owner-field="proof path"><a href="/proof-paths/">Proof paths</a>, sanitized summary, limitation page, or private review location described without raw SQL or configuration values.</dd>
+              <dt>Limitation</dt><dd data-owner-field="limitation">Static data-facing evidence only; no production data, live schema, or ownership proof.</dd>
+              <dt>Stop condition</dt><dd data-owner-field="stop condition">Stop if the handoff would require publishing SQL, configuration values, secrets, production data, or private identifiers.</dd>
+            </dl>
+          </article>
+
+          <article data-owner-row="config/deployment question">
+            <h3>Config/deployment question</h3>
+            <dl class="owner-field-list">
+              <dt>Static evidence trigger</dt><dd data-owner-field="static evidence trigger">Public-safe file reference or deployment-facing surface label for checked-in configuration, not the value itself.</dd>
+              <dt>What TraceMap can show</dt><dd data-owner-field="what tracemap can show">Can label a static config or deployment-facing surface and its limitation.</dd>
+              <dt>What TraceMap cannot show</dt><dd data-owner-field="what tracemap cannot show">Cannot show live environment values, deployed state, operational safety, or production configuration.</dd>
+              <dt>Next owner</dt><dd data-owner-field="next owner">service/runtime owner, release reviewer, or architect</dd>
+              <dt>Handoff wording</dt><dd data-owner-field="handoff wording">TraceMap can show the static configuration or deployment-facing surface. It cannot show live environment state. Please route this to the service/runtime owner, release reviewer, or architect with the proof path and limitation attached. Stop if production values are needed.</dd>
+              <dt>Proof path</dt><dd data-owner-field="proof path"><a href="/limitations/">Limitations</a>, proof route, validation page, or private review location described without raw configuration values.</dd>
+              <dt>Limitation</dt><dd data-owner-field="limitation">Checked-in static evidence only; no live deployment, environment, or operational-safety proof.</dd>
+              <dt>Stop condition</dt><dd data-owner-field="stop condition">Stop if the question depends on live environment values, deployment state, secrets, credentials, or operational safety.</dd>
+            </dl>
+          </article>
+
+          <article data-owner-row="release decision question">
+            <h3>Release decision question</h3>
+            <dl class="owner-field-list">
+              <dt>Static evidence trigger</dt><dd data-owner-field="static evidence trigger">Static evidence packet, coverage label, validation status, or evidence gap near a release question.</dd>
+              <dt>What TraceMap can show</dt><dd data-owner-field="what tracemap can show">Can list review inputs and unresolved proof boundaries.</dd>
+              <dt>What TraceMap cannot show</dt><dd data-owner-field="what tracemap cannot show">Cannot approve, block, certify, prove release safety, or replace release process.</dd>
+              <dt>Next owner</dt><dd data-owner-field="next owner">release reviewer or manager</dd>
+              <dt>Handoff wording</dt><dd data-owner-field="handoff wording">TraceMap can show the static review inputs and proof boundaries for this release question. It cannot approve or block a release. Please route this to the release reviewer or manager with the proof path and limitation attached. Stop if release approval is being inferred from static evidence.</dd>
+              <dt>Proof path</dt><dd data-owner-field="proof path"><a href="/packets/assembly/">Packet assembly</a>, validation page, limitation page, or private release-review location described without raw artifacts.</dd>
+              <dt>Limitation</dt><dd data-owner-field="limitation">Static evidence can inform review questions only; release process, tests, code review, source review, and owner judgment remain separate.</dd>
+              <dt>Stop condition</dt><dd data-owner-field="stop condition">Stop if wording claims approval, blocking, certification, release safety, operational safety, or manager authorization.</dd>
+            </dl>
+          </article>
+
+          <article data-owner-row="architecture decision question">
+            <h3>Architecture decision question</h3>
+            <dl class="owner-field-list">
+              <dt>Static evidence trigger</dt><dd data-owner-field="static evidence trigger">Dependency, coupling, boundary, modernization, cross-service, or ownership-split evidence.</dd>
+              <dt>What TraceMap can show</dt><dd data-owner-field="what tracemap can show">Can connect a static relationship and proof path to design review.</dd>
+              <dt>What TraceMap cannot show</dt><dd data-owner-field="what tracemap cannot show">Cannot show complete dependency understanding, runtime topology, final architecture authority, or org ownership.</dd>
+              <dt>Next owner</dt><dd data-owner-field="next owner">architect or code owner</dd>
+              <dt>Handoff wording</dt><dd data-owner-field="handoff wording">TraceMap can show the static relationship that raised this architecture question. It cannot decide the architecture or prove complete dependency scope. Please route this to the architect or code owner with the proof path and limitation attached. Stop if final design authority is being inferred.</dd>
+              <dt>Proof path</dt><dd data-owner-field="proof path"><a href="/proof-paths/">Proof paths</a>, relationship summary, limitation page, or private design-review location described without private topology or org metadata.</dd>
+              <dt>Limitation</dt><dd data-owner-field="limitation">Static relationship evidence only; no runtime topology, complete dependency map, or final architecture decision.</dd>
+              <dt>Stop condition</dt><dd data-owner-field="stop condition">Stop if the row implies complete coverage, authoritative ownership, final design approval, or production dependency proof.</dd>
+            </dl>
+          </article>
+
+          <article data-owner-row="evidence gap question">
+            <h3>Evidence gap question</h3>
+            <dl class="owner-field-list">
+              <dt>Static evidence trigger</dt><dd data-owner-field="static evidence trigger">Missing proof path, rule ID/rule family, evidence tier, coverage label, limitation, validation evidence, or owner category.</dd>
+              <dt>What TraceMap can show</dt><dd data-owner-field="what tracemap can show">Can record a gap label and where the evidence trail stops.</dd>
+              <dt>What TraceMap cannot show</dt><dd data-owner-field="what tracemap cannot show">Cannot show absence of impact, clean conclusion, approval, or complete coverage.</dd>
+              <dt>Next owner</dt><dd data-owner-field="next owner">reviewer, manager, or relevant domain owner category</dd>
+              <dt>Handoff wording</dt><dd data-owner-field="handoff wording">TraceMap can show where the evidence trail stops. It cannot turn missing evidence into a clean conclusion. Please route this gap to the reviewer, manager, or relevant domain owner with the missing field named. Stop until the gap is labeled or resolved.</dd>
+              <dt>Proof path</dt><dd data-owner-field="proof path"><a href="/review-claim-checklist/">Claim checklist</a>, proof route, validation page, gap summary, limitation page, or private review location where the trail stops.</dd>
+              <dt>Limitation</dt><dd data-owner-field="limitation">Evidence is missing, reduced, syntax-only, private-only, unavailable, or outside static analysis.</dd>
+              <dt>Stop condition</dt><dd data-owner-field="stop condition">Stop if proof path, rule ID/rule family, evidence tier, coverage label, limitation, validation evidence, or next owner category is missing.</dd>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="ownership-boundary" data-owner-boundary="ownership">
+        <div>
+          <p class="section-kicker">Ownership Boundary</p>
+          <h2>Owner categories are routing labels, not proof of real ownership.</h2>
+        </div>
+        <ul>
+          <li>Actual teams, people, on-call rotations, approval chains, service catalogs, database stewardship, and manager authority must come from the reader's organization.</li>
+          <li>The map does not prove production ownership, runtime behavior, production traffic, endpoint performance, release approval, release safety, operational safety, complete coverage, or replacement of human judgment.</li>
+          <li>It does not perform AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, automated ownership detection, or automated release approval.</li>
+          <li>Missing evidence creates a labeled follow-up question, not blame and not a clean conclusion.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="public-safety" data-owner-boundary="public-safety">
+        <div>
+          <p class="section-kicker">Public Safety</p>
+          <h2>Keep public copy synthetic and sanitized.</h2>
+        </div>
+        <ul>
+          <li>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, configuration values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+          <li>Use authored handoff wording, public-safe summaries, and links to reviewed public routes.</li>
+          <li>Private repository evidence needs private review before any public-safe summary is written.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof and context</p>
+          <h2>Follow the owner-routing question into the right bounded surface.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation</a>
+          <a href="/team-evidence-handoff/">Team evidence handoff</a>
+          <a href="/incident-evidence-handoff/">Incident evidence handoff</a>
+          <a href="/reviewer-quickstart/">Reviewer quickstart</a>
+          <a href="/questions/">Stakeholder questions</a>
+          <a href="/questions/objections/">Objection guide</a>
+          <a href="/packets/assembly/">Packet assembly</a>
+          <a href="/manager-packet/">Manager packet</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Owner follow-up links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/team-evidence-handoff/">team handoff</a>,
+        <a href="/questions/">questions</a>,
+        and
+        <a href="/validation/">validation</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
