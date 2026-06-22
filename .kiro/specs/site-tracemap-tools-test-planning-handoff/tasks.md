@@ -26,59 +26,60 @@ output directory.
 
 ## Future Implementation Tasks
 
-- [ ] Confirm or update this spec-local `implementation-state.md` with branch,
+- [x] Confirm or update this spec-local `implementation-state.md` with branch,
   selected placement, scope, public claim level, review status, validation
   plan, oddities, and follow-ups before changing site code.
-- [ ] Inspect `/reviewer-quickstart/`, `/packets/assembly/`,
+- [x] Inspect `/reviewer-quickstart/`, `/packets/assembly/`,
   `/review-claim-checklist/`, `/validation/`, `/proof-paths/tour/`, and
   `/questions/objections/` before selecting the final placement.
-- [ ] Select `/test-planning/`, `/reviewer-quickstart/test-planning/`, a
+- [x] Select `/test-planning/`, `/reviewer-quickstart/test-planning/`, a
   section on `/reviewer-quickstart/`, or a section on `/packets/assembly/`,
   then record the rationale in `implementation-state.md`.
-- [ ] Add or update only the selected public-site surface using existing static
+- [x] Add or update only the selected public-site surface using existing static
   site layout patterns.
-- [ ] Include `Public claim level: concept` and `No public conclusion without
+- [x] Include `Public claim level: concept` and `No public conclusion without
   evidence` visibly on the surface.
-- [ ] Include sections for static evidence input, test-planning questions,
+- [x] Include sections for static evidence input, test-planning questions,
   coverage caveats, examples of safe handoff language, stop conditions, test
   owner handoff, and non-claims.
-- [ ] Include visible field labels for claim label, proof path, rule
+- [x] Include visible field labels for claim label, proof path, rule
   ID/family, evidence tier, coverage label, changed surface, limitation,
   suggested test question, next owner, validation evidence, and non-claim.
-- [ ] Explain how proof paths, rule IDs or rule families, evidence tiers,
+- [x] Explain how proof paths, rule IDs or rule families, evidence tiers,
   coverage labels, changed surfaces, and limitations become human-owned
   test-planning questions.
-- [ ] Keep examples as safe handoff language and avoid generated tests, test
+- [x] Keep examples as safe handoff language and avoid generated tests, test
   sufficiency, runtime behavior proof, production traffic proof, endpoint
   performance proof, release safety, release approval, complete coverage,
   AI/LLM analysis, and QA replacement claims.
-- [ ] Use role-based next owners rather than named individuals or personal
+- [x] Use role-based next owners rather than named individuals or personal
   owner names in public examples and metadata.
-- [ ] Choose a standalone or nested route if the complete required content
+- [x] Choose a standalone or nested route if the complete required content
   cannot fit an embedded section without dropping required labels,
   distinctions, caveats, stop conditions, or non-claims.
-- [ ] Avoid raw facts, SQLite content, analyzer logs, source snippets, SQL,
+- [x] Avoid raw facts, SQLite content, analyzer logs, source snippets, SQL,
   config values, secrets, local paths, raw remotes, generated scan
   directories, private sample names, command output, hidden validation details,
   and credential-like values.
-- [ ] Distinguish the surface from `/reviewer-quickstart/`,
+- [x] Distinguish the surface from `/reviewer-quickstart/`,
   `/packets/assembly/`, `/review-claim-checklist/`, `/validation/`,
   `/proof-paths/tour/`, and `/questions/objections/`.
-- [ ] Add bounded links to the neighboring routes that exist at implementation
+- [x] Add bounded links to the neighboring routes that exist at implementation
   time, documenting route gaps or substitutions in `implementation-state.md`.
-- [ ] Add title, description, canonical URL, Open Graph metadata, concept
+- [x] Add title, description, canonical URL, Open Graph metadata, concept
   claim metadata, sitemap metadata, and discovery metadata if the placement is
   standalone.
-- [ ] If embedded, update host metadata only where needed to make the section
-  discoverable without overclaiming.
-- [ ] Add focused validation for required copy, required links, route or
+- [x] If embedded, update host metadata only where needed to make the section
+  discoverable without overclaiming. Not applicable: selected standalone
+  `/test-planning/`.
+- [x] Add focused validation for required copy, required links, route or
   section metadata, discovery/sitemap metadata when standalone, forbidden
   claims, private/raw material, word-count bounds, and desktop/mobile browser
   sanity expectations, including basic accessibility checks.
-- [ ] Run `git diff --check`.
-- [ ] Run the relevant site tests, validation, and build commands from `site/`.
-- [ ] Run `./scripts/check-private-paths.sh`.
-- [ ] Run desktop and mobile browser sanity checks for the selected surface, or
+- [x] Run `git diff --check`.
+- [x] Run the relevant site tests, validation, and build commands from `site/`.
+- [x] Run `./scripts/check-private-paths.sh`.
+- [x] Run desktop and mobile browser sanity checks for the selected surface, or
   document why deferred.
-- [ ] Update this spec's `implementation-state.md` with final implementation
+- [x] Update this spec's `implementation-state.md` with final implementation
   scope, validation results, oddities, and follow-up items.

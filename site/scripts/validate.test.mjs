@@ -50,6 +50,7 @@ import {
   teamEvidenceHandoffRequiredLinks,
   teamEvidenceHandoffRoute
 } from "./team-evidence-handoff.mjs";
+import { testPlanningHandoffRoute } from "./test-planning-handoff.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -180,6 +181,7 @@ async function createDistFixture({
       ...incidentEvidenceHandoffRequiredLinks,
       teamEvidenceHandoffRoute,
       ...teamEvidenceHandoffRequiredLinks,
+      testPlanningHandoffRoute,
       managerBriefRoute,
       managerDemoScriptRoute,
       managerFaqRoute,
@@ -222,6 +224,7 @@ async function createDistFixture({
     incidentCallRoute,
     incidentEvidenceHandoffRoute,
     teamEvidenceHandoffRoute,
+    testPlanningHandoffRoute,
     "/legacy-modernization/evidence-map/",
     "/legacy-validation/",
     glossaryRoute,
@@ -321,6 +324,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === teamEvidenceHandoffRoute) {
     return teamEvidenceHandoffPage();
+  }
+
+  if (route === testPlanningHandoffRoute) {
+    return readFile(new URL("../src/test-planning/index.html", import.meta.url), "utf8");
   }
 
   if (route === managerBriefRoute) {
@@ -588,6 +595,19 @@ async function writeDiscoveryFiles(dist) {
         limitations: ["Fixture team evidence handoff limitations remain bounded."],
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof."
+        ]
+      },
+      {
+        path: testPlanningHandoffRoute,
+        title: "Test Planning Handoff",
+        summary: "Concept-level handoff for turning TraceMap deterministic static evidence into human-owned test-planning questions.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["The fixture route translates static evidence into test-planning questions without acting as a validation result or release gate."],
+        nonClaims: [
+          "No generated tests, test sufficiency, runtime behavior, production traffic, endpoint performance, release safety, release approval, complete coverage, AI impact analysis, LLM analysis, or replacement of QA proof."
         ]
       },
       {

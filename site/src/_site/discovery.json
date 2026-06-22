@@ -628,6 +628,24 @@
     ]
   },
   {
+    "path": "/test-planning/",
+    "title": "Test Planning Handoff",
+    "summary": "Concept-level handoff for turning TraceMap deterministic static evidence into human-owned test-planning questions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route translates static evidence into test-planning questions; it is not a generated test workflow, validation result, or release gate.",
+      "Every question must keep proof path, rule context, evidence tier, coverage label, changed surface, limitation, next owner, validation evidence, and non-claim attached."
+    ],
+    "nonClaims": [
+      "No generated tests, test sufficiency, runtime behavior, production traffic, endpoint performance, release safety, release approval, complete coverage, AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, or replacement of QA proof.",
+      "No replacement of tests, source review, runtime observability, telemetry, logs, traces, APM, service-owner judgment, database-owner judgment, release-owner judgment, security review, compliance review, or human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public handoff material."
+    ]
+  },
+  {
     "path": "/static-vs-runtime/",
     "title": "Static Evidence Vs Runtime Telemetry",
     "summary": "Concept-level comparison of TraceMap deterministic static repository evidence with runtime telemetry and observability questions.",
