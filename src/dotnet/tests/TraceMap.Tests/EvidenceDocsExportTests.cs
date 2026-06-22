@@ -35,12 +35,16 @@ public sealed class EvidenceDocsExportTests
         Assert.True(EvidenceDocsExporter.IsSelfConsistentManifest(await File.ReadAllTextAsync(Path.Combine(firstOut, "manifest.json"))));
         Assert.True(EvidenceDocsExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "README.md"))));
         Assert.True(EvidenceDocsExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "index.md"))));
+        Assert.True(EvidenceDocsExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "chunks", "endpoint", "index.md"))));
         Assert.Equal(
             await File.ReadAllTextAsync(Path.Combine(firstOut, "chunks.jsonl")),
             await File.ReadAllTextAsync(Path.Combine(secondOut, "chunks.jsonl")));
         Assert.Equal(
             await File.ReadAllTextAsync(Path.Combine(firstOut, "README.md")),
             await File.ReadAllTextAsync(Path.Combine(secondOut, "README.md")));
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstOut, "chunks", "endpoint", "index.md")),
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "chunks", "endpoint", "index.md")));
 
         var jsonl = await File.ReadAllLinesAsync(Path.Combine(firstOut, "chunks.jsonl"));
         Assert.All(jsonl, line =>
@@ -57,14 +61,32 @@ public sealed class EvidenceDocsExportTests
             Assert.True(claim.TryGetProperty("text", out _));
             Assert.True(claim.TryGetProperty("ruleIds", out _));
             Assert.True(claim.TryGetProperty("evidenceTiers", out _));
+            Assert.True(document.RootElement.TryGetProperty("links", out var links));
+            Assert.Equal(JsonValueKind.Array, links.ValueKind);
+            Assert.Contains(links.EnumerateArray(), link =>
+                link.GetProperty("linkId").GetString() == "family-index"
+                && link.GetProperty("target").GetString() == $"chunks/{document.RootElement.GetProperty("chunkFamily").GetString()}/index.md");
+            Assert.All(links.EnumerateArray(), link =>
+            {
+                var target = link.GetProperty("target").GetString();
+                Assert.False(string.IsNullOrWhiteSpace(target));
+                Assert.DoesNotContain("..", target, StringComparison.Ordinal);
+                Assert.False(Path.IsPathRooted(target!));
+            });
         });
 
         Assert.Contains(first.Chunks, chunk => chunk.ChunkFamily == "endpoint" && chunk.QuestionFamilies.Contains("endpoint-question"));
         Assert.Contains(first.Chunks, chunk => chunk.ChunkFamily == "query-sql-shape" && chunk.QuestionFamilies.Contains("data-surface-question"));
         Assert.Contains(first.Chunks, chunk => chunk.QuestionFamilies.Contains("weak-evidence-question") && chunk.Claim.Kind is "weak-static-evidence" or "gap-statement");
         var chunkMarkdown = string.Join('\n', Directory.EnumerateFiles(firstOut, "chunks/*.md", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.Contains("## Navigation", chunkMarkdown);
+        Assert.Contains("[All Evidence Docs](../../index.md)", chunkMarkdown);
+        Assert.Contains("[Endpoint Index](index.md)", chunkMarkdown);
         Assert.Contains("Question families", chunkMarkdown);
         Assert.Contains("Claim kind", chunkMarkdown);
+        var familyIndex = await File.ReadAllTextAsync(Path.Combine(firstOut, "chunks", "endpoint", "index.md"));
+        Assert.Contains("# Endpoint Chunks", familyIndex);
+        Assert.Contains("This index is navigation metadata over deterministic static evidence.", familyIndex);
 
         var allText = string.Join('\n', Directory.EnumerateFiles(firstOut, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         var rawSqlMarker = string.Concat("sel", "ect *");

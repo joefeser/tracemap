@@ -42,10 +42,13 @@ them with publishable artifacts.
 2. Public and demo modes SHALL reject unsafe material rather than rendering
    redacted-but-ambiguous proof claims.
 3. Hidden/local mode MAY render repo-relative evidence locations or category
-   labels only when the hidden safety classifier allows the value for that
-   context. Absolute paths, raw remotes, raw URLs, hostnames, connection
-   strings, and source snippets SHALL be rejected or omitted even in
-   hidden/local mode.
+   labels from the closed safe field set in Requirement 2 only when the hidden
+   safety classifier allows the value for that context. Absolute paths, raw
+   remotes, raw URLs, hostnames, connection strings, and source snippets SHALL
+   be rejected or omitted even in hidden/local mode. The hidden/local
+   classifier boundary SHALL be the shipped vault/docs-export safety classifier
+   contract unless a future spec explicitly defines and reviews a narrower
+   surface-specific classifier.
 4. Every generated output SHALL visibly preserve or reference rule IDs,
    evidence tiers, coverage labels where available, limitations, source IDs,
    and supporting fact/report IDs.
@@ -53,7 +56,8 @@ them with publishable artifacts.
    not become evidence. Stable IDs and cited evidence remain authoritative.
 6. Vault export and docs-export SHALL use the same public/demo/hidden safety
    mode vocabulary and SHALL document any surface-specific behavior as an
-   explicit limitation.
+   explicit limitation, including any intentional absent-family behavior
+   divergence between vault and docs-export.
 
 ## Requirement 2: Safe Human-Readable Names
 
@@ -62,12 +66,16 @@ names and section titles to be readable while still deterministic and safe.
 
 ### Acceptance Criteria
 
-1. Generated note and chunk display names SHALL be derived from a closed set of
-   safe fields such as route method/path key, surface kind, rule ID,
-   classification, source label, evidence tier, or stable hash.
+1. Generated note and chunk display names, aliases, tags, category labels, and
+   slugs SHALL be derived from a closed set of safe fields such as route
+   method/path key, surface kind, rule ID, classification, source label,
+   evidence tier, or stable hash.
 2. Unsafe, ambiguous, excessively long, all-fields-absent, or collision-prone
    names SHALL fall back to deterministic category-plus-hash names; if no safe
-   category can be derived, the category SHALL be `unknown`.
+   category can be derived, the category SHALL be `unknown`. If a route path
+   key or other preferred candidate field fails the safety classifier, it SHALL
+   be treated as absent for display/navigation naming and the fallback SHALL
+   apply.
 3. Name collision handling SHALL be deterministic and SHALL not choose an
    arbitrary winner. All colliding entries SHALL receive stable-ID-derived
    disambiguators rather than allowing one entry to keep the bare display name
@@ -92,12 +100,17 @@ internal IDs.
 2. Docs-export output SHOULD include section anchors and backreferences for the
    same groupings when the chunk schema supports them.
 3. Cross-links SHALL use stable IDs or generated safe slugs, not raw paths or
-   raw endpoint URLs.
+   raw endpoint URLs. Generated safe slugs SHALL be derived from the same closed
+   safe fields and stable IDs used for display-name derivation so links remain
+   stable across re-exports.
 4. Missing neighbors inside a present evidence family SHALL be represented as
    rule-backed gaps or visible absence states rather than empty conclusions.
 5. Wholly absent evidence families SHALL either be omitted from generated
    navigation or rendered as an explicit family-level absence state; the
-   implementation SHALL choose one behavior per output surface and test it.
+   implementation SHALL choose one behavior per output surface, document the
+   chosen behavior, and test it. Vault and docs-export MAY intentionally choose
+   different absence behavior when their output models differ, but the
+   divergence SHALL be documented rather than inferred.
 6. Index pages SHALL remain deterministic across input row order changes.
 
 ## Requirement 4: Route And Flow-Oriented Navigation
@@ -108,18 +121,21 @@ neighbors.
 
 ### Acceptance Criteria
 
-1. When route-flow report evidence is present, exports SHOULD expose route-flow
-   navigation entries that cite the report/fact IDs, rule IDs, path coverage,
-   and limitations.
-2. When property-flow report evidence is present, exports SHOULD expose
-   property-flow navigation entries that cite report/fact IDs, rule IDs,
+1. WHEN compatible route-flow report evidence is present THEN exports SHALL
+   expose route-flow navigation entries that cite the report/fact IDs, rule
+   IDs, path coverage, and limitations; WHEN such evidence is absent THEN the
+   family SHALL be omitted or rendered as an explicit absence state per
+   Requirement 3.
+2. WHEN compatible property-flow report evidence is present THEN exports SHALL
+   expose property-flow navigation entries that cite report/fact IDs, rule IDs,
    property/source-target evidence, coverage labels where available, and
-   limitations.
+   limitations; WHEN such evidence is absent THEN the family SHALL be omitted
+   or rendered as an explicit absence state per Requirement 3.
 3. Route-flow and property-flow navigation SHALL not claim runtime execution,
    DI resolution, branch feasibility, auth behavior, object identity, mutation
    effects, or production traffic.
 4. Related service, data, SQL-shape, package, event/message, and legacy data
-   descriptors MAY be linked only when existing evidence already supplies the
+   descriptors SHALL only be linked when existing evidence already supplies the
    relationship or shared stable identity.
 5. Ambiguous or duplicate route-flow or property-flow neighbors SHALL be
    rendered as NeedsReview/unknown/gap context, not definitive flow.
@@ -129,6 +145,9 @@ neighbors.
 **User Story:** As a downstream RAG builder, I want chunks with stable titles,
 citations, and boundaries so retrieval can cite TraceMap evidence without
 turning RAG output into TraceMap evidence.
+
+A downstream RAG system may cite these chunks, but the RAG citation itself is
+not TraceMap evidence and must not be presented as a TraceMap finding.
 
 ### Acceptance Criteria
 
@@ -161,8 +180,12 @@ polish to be additive and safe to adopt.
    parse old fields.
 3. New fields SHALL be optional/additive unless the implementation creates a
    new documented schema version.
-4. Migration notes SHALL explain which fields are stable identity fields and
-   which are display/navigation helpers.
+4. Migration notes in `docs/VAULT_EXPORT.md`, `docs/EVIDENCE_DOCS_EXPORT.md`,
+   or a dedicated migration note SHALL explain which fields are stable identity
+   fields and which are display/navigation helpers. Those notes SHALL be
+   written before or concurrent with the first implementation slice that adds
+   optional fields or materially changes how an existing optional field is
+   populated.
 5. Stale generated output SHALL require existing force behavior and SHALL pass
    safety validation before replacement.
 
