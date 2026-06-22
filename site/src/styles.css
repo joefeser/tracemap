@@ -342,6 +342,26 @@ h3 {
   margin-bottom: 0;
 }
 
+.owner-field-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.owner-field-list dt {
+  color: var(--accent-strong);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.owner-field-list dd {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
 .split-section,
 .command-section,
 .boundary-section,

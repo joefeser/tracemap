@@ -1,44 +1,81 @@
 # Site TraceMap Tools Owner Follow-Up Map Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Current Branch And Worktree
 
-- Branch: `codex/spec-site-owner-followup-map`
+- Branch: `codex/impl-site-owner-followup-map`
 - Base: `origin/dev`
 - PR target: `dev`
-- Worktree: `<isolated-spec-worktree>`
-- Root checkout untouched by this spec packet.
+- Worktree: `<isolated-implementation-worktree>`
+- Root checkout untouched by this implementation phase.
 
 ## Scope
 
-Create a spec-only Kiro packet for a future public-site owner follow-up map.
-The packet is limited to:
+Implement the public-site owner follow-up map described by this spec. Scope is
+limited to:
 
 - `.kiro/specs/site-tracemap-tools-owner-followup-map/requirements.md`
 - `.kiro/specs/site-tracemap-tools-owner-followup-map/design.md`
 - `.kiro/specs/site-tracemap-tools-owner-followup-map/tasks.md`
 - `.kiro/specs/site-tracemap-tools-owner-followup-map/implementation-state.md`
 - `.kiro/specs/site-tracemap-tools-owner-followup-map/review-packet.md`
+- `site/src/owners/follow-up/index.html`
+- `site/src/_site/pages.json`
+- `site/src/_site/discovery.json`
+- `site/src/_site/pages.json`
+- `site/src/questions/index.html`
+- `site/src/team-evidence-handoff/index.html`
+- `site/src/styles.css`
+- `site/scripts/owner-followup-map.mjs`
+- `site/scripts/owner-followup-map.test.mjs`
+- `site/scripts/validate.mjs`
+- `site/scripts/validate.test.mjs`
 
-Do not edit `site/src`, generated output, scanner code, or existing specs in
+Do not edit generated output, scanner code, reducer code, or unrelated specs in
 this phase.
 
 ## Placement State
 
-Final placement is not selected in this spec-only phase. Candidate placements
-for future implementation are:
+Final placement: `/owners/follow-up/` as a standalone concept-level route.
 
-- `/owners/follow-up/`
-- `/review-room/owners/`
-- A section on `/team-evidence-handoff/`
-- A section on `/questions/`
+Rationale:
 
-Future implementation must record the selected placement, rejected
-alternatives, discovery/sitemap handling, and rationale here before changing
-site source.
+- The route is short, shareable, and describes question-to-owner-category
+  routing without implying TraceMap performs real org ownership detection.
+- Standalone placement avoids making `/questions/` or
+  `/team-evidence-handoff/` carry the full required matrix and boundary copy.
+- Discovery and sitemap entries can use `publicClaimLevel: concept` directly
+  without changing a host page's route purpose.
+- The page remains distinct from an org chart, ownership detector, reviewer
+  quickstart, packet assembly guide, manager packet, objection guide, incident
+  handoff, release gate, or runtime workflow because each row names only an
+  owner category, static evidence boundary, limitation, proof path, and stop
+  condition.
+
+Rejected alternatives:
+
+- `/review-room/owners/`: close to review-room language, but it could imply a
+  meeting-room owner model rather than broad owner-category follow-up.
+- Section on `/team-evidence-handoff/`: that page is receiver-specific packet
+  handoff language; adding the full matrix would blur packet handoff with
+  question-to-owner routing.
+- Section on `/questions/`: that page routes stakeholder questions to evidence
+  surfaces; this map routes follow-up questions to owner categories and needs
+  its own stop conditions.
+
+Discovery/sitemap handling: add a standalone sitemap entry, route-index
+discovery metadata, required links to live neighboring routes, and a focused
+validator registered in the aggregate site validation. The page will not be
+added to primary navigation; discovery will come from route indexes, sitemap,
+and useful contextual links on the new page.
+
+Navigation decision: primary navigation was left unchanged. Contextual inbound
+links were added from `/questions/` and `/team-evidence-handoff/` because those
+routes naturally lead to owner-category follow-up without bloating the global
+navigation.
 
 ## Scope Decisions
 
@@ -115,29 +152,93 @@ site source.
 
 - Passed on 2026-06-22: `git diff --check`.
 - Passed on 2026-06-22: `./scripts/check-private-paths.sh`.
+- Passed on 2026-06-22: `cd site && npm test`.
+- Passed on 2026-06-22: `cd site && npm run validate`
+  (`Validated 59 HTML files, 1993 internal references, 58 sitemap URLs, 1
+  legacy story safety targets, and 13 legacy modernization evidence-map
+  rows.`).
+- Passed on 2026-06-22: `cd site && npm run build`.
+- Passed on 2026-06-22 after review fix: `git diff --check`.
+- Passed on 2026-06-22 after review fix:
+  `./scripts/check-private-paths.sh`.
+- Passed on 2026-06-22 after review fix:
+  `cd site && node --test scripts/owner-followup-map.test.mjs`.
+- Passed on 2026-06-22 after review fix: `cd site && npm test`.
+- Passed on 2026-06-22 after review fix: `cd site && npm run validate`
+  (`Validated 59 HTML files, 1993 internal references, 58 sitemap URLs, 1
+  legacy story safety targets, and 13 legacy modernization evidence-map
+  rows.`).
+- Passed on 2026-06-22 after review fix: `cd site && npm run build`.
+- Passed on 2026-06-22 after test-hardening fix: `git diff --check`.
+- Passed on 2026-06-22 after test-hardening fix:
+  `./scripts/check-private-paths.sh`.
+- Passed on 2026-06-22 after test-hardening fix:
+  `cd site && node --test scripts/owner-followup-map.test.mjs`.
+- Passed on 2026-06-22 after test-hardening fix: `cd site && npm test`.
+- Passed on 2026-06-22 after test-hardening fix:
+  `cd site && npm run validate` (`Validated 59 HTML files, 1993 internal
+  references, 58 sitemap URLs, 1 legacy story safety targets, and 13 legacy
+  modernization evidence-map rows.`).
+- Passed on 2026-06-22 after test-hardening fix: `cd site && npm run build`.
+- Passed on 2026-06-22: desktop browser sanity for `/owners/follow-up/` at
+  1280x900. The page rendered title `Owner Follow-Up Map | TraceMap`, 8 owner
+  rows, visible `Public claim level: concept. No public conclusion without
+  evidence.`, no horizontal overflow, and no browser console warnings/errors.
+- Passed on 2026-06-22: mobile browser sanity for `/owners/follow-up/` at
+  390x844. The page rendered 8 owner rows, visible claim-level note, no
+  horizontal overflow, and no browser console warnings/errors.
 
-Spec-only phase validation did not run `npm run build` from `site/` or browser
-sanity checks because no site source changes are made. Those checks are
-required in the future implementation phase.
+Implementation validation included the full required site test, validation,
+build, private-path, diff, and browser sanity checks.
+
+## PR Loop State
+
+- PR loop initial outcome on PR #290 head
+  `56033f6de5ef16d281d3e00d9b5b59f766cbc37b`: first run stopped on
+  `ACTIONABLE_BOT_FINDINGS` while `nextAction` was
+  `wait_for_required_reviewers` because the required Codex review request was
+  still active. No patch was made until the review batch settled.
+- PR loop second actionable outcome on the same head:
+  `UNRESOLVED_REVIEW_THREADS`, `nextAction: patch_actionable_findings`.
+  Actionable finding was Codex/Qodo review feedback on
+  `site/scripts/owner-followup-map.mjs` requiring every forbidden-claim
+  occurrence to be checked, not only the first match.
+- Follow-up fix: `validateForbiddenText` now checks every
+  forbidden-claim match with a global clone of each regex and keeps the
+  negated-context guard per occurrence. Added regression coverage for a safe
+  negated occurrence before a later unsafe occurrence.
+- PR loop follow-up outcome on head
+  `5bdb52f7d1a6a5a110ce1e24758a0721d7d1a255`: Qodo reported brittle test
+  fixture mutation in `site/scripts/owner-followup-map.test.mjs` because the
+  negative test depended on exact serialized HTML spacing and copy.
+- Follow-up fix: the owner-followup test now removes required fixture
+  fragments through attribute-targeted patterns and asserts that each fixture
+  mutation actually changed the page before validating the expected error.
+- PR loop outcome on head
+  `99cf766c5ffc08eb58a64290b0940a0149f034d0`: `decision: merge_ready`,
+  `stopReason: NONE`, `nextAction: merge_ready`, `canMerge: true`.
+  Evidence: merge state `CLEAN`, unresolved threads `0`, pending checks `[]`,
+  failed checks `[]`, actionable bot findings `[]`. Residual risk level was
+  `medium` because the required Codex review was stale after the review fixes:
+  Codex reviewed `56033f6de5ef16d281d3e00d9b5b59f766cbc37b`, while the
+  current head was `99cf766c5ffc08eb58a64290b0940a0149f034d0`; the configured
+  trusted-code-review quorum was satisfied by Qodo, and the outdated Codex
+  finding had an evidence-backed disposition.
+- Latest PR loop outcome: final spec-state recording commit pending push and
+  rerun.
 
 ## Oddities
 
 - The future page must visibly name owner categories while repeatedly stating
   that TraceMap does not know real org ownership.
-- Some candidate required links may not exist at implementation time. Future
-  implementation must substitute, defer, or record the route gap before
-  publishing a dead link.
-- Links to verify at implementation time include `/team-evidence-handoff/`,
-  `/incident-evidence-handoff/`, `/reviewer-quickstart/`, `/questions/`,
-  `/questions/objections/`, `/packets/assembly/`, `/manager-packet/`,
-  `/proof-paths/`, `/limitations/`, and `/validation/`. Any route that is not
-  live must be substituted or deferred with rationale.
+- All required public links were live at implementation time. `/manager-packet/`
+  existed as a route but did not have discovery metadata, so this
+  implementation added bounded demo-level discovery metadata for the existing
+  manager packet route rather than weakening owner-map validation.
+- The standalone page fit within the 600-to-1700 rendered word-count target;
+  no mandatory-content overflow exception was needed.
 
 ## Follow-Up Items
 
-- Future implementation should choose standalone route versus embedded
-  section based on current site information architecture.
-- Future implementation should add focused validator coverage before
-  publishing the surface.
-- Future implementation should run desktop and mobile browser sanity checks
-  for the selected route or host page.
+- Push the final spec-state recording commit and rerun the required PR loop
+  against that head before final handoff.

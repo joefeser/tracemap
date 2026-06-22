@@ -31,6 +31,10 @@ import {
   managerDemoScriptRoute
 } from "./manager-demo-script.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
+import {
+  ownerFollowupMapRequiredLinks,
+  ownerFollowupMapRoute
+} from "./owner-followup-map.mjs";
 import { proofPathFaqRoute } from "./proof-path-faq.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
@@ -185,6 +189,8 @@ async function createDistFixture({
       managerBriefRoute,
       managerDemoScriptRoute,
       managerFaqRoute,
+      ownerFollowupMapRoute,
+      ...ownerFollowupMapRequiredLinks,
       proofPathFaqRoute,
       proofPathTourRoute,
       proofSourceCatalogRoute,
@@ -230,6 +236,8 @@ async function createDistFixture({
     glossaryRoute,
     managerBriefRoute,
     managerFaqRoute,
+    ownerFollowupMapRoute,
+    ...ownerFollowupMapRequiredLinks,
     proofPathFaqRoute,
     proofPathTourRoute,
     proofSourceCatalogRoute,
@@ -336,6 +344,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === managerFaqRoute) {
     return managerFaqPage();
+  }
+
+  if (route === ownerFollowupMapRoute) {
+    return readFile(new URL("../src/owners/follow-up/index.html", import.meta.url), "utf8");
   }
 
   if (route === proofPathTourRoute) {
@@ -631,6 +643,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture manager FAQ limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: ownerFollowupMapRoute,
+        title: "Owner Follow-Up Map",
+        summary: "Concept-level map for routing static-evidence questions to human owner categories while preserving proof paths, limitations, handoff wording, and stop conditions.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The map routes questions to owner categories, not real teams, people, approval chains, on-call rotations, service catalogs, database stewardship, or production ownership records.",
+          "Every row must keep the static evidence trigger, what TraceMap can and cannot show, proof path, limitation, handoff wording, and stop condition attached."
+        ],
+        nonClaims: [
+          "No real org ownership claim, production ownership proof, runtime behavior, production traffic, endpoint performance, release approval, release safety, operational safety, complete coverage, or replacement of human judgment.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, automated ownership detection, automated release approval, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public owner follow-up material."
+        ]
       },
       {
         path: proofPathTourRoute,
