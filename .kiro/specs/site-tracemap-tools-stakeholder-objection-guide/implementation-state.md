@@ -1,6 +1,6 @@
 # Site TraceMap Tools Stakeholder Objection Guide Implementation State
 
-Status: implemented-pending-pr-loop
+Status: implemented-pr-loop-merge-ready
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -327,7 +327,52 @@ Findings patched:
 Use repo-local `.agent-control/lanes/pr-review-loop.yaml` from this worktree
 for reruns.
 
-Implementation PR loop: pending until the implementation PR exists.
+Implementation PR loop:
+
+Initial implementation-head loop for PR #276:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 276 --base dev --require-codex-review --quiet --json
+```
+
+- Head `50e97726c55aaea3f473da5f6a1351a3379b9457`: returned
+  `actionable_findings`, `stopReason: UNRESOLVED_REVIEW_THREADS`.
+  `nextAction` was initially `wait_for_required_reviewers` because a required
+  Codex review request lock was active.
+- After the required reviewer returned, the loop authorized
+  `patch_actionable_findings`. Findings patched:
+  - Qodo/Sourcery: `validateSupportingRoutesResolve(...)` was async but not
+    awaited. Patched with `await`.
+  - Codex: hard private/credential leaks could hide inside stripped bounded
+    contexts. Patched with a full-document hard-leak scan before bounded raw
+    material scanning.
+- Patch validation passed:
+  `git diff --check`,
+  `./scripts/check-private-paths.sh`,
+  `cd site && npm test` (347 tests),
+  `cd site && npm run validate`, and
+  `cd site && npm run build`.
+- Fixed Codex review thread `PRRT_kwDOS4xeu86LJI2O` was resolved after the
+  patch and validation. Qodo/Sourcery findings cleared after rerun.
+
+Latest recorded PR-loop result before this spec-state bookkeeping commit:
+
+- Head `2da2f15b06f84b0e326f6b95c079a4dd212141e8`: `decision:
+  merge_ready`, `stopReason: NONE`, `canMerge: true`,
+  `nextAction: merge_ready`.
+- Checks: no pending checks and no failed checks.
+- Review threads: `0` unresolved.
+- Actionable bot findings: none.
+- Merge state: `CLEAN`.
+- Residual risk: `medium` because Codex reviewed
+  `50e97726c55aaea3f473da5f6a1351a3379b9457` and the current implementation
+  head was `2da2f15b06f84b0e326f6b95c079a4dd212141e8`; PR-loop reported this
+  as merge-ready by configured review quorum with Qodo returned and no stale
+  actionable Codex findings.
+
+This state update is docs/spec bookkeeping only. Rerun PR-loop after pushing
+the bookkeeping commit and use the final loop JSON as the merge-readiness
+source of truth.
 
 ## Follow-Ups
 
