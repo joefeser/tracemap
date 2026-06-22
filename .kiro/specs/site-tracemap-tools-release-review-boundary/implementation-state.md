@@ -80,8 +80,10 @@ manager packet, or objection guide.
 ## Scope Decisions
 
 - Required files are limited to this spec directory.
-- Required header state starts as `Status: not-started`,
-  `Readiness: spec-review`, and `Public claim level: concept`.
+- Initial header state started as `Status: not-started`, readiness for spec
+  review, and `Public claim level: concept`. Current committed headers are
+  `Status: not-started`, `Readiness: ready-for-implementation`, and
+  `Public claim level: concept`.
 - `Readiness` may move to `ready-for-implementation` only after spec review
   findings are handled or dispositioned.
 - Future implementation tasks stay unchecked in `tasks.md`.
