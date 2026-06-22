@@ -424,5 +424,5 @@ Kiro implementation review status:
 
 PR status:
 
-- Ready PR URL: pending.
+- Ready PR URL: https://github.com/joefeser/tracemap/pull/277
 - PR-loop result: pending.
