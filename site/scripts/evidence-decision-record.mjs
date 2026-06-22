@@ -315,7 +315,6 @@ async function validatePage({ pagePath, routeContext, errors }) {
   const html = await readFile(pagePath, "utf8");
   const mainHtml = extractMainHtml(html);
   const pageText = normalizeRenderedText(mainHtml);
-  const lowerPageText = pageText.toLowerCase();
   const strippedHtml = stripAllowedBoundaryContexts(mainHtml);
   const strippedText = normalizeRenderedText(strippedHtml);
   const metadataText = collectMetadataText(html);
@@ -605,7 +604,7 @@ function validateForbiddenPositiveClaims({ errors, text, label, artifact }) {
     const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
     const globalPattern = new RegExp(pattern.source, flags);
     for (const match of normalized.matchAll(globalPattern)) {
-      if (!hasNegation(match[0]) && !isNegated(normalized, match.index ?? 0)) {
+      if (!hasNegationForMatchedClaim(match[0]) && !isNegated(normalized, match.index ?? 0)) {
         errors.push(withEvidence(`Evidence decision record contains forbidden positive claim in ${label}: ${match[0]}`, artifact));
       }
     }
@@ -646,7 +645,12 @@ function stripAllowedBoundaryContexts(html) {
   }
 
   stripped = stripped.replace(
-    /<(?:tr|div)\b(?=[^>]*\bdata-tracemap-validation-context\s*=\s*["'](?:limitation|non-claim|rejected-interpretation|residual-risk)["'])[^>]*>[\s\S]*?<\/(?:tr|div)>/gi,
+    /<tr\b(?=[^>]*\bdata-record-field\s*=\s*["'](?:limitation|non-claim|rejected interpretation|residual risk)["'])[^>]*>[\s\S]*?<\/tr>/gi,
+    " "
+  );
+
+  stripped = stripped.replace(
+    /<div\b(?=[^>]*\bdata-safe-record-field\s*=\s*["'](?:limitation|non-claim|rejected interpretation|residual risk)["'])[^>]*>[\s\S]*?<\/div>/gi,
     " "
   );
 
@@ -777,16 +781,22 @@ function normalizeScanText(value) {
 }
 
 function isNegated(value, index) {
-  const sentencePrefix = value
-    .slice(0, index)
-    .split(/[.!?]\s+/)
-    .pop()
-    ?.toLowerCase() ?? "";
-  return /(?:cannot|can't|does not|do not|not|no|without|never)\b/.test(sentencePrefix);
+  const prefix = value.slice(Math.max(0, index - 40), index).toLowerCase();
+  return /\b(?:cannot|can't|does not|do not|not|no|without|never)\s*$/.test(prefix);
 }
 
-function hasNegation(value) {
-  return /\b(?:cannot|can't|does not|do not|not|no|without|never)\b/i.test(value);
+function hasNegationForMatchedClaim(value) {
+  const lower = value.toLowerCase();
+  const verbs = [
+    ...lower.matchAll(/\b(?:decides?|approves?|blocks?|certifies?|validates?|clears?|proves?|guarantees?|replaces?)\b/g)
+  ];
+  const verbIndex = verbs.at(-1)?.index;
+  if (verbIndex === undefined) {
+    return false;
+  }
+
+  const prefix = lower.slice(Math.max(0, verbIndex - 40), verbIndex);
+  return /\b(?:cannot|can't|does not|do not|not|no|without|never)\s*$/.test(prefix);
 }
 
 function countWords(value) {
