@@ -749,6 +749,23 @@
     ]
   },
   {
+    "path": "/release-review-boundary/",
+    "title": "Release Review Boundary",
+    "summary": "Concept-level handoff for what deterministic static evidence can contribute during release review while release-control decisions remain owner-owned.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a static-evidence release-review handoff, not a release gate, approval system, runtime workflow, deploy audit, validation proof, manager packet, or objection guide.",
+      "Static repository evidence can orient questions and gaps but cannot replace release owners, release controls, tests, source review, service-owner judgment, runtime observability, or human judgment."
+    ],
+    "nonClaims": [
+      "No release approval, release safety, operational safety, production proof, runtime behavior proof, endpoint performance proof, deployment success proof, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement of release controls.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public release-boundary material."
+    ]
+  },
+  {
     "path": "/review-claim-checklist/",
     "title": "Review Claim Checklist",
     "summary": "Concept-level repeat-before-reuse checklist for keeping TraceMap claims attached to proof paths, rule IDs, evidence tiers, coverage labels, limitations, non-claims, source status, and owner follow-up.",
