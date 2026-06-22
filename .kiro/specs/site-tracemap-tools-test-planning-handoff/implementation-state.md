@@ -9,8 +9,8 @@ Public claim level: concept
 Spec branch: `codex/spec-site-test-planning-handoff`
 Base branch: `origin/dev`
 Target PR base: `dev`
-Worktree:
-`/Users/josephfeser/src/gh-joe/tracemap-spec-test-planning-handoff`
+Worktree: isolated spec worktree from `origin/dev`; local path omitted from
+the public spec packet.
 
 ## Scope
 
