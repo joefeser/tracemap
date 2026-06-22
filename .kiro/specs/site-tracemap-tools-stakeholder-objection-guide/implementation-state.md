@@ -1,12 +1,14 @@
 # Site TraceMap Tools Stakeholder Objection Guide Implementation State
 
-Status: not-started
+Status: implemented-pr-loop-merge-ready
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
 Spec branch: `codex/spec-site-stakeholder-objection-guide`
+
+Implementation branch: `codex/impl-site-stakeholder-objection-guide`
 
 Base: `origin/dev`
 
@@ -16,14 +18,22 @@ Worktree: isolated worktree requested by the operator. The machine-local path
 is not repeated in this committed spec state to keep repository docs free of
 private local path material.
 
-Scope: spec-only packet for a future public-site stakeholder objection guide.
-Allowed files are limited to
-`.kiro/specs/site-tracemap-tools-stakeholder-objection-guide/`.
+Scope: implement the public-site stakeholder objection guide from this spec on
+the static site only, plus focused site validation and spec bookkeeping.
+Scanner, reducer, generated `site/dist`, generated `site/output`, and evidence
+packet example pages stay out of scope.
 
 ## Current State
 
-Initial spec packet created. No site source, site scripts, generated output,
-scanner code, reducer code, existing specs, or public copy have been changed.
+Implementation phase added the public stakeholder objection guide at
+`/questions/objections/`, registered standalone sitemap/discovery metadata,
+added a focused inbound link from `/questions/`, and wired focused validation
+into the aggregate site validation workflow.
+
+No scanner code, reducer code, generated `site/dist`, generated `site/output`,
+evidence packet example pages, runtime telemetry, AI/LLM analysis, embeddings,
+vector databases, prompt classification, or generated evidence artifacts were
+changed.
 
 The future surface is an objection-to-evidence handoff guide. It should help
 managers, reviewers, engineers, and skeptical stakeholders ask hard questions
@@ -42,6 +52,9 @@ proof surfaces, limitations, stop conditions, and owners.
 Future implementation must include visible `Public claim level: concept` and
 visible `No public conclusion without evidence`.
 
+Implementation result: the route and every objection row use public claim
+level `concept`.
+
 ## Placement Guidance
 
 Candidate placements:
@@ -51,18 +64,37 @@ Candidate placements:
 - Section on `/questions/`
 - Section on `/manager-faq/`
 
-Final placement: not selected in this spec-only phase.
+Final placement: `/questions/objections/`.
 
-Future implementation must record the final placement and rejected
-alternatives before changing site source.
+Rationale: `/questions/` remains the public entry point for stakeholder
+question routing, and the objection guide is a focused challenge-handling
+surface rather than a broad index. A nested standalone route keeps the guide
+addressable for review handoffs while preserving concept-level metadata and
+avoiding primary navigation churn.
 
-Initial preference: `/questions/objections/` if `/questions/` remains the
-public entry point for stakeholder questions. This keeps the guide near the
-question-index surface while making objections addressable. `/objections/`
-may be preferable if implementation needs a short standalone URL for review
-handoffs. Section placement on `/questions/` or `/manager-faq/` should be used
-only if standalone metadata would overstate maturity or duplicate nearby
-routes.
+Rejected alternatives:
+
+- `/objections/`: shorter URL, but less connected to the existing stakeholder
+  question index and more likely to look like a primary site pillar.
+- Section on `/questions/`: lower route surface area, but the required row
+  schema, metadata, validation, and supporting-route list are substantial
+  enough to deserve a focused addressable page.
+- Section on `/manager-faq/`: too manager-specific for a guide that also
+  serves reviewers, engineers, runtime owners, and skeptical stakeholders.
+- Replacing `/questions/`, `/manager-faq/`, `/limitations/`,
+  `/static-vs-runtime/`, `/review-claim-checklist/`,
+  `/proof-paths/tour/`, or `/demo/manager-script/`: rejected because those
+  pages keep separate jobs. This guide is an objection-to-evidence handoff,
+  not a proof claim, FAQ replacement, limitation replacement, release gate, or
+  runtime workflow.
+
+Navigation decision: keep the route out of primary navigation. Add focused
+inbound discovery from `/questions/` and route metadata only, so the guide is
+findable without turning a concept-level reference into a top-level claim.
+
+Supporting route verification: all supporting links selected by the row matrix
+and supporting-route section resolved in generated output during
+`npm run validate`. No route substitutions or deferrals were needed.
 
 ## Relationship Decisions
 
@@ -219,13 +251,55 @@ PR-loop patch validation:
 Future implementation validation is listed in `requirements.md` and
 `tasks.md`.
 
+Implementation validation:
+
+```bash
+git diff --check
+./scripts/check-private-paths.sh
+cd site && npm test
+cd site && npm run validate
+cd site && npm run build
+```
+
+Results:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `cd site && npm test`: passed, 345 tests.
+- `cd site && npm run validate`: passed; built static site and validated 56
+  HTML files, 1880 internal references, 55 sitemap URLs, 1 legacy story safety
+  target, and 13 legacy modernization evidence-map rows.
+- `cd site && npm run build`: passed.
+
+Browser sanity:
+
+- Served generated `site/dist` locally and opened
+  `/questions/objections/`.
+- Desktop viewport `1440x1100`: title matched, eight objection rows present,
+  page-level horizontal overflow was `0`.
+- Mobile viewport `390x844`: title matched, eight objection rows present,
+  primary navigation present, page-level horizontal overflow was `0`.
+
+Focused validation decisions:
+
+- Standalone route metadata, sitemap metadata, discovery metadata, Open Graph,
+  canonical URL, and route-index metadata use `publicClaimLevel: concept`.
+- Section-anchor validation is not applicable because a standalone route was
+  selected.
+- The focused validator allows required objection titles and bounded row,
+  stop-condition, and non-claim contexts while rejecting unsupported claim
+  wording outside those contexts.
+- Raw/private material examples are confined to non-shareable boundary copy
+  and required row stop conditions; no raw artifact links are published.
+
 ## Oddities
 
 - The root checkout may be dirty or used by other work. This spec uses an
   isolated worktree from `origin/dev`.
-- The spec intentionally does not choose a final route. Route choice belongs
-  to the future implementation phase after checking live site information
-  architecture.
+- The implementation route choice is now recorded as `/questions/objections/`.
+  The root checkout and other worktrees were not used for edits.
+- The Playwright CLI created temporary local snapshot metadata during browser
+  sanity; it was removed before final validation and is not part of the diff.
 
 ## PR Loop
 
@@ -252,6 +326,53 @@ Findings patched:
 
 Use repo-local `.agent-control/lanes/pr-review-loop.yaml` from this worktree
 for reruns.
+
+Implementation PR loop:
+
+Initial implementation-head loop for PR #276:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 276 --base dev --require-codex-review --quiet --json
+```
+
+- Head `50e97726c55aaea3f473da5f6a1351a3379b9457`: returned
+  `actionable_findings`, `stopReason: UNRESOLVED_REVIEW_THREADS`.
+  `nextAction` was initially `wait_for_required_reviewers` because a required
+  Codex review request lock was active.
+- After the required reviewer returned, the loop authorized
+  `patch_actionable_findings`. Findings patched:
+  - Qodo/Sourcery: `validateSupportingRoutesResolve(...)` was async but not
+    awaited. Patched with `await`.
+  - Codex: hard private/credential leaks could hide inside stripped bounded
+    contexts. Patched with a full-document hard-leak scan before bounded raw
+    material scanning.
+- Patch validation passed:
+  `git diff --check`,
+  `./scripts/check-private-paths.sh`,
+  `cd site && npm test` (347 tests),
+  `cd site && npm run validate`, and
+  `cd site && npm run build`.
+- Fixed Codex review thread `PRRT_kwDOS4xeu86LJI2O` was resolved after the
+  patch and validation. Qodo/Sourcery findings cleared after rerun.
+
+Latest recorded PR-loop result before this spec-state bookkeeping commit:
+
+- Head `2da2f15b06f84b0e326f6b95c079a4dd212141e8`: `decision:
+  merge_ready`, `stopReason: NONE`, `canMerge: true`,
+  `nextAction: merge_ready`.
+- Checks: no pending checks and no failed checks.
+- Review threads: `0` unresolved.
+- Actionable bot findings: none.
+- Merge state: `CLEAN`.
+- Residual risk: `medium` because Codex reviewed
+  `50e97726c55aaea3f473da5f6a1351a3379b9457` and the current implementation
+  head was `2da2f15b06f84b0e326f6b95c079a4dd212141e8`; PR-loop reported this
+  as merge-ready by configured review quorum with Qodo returned and no stale
+  actionable Codex findings.
+
+This state update is docs/spec bookkeeping only. Rerun PR-loop after pushing
+the bookkeeping commit and use the final loop JSON as the merge-readiness
+source of truth.
 
 ## Follow-Ups
 
