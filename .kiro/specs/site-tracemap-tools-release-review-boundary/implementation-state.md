@@ -1,7 +1,7 @@
 # Site TraceMap Tools Release Review Boundary Implementation State
 
-Status: implementation-in-progress
-Readiness: ready-for-implementation
+Status: implementation-complete
+Readiness: ready-for-owner-merge
 Public claim level: concept
 
 ## Branch
@@ -12,18 +12,23 @@ Base: `origin/dev`
 
 Target PR base: `dev`
 
+Implementation branch: `codex/impl-site-release-review-boundary`
+
+Implementation PR: `https://github.com/joefeser/tracemap/pull/291`
+
 Worktree: isolated worktree requested by the operator. The machine-local path
 is not repeated in this committed spec state to keep repository docs free of
 private local path material.
 
-Scope: create a spec-only Kiro packet for a future public-site page or section
-explaining TraceMap's boundary in release review. This branch changes only
-`.kiro/specs/site-tracemap-tools-release-review-boundary/`.
+Scope: implement the public-site release-review boundary surface from this
+spec, keep the public claim level at `concept`, and add focused validation for
+the route and its public-copy boundaries.
 
-Out of scope: `site/src`, generated `site/dist`, generated `site/output`,
-scanner code, reducer code, existing specs, release automation, runtime
-telemetry, AI/LLM analysis, embeddings, vector databases, prompt
-classification, generated evidence artifacts, and public copy changes.
+Out of scope: generated `site/dist`, generated `site/output`, scanner code,
+reducer code, release automation, runtime telemetry, AI/LLM analysis,
+embeddings, vector databases, prompt classification, generated evidence
+artifacts, raw facts, raw SQLite content, analyzer logs, and release approval
+or safety claims.
 
 ## Current State
 
@@ -241,43 +246,142 @@ Readiness decision: `ready-for-implementation`. Medium and higher findings
 were patched and re-reviewed where feasible. Remaining risk is reduced Kiro
 review coverage due to tool-denied analysis gaps recorded above.
 
-## Validation Results
+## Implementation Results
 
-Not run yet.
+Final placement: standalone route `/release-review-boundary/`.
 
-Planned spec-branch validation:
+Rejected alternatives:
+
+- `/review-room/release-boundary/`: too nested for a cross-surface boundary
+  page and harder to discover from non-review-room contexts.
+- Section on `/limitations/`: would blur the route's release-owner handoff
+  purpose with site-wide limitations.
+- Section on `/static-vs-runtime/`: would collapse release-review ownership
+  into the runtime/static distinction.
+
+The selected route does not replace `/limitations/`, `/static-vs-runtime/`,
+`/review-claim-checklist/`, `/deploy-audit/`, `/validation/`,
+`/manager-packet/`, or `/questions/objections/`. It links to those adjacent
+surfaces to help readers choose the right evidence boundary.
+
+Navigation decision: no primary navigation entry was added. Discovery uses
+sitemap and route metadata plus contextual inbound links from `/review-room/`
+and `/use-cases/change-review/`.
+
+Implemented files:
+
+- `site/src/release-review-boundary/index.html`
+- `site/src/_site/pages.json`
+- `site/src/_site/discovery.json`
+- `site/src/review-room/index.html`
+- `site/src/use-cases/change-review/index.html`
+- `site/scripts/release-review-boundary.mjs`
+- `site/scripts/release-review-boundary.test.mjs`
+- `site/scripts/validate.mjs`
+- `site/scripts/validate.test.mjs`
+
+Claim-boundary decisions:
+
+- Public claim level remains `concept`.
+- The page visibly states `Public claim level: concept`.
+- The page visibly states `No public conclusion without evidence`.
+- Release-boundary matrix rows stay bounded to static evidence contribution,
+  gaps, next-owner routing, and stop conditions.
+- Public copy does not claim release approval, release safety, operational
+  safety, production proof, runtime behavior proof, endpoint performance
+  proof, deployment success proof, absence-of-impact proof, complete coverage,
+  AI/LLM analysis, or replacement of release controls or human judgment.
+
+Validation results:
 
 ```bash
 git diff --check
 ./scripts/check-private-paths.sh
+cd site && npm test
+cd site && npm run validate
+cd site && npm run build
 ```
 
-Before checking the future implementation validation task, verify
-`./scripts/check-private-paths.sh` still exists and run it from the repository
-root.
+All commands passed after the final review-fix patch. Site tests reported
+401 passing tests. Aggregate validation reported 60 HTML files, 2034 internal
+references, 59 sitemap URLs, 1 legacy story safety target, and 13 legacy
+modernization evidence-map rows.
 
-Future implementation validation also requires:
+Browser sanity:
+
+- Desktop viewport `1440x1100`: `/release-review-boundary/` rendered the hero
+  and release-boundary matrix without page-level horizontal overflow.
+- Mobile viewport `390x900`: `/release-review-boundary/` rendered the hero and
+  matrix; the wide matrix scrolls inside its table wrapper without page-level
+  horizontal overflow.
+- Local browser screenshots were temporary verification artifacts and were not
+  committed.
+
+Review findings and dispositions:
+
+- Gemini thread on `getAttribute` spacing: patched in
+  `5f8b656bf3a480c55b94bd9e5be43add05a6f3db` by allowing whitespace around
+  attribute assignment and adding a spaced-attribute regression test.
+- Gemini thread on metadata content extraction: patched in
+  `5f8b656bf3a480c55b94bd9e5be43add05a6f3db` by extracting `content`
+  attributes from each meta tag directly and adding a reordered-metadata
+  regression test.
+- Codex thread on negation scope: patched in
+  `5f8b656bf3a480c55b94bd9e5be43add05a6f3db` by limiting negation checks to
+  the current sentence prefix and adding a regression test.
+- Codex/Qodo private-section scan concern: patched in
+  `5f8b656bf3a480c55b94bd9e5be43add05a6f3db` by scanning hard private
+  material against full page content and keeping softer boundary examples
+  scoped to stripped boundary sections.
+- Qodo top-level head-text and tag-split private-material findings: patched in
+  `aa89c1c7a138b45861f7938534fb91c64cb76c6a` by scanning full-document
+  rendered text for forbidden/private/blame checks and checking decoded,
+  rendered, and tight tag-stripped private-material variants. Added
+  regressions for forbidden title text and tag-split hard private material.
+- Evidence-backed PR-loop disposition comments were posted for the two Gemini
+  threads, the outdated Codex negation thread, and the Qodo top-level comment.
+
+Latest PR-loop outcome before this bookkeeping update:
 
 ```bash
-npm test
-npm run validate
-npm run build
+agent-control pr-loop --repo joefeser/tracemap --pr 291 --base dev --require-codex-review --quiet --json
 ```
 
-from `site/`, plus desktop and mobile browser sanity checks when layout or
-interaction changes are made.
+- Head: `aa89c1c7a138b45861f7938534fb91c64cb76c6a`.
+- Decision: `merge_ready`.
+- Stop reason: `NONE`.
+- Can merge: `true`.
+- Next action: `merge_ready`.
+- Merge state: `CLEAN`.
+- Unresolved review threads: `0`.
+- Pending checks: `0`.
+- Failed checks: `0`.
+- Actionable bot findings: `0`.
+- Qodo state: `dispositioned`.
+- Codex state: stale result from reviewed head
+  `4387e75a3c7ae5507b74441092eadf8d749404ec`, treated as medium residual
+  risk under the configured `dev` quorum policy because no stale actionable
+  Codex findings were found and Qodo returned.
+- Optional Gemini and Sourcery reviews were absent or not requested as
+  residual risk, not merge blockers by policy.
 
 ## Oddities
 
-- The committed implementation state intentionally omits the local absolute
-  worktree path to satisfy private-path guard rules.
-- This branch is spec-only, so site validation and browser sanity checks are
-  future implementation tasks rather than spec-branch requirements.
+- The committed implementation state intentionally omits local absolute
+  worktree paths to satisfy private-path guard rules.
+- During implementation, an initial local patch was accidentally applied in
+  the root checkout, then transferred to the isolated implementation worktree;
+  the root checkout was restored clean before continuing.
+- The final bookkeeping commit changes only spec state and task status. Rerun
+  PR-loop on that exact final head before merge and treat any clean `dev`
+  stale-review posture according to the repo-local lane policy instead of
+  retagging reviewers by hand.
 
 ## Follow-ups
 
-- Run Kiro spec review with `claude-opus-4.8` and `claude-sonnet-4.6` if
-  available.
+- No code follow-up is open from the latest merge-ready PR-loop result.
+- Joe should merge only the current PR head reported by the final PR-loop run
+  after this bookkeeping commit is pushed.
 - Patch Medium or higher findings and rerun re-review where feasible.
 - Update `requirements.md`, `design.md`, `tasks.md`, `review-packet.md`, and
   this file to `Readiness: ready-for-implementation` together in one patch

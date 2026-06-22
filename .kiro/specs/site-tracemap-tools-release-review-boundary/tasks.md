@@ -1,7 +1,7 @@
 # Site TraceMap Tools Release Review Boundary Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implementation-complete
+Readiness: ready-for-owner-merge
 Public claim level: concept
 
 These implementation tasks are checked only after the corresponding future
@@ -163,7 +163,7 @@ spec-only phase.
   responsive, or interaction changes, using existing site browser-check
   patterns when available or recording at least one wide desktop viewport and
   one narrow mobile viewport.
-- [ ] Update `implementation-state.md` with final placement decisions,
+- [x] Update `implementation-state.md` with final placement decisions,
   substitutions, validation results, review findings, claim-boundary
   decisions, oddities, PR-loop outcomes, residual risk, and follow-up items.
 - [x] Keep `implementation-state.md` free of local absolute paths, raw
