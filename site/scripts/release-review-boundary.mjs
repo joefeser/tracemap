@@ -279,7 +279,8 @@ async function validatePage({ pagePath, routeContext, errors }) {
   }
 
   validateForbiddenPositiveClaims(`${stripSanctionedBoundaryHtml(mainHtml)} ${metadataText} ${attributeText}`, errors, pageArtifact);
-  validatePrivateMaterial(`${stripSanctionedBoundaryHtml(mainHtml)} ${metadataText} ${attributeText}`, errors, pageArtifact);
+  validateHardPrivateMaterial(`${mainHtml} ${metadataText} ${attributeText}`, errors, pageArtifact);
+  validateBoundaryPrivateMaterial(`${stripSanctionedBoundaryHtml(mainHtml)} ${metadataText} ${attributeText}`, errors, pageArtifact);
   validateBlameLanguage(`${pageText} ${metadataText} ${attributeText}`, errors, pageArtifact);
 }
 
@@ -367,9 +368,18 @@ function validateForbiddenPositiveClaims(value, errors, artifact) {
   }
 }
 
-function validatePrivateMaterial(value, errors, artifact) {
+function validateHardPrivateMaterial(value, errors, artifact) {
   const normalized = decodeHtmlEntities(value);
-  for (const pattern of [...hardPrivatePatterns, ...privateBoundaryPatterns]) {
+  for (const pattern of hardPrivatePatterns) {
+    if (pattern.test(normalized)) {
+      errors.push(withEvidence(`Release review boundary contains forbidden private or raw material: ${pattern.source}`, artifact));
+    }
+  }
+}
+
+function validateBoundaryPrivateMaterial(value, errors, artifact) {
+  const normalized = decodeHtmlEntities(value);
+  for (const pattern of privateBoundaryPatterns) {
     if (pattern.test(normalized)) {
       errors.push(withEvidence(`Release review boundary contains forbidden private or raw material: ${pattern.source}`, artifact));
     }
@@ -401,7 +411,7 @@ function extractRows(html, marker) {
 }
 
 function getAttribute(attributes, name) {
-  const match = attributes.match(new RegExp(`\\b${escapeRegExp(name)}=["']([^"']*)["']`, "i"));
+  const match = attributes.match(new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*["']([^"']*)["']`, "i"));
   return match ? decodeHtmlEntities(match[1]) : null;
 }
 
@@ -419,8 +429,9 @@ function extractMainHtml(html) {
 }
 
 function collectMetadataText(html) {
-  return [...html.matchAll(/<meta\b[^>]*(?:content|name|property)\s*=\s*["']([^"']*)["'][^>]*>/gi)]
-    .map((match) => decodeHtmlEntities(match[1]))
+  return [...html.matchAll(/<meta\b([^>]*)>/gi)]
+    .map((match) => getAttribute(match[1], "content"))
+    .filter((value) => typeof value === "string" && value.trim() !== "")
     .join(" ");
 }
 
@@ -452,8 +463,12 @@ function normalizeRoute(route) {
 }
 
 function isNegated(value, index) {
-  const prefix = value.slice(Math.max(0, index - 96), index).toLowerCase();
-  return /(?:cannot|can't|does not|do not|not|no|without|never)\b.{0,96}$/.test(prefix);
+  const sentencePrefix = value
+    .slice(0, index)
+    .split(/[.!?]\s+/)
+    .pop()
+    ?.toLowerCase() ?? "";
+  return /(?:cannot|can't|does not|do not|not|no|without|never)\b/.test(sentencePrefix);
 }
 
 function hasNegation(value) {

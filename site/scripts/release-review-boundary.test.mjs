@@ -49,6 +49,18 @@ test("validateReleaseReviewBoundaryDist reports missing required row and field",
   assert.match(errors.join("\n"), /coverage gap is missing required field: stop condition/);
 });
 
+test("validateReleaseReviewBoundaryDist accepts spaced row attributes", async (t) => {
+  const pageHtml = (await releaseBoundaryPage())
+    .replaceAll("data-release-boundary-row=", "data-release-boundary-row = ")
+    .replaceAll("data-field=", "data-field = ");
+  const root = await createManagedReleaseBoundaryFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateReleaseReviewBoundaryDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateReleaseReviewBoundaryDist reports route metadata regressions", async (t) => {
   const root = await createManagedReleaseBoundaryFixture(t);
   await rewriteReleaseBoundaryRouteEntry(join(root, "dist"), {
@@ -96,6 +108,46 @@ test("validateReleaseReviewBoundaryDist rejects forbidden positive claims and pr
   assert.match(errors.join("\n"), /forbidden positive claim wording/);
   assert.match(errors.join("\n"), /forbidden private or raw material/);
   assert.match(errors.join("\n"), /blame-oriented wording/);
+});
+
+test("validateReleaseReviewBoundaryDist rejects metadata content regardless of attribute order", async (t) => {
+  const pageHtml = (await releaseBoundaryPage()).replace(
+    '<meta property="og:title" content="TraceMap Release Review Boundary">',
+    '<meta property="og:title" content="TraceMap approves releases">'
+  );
+  const root = await createManagedReleaseBoundaryFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateReleaseReviewBoundaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden positive claim wording/);
+});
+
+test("validateReleaseReviewBoundaryDist rejects hard private material inside boundary sections", async (t) => {
+  const privatePath = ["/", "Users", "/private"].join("");
+  const pageHtml = (await releaseBoundaryPage()).replace(
+    "Stop when proof path, rule ID or rule family",
+    `Stop when ${privatePath} appears near proof path, rule ID or rule family`
+  );
+  const root = await createManagedReleaseBoundaryFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateReleaseReviewBoundaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private or raw material/);
+});
+
+test("validateReleaseReviewBoundaryDist keeps negation inside the current sentence", async (t) => {
+  const pageHtml = (await releaseBoundaryPage()).replace(
+    "</main>",
+    "<p>This page is not release approval. TraceMap approves releases.</p></main>"
+  );
+  const root = await createManagedReleaseBoundaryFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateReleaseReviewBoundaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden positive claim wording/);
 });
 
 test("validateReleaseReviewBoundaryDist reports under word-count bound", async (t) => {
