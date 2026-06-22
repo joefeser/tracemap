@@ -138,6 +138,7 @@ public sealed record RouteFlowEntryEvidence(
     string? DisplaySymbol,
     string Classification,
     string Coverage,
+    string BridgeState,
     RouteFlowEvidenceRef Evidence);
 
 public sealed record RouteFlowRow(
@@ -324,7 +325,7 @@ public static class CombinedRouteFlowReporter
         var schemaGaps = await ReadRouteFlowSchemaGapsAsync(options.IndexPath, cancellationToken);
         var sources = ToSources(inventory.Sources, inventory.CoverageWarnings);
 
-        var entryEvidence = SelectEntryEvidence(options, routeSelector, clientSelector, endpointSelector, inventory.Nodes, sources)
+        var entryEvidence = SelectEntryEvidence(options, routeSelector, clientSelector, endpointSelector, inventory.Nodes, inventory.Edges, sources)
             .OrderBy(row => row.EntryKind, StringComparer.Ordinal)
             .ThenBy(row => row.Evidence.SourceLabel, StringComparer.Ordinal)
             .ThenBy(row => row.NormalizedPathKey, StringComparer.Ordinal)
@@ -650,46 +651,48 @@ public static class CombinedRouteFlowReporter
         string? clientSelector,
         string? endpointSelector,
         IReadOnlyList<CombinedPathNode> nodes,
+        IReadOnlyList<CombinedPathEdge> edges,
         IReadOnlyList<RouteFlowSource> sources)
     {
+        var bridgeStates = EndpointMethodBridgeStates(nodes, edges, sources);
         var rows = new List<RouteFlowEntryEvidence>();
         if (routeSelector is not null)
         {
-            rows.AddRange(EndpointEntries(nodes, routeSelector, "EndpointRoute", "route-root", sources));
+            rows.AddRange(EndpointEntries(nodes, routeSelector, "EndpointRoute", "route-root", bridgeStates, sources));
         }
 
         if (clientSelector is not null)
         {
-            rows.AddRange(EndpointEntries(nodes, clientSelector, "EndpointClient", "client-call-root", sources));
+            rows.AddRange(EndpointEntries(nodes, clientSelector, "EndpointClient", "client-call-root", bridgeStates, sources));
         }
 
         if (endpointSelector is not null)
         {
-            rows.AddRange(EndpointEntries(nodes, endpointSelector, null, "endpoint-root", sources));
+            rows.AddRange(EndpointEntries(nodes, endpointSelector, null, "endpoint-root", bridgeStates, sources));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromWebFormsEvent))
         {
             rows.AddRange(nodes
                 .Where(node => node.NodeKind is "webforms-event" or "webforms-lifecycle" && NodeMatches(node, options.FromWebFormsEvent!))
-                .Select(node => EntryFromNode(node, "webforms-event-root", sources)));
+                .Select(node => EntryFromNode(node, "webforms-event-root", BridgeStateForEntry(node, "webforms-event-root", bridgeStates), sources)));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromSymbol))
         {
             rows.AddRange(nodes
                 .Where(node => node.NodeKind is "Symbol" or "Method" or "Type" or "EndpointRoute" or "EndpointClient" && NodeMatches(node, options.FromSymbol!))
-                .Select(node => EntryFromNode(node, "symbol-root", sources)));
+                .Select(node => EntryFromNode(node, "symbol-root", BridgeStateForEntry(node, "symbol-root", bridgeStates), sources)));
         }
 
         if (!string.IsNullOrWhiteSpace(options.FromSource))
         {
             rows.AddRange(nodes
                 .Where(node => string.Equals(node.SourceLabel, options.FromSource, StringComparison.OrdinalIgnoreCase))
-                .Select(node => EntryFromNode(node, "source-root", sources)));
+                .Select(node => EntryFromNode(node, "source-root", BridgeStateForEntry(node, "source-root", bridgeStates), sources)));
         }
 
-        var aligned = AlignedEntry(nodes, routeSelector ?? clientSelector ?? endpointSelector, sources);
+        var aligned = AlignedEntry(nodes, routeSelector ?? clientSelector ?? endpointSelector, bridgeStates, sources);
         if (aligned is not null)
         {
             rows.Add(aligned);
@@ -699,6 +702,67 @@ public static class CombinedRouteFlowReporter
             .GroupBy(row => $"{row.EntryKind}\0{row.EntryId}", StringComparer.Ordinal)
             .Select(group => group.First())
             .ToArray();
+    }
+
+    private static IReadOnlyDictionary<string, string> EndpointMethodBridgeStates(
+        IReadOnlyList<CombinedPathNode> nodes,
+        IReadOnlyList<CombinedPathEdge> edges,
+        IReadOnlyList<RouteFlowSource> sources)
+    {
+        var nodesById = nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var sourcesByLabel = sources
+            .GroupBy(source => source.SourceLabel, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var bridgeEdgesByEndpointNodeId = edges
+            .Where(edge => edge.EdgeKind == "fact-attached-to-symbol")
+            .Where(edge => nodesById.TryGetValue(edge.FromNodeId, out var endpoint)
+                && endpoint.NodeKind is "EndpointRoute" or "EndpointClient"
+                && nodesById.TryGetValue(edge.ToNodeId, out var target)
+                && IsMethodSymbolNode(target)
+                && string.Equals(target.SourceIndexId, endpoint.SourceIndexId, StringComparison.Ordinal))
+            .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var states = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var endpointNode in nodes
+            .Where(node => node.NodeKind is "EndpointRoute" or "EndpointClient")
+            .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(node => node.NodeKind, StringComparer.Ordinal)
+            .ThenBy(node => node.FilePath, StringComparer.Ordinal)
+            .ThenBy(node => node.StartLine ?? 0)
+            .ThenBy(node => node.NodeId, StringComparer.Ordinal))
+        {
+            var bridgeCount = bridgeEdgesByEndpointNodeId.GetValueOrDefault(endpointNode.NodeId, []).Length;
+            states[endpointNode.NodeId] = bridgeCount switch
+            {
+                0 when EndpointBridgeCoverageReduced(endpointNode, sourcesByLabel) => "reduced-coverage",
+                0 => "missing",
+                1 => "method-symbol",
+                _ => "ambiguous"
+            };
+        }
+
+        return states;
+    }
+
+    private static bool EndpointBridgeCoverageReduced(
+        CombinedPathNode endpointNode,
+        IReadOnlyDictionary<string, RouteFlowSource> sourcesByLabel)
+    {
+        if (CoverageFor(endpointNode.EvidenceTier) == "ReducedCoverage")
+        {
+            return true;
+        }
+
+        if (!sourcesByLabel.TryGetValue(endpointNode.SourceLabel, out var source))
+        {
+            return true;
+        }
+
+        return !source.IdentityVerified
+            || !KnownCommit(source.CommitSha)
+            || string.Equals(source.AnalysisLevel, "failed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(source.BuildStatus, "failed", StringComparison.OrdinalIgnoreCase)
+            || source.CoverageWarnings.Count > 0;
     }
 
     private sealed record EndpointCompositionResult(
@@ -1423,7 +1487,11 @@ public static class CombinedRouteFlowReporter
         return paths.Where(path => string.Equals(path.Nodes.FirstOrDefault()?.NodeKind, requiredNodeKind, StringComparison.Ordinal));
     }
 
-    private static RouteFlowEntryEvidence? AlignedEntry(IReadOnlyList<CombinedPathNode> nodes, string? selector, IReadOnlyList<RouteFlowSource> sources)
+    private static RouteFlowEntryEvidence? AlignedEntry(
+        IReadOnlyList<CombinedPathNode> nodes,
+        string? selector,
+        IReadOnlyDictionary<string, string> bridgeStates,
+        IReadOnlyList<RouteFlowSource> sources)
     {
         if (selector is null)
         {
@@ -1447,14 +1515,20 @@ public static class CombinedRouteFlowReporter
         }
 
         var first = matching.First();
-        return EntryFromNode(first, "aligned-route-pair", sources) with
+        return EntryFromNode(first, "aligned-route-pair", BridgeStateForEntry(first, "aligned-route-pair", bridgeStates), sources) with
         {
             EntryId = $"entry:aligned:{CombinedReportHelpers.Hash($"{parsed.Method}\0{parsed.PathKey}", 16)}",
             Classification = RouteFlowClassifications.ProbableStaticRouteFlow
         };
     }
 
-    private static IEnumerable<RouteFlowEntryEvidence> EndpointEntries(IReadOnlyList<CombinedPathNode> nodes, string selector, string? nodeKind, string entryKind, IReadOnlyList<RouteFlowSource> sources)
+    private static IEnumerable<RouteFlowEntryEvidence> EndpointEntries(
+        IReadOnlyList<CombinedPathNode> nodes,
+        string selector,
+        string? nodeKind,
+        string entryKind,
+        IReadOnlyDictionary<string, string> bridgeStates,
+        IReadOnlyList<RouteFlowSource> sources)
     {
         var parsed = ParseNormalizedEndpoint(selector);
         return nodes
@@ -1462,10 +1536,10 @@ public static class CombinedRouteFlowReporter
             .Where(node => nodeKind is null || node.NodeKind == nodeKind)
             .Where(node => string.Equals(node.NormalizedPathKey, parsed.PathKey, StringComparison.Ordinal)
                 && CombinedDependencyReporter.MethodsCompatible(parsed.Method, node.HttpMethod ?? "ANY"))
-            .Select(node => EntryFromNode(node, entryKind, sources));
+            .Select(node => EntryFromNode(node, entryKind, BridgeStateForEntry(node, entryKind, bridgeStates), sources));
     }
 
-    private static RouteFlowEntryEvidence EntryFromNode(CombinedPathNode node, string entryKind, IReadOnlyList<RouteFlowSource> sources)
+    private static RouteFlowEntryEvidence EntryFromNode(CombinedPathNode node, string entryKind, string bridgeState, IReadOnlyList<RouteFlowSource> sources)
     {
         var method = node.HttpMethod ?? string.Empty;
         var pathKey = node.NormalizedPathKey ?? string.Empty;
@@ -1478,7 +1552,28 @@ public static class CombinedRouteFlowReporter
             SafeSelector(node.SymbolId ?? node.DisplayName),
             ClassificationForTier(node.EvidenceTier),
             CoverageFor(node.EvidenceTier),
+            bridgeState,
             EvidenceFromNode(EntryRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? EntryRuleId], sources));
+    }
+
+    private static string BridgeStateForEntry(CombinedPathNode node, string entryKind, IReadOnlyDictionary<string, string> bridgeStates)
+    {
+        if (bridgeStates.TryGetValue(node.NodeId, out var bridgeState))
+        {
+            return bridgeState;
+        }
+
+        if (entryKind is "webforms-event-root" or "source-root")
+        {
+            return "path-node";
+        }
+
+        if (IsMethodSymbolNode(node))
+        {
+            return "path-node";
+        }
+
+        return "symbol-fallback";
     }
 
     private static IReadOnlyList<RouteFlowRow> BuildFlowRows(IReadOnlyList<CombinedPath> paths, IReadOnlyList<RouteFlowSource> sources, List<RouteFlowGap> gaps)
@@ -3556,8 +3651,8 @@ public static class CombinedRouteFlowReporter
 
         builder.AppendLine("## Entry Evidence");
         builder.AppendLine();
-        AppendRows(builder, report.EntryEvidence, "| Kind | Method | Path key | Classification | Evidence |", "| --- | --- | --- | --- | --- |",
-            row => $"| {Cell(row.EntryKind)} | {Cell(row.Method)} | {Cell(row.NormalizedPathKey)} | {Cell(row.Classification)} | {Cell(Evidence(row.Evidence))} |");
+        AppendRows(builder, report.EntryEvidence, "| Kind | Method | Path key | Bridge | Classification | Evidence |", "| --- | --- | --- | --- | --- | --- |",
+            row => $"| {Cell(row.EntryKind)} | {Cell(row.Method)} | {Cell(row.NormalizedPathKey)} | {Cell(row.BridgeState)} | {Cell(row.Classification)} | {Cell(Evidence(row.Evidence))} |");
 
         builder.AppendLine("## Static Flow");
         builder.AppendLine();

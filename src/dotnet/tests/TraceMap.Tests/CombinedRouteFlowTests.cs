@@ -39,6 +39,9 @@ public sealed class CombinedRouteFlowTests
         Assert.NotEmpty(result.Report.Query.SelectorTrace.SupportingFactIds);
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "aligned-route-pair");
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root"
+            && row.BridgeState == "method-symbol"
+            && row.Evidence.RuleId == "combined.route-flow.entry.v1");
         Assert.DoesNotContain(result.Report.FlowRows, row => row.EdgeKind == "client-server-alignment");
         Assert.Contains(result.Report.FlowRows, row => row.RowKind == "endpoint-method-bridge" && row.EdgeKind == "route-bound-to-symbol");
         Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call" && row.SourceSymbol.Contains(controller, StringComparison.Ordinal));
@@ -93,6 +96,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("candidate implementation", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("## Touched Files", markdown);
         Assert.Contains("## Touched Symbols", markdown);
+        Assert.Contains("| Kind | Method | Path key | Bridge | Classification | Evidence |", markdown);
+        Assert.Contains("method-symbol", markdown);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("select * from", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Server=private", markdown, StringComparison.OrdinalIgnoreCase);
@@ -105,7 +110,10 @@ public sealed class CombinedRouteFlowTests
 
         var parsed = JsonSerializer.Deserialize<RouteFlowReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(parsed);
-        Assert.Contains(parsed!.TouchedFiles, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
+        Assert.Contains(parsed!.EntryEvidence, row => row.EntryKind == "route-root"
+            && row.BridgeState == "method-symbol"
+            && row.Evidence.RuleId == "combined.route-flow.entry.v1");
+        Assert.Contains(parsed.TouchedFiles, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
         Assert.Contains(parsed.TouchedSymbols, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.report.v1"));
         Assert.All(parsed.TouchedFiles, row =>
         {
@@ -293,6 +301,9 @@ public sealed class CombinedRouteFlowTests
             ToSurface: "sql-query"));
 
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root"
+            && row.BridgeState == "missing"
+            && row.Evidence.RuleId == "combined.route-flow.entry.v1");
         Assert.Empty(result.Report.FlowRows);
         var bridgeGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge" && gap.RuleId == "combined.route-flow.gap.v1");
         Assert.Equal("Controllers/OrdersController.cs", bridgeGap.FilePath);
@@ -303,6 +314,32 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, touchedControllerFile.Classification);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MissingCallEdge");
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_marks_missing_endpoint_bridge_as_reduced_coverage_when_source_is_reduced()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15", buildStatus: "Failed");
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFactWithoutMethodSymbol(server, "GET", "/api/orders/{id}", "/api/orders/{}", "Controllers/OrdersController.cs", 10)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}"));
+
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root"
+            && row.BridgeState == "reduced-coverage"
+            && row.Evidence.RuleId == "combined.route-flow.entry.v1");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ReducedCoverage" && gap.SourceLabel == "server");
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
     }
 
     [Fact]

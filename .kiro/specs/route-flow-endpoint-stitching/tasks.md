@@ -30,27 +30,30 @@ Current state: product implementation has not started for this spec. The tasks
 below are intended follow-up implementation slices. Do not check them off in a
 spec-only PR.
 
-- [ ] 4. Audit live route-flow endpoint stitching behavior. Requirements: 1, 2, 5.
-  - [ ] Inspect current `CombinedRouteFlowReport` root selection, selector
+- [x] 4. Audit live route-flow endpoint stitching behavior. Requirements: 1, 2, 5.
+  - [x] Inspect current `CombinedRouteFlowReport` root selection, selector
         trace, summary rollup, and gap behavior.
-  - [ ] Map endpoint-stitching concepts to existing route-flow gap names before
+  - [x] Map endpoint-stitching concepts to existing route-flow gap names before
         adding any new closed-set gap name.
-  - [ ] Identify existing route-flow rows/gaps that already satisfy this spec.
-  - [ ] Add fixture tests that lock current behavior before changing traversal
+  - [x] Identify existing route-flow rows/gaps that already satisfy this spec.
+  - [x] Add fixture tests that lock current behavior before changing traversal
         or output shape.
-  - [ ] Decide whether endpoint bridge state belongs on existing entry evidence
+  - [x] Decide whether endpoint bridge state belongs on existing entry evidence
         rows or a new additive JSON array.
 
 - [ ] 5. Implement endpoint root to method-symbol bridge state. Requirements:
       1, 5, 6.
-  - [ ] Record bridge state for route/client/endpoint selectors:
-        `method-symbol`, `path-node`, `symbol-fallback`, `missing`,
-        `ambiguous`, or `reduced-coverage`.
-  - [ ] Reuse existing `MissingMethodSymbolBridge` when route evidence cannot
+  - [x] Record bridge state for route/client/endpoint selectors:
+        `method-symbol`, `path-node`, `symbol-fallback`, `missing`, or
+        `ambiguous`.
+  - [x] Record explicit `reduced-coverage` bridge state where coverage, schema,
+        extractor, or source identity prevents credible root bridge
+        classification.
+  - [x] Reuse existing `MissingMethodSymbolBridge` when route evidence cannot
         bridge to a method/root node, unless the audit proves a new closed-set
         root-specific gap is required.
   - [ ] Emit duplicate/ambiguous root gaps for duplicate normalized selectors.
-  - [ ] Preserve supporting facts, file spans, source labels, commit SHAs,
+  - [x] Preserve supporting facts, file spans, source labels, commit SHAs,
         extractor identities, and limitations.
   - [ ] Add tests for success, missing bridge, duplicate route roots, dynamic
         route selectors, reduced coverage, and unknown source identity.
@@ -98,22 +101,22 @@ spec-only PR.
         reduced coverage, and missing optional schemas.
 
 - [ ] 10. Validate output compatibility and safety. Requirements: 6, 7.
-  - [ ] Preserve existing `route-flow-report.json` report type and version
+  - [x] Preserve existing `route-flow-report.json` report type and version
         unless a future breaking-schema spec changes them.
-  - [ ] Keep new fields additive with deterministic ordering and stable IDs.
+  - [x] Keep new fields additive with deterministic ordering and stable IDs.
   - [ ] Add byte-stable JSON tests.
   - [ ] Add Markdown/JSON/log negative tests for local paths, raw remotes, raw
         URLs, raw SQL, config values, source snippets, private names, secrets,
         and raw selector values.
 
 - [ ] 11. Run implementation validation. Requirements: 7.
-  - [ ] Run focused route-flow tests.
-  - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [x] Run focused route-flow tests.
+  - [x] Run `dotnet build src/dotnet/TraceMap.sln`.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
   - [ ] Run relevant pinned smoke checks from `docs/VALIDATION.md` if shared
         graph, route-flow, language-adapter, or reporting behavior changes.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
 
 ## Deferred Follow-Ups
 
