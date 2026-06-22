@@ -179,6 +179,7 @@ Do not store:
 Reuse existing rule IDs where possible:
 
 - `property-flow.root.v1`
+- `property-flow.edge.v1`
 - `property-flow.path.v1`
 - `property-flow.selector.v1`
 - `property-flow.schema.v1`
