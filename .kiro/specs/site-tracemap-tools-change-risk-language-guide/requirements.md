@@ -247,7 +247,7 @@ Acceptance criteria:
   Open Graph fields following existing site patterns.
 - Standalone discovery metadata includes `publicClaimLevel: concept`,
   `sourceType: site-page`, a valid existing `hintCategory`, a
-  `preferredProofPath`, limitations, and non-claims.
+  `preferredProofPath`, limitations, and `nonClaims`.
 - Standalone sitemap metadata includes the route if a standalone route is
   chosen.
 - If the guide is folded into an existing route, validation confirms the

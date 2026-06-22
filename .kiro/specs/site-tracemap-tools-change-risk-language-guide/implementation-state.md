@@ -179,6 +179,10 @@ non-claim entries.
   requirements, and the remaining Sonnet checkbox note was patched.
 - Current Medium or higher findings: none known after patches. Review coverage
   remains reduced because Kiro denied shell/write tools during each review run.
+- PR-loop actionable review findings patched after PR creation: added
+  `TraceMap found` to the design wording progression and changed standalone
+  discovery metadata wording in requirements/tasks to use the exact
+  `nonClaims` field name.
 
 ## Implementation Summary
 

@@ -84,6 +84,9 @@ The guide should teach a simple progression:
 - Use `evidence shows` only when a public-safe proof path, rule ID or
   equivalent supporting ID, evidence tier, coverage label, and limitation are
   present.
+- Use `TraceMap found` only for deterministic static evidence, and keep it
+  separate from runtime, production, release, safety, or business-correctness
+  claims.
 - Use `needs review` when static evidence exists but does not support a
   deterministic conclusion.
 - Use `coverage is reduced` when the claim depends on analysis that did not
