@@ -604,10 +604,12 @@ rules:
     emits:
       - property-flow edge row
       - property-flow root-to-graph gap
+      - route-flow no-property-context gap
     limitations:
       - Derived edges are bounded static composition and do not prove runtime mutation, callback execution, dependency-injection target selection, reflection behavior, serializer configuration, branch feasibility, or SQL execution.
       - Syntax-only and same-name edges are review-tier unless a stronger rule-backed source fact supports the hop.
       - Missing edges are analysis gaps under reduced coverage, not proof that no lineage exists.
+      - Route-flow context is additive only when tied to the selected property through rule-backed value-origin, payload, model-binding, assignment, mapping, or equivalent property-specific evidence.
 
   - id: property-flow.path.v1
     name: Property flow static path classification
