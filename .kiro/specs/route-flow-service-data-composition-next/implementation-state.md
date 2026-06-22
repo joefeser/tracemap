@@ -1,11 +1,70 @@
 # Route Flow Service/Data Composition Next Implementation State
 
-Status: reviewed-ready-for-implementation
+Status: implemented-pr1-followups-deferred
 Readiness: ready-for-implementation
 Spec branch: `codex/spec-route-flow-service-data-composition-next`
+Implementation branch: `codex/implement-route-flow-service-data-composition`
 Target base: `dev`
 Primary issue: `#179`
 Public claim level: hidden
+
+## Implementation Slice
+
+Selected PR boundary: PR 1 from the task list.
+
+This implementation adds additive route-flow `contextGroups` to
+`route-flow-report.json` and a `## Context Groups` section to
+`route-flow-report.md`. The groups are presentation context over already
+selected route-flow rows only; they do not create a new traversal engine or a
+new rule namespace.
+
+JSON placement:
+
+- `RouteFlowReport.contextGroups`
+- `reportType` remains `route-flow`.
+- JSON `version` remains `1.0`.
+- Missing `contextGroups` in older JSON renders as an empty list.
+
+Group kinds emitted by the selected slice:
+
+- `method`
+- `service`
+- `interface-candidate`
+- `repository`
+- `query`
+- `data-surface`
+- `dependency`
+- `legacy-data`
+- `value-origin`
+- `gap`
+
+Closed metadata:
+
+- `groupKind`
+- `matchKind`
+- `valueSafety`
+- `rowCount`
+- `sourceLabel`
+- selected safe row metadata such as `surfaceKind`, `logicKind`,
+  `attachmentKind`, `tableNameHash`, `columnNamesHash`, `shapeHash`, and
+  `textHash`
+
+The group evidence reuses `combined.route-flow.report.v1` and includes sorted
+supporting row IDs, rule IDs, evidence tiers, fact IDs, edge IDs, coverage,
+file spans where available, commit SHA where known, extractor identity, and
+limitations from contributing rows. Group classification, evidence tier, and
+coverage are the weakest values from contributing rows.
+
+No new rule IDs were added. Existing route-flow rules carry the underlying
+evidence; `combined.route-flow.redaction.v1` remains present when unsafe values
+are hashed or omitted.
+
+Deferred from this slice:
+
+- narrower gaps for adjacent but unjoinable data/query/dependency evidence;
+- new downgrade rules beyond the shipped route-flow gaps;
+- runtime DI proof, branch feasibility, SQL execution, database/schema proof,
+  mutation semantics, collection contents, or production traffic claims.
 
 ## Summary
 
@@ -118,20 +177,84 @@ Re-review completed:
   validation. Non-blocking suggestions for schema/version, `evidenceKind`, and
   multi-extractor tests were folded into task 9.
 
+Implementation review:
+
+```bash
+node scripts/kiro-review.mjs --phase route-flow-service-data-composition-next --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
+```
+
+- Sonnet completed with full coverage.
+- Blocking finding B1: `combined.route-flow.report.v1` did not document the
+  new `contextGroups` JSON section in `rules/rule-catalog.yml`. Patched by
+  adding the emitted section and a limitation stating that context groups are
+  additive report summaries over already-selected rows.
+- Blocking finding B2: task 9 lacked an emitted-rule-ID sweep test. Patched by
+  adding a route-flow test that collects rule IDs from entry, flow, logic,
+  dependency surface, touched file, touched symbol, context group, and gap
+  rows, then asserts every emitted ID exists in `rules/rule-catalog.yml`.
+- Non-blocking findings around `evidenceKind`, task ordering, reduced-coverage
+  no-evidence tests, status wording, and context-group truncation remain
+  follow-up guidance for later tasks 6, 7, and remaining task 9 work.
+
+Implementation re-review:
+
+```bash
+node scripts/kiro-review.mjs --phase route-flow-service-data-composition-next --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
+```
+
+- Sonnet completed with reduced coverage because Kiro reported denied tool
+  access. It still returned concrete findings.
+- Blocking finding B1: `tasks.md` and `implementation-state.md` lifecycle
+  status labels were out of sync. Patched by setting both to
+  `implemented-pr1-followups-deferred`.
+- Blocking finding B2: context-group behavior was not asserted for interface
+  multiple-candidate and no-candidate fixtures. Patched by adding assertions
+  for `interface-candidate` context groups, candidate gap groups, and weakest
+  review-tier inheritance in the existing fixtures.
+- Blocking finding B3: deferred task 6/7 checkboxes looked like forgotten work.
+  Patched by adding explicit "Deferred beyond PR 1" notes pointing to this
+  implementation state file.
+- Non-blocking closed-set `evidenceKind` and clean no-route-flow context-group
+  assertions were also added while touching the test file.
+
 ## Validation
 
-Spec-only validation completed:
+Spec-only validation completed before implementation:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 - No dedicated spec/docs validation script beyond the private path guard was
   found for this spec-only packet.
-- Product code, site files, generated outputs, private paths, private names,
-  raw SQL, config values, snippets, secrets, raw remotes, and local-only
-  artifacts were not intentionally committed.
 
-No `dotnet` validation was run because this is a spec-only PR and product code
-did not change.
+Product validation completed for the implementation slice:
+
+- `dotnet restore src/dotnet/TraceMap.sln`: passed with the repo's existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warning.
+- `dotnet test src/dotnet/TraceMap.sln --filter CombinedRouteFlowTests --no-restore`:
+  passed, 29 tests after the emitted-rule-ID catalog sweep was added.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing
+  NU1903 advisory warning.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: passed, 606 tests.
+- After the implementation re-review fixes, focused route-flow tests still
+  passed, 29 tests; build passed; full tests passed, 606 tests; `git diff
+  --check` passed; and `./scripts/check-private-paths.sh` passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `./scripts/demo-public.sh .tracemap-demo`: passed. The script completed the
+  public checked-in sample workflow, but this local script revision did not
+  write route-flow artifacts despite `docs/VALIDATION.md` describing targeted
+  route-flow as part of the public demo.
+- Manual route-flow smoke over the generated public-demo endpoint combined
+  index passed:
+  `dotnet run --project src/dotnet/TraceMap.Cli -- route-flow --index .tracemap-demo/combined/endpoint-stack.sqlite --route "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out .tracemap-demo/reports/route-flow/endpoint-to-sql`
+  produced `route-flow-report.md` and `route-flow-report.json` with `Context
+  Groups` / `contextGroups`.
+- Private legacy route-flow smoke was not run in this child context. That smoke
+  remains local-only and should not commit private sample names, local paths,
+  raw SQL, config values, snippets, secrets, raw remotes, or generated
+  artifacts.
+
+Generated `.tracemap-demo/` outputs are ignored and not committed.
 
 ## PR State
 
