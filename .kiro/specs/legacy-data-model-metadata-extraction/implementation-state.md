@@ -659,11 +659,17 @@ PR review-loop follow-up:
   Patched by emitting an unsupported-shape gap for formula-only properties and
   by adding a regression assertion that no column fact is produced without
   static column evidence.
+- A later loop surfaced two Qodo top-level findings. Patched both: NHibernate
+  `.hbm.xml` detection now requires a `hibernate-mapping` root instead of any
+  descendant `class` element, and `not-null` nullable metadata now parses
+  explicit true/false values case-insensitively.
 - After the PR-thread patch, reran
   `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataMetadataExtractorTests|LegacyDataModelDescriptorProjectionTests"`:
-  passed, 32 tests.
+  passed, 33 tests.
 - After the PR-thread patch, reran `dotnet test src/dotnet/TraceMap.sln`:
-  passed, 592 tests.
+  passed, 593 tests.
+- After the Qodo top-level patch, reran `dotnet build src/dotnet/TraceMap.sln`:
+  passed.
 - After the PR-thread patch, reran `./scripts/check-private-paths.sh`: passed.
 - After the PR-thread patch, reran `git diff --check`: passed.
 - Final agent-control loop result is pending. PR should target `dev`; do not

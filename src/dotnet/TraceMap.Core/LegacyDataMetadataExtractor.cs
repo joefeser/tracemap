@@ -283,7 +283,7 @@ public static class LegacyDataMetadataExtractor
         AddSafeName(columnProps, "propertyName", "propertyHash", propertyName);
         AddSafeName(columnProps, "columnName", "columnHash", columnName);
         AddSafeName(columnProps, "tableName", "tableHash", tableName);
-        AddOptional(columnProps, "isNullable", AttributeValue(property, "not-null") is "true" ? "False" : null);
+        AddOptional(columnProps, "isNullable", NHibernateNullable(property));
         AddOptional(columnProps, "descriptorSource", property.Name.LocalName);
         AddModelIdentity(columnProps, "NHibernateHbm", "column", "orm-mapped", relativePath, "nhibernate-property-column", propertyName, tableName ?? className, sourceMetadataFactId, Parts(("class", className), ("property", propertyName), ("column", columnName), ("descriptor", property.Name.LocalName)));
         facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, property, TargetFrom(columnProps, "propertyName", "propertyHash"), columnProps));
@@ -1548,8 +1548,7 @@ public static class LegacyDataMetadataExtractor
 
     private static bool LooksLikeNHibernateMapping(XDocument document)
     {
-        return document.Root?.Name.LocalName.Equals("hibernate-mapping", StringComparison.OrdinalIgnoreCase) == true
-            || document.Descendants().Any(element => element.Name.LocalName is "class" or "joined-subclass" or "subclass" or "union-subclass");
+        return document.Root?.Name.LocalName.Equals("hibernate-mapping", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static bool IsNHibernateColumnLikeElement(XElement element)
@@ -1587,6 +1586,17 @@ public static class LegacyDataMetadataExtractor
             && (property.Attribute("formula") is not null || property.Elements().Any(element => element.Name.LocalName == "formula"))
             && AttributeValue(property, "column") is null
             && property.Elements().All(element => element.Name.LocalName != "column" || AttributeValue(element, "name") is null);
+    }
+
+    private static string? NHibernateNullable(XElement property)
+    {
+        var notNull = AttributeValue(property, "not-null");
+        if (!bool.TryParse(notNull, out var parsed))
+        {
+            return null;
+        }
+
+        return parsed ? "False" : "True";
     }
 
     private static string? NHibernateKeyColumn(XElement relationship)

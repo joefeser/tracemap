@@ -1093,6 +1093,7 @@ public sealed class LegacyDataMetadataExtractorTests
                 <id name="Id" column="CustomerId" />
                 <version name="RowVersion" column="RowVersion" />
                 <property name="Status" column="Status" not-null="true" />
+                <property name="Nickname" column="Nickname" not-null="FALSE" />
                 <many-to-one name="Account" class="Account" column="AccountId" />
                 <set name="Orders">
                   <key>
@@ -1131,6 +1132,11 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.Properties.GetValueOrDefault("propertyName") == "Status"
             && fact.Properties.GetValueOrDefault("columnName") == "Status"
             && fact.Properties.GetValueOrDefault("isNullable") == "False");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("propertyName") == "Nickname"
+            && fact.Properties.GetValueOrDefault("columnName") == "Nickname"
+            && fact.Properties.GetValueOrDefault("isNullable") == "True");
 
         var account = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
@@ -1151,6 +1157,25 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal(
             result.Facts.Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate).Select(fact => fact.FactId).Order(StringComparer.Ordinal),
             second.Facts.Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate).Select(fact => fact.FactId).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_treats_non_mapping_hbm_xml_as_unsupported_orm_gap()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Noise.hbm.xml"), """
+            <not-hibernate>
+              <class name="Customer" table="Customers" />
+            </not-hibernate>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataOrmUnsupported
+            && fact.Evidence.FilePath == "Noise.hbm.xml"
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmDescriptor");
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate);
     }
 
     [Fact]
