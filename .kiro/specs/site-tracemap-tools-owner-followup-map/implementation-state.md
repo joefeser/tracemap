@@ -214,8 +214,18 @@ build, private-path, diff, and browser sanity checks.
 - Follow-up fix: the owner-followup test now removes required fixture
   fragments through attribute-targeted patterns and asserts that each fixture
   mutation actually changed the page before validating the expected error.
-- Latest PR loop outcome: pending rerun after the test-hardening commit is
-  pushed.
+- PR loop outcome on head
+  `99cf766c5ffc08eb58a64290b0940a0149f034d0`: `decision: merge_ready`,
+  `stopReason: NONE`, `nextAction: merge_ready`, `canMerge: true`.
+  Evidence: merge state `CLEAN`, unresolved threads `0`, pending checks `[]`,
+  failed checks `[]`, actionable bot findings `[]`. Residual risk level was
+  `medium` because the required Codex review was stale after the review fixes:
+  Codex reviewed `56033f6de5ef16d281d3e00d9b5b59f766cbc37b`, while the
+  current head was `99cf766c5ffc08eb58a64290b0940a0149f034d0`; the configured
+  trusted-code-review quorum was satisfied by Qodo, and the outdated Codex
+  finding had an evidence-backed disposition.
+- Latest PR loop outcome: final spec-state recording commit pending push and
+  rerun.
 
 ## Oddities
 
@@ -230,5 +240,5 @@ build, private-path, diff, and browser sanity checks.
 
 ## Follow-Up Items
 
-- Push the test-hardening follow-up commit, rerun the required PR loop, and
-  record the final exact decision/stop reason here before final handoff.
+- Push the final spec-state recording commit and rerun the required PR loop
+  against that head before final handoff.
