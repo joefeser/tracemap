@@ -27,8 +27,17 @@ test("validateOwnerFollowupMapDist accepts the owner follow-up route", async (t)
 
 test("validateOwnerFollowupMapDist reports missing required row and field", async (t) => {
   const pageHtml = await ownerFollowupPage();
-  const withoutRow = pageHtml.replace(/<article data-owner-row="runtime behavior question">[\s\S]*?<\/article>\n\n          /, "");
-  const withoutField = withoutRow.replace(/<dd data-owner-field="stop condition">Stop if proof path, rule ID\/rule family[\s\S]*?<\/dd>/, "");
+  const withoutRow = replaceRequiredFixtureFragment(
+    pageHtml,
+    /<article\b[^>]*\bdata-owner-row="runtime behavior question"[^>]*>[\s\S]*?<\/article>/,
+    "runtime behavior question row"
+  );
+  const withoutField = replaceRequiredFixtureFragment(
+    withoutRow,
+    /(<article\b[^>]*\bdata-owner-row="evidence gap question"[^>]*>[\s\S]*?)<dd\b[^>]*\bdata-owner-field="stop condition"[^>]*>[\s\S]*?<\/dd>/,
+    "evidence gap stop condition field",
+    "$1"
+  );
   const root = await createManagedOwnerFollowupDistFixture(t, { ownerHtml: withoutField });
   const errors = [];
 
@@ -192,6 +201,12 @@ async function createOwnerFollowupDistFixture({
 
 async function ownerFollowupPage() {
   return readFile(sourcePagePath, "utf8");
+}
+
+function replaceRequiredFixtureFragment(value, pattern, label, replacement = "") {
+  const updated = value.replace(pattern, replacement);
+  assert.notEqual(updated, value, `Expected test fixture mutation to remove ${label}.`);
+  return updated;
 }
 
 async function writeDiscoveryFiles(dist, routes) {
