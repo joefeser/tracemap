@@ -265,7 +265,8 @@ public static class FileInventory
             return false;
         }
 
-        return lowerFileName.Contains("sqlmap", StringComparison.Ordinal)
+        return lowerFileName.EndsWith(".hbm.xml", StringComparison.Ordinal)
+            || lowerFileName.Contains("sqlmap", StringComparison.Ordinal)
             || lowerFileName.Contains("llblgen", StringComparison.Ordinal)
             || lowerFileName.Contains("subsonic", StringComparison.Ordinal)
             || lowerFileName.Contains("activerecord", StringComparison.Ordinal)

@@ -82,29 +82,34 @@
           surface/query workflows.
 
 - [ ] 4. Add NHibernate mapping XML MVP. Requirements: 1, 3, 7, 8.
-  - [ ] Safely parse checked-in `.hbm.xml` files with DTD/entity resolution
+  - [x] Safely parse checked-in `.hbm.xml` files with DTD/entity resolution
         disabled.
-  - [ ] Reuse the same parser helper and bounds as
+  - [x] Reuse the same parser helper and bounds as
         `LegacyDataMetadataExtractor`, currently `SafeXml`: 2 MiB XML file size,
         4 MiB maximum characters in document, 100,000 descendant nodes, and
         depth 128.
-  - [ ] Inventory mapping documents and emit parser gaps for malformed or unsafe
+  - [x] Inventory mapping documents and emit parser gaps for malformed or unsafe
         XML.
   - [ ] Extract class, id, version, property, component, collection,
         many-to-one, one-to-one, many-to-many, key, table, and column descriptors
         where deterministic.
-  - [ ] Hash or omit schema, catalog, formula, filter, SQL, query, dialect,
+    - [x] Completed in slice 4: class, table, id, version, property,
+          many-to-one, one-to-one, collection, one-to-many/many-to-many target,
+          key, and column descriptors.
+    - [ ] Deferred: component descriptor expansion and broader provider-specific
+          descriptor shapes.
+  - [x] Hash or omit schema, catalog, formula, filter, SQL, query, dialect,
         connection, and provider-specific unsafe values.
-  - [ ] Cap per-class property/column-like descriptor emission at 500 rows and
+  - [x] Cap per-class property/column-like descriptor emission at 500 rows and
         relationship/collection descriptor emission at 200 rows, then emit a
         deterministic too-large/truncation gap for skipped descriptors.
-  - [ ] Emit unsupported-shape gaps for inheritance, joined/union subclass,
+  - [x] Emit unsupported-shape gaps for inheritance, joined/union subclass,
         composite id, dynamic component, custom SQL, filters, named queries, and
         provider extensions unless implemented explicitly.
-  - [ ] Add fixture tests for simple mappings, relationships, formula/filter
+  - [x] Add fixture tests for simple mappings, relationships, formula/filter
         redaction, unsafe values, parser safety, reduced coverage, and
         deterministic output.
-  - [ ] Add parser-bound and classification tests proving NHibernate uses the
+  - [x] Add parser-bound and classification tests proving NHibernate uses the
         same safety/malformed/too-large gap strings as the existing legacy data
         family.
 
@@ -135,6 +140,11 @@
         descriptor tier ceiling.
 
 - [ ] 7. Project model-enriched `legacy-data` dependency surfaces. Requirements: 5, 6, 8.
+  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
+        being marked complete until a future slice adds end-to-end privacy tests
+        proving unsafe NHibernate formula/filter/query/config values do not
+        appear in combined reports, portfolio output, graph export, or vault
+        export.
   - [ ] Add a safe surface projection for entity, storage object, column,
         relationship, adapter, routine, and mapped-type descriptors.
   - [ ] Reuse the existing `legacy-data` surface kind with
@@ -157,6 +167,11 @@
         query redaction survives through surface projection and export.
 
 - [ ] 8. Integrate with combined reports, paths, reverse, impact, release-review, and portfolio. Requirements: 5, 6, 8.
+  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
+        being marked complete until selector behavior, availability-gap
+        behavior, no-double-count behavior, and downstream privacy redaction
+        tests exist for the workflows that consume model-enriched legacy-data
+        surfaces.
   - [ ] Teach combined reports to render safe model-enriched `legacy-data` surfaces or
         emit explicit availability gaps.
   - [ ] Teach path and reverse queries to select model surfaces only from stable
@@ -181,6 +196,10 @@
   - [ ] Keep "impact" wording static and evidence-backed.
 
 - [ ] 9. Integrate with evidence graph and vault export. Requirements: 6, 7, 8.
+  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
+        being marked complete until graph/vault export tests prove raw SQL-like
+        formula/filter/query text, connection strings, URLs, remotes, local
+        paths, and private labels remain absent.
   - [ ] Export safe model document, descriptor, generated-symbol, surface, and
         gap nodes.
   - [ ] Export evidence-backed edges with rule IDs, evidence tiers, commit SHAs,

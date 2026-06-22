@@ -1082,6 +1082,173 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.DoesNotContain("ApiSecret", allProperties);
     }
 
+    [Fact]
+    public void Scan_extracts_nhibernate_hbm_metadata_with_model_identity_and_relationships()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Customer.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2" namespace="Samples.Domain">
+              <class name="Customer" table="Customers" schema="dbo">
+                <id name="Id" column="CustomerId" />
+                <version name="RowVersion" column="RowVersion" />
+                <property name="Status" column="Status" not-null="true" />
+                <property name="Nickname" column="Nickname" not-null="FALSE" />
+                <many-to-one name="Account" class="Account" column="AccountId" />
+                <set name="Orders">
+                  <key>
+                    <column name="CustomerId" />
+                  </key>
+                  <one-to-many class="Order" />
+                </set>
+              </class>
+            </hibernate-mapping>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var second = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out2")));
+
+        Assert.Contains(result.Inventory, item => item.Kind == "LegacyOrmMetadata" && item.RelativePath == "Mappings/Customer.hbm.xml");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMetadataDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("metadataFormat") == "nhibernate-hbm");
+
+        var entity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("typeName") == "Customer");
+        Assert.Equal("nhibernate-hbm", entity.Properties.GetValueOrDefault("metadataFormat"));
+        Assert.Equal("entity", entity.Properties.GetValueOrDefault("modelKind"));
+        Assert.Equal("orm-mapped", entity.Properties.GetValueOrDefault("descriptorRole"));
+        Assert.Equal(RuleIds.LegacyDataModelIdentity, entity.Properties.GetValueOrDefault("modelIdentityRuleId"));
+        Assert.StartsWith("ldm:", entity.Properties.GetValueOrDefault("stableModelKey"));
+        Assert.True(entity.Properties.ContainsKey("schemaHash"));
+        Assert.False(entity.Properties.ContainsKey("schemaName"));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataStorageObjectDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("storageObjectName") == "Customers");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("propertyName") == "Status"
+            && fact.Properties.GetValueOrDefault("columnName") == "Status"
+            && fact.Properties.GetValueOrDefault("isNullable") == "False");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("propertyName") == "Nickname"
+            && fact.Properties.GetValueOrDefault("columnName") == "Nickname"
+            && fact.Properties.GetValueOrDefault("isNullable") == "True");
+
+        var account = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("associationName") == "Account");
+        Assert.Equal("many-to-one", account.Properties.GetValueOrDefault("mappingKind"));
+        Assert.Equal("relationship", account.Properties.GetValueOrDefault("modelRelationshipKind"));
+        Assert.Equal("Customer", account.Properties.GetValueOrDefault("sourceEndpointName"));
+        Assert.Equal("Account", account.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.Equal("full", account.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+
+        var orders = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("associationName") == "Orders");
+        Assert.Equal("set", orders.Properties.GetValueOrDefault("mappingKind"));
+        Assert.Equal("Order", orders.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.Equal("CustomerId", orders.Properties.GetValueOrDefault("columnName"));
+
+        Assert.Equal(
+            result.Facts.Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate).Select(fact => fact.FactId).Order(StringComparer.Ordinal),
+            second.Facts.Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate).Select(fact => fact.FactId).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_treats_non_mapping_hbm_xml_as_unsupported_orm_gap()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Noise.hbm.xml"), """
+            <not-hibernate>
+              <class name="Customer" table="Customers" />
+            </not-hibernate>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataOrmUnsupported
+            && fact.Evidence.FilePath == "Noise.hbm.xml"
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmDescriptor");
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate);
+    }
+
+    [Fact]
+    public async Task Scan_hashes_nhibernate_unsafe_values_and_gaps_unsupported_shapes()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Unsafe.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class name="Server=prod;Password=secret" table="Customers;DROP" catalog="SensitiveCatalog">
+                <id name="Id" column="CustomerId" />
+                <property name="TokenSecret" formula="SELECT ApiSecret FROM Customers" />
+                <component name="Address" />
+                <filter name="tenant">TenantSecret = :tenant</filter>
+                <sql-query name="UnsafeQuery">SELECT ApiSecret FROM Customers</sql-query>
+              </class>
+            </hibernate-mapping>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var report = MarkdownReportWriter.Build(result);
+        var indexPath = Path.Combine(temp.Path, "out", "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+        var allProperties = await ReadAllPropertiesAsync(indexPath);
+
+        var entity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate);
+        Assert.True(entity.Properties.ContainsKey("typeHash"));
+        Assert.True(entity.Properties.ContainsKey("tableHash"));
+        Assert.True(entity.Properties.ContainsKey("catalogHash"));
+        Assert.DoesNotContain("Server=prod", entity.Properties.Values);
+        Assert.DoesNotContain("Customers;DROP", entity.Properties.Values);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("descriptorSource") == "property");
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmQueryMetadata");
+
+        Assert.DoesNotContain("ApiSecret", report);
+        Assert.DoesNotContain("TenantSecret", report);
+        Assert.DoesNotContain("Password=secret", report);
+        Assert.DoesNotContain("ApiSecret", allProperties);
+        Assert.DoesNotContain("TenantSecret", allProperties);
+        Assert.DoesNotContain("Password=secret", allProperties);
+    }
+
+    [Fact]
+    public void Scan_rejects_nhibernate_hbm_dtd_with_legacy_data_gap_classification()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Unsafe.hbm.xml"), """
+            <!DOCTYPE hibernate-mapping [
+              <!ENTITY ext SYSTEM "file:///private/secret.txt">
+            ]>
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class name="&ext;" table="Customers" />
+            </hibernate-mapping>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Evidence.FilePath == "Unsafe.hbm.xml"
+            && fact.Properties.GetValueOrDefault("classification") == "LegacyDataParserSecurityRejected");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate);
+    }
+
     private static async Task<string> ReadAllPropertiesAsync(string sqlitePath)
     {
         await using var connection = new SqliteConnection($"Data Source={sqlitePath}");
