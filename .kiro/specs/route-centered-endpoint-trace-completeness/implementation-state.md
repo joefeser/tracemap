@@ -54,6 +54,12 @@
   items. This spec references those boundaries but does not mark them complete.
 - No spec lint script has been identified yet; validation will record the final
   discovery result.
+- Coordination note added by
+  `.kiro/specs/route-flow-service-data-composition-next`: the service/data
+  composition subset of tasks 8-10 is owned by that continuation spec. This
+  endpoint-trace spec keeps broader endpoint trace completeness work such as
+  touched-file/touched-symbol summaries, selector trace metadata, and
+  route-flow presentation backlog not covered by the service/data continuation.
 
 ## Kiro Review Log
 
