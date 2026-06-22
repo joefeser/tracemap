@@ -2079,7 +2079,7 @@ public static class PropertyFlowReporter
             return false;
         }
 
-        var columns = await ColumnNamesAsync(connection, "combined_route_flow_edges", cancellationToken);
+        var columns = await RouteFlowColumnNamesAsync(connection, cancellationToken);
         var pathColumn = FirstColumn(columns, "normalizedPathKey", "normalized_path_key", "routeKey", "route_key", "pathKey", "path_key");
         if (pathColumn is null)
         {
@@ -2087,16 +2087,15 @@ public static class PropertyFlowReporter
         }
 
         var methodColumn = FirstColumn(columns, "httpMethod", "http_method", "method");
-        var sql = methodColumn is null
-            ? $"select {QuoteIdentifier(pathColumn)} from combined_route_flow_edges;"
-            : $"select {QuoteIdentifier(pathColumn)}, {QuoteIdentifier(methodColumn)} from combined_route_flow_edges;";
         await using var command = connection.CreateCommand();
-        command.CommandText = sql;
+        command.CommandText = "select * from combined_route_flow_edges;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var pathOrdinal = reader.GetOrdinal(pathColumn);
+        var methodOrdinal = methodColumn is null ? -1 : reader.GetOrdinal(methodColumn);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var pathKey = Convert.ToString(reader.GetValue(0));
-            var method = methodColumn is null ? null : Convert.ToString(reader.GetValue(1));
+            var pathKey = Convert.ToString(reader.GetValue(pathOrdinal));
+            var method = methodOrdinal < 0 ? null : Convert.ToString(reader.GetValue(methodOrdinal));
             if (string.IsNullOrWhiteSpace(pathKey))
             {
                 continue;
@@ -2121,7 +2120,9 @@ public static class PropertyFlowReporter
         }
 
         return paths
+            .Where(path => path is not null)
             .SelectMany(path => path.Nodes ?? [])
+            .Where(node => node?.SafeMetadata is not null)
             .Select(node =>
             {
                 node.SafeMetadata.TryGetValue("normalizedPathKey", out var normalizedPathKey);
@@ -2150,10 +2151,10 @@ public static class PropertyFlowReporter
         return string.IsNullOrWhiteSpace(method) ? null : method.Trim().ToUpperInvariant();
     }
 
-    private static async Task<IReadOnlySet<string>> ColumnNamesAsync(SqliteConnection connection, string objectName, CancellationToken cancellationToken)
+    private static async Task<IReadOnlySet<string>> RouteFlowColumnNamesAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"pragma table_info({QuoteIdentifier(objectName)});";
+        command.CommandText = "pragma table_info(\"combined_route_flow_edges\");";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         while (await reader.ReadAsync(cancellationToken))
@@ -2167,11 +2168,6 @@ public static class PropertyFlowReporter
     private static string? FirstColumn(IReadOnlySet<string> columns, params string[] names)
     {
         return names.FirstOrDefault(columns.Contains);
-    }
-
-    private static string QuoteIdentifier(string value)
-    {
-        return "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
     }
 
     private static string ClassifyPath(PropertyFlowRoot root, IReadOnlyList<PropertyFlowNode> nodes, IReadOnlyList<PropertyFlowEdge> edges)
