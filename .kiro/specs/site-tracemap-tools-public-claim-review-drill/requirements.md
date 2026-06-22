@@ -286,9 +286,10 @@ Acceptance criteria:
   output, tests, fixtures, and bot-oriented discovery surfaces.
 - Validation checks no blame language in visible copy, metadata, examples,
   validation messages, and review-packet references using a recorded advisory
-  phrase set such as `failed`, `fault`, `to blame`, `negligent`,
-  `careless`, or attributing missing, reduced, or conflicting evidence to a
-  named person, team, service, customer, or reviewer.
+  phrase set such as `fault`, `to blame`, `negligent`, `careless`, or
+  attributing missing, reduced, or conflicting evidence to a named person,
+  team, service, customer, or reviewer. The advisory phrase set should avoid
+  common technical status terms that appear in ordinary validation output.
 - Validation checks rendered body word count after stripping navigation,
   footer, metadata, and global chrome. The target range is 500 to 1800 words;
   required sections and row fields remain mandatory even when trimming copy.
