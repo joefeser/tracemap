@@ -38,6 +38,10 @@ public sealed record CodeFact(
     string? SourceSymbol,
     string? TargetSymbol,
     string? ContractElement,
+    // Legacy or externally-produced facts may deserialize with a null evidence
+    // span even though scanner-authored facts should provide one. Artifact
+    // readers must guard this boundary and emit reduced-coverage gaps instead
+    // of assuming source spans are always available.
     EvidenceSpan Evidence,
     IReadOnlyDictionary<string, string> Properties);
 

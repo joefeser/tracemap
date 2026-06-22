@@ -45,6 +45,12 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.DoesNotContain("http://", allGenerated);
         Assert.Contains("absolute-path-hash:", allGenerated);
         Assert.Contains("explorer.render.redacted-display-value.v1", allGenerated);
+        Assert.Contains("explorer.render.section-status.v1", allGenerated);
+        Assert.Contains("Safety &amp; Redactions", await File.ReadAllTextAsync(Path.Combine(output, "index.html")));
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "scanner-version"
+            && redaction.Category == "secret-like-value");
         Assert.Contains(result.Manifest.Redactions, redaction =>
             redaction.RuleId == StaticHtmlEvidenceExplorer.OmittedUnsafeValueRuleId
             && redaction.Location == "facts.properties"
@@ -52,15 +58,67 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains(result.Manifest.Redactions, redaction =>
             redaction.RuleId == StaticHtmlEvidenceExplorer.OmittedUnsafeValueRuleId
             && redaction.Location == "scan-manifest.remoteUrl");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.OmittedUnsafeValueRuleId
+            && redaction.Location == "scan-manifest.branch"
+            && redaction.Category == "branch-name");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.OmittedUnsafeValueRuleId
+            && redaction.Location == "scan-manifest.solutions"
+            && redaction.Category == "solution-name");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.OmittedUnsafeValueRuleId
+            && redaction.Location == "scan-manifest.projects"
+            && redaction.Category == "project-path");
+        Assert.Contains(result.Manifest.Limitations, limitation =>
+            limitation.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
+            && limitation.LimitationKind == "claim-level-conflict-detection-deferred"
+            && limitation.ClaimEffect == "claim-level");
         Assert.Contains("Local generated artifact", allGenerated);
         Assert.Contains("does not rescan source code", allGenerated);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_renders_rule_backed_section_statuses_for_first_slice_gaps()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("2"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.All(result.Data.SectionStatuses, row =>
+        {
+            Assert.Equal(StaticHtmlEvidenceExplorer.SectionStatusRuleId, row.RuleId);
+            Assert.Equal(EvidenceTiers.Tier4Unknown, row.EvidenceTier);
+            Assert.NotEmpty(row.SupportIds);
+        });
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "not-rendered-in-current-slice");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "not-rendered-in-current-slice");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "reducer-results" && row.Status == "not-rendered-in-current-slice");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "rules" && row.Status == "built-in-stubs");
+
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("<h2 id=\"coverage-heading\">Coverage</h2>", html);
+        Assert.Contains("Section status rows describe explorer rendering coverage only", html);
+        Assert.Contains("not-rendered-in-current-slice", html);
+        Assert.Contains(StaticHtmlEvidenceExplorer.SectionStatusRuleId, html);
+        Assert.DoesNotContain("complete analysis", html, StringComparison.OrdinalIgnoreCase);
+
+        var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
+        Assert.Contains("\"sectionStatuses\"", dataJson);
+        Assert.Contains("\"not-rendered-in-current-slice\"", dataJson);
+        Assert.DoesNotContain("C:\\sample-root", dataJson);
+        Assert.DoesNotContain("git@example.com:internal/example-repo.git", dataJson);
     }
 
     [Fact]
     public void Explorer_generated_string_validator_rejects_remote_references_without_printing_raw_value()
     {
         var failure = Assert.Throws<InvalidOperationException>(() =>
-            StaticHtmlEvidenceExplorer.ValidateGeneratedStringsForTesting(new Dictionary<string, string>
+            StaticHtmlEvidenceExplorer.ValidateGeneratedFilesForSafety(new Dictionary<string, string>
             {
                 ["index.html"] = "<a href=\"https://private.example.test/path\">unsafe</a>"
             }));
@@ -69,7 +127,17 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains("index.html", failure.Message);
         Assert.DoesNotContain("private.example.test", failure.Message);
 
-        StaticHtmlEvidenceExplorer.ValidateGeneratedStringsForTesting(new Dictionary<string, string>
+        var unsafeLocalPath = "/" + "Users/example/private/repo/file.cs";
+        var pathFailure = Assert.Throws<InvalidOperationException>(() =>
+            StaticHtmlEvidenceExplorer.ValidateGeneratedFilesForSafety(new Dictionary<string, string>
+            {
+                ["data/explorer-data.json"] = $$"""{"path":"{{unsafeLocalPath}}"}"""
+            }));
+        Assert.Contains(StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId, pathFailure.Message);
+        Assert.Contains("data/explorer-data.json", pathFailure.Message);
+        Assert.DoesNotContain(unsafeLocalPath, pathFailure.Message);
+
+        StaticHtmlEvidenceExplorer.ValidateGeneratedFilesForSafety(new Dictionary<string, string>
         {
             ["assets/explorer.js"] = "// local comment without a remote reference\n(() => {})();\n",
             ["assets/explorer.css"] = "/* local comment */\nbody { color: #111; }\n"
@@ -273,6 +341,16 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains("No static evidence rows were found in the provided fact stream under the current coverage.", html);
         Assert.Contains("index.sqlite was not provided", html);
         Assert.Contains("A JSON artifact was discovered but is not supported", html);
+
+        var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
+        using var document = JsonDocument.Parse(dataJson);
+        var sectionStatuses = document.RootElement.GetProperty("sectionStatuses").EnumerateArray().ToArray();
+        Assert.Contains(sectionStatuses, row =>
+            row.GetProperty("sectionId").GetString() == "evidence-rows"
+            && row.GetProperty("status").GetString() == "no-evidence-under-current-coverage");
+        Assert.Contains(sectionStatuses, row =>
+            row.GetProperty("sectionId").GetString() == "surfaces"
+            && row.GetProperty("status").GetString() == "not-provided");
     }
 
     [Fact]
@@ -358,7 +436,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             "git@example.com:internal/example-repo.git",
             "main",
             manifestCommitSha ?? commitSha ?? FortyCharCommit("1"),
-            "test-scanner.v1",
+            "test-scanner-token=redacted",
             DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
             "Level1SemanticAnalysisReduced",
             "Failed",

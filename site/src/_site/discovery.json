@@ -152,6 +152,41 @@
     ]
   },
   {
+    "path": "/packets/assembly/",
+    "title": "Review Packet Assembly",
+    "summary": "Concept-level checklist for assembling public-safe review handoff material from existing TraceMap evidence surfaces.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is a human checklist over existing evidence surfaces, not a generated packet-builder feature or new proof source.",
+      "Missing public-safe fields remain visible as limitations instead of being upgraded into stronger wording."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval or safety, operational safety, AI impact analysis, LLM analysis, autonomous review, generated packet-builder behavior, or complete coverage proof.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, or credential-like values are public packet material."
+    ]
+  },
+  {
+    "path": "/reviewer-quickstart/",
+    "title": "Reviewer Quickstart",
+    "summary": "Five-minute concept-level guide for inspecting a public-safe TraceMap evidence packet before repeating or routing a claim.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is first-stop reviewer orientation over existing public-safe packet and proof-path surfaces, not a complete review workflow or new evidence source.",
+      "Missing fields remain visible as limitations, unresolved gaps, or owner follow-up instead of being upgraded into stronger public wording."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, autonomous approval, or release approval proof.",
+      "No replacement of tests, code review, source review, runtime observability, telemetry, service ownership, release controls, or human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public quickstart material."
+    ]
+  },
+  {
     "path": "/limitations/",
     "title": "Limitations",
     "summary": "Starts with what TraceMap cannot prove so readers keep static evidence separate from operational claims.",
@@ -216,6 +251,23 @@
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or complete product coverage proof.",
       "No AI impact analysis, LLM analysis, raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local absolute paths, raw remotes, generated scan directories, or private sample names are published."
+    ]
+  },
+  {
+    "path": "/demo/manager-script/",
+    "title": "Manager Demo Script",
+    "summary": "Concept-level presenter script for showing TraceMap static evidence routes, bounded answer shapes, stop conditions, and public handoff links.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The script is a presenter guide over existing public pages, not a new evidence source.",
+      "Questions about runtime, production, release, incident, ownership, or complete coverage require the appropriate owners and evidence outside this page."
+    ],
+    "nonClaims": [
+      "No runtime behavior proof, production traffic proof, endpoint performance proof, outage cause proof, release approval, operational safety proof, complete coverage, or complete dependency understanding.",
+      "No AI analysis, LLM impact analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details."
     ]
   },
   {
@@ -284,6 +336,40 @@
     "nonClaims": [
       "No runtime proof, production traffic proof, endpoint performance proof, deployment state proof, release safety proof, or release approval proof.",
       "No AI impact analysis, LLM calls, embeddings, vector databases, prompt-based classification, raw facts, SQLite indexes, analyzer logs, raw SQL, secrets, local paths, raw remotes, or generated scan directories are published."
+    ]
+  },
+  {
+    "path": "/proof-paths/tour/",
+    "title": "Guided Proof-Path Tour",
+    "summary": "Concept-level guided reading flow for inspecting one public claim through proof path, rule family, evidence tier, coverage label, source context, limitation, non-claim, and next owner.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The tour is concept-level reading guidance over existing public-safe evidence surfaces, not a proof engine, runtime trace, approval workflow, validation result, or new evidence source.",
+      "Missing rule, tier, coverage, source context, extractor version, limitation, or public-safe support means the public claim stops or moves to owner follow-up."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, product behavior proof, autonomous approval, or replacement for tests, code review, source review, runtime observability, or human judgment.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, raw command output, or credential-like values are public proof material."
+    ]
+  },
+  {
+    "path": "/proof-paths/faq/",
+    "title": "Proof Path FAQ",
+    "summary": "Concept-level FAQ for reading proof paths, evidence tiers, coverage labels, limitations, review-packet context, missing-evidence gaps, and static-evidence boundaries.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The FAQ is concept-level explanation over existing public-safe evidence surfaces, not a generated proof source, scanner result, reducer result, approval workflow, or validation result.",
+      "Claims repeated from the FAQ must keep proof path, rule family, tier, coverage label, limitation, non-claim, public claim level, source context, and next-owner handoff attached."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, autonomous approval, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public FAQ material."
     ]
   },
   {

@@ -1,178 +1,167 @@
 # Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: ready-for-pr
 Public claim level: concept
 
 ## Summary
 
-This spec-only packet defines a future public blog/content phase for one or
-more TraceMap proof-path articles. The future phase should explain why
-deterministic evidence matters, how to read proof paths, and what TraceMap
-cannot prove, while staying inside concept-level public claims unless a
-specific article has public demo proof-path backing.
+This implementation publishes one concept-level public blog article for the
+proof-path series and adds deterministic validation for the article. The work
+stays inside the existing static site blog system under `site/src/_blog/` and
+does not add scanner, reducer, runtime service, analytics, AI/LLM, embeddings,
+vector database, or prompt-classification behavior.
 
-Readiness `ready-for-implementation` reflects disposition of available
-spec-review findings. Spec-packet validation, commit, PR creation, and PR-loop
-steps remain tracked in `tasks.md`.
-
-`Status: not-started` tracks the future site/content implementation phase.
-Spec-packet authoring and review progress is tracked in `tasks.md` and this
-state note.
-
-No site source, generated output, scanner code, reducer code, existing specs,
-or validation scripts were changed by this spec packet.
+The article is a practical proof-path reading guide. It teaches readers how to
+move from a public claim to proof surfaces, evidence vocabulary, limitations,
+safe wording, wording to avoid, and a human handoff when runtime or ownership
+questions remain.
 
 ## Branch And Worktree
 
-- Branch: `codex/spec-site-blog-proof-path-series`
-- Worktree: isolated spec worktree requested by the operator; exact local path
-  is omitted from the checked-in spec packet to satisfy the private-path guard.
-- Base: `origin/main`
-- Target PR base: `main`
+- Branch: `codex/impl-site-blog-proof-path-series`
+- Worktree: isolated implementation worktree requested by the operator; exact
+  local path is omitted from the checked-in state note to satisfy the
+  private-path guard.
+- Base: `origin/dev`
+- Target PR base: `dev`
+- Spec sync note: `.kiro/specs/site-tracemap-tools-blog-proof-path-series/`
+  was absent from the `origin/dev` worktree and was restored from
+  `origin/main` before implementation because main and dev were temporarily out
+  of sync.
 
-## Scope Decisions
+## Article Decisions
 
-- Scope is limited to
-  `.kiro/specs/site-tracemap-tools-blog-proof-path-series/`.
-- The phase is spec-only and records future implementation requirements.
-- Default article claim level is `concept`.
-- `demo` is allowed only for an article with public proof-path or public demo
-  backing recorded in metadata and implementation-state.
-- Candidate articles are intentionally optional so a future implementer can
-  choose one strong article or a short series.
-- Future implementation must check existing blog slugs:
-  `why-tracemap-exists`, `what-tracemap-solves-for-engineering-teams`, and
-  `building-tracemap-with-codex-kiro-qodo`.
-- Future implementation must record selected article count, final slugs,
-  rejected article ideas, claim levels, and rationale.
-- Current blog metadata does not expose a claim-level field, so future
-  implementation must choose visible article-body claim-level text or a
-  `publicClaimLevel` metadata/rendering/validation extension.
-- Existing public-site content validation usually uses dedicated modules under
-  `site/scripts/` with matching `*.test.mjs` files; future focused article
-  validation should follow that convention.
+- Selected article count: one article.
+- Final slug: `what-a-proof-path-is`.
+- Final title: `What a Proof Path Is`.
+- Public claim level: `concept`.
+- Claim-level mechanism: visible article-body text,
+  `Public claim level: concept`. This avoids extending the blog metadata schema
+  for a single concept article while still making the claim level rendered and
+  machine-checkable by the focused validator.
+- Target word count range: 900 to 1,800 rendered words for the single primary
+  article. The focused validator enforces this range.
+- Rationale: one strong definition and reading article is the smallest
+  reviewable content phase and avoids overlapping with the existing origin,
+  engineering-team, and project-workflow posts.
 
-## Current Claim Boundaries
+## Rejected Or Deferred Article Ideas
 
-Safe to specify for future public copy:
+- `How to read static evidence without overclaiming`: deferred because the
+  selected article already includes the reading steps, safe wording, unsafe
+  wording, and non-claim boundary for this first phase.
+- `What TraceMap can bring to a review before runtime telemetry`: deferred
+  because it risks drifting into runtime-review positioning unless it gets its
+  own narrow follow-up spec.
+- `Why no public conclusion without evidence matters`: deferred because the
+  shared principle is covered inside the selected proof-path article and the
+  existing site already repeats that boundary across evidence and review pages.
 
-- Proof paths keep public claims attached to reviewable public surfaces.
-- Static evidence can help reviewers and managers ask better questions before
-  runtime evidence is available.
-- Rule IDs, evidence tiers, coverage labels, limitations, and proof surfaces
-  are useful when deciding whether a public claim can be repeated.
+## Implemented Scope
 
-Not safe to claim:
+- Added `site/src/_blog/articles/what-a-proof-path-is.html`.
+- Registered the article in `site/src/_blog/articles.json` with conservative
+  metadata and June 21, 2026 publication date.
+- Added a contextual inbound link from `/proof-paths/` to the new article.
+  Primary navigation was not changed because the generated blog index already
+  exposes the article and the proof-path page is the relevant discovery surface.
+- Added `site/scripts/blog-proof-path-series.mjs` with deterministic checks for
+  required article blocks, required proof-surface links, metadata, blog index
+  registration, sitemap entry, rendered claim-level text, word count, forbidden
+  claims, and private/raw material.
+- Added `site/scripts/blog-proof-path-series.test.mjs` with acceptance and
+  regression tests for missing blocks, missing links, forbidden claims,
+  sanctioned wording-to-avoid examples, raw material, and metadata regressions.
+- Registered the focused validator in `site/scripts/validate.mjs`.
+- Updated the aggregate validation fixture in `site/scripts/validate.test.mjs`
+  so full-site validation exercises the new blog article route.
 
-- Runtime behavior, production traffic, endpoint performance, outage cause,
-  release safety, operational safety, complete coverage, AI/LLM impact
-  analysis, embedding/vector-database analysis, or prompt classification.
-- Replacement of telemetry, logs, traces, tests, owners, human review, or
-  release process.
-- Publication of raw facts, SQLite content, analyzer logs, source snippets,
-  SQL, config values, secrets, local paths, private remotes, generated scan
-  dirs, private names, or hidden validation details.
+## Verified Links
 
-## Review Log
+The required public routes were present in `site/src/` before publication:
 
-- Review artifacts: `.tmp/kiro-reviews/site-tracemap-tools-blog-proof-path-series/`
-  (not committed).
-  Inline summaries in this file are the authoritative resume record because
-  `.tmp` review artifacts are local-only and not committed.
-- Completed with reduced coverage due to denied tool access:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-blog-proof-path-series --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`.
-  Review artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-blog-proof-path-series/2026-06-21T023538-172Z-spec-claude-opus-4.8.clean.md`.
-  Opus found two Medium issues: missing per-route validation-module
-  convention, and undefined claim-level mechanism for blog articles. Both were
-  patched in `requirements.md`, `design.md`, `tasks.md`, and this state note.
-  Low sitemap/discovery/schema/state-note clarity items were also patched.
-- Completed with reduced coverage due to denied tool access:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-blog-proof-path-series --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`.
-  Review artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-blog-proof-path-series/2026-06-21T023538-253Z-spec-claude-sonnet-4.6.clean.md`.
-  Sonnet found no Medium or High findings. Low word-count, review-packet, task
-  gate, and review-artifact clarity items were patched.
-- Completed with reduced coverage due to denied tool access:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-blog-proof-path-series --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`.
-  Review artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-blog-proof-path-series/2026-06-21T023924-807Z-re-review-claude-sonnet-4.6.clean.md`.
-  Sonnet re-review found no Medium or High findings.
-- Completed with full coverage:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-blog-proof-path-series --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`.
-  Review artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-blog-proof-path-series/2026-06-21T023924-749Z-re-review-claude-opus-4.8.clean.md`.
-  Opus re-review found two Medium consistency issues: readiness advanced while
-  a re-review line still said pending, and reduced-coverage review caveats were
-  not surfaced near readiness. Both were patched here and in
-  `review-packet.md`. Low single-article route coverage, safe-term validation,
-  and stale initial-readiness task wording were also patched.
-- Completed with reduced coverage due to denied tool access:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-blog-proof-path-series --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`.
-  Review artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-blog-proof-path-series/2026-06-21T024249-189Z-re-review-claude-sonnet-4.6.clean.md`.
-  Sonnet found two Medium consistency issues: the spec-review gate task was
-  still open despite readiness being set to `ready-for-implementation`, and the
-  review log still had a pending final re-review line. Both were patched in
-  `tasks.md` and this state note. Low single-article route coverage and
-  word-count-tier clarity items were patched.
-- Completed with reduced coverage due to denied tool access:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-blog-proof-path-series --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`.
-  Review artifact:
-  `.tmp/kiro-reviews/site-tracemap-tools-blog-proof-path-series/2026-06-21T024249-085Z-re-review-claude-opus-4.8.clean.md`.
-  Opus found one Medium consistency issue: the stale pending final re-review
-  line conflicted with readiness. It was patched here. Low status, sitemap,
-  local-artifact, and word-count notes were patched or already covered.
-- Disposition: no further spec-only Kiro re-review is required before commit.
-  The latest findings were state/checklist consistency items introduced by
-  recording the in-progress review loop. The PR review loop is the confirming
-  pass for the ready PR.
+- `/proof-paths/`
+- `/proof-paths/tour/`
+- `/proof-source-catalog/`
+- `/evidence/`
+- `/packets/`
+- `/packets/assembly/`
+- `/review-claim-checklist/`
+- `/static-vs-runtime/`
+- `/limitations/`
+- `/validation/`
+- `/demo/result/`
+- `/questions/`
+
+The article links the full route set because the single article is broad enough
+to serve as the first proof-path reading guide.
+
+## Public-Safety Decisions
+
+- The article uses sanitized explanatory examples only.
+- Unsafe wording is isolated in an explicit wording-to-avoid section marked
+  with `data-tm-boundary`.
+- Raw artifact names are mentioned only as local output families in a bounded
+  limitations/non-claims section.
+- No raw facts, raw SQLite content, analyzer logs, source snippets, SQL, config
+  values, secrets, local paths, raw remotes, generated scan directories, private
+  sample names, hidden validation details, or raw command output are published.
+- No runtime behavior proof, production traffic proof, endpoint performance
+  proof, outage cause proof, release safety proof, operational safety proof,
+  complete coverage proof, AI/LLM impact analysis, embeddings, vector
+  databases, prompt classification, autonomous approval, or replacement of
+  tests/code review/source review/runtime observability/human judgment is
+  claimed.
 
 ## Validation Log
 
+- Passed: `cd site && npm test -- --test-name-pattern='BlogProofPath|blog proof|validateDist accepts'`.
+- Passed: `cd site && npm run validate`.
 - Passed: `git diff --check`.
-- Initial staged run of `./scripts/check-private-paths.sh` failed because this
-  state note included the machine-local isolated worktree path. Patched by
-  replacing the checked-in path with a generic isolated-worktree note.
-- Passed final rerun: `./scripts/check-private-paths.sh`.
-- Passed: focused Node text checks for required headers, required files,
-  required links, duplicate-slug guards, required content blocks, forbidden
-  claim topics, `publicClaimLevel` metadata option, and the dedicated
-  `site/scripts/<name>.mjs` plus `<name>.test.mjs` validation convention.
+- Passed: `./scripts/check-private-paths.sh`.
+- Passed: `cd site && npm test` with 315 tests.
+- Passed: `cd site && npm run validate`; generated output checked 53 HTML
+  files, 1,769 internal references, 52 sitemap URLs, one legacy story safety
+  target, and 13 legacy modernization evidence-map rows.
+- Passed: `cd site && npm run build`.
+- Passed browser sanity with Playwright against `http://localhost:4187`:
+  desktop and mobile checks for `/blog/what-a-proof-path-is/` and `/blog/`
+  showed expected H1/card/claim-level text and no horizontal overflow.
+- Passed: `dotnet test src/dotnet/TraceMap.sln` with 584 tests. Existing
+  `SQLitePCLRaw.lib.e_sqlite3` advisory warnings were emitted during restore.
+- Passed: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo
+  samples/modern-sample --out <temporary-output>`; the smoke produced
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` outside the worktree.
 
 ## PR Loop Log
 
+- Initial PR: `https://github.com/joefeser/tracemap/pull/263`.
 - Initial PR loop command:
-  `npm run dev -- pr-loop --repo joefeser/tracemap --pr 252 --base main --require-codex-review --quiet --json`.
-- Initial PR loop decision: `actionable_findings`.
-- Initial PR loop stop reason: `ACTIONABLE_BOT_FINDINGS`.
-- Initial PR loop next action: `patch_actionable_findings`.
-- Actionable finding patched: Qodo reported the spec-delivery checkbox in
-  `tasks.md` still showed the PR/PR-loop step as unchecked after that work had
-  begun. The checkbox is now checked to keep Kiro task state aligned with the
-  delivery status.
+  `agent-control pr-loop --repo joefeser/tracemap --pr 263 --base dev --require-codex-review --quiet --json`.
+- Initial PR loop head:
+  `d9b661f47896329191d94c48bb2ddbb5c8abb468`.
+- Initial PR loop decision: `merge_ready`.
+- Initial PR loop stop reason: `NONE`.
+- Initial PR loop next action: `merge_ready`.
+- Initial PR loop residual risk: `medium`; required Codex review was satisfied
+  by configured `trustedCodeReview` quorum after Qodo returned, with missing
+  Codex review recorded as residual risk by policy.
+- Initial PR loop gates: merge state `CLEAN`, unresolved threads `0`, pending
+  checks `0`, failed checks `0`, actionable bot findings `0`.
+- Follow-up: this state note was updated to record the PR-loop outcome, so the
+  branch needs a normal follow-up push and a fresh PR-loop run on the new head.
 
 ## Oddities
 
-- Initial review wrappers completed with reduced coverage because Kiro denied a
-  shell tool request to create review-output directories. The wrapper still
-  saved prompt/raw/clean/meta artifacts.
-- The review-packet is the standing review prompt and gate checklist; review
-  findings and dispositions are recorded in this implementation-state note and
-  in uncommitted `.tmp/kiro-reviews/` artifacts.
-- `site/src/_blog/articles.json` currently has no claim-level field.
-- Existing blog articles currently appear in sitemap output, while blog
-  articles are not represented in discovery metadata or `llms` outputs.
+- The implementation branch targets `dev`, but the spec source came from
+  `origin/main` because `origin/dev` did not yet contain this spec packet.
+- Existing blog articles are auto-emitted into `sitemap.xml`; comparable blog
+  articles are not represented in `discovery.json`, `llms.txt`, or
+  `llms-full.txt`, so no discovery metadata entry was added.
 
-## Follow-Up Items For Future Implementation
+## Follow-Up Items
 
-- Choose article count and final slugs.
-- Record rejected article ideas.
-- Verify required public routes before publishing links.
-- Add deterministic content validation for required blocks, metadata,
-  forbidden claims, private/raw material, and word count bounds.
-- Use the existing dedicated `site/scripts/<name>.mjs` plus
-  `<name>.test.mjs` validation pattern for focused article checks.
-- Run desktop and mobile browser sanity checks when article pages are
-  implemented.
+- A future article can cover the review-before-telemetry angle if it gets a
+  separate spec with tight runtime-boundary language.

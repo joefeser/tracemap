@@ -185,9 +185,24 @@
     "priority": "0.8"
   },
   {
+    "path": "/demo/manager-script/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/proof-paths/",
     "changefreq": "monthly",
     "priority": "0.8"
+  },
+  {
+    "path": "/proof-paths/tour/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/proof-paths/faq/",
+    "changefreq": "monthly",
+    "priority": "0.7"
   },
   {
     "path": "/proof-source-catalog/",
@@ -198,6 +213,16 @@
     "path": "/packets/",
     "changefreq": "monthly",
     "priority": "0.8"
+  },
+  {
+    "path": "/packets/assembly/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/reviewer-quickstart/",
+    "changefreq": "monthly",
+    "priority": "0.7"
   },
   {
     "path": "/manager-packet/",

@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
+import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import {
   validateDiscoveryDist,
   validateDiscoveryNotInSitemap,
@@ -20,8 +21,13 @@ import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff
 import { validateLegacyModernizationEvidenceMap } from "./legacy-modernization-evidence-map.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
+import { validateManagerDemoScriptDist } from "./manager-demo-script.mjs";
 import { validateManagerFaqDist } from "./manager-faq.mjs";
+import { validateProofPathFaqDist } from "./proof-path-faq.mjs";
+import { validateProofPathTourDist } from "./proof-path-tour.mjs";
 import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
+import { validateReviewerQuickstartDist } from "./reviewer-quickstart.mjs";
+import { validateReviewPacketAssemblyDist } from "./review-packet-assembly.mjs";
 import { validateReviewClaimChecklistDist } from "./review-claim-checklist.mjs";
 import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
@@ -86,11 +92,17 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateChangeReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateGlossaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateBlogProofPathSeriesDist({ baseUrl: normalizedBaseUrl, dist, errors, root: resolve(root, "src") });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateManagerDemoScriptDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateProofPathFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateProofPathTourDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReviewerQuickstartDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReviewPacketAssemblyDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewClaimChecklistDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateRoadmapClaimLedgerDist({ baseUrl: normalizedBaseUrl, dist, errors });

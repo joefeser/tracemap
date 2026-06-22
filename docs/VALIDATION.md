@@ -109,10 +109,11 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
-Focused validation should cover DBML, EDMX, typed DataSet/TableAdapter, config
-provider metadata, generated-code linkage, legacy data model identity keys,
-unrelated XSD gating, malformed XML, DTD/entity rejection, deterministic fact
-IDs, report redaction, and SQLite property redaction. Any local legacy smoke
+Focused validation should cover DBML, EDMX, typed DataSet/TableAdapter,
+NHibernate `.hbm.xml`, config provider metadata, generated-code linkage, legacy
+data model identity keys, unrelated XSD gating, malformed XML, DTD/entity
+rejection, deterministic fact IDs, report redaction, and SQLite property
+redaction. Any local legacy smoke
 must stay ignored/local-only and use neutral labels/counts only; do not commit
 raw facts, SQLite indexes, analyzer
 logs, raw SQL, connection strings, config values, raw remotes, private sample
@@ -208,7 +209,9 @@ Expected behavior: Angular template fixtures emit `UiTemplateBinding`,
 reports reject single-language indexes, keep input SQLite files read-only, emit
 route-flow/schema gaps where needed, and write deterministic Markdown/JSON
 without source snippets, raw SQL, raw URLs, connection strings, secrets, remotes,
-or local absolute paths.
+or local absolute paths. If `--observed-evidence <path>` is used, the observed
+rows remain demo metadata only, reject unsafe keys/values, and do not change
+static lineage classifications.
 
 For value-origin flow changes, also inspect the source `parameter_forward_edges` table from a semantic .NET sample or focused fixture:
 
@@ -468,7 +471,7 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
-Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, normalized model identity keys, config provider/connection metadata, generated-code links, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite.
+Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, normalized model identity keys, config provider/connection metadata, generated-code links, unsupported old ORM descriptor gaps, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite.
 
 Useful inspection queries:
 

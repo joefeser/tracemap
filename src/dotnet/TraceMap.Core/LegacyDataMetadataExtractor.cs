@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -11,6 +12,8 @@ public static class LegacyDataMetadataExtractor
 {
     private const string ExtractorId = "LegacyDataExtractor";
     private const long MaxGeneratedDesignerBytes = SafeXml.MaxXmlBytes;
+    private const int MaxNHibernatePropertiesPerClass = 500;
+    private const int MaxNHibernateRelationshipsPerClass = 200;
     private static readonly XNamespace Xs = "http://www.w3.org/2001/XMLSchema";
     private static readonly XNamespace MsData = "urn:schemas-microsoft-com:xml-msdata";
     private static readonly XNamespace MsProp = "urn:schemas-microsoft-com:xml-msprop";
@@ -40,9 +43,25 @@ public static class LegacyDataMetadataExtractor
                     break;
                 case "Config":
                     ExtractDataConfig(repoPath, manifest, item, facts);
+                    DetectUnsupportedOrmConfig(repoPath, manifest, item, facts);
                     break;
                 case "CSharp" when IsDesigner(item.RelativePath):
                     AddGeneratedDesignerInventory(manifest, item, facts);
+                    break;
+                case "CSharp":
+                case "WebFormsCodeBehind":
+                case "WinFormsDesigner":
+                    DetectUnsupportedOrmCSharp(repoPath, manifest, item, facts);
+                    break;
+                case "LegacyOrmMetadata":
+                    if (IsNHibernateHbmPath(item.RelativePath))
+                    {
+                        ExtractNHibernateMapping(repoPath, manifest, item, facts);
+                    }
+                    else
+                    {
+                        DetectUnsupportedOrmMetadata(repoPath, manifest, item, facts);
+                    }
                     break;
             }
         }
@@ -57,6 +76,263 @@ public static class LegacyDataMetadataExtractor
             .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static void DetectUnsupportedOrmMetadata(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
+    {
+        var family = UnsupportedOrmFamilyFromPath(item.RelativePath);
+        var fullPath = Path.Combine(repoPath, item.RelativePath);
+        try
+        {
+            var document = SafeXml.LoadDocument(fullPath);
+            family ??= UnsupportedOrmFamilyFromDocument(document);
+            if (family is null)
+            {
+                return;
+            }
+
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family, "metadata-file", "UnsupportedLegacyOrmDescriptor", "Recognized unsupported legacy ORM metadata descriptor; no entity, table, column, or relationship facts were inferred.", document.Root);
+        }
+        catch (SafeXmlException ex)
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family ?? "UnknownLegacyOrm", "metadata-file", Classification(ex), "Unsupported legacy ORM descriptor could not be parsed safely.", null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family ?? "UnknownLegacyOrm", "metadata-file", "MalformedLegacyDataMetadata", $"Unsupported legacy ORM descriptor could not be read: {ex.GetType().Name}.", null);
+        }
+    }
+
+    private static void DetectUnsupportedOrmConfig(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
+    {
+        var fullPath = Path.Combine(repoPath, item.RelativePath);
+        XDocument document;
+        try
+        {
+            document = SafeXml.LoadDocument(fullPath);
+        }
+        catch (Exception ex) when (ex is SafeXmlException or IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        foreach (var family in UnsupportedOrmFamiliesFromConfig(document).Order(StringComparer.Ordinal))
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family, "config", "UnsupportedLegacyOrmDescriptor", "Recognized unsupported legacy ORM config descriptor; no entity, table, column, or relationship facts were inferred.", document.Root);
+        }
+    }
+
+    private static void DetectUnsupportedOrmCSharp(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
+    {
+        var fullPath = Path.Combine(repoPath, item.RelativePath);
+        string source;
+        try
+        {
+            source = File.ReadAllText(fullPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var root = CSharpSyntaxTree.ParseText(source).GetRoot();
+        var families = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        AddCSharpFamilyIfPresent(root, "Castle ActiveRecord", new[] { "ActiveRecord" }, families);
+        AddCSharpFamilyIfPresent(root, "SubSonic", new[] { "SubSonic" }, families);
+        AddCSharpFamilyIfPresent(root, "LLBLGen", new[] { "LLBLGen" }, families);
+        AddCSharpFamilyIfPresent(root, "iBATIS.NET", new[] { "IBatisNet", "IBatis" }, families);
+        AddCSharpFamilyIfPresent(root, "MyBatis.NET", new[] { "MyBatis" }, families);
+
+        foreach (var (family, line) in families)
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, family, "csharp", "UnsupportedLegacyOrmDescriptor", "Recognized unsupported legacy ORM code descriptor; no entity, table, column, or relationship facts were inferred.", null, line);
+        }
+    }
+
+    private static void ExtractNHibernateMapping(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
+    {
+        var fullPath = Path.Combine(repoPath, item.RelativePath);
+        XDocument document;
+        string metadataHash;
+        try
+        {
+            metadataHash = HashMetadataDocument(fullPath);
+            document = SafeXml.LoadDocument(fullPath);
+        }
+        catch (SafeXmlException ex)
+        {
+            AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataOrmNHibernate, Classification(ex), "NHibernate mapping XML could not be parsed safely.", null);
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataOrmNHibernate, "MalformedLegacyDataMetadata", $"NHibernate mapping XML could not be read: {ex.GetType().Name}.", null);
+            return;
+        }
+
+        if (!LooksLikeNHibernateMapping(document))
+        {
+            AddUnsupportedOrmGap(manifest, facts, item.RelativePath, "UnknownLegacyOrm", "hbm-xml", "UnsupportedLegacyOrmDescriptor", "XML file used an .hbm.xml name but did not contain a supported NHibernate mapping root.", document.Root);
+            return;
+        }
+
+        var metadataFact = AddMetadataInventoryFact(manifest, facts, item.RelativePath, "NHibernateHbm", metadataHash, RuleIds.LegacyDataOrmNHibernate, document.Root);
+        AddNHibernateUnsupportedShapeGaps(manifest, facts, item.RelativePath, document);
+
+        foreach (var classElement in document.Descendants().Where(element => element.Name.LocalName == "class").OrderBy(GetLine).ThenBy(element => AttributeValue(element, "name"), StringComparer.Ordinal))
+        {
+            AddNHibernateClassFacts(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, classElement);
+        }
+    }
+
+    private static void AddNHibernateClassFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string relativePath,
+        string metadataHash,
+        string sourceMetadataFactId,
+        XElement classElement)
+    {
+        var className = AttributeValue(classElement, "name") ?? AttributeValue(classElement, "entity-name") ?? "mapped-class";
+        var tableName = AttributeValue(classElement, "table");
+        var schemaName = AttributeValue(classElement, "schema");
+        var catalogName = AttributeValue(classElement, "catalog");
+
+        var entityProps = MetadataProperties("NHibernateHbm", metadataHash, "orm-class");
+        AddSafeName(entityProps, "entityName", "entityHash", className);
+        AddSafeName(entityProps, "typeName", "typeHash", className);
+        AddSafeName(entityProps, "tableName", "tableHash", tableName);
+        AddHashOnly(entityProps, "schemaHash", schemaName);
+        AddHashOnly(entityProps, "catalogHash", catalogName);
+        AddModelIdentity(entityProps, "NHibernateHbm", "entity", "orm-mapped", relativePath, "nhibernate-class", className, tableName, sourceMetadataFactId, Parts(("class", className), ("table", tableName)));
+        facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, classElement, TargetFrom(entityProps, "typeName", "typeHash"), entityProps));
+
+        if (!string.IsNullOrWhiteSpace(tableName))
+        {
+            var storageProps = MetadataProperties("NHibernateHbm", metadataHash, "orm-table");
+            storageProps["storageObjectKind"] = "Table";
+            AddSafeName(storageProps, "storageObjectName", "storageObjectHash", tableName);
+            AddSafeName(storageProps, "entityName", "entityHash", className);
+            AddHashOnly(storageProps, "schemaHash", schemaName);
+            AddHashOnly(storageProps, "catalogHash", catalogName);
+            AddModelIdentity(storageProps, "NHibernateHbm", "storage-object", "storage", relativePath, "nhibernate-table", tableName, className, sourceMetadataFactId, Parts(("class", className), ("table", tableName)));
+            facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataStorageObjectDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, classElement, TargetFrom(storageProps, "storageObjectName", "storageObjectHash"), storageProps));
+
+            var mappingProps = MetadataProperties("NHibernateHbm", metadataHash, "orm-class-table");
+            mappingProps["mappingKind"] = "orm-class";
+            AddSafeName(mappingProps, "entityName", "entityHash", className);
+            AddSafeName(mappingProps, "tableName", "tableHash", tableName);
+            AddModelIdentity(mappingProps, "NHibernateHbm", "entity", "mapping", relativePath, "nhibernate-class-table", className, tableName, sourceMetadataFactId, Parts(("class", className), ("table", tableName)));
+            facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, classElement, TargetFrom(mappingProps, "entityName", "entityHash"), mappingProps));
+        }
+
+        var propertyLikeElements = classElement.Elements()
+            .Where(IsNHibernateColumnLikeElement)
+            .OrderBy(GetLine)
+            .ThenBy(element => AttributeValue(element, "name"), StringComparer.Ordinal)
+            .ToArray();
+        foreach (var property in propertyLikeElements.Take(MaxNHibernatePropertiesPerClass))
+        {
+            AddNHibernateColumnFacts(manifest, facts, relativePath, metadataHash, sourceMetadataFactId, className, tableName, property);
+        }
+
+        if (propertyLikeElements.Length > MaxNHibernatePropertiesPerClass)
+        {
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, "LegacyDataMetadataTooLarge", "NHibernate class exceeded the per-class property descriptor cap; skipped descriptors were not inferred.", propertyLikeElements[MaxNHibernatePropertiesPerClass]);
+        }
+
+        var relationshipElements = classElement.Elements()
+            .Where(IsNHibernateRelationshipElement)
+            .OrderBy(GetLine)
+            .ThenBy(element => AttributeValue(element, "name"), StringComparer.Ordinal)
+            .ToArray();
+        foreach (var relationship in relationshipElements.Take(MaxNHibernateRelationshipsPerClass))
+        {
+            AddNHibernateRelationshipFact(manifest, facts, relativePath, metadataHash, sourceMetadataFactId, className, relationship);
+        }
+
+        if (relationshipElements.Length > MaxNHibernateRelationshipsPerClass)
+        {
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, "LegacyDataMetadataTooLarge", "NHibernate class exceeded the per-class relationship descriptor cap; skipped descriptors were not inferred.", relationshipElements[MaxNHibernateRelationshipsPerClass]);
+        }
+    }
+
+    private static void AddNHibernateColumnFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string relativePath,
+        string metadataHash,
+        string sourceMetadataFactId,
+        string className,
+        string? tableName,
+        XElement property)
+    {
+        var propertyName = AttributeValue(property, "name") ?? property.Name.LocalName;
+        if (IsNHibernateFormulaOnlyProperty(property))
+        {
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, "UnsupportedLegacyOrmMappingShape", "NHibernate formula-only property did not provide static column evidence; no column descriptor was inferred.", property);
+            return;
+        }
+
+        var columnName = AttributeValue(property, "column")
+            ?? AttributeValue(property.Elements().FirstOrDefault(element => element.Name.LocalName == "column"), "name")
+            ?? propertyName;
+        var descriptorKind = $"orm-{NormalizeToken(property.Name.LocalName, "property")}";
+        var columnProps = MetadataProperties("NHibernateHbm", metadataHash, descriptorKind);
+        AddSafeName(columnProps, "entityName", "entityHash", className);
+        AddSafeName(columnProps, "propertyName", "propertyHash", propertyName);
+        AddSafeName(columnProps, "columnName", "columnHash", columnName);
+        AddSafeName(columnProps, "tableName", "tableHash", tableName);
+        AddOptional(columnProps, "isNullable", NHibernateNullable(property));
+        AddOptional(columnProps, "descriptorSource", property.Name.LocalName);
+        AddModelIdentity(columnProps, "NHibernateHbm", "column", "orm-mapped", relativePath, "nhibernate-property-column", propertyName, tableName ?? className, sourceMetadataFactId, Parts(("class", className), ("property", propertyName), ("column", columnName), ("descriptor", property.Name.LocalName)));
+        facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, property, TargetFrom(columnProps, "propertyName", "propertyHash"), columnProps));
+
+        var mappingProps = MetadataProperties("NHibernateHbm", metadataHash, "orm-property-column");
+        mappingProps["mappingKind"] = "property-column";
+        AddSafeName(mappingProps, "entityName", "entityHash", className);
+        AddSafeName(mappingProps, "propertyName", "propertyHash", propertyName);
+        AddSafeName(mappingProps, "columnName", "columnHash", columnName);
+        AddSafeName(mappingProps, "tableName", "tableHash", tableName);
+        AddOptional(mappingProps, "descriptorSource", property.Name.LocalName);
+        AddModelIdentity(mappingProps, "NHibernateHbm", "column", "mapping", relativePath, "nhibernate-property-column-mapping", propertyName, tableName ?? className, sourceMetadataFactId, Parts(("class", className), ("property", propertyName), ("column", columnName), ("descriptor", property.Name.LocalName)));
+        facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, property, TargetFrom(mappingProps, "propertyName", "propertyHash"), mappingProps));
+    }
+
+    private static void AddNHibernateRelationshipFact(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string relativePath,
+        string metadataHash,
+        string sourceMetadataFactId,
+        string className,
+        XElement relationship)
+    {
+        var relationshipName = AttributeValue(relationship, "name") ?? relationship.Name.LocalName;
+        var targetClass = AttributeValue(relationship, "class")
+            ?? AttributeValue(relationship.Elements().FirstOrDefault(element => element.Name.LocalName is "one-to-many" or "many-to-many"), "class");
+        var coverageLabel = string.IsNullOrWhiteSpace(targetClass) ? "reduced" : "full";
+        var limitations = string.IsNullOrWhiteSpace(targetClass)
+            ? new[] { "missing-target-endpoint" }
+            : Array.Empty<string>();
+
+        var properties = MetadataProperties("NHibernateHbm", metadataHash, $"orm-{NormalizeToken(relationship.Name.LocalName, "relationship")}");
+        properties["mappingKind"] = NormalizeToken(relationship.Name.LocalName, "relationship");
+        AddSafeName(properties, "associationName", "associationHash", relationshipName);
+        AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", className);
+        AddSafeName(properties, "targetEndpointName", "targetEndpointHash", targetClass);
+        AddSafeName(properties, "columnName", "columnHash", AttributeValue(relationship, "column") ?? NHibernateKeyColumn(relationship));
+        AddRelationshipSemantics(properties, sourceMetadataFactId, coverageLabel == "full" ? "full" : "unidirectional", limitations);
+        AddModelIdentity(properties, "NHibernateHbm", "relationship", "mapping", relativePath, "nhibernate-relationship", relationshipName, className, sourceMetadataFactId, Parts(("class", className), ("relationship", relationshipName), ("target-class", targetClass), ("descriptor", relationship.Name.LocalName)), coverageLabel);
+        facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, relationship, TargetFrom(properties, "associationName", "associationHash"), properties));
+    }
+
+    private static void AddNHibernateUnsupportedShapeGaps(ScanManifest manifest, List<CodeFact> facts, string relativePath, XDocument document)
+    {
+        foreach (var unsupported in document.Descendants().Where(IsUnsupportedNHibernateShape).OrderBy(GetLine))
+        {
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, NHibernateUnsupportedClassification(unsupported), $"Unsupported NHibernate mapping shape: {unsupported.Name.LocalName}.", unsupported);
+        }
     }
 
     private static void ExtractDbml(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
@@ -986,6 +1262,38 @@ public static class LegacyDataMetadataExtractor
             }));
     }
 
+    private static void AddUnsupportedOrmGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string relativePath,
+        string descriptorFamily,
+        string descriptorSignal,
+        string classification,
+        string message,
+        XObject? node,
+        int? explicitLine = null)
+    {
+        var family = NormalizeUnsupportedOrmFamily(descriptorFamily);
+        var signal = NormalizeToken(descriptorSignal, "descriptor");
+        var line = explicitLine ?? (node is null ? 1 : GetLine(node));
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyDataOrmUnsupported,
+            EvidenceTiers.Tier4Unknown,
+            Evidence(relativePath, line, $"{relativePath}:{line}:{family}:{signal}:{classification}"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = classification,
+                ["coverage"] = "reduced",
+                ["descriptorFamily"] = family,
+                ["descriptorSignal"] = signal,
+                ["message"] = message,
+                ["runtimeProof"] = "False",
+                ["unsupportedLegacyOrmDescriptor"] = "True"
+            }));
+    }
+
     private static CodeFact CreateLegacyFact(
         ScanManifest manifest,
         string factType,
@@ -1190,6 +1498,282 @@ public static class LegacyDataMetadataExtractor
     private static string? FirstPresent(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static string? UnsupportedOrmFamilyFromPath(string relativePath)
+    {
+        var lower = relativePath.ToLowerInvariant();
+        if (IsNHibernateHbmPath(relativePath))
+        {
+            return "NHibernate";
+        }
+
+        if (lower.Contains("llblgen", StringComparison.Ordinal)
+            || lower.EndsWith(".llblgenproj", StringComparison.Ordinal)
+            || lower.EndsWith(".lgp", StringComparison.Ordinal)
+            || lower.EndsWith(".lgpx", StringComparison.Ordinal))
+        {
+            return "LLBLGen";
+        }
+
+        if (lower.Contains("subsonic", StringComparison.Ordinal))
+        {
+            return "SubSonic";
+        }
+
+        if (lower.Contains("activerecord", StringComparison.Ordinal))
+        {
+            return "Castle ActiveRecord";
+        }
+
+        if (lower.Contains("mybatis", StringComparison.Ordinal))
+        {
+            return "MyBatis.NET";
+        }
+
+        if (lower.Contains("ibatis", StringComparison.Ordinal)
+            || lower.Contains("sqlmap", StringComparison.Ordinal)
+            || lower.EndsWith(".sqlmap", StringComparison.Ordinal))
+        {
+            return "iBATIS.NET";
+        }
+
+        return null;
+    }
+
+    private static bool IsNHibernateHbmPath(string relativePath)
+    {
+        return relativePath.EndsWith(".hbm.xml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeNHibernateMapping(XDocument document)
+    {
+        return document.Root?.Name.LocalName.Equals("hibernate-mapping", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool IsNHibernateColumnLikeElement(XElement element)
+    {
+        return element.Name.LocalName is "id" or "version" or "timestamp" or "property";
+    }
+
+    private static bool IsNHibernateRelationshipElement(XElement element)
+    {
+        return element.Name.LocalName is "many-to-one" or "one-to-one" or "set" or "list" or "bag" or "map";
+    }
+
+    private static bool IsUnsupportedNHibernateShape(XElement element)
+    {
+        return element.Name.LocalName is "subclass"
+            or "joined-subclass"
+            or "union-subclass"
+            or "composite-id"
+            or "component"
+            or "dynamic-component"
+            or "filter"
+            or "filter-def"
+            or "query"
+            or "sql-query"
+            or "loader"
+            or "sql-insert"
+            or "sql-update"
+            or "sql-delete"
+            or "formula";
+    }
+
+    private static bool IsNHibernateFormulaOnlyProperty(XElement property)
+    {
+        return property.Name.LocalName == "property"
+            && (property.Attribute("formula") is not null || property.Elements().Any(element => element.Name.LocalName == "formula"))
+            && AttributeValue(property, "column") is null
+            && property.Elements().All(element => element.Name.LocalName != "column" || AttributeValue(element, "name") is null);
+    }
+
+    private static string? NHibernateNullable(XElement property)
+    {
+        var notNull = AttributeValue(property, "not-null");
+        if (!bool.TryParse(notNull, out var parsed))
+        {
+            return null;
+        }
+
+        return parsed ? "False" : "True";
+    }
+
+    private static string? NHibernateKeyColumn(XElement relationship)
+    {
+        var key = relationship.Elements().FirstOrDefault(element => element.Name.LocalName == "key");
+        return AttributeValue(key, "column")
+            ?? AttributeValue(key?.Elements().FirstOrDefault(element => element.Name.LocalName == "column"), "name");
+    }
+
+    private static string NHibernateUnsupportedClassification(XElement element)
+    {
+        return element.Name.LocalName is "query" or "sql-query"
+            ? "UnsupportedLegacyOrmQueryMetadata"
+            : "UnsupportedLegacyOrmMappingShape";
+    }
+
+    private static string? UnsupportedOrmFamilyFromDocument(XDocument document)
+    {
+        var rootName = document.Root?.Name.LocalName ?? string.Empty;
+        var rootNamespace = document.Root?.Name.NamespaceName ?? string.Empty;
+        var text = $"{rootName} {rootNamespace}".ToLowerInvariant();
+
+        if (text.Contains("llblgen", StringComparison.Ordinal))
+        {
+            return "LLBLGen";
+        }
+
+        if (text.Contains("subsonic", StringComparison.Ordinal))
+        {
+            return "SubSonic";
+        }
+
+        if (text.Contains("activerecord", StringComparison.Ordinal))
+        {
+            return "Castle ActiveRecord";
+        }
+
+        if (text.Contains("mybatis", StringComparison.Ordinal))
+        {
+            return "MyBatis.NET";
+        }
+
+        if (text.Contains("ibatis", StringComparison.Ordinal) || text.Contains("sqlmap", StringComparison.Ordinal))
+        {
+            return "iBATIS.NET";
+        }
+
+        return null;
+    }
+
+    private static IReadOnlySet<string> UnsupportedOrmFamiliesFromConfig(XDocument document)
+    {
+        var families = new HashSet<string>(StringComparer.Ordinal);
+        var elements = document.Root is null
+            ? Enumerable.Empty<XElement>()
+            : document.Root.DescendantsAndSelf();
+        foreach (var value in elements
+            .SelectMany(element => element.Attributes().Select(attribute => attribute.Name.LocalName + " " + attribute.Value).Append(element.Name.LocalName)))
+        {
+            var normalized = value.ToLowerInvariant();
+            if (normalized.Contains("llblgen", StringComparison.Ordinal))
+            {
+                families.Add("LLBLGen");
+            }
+
+            if (normalized.Contains("subsonic", StringComparison.Ordinal))
+            {
+                families.Add("SubSonic");
+            }
+
+            if (normalized.Contains("activerecord", StringComparison.Ordinal))
+            {
+                families.Add("Castle ActiveRecord");
+            }
+
+            if (normalized.Contains("mybatis", StringComparison.Ordinal))
+            {
+                families.Add("MyBatis.NET");
+            }
+
+            if (normalized.Contains("ibatis", StringComparison.Ordinal) || normalized.Contains("sqlmap", StringComparison.Ordinal))
+            {
+                families.Add("iBATIS.NET");
+            }
+        }
+
+        return families;
+    }
+
+    private static void AddCSharpFamilyIfPresent(SyntaxNode root, string family, IReadOnlyCollection<string> tokens, IDictionary<string, int> families)
+    {
+        if (families.ContainsKey(family))
+        {
+            return;
+        }
+
+        foreach (var node in root.DescendantNodes())
+        {
+            if (!IsUnsupportedOrmSyntaxEvidence(node, tokens))
+            {
+                continue;
+            }
+
+            families[family] = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            return;
+        }
+    }
+
+    private static bool IsUnsupportedOrmSyntaxEvidence(SyntaxNode node, IReadOnlyCollection<string> tokens)
+    {
+        return node switch
+        {
+            UsingDirectiveSyntax usingDirective => MentionsUnsupportedOrmToken(usingDirective.Name?.ToString(), tokens),
+            AttributeSyntax attribute => MentionsUnsupportedOrmToken(attribute.Name.ToString(), tokens),
+            ObjectCreationExpressionSyntax objectCreation => MentionsUnsupportedOrmToken(objectCreation.Type.ToString(), tokens),
+            IdentifierNameSyntax identifier => MentionsUnsupportedOrmToken(identifier.Identifier.ValueText, tokens),
+            GenericNameSyntax generic => MentionsUnsupportedOrmToken(generic.Identifier.ValueText, tokens),
+            QualifiedNameSyntax qualified => MentionsUnsupportedOrmToken(qualified.ToString(), tokens),
+            MemberAccessExpressionSyntax memberAccess => MentionsUnsupportedOrmToken(memberAccess.ToString(), tokens),
+            _ => false
+        };
+    }
+
+    private static bool MentionsUnsupportedOrmToken(string? value, IReadOnlyCollection<string> tokens)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var segment in Regex.Split(value, @"[^A-Za-z0-9_]+").Where(segment => segment.Length > 0))
+        {
+            var normalized = segment.EndsWith("Attribute", StringComparison.OrdinalIgnoreCase)
+                ? segment[..^"Attribute".Length]
+                : segment;
+            if (tokens.Any(token => string.Equals(normalized, token, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string NormalizeUnsupportedOrmFamily(string family)
+    {
+        return family switch
+        {
+            "LLBLGen" => "LLBLGen",
+            "SubSonic" => "SubSonic",
+            "Castle ActiveRecord" => "Castle ActiveRecord",
+            "MyBatis.NET" => "MyBatis.NET",
+            "iBATIS.NET" => "iBATIS.NET",
+            _ => "UnknownLegacyOrm"
+        };
+    }
+
+    private static string NormalizeToken(string value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value.Trim())
+        {
+            builder.Append(char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '-');
+        }
+
+        var normalized = builder.ToString().Trim('-');
+        while (normalized.Contains("--", StringComparison.Ordinal))
+        {
+            normalized = normalized.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        return normalized.Length == 0 ? fallback : normalized;
     }
 
     private static string? AttributeValue(XElement? element, string name)

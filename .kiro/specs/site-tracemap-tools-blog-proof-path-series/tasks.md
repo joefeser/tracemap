@@ -27,70 +27,70 @@ Public claim level: concept
 
 ## Future Implementation Tasks
 
-- [ ] Confirm this spec is `ready-for-implementation` before writing site
+- [x] Confirm this spec is `ready-for-implementation` before writing site
   content.
-- [ ] Choose final article count and record the rationale in
+- [x] Choose final article count and record the rationale in
   `implementation-state.md`.
-- [ ] Choose final article slugs and confirm they do not collide with
+- [x] Choose final article slugs and confirm they do not collide with
   `why-tracemap-exists`, `what-tracemap-solves-for-engineering-teams`, or
   `building-tracemap-with-codex-kiro-qodo`.
-- [ ] Record rejected article ideas and why they were rejected or deferred.
-- [ ] Decide whether each article is `concept` or, only with proof-path backing,
+- [x] Record rejected article ideas and why they were rejected or deferred.
+- [x] Decide whether each article is `concept` or, only with proof-path backing,
   `demo`; default to `concept`.
-- [ ] Choose the claim-level mechanism: visible article-body claim-level text,
+- [x] Choose the claim-level mechanism: visible article-body claim-level text,
   or a `publicClaimLevel` blog metadata/rendering/validation extension; record
   the decision in `implementation-state.md`.
-- [ ] Add article source content using existing blog patterns.
-- [ ] Include `Public claim level: concept` in each article unless a
+- [x] Add article source content using existing blog patterns.
+- [x] Include `Public claim level: concept` in each article unless a
   demo-backed exception is recorded.
-- [ ] Include opening problem blocks.
-- [ ] Include evidence-backed claim examples.
-- [ ] Include proof-path reading steps.
-- [ ] Include limitations and non-claims.
-- [ ] Include safe language examples.
-- [ ] Include unsafe language examples that are clearly framed as wording to
+- [x] Include opening problem blocks.
+- [x] Include evidence-backed claim examples.
+- [x] Include proof-path reading steps.
+- [x] Include limitations and non-claims.
+- [x] Include safe language examples.
+- [x] Include unsafe language examples that are clearly framed as wording to
   avoid.
-- [ ] Include links to proof surfaces.
-- [ ] Include closing handoff/action sections.
-- [ ] Verify `/proof-paths/`, `/proof-source-catalog/`, `/evidence/`,
+- [x] Include links to proof surfaces.
+- [x] Include closing handoff/action sections.
+- [x] Verify `/proof-paths/`, `/proof-source-catalog/`, `/evidence/`,
   `/packets/`, `/review-claim-checklist/`, `/static-vs-runtime/`,
   `/limitations/`, `/validation/`, `/demo/result/`, and `/questions/`.
-- [ ] Link to relevant required proof surfaces from each article; cover the
+- [x] Link to relevant required proof surfaces from each article; cover the
   full required link set across the article set, or record per-article
   substitutions and series-level deferrals. For a single-article
   implementation, link only relevant routes and record remaining required
   routes as justified deferrals in `implementation-state.md`.
-- [ ] Keep copy plainspoken and professional.
-- [ ] Avoid blame toward consultants, vendors, teams, maintainers, or prior
+- [x] Keep copy plainspoken and professional.
+- [x] Avoid blame toward consultants, vendors, teams, maintainers, or prior
   technical choices.
-- [ ] Avoid internal workplace details, private project/customer/service names,
+- [x] Avoid internal workplace details, private project/customer/service names,
   raw command output, local paths, raw remotes, and generated scan dirs.
-- [ ] Avoid runtime behavior proof, production traffic, endpoint performance,
+- [x] Avoid runtime behavior proof, production traffic, endpoint performance,
   outage cause, release safety, operational safety, complete coverage, AI/LLM
   impact analysis, embeddings, vector databases, and prompt classification
   claims.
-- [ ] Avoid publishing raw facts, raw SQLite content, analyzer logs, source
+- [x] Avoid publishing raw facts, raw SQLite content, analyzer logs, source
   snippets, SQL, config values, secrets, private names, hidden validation
   details, or local-only artifact paths.
-- [ ] Register articles in the blog metadata source with unique slugs,
+- [x] Register articles in the blog metadata source with unique slugs,
   conservative titles, descriptions, dates, canonical URLs, and body paths.
-- [ ] Confirm each new article appears in generated `sitemap.xml`; blog slugs
+- [x] Confirm each new article appears in generated `sitemap.xml`; blog slugs
   are currently auto-emitted by `generateSitemap`, so no manual sitemap entry
   is required unless build behavior changes.
-- [ ] Add discovery, `llms.txt`, or `llms-full.txt` metadata when comparable
+- [x] Add discovery, `llms.txt`, or `llms-full.txt` metadata when comparable
   blog articles are indexed there.
-- [ ] Add focused validation for required content blocks, required links,
+- [x] Add focused validation for required content blocks, required links,
   metadata, blog registration, sitemap/discovery output, forbidden claims,
   private/raw material, and word count bounds.
-- [ ] Follow the existing `site/scripts/` per-route validation-module pattern
+- [x] Follow the existing `site/scripts/` per-route validation-module pattern
   with a dedicated validation module and matching `*.test.mjs` file for article
   content and claim-boundary checks.
-- [ ] Run `git diff --check`.
-- [ ] Run `./scripts/check-private-paths.sh`.
-- [ ] Run `npm test` from `site/`.
-- [ ] Run `npm run validate` from `site/`.
-- [ ] Run `npm run build` from `site/`.
-- [ ] Run desktop and mobile browser sanity checks for each article and the
+- [x] Run `git diff --check`.
+- [x] Run `./scripts/check-private-paths.sh`.
+- [x] Run `npm test` from `site/`.
+- [x] Run `npm run validate` from `site/`.
+- [x] Run `npm run build` from `site/`.
+- [x] Run desktop and mobile browser sanity checks for each article and the
   blog index when layout or discovery changes are made.
-- [ ] Update `implementation-state.md` with final scope decisions, validation,
+- [x] Update `implementation-state.md` with final scope decisions, validation,
   oddities, review-loop outcomes, and follow-up items.

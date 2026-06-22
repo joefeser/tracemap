@@ -80,6 +80,153 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_traverse_static_interface_dispatch_candidates_as_needs_review()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "paths");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            CallFact(server, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                outDir,
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewPath, path.Classification);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "calls"
+            && edge.FilePath == "Controllers/OrdersController.cs"
+            && edge.StartLine == 14);
+        var candidate = Assert.Single(path.Edges, edge => edge.EdgeKind == "interface-candidate");
+        Assert.Equal("combined.dispatch-candidate.v1", candidate.RuleId);
+        Assert.Equal(EvidenceTiers.Tier1Semantic, candidate.EvidenceTier);
+        Assert.NotEmpty(candidate.SupportingCombinedEdgeIds);
+        Assert.Contains(path.Notes, note => note.Code == "StaticDispatchCandidate");
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit"
+            && gap.Reason == "cycle"
+            && (gap.NodeId == candidate.FromNodeId || gap.NodeId == candidate.ToNodeId));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.md"));
+        Assert.Contains("interface-candidate", markdown);
+        Assert.Contains("StaticDispatchCandidate", markdown);
+        Assert.DoesNotContain("runtime target", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Paths_cap_static_interface_dispatch_candidate_fanout_with_gap()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.StatusController.Get(System.Int32)";
+        var service = "Server.IStatusService.Status(System.Int32)";
+        var repository = "Server.StatusRepository.Query(System.Int32)";
+        var facts = new List<CodeFact>
+        {
+            RouteFact(server, "GET", "/api/status", "/api/status", controller, "Controllers/StatusController.cs", 10),
+            CallFact(server, controller, service, "Controllers/StatusController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/StatusRepository.cs", 31)
+        };
+        for (var index = 0; index < 11; index++)
+        {
+            var implementation = $"Server.StatusService{index}.Status(System.Int32)";
+            facts.Add(SymbolRelationshipFact(server, implementation, service, $"Services/StatusService{index}.cs", 18 + index));
+            facts.Add(CallFact(server, implementation, repository, $"Services/StatusService{index}.cs", 40 + index));
+        }
+
+        SqliteIndexWriter.Write(serverIndex, server, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/status",
+                FromSource: "server",
+                ToSurface: "sql-query"));
+
+        Assert.Equal(10, result.Report.Paths.Count);
+        Assert.All(result.Report.Paths, path =>
+        {
+            Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewPath, path.Classification);
+            Assert.Contains(path.Edges, edge => edge.EdgeKind == "interface-candidate");
+        });
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
+        Assert.Equal("combined.dispatch-gap.v1", gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("Services/StatusService10.cs", gap.FilePath);
+        Assert.Equal(28, gap.StartLine);
+        Assert.Equal(28, gap.EndLine);
+        Assert.Equal(server.CommitSha, gap.CommitSha);
+        Assert.Equal(server.ScannerVersion, gap.ExtractorVersion);
+        Assert.Equal("combined-symbol-relationships", gap.EvidenceScope);
+    }
+
+    [Fact]
+    public async Task Paths_do_not_fan_out_from_concrete_implementation_through_interface_relationship()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementationA = "Server.OrderServiceA.Get(System.Int32)";
+        var implementationB = "Server.OrderServiceB.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            SymbolRelationshipFact(server, implementationA, service, "Services/OrderServiceA.cs", 18),
+            SymbolRelationshipFact(server, implementationB, service, "Services/OrderServiceB.cs", 28),
+            CallFact(server, implementationB, repository, "Services/OrderServiceB.cs", 31),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 40)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromSymbol: implementationA,
+                ToSurface: "sql-query"));
+
+        Assert.DoesNotContain(result.Report.Paths, path => path.Edges.Any(edge => edge.EdgeKind == "interface-candidate"));
+        Assert.DoesNotContain(result.Report.Paths, path => path.Nodes.Any(node => node.DisplayName == implementationB));
+    }
+
+    [Fact]
+    public void Paths_dispatch_candidate_rule_ids_are_documented()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        foreach (var ruleId in new[] { "combined.dispatch-candidate.v1", "combined.dispatch-gap.v1" })
+        {
+            var start = catalog.IndexOf($"- id: {ruleId}", StringComparison.Ordinal);
+            Assert.True(start >= 0, $"Missing rule catalog entry for {ruleId}.");
+            var block = catalog[start..Math.Min(catalog.Length, start + 900)];
+            Assert.Contains("limitations:", block);
+            Assert.Contains("evidenceTier:", block);
+        }
+    }
+
+    [Fact]
     public async Task Paths_build_report_does_not_write_outputs()
     {
         using var temp = new TempDirectory();
@@ -848,6 +995,33 @@ public sealed class CombinedDependencyPathTests
             });
     }
 
+    private static CodeFact SymbolRelationshipFact(
+        ScanManifest manifest,
+        string implementationMethodSymbol,
+        string interfaceMethodSymbol,
+        string file,
+        int line,
+        string evidenceTier = EvidenceTiers.Tier1Semantic)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            evidenceTier,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: implementationMethodSymbol,
+            targetSymbol: interfaceMethodSymbol,
+            contractElement: "ImplementsInterfaceMember",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["relationshipKind"] = "ImplementsInterfaceMember",
+                ["sourceSymbolDisplayName"] = implementationMethodSymbol,
+                ["sourceSymbolId"] = implementationMethodSymbol,
+                ["targetSymbolDisplayName"] = interfaceMethodSymbol,
+                ["targetSymbolId"] = interfaceMethodSymbol
+            });
+    }
+
     private static CodeFact ArgumentPassedFact(
         ScanManifest manifest,
         string caller,
@@ -1009,5 +1183,21 @@ public sealed class CombinedDependencyPathTests
     {
         await using var stream = File.OpenRead(path);
         return Convert.ToHexString(await SHA256.HashDataAsync(stream));
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not find repository root.");
     }
 }

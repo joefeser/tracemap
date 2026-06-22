@@ -26,6 +26,10 @@ public static class FileInventory
         ".svc",
         ".asmx",
         ".svcmap",
+        ".llblgenproj",
+        ".lgp",
+        ".lgpx",
+        ".sqlmap",
         ".dbml",
         ".edmx",
         ".wsdl",
@@ -147,6 +151,11 @@ public static class FileInventory
             return IsAsmxMetadataPath(root, fullPath, webReferenceFolders);
         }
 
+        if (IsLegacyOrmMetadataPath(root, fullPath))
+        {
+            return true;
+        }
+
         return IncludedFileNames.Contains(fileName) || IncludedExtensions.Contains(extension);
     }
 
@@ -189,6 +198,11 @@ public static class FileInventory
             return "Config";
         }
 
+        if (IsLegacyOrmMetadataPath(root, path))
+        {
+            return "LegacyOrmMetadata";
+        }
+
         return extension.ToLowerInvariant() switch
         {
             ".sln" => "Solution",
@@ -227,6 +241,42 @@ public static class FileInventory
             ".edmx" => "Edmx",
             _ => "File"
         };
+    }
+
+    private static bool IsLegacyOrmMetadataPath(string root, string path)
+    {
+        var relative = NormalizeRelativePath(Path.GetRelativePath(root, path));
+        var fileName = Path.GetFileName(path);
+        var extension = Path.GetExtension(path);
+        var lowerRelative = relative.ToLowerInvariant();
+        var lowerFileName = fileName.ToLowerInvariant();
+        var pathParts = lowerRelative.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        if (extension.Equals(".llblgenproj", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".lgp", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".lgpx", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".sqlmap", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!extension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return lowerFileName.EndsWith(".hbm.xml", StringComparison.Ordinal)
+            || lowerFileName.Contains("sqlmap", StringComparison.Ordinal)
+            || lowerFileName.Contains("llblgen", StringComparison.Ordinal)
+            || lowerFileName.Contains("subsonic", StringComparison.Ordinal)
+            || lowerFileName.Contains("activerecord", StringComparison.Ordinal)
+            || pathParts.Contains("sqlmap", StringComparer.Ordinal)
+            || pathParts.Contains("sqlmaps", StringComparer.Ordinal)
+            || pathParts.Contains("ibatis", StringComparer.Ordinal)
+            || pathParts.Contains("mybatis", StringComparer.Ordinal)
+            || pathParts.Contains("llblgen", StringComparer.Ordinal)
+            || pathParts.Contains("subsonic", StringComparer.Ordinal)
+            || pathParts.Contains("activerecord", StringComparer.Ordinal);
     }
 
     public static bool IsCSharpKind(string kind)

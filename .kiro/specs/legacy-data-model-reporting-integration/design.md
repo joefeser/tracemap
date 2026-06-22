@@ -348,6 +348,28 @@ limitations
 
 Supporting rows should use separate row IDs and a `supportingContext` label so
 users can distinguish nearby descriptor metadata from a terminal static path.
+Supporting rows use a separate `routeFlowSupportingRowId` namespace from
+terminal `routeFlowRowId` values. Their JSON shape includes:
+
+```text
+routeFlowSupportingRowId
+supportingContext = descriptor-context
+terminalRowId
+descriptorId
+descriptorRole
+metadataFormat
+safeDisplayLabelOrHash
+sourceLegacyDataRuleIds
+evidenceTier
+sourceLabel
+commitSha
+filePath
+lineSpan
+supportingFactIds
+supportingEdgeIds
+coverageLabel
+limitations
+```
 
 A credible route-to-legacy-data bridge requires at least one of:
 `LegacyDataGeneratedCodeLinked`, a fact-symbol attachment linking a route symbol
@@ -364,7 +386,9 @@ symbol has not yet been extracted, route-flow must not emit a terminal row. It
 should emit an availability gap citing the bridge evidence record and explaining
 that the linked symbol is absent from the combined index, and it should cap the
 route-flow classification at `NeedsReviewStaticRouteFlow` or lower for that
-route path.
+route path. Before implementing this branch, the implementation must either
+document that `combined.route-flow.gap.v1` covers the specific
+linked-symbol-absent gap cause or register a narrower rule/gap code.
 
 When all reachable legacy data evidence for a route consists solely of
 `AnalysisGap` facts, route-flow must not produce a supporting descriptor row
@@ -424,11 +448,12 @@ data model evidence should include:
 - supporting IDs;
 - coverage and limitations.
 
-When before/after descriptor stable identities cannot be uniquely resolved, for
-example when two rows share all identity fields except a volatile row ID, the
-diff row must be marked `ambiguous-identity`, the matching candidates must be
-listed as supporting rows, and the change must be classified as needs-review
-rather than a definite add or remove.
+When before/after descriptor stable identities cannot be uniquely resolved,
+specifically when two or more rows produce the same cross-snapshot descriptor
+identity key defined in Requirement 9, the diff row must be marked
+`ambiguous-identity`, the matching candidates must be listed as supporting rows,
+and the change must be classified as needs-review rather than a definite add or
+remove.
 
 Impact and release-review may consume changed descriptor rows as static inputs.
 They must not claim schema compatibility, runtime database behavior, migration

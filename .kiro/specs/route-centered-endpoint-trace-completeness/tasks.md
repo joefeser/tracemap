@@ -54,13 +54,13 @@ slice. Remaining unchecked items are follow-up slices.
         production traffic, runtime DI, dynamic dispatch, branch feasibility,
         query execution, release safety, outage cause, and business impact.
 
-- [ ] 5. Implement safe selector trace metadata. Requirements: 1, 6, 7.
-  - [ ] Reuse existing route/client/from-* selector normalization.
-  - [ ] Record selector kind, safe normalized key, match mode, and redaction
+- [x] 5. Implement safe selector trace metadata. Requirements: 1, 6, 7.
+  - [x] Reuse existing route/client/from-* selector normalization.
+  - [x] Record selector kind, safe normalized key, match mode, and redaction
         state.
-  - [ ] Prevent unsafe selector values from appearing in Markdown, JSON, logs,
+  - [x] Prevent unsafe selector values from appearing in Markdown, JSON, logs,
         or committed fixtures.
-  - [ ] Add selector miss, unsafe selector, dynamic URL, and reduced-coverage
+  - [x] Add selector miss, unsafe selector, dynamic URL, and reduced-coverage
         tests.
 
 - [x] 6. Add touched-file summaries from existing rows. Requirements: 2, 3, 6.

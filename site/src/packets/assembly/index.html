@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level checklist for assembling public-safe TraceMap review packets from existing static evidence surfaces, proof paths, limitations, and owner follow-up."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Review Packet Assembly | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/packets/assembly/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Review Packet Assembly">
+    <meta
+      property="og:description"
+      content="A human checklist for preparing public-safe review handoff material from existing TraceMap evidence surfaces."
+    >
+    <meta property="og:url" content="https://tracemap.tools/packets/assembly/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Review packet assembly</p>
+        <h1>Prepare one public-safe review handoff before anyone repeats the claim.</h1>
+        <p class="hero-subhead">
+          This concept guide is a human checklist for gathering public-safe
+          material from existing TraceMap evidence surfaces. It helps reviewers
+          keep the claim, proof path, rule context, coverage, limitations,
+          validation evidence, gaps, and next owner together.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This is not a generated packet-builder feature.
+        </p>
+        <nav class="hero-actions" aria-label="Review packet assembly links">
+          <a class="button primary" href="#workflow">Start checklist</a>
+          <a class="button secondary" href="/reviewer-quickstart/">Reviewer quickstart</a>
+          <a class="button secondary" href="/packets/">Packet guide</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Packet question</p>
+          <h2>The packet starts with the claim being reviewed and the audience receiving it.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>One claim</strong><span>Write the bounded sentence or question under review before collecting evidence.</span></div>
+          <div><strong>One audience</strong><span>Name whether the handoff is for a reviewer, manager, teammate, service owner, database owner, release owner, or another human owner.</span></div>
+          <div><strong>One proof path</strong><span>Attach a public-safe route, summary, documentation page, rule catalog reference, report-family summary, or private review location named without raw material.</span></div>
+          <div><strong>One next owner</strong><span>Record who owns the remaining source, test, telemetry, service, database, release, or review question.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Required ingredients</p>
+          <h2>Every packet is incomplete until these fields travel together.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-review-packet-ingredients>
+            <caption>
+              Missing fields stay visible as limitations; they are not silently
+              dropped or converted into stronger public language.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Ingredient</th>
+                <th scope="col">Public-safe handling</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-packet-ingredient="claim being reviewed"><td>claim being reviewed</td><td>The exact bounded sentence or question.</td></tr>
+              <tr data-packet-ingredient="audience"><td>audience</td><td>The receiver for the handoff.</td></tr>
+              <tr data-packet-ingredient="proof path"><td>proof path</td><td>A public-safe trail or named private review location.</td></tr>
+              <tr data-packet-ingredient="public claim level"><td>public claim level</td><td><code>concept</code> for this page unless a later proof surface says otherwise.</td></tr>
+              <tr data-packet-ingredient="rule ID or rule family"><td>rule ID or rule family</td><td>A deterministic rule basis plus limitation; use a family when the exact ID is not public-safe.</td></tr>
+              <tr data-packet-ingredient="evidence tier"><td>evidence tier</td><td><code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</td></tr>
+              <tr data-packet-ingredient="coverage label"><td>coverage label</td><td>Transcribe the label from the cited evidence surface without strengthening it.</td></tr>
+              <tr data-packet-ingredient="commit SHA"><td>commit SHA</td><td>Name the scan context when the public-safe summary exposes it; otherwise record a limitation.</td></tr>
+              <tr data-packet-ingredient="extractor version"><td>extractor version</td><td>Name the extractor context when public-safe; otherwise record a limitation.</td></tr>
+              <tr data-packet-ingredient="public-safe file path and line span"><td>public-safe file path and line span</td><td>Use checked-in demo paths or sanitized references, never source excerpts.</td></tr>
+              <tr data-packet-ingredient="limitations"><td>limitations</td><td>State what the evidence cannot prove.</td></tr>
+              <tr data-packet-ingredient="non-claims"><td>non-claims</td><td>Keep unsupported runtime, release, safety, ownership, and completeness wording out of the claim.</td></tr>
+              <tr data-packet-ingredient="next owner"><td>next owner</td><td>The person, role, or process responsible for the next question.</td></tr>
+              <tr data-packet-ingredient="validation evidence"><td>validation evidence</td><td>A public-safe test, command family, review result, or validation summary.</td></tr>
+              <tr data-packet-ingredient="unresolved gaps"><td>unresolved gaps</td><td>Reduced, unknown, private-only, syntax-only, or pending review evidence that remains open.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="workflow">
+        <div class="section-header">
+          <p class="section-kicker">Assembly workflow</p>
+          <h2>Use the same order every time, especially when the evidence is partial.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article><h3>Choose the question</h3><p>Narrow the packet to one claim and audience before gathering proof.</p></article>
+          <article><h3>Collect public-safe evidence</h3><p>Use existing TraceMap surfaces and keep a proof path attached to each statement.</p></article>
+          <article><h3>Attach limitations</h3><p>Carry coverage labels, evidence tiers, reduced or unknown coverage, and rule limitations beside the claim.</p></article>
+          <article><h3>Name next owners</h3><p>Assign the remaining human, telemetry, test, release, service, database, code, or review question.</p></article>
+          <article><h3>Run claim checklist</h3><p>Use the <a href="/review-claim-checklist/">review claim checklist</a>; the process cannot upgrade unsupported evidence.</p></article>
+          <article><h3>Stop conditions</h3><p>Block public handoff when a mandatory stop condition is present.</p></article>
+          <article><h3>Handoff notes</h3><p>Write the audience, non-claims, validation evidence, unresolved gaps, and next owner without adding raw or private material.</p></article>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-boundary-region>
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Stop assembly when the packet would make the claim stronger than the evidence.</h2>
+        </div>
+        <ul>
+          <li><strong>missing proof path</strong>: the public statement needs a public-safe proof path or explicit private-only limitation.</li>
+          <li><strong>private-only support</strong>: internal evidence may guide follow-up, but public copy waits for a public-safe summary.</li>
+          <li><strong>raw artifact leakage</strong>: do not include raw facts, raw SQLite content, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private names, or hidden validation details.</li>
+          <li><strong>unknown or reduced coverage without label</strong>: restore the coverage label before handoff.</li>
+          <li><strong>unsupported runtime, release, or safety wording</strong>: remove claims about runtime behavior, production traffic, endpoint performance, outage cause, release approval or safety, operational safety, production proof, or complete coverage.</li>
+          <li><strong>no next owner</strong>: the packet must say who handles the remaining question.</li>
+          <li><strong>no validation evidence</strong>: name what was checked or visibly state what validation is missing.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Handoff notes</p>
+          <h2>Write notes that preserve evidence metadata instead of rephrasing it away.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>Review question</code><span>The claim, audience, and bounded public wording.</span></div>
+          <div><code>Evidence metadata</code><span>Proof path, rule ID or rule family, evidence tier, coverage label, commit SHA, extractor version, and public-safe file span.</span></div>
+          <div><code>Limits</code><span>Limitations, non-claims, unresolved gaps, and any unavailable public-safe fields.</span></div>
+          <div><code>Follow-up</code><span>Validation evidence, next owner, and the remaining review or non-static question.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Neighboring surfaces</p>
+          <h2>Use assembly for the pre-handoff checklist, not as another catalog.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/packets/">/packets/</a></strong><span>General evidence packet artifact model.</span></div>
+          <div><strong><a href="/manager-packet/">/manager-packet/</a></strong><span>Manager-facing summary framing.</span></div>
+          <div><strong><a href="/team-evidence-handoff/">/team-evidence-handoff/</a></strong><span>Receiver-specific handoff language.</span></div>
+          <div><strong><a href="/incident-evidence-handoff/">/incident-evidence-handoff/</a></strong><span>Incident-adjacent static evidence transfer.</span></div>
+          <div><strong><a href="/review-room/">/review-room/</a></strong><span>Meeting agenda for known, partial, and missing evidence.</span></div>
+          <div><strong><a href="/review-claim-checklist/">/review-claim-checklist/</a></strong><span>Decision ritual for whether a sentence may be repeated.</span></div>
+          <div><strong><a href="/proof-source-catalog/">/proof-source-catalog/</a></strong><span>Route and claim mapping to public-safe source material.</span></div>
+          <div><strong><a href="/proof-paths/">/proof-paths/</a>, <a href="/limitations/">/limitations/</a>, <a href="/validation/">/validation/</a></strong><span>Proof trails, claim boundaries, and public-safe validation context.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-boundary-region>
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>TraceMap keeps this workflow bounded to deterministic static evidence and human review.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release approval or safety, operational safety, complete coverage, AI impact analysis, LLM analysis, autonomous review, or generated packet-builder behavior.</li>
+          <li>TraceMap does not replace human review, source review, ownership decisions, telemetry, logs, traces, APM, tests, release controls, incident response, manager judgment, service ownership, or database ownership.</li>
+          <li>The workflow helps humans prepare bounded review handoff material from existing static evidence surfaces; it does not approve the claim.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Review packet assembly sits between
+        <a href="/packets/">evidence packet guidance</a>,
+        <a href="/review-room/">review-room agendas</a>,
+        and
+        <a href="/review-claim-checklist/">claim checking</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

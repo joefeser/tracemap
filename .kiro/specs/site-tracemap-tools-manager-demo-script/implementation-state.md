@@ -1,144 +1,121 @@
 # Site TraceMap Tools Manager Demo Script Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: pr-loop-merge-ready
 Public claim level: concept
 
 ## Current Scope
 
-Spec-only packet for a future public-site manager/teammate demo script. This
-branch creates only files under
-`.kiro/specs/site-tracemap-tools-manager-demo-script/`.
+Implemented a concept-level public site route for a bounded
+manager/teammate demo script.
 
-No site source, scripts, generated output, scanner code, reducer code, or
-existing specs are intentionally changed in this phase.
+Changed source files:
+
+- `site/src/demo/manager-script/index.html`
+- `site/src/demo/index.html`
+- `site/src/_site/pages.json`
+- `site/src/_site/discovery.json`
+- `site/scripts/manager-demo-script.mjs`
+- `site/scripts/manager-demo-script.test.mjs`
+- `site/scripts/validate.mjs`
+- `site/scripts/validate.test.mjs`
+- `.kiro/specs/site-tracemap-tools-manager-demo-script/tasks.md`
+- `.kiro/specs/site-tracemap-tools-manager-demo-script/implementation-state.md`
+
+No scanner, reducer, generated output, runtime service, analytics dependency,
+client-side data fetch, form, or new generated evidence artifact was added.
 
 ## Branch And Base
 
-- Branch: `codex/spec-site-manager-demo-script`.
-- Base: `origin/main`.
-- PR target: `main`.
-- Implementation status: not started.
+- Branch: `codex/impl-site-manager-demo-script`.
+- Base: `origin/dev`.
+- PR target: `dev`.
+- Implementation status: implemented and published in PR 258.
+- Spec sync note: `origin/dev` did not contain this spec directory at
+  implementation start, so the spec packet was restored from `origin/main`
+  before editing. This records the temporary main/dev sync gap without adding
+  local paths.
 
 ## Placement State
 
-Preferred future placement: `/demo/manager-script/`.
+Final placement: `/demo/manager-script/`.
 
-Rejected alternatives recorded in the spec:
+Rationale:
 
-- `/demo/briefing/`.
-- Section on `/demo/runbook/`.
-- Section on `/manager-brief/`.
-- Replacing or merging with `/manager-packet/`.
+- The route is demonstrably a demo aid and stays under the public demo route
+  family.
+- It keeps the human presenter script separate from the operator checklist at
+  `/demo/runbook/`.
+- It avoids making the script look like the canonical manager summary,
+  manager FAQ, manager packet, or product capability proof.
 
-Future implementation must re-check current site information architecture and
-record the final placement decision before editing site files.
+Rejected alternatives:
+
+- `/demo/briefing/`: too broad and less explicit about a script with stop
+  conditions.
+- Section on `/demo/runbook/`: would bury the presenter words inside an
+  operator checklist.
+- Section on `/manager-brief/`: too close to manager positioning and easier to
+  misread as a stronger product claim.
+- Replacing or merging with `/manager-packet/`: the packet explains value; the
+  script choreographs a bounded live route.
+
+Navigation decision:
+
+- Added one inbound discovery path from `/demo/` through a hero action and a
+  short callout.
+- Did not add the route to primary navigation, to avoid bloating the top nav
+  with a presenter-specific script.
 
 ## Route Verification State
 
-Spec-time review reported that the ten intended route stops currently exist in
-`site/src`, but future implementation must still verify generated site output
-before linking. The implementation-time verification set is `/`,
-`/capabilities/`, `/proof-paths/`, `/proof-source-catalog/`, `/demo/result/`,
-`/demo/runbook/`, `/questions/`, `/limitations/`, `/validation/`, and
-`/static-vs-runtime/`.
+Generated-output verification before linking confirmed these route entries and
+claim levels:
 
-Before referencing a named evidence field on a route, future implementation
-must also verify that the field is visibly rendered on the target page or
-soften the script wording to `where present`.
+| Route | Claim level | Title |
+| --- | --- | --- |
+| `/` | `demo` | TraceMap Home |
+| `/capabilities/` | `demo` | Capabilities |
+| `/proof-paths/` | `demo` | Proof Path Index |
+| `/proof-source-catalog/` | `demo` | Proof Source Catalog |
+| `/demo/result/` | `demo` | Public Demo Result |
+| `/demo/runbook/` | `demo` | Public Demo Runbook |
+| `/questions/` | `concept` | Stakeholder Question Index |
+| `/limitations/` | `demo` | Limitations |
+| `/validation/` | `demo` | Validation |
+| `/static-vs-runtime/` | `concept` | Static Evidence Vs Runtime Telemetry |
 
-## Scope Decisions
+No substitutions, removals, or route blocks were needed. Evidence-field
+wording uses `where present` or `where visibly present` when referencing rule
+IDs, rule families, evidence tiers, coverage labels, proof paths, source
+mapping, limitations, and validation state on linked pages.
 
-- Keep this as `Public claim level: concept` because it is a presentation guide
-  over existing public pages, not new demo evidence.
-- Require visible `No public conclusion without evidence`.
-- Treat the route list as intended public stops that must be verified during
-  implementation before linking.
-- Distinguish the script from manager brief, manager FAQ, manager packet, demo
-  runbook, questions, use cases, capabilities, and blog pages.
-- Preserve strict non-claim boundaries for runtime, production, release,
-  incident, operational, endpoint-performance, completeness, and AI/LLM
-  language.
-- Keep raw facts, SQLite, logs, source, SQL, config, secrets, local paths,
-  remotes, generated scan directories, private names, and hidden validation
-  details out of future public output.
+## Implemented Surface
 
-## Review Log
+The new page includes:
 
-Initial `claude-opus-4.8` review command:
+- Visible `Public claim level: concept`.
+- Visible `No public conclusion without evidence`.
+- Opening context.
+- 2-minute tour.
+- 5-minute proof walkthrough.
+- Manager questions and safe answer shapes for value, trust, completeness,
+  release decision, production behavior, incident use, team handoff, and what
+  to do next.
+- Engineer questions and proof routes for rule IDs, evidence tiers, coverage
+  labels, source mapping, demo result status, gaps, static-versus-runtime
+  boundaries, validation, and raw artifact boundaries.
+- Stop conditions.
+- Follow-up handoff.
+- Non-claims.
 
-```bash
-node scripts/kiro-review.mjs --phase site-tracemap-tools-manager-demo-script --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
-```
-
-Result: completed with reduced coverage because Kiro reported denied tool
-access. Artifacts:
-
-- `.tmp/kiro-reviews/site-tracemap-tools-manager-demo-script/2026-06-21T023545-886Z-spec-claude-opus-4.8.clean.md`
-- `.tmp/kiro-reviews/site-tracemap-tools-manager-demo-script/2026-06-21T023545-886Z-spec-claude-opus-4.8.meta.json`
-
-Finding patched: Medium finding that the 900-1,600 word count bound likely
-conflicted with the required script block volume. Resolution: raised the future
-visible-copy validation bound to 900-2,400 words.
-
-Low findings addressed while patching: clarified evidence fields are required
-where visibly present, named rendered page label and site metadata as the
-claim-level source of truth for links, scoped forbidden word checks to authored
-conclusions and non-claim sections, and added an inbound-link expectation with
-a recorded direct-navigation escape hatch.
-
-Initial `claude-sonnet-4.6` review command:
-
-```bash
-node scripts/kiro-review.mjs --phase site-tracemap-tools-manager-demo-script --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
-```
-
-Result: completed with reduced coverage because Kiro reported denied tool
-access. Artifacts:
-
-- `.tmp/kiro-reviews/site-tracemap-tools-manager-demo-script/2026-06-21T023830-327Z-spec-claude-sonnet-4.6.clean.md`
-- `.tmp/kiro-reviews/site-tracemap-tools-manager-demo-script/2026-06-21T023830-327Z-spec-claude-sonnet-4.6.meta.json`
-
-Finding patched: Medium finding that forbidden-claim validation did not
-explicitly cover metadata, discovery output, sitemap output, tests, fixtures,
-and generated pages. Resolution: expanded the validation scope in
-`requirements.md` and `design.md`.
-
-Sonnet re-review command:
-
-```bash
-node scripts/kiro-review.mjs --phase site-tracemap-tools-manager-demo-script --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
-```
-
-Result: full coverage with no High or Medium findings. Artifacts:
-
-- `.tmp/kiro-reviews/site-tracemap-tools-manager-demo-script/2026-06-21T024132-703Z-re-review-claude-sonnet-4.6.clean.md`
-- `.tmp/kiro-reviews/site-tracemap-tools-manager-demo-script/2026-06-21T024132-703Z-re-review-claude-sonnet-4.6.meta.json`
-
-Low findings addressed after re-review: recorded route verification state and
-added an explicit requirement to verify visible evidence fields before the
-script references them.
-
-Opus re-review command:
-
-```bash
-node scripts/kiro-review.mjs --phase site-tracemap-tools-manager-demo-script --kind re-review --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
-```
-
-Result: completed with reduced coverage because Kiro reported denied tool
-access. Artifacts:
-
-- `.tmp/kiro-reviews/site-tracemap-tools-manager-demo-script/2026-06-21T024329-366Z-re-review-claude-opus-4.8.clean.md`
-- `.tmp/kiro-reviews/site-tracemap-tools-manager-demo-script/2026-06-21T024329-366Z-re-review-claude-opus-4.8.meta.json`
-
-No High or Medium findings were reported. Low findings patched: aligned the
-design placement table with the requirements and implementation-state
-rejection list, clarified that the 2-minute tour links use the same
-generated-output verification as the full route sequence, and required chosen
-inbound-link sources to be verified before adding links.
-
-All Medium+ review findings are patched or dispositioned. Readiness is
-`ready-for-implementation` after local spec-only validation completed.
+The copy keeps the route at concept level and does not claim production
+incident diagnosis, runtime proof, release approval, complete dependency
+understanding, endpoint performance insight, operational safety, or AI/LLM
+impact analysis. Raw facts, raw SQLite content, analyzer logs, raw source
+snippets, raw SQL, config values, secrets, local paths, raw remotes, generated
+scan directories, private sample names, and hidden validation details are
+named only as material that stays out of public copy.
 
 ## Validation Log
 
@@ -146,28 +123,67 @@ Completed:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
-- Focused spec text checks for required files, labels, route references,
-  script block names, forbidden unsupported claims, raw/private material
-  boundaries, word-count bound, and readiness state: passed.
+- `cd site && npm test`: passed, 270 tests.
+- `cd site && npm run validate`: passed; built static site and validated 50
+  HTML files, 1641 internal references, 49 sitemap URLs, 1 legacy story safety
+  target, and 13 legacy modernization evidence-map rows.
+- `cd site && npm run build`: passed.
+- Desktop browser sanity: passed at 1440x1100 on
+  `/demo/manager-script/`; title was `Manager Demo Script | TraceMap`, 9 main
+  sections, 42 main links, and no horizontal overflow.
+- Mobile browser sanity: passed at 390x844 on `/demo/manager-script/`; title
+  was `Manager Demo Script | TraceMap`, 9 main sections, 42 main links, and no
+  horizontal overflow.
 
-## Future Implementation Validation
+## PR Loop State
 
-The future site implementation should run and record:
+Initial PR-loop command after the ready PR was opened against `dev`:
 
-- `git diff --check`.
-- `./scripts/check-private-paths.sh`.
-- `npm test` from `site/`.
-- `npm run validate` from `site/`.
-- `npm run build` from `site/`.
-- Desktop browser sanity check.
-- Mobile browser sanity check.
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 258 --base dev --require-codex-review --quiet --json
+```
+
+Initial result for head `671ab0f6789dda98795a8b466bd1049b3338f733`:
+
+- Decision: `merge_ready`.
+- Stop reason: `NONE`.
+- Next action: `merge_ready`.
+- Human next action: `merge_current_head`.
+- Merge state: `CLEAN`.
+- Pending checks: none.
+- Failed checks: none.
+- Unresolved review threads: 0.
+- Actionable bot findings: 0.
+- Qodo state: `review_completed`.
+- Gemini state: `review_completed`.
+- Codex state: `not_requested`; treated as residual risk, not a blocker, by
+  configured `trustedCodeReview` quorum.
+- Sourcery state: `not_requested`; optional residual risk, not a blocker.
+- Review quorum: enabled; group `trustedCodeReview`; returned bots `qodo`;
+  missing bots `codex`; minimum returned `1`; quorum met; residual risk
+  `medium`; required Codex review satisfied by quorum on `dev`.
+- Lane config: loaded from `.agent-control/lanes/pr-review-loop.yaml`.
+- Push batching: no local push batching action active.
+- Recommended human action: Joe can merge the current head if he accepts the
+  configured policy evidence.
+
+This file was updated after the initial PR-loop result to record the outcome,
+so a follow-up state-only commit must be pushed and the PR loop rerun for the
+new head before final merge-readiness reporting.
+
+## Oddities
+
+- The implementation worktree started from `origin/dev`, but the spec packet
+  was present only on `origin/main`; it was restored from `origin/main` before
+  editing.
+- The manager demo script validator normalizes `public-safe` before scanning
+  unsupported conclusion wording so the required phrase `safe answer shapes`
+  and existing public-safe terminology do not become false positives.
+- The aggregate site validation fixture needed a compact generated-page
+  representation for `/demo/manager-script/` and target claim-level metadata
+  for `/capabilities/`.
 
 ## Follow-Up Items
 
-- Future implementation must decide whether the script is a standalone route
-  or a section, then update metadata/discovery/sitemap only when applicable.
-- Future implementation must verify route availability before linking.
-- Future implementation must confirm required evidence fields are visibly
-  present on target routes before telling presenters to point at those fields.
-- Future implementation must keep the route concept-level unless a separate
-  evidence-backed claim-level upgrade is recorded.
+- Rerun PR loop after the state-only follow-up commit that records the initial
+  PR-loop result.

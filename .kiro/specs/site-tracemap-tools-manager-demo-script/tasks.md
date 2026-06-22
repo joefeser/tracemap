@@ -26,26 +26,26 @@ Public claim level: concept
 
 ## Future Site Implementation
 
-- [ ] Confirm final placement from `/demo/manager-script/`, `/demo/briefing/`,
+- [x] Confirm final placement from `/demo/manager-script/`, `/demo/briefing/`,
   section on `/demo/runbook/`, section on `/manager-brief/`, or a documented
   implementation-time equivalent.
-- [ ] Record the final placement and rejected alternatives in
+- [x] Record the final placement and rejected alternatives in
   `implementation-state.md`.
-- [ ] Implement the page or section with visible `Public claim level: concept`.
-- [ ] Implement visible `No public conclusion without evidence`.
-- [ ] Include opening context, 2-minute tour, 5-minute proof walkthrough,
+- [x] Implement the page or section with visible `Public claim level: concept`.
+- [x] Implement visible `No public conclusion without evidence`.
+- [x] Include opening context, 2-minute tour, 5-minute proof walkthrough,
   manager questions and safe answer shapes, engineer questions and proof
   routes, stop conditions, follow-up handoff, and non-claims.
-- [ ] Verify each intended route exists before linking: `/`, `/capabilities/`,
+- [x] Verify each intended route exists before linking: `/`, `/capabilities/`,
   `/proof-paths/`, `/proof-source-catalog/`, `/demo/result/`,
   `/demo/runbook/`, `/questions/`, `/limitations/`, `/validation/`, and
   `/static-vs-runtime/`.
-- [ ] Record substitutions, removals, or blocks for unavailable routes.
-- [ ] Add metadata, sitemap metadata if standalone, and discovery metadata if
+- [x] Record substitutions, removals, or blocks for unavailable routes.
+- [x] Add metadata, sitemap metadata if standalone, and discovery metadata if
   comparable pages use it, all with `publicClaimLevel: concept`.
-- [ ] Add focused validation for required copy, required links, metadata,
+- [x] Add focused validation for required copy, required links, metadata,
   forbidden claims, private/raw materials, and word count bounds.
-- [ ] Run `npm test`, `npm run validate`, and `npm run build` from `site/`.
-- [ ] Run desktop and mobile browser sanity checks for the implemented surface.
-- [ ] Record validation, oddities, and follow-up items in
+- [x] Run `npm test`, `npm run validate`, and `npm run build` from `site/`.
+- [x] Run desktop and mobile browser sanity checks for the implemented surface.
+- [x] Record validation, oddities, and follow-up items in
   `implementation-state.md`.

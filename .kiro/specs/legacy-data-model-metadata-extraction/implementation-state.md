@@ -2,13 +2,41 @@
 
 Status: continuation-ready
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
-Current implementation branch: codex/implement-legacy-data-model-metadata-extraction-slice2
+Current implementation branch: codex/implement-legacy-data-model-metadata-followup
 Public claim level: hidden
 
 Post-promotion note: several legacy-data model identity/reporting slices have
 landed, including PR #199 and PR #236. This spec still has follow-up work, but
 there is no active implementation branch running for it after the PR #247
 promotion.
+
+## Current Branch Scope
+
+This branch is a partial follow-up slice, not a full-spec closeout. It is
+merge-ready only as a contained NHibernate `.hbm.xml` metadata MVP over
+checked-in static XML descriptors.
+
+- [x] Task 5 partial: LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, and Castle
+  ActiveRecord descriptor signals emit `legacy.data.orm.unsupported.v1`
+  `AnalysisGap` facts.
+- [ ] Task 5 project-local mapping DSL detection remains deferred because it
+  needs a separate deterministic signal taxonomy.
+- [x] Task 4 partial: checked-in NHibernate `.hbm.xml` files emit safe
+  static inventory, class/table/property/relationship descriptor facts and
+  unsupported-shape gaps under `legacy.data.orm.nhibernate.v1`.
+- [ ] Task 4 component descriptor expansion and broader provider-specific
+  descriptor shapes remain deferred.
+- [ ] Task 6 generated-code and mapped-symbol linkage hardening remains
+  deferred.
+- [ ] Tasks 7-9 downstream surface/report/path/reverse/graph/vault integration
+  remain deferred.
+- [ ] Task 10 broader docs/fixtures work remains partially deferred; this slice
+  updates only acceptance, validation, language-adapter contract, and rule
+  limitations for unsupported ORM gaps.
+
+The unchecked tasks above are intentional runway, not hidden completed work.
+They must not be interpreted as clean absence of legacy ORM metadata or as a
+runtime database conclusion.
 
 ## Why This Spec Exists
 
@@ -449,3 +477,200 @@ PR review-loop follow-up:
   Patched by marking inherited EDMX entities/properties and CSDL associations
   involving inherited endpoint types as reduced coverage with explicit
   limitations while preserving endpoint completeness separately.
+
+## Implementation Slice 4 State
+
+Branch: `codex/implement-legacy-data-model-metadata-followup`
+Base: `origin/dev` at `7a8bb97c`
+PR: https://github.com/joefeser/tracemap/pull/260
+
+Selected scope: partial Task 5. This slice adds conservative unsupported old
+ORM descriptor gaps for recognized LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET,
+and Castle ActiveRecord signals. It does not parse those mappings, infer
+entities, infer tables, infer columns, infer relationships, execute queries, or
+claim runtime ORM behavior.
+
+Implementation boundary:
+
+- Added file-inventory recognition for public-safe legacy ORM metadata
+  candidates such as LLBLGen project files and SQL map XML files with
+  recognizable path or filename signals.
+- Added gap-only extraction for unsupported legacy ORM metadata files,
+  unsupported ORM config sections/attributes, and C# code descriptors such as
+  Castle ActiveRecord attributes/usings.
+- Emitted only `AnalysisGap` facts under `legacy.data.orm.unsupported.v1` with
+  `Tier4Unknown`, safe descriptor family labels, reduced coverage, runtime
+  proof set to false, and closed descriptor-signal tokens.
+- Added focused synthetic tests proving recognized unsupported descriptors
+  produce gaps, not invented legacy entity/storage/column/mapping facts, and
+  proving raw SQL-like text, connection-ish values, and unsafe config content
+  do not persist into Markdown or SQLite properties.
+
+Deferred within Task 5:
+
+- Project-local mapping DSL detection remains unchecked. It needs a separate
+  deterministic taxonomy so local helper names and fluent methods do not become
+  false-positive ORM descriptors.
+- NHibernate `.hbm.xml` parsing remains Task 4, not part of this unsupported
+  descriptor-gap slice.
+
+Validation executed so far:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 28 tests. Existing NuGet audit warning for `SQLitePCLRaw.lib.e_sqlite3` was reported during restore/build output.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 583 tests, with the same existing NU1903 advisory warnings.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke`: passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log` with 27 facts.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review had full coverage and reported blockers
+  because it evaluated the entire long-running spec as if this branch intended
+  to complete Tasks 3-11. Patched by adding the Current Branch Scope section
+  above and by clarifying the `legacy.data.orm.unsupported.v1` limitation for
+  project-local mapping DSLs.
+- Sonnet re-review had full coverage and found no blocking issues. It reported
+  remaining non-blocking documentation concerns around unchecked future tasks;
+  this implementation-state section records the slice boundary and validation
+  explicitly.
+
+PR review-loop follow-up:
+
+- Initial PR loop on commit `d085fa767551dd22c1f37a32991b786549cf15c9`
+  returned `merge_ready` with clean checks, clean merge state, no unresolved
+  threads, no actionable bot findings, Qodo returned, and Codex satisfied by
+  the configured trusted review quorum. A state-only follow-up commit records
+  the PR URL and loop result.
+
+## Implementation Slice 5 State
+
+Branch: `codex/implement-legacy-data-model-metadata-continuation`
+Base: `origin/dev`
+PR: pending
+
+Selected scope: partial Task 4. This slice adds a bounded NHibernate `.hbm.xml`
+metadata MVP for checked-in XML mapping files. It does not load NHibernate,
+execute provider code, parse Fluent mappings, connect to a database, execute
+queries, infer runtime session-factory behavior, or claim runtime ORM mapping
+validity.
+
+Implemented:
+
+- Exact `.hbm.xml` file inventory recognition as `LegacyOrmMetadata`.
+- Safe XML parsing through shared `SafeXml` bounds and DTD/entity rejection.
+- `legacy.data.orm.nhibernate.v1` static inventory facts for recognized
+  `hibernate-mapping` documents.
+- Safe `LegacyDataEntityDeclared`, `LegacyDataStorageObjectDeclared`,
+  `LegacyDataColumnDeclared`, and `LegacyDataMappingDeclared` facts for
+  deterministic class/table/id/version/property and relationship/collection
+  descriptors.
+- Additive normalized model identity metadata using `metadataFormat:
+  nhibernate-hbm`.
+- Relationship semantics for many-to-one, one-to-one, set/list/bag/map
+  descriptors when endpoint evidence is deterministic; missing endpoint
+  evidence remains reduced/unidirectional.
+- Hash-only or omitted unsafe values for schema, catalog, unsafe class/table/
+  property names, formula/filter/query content, and provider-like values.
+- Unsupported-shape gaps for inherited/subclass, composite-id,
+  dynamic-component, filter, custom SQL, loader, and named query shapes.
+- Per-class descriptor caps of 500 property/column-like descriptors and 200
+  relationship/collection descriptors with deterministic too-large gaps.
+- Focused tests for simple mapping extraction, relationship extraction,
+  unsafe value redaction, unsupported mapping/query shape gaps, and DTD parser
+  rejection.
+
+Deferred within Task 4:
+
+- Component descriptor expansion and broader provider-specific descriptor
+  shapes. Encountered `<component>` and `<dynamic-component>` elements emit
+  unsupported-shape gaps in this slice; recursive component descriptor expansion
+  is intentionally not inferred.
+- Deeper generated-code or mapped-symbol linkage; Task 6 owns that.
+- Downstream selector/report/vault/graph-specific tests beyond existing
+  descriptor projection support; Tasks 7-9 own those and are blocked from being
+  marked complete until their own privacy/redaction tests exist.
+
+Deferred scope gap strategy:
+
+- Implemented NHibernate mapping files that contain unsupported inherited,
+  composite-id, dynamic-component, filter, custom SQL, loader, query, or
+  formula shapes emit `AnalysisGap` facts under
+  `legacy.data.orm.nhibernate.v1`.
+- Component descriptor expansion beyond the deterministic top-level unsupported
+  shape gap is out of scope for this slice; TraceMap does not invent component
+  entity/table/column descriptors.
+- Project-local mapping DSL detection remains out of scope for Task 5 until a
+  separate deterministic signal taxonomy exists; TraceMap does not claim
+  absence of local DSL mappings.
+- Tasks 7-9 are not started for this branch. Combined reports, portfolio,
+  graph, vault, reverse, path, diff, impact, and release-review must not treat
+  the unchecked boxes as proven NHibernate downstream support.
+
+Smoke check deferrals:
+
+- Existing scan, facts, SQLite, and Markdown report artifact privacy is covered
+  by focused NHibernate tests and the synthetic CLI smoke for this scan-only
+  slice.
+- Combined-report, portfolio, graph, vault, path, reverse, diff, impact, and
+  release-review smokes are deferred because this branch does not implement
+  Tasks 7-9. Those future slices must add their own unsafe-value redaction and
+  availability-gap tests before marking the tasks complete.
+
+Validation executed so far:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`: passed, 31 tests. Existing NuGet audit warning for `SQLitePCLRaw.lib.e_sqlite3` was reported during restore/build output.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModelDescriptorProjectionTests`: passed, 1 test, after the Kiro review-requested projection gap regression was added.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 592 tests, with the same existing NU1903 advisory warnings.
+- Synthetic CLI smoke against a temporary git repo containing `Mappings/Customer.hbm.xml`: passed. Verified required scan outputs (`scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, `logs/analyzer.log`) and `legacy.data.orm.nhibernate.v1` / `nhibernate-hbm` facts.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review had reduced coverage because Kiro
+  reported denied shell access, but it inspected the source with read/search
+  tools. It found one merge-readiness blocker for this incremental slice:
+  missing regression coverage proving `legacy.data.*` `AnalysisGap` facts do
+  not project as terminal `legacy-data` descriptor surfaces.
+- Patched by adding `LegacyDataModelDescriptorProjectionTests` coverage for a
+  pre-existing DBML gap, a new NHibernate gap, and a valid NHibernate
+  descriptor. The remaining review notes are deferred Tasks 6-9 and broader
+  parser/cap tests, already recorded as future runway for this long-running
+  spec.
+- Sonnet re-review had full coverage but again evaluated deferred Tasks 7-9 as
+  merge blockers. Patched the task/state notes to make those tasks explicitly
+  not-started/blocked until future privacy, redaction, no-double-count,
+  selector, graph, vault, and downstream workflow tests are added.
+- Final Sonnet re-review had full coverage and found no blocking issues. It
+  reported only organizational follow-ups around future task tracking,
+  selector/privacy checkpoint grouping, and fixture-location wording for later
+  slices.
+
+PR review-loop follow-up:
+
+- Initial agent-control loop on PR #273 returned actionable unresolved review
+  threads from Gemini/Qodo. Patched both current-slice findings:
+  `<component>` now emits an unsupported-shape gap, and collection
+  `<key><column name="..." /></key>` column evidence is recognized.
+- A follow-up agent-control loop surfaced one Codex finding: formula-only
+  NHibernate properties must not fall back to a property-name column descriptor.
+  Patched by emitting an unsupported-shape gap for formula-only properties and
+  by adding a regression assertion that no column fact is produced without
+  static column evidence.
+- A later loop surfaced two Qodo top-level findings. Patched both: NHibernate
+  `.hbm.xml` detection now requires a `hibernate-mapping` root instead of any
+  descendant `class` element, and `not-null` nullable metadata now parses
+  explicit true/false values case-insensitively.
+- After the PR-thread patch, reran
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataMetadataExtractorTests|LegacyDataModelDescriptorProjectionTests"`:
+  passed, 33 tests.
+- After the PR-thread patch, reran `dotnet test src/dotnet/TraceMap.sln`:
+  passed, 593 tests.
+- After the Qodo top-level patch, reran `dotnet build src/dotnet/TraceMap.sln`:
+  passed.
+- After the PR-thread patch, reran `./scripts/check-private-paths.sh`: passed.
+- After the PR-thread patch, reran `git diff --check`: passed.
+- Final agent-control loop result is pending. PR should target `dev`; do not
+  merge from the implementation agent.

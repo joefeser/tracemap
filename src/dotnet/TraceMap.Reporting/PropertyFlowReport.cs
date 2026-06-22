@@ -18,7 +18,8 @@ public sealed record PropertyFlowOptions(
     int MaxPaths = 100,
     int MaxFrontier = 10000,
     int MaxInventory = 1000,
-    int MaxGaps = 1000);
+    int MaxGaps = 1000,
+    string? ObservedEvidencePath = null);
 
 public sealed record PropertyFlowResult(PropertyFlowReport Report, string? MarkdownPath, string? JsonPath);
 
@@ -249,6 +250,7 @@ public static class PropertyFlowClassifications
     public const string NoLineageEvidence = nameof(NoLineageEvidence);
     public const string SelectorNoMatch = nameof(SelectorNoMatch);
     public const string TruncatedByLimit = nameof(TruncatedByLimit);
+    public const string ObservedDemoContext = nameof(ObservedDemoContext);
 }
 
 public static class PropertyFlowReporter
@@ -265,6 +267,8 @@ public static class PropertyFlowReporter
     private const string SchemaRuleId = "property-flow.schema.v1";
     private const string TruncationRuleId = "property-flow.truncation.v1";
     private const string ObservedRuleId = "property-flow.observed-evidence.v1";
+    private const int MaxObservedEvidenceBytes = 256 * 1024;
+    private const int MaxObservedEvidenceRows = 50;
 
     private static readonly HashSet<string> GenericNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -288,6 +292,25 @@ public static class PropertyFlowReporter
         "combined_field_aliases",
         "combined_parameter_forward_edges",
         "combined_route_flow_edges"
+    };
+
+    private static readonly HashSet<string> ObservedMetadataKeys = new(StringComparer.Ordinal)
+    {
+        "artifactHash",
+        "bindingKind",
+        "captureMode",
+        "controlName",
+        "evidenceHash",
+        "field",
+        "label",
+        "noteCode",
+        "observationKind",
+        "propertyName",
+        "propertyPath",
+        "runId",
+        "selector",
+        "sourceLabel",
+        "tool"
     };
 
     private static readonly IReadOnlyList<string> Limitations =
@@ -321,6 +344,7 @@ public static class PropertyFlowReporter
         _ = format;
         var framework = NormalizeFramework(options.Framework);
         var sourceFilter = SafeFilter(options.Source);
+        var observedEvidence = await ReadObservedEvidenceAsync(options.ObservedEvidencePath, cancellationToken);
 
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -578,8 +602,166 @@ public static class PropertyFlowReporter
                 roots.Take(options.MaxInventory).ToArray(),
                 evidenceNodes,
                 evidenceEdges),
-            [],
+            observedEvidence,
             Limitations);
+    }
+
+    private static async Task<IReadOnlyList<PropertyFlowObservedEvidence>> ReadObservedEvidenceAsync(string? path, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return [];
+        }
+
+        if (!File.Exists(path))
+        {
+            throw new ArgumentException("property-flow observed evidence file was not found.");
+        }
+
+        if (new FileInfo(path).Length > MaxObservedEvidenceBytes)
+        {
+            throw new ArgumentException("property-flow observed evidence file exceeds the supported size limit.");
+        }
+
+        await using var stream = OpenObservedEvidenceFile(path);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var rowsElement = document.RootElement;
+        if (document.RootElement.ValueKind == JsonValueKind.Object)
+        {
+            if (!document.RootElement.TryGetProperty("observedEvidence", out rowsElement))
+            {
+                throw new ArgumentException("property-flow observed evidence JSON must contain observedEvidence.");
+            }
+        }
+
+        if (rowsElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new ArgumentException("property-flow observedEvidence must be an array.");
+        }
+
+        var rows = new List<(string Label, IReadOnlyDictionary<string, string> Metadata)>();
+        foreach (var row in rowsElement.EnumerateArray())
+        {
+            if (rows.Count >= MaxObservedEvidenceRows)
+            {
+                throw new ArgumentException("property-flow observed evidence row limit exceeded.");
+            }
+
+            if (row.ValueKind != JsonValueKind.Object)
+            {
+                throw new ArgumentException("property-flow observed evidence rows must be objects.");
+            }
+
+            var label = RequiredString(row, "label", "observed evidence label");
+            if (!IsSafeObservedEvidenceString(label))
+            {
+                throw new ArgumentException("property-flow rejected unsafe observed evidence metadata.");
+            }
+
+            var metadata = ReadObservedMetadata(row);
+            if (metadata.Count == 0)
+            {
+                throw new ArgumentException("property-flow observed evidence requires non-empty safeMetadata.");
+            }
+
+            rows.Add((label, metadata));
+        }
+
+        return rows
+            .OrderBy(row => row.Label, StringComparer.Ordinal)
+            .ThenBy(row => string.Join("|", row.Metadata.Select(pair => $"{pair.Key}={pair.Value}")), StringComparer.Ordinal)
+            .Take(50)
+            .Select((row, index) =>
+            {
+                var stable = string.Join("|", row.Metadata.Select(pair => $"{pair.Key}={pair.Value}"));
+                return new PropertyFlowObservedEvidence(
+                    $"observed-{index + 1:D4}-{CombinedReportHelpers.Hash(row.Label + ":" + stable, 12)}",
+                    row.Label,
+                    PropertyFlowClassifications.ObservedDemoContext,
+                    ObservedRuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    row.Metadata);
+            })
+            .ToArray();
+    }
+
+    private static FileStream OpenObservedEvidenceFile(string path)
+    {
+        try
+        {
+            return File.OpenRead(path);
+        }
+        catch (IOException exception)
+        {
+            throw new ArgumentException("property-flow observed evidence file could not be read.", exception);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            throw new ArgumentException("property-flow observed evidence file could not be read.", exception);
+        }
+    }
+
+    private static string RequiredString(JsonElement row, string propertyName, string label)
+    {
+        if (!row.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(value.GetString()))
+        {
+            throw new ArgumentException($"property-flow observed evidence requires {label}.");
+        }
+
+        return value.GetString()!.Trim();
+    }
+
+    private static IReadOnlyDictionary<string, string> ReadObservedMetadata(JsonElement row)
+    {
+        if (!row.TryGetProperty("safeMetadata", out var metadataElement))
+        {
+            throw new ArgumentException("property-flow observed evidence requires non-empty safeMetadata.");
+        }
+
+        if (metadataElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new ArgumentException("property-flow observed evidence safeMetadata must be an object.");
+        }
+
+        var values = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var property in metadataElement.EnumerateObject())
+        {
+            if (!ObservedMetadataKeys.Contains(property.Name) || SensitiveObservedToken(property.Name))
+            {
+                throw new ArgumentException("property-flow rejected unsafe observed evidence metadata.");
+            }
+
+            if (property.Value.ValueKind != JsonValueKind.String)
+            {
+                throw new ArgumentException("property-flow observed evidence safeMetadata values must be strings.");
+            }
+
+            var value = property.Value.GetString()?.Trim() ?? string.Empty;
+            if (!IsSafeObservedEvidenceString(value))
+            {
+                throw new ArgumentException("property-flow rejected unsafe observed evidence metadata.");
+            }
+
+            values[property.Name] = value;
+        }
+
+        return values;
+    }
+
+    private static bool SensitiveObservedToken(string value)
+    {
+        return Regex.IsMatch(value, "(secret|token|password|cookie|credential|authorization|bearer|connectionstring|rawsql|snippet|hostname|remoteurl|apikey|api_key|api-key|production|prod-|live-|live_|runtime|http)", RegexOptions.IgnoreCase);
+    }
+
+    private static bool IsSafeObservedEvidenceString(string value)
+    {
+        if (!IsSafeValue(value) || SensitiveObservedToken(value))
+        {
+            return false;
+        }
+
+        return !value.Contains('/', StringComparison.Ordinal)
+            && !value.Contains('\\', StringComparison.Ordinal);
     }
 
     private static void ValidateOptions(PropertyFlowOptions options, PropertySelector selector)
@@ -2233,9 +2415,21 @@ public static class PropertyFlowReporter
         builder.AppendLine();
         builder.AppendLine("## Optional Observed Evidence");
         builder.AppendLine();
-        builder.AppendLine(report.ObservedEvidence.Count == 0
-            ? "No browser/computer-use observed evidence was supplied. Static report completeness is independent of observed demo metadata."
-            : "Observed evidence is demo/validation metadata only and does not upgrade static classifications.");
+        if (report.ObservedEvidence.Count == 0)
+        {
+            builder.AppendLine("No browser/computer-use observed evidence was supplied. Static report completeness is independent of observed demo metadata.");
+        }
+        else
+        {
+            builder.AppendLine("Observed evidence is demo/validation metadata only and does not upgrade static classifications.");
+            builder.AppendLine();
+            builder.AppendLine("| Evidence | Label | Classification | Rule | Tier | Metadata |");
+            builder.AppendLine("| --- | --- | --- | --- | --- | --- |");
+            foreach (var evidence in report.ObservedEvidence)
+            {
+                builder.AppendLine($"| `{Cell(evidence.EvidenceId)}` | `{Cell(evidence.Label)}` | `{Cell(evidence.Classification)}` | `{Cell(evidence.RuleId)}` | `{Cell(evidence.EvidenceTier)}` | `{Cell(Display(evidence.SafeMetadata))}` |");
+            }
+        }
         builder.AppendLine();
         builder.AppendLine("## Limitations");
         builder.AppendLine();
