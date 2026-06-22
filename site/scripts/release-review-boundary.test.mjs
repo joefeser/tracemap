@@ -123,11 +123,39 @@ test("validateReleaseReviewBoundaryDist rejects metadata content regardless of a
   assert.match(errors.join("\n"), /forbidden positive claim wording/);
 });
 
+test("validateReleaseReviewBoundaryDist rejects forbidden head title text", async (t) => {
+  const pageHtml = (await releaseBoundaryPage()).replace(
+    "<title>Release Review Boundary | TraceMap</title>",
+    "<title>TraceMap approves releases</title>"
+  );
+  const root = await createManagedReleaseBoundaryFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateReleaseReviewBoundaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden positive claim wording/);
+});
+
 test("validateReleaseReviewBoundaryDist rejects hard private material inside boundary sections", async (t) => {
   const privatePath = ["/", "Users", "/private"].join("");
   const pageHtml = (await releaseBoundaryPage()).replace(
     "Stop when proof path, rule ID or rule family",
     `Stop when ${privatePath} appears near proof path, rule ID or rule family`
+  );
+  const root = await createManagedReleaseBoundaryFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateReleaseReviewBoundaryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private or raw material/);
+});
+
+test("validateReleaseReviewBoundaryDist rejects tag-split hard private material", async (t) => {
+  const tokenPrefix = ["s", "k"].join("");
+  const tokenBody = "abcdefghijklmn";
+  const pageHtml = (await releaseBoundaryPage()).replace(
+    "</main>",
+    `<p>${tokenPrefix[0]}<span>${tokenPrefix[1]}-${tokenBody}</span></p></main>`
   );
   const root = await createManagedReleaseBoundaryFixture(t, { pageHtml });
   const errors = [];

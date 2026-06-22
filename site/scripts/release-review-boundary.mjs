@@ -256,6 +256,7 @@ async function validatePage({ pagePath, routeContext, errors }) {
   const html = await readFile(pagePath, "utf8");
   const mainHtml = extractMainHtml(html);
   const pageText = normalizeRenderedText(mainHtml);
+  const fullText = normalizeRenderedText(html);
   const metadataText = collectMetadataText(html);
   const attributeText = collectDecodedAttributeText(html);
   const wordCount = countWords(normalizeRenderedText(stripTableHeaderHtml(mainHtml)));
@@ -278,10 +279,10 @@ async function validatePage({ pagePath, routeContext, errors }) {
     errors.push(withEvidence(`Release review boundary page word count must be between 900 and 2400 words, got ${wordCount}`, pageArtifact));
   }
 
-  validateForbiddenPositiveClaims(`${stripSanctionedBoundaryHtml(mainHtml)} ${metadataText} ${attributeText}`, errors, pageArtifact);
-  validateHardPrivateMaterial(`${mainHtml} ${metadataText} ${attributeText}`, errors, pageArtifact);
+  validateForbiddenPositiveClaims(`${stripSanctionedBoundaryHtml(mainHtml)} ${fullText} ${metadataText} ${attributeText}`, errors, pageArtifact);
+  validateHardPrivateMaterial(`${html} ${fullText} ${metadataText} ${attributeText}`, errors, pageArtifact);
   validateBoundaryPrivateMaterial(`${stripSanctionedBoundaryHtml(mainHtml)} ${metadataText} ${attributeText}`, errors, pageArtifact);
-  validateBlameLanguage(`${pageText} ${metadataText} ${attributeText}`, errors, pageArtifact);
+  validateBlameLanguage(`${pageText} ${fullText} ${metadataText} ${attributeText}`, errors, pageArtifact);
 }
 
 function validateRows(html, errors) {
@@ -369,21 +370,26 @@ function validateForbiddenPositiveClaims(value, errors, artifact) {
 }
 
 function validateHardPrivateMaterial(value, errors, artifact) {
-  const normalized = decodeHtmlEntities(value);
+  const normalizedValues = privateMaterialScanValues(value);
   for (const pattern of hardPrivatePatterns) {
-    if (pattern.test(normalized)) {
+    if (normalizedValues.some((normalized) => pattern.test(normalized))) {
       errors.push(withEvidence(`Release review boundary contains forbidden private or raw material: ${pattern.source}`, artifact));
     }
   }
 }
 
 function validateBoundaryPrivateMaterial(value, errors, artifact) {
-  const normalized = decodeHtmlEntities(value);
+  const normalizedValues = privateMaterialScanValues(value);
   for (const pattern of privateBoundaryPatterns) {
-    if (pattern.test(normalized)) {
+    if (normalizedValues.some((normalized) => pattern.test(normalized))) {
       errors.push(withEvidence(`Release review boundary contains forbidden private or raw material: ${pattern.source}`, artifact));
     }
   }
+}
+
+function privateMaterialScanValues(value) {
+  const decoded = decodeHtmlEntities(value);
+  return [decoded, normalizeRenderedText(decoded), decoded.replace(/<[^>]+>/g, "")];
 }
 
 function validateBlameLanguage(value, errors, artifact) {
