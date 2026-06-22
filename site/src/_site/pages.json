@@ -200,6 +200,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/proof-paths/faq/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/proof-source-catalog/",
     "changefreq": "monthly",
     "priority": "0.7"
