@@ -1182,6 +1182,9 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.True(entity.Properties.ContainsKey("catalogHash"));
         Assert.DoesNotContain("Server=prod", entity.Properties.Values);
         Assert.DoesNotContain("Customers;DROP", entity.Properties.Values);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("descriptorSource") == "property");
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataOrmNHibernate

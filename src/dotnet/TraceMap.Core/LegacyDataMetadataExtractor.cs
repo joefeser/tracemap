@@ -268,6 +268,12 @@ public static class LegacyDataMetadataExtractor
         XElement property)
     {
         var propertyName = AttributeValue(property, "name") ?? property.Name.LocalName;
+        if (IsNHibernateFormulaOnlyProperty(property))
+        {
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, "UnsupportedLegacyOrmMappingShape", "NHibernate formula-only property did not provide static column evidence; no column descriptor was inferred.", property);
+            return;
+        }
+
         var columnName = AttributeValue(property, "column")
             ?? AttributeValue(property.Elements().FirstOrDefault(element => element.Name.LocalName == "column"), "name")
             ?? propertyName;
@@ -1573,6 +1579,14 @@ public static class LegacyDataMetadataExtractor
             or "sql-update"
             or "sql-delete"
             or "formula";
+    }
+
+    private static bool IsNHibernateFormulaOnlyProperty(XElement property)
+    {
+        return property.Name.LocalName == "property"
+            && (property.Attribute("formula") is not null || property.Elements().Any(element => element.Name.LocalName == "formula"))
+            && AttributeValue(property, "column") is null
+            && property.Elements().All(element => element.Name.LocalName != "column" || AttributeValue(element, "name") is null);
     }
 
     private static string? NHibernateKeyColumn(XElement relationship)
