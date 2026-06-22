@@ -908,6 +908,7 @@ Kiro implementation review:
 
 PR review-loop status:
 
+- PR: https://github.com/joefeser/tracemap/pull/296 targeting `dev`.
 - Initial agent-control loop on PR #296 waited for required Codex/Qodo batching
   and then returned `actionable_findings` after Qodo completed. Patched
   Gemini's duplicate `Path.GetFileName*` allocation comments by caching
@@ -919,4 +920,11 @@ PR review-loop status:
   generated-link gaps with `sourceMetadataFactId`, `supportingFactIds`,
   stable type safe/hash metadata, and a source fact/type discriminator in the
   evidence hash seed.
-- Final agent-control rerun after this patch: pending.
+- Posted evidence-backed `review-finding-disposition` comments for the two
+  Gemini threads and one Qodo thread that GitHub did not auto-resolve, citing
+  fixing commit `ff6bac32` and validation evidence.
+- Final agent-control rerun at `ff6bac32c51141fad47472028475297c5c164a5f`:
+  `merge_ready`, stop reason `NONE`, `canMerge: true`, merge state `CLEAN`,
+  unresolved threads `0`, pending checks `0`, failed checks `0`. Residual risk
+  was `medium` because Codex reviewed `9ede07c8e240ae21286e54955845deb2602e5f0d`
+  and Qodo satisfied the configured required-review quorum on `dev`.
