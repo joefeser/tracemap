@@ -458,6 +458,23 @@
     ]
   },
   {
+    "path": "/owners/follow-up/",
+    "title": "Owner Follow-Up Map",
+    "summary": "Concept-level map for routing static-evidence questions to human owner categories while preserving proof paths, limitations, handoff wording, and stop conditions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The map routes questions to owner categories, not real teams, people, approval chains, on-call rotations, service catalogs, database stewardship, or production ownership records.",
+      "Every row must keep the static evidence trigger, what TraceMap can and cannot show, proof path, limitation, handoff wording, and stop condition attached."
+    ],
+    "nonClaims": [
+      "No real org ownership claim, production ownership proof, runtime behavior, production traffic, endpoint performance, release approval, release safety, operational safety, complete coverage, or replacement of human judgment.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, automated ownership detection, automated release approval, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public owner follow-up material."
+    ]
+  },
+  {
     "path": "/legacy-evidence/",
     "title": "Legacy Evidence Story",
     "summary": "Concept claim ledger for hidden legacy-adjacent static evidence themes, promotion gates, and public-safe boundaries.",
@@ -661,6 +678,23 @@
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete product coverage, incident root cause, service ownership, production dependency understanding, or test sufficiency proof.",
       "No replacement for logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.",
       "No AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis."
+    ]
+  },
+  {
+    "path": "/manager-packet/",
+    "title": "Manager Packet",
+    "summary": "Demo-level manager-facing packet explaining deterministic static evidence, rule IDs, coverage labels, generated summaries, gaps, and limitations.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "The page summarizes public demo evidence from checked-in samples and public-safe routes.",
+      "Manager-facing summaries must keep proof paths, coverage labels, generated summary status, gaps, and limitations visible."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, incident root cause, release approval, operational safety, or complete coverage proof.",
+      "No AI impact analysis, LLM analysis, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public manager-packet material."
     ]
   },
   {
