@@ -1045,13 +1045,12 @@ public static class PortfolioReporter
     private static string? SharedKey(PortfolioSurfaceRow surface)
     {
         var kind = surface.SurfaceKind;
-        var metadata = surface.Metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         string? value = kind switch
         {
-            "http-client" or "http-route" => Metadata(metadata, "httpMethod") is { } method && Metadata(metadata, "normalizedPathKey") is { } path ? $"{method} {path}" : null,
-            "sql-query" or "sql-persistence" => Metadata(metadata, "tableName") ?? Metadata(metadata, "shapeHash") ?? Metadata(metadata, "textHash"),
-            "package-config" => Metadata(metadata, "ecosystem") is { } eco && Metadata(metadata, "packageName") is { } package ? $"{eco}:{package}" : Metadata(metadata, "packageName") ?? Metadata(metadata, "configKey"),
-            "legacy-data" => Metadata(metadata, "legacyDataStableModelKeyHash") ?? Metadata(metadata, "legacyDataDisplayNameHash"),
+            "http-client" or "http-route" => Metadata(surface.Metadata, "httpMethod") is { } method && Metadata(surface.Metadata, "normalizedPathKey") is { } path ? $"{method} {path}" : null,
+            "sql-query" or "sql-persistence" => Metadata(surface.Metadata, "tableName") ?? Metadata(surface.Metadata, "shapeHash") ?? Metadata(surface.Metadata, "textHash"),
+            "package-config" => Metadata(surface.Metadata, "ecosystem") is { } eco && Metadata(surface.Metadata, "packageName") is { } package ? $"{eco}:{package}" : Metadata(surface.Metadata, "packageName") ?? Metadata(surface.Metadata, "configKey"),
+            "legacy-data" => Metadata(surface.Metadata, "legacyDataStableModelKeyHash") ?? Metadata(surface.Metadata, "legacyDataDisplayNameHash"),
             _ => surface.DisplayName
         };
         return string.IsNullOrWhiteSpace(value) || value == "n/a" || value == "unknown" ? null : $"{kind}:{value}";
@@ -1114,7 +1113,7 @@ public static class PortfolioReporter
                 new("legacyDataCoverageLabel", surface.LegacyDataCoverageLabel),
                 new("legacyDataLimitations", SafeLegacyDataList(surface.LegacyDataLimitations, "limitation")),
                 new("legacyDataRedactions", SafeLegacyDataList(surface.LegacyDataRedactions, "redaction")),
-                new("legacyDataDisplayClearance", surface.SurfaceKind == "legacy-data" ? surface.LegacyDataDisplayClearance.ToString().ToLowerInvariant() : null),
+                new("legacyDataDisplayClearance", LegacyDataDisplayClearanceValue(surface)),
                 new("legacyDataExtractorVersion", surface.LegacyDataExtractorVersion)
             ]));
     }
@@ -1585,7 +1584,7 @@ public static class PortfolioReporter
             new("legacyDataCoverageLabel", surface.LegacyDataCoverageLabel),
             new("legacyDataLimitations", SafeLegacyDataList(surface.LegacyDataLimitations, "limitation")),
             new("legacyDataRedactions", SafeLegacyDataList(surface.LegacyDataRedactions, "redaction")),
-            new("legacyDataDisplayClearance", surface.SurfaceKind == "legacy-data" ? surface.LegacyDataDisplayClearance.ToString().ToLowerInvariant() : null),
+            new("legacyDataDisplayClearance", LegacyDataDisplayClearanceValue(surface)),
             new("legacyDataExtractorVersion", surface.LegacyDataExtractorVersion),
             new("identityFallbackHash", IsVolatileSqlIdentity(surface) ? CombinedReportHelpers.Hash(surface.OriginalFactId ?? surface.CombinedFactId, 24) : null)
         ]);
@@ -1604,6 +1603,7 @@ public static class PortfolioReporter
                 new("surfaceKind", surface.SurfaceKind),
                 new("surfaceSubtype", surface.SurfaceSubtype),
                 new("legacyDataMetadataFormat", surface.LegacyDataMetadataFormat),
+                new("legacyDataModelKind", surface.LegacyDataModelKind),
                 new("legacyDataDescriptorRole", surface.LegacyDataDescriptorRole),
                 new("legacyDataStableModelKeyHash", stableModelKeyHash),
                 new("legacyDataDisplayNameHash", surface.LegacyDataDisplayNameHash),
@@ -1698,12 +1698,48 @@ public static class PortfolioReporter
 
     private static string SafeLegacyDataValue(string value, string hashPrefix)
     {
-        if (value.All(static ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.'))
+        if (value.All(static ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.')
+            && !LooksSensitiveLegacyDataToken(value))
         {
             return value;
         }
 
         return $"{hashPrefix}-hash:{CombinedReportHelpers.Hash(value, 24)}";
+    }
+
+    private static bool LooksSensitiveLegacyDataToken(string value)
+    {
+        return value.Contains("password", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("passwd", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("pwd", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("token", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("secret", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("private", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("apikey", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("api_key", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("connection", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("server", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("catalog", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("datasource", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("data.source", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("user.id", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("userid", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("uid", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("://", StringComparison.Ordinal)
+            || value.Contains('\\', StringComparison.Ordinal)
+            || value.StartsWith("/", StringComparison.Ordinal)
+            || value.StartsWith("./", StringComparison.Ordinal)
+            || value.StartsWith("../", StringComparison.Ordinal)
+            || value.Contains("${", StringComparison.Ordinal)
+            || value.Contains("$(", StringComparison.Ordinal)
+            || value.Contains('%', StringComparison.Ordinal);
+    }
+
+    private static string? LegacyDataDisplayClearanceValue(CombinedDependencySurfaceRow surface)
+    {
+        return surface.SurfaceKind == "legacy-data"
+            ? surface.LegacyDataDisplayClearance ? "true" : "false"
+            : null;
     }
 
     private static bool IsHashOnlySqlEvidence(CombinedDependencySurfaceRow surface)
@@ -2302,7 +2338,16 @@ public static class PortfolioReporter
 
     private static string? Metadata(IReadOnlyList<KeyValuePair<string, string>> metadata, string key)
     {
-        return metadata.FirstOrDefault(pair => pair.Key == key).Value is { } value && !string.IsNullOrWhiteSpace(value) ? value : null;
+        for (var i = 0; i < metadata.Count; i++)
+        {
+            var pair = metadata[i];
+            if (pair.Key == key)
+            {
+                return !string.IsNullOrWhiteSpace(pair.Value) ? pair.Value : null;
+            }
+        }
+
+        return null;
     }
 
     private static IReadOnlyList<string> GapCategories(IReadOnlyList<string> knownGaps)
