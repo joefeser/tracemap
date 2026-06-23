@@ -186,6 +186,23 @@
     ]
   },
   {
+    "path": "/handoff/template/",
+    "title": "Evidence Handoff Template",
+    "summary": "Concept-level reusable template for carrying one TraceMap static-evidence question with proof path, rule context, limits, and next role.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is an authored public-safe template, not generated handoff output or a new proof source.",
+      "Missing private-only scan context, reduced coverage, weak evidence, or absent validation remains a visible limitation or stop condition."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, real organization ownership, complete coverage, AI impact analysis, LLM analysis, autonomous review, generated handoff feature, or replacement of human review.",
+      "No raw artifacts, source excerpts, database text, configuration values, credentials, workstation paths, repository locations, scan folders, command output, hidden validation detail, private sample names, or personal owner names are public handoff-template material."
+    ]
+  },
+  {
     "path": "/reviewer-quickstart/",
     "title": "Reviewer Quickstart",
     "summary": "Five-minute concept-level guide for inspecting a public-safe TraceMap evidence packet before repeating or routing a claim.",
