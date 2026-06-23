@@ -691,7 +691,10 @@ Each fixture should document:
 | Typed DataSet TableAdapter static SQL | `LegacyData*` descriptor facts plus `SqlTextUsed`/SQL-shape `QueryPatternDetected` hashes under `legacy.data.typed-dataset.v1`; raw SQL is not stored |
 | Legacy data model identity | Source descriptor facts carry safe `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, identity-rule provenance, safe display labels or hashes, and source metadata fact IDs without changing source rule ownership |
 | Legacy data config provider | `LegacyDataProviderConfigDeclared` under `legacy.data.config.v1` with safe names or hashes; raw connection strings and config values are omitted |
-| Legacy data generated code | `LegacyDataGeneratedCodeLinked` under `legacy.data.generated-link.v1`; descriptor tiers are not upgraded by the link |
+| Legacy data generated code explicit file link | `LegacyDataGeneratedCodeLinked` under `legacy.data.generated-link.v1` with `linkKind = explicit-generated-file`, `Tier2Structural`, `coverageLabel = full`, `sourceMetadataFactId`, `supportingFactIds`, `symbolRole`, and `stableModelKey`; descriptor tiers are not upgraded by the link |
+| Legacy data generated code syntax fallback | `LegacyDataGeneratedCodeLinked` under `legacy.data.generated-link.v1` with `linkKind = type-name-syntax-fallback`, `Tier3SyntaxOrTextual`, `coverageLabel = reduced`, and static-only limitations; descriptor tiers are not upgraded by the link |
+| Legacy data generated code duplicate designer types | `AmbiguousGeneratedCodeLink` gap under `legacy.data.generated-link.v1` anchored to the source descriptor line; no generated-code link is emitted |
+| Legacy data generated code missing explicit designer | `MissingGeneratedCode` gap under `legacy.data.generated-link.v1` anchored to the source descriptor line; no generated-code link is emitted |
 | Python Pydantic DTO member match | `ProbableImpact` through Tier2 `SerializerContractMember` |
 | Python Flask/FastAPI route | `HttpRouteBinding` with normalized route key when static decorator syntax is visible |
 | Python SQLAlchemy column | `DatabaseColumnMapping` with table/column/member evidence when declarative syntax is visible |

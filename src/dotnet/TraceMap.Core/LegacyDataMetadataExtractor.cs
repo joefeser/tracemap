@@ -66,7 +66,7 @@ public static class LegacyDataMetadataExtractor
             }
         }
 
-        AddGeneratedCodeLinks(manifest, facts, generatedCandidates, existingFacts);
+        AddGeneratedCodeLinks(manifest, facts, generatedCandidates);
         if (HasMappedTypeSyntaxLinkCandidates(facts))
         {
             var csharpTypeDeclarations = LoadCSharpTypeDeclarations(repoPath, inventory);
@@ -1102,11 +1102,11 @@ public static class LegacyDataMetadataExtractor
             properties: properties));
     }
 
-    private static void AddGeneratedCodeLinks(ScanManifest manifest, List<CodeFact> facts, IReadOnlyList<GeneratedCandidate> generatedCandidates, IReadOnlyList<CodeFact> existingFacts)
+    private static void AddGeneratedCodeLinks(ScanManifest manifest, List<CodeFact> facts, IReadOnlyList<GeneratedCandidate> generatedCandidates)
     {
         var metadataFacts = facts
-            .Where(fact => fact.RuleId is RuleIds.LegacyDataDbml or RuleIds.LegacyDataEdmx or RuleIds.LegacyDataTypedDataSet
-                && fact.FactType is FactTypes.LegacyDataEntityDeclared or FactTypes.LegacyDataStorageObjectDeclared)
+            .Where(fact => fact.RuleId is RuleIds.LegacyDataDbml or RuleIds.LegacyDataEdmx or RuleIds.LegacyDataTypedDataSet)
+            .Where(fact => fact.FactType is FactTypes.LegacyDataEntityDeclared or FactTypes.LegacyDataStorageObjectDeclared)
             .ToArray();
 
         foreach (var fact in metadataFacts)
@@ -1122,42 +1122,96 @@ public static class LegacyDataMetadataExtractor
 
             var explicitGeneratedName = fact.Properties.GetValueOrDefault("generatedCodeFileName");
             var metadataBaseName = Path.GetFileNameWithoutExtension(fact.Evidence.FilePath);
-            var scopedCandidates = generatedCandidates
+            var scopedMatches = generatedCandidates
                 .Where(candidate => string.IsNullOrWhiteSpace(explicitGeneratedName)
-                    ? Path.GetFileNameWithoutExtension(candidate.FilePath).StartsWith(metadataBaseName, StringComparison.OrdinalIgnoreCase)
-                    : Path.GetFileName(candidate.FilePath).Equals(explicitGeneratedName, StringComparison.OrdinalIgnoreCase))
-                .Where(candidate => candidate.TypeNames.Contains(expectedType, StringComparer.Ordinal))
+                    ? candidate.FileNameWithoutExtension.StartsWith(metadataBaseName, StringComparison.OrdinalIgnoreCase)
+                    : candidate.FileName.Equals(explicitGeneratedName, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(candidate => candidate.LinesFor(expectedType).Select(line => new GeneratedTypeMatch(candidate.FilePath, line)))
                 .ToArray();
 
-            if (scopedCandidates.Length == 1)
+            if (scopedMatches.Length == 1)
             {
-                var candidate = scopedCandidates[0];
+                var candidate = scopedMatches[0];
+                var isExplicitGeneratedFile = !string.IsNullOrWhiteSpace(explicitGeneratedName);
                 var properties = MetadataProperties(fact.Properties.GetValueOrDefault("metadataKind") ?? "LegacyData", fact.Properties.GetValueOrDefault("metadataHash") ?? string.Empty, "generated-code-link");
-                properties["supportingFactId"] = fact.FactId;
-                properties["linkKind"] = string.IsNullOrWhiteSpace(explicitGeneratedName) ? "type-name-syntax-fallback" : "explicit-generated-file";
+                properties["coverageLabel"] = isExplicitGeneratedFile ? "full" : "reduced";
+                properties["limitations"] = isExplicitGeneratedFile
+                    ? "generated-code-freshness-unverified"
+                    : "generated-code-freshness-unverified;syntax-only-generated-code-link";
+                properties["sourceMetadataFactId"] = fact.FactId;
+                properties["supportingFactIds"] = fact.FactId;
+                properties["symbolRole"] = GeneratedSymbolRole(fact);
+                properties["linkKind"] = isExplicitGeneratedFile ? "explicit-generated-file" : "type-name-syntax-fallback";
                 properties["generatedCodeFileName"] = Path.GetFileName(candidate.FilePath);
-                properties["generatedCodeFilePath"] = candidate.FilePath;
+                if (fact.Properties.TryGetValue("stableModelKey", out var stableModelKey))
+                {
+                    properties["stableModelKey"] = stableModelKey;
+                }
+
                 AddSafeName(properties, "typeName", "typeHash", expectedType);
                 facts.Add(FactFactory.Create(
                     manifest,
                     FactTypes.LegacyDataGeneratedCodeLinked,
                     RuleIds.LegacyDataGeneratedLink,
-                    string.IsNullOrWhiteSpace(explicitGeneratedName) ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
-                    Evidence(candidate.FilePath, candidate.LineFor(expectedType), $"{candidate.FilePath}:{expectedType}:{fact.FactId}"),
+                    isExplicitGeneratedFile ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
+                    Evidence(candidate.FilePath, candidate.Line, $"{candidate.FilePath}:{expectedType}:{fact.FactId}"),
                     targetSymbol: expectedType,
                     properties: properties));
             }
-            else if (scopedCandidates.Length > 1)
+            else if (scopedMatches.Length > 1)
             {
-                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataGeneratedLink, "AmbiguousGeneratedCodeLink", "Multiple generated-code candidates matched a legacy data descriptor.", null);
+                AddGeneratedLinkGap(manifest, facts, fact, "AmbiguousGeneratedCodeLink", "Multiple generated-code candidates matched a legacy data descriptor.", expectedType);
             }
             else if (!string.IsNullOrWhiteSpace(explicitGeneratedName))
             {
-                AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataGeneratedLink, "MissingGeneratedCode", "Metadata names generated output that was not checked in.", null);
+                AddGeneratedLinkGap(manifest, facts, fact, "MissingGeneratedCode", "Metadata names generated output that was not checked in.", expectedType);
             }
         }
+    }
 
-        _ = existingFacts;
+    private static void AddGeneratedLinkGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        CodeFact sourceFact,
+        string classification,
+        string message,
+        string expectedType)
+    {
+        var properties = MetadataProperties(
+            sourceFact.Properties.GetValueOrDefault("metadataKind") ?? "LegacyData",
+            sourceFact.Properties.GetValueOrDefault("metadataHash") ?? string.Empty,
+            "generated-code-link-gap");
+        properties["classification"] = classification;
+        properties["coverage"] = "reduced";
+        properties["message"] = message;
+        properties["sourceMetadataFactId"] = sourceFact.FactId;
+        properties["supportingFactIds"] = sourceFact.FactId;
+        properties["symbolRole"] = GeneratedSymbolRole(sourceFact);
+        if (sourceFact.Properties.TryGetValue("stableModelKey", out var stableModelKey))
+        {
+            properties["stableModelKey"] = stableModelKey;
+        }
+
+        AddSafeName(properties, "typeName", "typeHash", expectedType);
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyDataGeneratedLink,
+            EvidenceTiers.Tier4Unknown,
+            Evidence(sourceFact.Evidence.FilePath, sourceFact.Evidence.StartLine, $"{sourceFact.Evidence.FilePath}:{sourceFact.Evidence.StartLine}:{classification}:{sourceFact.FactId}:{expectedType}"),
+            targetSymbol: TargetFrom(properties, "typeName", "typeHash"),
+            properties: properties));
+    }
+
+    private static string GeneratedSymbolRole(CodeFact fact)
+    {
+        return fact.Properties.GetValueOrDefault("modelKind") switch
+        {
+            "mapped-type" => "generated-context",
+            "entity" => "generated-entity",
+            "storage-object" => "generated-storage-object",
+            _ => "generated-type"
+        };
     }
 
     private static void AddMappedTypeSyntaxLinks(ScanManifest manifest, List<CodeFact> facts, IReadOnlyDictionary<string, IReadOnlyList<CSharpTypeDeclaration>> csharpTypeDeclarations)
@@ -1256,7 +1310,14 @@ public static class LegacyDataMetadataExtractor
                     .ToArray();
                 if (types.Length > 0)
                 {
-                    candidates.Add(new GeneratedCandidate(item.RelativePath, types.ToDictionary(type => type.Name, type => type.Line, StringComparer.Ordinal)));
+                    candidates.Add(new GeneratedCandidate(
+                        item.RelativePath,
+                        types
+                            .GroupBy(type => type.Name, StringComparer.Ordinal)
+                            .ToDictionary(
+                                group => group.Key,
+                                group => (IReadOnlyList<int>)group.Select(type => type.Line).Order().ToArray(),
+                                StringComparer.Ordinal)));
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -2110,15 +2171,19 @@ public static class LegacyDataMetadataExtractor
 
     private sealed record ConstraintDefinition(XElement Element, string Name, string Table);
 
-    private sealed record GeneratedCandidate(string FilePath, IReadOnlyDictionary<string, int> TypeLines)
+    private sealed record GeneratedCandidate(string FilePath, IReadOnlyDictionary<string, IReadOnlyList<int>> TypeLines)
     {
         public IReadOnlySet<string> TypeNames { get; } = TypeLines.Keys.ToHashSet(StringComparer.Ordinal);
+        public string FileName { get; } = Path.GetFileName(FilePath);
+        public string FileNameWithoutExtension { get; } = Path.GetFileNameWithoutExtension(FilePath);
 
-        public int LineFor(string typeName)
+        public IReadOnlyList<int> LinesFor(string typeName)
         {
-            return TypeLines.GetValueOrDefault(typeName, 1);
+            return TypeLines.GetValueOrDefault(typeName) ?? Array.Empty<int>();
         }
     }
+
+    private sealed record GeneratedTypeMatch(string FilePath, int Line);
 
     private sealed record CSharpTypeDeclaration(string FilePath, string FullName, int Line);
 }

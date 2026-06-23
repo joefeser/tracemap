@@ -2,7 +2,7 @@
 
 Status: continuation-ready
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
-Current implementation branch: codex/implement-legacy-data-model-metadata-continuation
+Current implementation branch: codex/implement-legacy-data-model-metadata-continuation-next
 Public claim level: hidden
 
 Post-promotion note: several legacy-data model identity/reporting slices have
@@ -11,10 +11,14 @@ slice. This spec still has follow-up work after the current continuation slice.
 
 ## Current Branch Scope
 
-This branch is a partial follow-up slice, not a full-spec closeout. It is
-merge-ready only as a contained Task 6 mapped-symbol continuation: scoped
-syntax fallback links from NHibernate mapped classes to checked-in C# type
-declarations when the mapping supplies a fully qualified type identity.
+This branch is a partial follow-up slice, not a full-spec closeout. The current
+working branch is
+`codex/implement-legacy-data-model-metadata-continuation-next`; it is
+merge-ready only as a contained Task 6 generated-link continuation: hardening
+existing DBML/EDMX/typed DataSet generated-designer link metadata and duplicate
+designer type ambiguity gaps. It does not add compiler-semantic symbol
+resolution, runtime generated-code freshness checks, custom tool execution,
+provider behavior, or downstream graph/vault/report expansion.
 
 - [x] Task 5 partial: LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, and Castle
   ActiveRecord descriptor signals emit `legacy.data.orm.unsupported.v1`
@@ -29,6 +33,10 @@ declarations when the mapping supplies a fully qualified type identity.
 - [x] Task 6 partial: NHibernate mapped class descriptors link to a single
   scoped C# syntax declaration through `legacy.data.model.generated-link.v1`
   with reduced coverage.
+- [x] Task 6 partial: DBML/EDMX/typed DataSet generated-designer links under
+  `legacy.data.generated-link.v1` now carry model-normalized supporting
+  metadata and duplicate generated-designer type declarations emit ambiguity
+  gaps instead of arbitrary links.
 - [ ] Task 6 semantic symbol resolution, DataSet row/table/adapter linking,
   context types, custom tool generated outputs, missing/stale generated hints,
   and broader ambiguity families remain deferred.
@@ -790,3 +798,133 @@ PR review-loop follow-up:
 - After the PR-thread patch, reran `git diff --check`: passed.
 - Final agent-control loop result is pending. PR should target `dev`; do not
   merge from the implementation agent.
+
+## Implementation Slice 7 State
+
+Branch: `codex/implement-legacy-data-model-metadata-continuation-next`
+Base: `origin/dev` at `c200ae37`
+PR: pending
+
+Selected scope: partial Task 6. This slice hardens the existing DBML, EDMX, and
+typed DataSet generated-designer link path. It preserves the existing
+`legacy.data.generated-link.v1` source rule for these descriptor-scoped links
+and adds model-normalized supporting metadata needed by downstream readers.
+
+Implemented:
+
+- Limited generated-designer matching to legacy data entity/storage descriptor
+  facts, avoiding incidental descriptor facts that happen to carry a type name.
+- Added `sourceMetadataFactId`, `supportingFactIds`, `stableModelKey`,
+  `symbolRole`, `coverageLabel`, and deterministic limitation codes to legacy
+  generated-link facts.
+- Preserved tier behavior: explicit descriptor-named generated files remain
+  `Tier2Structural`; scoped designer syntax fallback remains
+  `Tier3SyntaxOrTextual`; descriptor facts remain capped at `Tier2Structural`.
+- Treated duplicate type declarations inside a candidate generated designer as
+  `AmbiguousGeneratedCodeLink` gaps instead of throwing or selecting a winner.
+- Anchored missing and ambiguous generated-code gaps to the source descriptor
+  line when available.
+- Updated `rules/rule-catalog.yml` safe-property documentation for
+  `legacy.data.generated-link.v1`.
+- Updated `docs/ACCEPTANCE.md` with explicit generated-file, syntax fallback,
+  duplicate designer type, and missing explicit designer generated-link
+  acceptance rows.
+- PR-loop patch added cached generated-candidate file names, deterministic
+  source/type discriminators on generated-link gaps, and same-line missing
+  generated-code gap ID regression coverage.
+
+Task checkbox mapping:
+
+- Task 6 structural fallback remains open overall. This slice completes the
+  existing explicit generated-designer metadata hardening for DBML/EDMX/typed
+  DataSet descriptors; custom tool/project-file generated outputs remain
+  deferred.
+- Task 6 scoped syntax fallback remains open overall. This slice completes
+  duplicate-candidate hardening for existing DBML/EDMX/typed DataSet
+  generated-designer syntax fallback; DataSet row/table/adapter/context
+  expansion and compiler-semantic links remain deferred.
+- Task 6 gap emission remains open overall. This slice completes duplicate
+  designer type ambiguity gaps and descriptor-line anchoring for missing or
+  ambiguous generated-designer evidence; stale generated-code freshness
+  analysis and broader generated-output ambiguity families remain deferred.
+
+Deferred within Task 6:
+
+- Compiler-semantic symbol resolution.
+- Custom tool/project-file generated output declarations beyond existing
+  descriptor-scoped generated designer hints.
+- Deeper DataSet row/table/adapter/context linking beyond existing generated
+  designer short-name evidence.
+- Stale generated-code freshness analysis and broader generated-output
+  ambiguity families.
+- Downstream selector/report/vault/graph integration remains owned by Tasks
+  7-9 and is not claimed by this slice.
+
+Validation executed:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataMetadataExtractorTests`:
+  passed, 42 tests after the PR-loop patch. Existing NuGet audit warning for
+  `SQLitePCLRaw.lib.e_sqlite3` was reported during restore/build output.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter LegacyDataModel`:
+  passed, 4 tests, with the same existing NU1903 advisory warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 611 tests after the PR-loop
+  patch, with the same
+  existing NU1903 advisory warnings.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-sample-generated-link-smoke`:
+  passed; emitted 27 facts at `Level1SemanticAnalysis`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Relevant pinned smoke guidance from `docs/VALIDATION.md`: legacy data metadata
+scanner changes require focused extractor tests, full build/test, private-path
+guard, and diff check. Broader combined/path/reverse/report smokes are deferred
+because this slice does not change downstream workflow behavior.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-22T222139-919Z-implementation-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. Blocking
+  findings were patched by removing undocumented `generatedCodeFilePath` and
+  singular `supportingFactId`, tightening generated-link rule catalog tier and
+  safe-property documentation, and adding tests for the documented property
+  contract.
+- First Sonnet re-review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-22T222626-207Z-re-review-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. Blocking
+  findings were patched by removing the dead private `existingFacts` parameter
+  from `AddGeneratedCodeLinks`, adding DBML `MissingGeneratedCode` coverage,
+  and adding EDMX syntax-fallback coverage/limitation tests.
+- Second Sonnet re-review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-22T223109-173Z-re-review-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. It found the
+  implementation correct and remaining blockers were validation/state and
+  `docs/ACCEPTANCE.md` updates. Patched by recording validation here, updating
+  acceptance rows, and adding SQLite temp-path privacy coverage for DBML
+  generated-link properties. No further Kiro review cycle was run to respect
+  the two re-review limit.
+
+PR review-loop status:
+
+- PR: https://github.com/joefeser/tracemap/pull/296 targeting `dev`.
+- Initial agent-control loop on PR #296 waited for required Codex/Qodo batching
+  and then returned `actionable_findings` after Qodo completed. Patched
+  Gemini's duplicate `Path.GetFileName*` allocation comments by caching
+  `FileName` and `FileNameWithoutExtension` on `GeneratedCandidate`.
+- Patched Codex's generated-link rule catalog finding by documenting the actual
+  emitted evidence tiers for `legacy.data.generated-link.v1`:
+  `Tier2Structural`, `Tier3SyntaxOrTextual`, and `Tier4Unknown`.
+- Patched Qodo's generated-link gap FactId collision finding by emitting
+  generated-link gaps with `sourceMetadataFactId`, `supportingFactIds`,
+  stable type safe/hash metadata, and a source fact/type discriminator in the
+  evidence hash seed.
+- Posted evidence-backed `review-finding-disposition` comments for the two
+  Gemini threads and one Qodo thread that GitHub did not auto-resolve, citing
+  fixing commit `ff6bac32` and validation evidence.
+- Final agent-control rerun at `ff6bac32c51141fad47472028475297c5c164a5f`:
+  `merge_ready`, stop reason `NONE`, `canMerge: true`, merge state `CLEAN`,
+  unresolved threads `0`, pending checks `0`, failed checks `0`. Residual risk
+  was `medium` because Codex reviewed `9ede07c8e240ae21286e54955845deb2602e5f0d`
+  and Qodo satisfied the configured required-review quorum on `dev`.
