@@ -119,6 +119,8 @@ const hardPrivatePatterns = [
   /\bsk-[A-Za-z0-9_-]{12,}\b/i
 ];
 
+const attributePatternCache = new Map();
+
 export async function validateChangeRiskLanguageGuideDist({
   baseUrl = "https://tracemap.tools",
   dist,
@@ -436,7 +438,13 @@ function hasHref(html, href) {
 }
 
 function getAttribute(attributes, name) {
-  const match = new RegExp(`(?:^|\\s)${escapeRegExp(name)}\\s*=\\s*["']([^"']*)["']`, "i").exec(attributes);
+  let pattern = attributePatternCache.get(name);
+  if (!pattern) {
+    pattern = new RegExp(`(?:^|\\s)${escapeRegExp(name)}\\s*=\\s*["']([^"']*)["']`, "i");
+    attributePatternCache.set(name, pattern);
+  }
+
+  const match = pattern.exec(attributes);
   return match ? decodeHtmlEntities(match[1]) : null;
 }
 
