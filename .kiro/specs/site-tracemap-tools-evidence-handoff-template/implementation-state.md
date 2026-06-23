@@ -149,7 +149,26 @@ human review.
   390x844. Hero buttons fit within the viewport, page-level horizontal
   overflow was false, and the template table scrolled inside its existing
   table wrapper.
-- PR loop outcome: pending until the ready PR exists.
+- PR loop cycle on PR 302 initially returned `actionable_findings` with
+  `UNRESOLVED_REVIEW_THREADS`. Patching was deferred while Codex was still an
+  active required-review lock and `patchAuthorized` was false.
+- After Codex returned, the required-review batch reached `batch_terminal`
+  with `patchAuthorized: true`. Combined findings patched:
+  - tighten realistic abbreviated SHA detection to avoid ordinary hex-like
+    word false positives;
+  - avoid `data-id`, `data-rel`, and `data-href` attribute spoofing in the
+    focused validator helpers;
+  - handle non-array `limitations` metadata without throwing;
+  - reject `Not only does TraceMap prove runtime behavior` style overclaim
+    wording instead of treating it as a negated context.
+- Review-fix validation on 2026-06-23:
+  `node --test site/scripts/evidence-handoff-template.test.mjs` passed,
+  `cd site && npm test` passed, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and sequential
+  `cd site && npm run validate && npm run build` passed. A parallel
+  validate/build attempt was discarded because both commands rewrote
+  `site/dist/` concurrently.
+- Final PR loop outcome: pending after review-fix push.
 
 If `./scripts/check-private-paths.sh` is absent at review time, record the
 absence here and treat the check as an open gap rather than a pass.

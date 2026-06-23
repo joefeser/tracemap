@@ -83,6 +83,62 @@ test("validateEvidenceHandoffTemplateDist rejects hard private material and real
   assert.match(errors.join("\n"), /hard private material/);
 });
 
+test("validateEvidenceHandoffTemplateDist allows hex-like words that are not SHA context", async (t) => {
+  const root = await createManagedFixture(t, {
+    templateHtml: evidenceHandoffTemplatePage({ extraBody: "<p>defaced effaced feedback</p>" })
+  });
+  const errors = [];
+
+  await validateEvidenceHandoffTemplateDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateEvidenceHandoffTemplateDist reports non-array limitations without throwing", async (t) => {
+  const root = await createManagedFixture(t);
+  await rewriteRouteEntry(join(root, "dist"), {
+    limitations: { text: "not an array" }
+  });
+  const errors = [];
+
+  await validateEvidenceHandoffTemplateDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /must include limitations metadata/);
+});
+
+test("validateEvidenceHandoffTemplateDist rejects data-id section spoofing", async (t) => {
+  const root = await createManagedFixture(t, {
+    templateHtml: evidenceHandoffTemplatePage().replace('id="template"', 'data-id="template"')
+  });
+  const errors = [];
+
+  await validateEvidenceHandoffTemplateDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing required section: template/);
+});
+
+test("validateEvidenceHandoffTemplateDist rejects data-rel metadata spoofing", async (t) => {
+  const root = await createManagedFixture(t, {
+    templateHtml: evidenceHandoffTemplatePage().replace('rel="canonical"', 'data-rel="canonical"')
+  });
+  const errors = [];
+
+  await validateEvidenceHandoffTemplateDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing required metadata: canonical URL/);
+});
+
+test("validateEvidenceHandoffTemplateDist rejects not-only overclaim wording", async (t) => {
+  const root = await createManagedFixture(t, {
+    templateHtml: evidenceHandoffTemplatePage({ extraBody: "<p>Not only does TraceMap prove runtime behavior, it certifies the claim.</p>" })
+  });
+  const errors = [];
+
+  await validateEvidenceHandoffTemplateDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim/);
+});
+
 test("validateEvidenceHandoffTemplateDist reports missing inbound links from adjacent routes", async (t) => {
   const root = await createManagedFixture(t, { includeInboundLinks: false });
   const errors = [];

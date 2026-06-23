@@ -167,7 +167,7 @@ const hardPrivatePatterns = [
   /\bsecret\s*=/i,
   /\bsk-[A-Za-z0-9_-]{12,}\b/i,
   /\b[a-f0-9]{40}\b/,
-  /\b[a-f0-9]{7,12}\b/
+  /\b(?=[a-f0-9]{7,12}\b)(?=[a-f0-9]*\d)(?=[a-f0-9]*[a-f])[a-f0-9]+\b/
 ];
 
 const forbiddenPrivateNamePatterns = [
@@ -282,6 +282,7 @@ function validateRouteEntry(routeEntry, errors) {
   if (!Array.isArray(routeEntry.limitations) || routeEntry.limitations.length === 0) {
     errors.push(withEvidence("Evidence handoff template routes-index.json must include limitations metadata.", routesIndexArtifact));
   }
+  const limitations = Array.isArray(routeEntry.limitations) ? routeEntry.limitations : [];
 
   if (!Array.isArray(routeEntry.nonClaims) || routeEntry.nonClaims.length === 0) {
     errors.push(withEvidence("Evidence handoff template routes-index.json must include nonClaims metadata.", routesIndexArtifact));
@@ -297,7 +298,7 @@ function validateRouteEntry(routeEntry, errors) {
 
   validateForbiddenPositiveClaims({
     errors,
-    text: [routeEntry.title, routeEntry.summary, ...(routeEntry.limitations ?? [])].join(" "),
+    text: [routeEntry.title, routeEntry.summary, ...limitations].join(" "),
     label: "route metadata"
   });
   validateHardPrivateMaterial({
@@ -548,22 +549,26 @@ function validatePrivateNames({ errors, text, label }) {
 
 function hasNegatedContext(value, index) {
   const prefix = value.slice(Math.max(0, index - 72), index).toLowerCase();
-  return /(?:not|no|without|cannot|can't|does not|do not|never|not a|is not|are not)\s+(?:a\s+|an\s+|the\s+|new\s+|this\s+)?[^.]{0,40}$/.test(prefix);
+  if (/\bnot\s+only\b/.test(prefix)) {
+    return false;
+  }
+
+  return /(?:does not|do not|cannot|can't|is not|are not|without|never|not a|not an|not the|no)\s+(?:a\s+|an\s+|the\s+|new\s+|this\s+)?[^.]{0,40}$/.test(prefix);
 }
 
 function hasSection(html, id) {
-  return new RegExp(`<section\\b(?=[^>]*\\bid\\s*=\\s*["']${escapeRegExp(id)}["'])`, "i").test(html);
+  return new RegExp(`<section\\b(?=[^>]*(?:^|\\s)id\\s*=\\s*["']${escapeRegExp(id)}["'])`, "i").test(html);
 }
 
 function extractSection(html, id) {
   const escaped = escapeRegExp(id);
-  const match = html.match(new RegExp(`<section\\b(?=[^>]*\\bid\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/section>`, "i"));
+  const match = html.match(new RegExp(`<section\\b(?=[^>]*(?:^|\\s)id\\s*=\\s*["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/section>`, "i"));
   return match?.[0] ?? "";
 }
 
 function hasFieldRow(html, field) {
   const escaped = escapeRegExp(field);
-  return new RegExp(`<tr\\b(?=[^>]*\\bdata-handoff-field\\s*=\\s*["']${escaped}["'])`, "i").test(html);
+  return new RegExp(`<tr\\b(?=[^>]*(?:^|\\s)data-handoff-field\\s*=\\s*["']${escaped}["'])`, "i").test(html);
 }
 
 function hasSyntheticExampleField(html, field) {
@@ -573,7 +578,7 @@ function hasSyntheticExampleField(html, field) {
 
 function hasHref(html, href) {
   const escaped = escapeRegExp(href);
-  return new RegExp(`\\bhref\\s*=\\s*(["'])${escaped}\\1`, "i").test(html);
+  return new RegExp(`(?:^|\\s)href\\s*=\\s*(["'])${escaped}\\1`, "i").test(html);
 }
 
 function hasMeta(metaTags, expected) {
@@ -633,7 +638,7 @@ function findTagAttributes(html, tagName) {
 }
 
 function getAttribute(attributes, name) {
-  const pattern = new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, "i");
+  const pattern = new RegExp(`(?:^|\\s)${escapeRegExp(name)}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, "i");
   const match = attributes.match(pattern);
   return match ? decodeHtmlEntities(unquoteAttributeValue(match[1]).trim()) : null;
 }
@@ -647,7 +652,7 @@ function unquoteAttributeValue(value) {
 }
 
 function extractHrefs(html) {
-  return [...html.matchAll(/\bhref\s*=\s*("[^"]*"|'[^']*')/gi)].map((match) => decodeHtmlEntities(unquoteAttributeValue(match[1])));
+  return [...html.matchAll(/(?:^|\s)href\s*=\s*("[^"]*"|'[^']*')/gi)].map((match) => decodeHtmlEntities(unquoteAttributeValue(match[1])));
 }
 
 function extractMainHtml(html) {
@@ -657,7 +662,7 @@ function extractMainHtml(html) {
 
 function stripSanctionedBoundaryRegions(html) {
   return html.replace(
-    /<section\b(?=[^>]*\bdata-context\s*=\s*["'](?:non-claim|unsafe-example|stop-condition|handoff-checklist|template-field|neighbor-distinction|when-to-use|caution|synthetic-example)["'])[^>]*>[\s\S]*?<\/section>/gi,
+    /<section\b(?=[^>]*(?:^|\s)data-context\s*=\s*["'](?:non-claim|unsafe-example|stop-condition|handoff-checklist|template-field|neighbor-distinction|when-to-use|caution|synthetic-example)["'])[^>]*>[\s\S]*?<\/section>/gi,
     " "
   );
 }
