@@ -83,6 +83,17 @@ test("validateEvidenceHandoffTemplateDist rejects hard private material and real
   assert.match(errors.join("\n"), /hard private material/);
 });
 
+test("validateEvidenceHandoffTemplateDist rejects uppercase realistic SHAs", async (t) => {
+  const root = await createManagedFixture(t, {
+    templateHtml: evidenceHandoffTemplatePage({ extraBody: "<p>ABCD1234</p>" })
+  });
+  const errors = [];
+
+  await validateEvidenceHandoffTemplateDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /hard private material/);
+});
+
 test("validateEvidenceHandoffTemplateDist allows hex-like words that are not SHA context", async (t) => {
   const root = await createManagedFixture(t, {
     templateHtml: evidenceHandoffTemplatePage({ extraBody: "<p>defaced effaced feedback</p>" })
@@ -104,6 +115,21 @@ test("validateEvidenceHandoffTemplateDist reports non-array limitations without 
   await validateEvidenceHandoffTemplateDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /must include limitations metadata/);
+});
+
+test("validateEvidenceHandoffTemplateDist rejects affirmative overclaims in route nonClaims", async (t) => {
+  const root = await createManagedFixture(t);
+  await rewriteRouteEntry(join(root, "dist"), {
+    nonClaims: [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, real organization ownership, complete coverage, AI impact analysis, LLM analysis, autonomous review, generated handoff feature, or replacement of human review.",
+      "TraceMap proves runtime behavior."
+    ]
+  });
+  const errors = [];
+
+  await validateEvidenceHandoffTemplateDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim/);
 });
 
 test("validateEvidenceHandoffTemplateDist rejects data-id section spoofing", async (t) => {

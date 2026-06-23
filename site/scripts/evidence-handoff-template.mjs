@@ -166,8 +166,8 @@ const hardPrivatePatterns = [
   /\bapi[_-]?key\b/i,
   /\bsecret\s*=/i,
   /\bsk-[A-Za-z0-9_-]{12,}\b/i,
-  /\b[a-f0-9]{40}\b/,
-  /\b(?=[a-f0-9]{7,12}\b)(?=[a-f0-9]*\d)(?=[a-f0-9]*[a-f])[a-f0-9]+\b/
+  /\b[a-f0-9]{40}\b/i,
+  /\b(?=[a-f0-9]{7,12}\b)(?=[a-f0-9]*\d)(?=[a-f0-9]*[a-f])[a-f0-9]+\b/i
 ];
 
 const forbiddenPrivateNamePatterns = [
@@ -298,7 +298,7 @@ function validateRouteEntry(routeEntry, errors) {
 
   validateForbiddenPositiveClaims({
     errors,
-    text: [routeEntry.title, routeEntry.summary, ...limitations].join(" "),
+    text: [routeEntry.title, routeEntry.summary, ...limitations, ...routeEntry.nonClaims].join(" "),
     label: "route metadata"
   });
   validateHardPrivateMaterial({

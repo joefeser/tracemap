@@ -168,6 +168,18 @@ human review.
   `cd site && npm run validate && npm run build` passed. A parallel
   validate/build attempt was discarded because both commands rewrote
   `site/dist/` concurrently.
+- Second review-fix batch on 2026-06-23 addressed Qodo top-level findings
+  after review threads were resolved:
+  - removed `impacted` from the unsafe example wording;
+  - scanned route `nonClaims` for affirmative overclaims while preserving
+    negated non-claim wording;
+  - made realistic SHA detection case-insensitive and added an uppercase
+    regression test.
+- Second review-fix validation on 2026-06-23:
+  `node --test site/scripts/evidence-handoff-template.test.mjs` passed,
+  `cd site && npm test` passed, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and sequential
+  `cd site && npm run validate && npm run build` passed.
 - Final PR loop outcome: pending after review-fix push.
 
 If `./scripts/check-private-paths.sh` is absent at review time, record the
