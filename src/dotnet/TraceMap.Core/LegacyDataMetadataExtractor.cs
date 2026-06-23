@@ -1645,29 +1645,7 @@ public static class LegacyDataMetadataExtractor
 
     private static bool IsSafeIdentifier(string value)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Length > 128)
-        {
-            return false;
-        }
-
-        var lower = value.ToLowerInvariant();
-        if (lower.Contains("password", StringComparison.Ordinal)
-            || lower.Contains("secret", StringComparison.Ordinal)
-            || lower.Contains("token", StringComparison.Ordinal)
-            || lower.Contains("apikey", StringComparison.Ordinal)
-            || lower.Contains("api_key", StringComparison.Ordinal)
-            || lower.Contains("connectionstring", StringComparison.Ordinal)
-            || value.Contains("://", StringComparison.Ordinal)
-            || value.Contains("\\", StringComparison.Ordinal)
-            || value.Contains("/", StringComparison.Ordinal)
-            || value.Contains(";", StringComparison.Ordinal)
-            || value.Contains("=", StringComparison.Ordinal)
-            || value.Contains("@", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return value.All(ch => char.IsLetterOrDigit(ch) || ch is '_' or '.' or '-' or ' ');
+        return LegacyDataSafeValues.IsSafeIdentifier(value);
     }
 
     private static string? TargetFrom(IReadOnlyDictionary<string, string> properties, string clearKey, string hashKey)
