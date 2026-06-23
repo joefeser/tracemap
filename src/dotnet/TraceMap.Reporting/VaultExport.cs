@@ -2546,7 +2546,7 @@ public static class VaultExporter
 
     private static IReadOnlyList<string> NodeLimitations(CombinedPathNode node, string sourceClaim)
     {
-        var limitations = new List<string>();
+        var limitations = new SortedSet<string>(SafeNodeLimitationCodes(node.Limitations), StringComparer.Ordinal);
         if (sourceClaim == "hidden")
         {
             limitations.Add("Display values are category-labeled because the source identity is hidden.");
@@ -2557,7 +2557,30 @@ public static class VaultExporter
             limitations.Add("Evidence tier is unknown; do not upgrade the conclusion from graph presence.");
         }
 
-        return limitations.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        return limitations.ToArray();
+    }
+
+    private static IReadOnlyList<string> SafeNodeLimitationCodes(IReadOnlyList<string>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return [];
+        }
+
+        return values
+            .Select(value => value?.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => IsSafeNodeLimitationCode(value!) ? value! : $"unsafe-limitation-code-hash-{Hash(value!, 16)}")
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsSafeNodeLimitationCode(string value)
+    {
+        return value.Length <= 96
+            && Regex.IsMatch(value, "^[a-z][a-z0-9-]{0,95}$", RegexOptions.CultureInvariant)
+            && UnsafeCategory(value) is null;
     }
 
     private static IReadOnlyList<string> EdgeLimitations(CombinedPathEdge edge)

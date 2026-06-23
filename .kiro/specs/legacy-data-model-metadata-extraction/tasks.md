@@ -199,15 +199,23 @@
           projected descriptor rows expose or preserve
           `surfaceSubtype = data-model` while retaining hash-only display and
           `AnalysisGap` exclusion.
+    - [x] Completed in slice 9: graph/vault export redaction regression proves
+          NHibernate formula, filter, query, config/provider-like values,
+          remotes, local paths, and unsafe descriptor labels do not appear in
+          `graph.json` or generated vault Markdown.
     - [ ] Deferred: persisted derived-row no-double-projection tests, broader
-          selector downgrade behavior, graph/vault export redaction, portfolio
-          privacy, and end-to-end NHibernate unsafe-value redaction.
+          selector downgrade behavior, portfolio privacy, and broader
+          end-to-end NHibernate unsafe-value redaction outside graph/vault.
   - [ ] Include a gap-exclusion regression for a pre-existing source rule such
         as `legacy.data.dbml.v1`, not only new old ORM gaps.
     - [x] Completed in earlier projection coverage and asserted in combined
           report/path tests with DBML gap facts.
   - [ ] Add graph/vault projection tests proving NHibernate formula, filter, and
         query redaction survives through surface projection and export.
+    - [x] Completed in slice 9 for vault export and its machine graph:
+          descriptor limitations now flow through path inventory nodes and
+          generated vault output omits raw formula/filter/query/config-like
+          values while preserving rule IDs, tiers, spans, and limitation codes.
 
 - [ ] 8. Integrate with combined reports, paths, reverse, impact, release-review, and portfolio. Requirements: 5, 6, 8.
   - [ ] Partially implemented across reporting-integration and slice 8. This
@@ -239,7 +247,8 @@
   - [ ] Keep "impact" wording static and evidence-backed.
 
 - [ ] 9. Integrate with evidence graph and vault export. Requirements: 6, 7, 8.
-  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
+  - [ ] Partially implemented across the surface-subtype and graph/vault
+        redaction slices. This task remains blocked from
         being marked complete until graph/vault export tests prove raw SQL-like
         formula/filter/query text, connection strings, URLs, remotes, local
         paths, and private labels remain absent.
@@ -251,6 +260,11 @@
   - [ ] Add tests for redaction and graph/vault schema compatibility.
   - [ ] Add vault export tests proving connection strings, raw SQL-like formula
         or filter text, URLs, remotes, local paths, and private labels are absent.
+    - [x] Completed in slice 9: added a vault export regression over a combined
+          index with NHibernate descriptor evidence carrying unsafe raw
+          formula/filter/query/config/provider-like properties. The test proves
+          those values are absent from `graph.json` and generated Markdown while
+          safe limitation labels survive.
 
 - [ ] 10. Update docs and validation guidance. Requirements: 8.
   - [x] Update `docs/ACCEPTANCE.md` for new data model identity, ORM descriptor,
