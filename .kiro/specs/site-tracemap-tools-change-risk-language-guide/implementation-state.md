@@ -1,21 +1,21 @@
 # Site TraceMap Tools Change-Risk Language Guide Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
 Spec branch: `codex/spec-site-change-risk-language-guide`
+Implementation branch: `codex/impl-site-change-risk-language-guide`
 Base: `origin/dev`
 Target PR base: `dev`
 
 ## Scope
 
-This is a spec-only public-site packet for a future change-risk language guide.
-The current phase may write only this spec directory. It must not edit site
-source, generated output, scanner code, reducer code, package files, validation
-scripts, or existing specs.
+This implementation adds the public change-risk language guide to the static
+site. The work is limited to site source, site validation/test coverage, and
+this spec packet's bookkeeping. Generated site output remains uncommitted.
 
 ## Claim Boundary
 
@@ -33,17 +33,40 @@ source snippets, raw SQL, config values, secrets, local absolute paths, raw
 remotes, generated scan directories, private sample names, command output,
 hidden validation details, or credential-like values.
 
-## Placement Decision Status
+## Placement Decision
 
-Not selected. Future implementation must evaluate:
+Selected placement: `/language/change-risk/`.
 
-- `/language/change-risk/`
-- `/review-claim-checklist/language/`
-- A section on `/review-claim-checklist/`
-- A section on `/questions/objections/`
+Reasons:
 
-Selection and rejected alternatives must be recorded here during future
-implementation.
+- The required eight sections and six tables fit the standalone word-count
+  bound and would make a folded section too dense.
+- A standalone page supports canonical metadata, sitemap metadata, discovery
+  metadata, route-specific validation, and direct links from adjacent surfaces.
+- The page is concept-level wording discipline, so it can stay separate from
+  checklist completion, objection handling, release boundary, runtime boundary,
+  proof-path FAQ, and manager Q&A surfaces.
+
+Rejected alternatives:
+
+- `/review-claim-checklist/language/`: close to the claim checklist, but the
+  page is broader reusable wording guidance for reviewers, managers,
+  engineers, architects, and implementation agents.
+- Section on `/review-claim-checklist/`: rejected because the required tables
+  and non-claim examples would bloat the checklist route and blur checklist
+  completion with language selection.
+- Section on `/questions/objections/`: rejected because it would make the guide
+  look like objection handling instead of bounded phrasing discipline.
+
+Route existence check: all named adjacent routes exist:
+`/review-claim-checklist/`, `/questions/objections/`,
+`/release-review-boundary/`, `/static-vs-runtime/`, `/proof-paths/faq/`, and
+`/manager-faq/`.
+
+Navigation decision: the guide is not added to primary navigation. Discovery is
+through sitemap/discovery metadata, hero/related links on the new page, and
+targeted inbound links from `/review-claim-checklist/`,
+`/questions/objections/`, and `/manager-faq/`.
 
 ## Adjacent Surface Boundary
 
@@ -84,6 +107,19 @@ Visible required phrases:
 
 - `Public claim level: concept`
 - `No public conclusion without evidence`
+
+Implemented route content:
+
+- Required sections use stable anchors:
+  `#why-wording-matters`, `#safe-static-evidence-phrases`,
+  `#unsafe-phrases`, `#evidence-required-wording`,
+  `#reduced-coverage-wording`, `#owner-handoff-wording`,
+  `#stop-conditions`, and `#non-claims`.
+- Required tables use machine-readable `data-language-table` markers:
+  `safe-phrasing`, `unsafe-blocked-phrasing`, `evidence-shows`,
+  `needs-review`, `coverage-reduced`, and `when-to-stop`.
+- Unsafe examples are wrapped with `data-blocked-phrase` so validators can
+  distinguish blocked teaching examples from affirmative product claims.
 
 ## Validation Expectations
 
@@ -128,6 +164,40 @@ because the page teaches language for deterministic static evidence; future
 implementation must verify the current allowed values before editing
 discovery metadata. Use the exact `nonClaims` field name for discovery
 non-claim entries.
+
+## Validation Results
+
+Validation completed before commit:
+
+- `npm test` from `site/`: passed.
+- `npm run validate` from `site/`: passed.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
+Focused validator coverage added for:
+
+- Required visible text, required section anchors, and required tables.
+- Required adjacent links, inbound links, sitemap entry, route metadata, and
+  discovery metadata fields.
+- Forbidden affirmative public claims outside sanctioned teaching/non-claim
+  contexts.
+- Private or credential-like material.
+- Required marked blocked phrases and rendered word-count bounds.
+
+Browser sanity:
+
+- Desktop viewport check passed: visible claim-level/principle text, six
+  language tables, required links, and no document-level horizontal overflow.
+- Mobile viewport check passed: visible claim-level/principle text, six
+  language tables inside scrollable wrappers, and no document-level horizontal
+  overflow.
+
+## PR Loop Status
+
+Pending PR creation and required reviewer loop. Final PR-loop decision and stop
+reason must be recorded here after the ready PR is opened and the required
+`agent-control pr-loop` command completes.
 
 ## Review Status
 
@@ -186,11 +256,23 @@ non-claim entries.
 
 ## Implementation Summary
 
-Not implemented. This packet defines future implementation requirements only.
-Spec review findings have been handled, so the packet is ready for a future
-implementation phase.
+Implemented the standalone `/language/change-risk/` public site route with
+concept-level wording guidance, safe and unsafe phrasing tables,
+evidence-required wording, reduced-coverage wording, owner-handoff wording,
+stop conditions, and non-claims.
+
+Added standalone sitemap and discovery metadata with `publicClaimLevel:
+concept`, `sourceType: site-page`, `hintCategory: evidence`,
+`preferredProofPath: /proof-paths/`, limitations, and `nonClaims`.
+
+Added targeted inbound discovery links from nearby public-safe pages without
+adding the route to primary navigation.
+
+Added route-specific validator and tests, then wired the validator into the
+aggregate site validation entrypoint.
 
 ## Follow-Ups
 
-- Future implementation should begin by verifying current site information
-  architecture and recording placement decisions here.
+- Replace the PR-loop pending note with the final exact decision, stop reason,
+  actionable findings, review-thread state, and merge/owner-ready posture after
+  the PR loop completes.

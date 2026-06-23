@@ -801,6 +801,23 @@
     ]
   },
   {
+    "path": "/language/change-risk/",
+    "title": "Change-Risk Language Guide",
+    "summary": "Concept-level wording guide for choosing bounded public language around deterministic static change evidence, reduced coverage, owner handoffs, and stop conditions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The guide teaches public-safe wording and cannot upgrade static evidence into stronger product, runtime, release, or safety conclusions.",
+      "Evidence-bearing scanner facts, reducer findings, rule catalog entries, coverage labels, and documented limitations remain the source of support."
+    ],
+    "nonClaims": [
+      "No impact proof, absence-of-impact proof, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, complete coverage, AI impact analysis, LLM analysis, autonomous approval, or replacement of human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public language-guide material."
+    ]
+  },
+  {
     "path": "/review-claim-checklist/",
     "title": "Review Claim Checklist",
     "summary": "Concept-level repeat-before-reuse checklist for keeping TraceMap claims attached to proof paths, rule IDs, evidence tiers, coverage labels, limitations, non-claims, source status, and owner follow-up.",
