@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 
@@ -155,7 +156,9 @@ public sealed record CombinedDependencySurfaceRow(
     IReadOnlyList<string>? LegacyDataRedactions = null,
     bool LegacyDataDisplayClearance = false,
     string? LegacyDataClaimLevelContextId = null,
-    string? LegacyDataExtractorVersion = null);
+    string? LegacyDataExtractorVersion = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? SurfaceSubtype = null);
 
 public sealed record CombinedDependencyEdgeRow(
     string EdgeKind,
@@ -951,7 +954,8 @@ public static class CombinedDependencyReporter
             surface.LegacyDataRedactions,
             surface.LegacyDataDisplayClearance,
             surface.LegacyDataClaimLevelContextId,
-            surface.LegacyDataExtractorVersion);
+            surface.LegacyDataExtractorVersion,
+            surface.SurfaceSubtype);
     }
 
     private static IReadOnlyList<CombinedNeedsReviewRow> BuildNeedsReview(IReadOnlyList<CombinedEndpointFinding> endpointFindings, IReadOnlyList<CombinedFactRow> facts)
@@ -1282,7 +1286,7 @@ public static class CombinedDependencyReporter
             "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" =>
                 $"framework {surface.FrameworkFamily ?? "unknown"} direction {surface.OperationDirection ?? "unknown"} operation {surface.OperationKind ?? "unknown"} identity {surface.DestinationIdentityStatus ?? "unknown"} destination {surface.NormalizedDestinationKey ?? ShortHash(surface.DestinationHash) ?? "n/a"} caveat static-only",
             "legacy-data" =>
-                $"descriptor {surface.LegacyDataDescriptorId ?? "unknown"} format {surface.LegacyDataMetadataFormat ?? "unknown"} role {surface.LegacyDataDescriptorRole ?? "unknown"} model {surface.LegacyDataModelKind ?? "unknown"} displayClearance {surface.LegacyDataDisplayClearance.ToString().ToLowerInvariant()} coverage {surface.LegacyDataCoverageLabel ?? "unknown"} extractor {surface.LegacyDataExtractorVersion ?? "n/a"} projectionRule {surface.LegacyDataProjectionRuleId ?? "n/a"} limitations {Joined(surface.LegacyDataLimitations)}",
+                $"subtype {surface.SurfaceSubtype ?? "unknown"} descriptor {surface.LegacyDataDescriptorId ?? "unknown"} format {surface.LegacyDataMetadataFormat ?? "unknown"} role {surface.LegacyDataDescriptorRole ?? "unknown"} model {surface.LegacyDataModelKind ?? "unknown"} displayClearance {surface.LegacyDataDisplayClearance.ToString().ToLowerInvariant()} coverage {surface.LegacyDataCoverageLabel ?? "unknown"} extractor {surface.LegacyDataExtractorVersion ?? "n/a"} projectionRule {surface.LegacyDataProjectionRuleId ?? "n/a"} limitations {Joined(surface.LegacyDataLimitations)}",
             _ => string.Empty
         };
     }

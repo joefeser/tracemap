@@ -90,7 +90,7 @@ public static partial class LegacyDataModelDescriptorProjection
             FirstValue(fact.Properties, "descriptorKind"),
             FirstValue(fact.Properties, "sourceSection"));
         var modelKind = ClosedToken(FirstValue(fact.Properties, "modelKind", "descriptorModelKind") ?? ModelKindFromFactType(fact.FactType), "unknown");
-        var descriptorRole = ClosedToken(FirstValue(fact.Properties, "descriptorRole", "mappingKind", "descriptorKind") ?? modelKind, "unknown");
+        var descriptorRole = ClosedToken(FirstValue(fact.Properties, "descriptorRole", "descriptorKind") ?? modelKind, "unknown");
         var stableModelKey = FirstValue(fact.Properties, "stableModelKey");
         var displayNameHash = FirstValue(fact.Properties, "displayNameHash")
             ?? FirstHashValue(fact.Properties)
@@ -167,6 +167,7 @@ public static partial class LegacyDataModelDescriptorProjection
         return IsLegacyDataEvidence(fact)
             && fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)
             && fact.FactType != FactTypes.AnalysisGap
+            && fact.FactType != FactTypes.LegacyDataGeneratedCodeLinked
             && !string.Equals(ClosedToken(FirstValue(fact.Properties, "descriptorRole", "descriptorKind") ?? string.Empty, string.Empty), "analysis-gap", StringComparison.Ordinal)
             && !string.Equals(FirstValue(fact.Properties, "classification"), "AnalysisGap", StringComparison.Ordinal);
     }
@@ -376,7 +377,13 @@ public static partial class LegacyDataModelDescriptorProjection
 
     private static string CoverageLabel(string? value)
     {
-        return string.Equals(value, "reduced", StringComparison.OrdinalIgnoreCase) ? "reduced" : "full";
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "full" => "full",
+            "reduced" => "reduced",
+            "unknown" => "unknown",
+            _ => "unknown"
+        };
     }
 
     private static IReadOnlyList<string> Split(string? value)
