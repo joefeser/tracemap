@@ -963,7 +963,7 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
-    public void Scan_does_not_upgrade_descriptor_tier_above_tier2_for_generated_code_link()
+    public async Task Scan_does_not_upgrade_descriptor_tier_above_tier2_for_generated_code_link()
     {
         using var temp = new TempDirectory();
         File.WriteAllText(Path.Combine(temp.Path, "Model.dbml"), """
@@ -978,6 +978,9 @@ public sealed class LegacyDataMetadataExtractorTests
             """);
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var indexPath = Path.Combine(temp.Path, "out", "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+        var allProperties = await ReadAllPropertiesAsync(indexPath);
 
         var entity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
             && fact.RuleId == RuleIds.LegacyDataDbml
@@ -988,6 +991,165 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal(EvidenceTiers.Tier2Structural, entity.EvidenceTier);
         Assert.Equal(EvidenceTiers.Tier2Structural, entity.Properties.GetValueOrDefault("modelIdentityEvidenceTier"));
         Assert.Equal(EvidenceTiers.Tier2Structural, link.EvidenceTier);
+        Assert.Equal("explicit-generated-file", link.Properties.GetValueOrDefault("linkKind"));
+        Assert.Equal("generated-entity", link.Properties.GetValueOrDefault("symbolRole"));
+        Assert.Equal("dbml", link.Properties.GetValueOrDefault("metadataFormat"));
+        Assert.Equal("full", link.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("generated-code-freshness-unverified", link.Properties.GetValueOrDefault("limitations"));
+        Assert.Equal(entity.FactId, link.Properties.GetValueOrDefault("sourceMetadataFactId"));
+        Assert.Equal(entity.FactId, link.Properties.GetValueOrDefault("supportingFactIds"));
+        Assert.Equal(entity.Properties.GetValueOrDefault("stableModelKey"), link.Properties.GetValueOrDefault("stableModelKey"));
+        Assert.False(link.Properties.ContainsKey("supportingFactId"));
+        Assert.False(link.Properties.ContainsKey("generatedCodeFilePath"));
+        Assert.DoesNotContain(temp.Path, allProperties);
+    }
+
+    [Fact]
+    public void Scan_gaps_duplicate_type_declarations_in_generated_designer_without_choosing_a_winner()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.dbml"), """
+            <Database Name="Store" Class="StoreContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers">
+                <Type Name="Customer" />
+              </Table>
+            </Database>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Model.designer.cs"), """
+            namespace Store.One
+            {
+                public partial class Customer { }
+            }
+            namespace Store.Two
+            {
+                public partial class Customer { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.TargetSymbol == "Customer");
+        var gap = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataGeneratedLink
+            && fact.Evidence.FilePath == "Model.dbml"
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousGeneratedCodeLink");
+        Assert.Equal(3, gap.Evidence.StartLine);
+    }
+
+    [Fact]
+    public void Scan_gaps_missing_explicit_dbml_generated_designer()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.dbml"), """
+            <Database Name="Store" Class="StoreContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="Customers" Member="Customers">
+                <Type Name="Customer" />
+              </Table>
+            </Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataGeneratedLink);
+        var gap = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataGeneratedLink
+            && fact.Evidence.FilePath == "Model.dbml"
+            && fact.Properties.GetValueOrDefault("classification") == "MissingGeneratedCode");
+        Assert.Equal(3, gap.Evidence.StartLine);
+        Assert.False(string.IsNullOrWhiteSpace(gap.Properties.GetValueOrDefault("sourceMetadataFactId")));
+        Assert.False(string.IsNullOrWhiteSpace(gap.Properties.GetValueOrDefault("supportingFactIds")));
+        Assert.Equal("Customer", gap.Properties.GetValueOrDefault("typeName"));
+    }
+
+    [Fact]
+    public void Scan_emits_distinct_generated_link_gap_ids_for_same_line_descriptors()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.dbml"), """
+            <Database Name="Store" Class="StoreContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007"><Table Name="Customers" Member="Customers"><Type Name="Customer" /></Table><Table Name="Orders" Member="Orders"><Type Name="Order" /></Table></Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var indexPath = Path.Combine(temp.Path, "out", "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+
+        var gaps = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.RuleId == RuleIds.LegacyDataGeneratedLink
+                && fact.Properties.GetValueOrDefault("classification") == "MissingGeneratedCode")
+            .OrderBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(2, gaps.Length);
+        Assert.Equal(2, gaps.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(gaps, gap =>
+        {
+            Assert.Equal(1, gap.Evidence.StartLine);
+            Assert.False(string.IsNullOrWhiteSpace(gap.Properties.GetValueOrDefault("sourceMetadataFactId")));
+            Assert.Equal(gap.Properties.GetValueOrDefault("sourceMetadataFactId"), gap.Properties.GetValueOrDefault("supportingFactIds"));
+        });
+    }
+
+    [Fact]
+    public void Scan_marks_edmx_generated_designer_syntax_fallback_as_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.edmx"), """
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer"><EntitySet Name="Customers" EntityType="Model.Customer" /></EntityContainer>
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer"><EntitySet Name="Customers" EntityType="Store.Customers" Table="Customers" /></EntityContainer>
+                    <EntityType Name="Customers"><Property Name="CustomerId" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="Model.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="CustomerId" ColumnName="CustomerId" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Model.Generated.designer.cs"), """
+            namespace Model;
+            public partial class Customer { }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var entity = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("typeName") == "Customer");
+        var link = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataGeneratedLink
+            && fact.TargetSymbol == "Customer");
+
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, link.EvidenceTier);
+        Assert.Equal("type-name-syntax-fallback", link.Properties.GetValueOrDefault("linkKind"));
+        Assert.Equal("generated-entity", link.Properties.GetValueOrDefault("symbolRole"));
+        Assert.Equal("edmx", link.Properties.GetValueOrDefault("metadataFormat"));
+        Assert.Equal("reduced", link.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("generated-code-freshness-unverified;syntax-only-generated-code-link", link.Properties.GetValueOrDefault("limitations"));
+        Assert.Equal(entity.FactId, link.Properties.GetValueOrDefault("sourceMetadataFactId"));
+        Assert.Equal(entity.FactId, link.Properties.GetValueOrDefault("supportingFactIds"));
+        Assert.Equal(entity.Properties.GetValueOrDefault("stableModelKey"), link.Properties.GetValueOrDefault("stableModelKey"));
     }
 
     [Fact]
