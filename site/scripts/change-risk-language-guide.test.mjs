@@ -82,8 +82,9 @@ test("validateChangeRiskLanguageGuideDist rejects positive overclaims outside sa
 });
 
 test("validateChangeRiskLanguageGuideDist rejects private or credential-like material", async (t) => {
+  const privatePath = ["/", "Users", "/example/private"].join("");
   const root = await createManagedFixture(t, {
-    pageHtml: (await sourcePage()).replace("</main>", "<p>/Users/example/private</p></main>")
+    pageHtml: (await sourcePage()).replace("</main>", `<p>${privatePath}</p></main>`)
   });
   const errors = [];
 
