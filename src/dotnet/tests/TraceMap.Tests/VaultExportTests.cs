@@ -103,6 +103,50 @@ public sealed class VaultExportTests
     }
 
     [Fact]
+    public async Task Vault_export_redacts_nhibernate_unsafe_values_from_graph_and_markdown()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "vault");
+        var manifest = Manifest("server", "tracemap-milestone15");
+
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            NHibernateUnsafeEntityFact(manifest, "Mappings/Model.hbm.xml", 8)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["server"]));
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Format: "markdown,json"));
+
+        var surface = Assert.Single(result.Graph.Nodes, node => node.Kind == "surface" && node.SurfaceKind == "legacy-data");
+        Assert.Equal("data-model", surface.SurfaceSubtype);
+        Assert.Contains(RuleIds.LegacyDataOrmNHibernate, surface.RuleIds);
+        Assert.Equal("Tier2Structural", Assert.Single(surface.EvidenceTiers));
+        Assert.Contains("formula-redacted", surface.Limitations);
+        Assert.Contains("filter-redacted", surface.Limitations);
+        Assert.Contains("query-redacted", surface.Limitations);
+
+        var allText = string.Join('\n', Directory.EnumerateFiles(outDir, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.Contains("legacy.data.orm.nhibernate.v1", allText);
+        Assert.Contains("legacy-data", allText);
+        Assert.Contains("data-model", allText);
+        foreach (var unsafeToken in new[]
+                 {
+                     "PrivateCustomer",
+                     "TenantSecrets",
+                     "select CardNumber from Vault.Customers",
+                     "tenant_id = 42",
+                     "https://private.example/nhibernate",
+                     "Server=prod-db;Password=synthetic-secret",
+                     "git@github.com:private/customer.git",
+                     "C:\\private\\customer"
+                 })
+        {
+            Assert.DoesNotContain(unsafeToken, allText, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
     public async Task Vault_export_cli_supports_format_dry_run_and_no_writes()
     {
         using var temp = new TempDirectory();
@@ -783,6 +827,43 @@ public sealed class VaultExportTests
                 ["metadataKind"] = "Dbml",
                 ["modelKind"] = "entity",
                 ["stableModelKey"] = "ldm:vault-model-key"
+            });
+    }
+
+    private static CodeFact NHibernateUnsafeEntityFact(ScanManifest manifest, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataOrmNHibernate,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: "PrivateCustomer",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced",
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = "PrivateCustomer",
+                ["displayNameHash"] = "nhibernate-private-entity-hash",
+                ["displayNameRedaction"] = "hashed-unsafe-identifier",
+                ["metadataFormat"] = "nhibernate-hbm",
+                ["metadataHash"] = "metadata-hash",
+                ["metadataKind"] = "NHibernateHbm",
+                ["modelKind"] = "entity",
+                ["stableModelKey"] = "ldm:nhibernate-private-entity",
+                ["containerName"] = "TenantSecrets",
+                ["containerHash"] = "tenant-secrets-hash",
+                ["formula"] = "select CardNumber from Vault.Customers",
+                ["formulaHash"] = "formula-hash",
+                ["filter"] = "tenant_id = 42",
+                ["filterHash"] = "filter-hash",
+                ["query"] = "select CardNumber from Vault.Customers where tenant_id = 42",
+                ["queryHash"] = "query-hash",
+                ["providerUrl"] = "https://private.example/nhibernate",
+                ["connectionString"] = "Server=prod-db;Password=synthetic-secret",
+                ["remote"] = "git@github.com:private/customer.git",
+                ["localPath"] = "C:\\private\\customer",
+                ["limitations"] = "formula-redacted;filter-redacted;query-redacted"
             });
     }
 

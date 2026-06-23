@@ -2546,7 +2546,7 @@ public static class VaultExporter
 
     private static IReadOnlyList<string> NodeLimitations(CombinedPathNode node, string sourceClaim)
     {
-        var limitations = new List<string>();
+        var limitations = new SortedSet<string>(node.Limitations ?? [], StringComparer.Ordinal);
         if (sourceClaim == "hidden")
         {
             limitations.Add("Display values are category-labeled because the source identity is hidden.");
@@ -2557,7 +2557,7 @@ public static class VaultExporter
             limitations.Add("Evidence tier is unknown; do not upgrade the conclusion from graph presence.");
         }
 
-        return limitations.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        return limitations.ToArray();
     }
 
     private static IReadOnlyList<string> EdgeLimitations(CombinedPathEdge edge)

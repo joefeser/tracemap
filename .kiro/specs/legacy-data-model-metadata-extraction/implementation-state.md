@@ -2,7 +2,7 @@
 
 Status: continuation-ready
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
-Current implementation branch: codex/implement-legacy-data-model-surface-projection
+Current implementation branch: codex/implement-legacy-data-model-export-redaction
 Public claim level: hidden
 
 Post-promotion note: several legacy-data model identity/reporting slices have
@@ -10,6 +10,116 @@ landed, including PR #199, PR #236, and the later NHibernate `.hbm.xml` MVP
 slice. This spec still has follow-up work after the current continuation slice.
 
 ## Current Branch Scope
+
+Branch: `codex/implement-legacy-data-model-export-redaction`
+Base: `origin/dev` at `6dc72576`
+PR: pending
+
+Selected scope: partial Task 7/9 graph and vault export redaction proof. This
+slice does not add scanner extractors, runtime ORM behavior, portfolio output,
+impact, release-review, selector vocabulary, or persisted derived surface facts.
+It carries already-safe legacy data descriptor limitation labels through
+combined path inventory nodes and into vault graph nodes so export consumers can
+see why NHibernate descriptor evidence remains reduced/redacted without
+receiving raw formula, filter, query, config, remote, URL, local-path, or
+private descriptor values.
+
+Implemented in this slice:
+
+- Added optional `limitations` metadata to `CombinedPathNode` and populated it
+  from legacy-data descriptor projection rows only.
+- Threaded safe legacy-data limitation labels from shared combined surface rows
+  into graph inventory surface nodes, preserving existing `legacy-data` /
+  `surfaceSubtype = data-model` behavior.
+- Updated vault node limitation rendering to merge descriptor limitation labels
+  with existing hidden-source and evidence-tier caveats.
+- Added a vault export regression over a combined index seeded with
+  NHibernate descriptor evidence carrying unsafe formula/filter/query/config,
+  provider URL, remote, local path, and private descriptor labels. The test
+  proves `graph.json` and generated Markdown omit the raw values while keeping
+  rule IDs, evidence tiers, surface subtype, spans, and limitation labels.
+- Patched Kiro review findings by collapsing undocumented EDMX/NHibernate
+  classification strings to documented `AmbiguousLegacyDataModelIdentity` and
+  `UnsupportedLegacyOrmMappingShape`, and by making relationship semantics set
+  `coverageLabel` explicitly from endpoint coverage.
+- Patched Kiro re-review documentation findings by adding acceptance coverage
+  for vault limitation threading and documenting optional projected
+  `legacy-data` path-node limitation codes in the language adapter contract.
+
+Validation so far:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter Vault_export_redacts_nhibernate_unsafe_values_from_graph_and_markdown`:
+  passed, 1 test, with the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903
+  advisory warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "VaultExportTests|CombinedDependencyPathTests|LegacyDataModelDescriptorProjectionTests"`:
+  passed, 63 tests, with the same existing NU1903 advisory warning.
+- After Kiro review patches,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataMetadataExtractorTests|LegacyDataModelDescriptorProjectionTests|VaultExportTests|CombinedDependencyPathTests"`:
+  passed, 105 tests, with the same existing NU1903 advisory warning.
+- After Kiro review patches, `dotnet build src/dotnet/TraceMap.sln`: passed
+  with the same existing NU1903 advisory warning.
+- After Kiro review patches, `dotnet test src/dotnet/TraceMap.sln`: passed,
+  617 tests, with the same existing NU1903 advisory warning.
+- After Kiro review patches,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-export-redaction-smoke`:
+  passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log` with 27 facts at
+  `Level1SemanticAnalysis`.
+- After Kiro review patches, `./scripts/check-private-paths.sh`: passed.
+- After Kiro review patches, `git diff --check`: passed.
+
+Oddities and scope decisions:
+
+- The additive `CombinedPathNode.Limitations` field is nullable and omitted from
+  JSON when absent, preserving existing report shape for non-legacy-data nodes.
+- Vault hidden-claim display continues to category-label surface nodes; this
+  slice preserves descriptor limitation evidence rather than exposing descriptor
+  names or display hashes as user-facing labels.
+- The regression uses synthetic unsafe tokens and a neutral evidence file path
+  so the test does not conflate preserved file-span evidence with private
+  descriptor values.
+
+Follow-ups:
+
+- Portfolio privacy, release-review/impact behavior, no-double-count checks,
+  broader selector downgrade tests, and persisted derived-row no-double-
+  projection tests remain deferred.
+- Broader end-to-end NHibernate unsafe-value redaction outside graph/vault
+  remains open in Tasks 7-9.
+- The vault regression proves limitation-code threading using synthetic
+  descriptor properties. A future extractor slice should either emit stable
+  limitation codes when NHibernate formula/filter/query values are omitted or
+  keep the codes documented as reserved export-threading examples before
+  marking Tasks 7-9 complete.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-23T013802-416Z-implementation-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. It found
+  three blocking same-spec contract issues: undocumented EDMX/NHibernate gap
+  classification strings, undocumented NHibernate query classification, and
+  `AddRelationshipSemantics` relying on caller order for coverage labels.
+  Patched all three in this branch and reran focused legacy-data/export tests.
+- First Sonnet re-review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-23T014416-520Z-re-review-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. It found no
+  blocking merge issues after the classification/coverage patches. It requested
+  non-blocking documentation updates for the new vault limitation-threading
+  behavior and optional `CombinedPathNode.Limitations` output field; both are
+  patched in `docs/ACCEPTANCE.md` and `docs/LANGUAGE_ADAPTER_CONTRACT.md`.
+- Second Sonnet re-review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-23T015256-715Z-re-review-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. It found no
+  blocking issues and considered this scoped branch ready to merge. It noted
+  non-blocking follow-ups: the redaction test proves export-threading with
+  synthetic limitation-code properties, while future extractor work should
+  decide whether production NHibernate facts emit those codes when raw
+  formula/filter/query values are omitted. This note records that follow-up;
+  no further Kiro cycle was run to respect the two re-review limit.
+PR review-loop status: pending until a ready PR exists.
+
+## Previous Branch Scope: Surface Subtype Projection
 
 Branch: `codex/implement-legacy-data-model-surface-projection`
 Base: `origin/dev` at `38378660`
@@ -551,7 +661,7 @@ Kiro implementation review:
 
 - Initial Sonnet implementation review had reduced coverage due to denied shell
   access. It found incomplete full Task 3 unsupported-shape coverage, missing
-  selector downgrade tests, a relationship-specific `AmbiguousEdmxMapping`
+  selector downgrade tests, a relationship-specific EDMX ambiguity
   classification, and missing relationship docs. Patched by documenting this as
   a partial Task 3 slice, keeping remaining unsupported-shape and selector
   downgrade work deferred, changing the new MSL relationship ambiguity gap to

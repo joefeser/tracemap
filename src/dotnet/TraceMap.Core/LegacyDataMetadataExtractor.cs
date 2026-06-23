@@ -498,7 +498,7 @@ public static class LegacyDataMetadataExtractor
         var storageContainers = ssdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityContainer")).ToArray();
         if (conceptualContainers.Length > 1 || storageContainers.Length > 1)
         {
-            AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataEdmx, "AmbiguousEdmxMapping", "Multiple conceptual or storage containers require review.", document.Root);
+            AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "Multiple conceptual or storage containers require review.", document.Root);
         }
         var coverageLabel = csdlSchemas.Length == 0 || ssdlSchemas.Length == 0 || mappingElements.Length == 0 || conceptualContainers.Length > 1 || storageContainers.Length > 1
             ? "reduced"
@@ -616,7 +616,7 @@ public static class LegacyDataMetadataExtractor
             .ToArray();
         foreach (var unsupported in unsupportedMappings)
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "UnsupportedEdmxMappingShape", $"Unsupported EDMX mapping shape: {unsupported.Name.LocalName}.", unsupported);
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "UnsupportedLegacyOrmMappingShape", $"Unsupported EDMX mapping shape: {unsupported.Name.LocalName}.", unsupported);
         }
         var mappingCoverageLabel = unsupportedMappings.Length > 0 ? "reduced" : coverageLabel;
 
@@ -626,7 +626,7 @@ public static class LegacyDataMetadataExtractor
             var fragments = entitySetMapping.Descendants().Where(element => element.Name.LocalName == "MappingFragment").ToArray();
             if (fragments.Length != 1)
             {
-                AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousEdmxMapping", "EntitySetMapping did not contain exactly one MappingFragment.", entitySetMapping);
+                AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "EntitySetMapping did not contain exactly one MappingFragment.", entitySetMapping);
                 continue;
             }
 
@@ -1568,6 +1568,7 @@ public static class LegacyDataMetadataExtractor
         properties["modelRelationshipRuleId"] = RuleIds.LegacyDataModelRelationship;
         properties["modelRelationshipEvidenceTier"] = EvidenceTiers.Tier2Structural;
         properties["relationshipEndpointCoverage"] = string.Equals(endpointCoverage, "full", StringComparison.OrdinalIgnoreCase) ? "full" : "unidirectional";
+        properties["coverageLabel"] = string.Equals(endpointCoverage, "full", StringComparison.OrdinalIgnoreCase) ? "full" : "reduced";
         if (!string.IsNullOrWhiteSpace(sourceMetadataFactId))
         {
             properties["supportingFactIds"] = sourceMetadataFactId.Trim();
@@ -1789,9 +1790,7 @@ public static class LegacyDataMetadataExtractor
 
     private static string NHibernateUnsupportedClassification(XElement element)
     {
-        return element.Name.LocalName is "query" or "sql-query"
-            ? "UnsupportedLegacyOrmQueryMetadata"
-            : "UnsupportedLegacyOrmMappingShape";
+        return "UnsupportedLegacyOrmMappingShape";
     }
 
     private static string? NHibernateMappedTypeName(XElement classElement)
