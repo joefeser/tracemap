@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap language guide for choosing bounded change-risk wording from deterministic static evidence, coverage labels, limitations, and owner handoffs."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Change-Risk Language Guide | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/language/change-risk/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Change-Risk Language Guide">
+    <meta
+      property="og:description"
+      content="Use public-safe wording for static change evidence without turning it into impact proof, runtime proof, release approval, or safety claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/language/change-risk/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-change-risk-language-guide>
+      <section class="page-hero">
+        <p class="eyebrow">Change-risk language guide</p>
+        <h1>Choose bounded words before repeating a change-risk claim.</h1>
+        <p class="hero-subhead">
+          This guide helps reviewers, managers, engineers, architects, and
+          implementation agents describe deterministic static evidence without
+          stretching it into runtime, safety, release, or impact conclusions.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          The guide is wording discipline, not a product claim that TraceMap
+          proves impact, absence of impact, safety, runtime behavior, or
+          release readiness.
+        </p>
+        <nav class="hero-actions" aria-label="Change-risk language guide links">
+          <a class="button primary" href="#safe-static-evidence-phrases">Safe phrases</a>
+          <a class="button secondary" href="#unsafe-phrases">Blocked phrases</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+          <a class="button secondary" href="/static-vs-runtime/">Static vs runtime</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="why-wording-matters">
+        <div>
+          <p class="section-kicker">Why wording matters</p>
+          <h2>Small wording upgrades can overstate static evidence.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Static evidence has a boundary</strong><span>Rule IDs, evidence tiers, proof paths, coverage labels, and limitations can support bounded review language.</span></div>
+          <div><strong>Limitations are part of the claim</strong><span>A limitation travels in the sentence, not as an optional disclaimer after the conclusion.</span></div>
+          <div><strong>Unknowns stay visible</strong><span>Reduced coverage, syntax fallback, missing adapters, and unclear ownership should become wording constraints or owner handoffs.</span></div>
+          <div><strong>Adjacent pages keep their jobs</strong><span>The <a href="/review-claim-checklist/">review claim checklist</a> decides repeatability; this page chooses the words that keep evidence bounded.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="safe-static-evidence-phrases" aria-labelledby="safe-static-evidence-phrases-heading">
+        <div class="section-header">
+          <p class="section-kicker">Safe static-evidence phrases</p>
+          <h2 id="safe-static-evidence-phrases-heading">Use words that keep the proof path attached.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-language-table="safe-phrasing">
+            <caption>Safe phrasing examples for public summaries.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Condition</th>
+                <th scope="col">Allowed wording</th>
+                <th scope="col">Evidence or boundary reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Rule, tier, coverage, and limitation are present.</td>
+                <td>Static evidence shows this source relationship under the cited rule.</td>
+                <td>Keep the rule ID or rule family, evidence tier, proof path, and limitation beside the statement.</td>
+              </tr>
+              <tr>
+                <td>The evidence is useful but narrow.</td>
+                <td>Evidence is limited to deterministic static analysis of the scanned source.</td>
+                <td>Scope the claim to the available artifact family and coverage label.</td>
+              </tr>
+              <tr>
+                <td>Project load, semantic analysis, or an adapter did not fully run.</td>
+                <td>Coverage is reduced; this scan still identifies review questions.</td>
+                <td>Reduced coverage is not a clean result and not a reason to discard useful facts.</td>
+              </tr>
+              <tr>
+                <td>The name is noisy, high fan-out, or ownership is unclear.</td>
+                <td>Needs review by the owner of the affected source area.</td>
+                <td>Use review language when evidence exists but cannot carry a deterministic conclusion.</td>
+              </tr>
+              <tr>
+                <td>The next step is outside static evidence.</td>
+                <td>Owner decision needed before stronger wording is repeated.</td>
+                <td>Route runtime, release, business, or ownership conclusions to the accountable process.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="unsafe-phrases" aria-labelledby="unsafe-phrases-heading">
+        <div class="section-header">
+          <p class="section-kicker">Unsafe phrases</p>
+          <h2 id="unsafe-phrases-heading">Treat these as blocked teaching examples, not product claims.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-language-table="unsafe-blocked-phrasing">
+            <caption>Unsafe or blocked phrasing that crosses the static-evidence boundary.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Condition</th>
+                <th scope="col">Blocked wording</th>
+                <th scope="col">Boundary reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Static source evidence exists.</td><td><span data-blocked-phrase>TraceMap proved impact.</span></td><td>Impact proof requires reducer-backed evidence and bounded wording; static clues alone do not prove impact.</td></tr>
+              <tr><td>A review packet looks clean.</td><td><span data-blocked-phrase>Safe to release.</span></td><td>Release readiness and safety belong to release owners, tests, review, and runtime evidence.</td></tr>
+              <tr><td>No direct reference was found.</td><td><span data-blocked-phrase>No impact.</span></td><td>Absence of impact is not established by a missing or reduced static signal.</td></tr>
+              <tr><td>A route or symbol is visible in source.</td><td><span data-blocked-phrase>Runtime confirms it.</span></td><td>Runtime behavior needs runtime evidence and service-owner interpretation.</td></tr>
+              <tr><td>A production-facing name appears in source.</td><td><span data-blocked-phrase>Production is unaffected.</span></td><td>Production behavior and traffic are outside static evidence.</td></tr>
+              <tr><td>A scan completed.</td><td><span data-blocked-phrase>Complete coverage.</span></td><td>Coverage depends on tool load, adapters, evidence tiers, and documented gaps.</td></tr>
+              <tr><td>A reviewer summarizes the page.</td><td><span data-blocked-phrase>AI analyzed the change.</span></td><td>TraceMap core scanner and reducer evidence is deterministic, not LLM or prompt classification.</td></tr>
+              <tr><td>A checklist row has no open gap.</td><td><span data-blocked-phrase>Approved for merge.</span></td><td>Merge and release decisions remain human process decisions outside this guide.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="evidence-required-wording" aria-labelledby="evidence-required-wording-heading">
+        <div class="section-header">
+          <p class="section-kicker">Evidence-required wording</p>
+          <h2 id="evidence-required-wording-heading">Use stronger words only when the supporting fields exist.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-language-table="evidence-shows">
+            <caption>When to say evidence shows or TraceMap found.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Condition</th>
+                <th scope="col">Allowed wording</th>
+                <th scope="col">Evidence or boundary reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>A public-safe proof path, supporting ID, evidence tier, coverage label, and limitation are present.</td>
+                <td>Evidence shows a static relationship under the cited rule.</td>
+                <td>The statement remains tied to the proof path and does not drop the limitation.</td>
+              </tr>
+              <tr>
+                <td>The statement names a deterministic finding from static analysis.</td>
+                <td>TraceMap found static evidence for this review question.</td>
+                <td>This describes deterministic static evidence only, not runtime behavior, production behavior, release safety, or business correctness.</td>
+              </tr>
+              <tr>
+                <td>The requested conclusion needs runtime, operational, or release evidence.</td>
+                <td>Not established by this scan.</td>
+                <td>Do not upgrade static evidence into runtime behavior, production traffic, endpoint performance, operational safety, release safety, or complete coverage.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-language-table="needs-review">
+            <caption>When to use needs review.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Condition</th>
+                <th scope="col">Allowed wording</th>
+                <th scope="col">Evidence or boundary reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Evidence exists but does not support a deterministic conclusion.</td><td>Needs review with the cited rule and limitation.</td><td>Static evidence can frame the question without deciding it.</td></tr>
+              <tr><td>A name is common, noisy, or high fan-out.</td><td>Needs review because the signal may match unrelated uses.</td><td>High fan-out language prevents false certainty.</td></tr>
+              <tr><td>Ownership is unclear.</td><td>Needs review by the likely source or service owner.</td><td>Owner routing asks for a decision without assigning blame.</td></tr>
+              <tr><td>Coverage is reduced or expected evidence is missing.</td><td>Needs review under reduced coverage.</td><td>Reduced coverage limits the claim and keeps the gap visible.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="reduced-coverage-wording" aria-labelledby="reduced-coverage-wording-heading">
+        <div class="section-header">
+          <p class="section-kicker">Reduced-coverage wording</p>
+          <h2 id="reduced-coverage-wording-heading">Label partial analysis without throwing away useful evidence.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-language-table="coverage-reduced">
+            <caption>When to say coverage is reduced.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Condition</th>
+                <th scope="col">Allowed wording</th>
+                <th scope="col">Evidence or boundary reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>MSBuild or project load failed.</td><td>Coverage is reduced because project load did not complete.</td><td>The scan can continue, but semantic conclusions may be unavailable.</td></tr>
+              <tr><td>Semantic analysis is unavailable.</td><td>Coverage is reduced; evidence may be syntax or textual.</td><td>Do not present fallback evidence as compiler-resolved proof.</td></tr>
+              <tr><td>Relevant adapters did not run.</td><td>Coverage is reduced for that language or artifact family.</td><td>The missing adapter constrains claims that depend on that coverage.</td></tr>
+              <tr><td>Expected evidence is missing.</td><td>Coverage is reduced or the evidence is not established by this scan.</td><td>Missing evidence is a gap, not proof of a clean change.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="owner-handoff-wording">
+        <div>
+          <p class="section-kicker">Owner-handoff wording</p>
+          <h2>Ask for a decision without declaring the result.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>owner decision needed</code><span>Use when a reviewer must decide whether the static evidence changes review priority or next steps.</span></div>
+          <div><code>service owner review needed</code><span>Use when runtime meaning, ownership, or service context is outside the scan.</span></div>
+          <div><code>release owner decision needed</code><span>Use when the question asks for release timing, approval, or go/no-go process.</span></div>
+          <div><code>not established by this scan</code><span>Use when absence of impact, runtime behavior, operational safety, or release readiness has not been proven.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="stop-conditions" aria-labelledby="stop-conditions-heading">
+        <div class="section-header">
+          <p class="section-kicker">Stop conditions</p>
+          <h2 id="stop-conditions-heading">Stop before stronger wording when evidence or public-safety boundaries are missing.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-language-table="when-to-stop">
+            <caption>When to stop and hand off instead of publishing stronger wording.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Condition</th>
+                <th scope="col">Allowed wording</th>
+                <th scope="col">Evidence or boundary reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Required evidence is missing.</td><td>Stop: owner decision needed before this claim is repeated.</td><td>Do not fill missing evidence with confidence, seniority, or repetition.</td></tr>
+              <tr><td>Coverage is reduced and the claim depends on the missing coverage.</td><td>Stop: coverage is reduced for this conclusion.</td><td>Partial analysis can be useful, but it cannot support a stronger claim.</td></tr>
+              <tr><td>A reviewer asks for raw or private material.</td><td>Stop: use a public-safe summary or keep the material private.</td><td>Do not expose raw artifacts, private repository material, secrets, hidden validation detail, or command output.</td></tr>
+              <tr><td>Copy would imply release approval or safety.</td><td>Stop: release owner decision needed.</td><td>This guide does not approve, certify, or block releases.</td></tr>
+              <tr><td>Wording would blame a person, team, vendor, or implementation partner.</td><td>Stop: describe the evidence gap and next owner instead.</td><td>Public copy should stay neutral and evidence-centered.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>This language guide does not upgrade static evidence.</h2>
+        </div>
+        <ul>
+          <li>It does not prove impact, prove absence of impact, approve releases, certify release safety, or establish operational safety.</li>
+          <li>It does not prove runtime behavior, production traffic, endpoint performance, business correctness, complete coverage, or replacement of human judgment.</li>
+          <li>It does not provide AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, autonomous review, or autonomous approval.</li>
+          <li>It does not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" id="related-routes">
+        <div>
+          <p class="section-kicker">Related routes</p>
+          <h2>Use the neighboring page that owns the next question.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/questions/objections/">Stakeholder objection guide</a>
+          <a href="/release-review-boundary/">Release review boundary</a>
+          <a href="/static-vs-runtime/">Static versus runtime</a>
+          <a href="/proof-paths/faq/">Proof path FAQ</a>
+          <a href="/manager-faq/">Manager FAQ</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/limitations/">Limitations</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Pair this guide with the
+        <a href="/review-claim-checklist/">review claim checklist</a>,
+        <a href="/questions/objections/">objection guide</a>,
+        and
+        <a href="/release-review-boundary/">release review boundary</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

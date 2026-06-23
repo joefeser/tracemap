@@ -280,6 +280,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/language/change-risk/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/review-claim-checklist/",
     "changefreq": "monthly",
     "priority": "0.7"

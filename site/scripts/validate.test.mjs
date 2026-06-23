@@ -12,6 +12,7 @@ import {
   blogProofPathRequiredLinks,
   blogProofPathSeriesRoute
 } from "./blog-proof-path-series.mjs";
+import { changeRiskLanguageGuideRoute } from "./change-risk-language-guide.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
@@ -182,6 +183,7 @@ async function createDistFixture({
       evidenceHandoffTemplateRoute,
       endpointReviewRoute,
       changeReviewRoute,
+      changeRiskLanguageGuideRoute,
       "/evidence/",
       "/examples/scan-packet/",
       glossaryRoute,
@@ -232,6 +234,7 @@ async function createDistFixture({
     managerDemoScriptRoute,
     endpointReviewRoute,
     changeReviewRoute,
+    changeRiskLanguageGuideRoute,
     "/evidence/",
     "/examples/",
     "/examples/scan-packet/",
@@ -358,6 +361,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === changeReviewRoute) {
     return changeReviewPage();
+  }
+
+  if (route === changeRiskLanguageGuideRoute) {
+    return readFile(new URL("../src/language/change-risk/index.html", import.meta.url), "utf8");
   }
 
   if (route === glossaryRoute) {
@@ -636,6 +643,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
           "No release approval proof, raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, facts.ndjson, index.sqlite, report.md, scan-manifest.json, or logs/analyzer.log are published."
+        ]
+      },
+      {
+        path: changeRiskLanguageGuideRoute,
+        title: "Change-Risk Language Guide",
+        summary: "Concept-level wording guide for choosing bounded public language around deterministic static change evidence, reduced coverage, owner handoffs, and stop conditions.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The guide teaches public-safe wording and cannot upgrade static evidence into stronger product, runtime, release, or safety conclusions.",
+          "Evidence-bearing scanner facts, reducer findings, rule catalog entries, coverage labels, and documented limitations remain the source of support."
+        ],
+        nonClaims: [
+          "No impact proof, absence-of-impact proof, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, complete coverage, AI impact analysis, LLM analysis, autonomous approval, or replacement of human judgment.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public language-guide material."
         ]
       },
       {
@@ -1462,6 +1486,7 @@ function managerFaqPage() {
     <a href="/review-room/">Review room</a>
     <a href="${evidenceDecisionRecordRoute}">Evidence decision record</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
+    <a href="${changeRiskLanguageGuideRoute}">Change-risk language guide</a>
     <a href="/limitations/">Limitations</a>
     <a href="/validation/">Validation</a>
     <a href="/proof-paths/">Proof paths</a>
@@ -1520,6 +1545,7 @@ function reviewClaimChecklistPage() {
     <meta property="og:type" content="article">
     <a href="/review-room/">Review-room agenda</a>
     <a href="/manager-faq/">Manager FAQ</a>
+    <a href="${changeRiskLanguageGuideRoute}">Change-risk language guide</a>
     <a href="/proof-paths/">Proof path index</a>
     <a href="/roadmap/#claim-ledger">Claim ledger</a>
     <section id="claim-row-template">
