@@ -357,6 +357,7 @@ public sealed class CombinedDependencyReportTests
         var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
 
         var surface = Assert.Single(result.Report.DependencySurfaces, row => row.SurfaceKind == "legacy-data");
+        Assert.Equal("data-model", surface.SurfaceSubtype);
         Assert.Equal(RuleIds.LegacyDataDbml, surface.RuleId);
         Assert.Equal(RuleIds.LegacyDataModelSurface, surface.LegacyDataProjectionRuleId);
         Assert.Equal("dbml", surface.LegacyDataMetadataFormat);
@@ -373,8 +374,10 @@ public sealed class CombinedDependencyReportTests
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
         Assert.Contains("static descriptor evidence only", markdown);
+        Assert.Contains("subtype data-model", markdown);
         Assert.Contains("role conceptual model entity", markdown);
         Assert.Contains("extractor tracemap-milestone15", markdown);
+        Assert.Contains("\"surfaceSubtype\": \"data-model\"", json);
         Assert.Contains("\"legacyDataProjectionRuleId\": \"legacy.data.model.surface.v1\"", json);
         Assert.Contains("\"legacyDataExtractorVersion\": \"tracemap-milestone15\"", json);
         Assert.DoesNotContain(descriptorName, markdown, StringComparison.Ordinal);
@@ -419,8 +422,10 @@ public sealed class CombinedDependencyReportTests
 
         var surface = Assert.Single(surfaces);
         Assert.Equal("legacy-data", surface.SurfaceKind);
+        Assert.Equal("data-model", surface.SurfaceSubtype);
         Assert.Equal("dbml", surface.LegacyDataMetadataFormat);
         Assert.Equal("entity", surface.LegacyDataModelKind);
+        Assert.Equal("unknown", surface.LegacyDataCoverageLabel);
         Assert.Equal("entity:hash:entity-hash", surface.DisplayName);
         Assert.False(surface.LegacyDataDisplayClearance);
     }

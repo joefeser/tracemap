@@ -213,6 +213,7 @@ public static class VaultExporter
             "hidden",
             "demo-safe",
             "public-safe",
+            "legacy-data",
             "local-path",
             "raw-remote-or-url",
             "raw-sql",

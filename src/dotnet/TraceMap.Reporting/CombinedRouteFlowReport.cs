@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 
@@ -174,7 +175,9 @@ public sealed record RouteFlowDependencySurface(
     string Classification,
     string Coverage,
     IReadOnlyDictionary<string, string> SafeMetadata,
-    RouteFlowEvidenceRef Evidence);
+    RouteFlowEvidenceRef Evidence,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? SurfaceSubtype = null);
 
 public sealed record RouteFlowTouchedFile(
     string FileId,
@@ -1739,8 +1742,10 @@ public static class CombinedRouteFlowReporter
                         ("shapeHash", node.ShapeHash),
                         ("textHash", node.TextHash),
                         ("packageName", node.PackageName),
-                        ("configKeyHash", string.IsNullOrWhiteSpace(node.ConfigKey) ? null : CombinedReportHelpers.Hash(node.ConfigKey!, 16))),
-                    EvidenceFromNode(DependencySurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? DependencySurfaceRuleId], sources));
+                        ("configKeyHash", string.IsNullOrWhiteSpace(node.ConfigKey) ? null : CombinedReportHelpers.Hash(node.ConfigKey!, 16)),
+                        ("surfaceSubtype", node.SurfaceSubtype)),
+                    EvidenceFromNode(DependencySurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? DependencySurfaceRuleId], sources),
+                    node.SurfaceSubtype);
             })
             .GroupBy(surface => surface.StableKey, StringComparer.Ordinal)
             .Select(group => group.OrderBy(surface => ClassificationRank(surface.Classification)).ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal).First())
@@ -1773,6 +1778,7 @@ public static class CombinedRouteFlowReporter
                 Metadata(
                     ("nodeKind", node.NodeKind),
                     ("surfaceKind", node.SurfaceKind),
+                    ("surfaceSubtype", node.SurfaceSubtype),
                     ("operationName", node.OperationName),
                     ("sourceKind", node.SourceKind),
                     ("shapeHash", node.ShapeHash)),
@@ -3813,6 +3819,7 @@ public static class CombinedRouteFlowReporter
         var value = string.Join("|", new[]
         {
             SafeSelector(node.SurfaceKind) ?? "dependency-surface",
+            SafeSelector(node.SurfaceSubtype),
             SafeLabel(node.SourceLabel),
             SafeSelector(node.NormalizedPathKey),
             SafeSelector(node.PackageName),
@@ -4059,8 +4066,8 @@ public static class CombinedRouteFlowReporter
 
         builder.AppendLine("## Dependency Surfaces");
         builder.AppendLine();
-        AppendRows(builder, report.DependencySurfaces, "| Kind | Name | Stable key | Classification | Evidence |", "| --- | --- | --- | --- | --- |",
-            row => $"| {Cell(row.SurfaceKind)} | {Cell(row.DisplayName)} | {Cell(row.StableKey)} | {Cell(row.Classification)} | {Cell(Evidence(row.Evidence))} |");
+        AppendRows(builder, report.DependencySurfaces, "| Kind | Subtype | Name | Stable key | Classification | Evidence |", "| --- | --- | --- | --- | --- | --- |",
+            row => $"| {Cell(row.SurfaceKind)} | {Cell(row.SurfaceSubtype ?? "n/a")} | {Cell(row.DisplayName)} | {Cell(row.StableKey)} | {Cell(row.Classification)} | {Cell(Evidence(row.Evidence))} |");
 
         builder.AppendLine("## Context Groups");
         builder.AppendLine();

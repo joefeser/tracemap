@@ -700,6 +700,7 @@ public static class CombinedReverseReporter
             node.EndLine,
             SortedMetadata([
                 new("surfaceKind", node.SurfaceKind),
+                new("surfaceSubtype", node.SurfaceSubtype),
                 new("httpMethod", node.HttpMethod),
                 new("normalizedPathKey", node.NormalizedPathKey),
                 new("packageName", node.PackageName),
@@ -1170,6 +1171,7 @@ public static class CombinedReverseReporter
         return string.Join("|", [
             node.SourceLabel,
             node.SurfaceKind ?? "unknown",
+            node.SurfaceSubtype ?? string.Empty,
             node.SurfaceName ?? node.DisplayName,
             node.HttpMethod ?? string.Empty,
             node.NormalizedPathKey ?? string.Empty,

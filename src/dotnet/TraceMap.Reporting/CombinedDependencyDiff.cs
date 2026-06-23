@@ -242,7 +242,8 @@ public static class CombinedDependencyDiffer
         "sql-persistence",
         "http-route",
         "http-client",
-        "package-config"
+        "package-config",
+        "legacy-data"
     };
 
     private static readonly IReadOnlyList<string> Limitations =
@@ -378,7 +379,7 @@ public static class CombinedDependencyDiffer
 
         if (!string.IsNullOrWhiteSpace(options.Surface) && !ValidSurfaceKinds.Contains(options.Surface.Trim()))
         {
-            throw new ArgumentException("diff --surface must be one of sql-query, sql-persistence, http-route, http-client, or package-config.");
+            throw new ArgumentException("diff --surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, or legacy-data.");
         }
 
         var scopes = NormalizeScopes(options.Scope, options.IncludePaths);
@@ -705,6 +706,7 @@ public static class CombinedDependencyDiffer
     {
         return CombinedReportHelpers.SortedMetadata([
             Pair("surfaceKind", surface.SurfaceKind),
+            Pair("surfaceSubtype", surface.SurfaceSubtype),
             Pair("httpMethod", surface.HttpMethod),
             Pair("normalizedPathKey", surface.NormalizedPathKey),
             Pair("operationName", surface.OperationName),
