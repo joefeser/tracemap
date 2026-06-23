@@ -81,6 +81,20 @@ test("validateChangeRiskLanguageGuideDist rejects positive overclaims outside sa
   assert.match(errors.join("\n"), /forbidden public claim: TraceMap proves runtime behavior/);
 });
 
+test("validateChangeRiskLanguageGuideDist rejects unmarked positive overclaims inside boundary sections", async (t) => {
+  const root = await createManagedFixture(t, {
+    pageHtml: (await sourcePage()).replace(
+      '<section class="section boundary-section" id="non-claims">',
+      '<section class="section boundary-section" id="non-claims"><p>TraceMap proves runtime behavior.</p>'
+    )
+  });
+  const errors = [];
+
+  await validateChangeRiskLanguageGuideDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim: TraceMap proves runtime behavior/);
+});
+
 test("validateChangeRiskLanguageGuideDist rejects private or credential-like material", async (t) => {
   const privatePath = ["/", "Users", "/example/private"].join("");
   const root = await createManagedFixture(t, {
@@ -91,6 +105,19 @@ test("validateChangeRiskLanguageGuideDist rejects private or credential-like mat
   await validateChangeRiskLanguageGuideDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /hard private or credential-like material: \/Users\//);
+});
+
+test("validateChangeRiskLanguageGuideDist requires adjacent links to be anchors", async (t) => {
+  const root = await createManagedFixture(t, {
+    pageHtml: (await sourcePage())
+      .replaceAll('href="/manager-faq/"', 'href="/manager-faq-missing/"')
+      .replace("</head>", '<link rel="canonical" href="/manager-faq/"></head>')
+  });
+  const errors = [];
+
+  await validateChangeRiskLanguageGuideDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing required adjacent link: \/manager-faq\//);
 });
 
 test("validateChangeRiskLanguageGuideDist reports missing adjacent and inbound links", async (t) => {

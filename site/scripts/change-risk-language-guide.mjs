@@ -369,7 +369,6 @@ async function validateInboundLinks({ dist, errors }) {
 function stripSanctionedHtml(html) {
   return stripSanctionedText(
     html
-      .replace(/<section\b(?=[^>]*\bid\s*=\s*["'](?:unsafe-phrases|stop-conditions|non-claims)["'])[^>]*>[\s\S]*?<\/section>/gi, " ")
       .replace(/<span\b(?=[^>]*\bdata-blocked-phrase\b)[^>]*>[\s\S]*?<\/span>/gi, " ")
   );
 }
@@ -434,7 +433,7 @@ function hasElementId(html, id) {
 }
 
 function hasHref(html, href) {
-  return new RegExp(`\\bhref\\s*=\\s*["']${escapeRegExp(href)}["']`, "i").test(html);
+  return new RegExp(`<a\\b(?=[^>]*\\bhref\\s*=\\s*["']${escapeRegExp(href)}["'])[^>]*>`, "i").test(html);
 }
 
 function getAttribute(attributes, name) {
