@@ -212,8 +212,12 @@ PR-loop history:
   check. Patched by stripping only marked blocked phrases before claim checks,
   adding negative tests for overclaims inside sanctioned sections, and making
   the href matcher anchor-scoped.
-- Final run on head `81af443a7b3fe33ff110208bc19de78f65cf386f` returned
-  `merge_ready` with stop reason `NONE`.
+- Implementation-content PR-loop run returned `merge_ready` with stop reason
+  `NONE`.
+- After the docs-only state note is pushed, the final handoff records the
+  exact latest PR-loop decision for the then-current head. The expected state
+  remains `merge_ready` / `NONE` unless a new check, review, or merge-state
+  event appears after this note.
 
 Final PR-loop state:
 
