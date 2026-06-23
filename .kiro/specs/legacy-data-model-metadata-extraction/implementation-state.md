@@ -13,7 +13,7 @@ slice. This spec still has follow-up work after the current continuation slice.
 
 Branch: `codex/implement-legacy-data-model-surface-projection`
 Base: `origin/dev` at `38378660`
-PR: pending
+PR: https://github.com/joefeser/tracemap/pull/301
 
 Selected scope: partial Task 7/8 surface/report visibility continuation. The
 current branch does not add scanner extractors, runtime ORM behavior, persisted
@@ -88,7 +88,7 @@ Kiro implementation review:
   recorded here. No further Kiro re-review was run to respect the two re-review
   limit.
 
-PR review-loop status: pending.
+PR review-loop status: pending initial `agent-control pr-loop` run on PR #301.
 
 Remaining Task 7-9 follow-ups:
 
