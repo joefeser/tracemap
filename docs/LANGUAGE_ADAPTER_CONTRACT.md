@@ -262,6 +262,8 @@ The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX, typ
 
 Model identity properties such as `modelIdentityRuleId`, `modelIdentityEvidenceTier`, `sourceMetadataFactId`, `displayName`, `displayNameHash`, `containerName`, `containerHash`, and `coverageLabel` are additive metadata on the source facts; they do not re-emit DBML, EDMX, or typed DataSet descriptors under a second rule ID. These facts are static design-time metadata evidence. DBML, EDMX, typed DataSet, TableAdapter, and config descriptor facts are capped at `Tier2Structural`; generated-code links may be `Tier1Semantic` only when compiler-resolved symbol evidence is available, and that link does not upgrade descriptor facts. Raw SQL, connection strings, config values, namespace URIs, provider secrets, URLs, local paths, remotes, source snippets, and secret-looking values must be hashed or omitted. Metadata facts must not emit `DatabaseColumnMapping` without code-level mapping evidence owned by another rule.
 
+Combined report, path, and route-flow readers project terminal legacy data model descriptors as the existing `legacy-data` surface kind with `surfaceSubtype = data-model`. The subtype is report/export metadata only; selectors continue to use `legacy-data`, and `AnalysisGap` facts under `legacy.data.*` rules remain gaps or caveats rather than terminal surfaces.
+
 ## Symbol Identity
 
 Each adapter should emit stable symbol IDs for its own ecosystem and include a language discriminator in `symbols`.
