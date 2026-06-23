@@ -1,24 +1,25 @@
 # Implementation State
 
-Status: not-started
+Status: in-progress
 Readiness: ready-for-implementation
-Last verified: 2026-06-22
-Branch: codex/spec-site-evidence-handoff-template
-Worktree: isolated spec worktree; local absolute path omitted from tracked spec
+Last verified: 2026-06-23
+Branch: codex/impl-site-evidence-handoff-template
+Worktree: isolated implementation worktree; local absolute path omitted from tracked spec
 Base: origin/dev
 PR target: dev
 Public claim level: concept
 
 ## Summary
 
-This spec-only packet defines a future public-site evidence handoff template.
-The future surface should help humans carry one bounded TraceMap static
-evidence question, proof path, evidence metadata, limitation, non-claim,
-validation evidence, owner to ask, and stop condition to another reviewer or
-owner.
+Implementation is adding a public-site evidence handoff template. The surface
+helps humans carry one bounded TraceMap static evidence question, proof path,
+evidence metadata, limitation, non-claim, validation evidence, owner to ask,
+and stop condition to another reviewer or owner.
 
-No site source, generated output, scanner code, reducer code, or existing spec
-was changed in this phase.
+The work remains site-only. It does not change scanner code, reducer code,
+generated handoff output, runtime monitoring, ownership automation, release
+approval, operational safety proof, AI or LLM analysis, or replacement for
+human review.
 
 ## Scope Decisions
 
@@ -27,8 +28,37 @@ was changed in this phase.
 - Candidate placements are `/handoff/template/`,
   `/team-evidence-handoff/template/`, a section on
   `/team-evidence-handoff/`, or a section on `/packets/assembly/`.
-- Final placement is intentionally deferred to the future implementation after
-  checking the live neighboring routes.
+- Final placement selected: `/handoff/template/`.
+- `/handoff/template/` was selected because all neighboring routes exist and a
+  neutral standalone route keeps the reusable field template distinct from
+  receiver-specific handoff language and packet assembly workflow copy.
+- Rejected `/team-evidence-handoff/template/` because the live
+  `/team-evidence-handoff/` page focuses on receiver framing. Nesting under it
+  could imply the template is team-specific instead of reusable across review
+  contexts.
+- Rejected a section on `/team-evidence-handoff/` because the required
+  template fields, synthetic example, unsafe example, stop conditions,
+  non-claims, and six neighbor distinctions are too large for the embedded
+  word-count target without weakening content.
+- Rejected a section on `/packets/assembly/` because the live
+  `/packets/assembly/` page already owns the broader packet-preparation
+  checklist. The template is the reusable handoff form for one bounded claim
+  after packet ingredients are selected.
+- Rejected `/team-evidence-handoff/template/` as a nested standalone route for
+  the same receiver-specific placement risk; it remains a useful inbound link
+  target from the team handoff page if needed later.
+- Metadata consequence: the implementation uses standalone page metadata,
+  canonical and Open Graph tags, sitemap metadata, and discovery metadata with
+  `publicClaimLevel: concept`, `sourceType: site-page`,
+  `hintCategory: use-case`, and `preferredProofPath: /proof-paths/`.
+- Route gaps: none for required neighboring or support routes. The live site
+  includes `/team-evidence-handoff/`, `/incident-evidence-handoff/`,
+  `/packets/assembly/`, `/reviewer-quickstart/`, `/owners/follow-up/`,
+  `/decisions/evidence-record/`, `/proof-paths/`, `/limitations/`, and
+  `/validation/`.
+- Navigation decision: do not add the template to primary navigation. Add
+  focused discovery through metadata and useful inbound links from neighboring
+  handoff or packet surfaces only where it improves route discovery.
 - Future implementation must distinguish this template from
   `/team-evidence-handoff/`, `/incident-evidence-handoff/`,
   `/packets/assembly/`, `/reviewer-quickstart/`, `/owners/follow-up/`, and
@@ -38,6 +68,10 @@ was changed in this phase.
   complete coverage, AI or LLM analysis, and replacement of human review.
 - The tracked state note avoids local absolute paths so the repository
   private-path guard can remain strict.
+- Claim-level vocabulary consulted from existing discovery metadata:
+  `concept` and `demo`. This page uses only `concept`.
+- Coverage-label vocabulary consulted from the spec and neighboring site copy:
+  concept-only, demo-only, partial, reduced, gap, unknown, and syntax-only.
 
 ## Review Commands
 
@@ -90,6 +124,32 @@ was changed in this phase.
   required headers, all 15 required fields, required sections, all required
   stop conditions, all six neighbor distinctions, boundary wording, synthetic
   labeling, word-count expectations, and forbidden raw/private patterns.
+- Implementation focused validator: `site/scripts/evidence-handoff-template.mjs`.
+  It checks `/handoff/template/` route output, sitemap metadata, discovery
+  metadata, required field rows, synthetic example completeness, required
+  links, neighbor distinctions, checklist content, non-claims, stop
+  conditions, forbidden positive claims, hard private material, realistic SHA
+  shapes, and inbound links from adjacent routes.
+- Focused validator tests:
+  `node --test site/scripts/evidence-handoff-template.test.mjs` passed on
+  2026-06-23.
+- `cd site && npm test`: passed on 2026-06-23.
+- `cd site && npm run validate`: passed on 2026-06-23. The validator rebuilt
+  `dist/` and reported 62 HTML files, 2109 internal references, 61 sitemap
+  URLs, 1 legacy story safety target, and 13 legacy modernization evidence-map
+  rows.
+- `cd site && npm run build`: passed on 2026-06-23.
+- `git diff --check`: passed on 2026-06-23.
+- `./scripts/check-private-paths.sh`: passed on 2026-06-23.
+- Desktop browser sanity on `/handoff/template/`: passed on 2026-06-23 at
+  1440x1100. The page title, H1, required sections, support links, and
+  `No public conclusion without evidence` rendered; page-level horizontal
+  overflow was false.
+- Mobile browser sanity on `/handoff/template/`: passed on 2026-06-23 at
+  390x844. Hero buttons fit within the viewport, page-level horizontal
+  overflow was false, and the template table scrolled inside its existing
+  table wrapper.
+- PR loop outcome: pending until the ready PR exists.
 
 If `./scripts/check-private-paths.sh` is absent at review time, record the
 absence here and treat the check as an open gap rather than a pass.
@@ -103,16 +163,21 @@ treating the check as done.
 
 ## Oddities
 
-- `/owners/follow-up/` and `/decisions/evidence-record/` may be planned or
-  absent routes at future implementation time. The implementation should link
-  them only if they exist and otherwise record the route gap.
+- `/owners/follow-up/` and `/decisions/evidence-record/` exist in the live site
+  at implementation time and are linked directly.
 - The template intentionally overlaps vocabulary with handoff and packet
   surfaces. Its distinct job is to keep one claim's reusable handoff fields
   together, not to explain receiver-specific language or the broader packet
   assembly process.
+- The page uses a standalone route, so no embedded section anchor or
+  separate-sitemap exemption was needed.
+- The primary navigation was not changed. Discovery is via sitemap,
+  discovery metadata, page links, and focused inbound links from
+  `/team-evidence-handoff/` and `/packets/assembly/`.
+- Desktop and mobile sanity used a temporary local static server on an
+  alternate port because the default local port was already in use.
 
 ## Follow-ups
 
-- Future implementation must choose final placement only after checking live
-  neighboring routes and must update this state file with the selected route,
-  rejected alternatives, validation evidence, and route gaps.
+- Update this state file with the final PR-loop decision after the PR review
+  workflow reaches a terminal state.

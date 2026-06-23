@@ -245,6 +245,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/handoff/template/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/reviewer-quickstart/",
     "changefreq": "monthly",
     "priority": "0.7"
