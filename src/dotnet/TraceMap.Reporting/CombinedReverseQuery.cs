@@ -1168,10 +1168,10 @@ public static class CombinedReverseReporter
 
     private static string SurfaceIdentity(CombinedPathNode node)
     {
-        return string.Join("|", [
+        var components = new List<string>
+        {
             node.SourceLabel,
             node.SurfaceKind ?? "unknown",
-            node.SurfaceSubtype ?? string.Empty,
             node.SurfaceName ?? node.DisplayName,
             node.HttpMethod ?? string.Empty,
             node.NormalizedPathKey ?? string.Empty,
@@ -1185,7 +1185,14 @@ public static class CombinedReverseReporter
             node.TextHash ?? string.Empty,
             node.TextLength ?? string.Empty,
             IsVolatileSqlIdentity(node) ? CombinedReportHelpers.Hash(node.CombinedFactId ?? node.NodeId, 24) : string.Empty
-        ]);
+        };
+
+        if (!string.IsNullOrWhiteSpace(node.SurfaceSubtype))
+        {
+            components.Insert(2, $"subtype:{node.SurfaceSubtype.Trim()}");
+        }
+
+        return string.Join("|", components);
     }
 
     private static IReadOnlyList<string> SurfaceCaveats(CombinedPathNode node, CombinedReportSource? source)
