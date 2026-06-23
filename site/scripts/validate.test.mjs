@@ -17,6 +17,7 @@ import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { evidenceDecisionRecordRoute } from "./evidence-decision-record.mjs";
+import { evidenceHandoffTemplateRoute } from "./evidence-handoff-template.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
 import { evidencePacketExamplesRoute } from "./evidence-packet-examples.mjs";
 import { changeReviewRoute } from "./change-review.mjs";
@@ -178,6 +179,7 @@ async function createDistFixture({
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       evidenceDecisionRecordRoute,
+      evidenceHandoffTemplateRoute,
       endpointReviewRoute,
       changeReviewRoute,
       "/evidence/",
@@ -226,6 +228,7 @@ async function createDistFixture({
     demoEvidenceTrailRoute,
     demoRunbookRoute,
     evidenceDecisionRecordRoute,
+    evidenceHandoffTemplateRoute,
     managerDemoScriptRoute,
     endpointReviewRoute,
     changeReviewRoute,
@@ -341,6 +344,10 @@ async function fixturePageHtml(route, path) {
     return readFile(new URL("../src/decisions/evidence-record/index.html", import.meta.url), "utf8");
   }
 
+  if (route === evidenceHandoffTemplateRoute) {
+    return readFile(new URL("../src/handoff/template/index.html", import.meta.url), "utf8");
+  }
+
   if (route === managerDemoScriptRoute) {
     return managerDemoScriptPage();
   }
@@ -366,7 +373,7 @@ async function fixturePageHtml(route, path) {
   }
 
   if (route === teamEvidenceHandoffRoute) {
-    return teamEvidenceHandoffPage();
+    return readFile(new URL("../src/team-evidence-handoff/index.html", import.meta.url), "utf8");
   }
 
   if (route === testPlanningHandoffRoute) {
@@ -584,6 +591,23 @@ async function writeDiscoveryFiles(dist) {
           "No autonomous decision, approval workflow, release approval, release safety, operational safety, runtime proof, production proof, endpoint performance proof, outage cause, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, or prompt classification.",
           "No replacement of tests, code review, source review, runtime observability, telemetry, release process, service-owner review, governance, or human judgment.",
           "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public record material."
+        ]
+      },
+      {
+        path: evidenceHandoffTemplateRoute,
+        title: "Evidence Handoff Template",
+        summary: "Concept-level reusable template for carrying one TraceMap static-evidence question with proof path, rule context, limits, and next role.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route is an authored public-safe template, not generated handoff output or a new proof source.",
+          "Missing private-only scan context, reduced coverage, weak evidence, or absent validation remains a visible limitation or stop condition."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, real organization ownership, complete coverage, AI impact analysis, LLM analysis, autonomous review, generated handoff feature, or replacement of human review.",
+          "No raw artifacts, source excerpts, database text, configuration values, credentials, workstation paths, repository locations, scan folders, command output, hidden validation detail, private sample names, or personal owner names are public handoff-template material."
         ]
       },
       {
