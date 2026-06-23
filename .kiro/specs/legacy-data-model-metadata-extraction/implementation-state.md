@@ -106,8 +106,17 @@ PR review-loop status:
 - Disposition for Gemini's WCF subtype thread is test-backed by adding a
   regression assertion that `wcf-operation` terminal path nodes keep
   `SurfaceSubtype = null`.
-- Post-fix full validation passed. ACK rerun is pending after pushing the
-  follow-up commit.
+- Follow-up commit `1e900341fc6fb99ca4f69532999c21abf925eacc` was pushed
+  after the post-fix full validation above.
+- Posted ACK disposition comments citing post-push SHA `1e900341` and the
+  validation evidence for Gemini's WCF false-positive thread and Codex's vault
+  subtype preservation thread.
+- Final ACK rerun at `1e900341fc6fb99ca4f69532999c21abf925eacc` returned
+  `merge_ready`, stop reason `NONE`, `canMerge: true`, merge state `CLEAN`,
+  unresolved threads `0`, pending checks `0`, and failed checks `0`. Residual
+  risk was `medium` because Codex reviewed pre-follow-up head `dd069410` and
+  the configured `dev` policy accepted required-review quorum after Qodo
+  returned clean on the follow-up.
 
 Remaining Task 7-9 follow-ups:
 
