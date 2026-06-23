@@ -172,19 +172,20 @@
           remain `Tier2Structural`.
 
 - [ ] 7. Project model-enriched `legacy-data` dependency surfaces. Requirements: 5, 6, 8.
-  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
-        being marked complete until a future slice adds end-to-end privacy tests
-        proving unsafe NHibernate formula/filter/query/config values do not
-        appear in combined reports, portfolio output, graph export, or vault
-        export.
-  - [ ] Add a safe surface projection for entity, storage object, column,
+  - [ ] Partially implemented across the reporting-integration and
+        surface-subtype slices. This task remains blocked from being marked
+        complete until future slices add end-to-end privacy tests proving unsafe
+        NHibernate formula/filter/query/config values do not appear in graph
+        export, vault export, portfolio output, or any newly supported
+        downstream workflow.
+  - [x] Add a safe surface projection for entity, storage object, column,
         relationship, adapter, routine, and mapped-type descriptors.
-  - [ ] Reuse the existing `legacy-data` surface kind with
+  - [x] Reuse the existing `legacy-data` surface kind with
         `surfaceSubtype = data-model`; do not introduce a parallel
         `legacy-data-model` kind in MVP.
-  - [ ] Preserve source labels, scan IDs, commit SHAs, rule IDs, evidence tiers,
+  - [x] Preserve source labels, scan IDs, commit SHAs, rule IDs, evidence tiers,
         file spans, supporting fact IDs, and limitations.
-  - [ ] Exclude `AnalysisGap` facts under `legacy.data.*` rule IDs from terminal
+  - [x] Exclude `AnalysisGap` facts under `legacy.data.*` rule IDs from terminal
         surface projection; render them only as gaps, caveats, or limitations.
   - [ ] Exclude already-derived projection rows from prefix-based legacy data
         fact projection to prevent duplicate surfaces.
@@ -193,22 +194,32 @@
   - [ ] Add tests for surface projection, duplicate surface gaps, selector
         behavior, gap exclusion, no-double-projection, backward compatibility
         for existing `legacy-data` surfaces, and report redaction.
+    - [x] Completed in slice 8: combined dependency report, dependency path,
+          route-flow, reverse, diff, and vault JSON/Markdown/export tests prove
+          projected descriptor rows expose or preserve
+          `surfaceSubtype = data-model` while retaining hash-only display and
+          `AnalysisGap` exclusion.
+    - [ ] Deferred: persisted derived-row no-double-projection tests, broader
+          selector downgrade behavior, graph/vault export redaction, portfolio
+          privacy, and end-to-end NHibernate unsafe-value redaction.
   - [ ] Include a gap-exclusion regression for a pre-existing source rule such
         as `legacy.data.dbml.v1`, not only new old ORM gaps.
+    - [x] Completed in earlier projection coverage and asserted in combined
+          report/path tests with DBML gap facts.
   - [ ] Add graph/vault projection tests proving NHibernate formula, filter, and
         query redaction survives through surface projection and export.
 
 - [ ] 8. Integrate with combined reports, paths, reverse, impact, release-review, and portfolio. Requirements: 5, 6, 8.
-  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
-        being marked complete until selector behavior, availability-gap
-        behavior, no-double-count behavior, and downstream privacy redaction
-        tests exist for the workflows that consume model-enriched legacy-data
-        surfaces.
-  - [ ] Teach combined reports to render safe model-enriched `legacy-data` surfaces or
+  - [ ] Partially implemented across reporting-integration and slice 8. This
+        task is blocked from being marked complete until selector behavior,
+        availability-gap behavior, no-double-count behavior, and downstream
+        privacy redaction tests exist for every workflow that consumes
+        model-enriched legacy-data surfaces.
+  - [x] Teach combined reports to render safe model-enriched `legacy-data` surfaces or
         emit explicit availability gaps.
-  - [ ] Teach path and reverse queries to select model surfaces only from stable
+  - [x] Teach path and reverse queries to select model surfaces only from stable
         identities.
-  - [ ] Update hardcoded surface allow-lists and user-facing "must be one of"
+  - [x] Update hardcoded surface allow-lists and user-facing "must be one of"
         messages in reverse and diff command validators if `legacy-data` is
         selectable there.
   - [ ] Teach diff, impact, release-review, and portfolio readers to consume or

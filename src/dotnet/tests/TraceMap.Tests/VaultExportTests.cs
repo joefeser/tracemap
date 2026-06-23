@@ -77,6 +77,32 @@ public sealed class VaultExportTests
     }
 
     [Fact]
+    public async Task Vault_export_keeps_legacy_data_surface_closed_vocabulary_and_hash_only()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "vault");
+        var manifest = Manifest("server", "tracemap-milestone15");
+
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            LegacyDataEntityFact(manifest, "Customer|Ledger", "Models/Store.dbml", 21)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["server"]));
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Format: "markdown,json"));
+
+        var surface = Assert.Single(result.Graph.Nodes, node => node.Kind == "surface" && node.SurfaceKind == "legacy-data");
+        Assert.Equal("data-model", surface.SurfaceSubtype);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Category == "unsafe-id-component");
+
+        var allText = string.Join('\n', Directory.EnumerateFiles(outDir, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.Contains("legacy-data", allText);
+        Assert.Contains("data-model", allText);
+        Assert.DoesNotContain("Customer|Ledger", allText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Vault_export_cli_supports_format_dry_run_and_no_writes()
     {
         using var temp = new TempDirectory();
@@ -734,6 +760,29 @@ public sealed class VaultExportTests
                 ["columnNames"] = "id;status",
                 ["sqlSourceKind"] = "literal-string",
                 ["queryShapeHash"] = "shape123"
+            });
+    }
+
+    private static CodeFact LegacyDataEntityFact(ScanManifest manifest, string displayName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: displayName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced",
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = displayName,
+                ["displayNameHash"] = "customer-ledger-hash",
+                ["metadataFormat"] = "dbml",
+                ["metadataHash"] = "metadata-hash",
+                ["metadataKind"] = "Dbml",
+                ["modelKind"] = "entity",
+                ["stableModelKey"] = "ldm:vault-model-key"
             });
     }
 

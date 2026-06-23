@@ -279,6 +279,7 @@ public sealed class CombinedDependencyPathTests
         var path = Assert.Single(result.Report.Paths);
         var terminal = path.Nodes.Last();
         Assert.Equal("legacy-data", terminal.SurfaceKind);
+        Assert.Equal("data-model", terminal.SurfaceSubtype);
         Assert.StartsWith("entity:hash:", terminal.DisplayName, StringComparison.Ordinal);
         Assert.Equal("dbml", terminal.OperationName);
         Assert.Equal("dbml", terminal.SourceKind);
@@ -289,6 +290,7 @@ public sealed class CombinedDependencyPathTests
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "paths-report.json"));
         Assert.Contains("legacy-data", markdown);
+        Assert.Contains("\"surfaceSubtype\": \"data-model\"", json);
         Assert.DoesNotContain("CustomerLedger", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("CustomerLedger", json, StringComparison.Ordinal);
     }

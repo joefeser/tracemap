@@ -2,7 +2,7 @@
 
 Status: continuation-ready
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
-Current implementation branch: codex/implement-legacy-data-model-metadata-continuation-next
+Current implementation branch: codex/implement-legacy-data-model-surface-projection
 Public claim level: hidden
 
 Post-promotion note: several legacy-data model identity/reporting slices have
@@ -11,9 +11,131 @@ slice. This spec still has follow-up work after the current continuation slice.
 
 ## Current Branch Scope
 
-This branch is a partial follow-up slice, not a full-spec closeout. The current
-working branch is
-`codex/implement-legacy-data-model-metadata-continuation-next`; it is
+Branch: `codex/implement-legacy-data-model-surface-projection`
+Base: `origin/dev` at `38378660`
+PR: https://github.com/joefeser/tracemap/pull/301
+
+Selected scope: partial Task 7/8 surface/report visibility continuation. The
+current branch does not add scanner extractors, runtime ORM behavior, persisted
+derived surface facts, full graph/vault expansion, portfolio expansion, impact,
+release-review, or new selector vocabulary. It tightens the already-landed
+`legacy-data` descriptor projection by carrying the documented
+`surfaceSubtype = data-model` field through combined dependency reports,
+dependency path nodes, route-flow dependency surfaces, reverse selected
+surfaces, diff surface metadata, and vault closed-vocabulary surface export.
+
+Implemented in this slice:
+
+- Added optional `surfaceSubtype` / `SurfaceSubtype` output metadata to shared
+  combined surface projection rows, combined dependency surface rows, combined
+  path nodes, route-flow dependency surface rows, reverse selected-surface
+  metadata, and diff safe metadata.
+- Set `surfaceSubtype = data-model` only for rows derived by
+  `legacy.data.model.surface.v1` over terminal `LegacyData*` descriptor facts.
+- Kept selectors stable: workflows still use `legacy-data`; no
+  `legacy-data-model` surface kind was introduced.
+- Preserved hash-only descriptor display by default and kept `AnalysisGap`
+  facts under `legacy.data.*` out of terminal surfaces.
+- Preserved `unknown` coverage labels instead of promoting absent or unknown
+  coverage to `full`.
+- Prevented `LegacyDataGeneratedCodeLinked` facts from becoming terminal
+  descriptor surfaces and kept `mappingKind` separate from `descriptorRole`.
+- Added focused combined report, dependency path, route-flow, reverse, diff,
+  vault, and descriptor-projection tests proving JSON/Markdown/export subtype
+  visibility without raw descriptor-name leakage.
+- Updated `docs/ACCEPTANCE.md`, `docs/LANGUAGE_ADAPTER_CONTRACT.md`,
+  `docs/VALIDATION.md`, and this task/state file for the additive output
+  metadata.
+
+Validation:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataModelDescriptorProjectionTests|CombinedDependencyDiffTests|VaultExportTests|CombinedDependencyReportTests|CombinedDependencyPathTests|CombinedRouteFlowTests|CombinedReverseQueryTests"`:
+  passed, 138 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903
+  advisory warning.
+- Post-ACK focused regression run
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyFlowCompositionTests|CombinedReverseQueryTests|VaultExportTests|CombinedDependencyPathTests|CombinedDependencyDiffTests|CombinedDependencyReportTests|CombinedRouteFlowTests|LegacyDataModelDescriptorProjectionTests"`:
+  passed, 161 tests, with the existing NU1903 advisory warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed, with the existing NU1903
+  advisory warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 616 tests, with the existing
+  NU1903 advisory warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-surface-projection-smoke`:
+  passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log` with 27 facts at
+  `Level1SemanticAnalysis`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Kiro implementation review:
+
+- Initial Sonnet implementation review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-23T003132-914Z-implementation-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. It found one
+  merge-readiness issue in the current slice: absent or unknown legacy-data
+  coverage labels were promoted to `full`. Patched by preserving `full`,
+  `reduced`, and `unknown` explicitly and adding a regression assertion.
+- First Sonnet re-review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-23T003712-327Z-re-review-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. It found
+  blocking report/export integration gaps for `diff --surface legacy-data` and
+  vault export closed-vocabulary handling. Patched by adding `legacy-data` to
+  diff validation, carrying `surfaceSubtype` in diff metadata, seeding
+  `legacy-data` in vault closed vocabulary, and adding focused tests. Also
+  patched non-blocking hardening: generated-code link facts are not terminal
+  descriptor surfaces, and `mappingKind` no longer falls back into
+  `descriptorRole`.
+- Second Sonnet re-review:
+  `.tmp/kiro-reviews/legacy-data-model-metadata-extraction/2026-06-23T004422-045Z-re-review-claude-sonnet-4.6.clean.md`.
+  Coverage was reduced because Kiro reported denied tool access. It found no
+  blocking issues for this scoped branch after the validation/state updates
+  recorded here. No further Kiro re-review was run to respect the two re-review
+  limit.
+
+PR review-loop status:
+
+- Initial ACK run on PR #301 posted/requested required Codex review and waited
+  for the required reviewer batch. Qodo returned actionable findings first; no
+  patch was made until Codex also returned and ACK reported
+  `requiredReviewBatch.state = batch_terminal` with `patchAuthorized = true`.
+- Patched Qodo's reverse-query stable key drift finding by only including
+  `surfaceSubtype` in reverse surface identity when a subtype is present, so
+  non-subtyped surfaces keep their previous identity shape.
+- Patched Codex's vault export finding by carrying `SurfaceSubtype` on vault
+  graph nodes, closed-vocabulary-validating `data-model`, rendering subtype in
+  vault Markdown, and including subtype tags/aliases.
+- Disposition for Gemini's WCF subtype thread is test-backed by adding a
+  regression assertion that `wcf-operation` terminal path nodes keep
+  `SurfaceSubtype = null`.
+- Follow-up commit `1e900341fc6fb99ca4f69532999c21abf925eacc` was pushed
+  after the post-fix full validation above.
+- Posted ACK disposition comments citing post-push SHA `1e900341` and the
+  validation evidence for Gemini's WCF false-positive thread and Codex's vault
+  subtype preservation thread.
+- Final ACK rerun at `1e900341fc6fb99ca4f69532999c21abf925eacc` returned
+  `merge_ready`, stop reason `NONE`, `canMerge: true`, merge state `CLEAN`,
+  unresolved threads `0`, pending checks `0`, and failed checks `0`. Residual
+  risk was `medium` because Codex reviewed pre-follow-up head `dd069410` and
+  the configured `dev` policy accepted required-review quorum after Qodo
+  returned clean on the follow-up.
+
+Remaining Task 7-9 follow-ups:
+
+- Persisted derived-surface no-double-projection behavior if derived rows are
+  ever stored in indexes.
+- Broader selector downgrade tests for ambiguous, high fan-out, missing
+  generated-code, and reduced-coverage evidence.
+- Graph/vault export redaction tests proving NHibernate formula, filter, query,
+  config, and provider-like unsafe values remain absent.
+- Portfolio `surfaceSubtype` threading, no-double-count behavior, and privacy
+  coverage remain deferred to Task 8.
+- Release-review and impact expansion beyond the already-landed first
+  reporting-integration slice remains deferred.
+
+## Previous Branch Scope
+
+This previous branch was a partial follow-up slice, not a full-spec closeout.
+The previous working branch was
+`codex/implement-legacy-data-model-metadata-continuation-next`; it was
 merge-ready only as a contained Task 6 generated-link continuation: hardening
 existing DBML/EDMX/typed DataSet generated-designer link metadata and duplicate
 designer type ambiguity gaps. It does not add compiler-semantic symbol
