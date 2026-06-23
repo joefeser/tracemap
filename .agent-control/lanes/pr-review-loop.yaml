@@ -22,7 +22,7 @@ prLoopPacket:
           - qodo
         minimumReturned: 1
         preferAllReturned: false
-        waitForAllTimeoutSeconds: 300
+        waitForAllTimeoutSeconds: 900
         noneReturnedStopReason: REQUIRED_REVIEW_QUORUM_NOT_MET
   pushPolicy:
     mode: batch_until_review_settles
@@ -34,7 +34,7 @@ prLoopPacket:
     qodo:
       requirement: required
       waitUntilReturnedBeforeProcessing: true
-      waitTimeoutSeconds: 300
+      waitTimeoutSeconds: 900
       requestAllowed: explicit_only
       requestRetryCeiling: 0
       retryCooldownSeconds: 0
