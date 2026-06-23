@@ -17,6 +17,14 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Legacy_data_model_identity_treats_null_coverage_as_unknown()
+    {
+        var properties = ApplyLegacyDataModelIdentity("Customer", null);
+
+        Assert.Equal("unknown", properties["coverageLabel"]);
+    }
+
+    [Fact]
     public void Legacy_data_model_identity_uses_shared_safe_identifier_rules()
     {
         var properties = ApplyLegacyDataModelIdentity("my-entity", "full");
@@ -1667,7 +1675,7 @@ public sealed class LegacyDataMetadataExtractorTests
         return (string?)await command.ExecuteScalarAsync() ?? string.Empty;
     }
 
-    private static SortedDictionary<string, string> ApplyLegacyDataModelIdentity(string displayName, string coverageLabel)
+    private static SortedDictionary<string, string> ApplyLegacyDataModelIdentity(string displayName, string? coverageLabel)
     {
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var coreAssembly = typeof(ScanEngine).Assembly;

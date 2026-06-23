@@ -193,7 +193,7 @@ public sealed class PortfolioReportTests
                 scan,
                 "ldm:nhibernate-private-entity",
                 "reduced",
-                "formula-redacted;filter-redacted;query-redacted;select CardNumber from Vault.Customers")
+                "formula-redacted;filter-redacted;query-redacted;PrivateCustomer;TenantSecrets;syntheticsecret;select CardNumber from Vault.Customers")
         ]);
 
         var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
@@ -231,6 +231,7 @@ public sealed class PortfolioReportTests
             Assert.DoesNotContain("C:\\private", output, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("TenantSecrets", output, StringComparison.Ordinal);
             Assert.DoesNotContain("PrivateCustomer", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("syntheticsecret", output, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("ldm:nhibernate-private-entity", output, StringComparison.Ordinal);
         }
     }
@@ -642,6 +643,20 @@ public sealed class PortfolioReportTests
     }
 
     [Fact]
+    public void Portfolio_legacy_data_diff_identity_includes_model_kind_with_display_hash_keys()
+    {
+        var entity = LegacyDataSurfaceForIdentityFallback("fact-a", modelKind: "entity", displayNameHash: "same-display-hash");
+        var column = LegacyDataSurfaceForIdentityFallback("fact-b", modelKind: "column", displayNameHash: "same-display-hash");
+
+        var entityMetadata = SurfaceDiffIdentityMetadataForTest(entity);
+        var columnMetadata = SurfaceDiffIdentityMetadataForTest(column);
+
+        Assert.Contains(entityMetadata, pair => pair.Key == "legacyDataModelKind" && pair.Value == "entity");
+        Assert.Contains(columnMetadata, pair => pair.Key == "legacyDataModelKind" && pair.Value == "column");
+        Assert.NotEqual(JoinedMetadataForTest(entityMetadata), JoinedMetadataForTest(columnMetadata));
+    }
+
+    [Fact]
     public async Task Portfolio_comparison_requested_deferred_context_gaps_are_in_top_level_rollup()
     {
         using var temp = new TempDirectory();
@@ -848,7 +863,10 @@ public sealed class PortfolioReportTests
             });
     }
 
-    private static CombinedDependencySurfaceRow LegacyDataSurfaceForIdentityFallback(string factId)
+    private static CombinedDependencySurfaceRow LegacyDataSurfaceForIdentityFallback(
+        string factId,
+        string? modelKind = null,
+        string? displayNameHash = null)
     {
         return new CombinedDependencySurfaceRow(
             SurfaceKind: "legacy-data",
@@ -878,7 +896,9 @@ public sealed class PortfolioReportTests
             Version: null,
             ConfigKey: null,
             LegacyDataMetadataFormat: "nhibernate-hbm",
+            LegacyDataModelKind: modelKind,
             LegacyDataDescriptorRole: "conceptual",
+            LegacyDataDisplayNameHash: displayNameHash,
             SurfaceSubtype: "data-model");
     }
 
@@ -1009,5 +1029,10 @@ public sealed class PortfolioReportTests
         Assert.NotNull(method);
         return Assert.IsAssignableFrom<IReadOnlyList<KeyValuePair<string, string>>>(
             method.Invoke(null, [surface]));
+    }
+
+    private static string JoinedMetadataForTest(IReadOnlyList<KeyValuePair<string, string>> metadata)
+    {
+        return string.Join(";", metadata.Select(pair => $"{pair.Key}={pair.Value}"));
     }
 }

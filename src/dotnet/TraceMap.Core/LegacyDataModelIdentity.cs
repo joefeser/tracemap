@@ -91,9 +91,9 @@ internal static class LegacyDataModelIdentity
         return relativePath.Replace('\\', '/').Trim();
     }
 
-    private static string NormalizeCoverageLabel(string coverageLabel)
+    private static string NormalizeCoverageLabel(string? coverageLabel)
     {
-        return coverageLabel.Trim().ToLowerInvariant() switch
+        return coverageLabel?.Trim().ToLowerInvariant() switch
         {
             "full" => "full",
             "reduced" => "reduced",

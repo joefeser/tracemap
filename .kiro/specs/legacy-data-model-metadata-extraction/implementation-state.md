@@ -14,7 +14,7 @@ work after the current continuation slice.
 
 Branch: `codex/implement-legacy-data-model-portfolio-safety`
 Base: `origin/dev` at `1e0e497e`
-PR: pending
+PR: #305, https://github.com/joefeser/tracemap/pull/305
 
 Selected scope: partial Task 7/8 portfolio inventory and before/after
 comparison safety for already-projected `legacy-data` model surfaces. This
@@ -35,13 +35,18 @@ Implemented in this slice:
   and hashes unsafe free-form values such as raw formula/query/config-like text
   before output. Colon-containing values are treated as unsafe and hashed so
   URI, JDBC, connection, host, and port-shaped values do not pass through as
-  labels.
+  labels. Sensitive-looking alphanumeric tokens such as private names,
+  secret-bearing labels, connection/server/catalog/user labels, and path-like
+  values are also hashed before output.
 - Portfolio before/after comparison uses safe legacy-data identity fields
   rather than descriptor IDs, so limitation-only changes stay
   `ChangedSurfaceEvidence` instead of noisy add/remove rows.
 - Portfolio before/after comparison uses a hash-only fact-id fallback when a
   legacy-data surface has neither a stable model key hash nor display-name hash,
   preventing null-key identity collisions.
+- Portfolio before/after comparison includes `legacyDataModelKind` in
+  legacy-data identity metadata so older/custom rows without stable keys do not
+  collapse entity/column/mapping descriptors that share a display-name hash.
 - Reduced legacy-data coverage remains review-tier in portfolio diffs.
 - Added focused portfolio tests for single-snapshot metadata redaction and
   before/after diff identity over synthetic NHibernate descriptor evidence with
@@ -51,11 +56,11 @@ Implemented in this slice:
 Validation:
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "PortfolioReportTests|LegacyDataMetadataExtractorTests"`:
-  passed, 65 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903
+  passed, 67 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903
   advisory warning.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing NU1903
   advisory warning.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 624 tests, with the same
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 626 tests, with the same
   existing NU1903 advisory warning.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-portfolio-safety-smoke`:
   passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
@@ -115,7 +120,21 @@ Kiro implementation review:
 - No third Kiro review was run after those patches to stay within the requested
   two re-review cycles; final local validation above passed after the patches.
 
-PR review-loop status: pending until a ready PR exists.
+PR review-loop status:
+
+- Initial ACK loop on PR #305 reached `actionable_findings` with seven
+  unresolved review threads. Qodo stayed in `review_running` for multiple
+  polls; after the loop moved from `wait_for_required_reviewers` to
+  `owner_decision_required`, the live unresolved threads were patched as one
+  batch.
+- Patched Codex findings by hashing sensitive-looking legacy-data
+  limitation/redaction tokens before portfolio output and including
+  `legacyDataModelKind` in legacy-data diff identity.
+- Patched Gemini findings by removing shared-surface metadata dictionary
+  allocation, using a loop for list metadata lookup, making coverage
+  normalization null-tolerant, and avoiding boolean `ToString().ToLowerInvariant()`
+  rendering.
+- Final ACK rerun is pending after pushing the review-fix commit.
 
 ## Previous Branch Scope: Graph And Vault Export Redaction
 
