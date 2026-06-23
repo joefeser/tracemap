@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level reusable TraceMap template for transferring one bounded static-evidence question with proof path, rule context, limitations, and follow-up role."
+    >
+    <meta name="robots" content="index,follow">
+    <title>Evidence Handoff Template | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/handoff/template/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Handoff Template">
+    <meta
+      property="og:description"
+      content="A public-safe concept template for keeping one TraceMap static-evidence claim attached to its proof path, evidence fields, limits, and next role."
+    >
+    <meta property="og:url" content="https://tracemap.tools/handoff/template/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Evidence handoff template</p>
+        <h1>Keep one static-evidence handoff attached to its proof boundary.</h1>
+        <p class="hero-subhead">
+          Use this concept-level template when a TraceMap evidence question
+          moves from one reviewer or owner role to another. It keeps the claim,
+          proof path, deterministic evidence fields, limitation, non-claim,
+          validation evidence, next owner, and stop condition in one
+          public-safe structure.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+        </p>
+        <nav class="hero-actions" aria-label="Evidence handoff template links">
+          <a class="button primary" href="#template">Use the template</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+          <a class="button secondary" href="/validation/">Validation</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="when-to-use-it" data-context="when-to-use">
+        <div>
+          <p class="section-kicker">When to use it</p>
+          <h2>Use it for one bounded claim, question, or proof path.</h2>
+        </div>
+        <div>
+          <p>
+            The template is for transferring one static-evidence question to a
+            human reviewer, owner role, or follow-up process. It is useful
+            after a public-safe packet ingredient has been selected and before
+            anyone repeats the conclusion. If the evidence is missing, private
+            only, reduced, syntax-only, or still unvalidated, the handoff keeps
+            that limit visible instead of upgrading the claim.
+          </p>
+        </div>
+      </section>
+
+      <section class="section split-section" id="neighbor-distinctions" data-context="neighbor-distinction">
+        <div>
+          <p class="section-kicker">Neighbor distinctions</p>
+          <h2>This route is the portable field template, not the surrounding workflow.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/team-evidence-handoff/">/team-evidence-handoff/</a></strong><span>Receiver-specific wording; this template supplies the reusable fields that travel with any receiver-facing note.</span></div>
+          <div><strong><a href="/incident-evidence-handoff/">/incident-evidence-handoff/</a></strong><span>Incident-adjacent static evidence transfer; this template is general and does not imply outage proof or incident command.</span></div>
+          <div><strong><a href="/packets/assembly/">/packets/assembly/</a></strong><span>Broader human workflow for selecting packet ingredients; this template is the filled handoff form for one bounded claim.</span></div>
+          <div><strong><a href="/reviewer-quickstart/">/reviewer-quickstart/</a></strong><span>Reviewer onboarding; this template is a portable handoff form that travels with evidence.</span></div>
+          <div><strong><a href="/owners/follow-up/">/owners/follow-up/</a></strong><span>Owner follow-up framing; this template names an owner role to ask without claiming real organization ownership.</span></div>
+          <div><strong><a href="/decisions/evidence-record/">/decisions/evidence-record/</a></strong><span>Decision-record framing; this template preserves handoff context and stop conditions, not a final decision.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="template">
+        <div class="section-header">
+          <p class="section-kicker">Template</p>
+          <h2>Attach every field before a handoff leaves the review context.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-handoff-template-fields>
+            <caption>
+              Missing private-only values stay as explicit limitations or stop
+              conditions; they are not silently omitted.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Field label</th>
+                <th scope="col">Public-safe handling</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-handoff-field="handoff question"><td>handoff question</td><td>The bounded question or claim being transferred, not a broad investigation topic.</td></tr>
+              <tr data-handoff-field="audience"><td>audience</td><td>The receiving role or review context. It is the receiver, while owner to ask is the role for the next open question.</td></tr>
+              <tr data-handoff-field="proof path"><td>proof path</td><td>A public-safe route, summary, rule catalog note, report-family summary, or private review location described only by function.</td></tr>
+              <tr data-handoff-field="public claim level"><td>public claim level</td><td>Use <code>concept</code> for this template unless a cited public-safe evidence surface says otherwise.</td></tr>
+              <tr data-handoff-field="rule ID/family"><td>rule ID/family</td><td>Name the deterministic rule basis when public-safe; otherwise use a rule family and record the limitation.</td></tr>
+              <tr data-handoff-field="evidence tier"><td>evidence tier</td><td>Use <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</td></tr>
+              <tr data-handoff-field="coverage label"><td>coverage label</td><td>Copy the cited label or mark concept-only, demo-only, partial, reduced, gap, unknown, or syntax-only.</td></tr>
+              <tr data-handoff-field="public-safe path/span"><td>public-safe path/span</td><td>Use checked-in demo paths or sanitized references only; do not publish source excerpts.</td></tr>
+              <tr data-handoff-field="commit SHA"><td>commit SHA</td><td>Name public-safe scan context only. Missing or private-only values remain a limitation.</td></tr>
+              <tr data-handoff-field="extractor version"><td>extractor version</td><td>Name public-safe extractor context only. Missing or private-only values remain a limitation.</td></tr>
+              <tr data-handoff-field="limitation"><td>limitation</td><td>State what the static evidence cannot prove.</td></tr>
+              <tr data-handoff-field="non-claim"><td>non-claim</td><td>State the stronger runtime, release, safety, ownership, completeness, AI, LLM, or review-replacement claim not being made.</td></tr>
+              <tr data-handoff-field="validation evidence"><td>validation evidence</td><td>Name a public-safe validation result, command family, review evidence, or test summary without output or private logs.</td></tr>
+              <tr data-handoff-field="owner to ask"><td>owner to ask</td><td>Name a role such as code owner, service owner, database owner, telemetry owner, test owner, release owner, or security reviewer.</td></tr>
+              <tr data-handoff-field="stop condition"><td>stop condition</td><td>Name why the handoff must pause, downgrade, remain private, or move to another owner.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="filled-synthetic-example" data-context="synthetic-example">
+        <div class="section-header">
+          <p class="section-kicker">Filled synthetic example</p>
+          <h2>Synthetic concept data shows every field without raw material.</h2>
+        </div>
+        <div class="output-list" data-filled-synthetic-example>
+          <div><code>handoff question</code><span>Can the reviewer inspect the public-safe route-handler evidence question before repeating the dependency claim?</span></div>
+          <div><code>audience</code><span>Source reviewer receiving the handoff.</span></div>
+          <div><code>proof path</code><span>Public-safe summary on <a href="/proof-paths/">proof paths</a> plus internal review location named only as private code review.</span></div>
+          <div><code>public claim level</code><span>concept</span></div>
+          <div><code>rule ID/family</code><span>synthetic rule family: endpoint-to-handler structural reference.</span></div>
+          <div><code>evidence tier</code><span>Tier2Structural.</span></div>
+          <div><code>coverage label</code><span>concept-only.</span></div>
+          <div><code>public-safe path/span</code><span>synthetic demo route reference, lines described by role only.</span></div>
+          <div><code>commit SHA</code><span>synthetic-sha-0001; real private scan context unavailable publicly.</span></div>
+          <div><code>extractor version</code><span>synthetic-extractor-v0; real private extractor context unavailable publicly.</span></div>
+          <div><code>limitation</code><span>Static evidence cannot prove runtime traffic, endpoint performance, release readiness, or complete coverage.</span></div>
+          <div><code>non-claim</code><span>This handoff does not prove production behavior, real ownership, release safety, AI analysis, LLM analysis, or replacement of human review.</span></div>
+          <div><code>validation evidence</code><span>Public-safe site validation summary and review evidence only; no command output or private log text.</span></div>
+          <div><code>owner to ask</code><span>Service owner for runtime questions; source reviewer for code-path questions.</span></div>
+          <div><code>stop condition</code><span>Stop if the proof path is private-only, the coverage label is missing, or validation evidence is not available.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="unsafe-example" data-context="unsafe-example" data-boundary-region>
+        <div>
+          <p class="section-kicker">Unsafe example</p>
+          <h2>Synthetic wording that must stop or be rewritten.</h2>
+        </div>
+        <p>
+          Not recommended: "The private scan proves the service is impacted,
+          release safe, fully covered, production proven, assigned to a named
+          person, and verified by AI." This is unsafe because it has missing
+          proof path, private-only support, raw or private material risk,
+          unsupported runtime proof wording, unsupported release or safety
+          wording, unsupported complete-coverage wording, AI or LLM analysis
+          wording, no validation evidence, no owner to ask, and blame-prone
+          wording.
+        </p>
+      </section>
+
+      <section class="section split-section" id="handoff-checklist" data-context="handoff-checklist">
+        <div>
+          <p class="section-kicker">Handoff checklist</p>
+          <h2>Before sharing, make sure the reduced checklist still carries the boundary.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>handoff question</strong><span>One bounded claim or question.</span></div>
+          <div><strong>audience</strong><span>Visible unless the receiver and owner to ask are the same role.</span></div>
+          <div><strong>public claim level</strong><span>Concept unless a cited public-safe evidence surface says otherwise.</span></div>
+          <div><strong>proof path</strong><span>Public-safe route or private review function, not raw material.</span></div>
+          <div><strong>rule ID or family</strong><span>Deterministic rule basis or family plus limitation.</span></div>
+          <div><strong>evidence tier</strong><span>One TraceMap tier stays attached.</span></div>
+          <div><strong>coverage label</strong><span>Concept-only, demo-only, partial, reduced, gap, unknown, syntax-only, or copied label.</span></div>
+          <div><strong>limitation</strong><span>What static evidence cannot prove.</span></div>
+          <div><strong>non-claim</strong><span>The stronger claim not being made.</span></div>
+          <div><strong>validation evidence</strong><span>Public-safe validation or review summary.</span></div>
+          <div><strong>owner to ask</strong><span>Role responsible for the next open question.</span></div>
+          <div><strong>stop condition</strong><span>Reason to pause, downgrade, keep private, or reroute.</span></div>
+        </div>
+        <p class="claim-ledger-note">
+          Reduced checklist note: public-safe path/span, commit SHA, and
+          extractor version stay in the full template above because they can be
+          private-only. Audience may be omitted only when the receiver and
+          owner to ask are the same role.
+        </p>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-context="stop-condition" data-boundary-region>
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Pause the public handoff when a required boundary is missing.</h2>
+        </div>
+        <ul>
+          <li>missing proof path</li>
+          <li>private-only support</li>
+          <li>raw or private material</li>
+          <li>unknown or reduced coverage without label</li>
+          <li>unsupported runtime proof wording</li>
+          <li>unsupported release or safety wording</li>
+          <li>unsupported complete-coverage wording</li>
+          <li>AI or LLM analysis wording</li>
+          <li>no validation evidence</li>
+          <li>no owner to ask</li>
+          <li>blame language toward owners, reviewers, teams, vendors, or prior authors</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-context="non-claim" data-boundary-region>
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The template does not prove, approve, automate, or replace review.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not generate this handoff, prove runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, or complete coverage.</li>
+          <li>TraceMap does not perform AI impact analysis, LLM analysis, autonomous review, or replacement of human review.</li>
+          <li>The template does not claim real organization ownership and does not assign work to a named person.</li>
+          <li>It does not replace source review, ownership decisions, telemetry, logs, traces, APM, tests, release controls, incident response, service-owner judgment, database-owner judgment, security review, compliance review, manager judgment, or human judgment.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Support routes</p>
+          <h2>Use the template beside proof paths, limitations, and validation context.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation</a>
+          <a href="/team-evidence-handoff/">Team evidence handoff</a>
+          <a href="/incident-evidence-handoff/">Incident evidence handoff</a>
+          <a href="/packets/assembly/">Packet assembly</a>
+          <a href="/reviewer-quickstart/">Reviewer quickstart</a>
+          <a href="/owners/follow-up/">Owner follow-up</a>
+          <a href="/decisions/evidence-record/">Evidence decision record</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Evidence handoff template links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/limitations/">limitations</a>,
+        <a href="/validation/">validation</a>,
+        and
+        <a href="/packets/assembly/">packet assembly</a>.
+      </p>
+      <p class="copyright">&copy; 2026 TraceMap.</p>
+    </footer>
+  </body>
+</html>

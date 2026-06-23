@@ -13,6 +13,7 @@ import {
 import { validateDeployAuditDist } from "./deploy-audit.mjs";
 import { validateDemoEvidenceTrailDist } from "./demo-evidence-trail.mjs";
 import { validateDemoRunbookDist } from "./demo-runbook.mjs";
+import { validateEvidenceHandoffTemplateDist } from "./evidence-handoff-template.mjs";
 import { validateEvidenceDecisionRecordDist } from "./evidence-decision-record.mjs";
 import { validateEndpointReviewDist } from "./endpoint-review.mjs";
 import { validateEvidencePacketExamplesDist } from "./evidence-packet-examples.mjs";
@@ -94,6 +95,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoEvidenceTrailDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoRunbookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateEvidenceHandoffTemplateDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceDecisionRecordDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEndpointReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidencePacketExamplesDist({ baseUrl: normalizedBaseUrl, dist, errors });
