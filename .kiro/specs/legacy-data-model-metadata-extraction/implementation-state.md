@@ -52,6 +52,9 @@ Validation:
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataModelDescriptorProjectionTests|CombinedDependencyDiffTests|VaultExportTests|CombinedDependencyReportTests|CombinedDependencyPathTests|CombinedRouteFlowTests|CombinedReverseQueryTests"`:
   passed, 138 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903
   advisory warning.
+- Post-ACK focused regression run
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyFlowCompositionTests|CombinedReverseQueryTests|VaultExportTests|CombinedDependencyPathTests|CombinedDependencyDiffTests|CombinedDependencyReportTests|CombinedRouteFlowTests|LegacyDataModelDescriptorProjectionTests"`:
+  passed, 161 tests, with the existing NU1903 advisory warning.
 - `dotnet build src/dotnet/TraceMap.sln`: passed, with the existing NU1903
   advisory warning.
 - `dotnet test src/dotnet/TraceMap.sln`: passed, 616 tests, with the existing
@@ -88,7 +91,23 @@ Kiro implementation review:
   recorded here. No further Kiro re-review was run to respect the two re-review
   limit.
 
-PR review-loop status: pending initial `agent-control pr-loop` run on PR #301.
+PR review-loop status:
+
+- Initial ACK run on PR #301 posted/requested required Codex review and waited
+  for the required reviewer batch. Qodo returned actionable findings first; no
+  patch was made until Codex also returned and ACK reported
+  `requiredReviewBatch.state = batch_terminal` with `patchAuthorized = true`.
+- Patched Qodo's reverse-query stable key drift finding by only including
+  `surfaceSubtype` in reverse surface identity when a subtype is present, so
+  non-subtyped surfaces keep their previous identity shape.
+- Patched Codex's vault export finding by carrying `SurfaceSubtype` on vault
+  graph nodes, closed-vocabulary-validating `data-model`, rendering subtype in
+  vault Markdown, and including subtype tags/aliases.
+- Disposition for Gemini's WCF subtype thread is test-backed by adding a
+  regression assertion that `wcf-operation` terminal path nodes keep
+  `SurfaceSubtype = null`.
+- Post-fix full validation passed. ACK rerun is pending after pushing the
+  follow-up commit.
 
 Remaining Task 7-9 follow-ups:
 

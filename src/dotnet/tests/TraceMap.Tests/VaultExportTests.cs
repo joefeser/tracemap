@@ -92,11 +92,13 @@ public sealed class VaultExportTests
 
         var result = await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Format: "markdown,json"));
 
-        Assert.Contains(result.Graph.Nodes, node => node.Kind == "surface" && node.SurfaceKind == "legacy-data");
+        var surface = Assert.Single(result.Graph.Nodes, node => node.Kind == "surface" && node.SurfaceKind == "legacy-data");
+        Assert.Equal("data-model", surface.SurfaceSubtype);
         Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Category == "unsafe-id-component");
 
         var allText = string.Join('\n', Directory.EnumerateFiles(outDir, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         Assert.Contains("legacy-data", allText);
+        Assert.Contains("data-model", allText);
         Assert.DoesNotContain("Customer|Ledger", allText, StringComparison.Ordinal);
     }
 

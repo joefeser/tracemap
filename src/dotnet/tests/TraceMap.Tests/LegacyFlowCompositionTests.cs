@@ -120,6 +120,7 @@ public sealed class LegacyFlowCompositionTests
 
         var path = Assert.Single(result.Report.Paths);
         Assert.Equal("wcf-operation", path.Nodes.Last().SurfaceKind);
+        Assert.Null(path.Nodes.Last().SurfaceSubtype);
         Assert.Contains(path.Nodes, node => node.DisplayName.Contains("OrderClient", StringComparison.Ordinal));
         Assert.Contains(path.Edges, edge => edge.EdgeKind == "wcf-service-reference");
         Assert.DoesNotContain(path.Nodes, node => node.SymbolId == serviceImpl);
