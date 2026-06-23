@@ -1580,7 +1580,7 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
-            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmQueryMetadata");
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape");
 
         Assert.DoesNotContain("ApiSecret", report);
         Assert.DoesNotContain("TenantSecret", report);

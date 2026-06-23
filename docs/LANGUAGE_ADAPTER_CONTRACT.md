@@ -264,6 +264,12 @@ Model identity properties such as `modelIdentityRuleId`, `modelIdentityEvidenceT
 
 Combined report, path, and route-flow readers project terminal legacy data model descriptors as the existing `legacy-data` surface kind with `surfaceSubtype = data-model`. The subtype is report/export metadata only; selectors continue to use `legacy-data`, and `AnalysisGap` facts under `legacy.data.*` rules remain gaps or caveats rather than terminal surfaces.
 
+Projected `legacy-data` path nodes may carry an optional `limitations` list of
+stable descriptor limitation codes such as `formula-redacted`,
+`filter-redacted`, or `query-redacted`. These codes are output metadata for
+report/export consumers; they must not include raw SQL, config values, provider
+URLs, remotes, local paths, source snippets, or private labels.
+
 ## Symbol Identity
 
 Each adapter should emit stable symbol IDs for its own ecosystem and include a language discriminator in `symbols`.
