@@ -125,6 +125,7 @@ public sealed class VaultExportTests
         Assert.Contains("formula-redacted", surface.Limitations);
         Assert.Contains("filter-redacted", surface.Limitations);
         Assert.Contains("query-redacted", surface.Limitations);
+        Assert.Contains(surface.Limitations, limitation => limitation.StartsWith("unsafe-limitation-code-hash-", StringComparison.Ordinal));
 
         var allText = string.Join('\n', Directory.EnumerateFiles(outDir, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         Assert.Contains("legacy.data.orm.nhibernate.v1", allText);
@@ -863,7 +864,7 @@ public sealed class VaultExportTests
                 ["connectionString"] = "Server=prod-db;Password=synthetic-secret",
                 ["remote"] = "git@github.com:private/customer.git",
                 ["localPath"] = "C:\\private\\customer",
-                ["limitations"] = "formula-redacted;filter-redacted;query-redacted"
+                ["limitations"] = "formula-redacted;filter-redacted;query-redacted;select CardNumber from Vault.Customers"
             });
     }
 
