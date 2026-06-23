@@ -40,11 +40,14 @@ Implemented in this slice:
   rule IDs, evidence tiers, surface subtype, spans, and limitation labels.
 - Patched Kiro review findings by collapsing undocumented EDMX/NHibernate
   classification strings to documented `AmbiguousLegacyDataModelIdentity` and
-  `UnsupportedLegacyOrmMappingShape`, and by making relationship semantics set
-  `coverageLabel` explicitly from endpoint coverage.
+  `UnsupportedLegacyOrmMappingShape`, and by keeping descriptor `coverageLabel`
+  ownership on model identity projection rather than relationship semantics.
 - Patched Kiro re-review documentation findings by adding acceptance coverage
   for vault limitation threading and documenting optional projected
   `legacy-data` path-node limitation codes in the language adapter contract.
+- Patched ACK review findings by removing a redundant NHibernate classification
+  helper and by hashing source-derived graph node limitation values that are not
+  closed, safe limitation codes before writing `graph.json` or Markdown.
 
 Validation so far:
 
@@ -67,6 +70,23 @@ Validation so far:
   `Level1SemanticAnalysis`.
 - After Kiro review patches, `./scripts/check-private-paths.sh`: passed.
 - After Kiro review patches, `git diff --check`: passed.
+- After ACK review patches,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter Vault_export_redacts_nhibernate_unsafe_values_from_graph_and_markdown`:
+  passed, 1 test, with the same existing NU1903 advisory warning.
+- After ACK review patches,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataMetadataExtractorTests|LegacyDataModelDescriptorProjectionTests|VaultExportTests|CombinedDependencyPathTests"`:
+  passed, 105 tests, with the same existing NU1903 advisory warning.
+- After ACK review patches, `dotnet build src/dotnet/TraceMap.sln`: passed
+  with the same existing NU1903 advisory warning.
+- After ACK review patches, `dotnet test src/dotnet/TraceMap.sln`: passed,
+  617 tests, with the same existing NU1903 advisory warning.
+- After ACK review patches,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-export-redaction-smoke`:
+  passed; emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log` with 27 facts at
+  `Level1SemanticAnalysis`.
+- After ACK review patches, `./scripts/check-private-paths.sh`: passed.
+- After ACK review patches, `git diff --check`: passed.
 
 Oddities and scope decisions:
 

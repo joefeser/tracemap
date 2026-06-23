@@ -338,7 +338,7 @@ public static class LegacyDataMetadataExtractor
     {
         foreach (var unsupported in document.Descendants().Where(IsUnsupportedNHibernateShape).OrderBy(GetLine))
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, NHibernateUnsupportedClassification(unsupported), $"Unsupported NHibernate mapping shape: {unsupported.Name.LocalName}.", unsupported);
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, "UnsupportedLegacyOrmMappingShape", $"Unsupported NHibernate mapping shape: {unsupported.Name.LocalName}.", unsupported);
         }
     }
 
@@ -1568,7 +1568,6 @@ public static class LegacyDataMetadataExtractor
         properties["modelRelationshipRuleId"] = RuleIds.LegacyDataModelRelationship;
         properties["modelRelationshipEvidenceTier"] = EvidenceTiers.Tier2Structural;
         properties["relationshipEndpointCoverage"] = string.Equals(endpointCoverage, "full", StringComparison.OrdinalIgnoreCase) ? "full" : "unidirectional";
-        properties["coverageLabel"] = string.Equals(endpointCoverage, "full", StringComparison.OrdinalIgnoreCase) ? "full" : "reduced";
         if (!string.IsNullOrWhiteSpace(sourceMetadataFactId))
         {
             properties["supportingFactIds"] = sourceMetadataFactId.Trim();
@@ -1786,11 +1785,6 @@ public static class LegacyDataMetadataExtractor
         var key = relationship.Elements().FirstOrDefault(element => element.Name.LocalName == "key");
         return AttributeValue(key, "column")
             ?? AttributeValue(key?.Elements().FirstOrDefault(element => element.Name.LocalName == "column"), "name");
-    }
-
-    private static string NHibernateUnsupportedClassification(XElement element)
-    {
-        return "UnsupportedLegacyOrmMappingShape";
     }
 
     private static string? NHibernateMappedTypeName(XElement classElement)
