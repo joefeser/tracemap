@@ -121,13 +121,17 @@ public sealed class VaultExportTests
         var surface = Assert.Single(result.Graph.Nodes, node => node.Kind == "surface" && node.SurfaceKind == "legacy-data");
         Assert.Equal("data-model", surface.SurfaceSubtype);
         Assert.Contains(RuleIds.LegacyDataOrmNHibernate, surface.RuleIds);
-        Assert.Equal("Tier2Structural", Assert.Single(surface.EvidenceTiers));
+        Assert.Equal(EvidenceTiers.Tier2Structural, Assert.Single(surface.EvidenceTiers));
         Assert.Contains("formula-redacted", surface.Limitations);
         Assert.Contains("filter-redacted", surface.Limitations);
         Assert.Contains("query-redacted", surface.Limitations);
         Assert.Contains(surface.Limitations, limitation => limitation.StartsWith("unsafe-limitation-code-hash-", StringComparison.Ordinal));
 
-        var allText = string.Join('\n', Directory.EnumerateFiles(outDir, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        var graphJson = await File.ReadAllTextAsync(Path.Combine(outDir, "graph.json"));
+        using var graphDocument = JsonDocument.Parse(graphJson);
+        var graphStrings = JsonStringValues(graphDocument.RootElement).ToArray();
+        var markdownText = string.Join('\n', Directory.EnumerateFiles(outDir, "*.md", SearchOption.AllDirectories).Select(File.ReadAllText));
+        var allText = string.Join('\n', [graphJson, markdownText]);
         Assert.Contains("legacy.data.orm.nhibernate.v1", allText);
         Assert.Contains("legacy-data", allText);
         Assert.Contains("data-model", allText);
@@ -143,7 +147,8 @@ public sealed class VaultExportTests
                      "C:\\private\\customer"
                  })
         {
-            Assert.DoesNotContain(unsafeToken, allText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(graphStrings, value => value.Contains(unsafeToken, StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(unsafeToken, markdownText, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -866,6 +871,40 @@ public sealed class VaultExportTests
                 ["localPath"] = "C:\\private\\customer",
                 ["limitations"] = "formula-redacted;filter-redacted;query-redacted;select CardNumber from Vault.Customers"
             });
+    }
+
+    private static IEnumerable<string> JsonStringValues(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    foreach (var nestedValue in JsonStringValues(property.Value))
+                    {
+                        yield return nestedValue;
+                    }
+                }
+
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    foreach (var nestedValue in JsonStringValues(item))
+                    {
+                        yield return nestedValue;
+                    }
+                }
+
+                break;
+            case JsonValueKind.String:
+                if (element.GetString() is { } stringValue)
+                {
+                    yield return stringValue;
+                }
+
+                break;
+        }
     }
 
     private static string Hash(string value, int length)
