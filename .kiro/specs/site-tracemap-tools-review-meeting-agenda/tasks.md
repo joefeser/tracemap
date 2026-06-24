@@ -1,6 +1,6 @@
 # Site TraceMap Tools Review Meeting Agenda Tasks
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -112,5 +112,5 @@ work or validation is complete.
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Run desktop and mobile browser sanity checks if route, layout, or
   interaction changes are made, or document why they were deferred.
-- [ ] Update `implementation-state.md` with final validation, placement
+- [x] Update `implementation-state.md` with final validation, placement
   choice, review-loop outcomes, oddities, and follow-up notes.
