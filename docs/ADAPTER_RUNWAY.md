@@ -63,8 +63,9 @@ honest gaps. Swift v0 is the next adapter-family proof that the same evidence
 model can cross into mobile application code without becoming a rewrite or a
 giant analyzer promise.
 
-Adapter output should stay useful for future WITS/ACK overnight classification:
-stable artifacts, rule IDs, evidence tiers, coverage labels, machine-readable
-gaps, and human-readable limitations. The classifier should be able to consume
-TraceMap evidence without needing private repo paths, raw code snippets, raw
-SQL/config values, secrets, or runtime-only claims.
+Adapter output should stay useful for future what-is-the-spec (WITS) and
+Agent Control Kit (ACK) overnight classification: stable artifacts, rule IDs,
+evidence tiers, coverage labels, machine-readable gaps, and human-readable
+limitations. The classifier should be able to consume TraceMap evidence without
+needing private repo paths, raw code snippets, raw SQL/config values, secrets,
+or runtime-only claims.

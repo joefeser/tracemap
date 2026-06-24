@@ -19,6 +19,7 @@ Start here:
 - [Decision log](docs/DECISIONS.md)
 - [Build milestones](MILESTONES.md)
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
+- [Adapter runway](docs/ADAPTER_RUNWAY.md)
 - [PR review loop](docs/PR_REVIEW_LOOP.md)
 - [Static HTML evidence explorer](docs/STATIC_HTML_EVIDENCE_EXPLORER.md)
 - [Rule catalog](rules/rule-catalog.yml)
