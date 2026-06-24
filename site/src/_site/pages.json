@@ -170,6 +170,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/limitations/reduced-coverage/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/demo/",
     "changefreq": "monthly",
     "priority": "0.8"
