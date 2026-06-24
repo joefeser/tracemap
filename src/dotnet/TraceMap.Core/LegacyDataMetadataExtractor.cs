@@ -338,7 +338,7 @@ public static class LegacyDataMetadataExtractor
     {
         foreach (var unsupported in document.Descendants().Where(IsUnsupportedNHibernateShape).OrderBy(GetLine))
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, NHibernateUnsupportedClassification(unsupported), $"Unsupported NHibernate mapping shape: {unsupported.Name.LocalName}.", unsupported);
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataOrmNHibernate, "UnsupportedLegacyOrmMappingShape", $"Unsupported NHibernate mapping shape: {unsupported.Name.LocalName}.", unsupported);
         }
     }
 
@@ -498,7 +498,7 @@ public static class LegacyDataMetadataExtractor
         var storageContainers = ssdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityContainer")).ToArray();
         if (conceptualContainers.Length > 1 || storageContainers.Length > 1)
         {
-            AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataEdmx, "AmbiguousEdmxMapping", "Multiple conceptual or storage containers require review.", document.Root);
+            AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "Multiple conceptual or storage containers require review.", document.Root);
         }
         var coverageLabel = csdlSchemas.Length == 0 || ssdlSchemas.Length == 0 || mappingElements.Length == 0 || conceptualContainers.Length > 1 || storageContainers.Length > 1
             ? "reduced"
@@ -616,7 +616,7 @@ public static class LegacyDataMetadataExtractor
             .ToArray();
         foreach (var unsupported in unsupportedMappings)
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "UnsupportedEdmxMappingShape", $"Unsupported EDMX mapping shape: {unsupported.Name.LocalName}.", unsupported);
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "UnsupportedLegacyOrmMappingShape", $"Unsupported EDMX mapping shape: {unsupported.Name.LocalName}.", unsupported);
         }
         var mappingCoverageLabel = unsupportedMappings.Length > 0 ? "reduced" : coverageLabel;
 
@@ -626,7 +626,7 @@ public static class LegacyDataMetadataExtractor
             var fragments = entitySetMapping.Descendants().Where(element => element.Name.LocalName == "MappingFragment").ToArray();
             if (fragments.Length != 1)
             {
-                AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousEdmxMapping", "EntitySetMapping did not contain exactly one MappingFragment.", entitySetMapping);
+                AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "EntitySetMapping did not contain exactly one MappingFragment.", entitySetMapping);
                 continue;
             }
 
@@ -1645,29 +1645,7 @@ public static class LegacyDataMetadataExtractor
 
     private static bool IsSafeIdentifier(string value)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Length > 128)
-        {
-            return false;
-        }
-
-        var lower = value.ToLowerInvariant();
-        if (lower.Contains("password", StringComparison.Ordinal)
-            || lower.Contains("secret", StringComparison.Ordinal)
-            || lower.Contains("token", StringComparison.Ordinal)
-            || lower.Contains("apikey", StringComparison.Ordinal)
-            || lower.Contains("api_key", StringComparison.Ordinal)
-            || lower.Contains("connectionstring", StringComparison.Ordinal)
-            || value.Contains("://", StringComparison.Ordinal)
-            || value.Contains("\\", StringComparison.Ordinal)
-            || value.Contains("/", StringComparison.Ordinal)
-            || value.Contains(";", StringComparison.Ordinal)
-            || value.Contains("=", StringComparison.Ordinal)
-            || value.Contains("@", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return value.All(ch => char.IsLetterOrDigit(ch) || ch is '_' or '.' or '-' or ' ');
+        return LegacyDataSafeValues.IsSafeIdentifier(value);
     }
 
     private static string? TargetFrom(IReadOnlyDictionary<string, string> properties, string clearKey, string hashKey)
@@ -1785,13 +1763,6 @@ public static class LegacyDataMetadataExtractor
         var key = relationship.Elements().FirstOrDefault(element => element.Name.LocalName == "key");
         return AttributeValue(key, "column")
             ?? AttributeValue(key?.Elements().FirstOrDefault(element => element.Name.LocalName == "column"), "name");
-    }
-
-    private static string NHibernateUnsupportedClassification(XElement element)
-    {
-        return element.Name.LocalName is "query" or "sql-query"
-            ? "UnsupportedLegacyOrmQueryMetadata"
-            : "UnsupportedLegacyOrmMappingShape";
     }
 
     private static string? NHibernateMappedTypeName(XElement classElement)

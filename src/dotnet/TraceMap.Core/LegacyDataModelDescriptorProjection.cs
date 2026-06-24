@@ -1,7 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
-
 namespace TraceMap.Core;
 
 public sealed record LegacyDataModelDescriptorProjectionOptions(
@@ -427,22 +425,7 @@ public static partial class LegacyDataModelDescriptorProjection
 
     private static bool IsSafeIdentifier(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var trimmed = value.Trim();
-        return trimmed.Length <= 128
-            && SafeIdentifierPattern().IsMatch(trimmed)
-            && !trimmed.Contains("://", StringComparison.Ordinal)
-            && !trimmed.Contains('\\', StringComparison.Ordinal)
-            && !trimmed.StartsWith("/", StringComparison.Ordinal)
-            && !trimmed.StartsWith("../", StringComparison.Ordinal)
-            && !trimmed.Contains("password", StringComparison.OrdinalIgnoreCase)
-            && !trimmed.Contains("secret", StringComparison.OrdinalIgnoreCase)
-            && !trimmed.Contains("token", StringComparison.OrdinalIgnoreCase)
-            && !trimmed.Contains("connectionstring", StringComparison.OrdinalIgnoreCase);
+        return LegacyDataSafeValues.IsSafeIdentifier(value);
     }
 
     private static string SafePath(string? filePath)
@@ -469,6 +452,4 @@ public static partial class LegacyDataModelDescriptorProjection
         return text[..Math.Min(length, text.Length)];
     }
 
-    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_.$]*$", RegexOptions.CultureInvariant)]
-    private static partial Regex SafeIdentifierPattern();
 }

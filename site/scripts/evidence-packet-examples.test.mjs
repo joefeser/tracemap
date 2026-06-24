@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { createDiscoveryOutputs } from "./discovery.mjs";
+import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
 import {
   evidencePacketExamplesRequiredLinks,
   evidencePacketExamplesRoute,
@@ -207,7 +208,7 @@ async function createManagedEvidencePacketExamplesFixture(t, options = {}) {
 }
 
 async function createEvidencePacketExamplesFixture({
-  discoveryRoutes = [evidencePacketExamplesRoute, ...evidencePacketExamplesRequiredLinks],
+  discoveryRoutes = [evidencePacketExamplesRoute, ...evidencePacketExamplesRequiredLinks, claimReviewDrillRoute],
   examplesHtml = null,
   includeInboundLinks = true,
   sitemapRoutes = [evidencePacketExamplesRoute]
@@ -217,6 +218,7 @@ async function createEvidencePacketExamplesFixture({
   const routes = new Set([
     evidencePacketExamplesRoute,
     ...evidencePacketExamplesRequiredLinks,
+    claimReviewDrillRoute,
     "/packets/assembly/"
   ]);
 

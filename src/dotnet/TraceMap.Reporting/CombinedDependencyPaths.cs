@@ -121,7 +121,9 @@ public sealed record CombinedPathNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? OperationDirection = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? SurfaceSubtype = null);
+    string? SurfaceSubtype = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? Limitations = null);
 
 public sealed record CombinedPathEdge(
     string EdgeId,
@@ -1625,7 +1627,8 @@ public static class CombinedDependencyPathReporter
             CombinedDependencyReporter.FirstValue(fact.Properties, "textLength"),
             null,
             null,
-            SurfaceSubtype: "data-model");
+            SurfaceSubtype: "data-model",
+            Limitations: descriptor.Limitations);
     }
 
     private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact)
@@ -3335,7 +3338,8 @@ public static class CombinedDependencyPathReporter
             surface.PackageName,
             surface.ConfigKey,
             surface.OperationDirection,
-            surface.SurfaceSubtype);
+            surface.SurfaceSubtype,
+            Limitations: surface.SurfaceKind == "legacy-data" ? surface.LegacyDataLimitations : null);
     }
 
     private static bool IsMessageSurfaceKind(string? surfaceKind)
@@ -4074,7 +4078,8 @@ public static class CombinedDependencyPathReporter
         string? PackageName,
         string? ConfigKey,
         string? OperationDirection = null,
-        string? SurfaceSubtype = null)
+        string? SurfaceSubtype = null,
+        IReadOnlyList<string>? Limitations = null)
     {
         public CombinedPathNode ToReportNode()
         {
@@ -4107,7 +4112,8 @@ public static class CombinedDependencyPathReporter
                 PackageName,
                 ConfigKey,
                 OperationDirection,
-                SurfaceSubtype);
+                SurfaceSubtype,
+                Limitations);
         }
     }
 

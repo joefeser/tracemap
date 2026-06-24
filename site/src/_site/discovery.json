@@ -186,6 +186,23 @@
     ]
   },
   {
+    "path": "/handoff/template/",
+    "title": "Evidence Handoff Template",
+    "summary": "Concept-level reusable template for carrying one TraceMap static-evidence question with proof path, rule context, limits, and next role.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is an authored public-safe template, not generated handoff output or a new proof source.",
+      "Missing private-only scan context, reduced coverage, weak evidence, or absent validation remains a visible limitation or stop condition."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, real organization ownership, complete coverage, AI impact analysis, LLM analysis, autonomous review, generated handoff feature, or replacement of human review.",
+      "No raw artifacts, source excerpts, database text, configuration values, credentials, workstation paths, repository locations, scan folders, command output, hidden validation detail, private sample names, or personal owner names are public handoff-template material."
+    ]
+  },
+  {
     "path": "/reviewer-quickstart/",
     "title": "Reviewer Quickstart",
     "summary": "Five-minute concept-level guide for inspecting a public-safe TraceMap evidence packet before repeating or routing a claim.",
@@ -217,6 +234,23 @@
     "nonClaims": [
       "No runtime behavior, production usage, deployment state, endpoint performance, release approval, or release safety proof.",
       "No AI impact analysis, LLM calls, embeddings, vector databases, or prompt-based classification in core TraceMap."
+    ]
+  },
+  {
+    "path": "/limitations/reduced-coverage/",
+    "title": "Reduced Coverage Playbook",
+    "summary": "Concept-level playbook for labeling partial static evidence, preserving coverage labels, and routing owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "limitations",
+    "preferredProofPath": "/limitations/",
+    "limitations": [
+      "The playbook is guidance for labeling reduced coverage and owner handoff, not scanner output or reducer output.",
+      "Coverage labels, evidence tiers, limitations, proof links, and stop conditions must remain attached before wording is repeated."
+    ],
+    "nonClaims": [
+      "No absence-of-impact proof, clean-repo claim under reduced analysis, runtime behavior proof, production traffic proof, endpoint performance proof, outage cause proof, release approval, release safety, operational safety, or complete coverage proof.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt-based classification, autonomous approval, replacement of human review, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values."
     ]
   },
   {
@@ -784,6 +818,23 @@
     ]
   },
   {
+    "path": "/language/change-risk/",
+    "title": "Change-Risk Language Guide",
+    "summary": "Concept-level wording guide for choosing bounded public language around deterministic static change evidence, reduced coverage, owner handoffs, and stop conditions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The guide teaches public-safe wording and cannot upgrade static evidence into stronger product, runtime, release, or safety conclusions.",
+      "Evidence-bearing scanner facts, reducer findings, rule catalog entries, coverage labels, and documented limitations remain the source of support."
+    ],
+    "nonClaims": [
+      "No impact proof, absence-of-impact proof, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, complete coverage, AI impact analysis, LLM analysis, autonomous approval, or replacement of human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public language-guide material."
+    ]
+  },
+  {
     "path": "/review-claim-checklist/",
     "title": "Review Claim Checklist",
     "summary": "Concept-level repeat-before-reuse checklist for keeping TraceMap claims attached to proof paths, rule IDs, evidence tiers, coverage labels, limitations, non-claims, source status, and owner follow-up.",
@@ -798,6 +849,23 @@
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
       "No raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, real internal reviewer identities, owner identities, or internal review dates are published."
+    ]
+  },
+  {
+    "path": "/review-claim-checklist/drill/",
+    "title": "Claim Review Drill",
+    "summary": "Concept-level practice drill for checking whether a public claim has a proof path, rule family, evidence tier, coverage label, limitation, non-claim, and public-safe status before it is repeated.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/review-claim-checklist/",
+    "limitations": [
+      "The drill uses authored sample rows and an answer key; it is not an automated grader, approval workflow, product proof, or generated evidence artifact.",
+      "Correct drill answers control reuse of sample sentences and do not upgrade scanner, reducer, runtime, release, or coverage claims."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, automated grading, or replacement of human review.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public drill material."
     ]
   },
   {
