@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -238,7 +239,13 @@ public sealed record RouteFlowGap(
     IReadOnlyList<string> Limitations,
     string? FilePath = null,
     int? StartLine = null,
-    int? EndLine = null);
+    int? EndLine = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CommitSha = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? ExtractorName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? ExtractorVersion = null);
 
 public static class RouteFlowClassifications
 {
@@ -266,6 +273,8 @@ public static class CombinedRouteFlowReporter
     private const string RedactionRuleId = "combined.route-flow.redaction.v1";
     private const string ReportRuleId = "combined.route-flow.report.v1";
     private const int MarkdownRowLimit = 200;
+    private const int AmbiguitySupportingFactIdLimit = 20;
+    private const int AmbiguityLargeRootNoticeThreshold = 50;
 
     private static readonly HashSet<string> AllowedClassifications = new(StringComparer.Ordinal)
     {
@@ -875,6 +884,10 @@ public static class CombinedRouteFlowReporter
             return new EndpointCompositionResult([], [], false);
         }
 
+        var scannerVersionBySourceIndexId = inventory.Sources
+            .GroupBy(source => source.SourceIndexId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(source => source.Label, StringComparer.Ordinal).First().ScannerVersion, StringComparer.Ordinal);
+        var rootAmbiguityGaps = EndpointRootAmbiguityGaps(requiredNodeKind, parsed.Method, parsed.PathKey, roots, scannerVersionBySourceIndexId);
         var nodesById = inventory.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         var outgoing = inventory.Edges
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
@@ -896,11 +909,18 @@ public static class CombinedRouteFlowReporter
         {
             return new EndpointCompositionResult(
                 [],
-                TerminalSurfaceMissingGaps(roots, outgoing, callLikeEdgesByFromNodeId, nodesById),
+                rootAmbiguityGaps
+                    .Concat(TerminalSurfaceMissingGaps(roots, outgoing, callLikeEdgesByFromNodeId, nodesById))
+                    .GroupBy(gap => gap.GapId, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
+                    .ThenBy(gap => gap.SourceLabel, StringComparer.Ordinal)
+                    .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+                    .ToArray(),
                 false);
         }
 
-        var gaps = new List<RouteFlowGap>();
+        var gaps = new List<RouteFlowGap>(rootAmbiguityGaps);
         var paths = new List<CombinedPath>();
         var queue = new Queue<EndpointTraversalState>();
         var emittedPathsByRoot = roots.ToDictionary(root => root.NodeId, _ => 0, StringComparer.Ordinal);
@@ -1103,6 +1123,120 @@ public static class CombinedRouteFlowReporter
                 .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
                 .ToArray(),
             truncated);
+    }
+
+    private static IReadOnlyList<RouteFlowGap> EndpointRootAmbiguityGaps(
+        string? requiredNodeKind,
+        string method,
+        string pathKey,
+        IReadOnlyList<CombinedPathNode> roots,
+        IReadOnlyDictionary<string, string> scannerVersionBySourceIndexId)
+    {
+        if (roots.Count <= 1)
+        {
+            return [];
+        }
+
+        var supportingFactIds = BoundedSortedDistinctValues(
+            roots.Select(root => root.CombinedFactId),
+            AmbiguitySupportingFactIdLimit,
+            out var supportingFactReferenceCount);
+        var firstRoot = roots[0];
+        scannerVersionBySourceIndexId.TryGetValue(firstRoot.SourceIndexId, out var extractorVersion);
+        var limitations = new List<string>
+        {
+            "Duplicate route roots make selector ownership ambiguous and do not prove runtime routing, traffic, or handler selection."
+        };
+        if (supportingFactReferenceCount > supportingFactIds.Length)
+        {
+            limitations.Add($"Supporting fact IDs are capped at {AmbiguitySupportingFactIdLimit} of {supportingFactReferenceCount} non-empty fact references; use source filters to narrow the selector.");
+        }
+
+        if (roots.Count > AmbiguityLargeRootNoticeThreshold)
+        {
+            limitations.Add($"Ambiguity spans {roots.Count} endpoint roots; the stable gap identity hashes the full deterministic root sequence without emitting every root ID.");
+        }
+
+        return [
+            new RouteFlowGap(
+                $"gap:endpoint-composition:SelectorNoMatch:{HashAmbiguousRootSet(requiredNodeKind, method, pathKey, roots, 16)}",
+                "SelectorNoMatch",
+                "Route-flow selector matched multiple endpoint roots; downstream rows remain static review context until the root is narrowed.",
+                SelectorRuleId,
+                EvidenceTiers.Tier4Unknown,
+                "ReducedCoverage",
+                SafeLabel(firstRoot.SourceLabel),
+                firstRoot.NodeId,
+                supportingFactIds,
+                limitations,
+                CombinedReportHelpers.SafePath(firstRoot.FilePath),
+                firstRoot.StartLine,
+                firstRoot.EndLine,
+                SafeCommitSha(firstRoot.CommitSha),
+                ExtractorName(firstRoot.RuleId),
+                SafeSelector(extractorVersion) ?? "unknown")
+        ];
+    }
+
+    private static string[] BoundedSortedDistinctValues(IEnumerable<string?> values, int limit, out int nonEmptyValueCount)
+    {
+        var selected = new SortedSet<string>(StringComparer.Ordinal);
+        nonEmptyValueCount = 0;
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            nonEmptyValueCount++;
+            selected.Add(value);
+            if (selected.Count <= limit)
+            {
+                continue;
+            }
+
+            var largest = selected.Max;
+            if (largest is not null)
+            {
+                selected.Remove(largest);
+            }
+        }
+
+        return selected.ToArray();
+    }
+
+    private static string HashAmbiguousRootSet(
+        string? requiredNodeKind,
+        string method,
+        string pathKey,
+        IReadOnlyList<CombinedPathNode> roots,
+        int length)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var separator = new byte[] { 0 };
+        AppendHashValue(hash, separator, requiredNodeKind ?? "endpoint");
+        AppendHashValue(hash, separator, method);
+        AppendHashValue(hash, separator, pathKey);
+        AppendHashValue(hash, separator, roots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var root in roots)
+        {
+            AppendHashValue(hash, separator, root.NodeId);
+        }
+
+        var bytes = hash.GetHashAndReset();
+        var text = Convert.ToHexString(bytes).ToLowerInvariant();
+        return text[..Math.Min(length, text.Length)];
+    }
+
+    private static void AppendHashValue(IncrementalHash hash, byte[] separator, string? value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(value));
+        }
+
+        hash.AppendData(separator);
     }
 
     private static IReadOnlyDictionary<string, CombinedPathEdge[]> BuildParameterForwardSeedEdgesByMethodNodeId(
@@ -2939,12 +3073,12 @@ public static class CombinedRouteFlowReporter
             gap.RuleId,
             gap.EvidenceTier,
             gap.SourceLabel ?? "unknown",
-            SafeCommitSha(commitSha),
+            SafeCommitSha(gap.CommitSha ?? commitSha),
             gap.FilePath,
             gap.StartLine,
             gap.EndLine,
-            "route-flow",
-            Version,
+            gap.ExtractorName ?? "route-flow",
+            gap.ExtractorVersion ?? Version,
             gap.SupportingFactIds,
             [],
             [gap.RuleId],
