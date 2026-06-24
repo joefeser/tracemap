@@ -67,6 +67,23 @@
     ]
   },
   {
+    "path": "/evidence/gaps/",
+    "title": "Evidence Gap Register",
+    "summary": "Concept-level register for recording missing, reduced, stale, private-only, unsupported, unknown, validation, and owner-question evidence gaps as bounded follow-up rows.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/review-claim-checklist/",
+    "limitations": [
+      "The register records follow-up rows and stop conditions; it is not scanner output, reducer output, validation success, or a public proof source.",
+      "Gap rows must keep what evidence exists, what cannot be concluded, next owner, proof or validation route, safe wording, and stop condition attached."
+    ],
+    "nonClaims": [
+      "No absence-of-impact proof, runtime behavior proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release readiness, operational certainty, clean-repo status, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous approval, or replacement of human review.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public gap-register material."
+    ]
+  },
+  {
     "path": "/glossary/",
     "title": "Evidence Glossary",
     "summary": "Concept-level vocabulary for public-safe TraceMap evidence terms before readers repeat public claims.",
@@ -152,6 +169,23 @@
     ]
   },
   {
+    "path": "/packets/examples/",
+    "title": "Evidence Packet Examples",
+    "summary": "Concept-level gallery of synthetic public-safe packet shapes showing claims, proof paths, tiers, coverage labels, limitations, non-claims, owners, and validation evidence.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/packets/",
+    "limitations": [
+      "The route teaches synthetic public-safe packet shapes, not real customer, private repository, production, or raw artifact evidence.",
+      "Every example remains concept-level and must keep limitations, coverage labels, and next-owner questions attached to the claim."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, autonomous approval, autonomous review, or replacement of human review.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public example material."
+    ]
+  },
+  {
     "path": "/packets/assembly/",
     "title": "Review Packet Assembly",
     "summary": "Concept-level checklist for assembling public-safe review handoff material from existing TraceMap evidence surfaces.",
@@ -166,6 +200,23 @@
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release approval or safety, operational safety, AI impact analysis, LLM analysis, autonomous review, generated packet-builder behavior, or complete coverage proof.",
       "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, hidden validation details, or credential-like values are public packet material."
+    ]
+  },
+  {
+    "path": "/handoff/template/",
+    "title": "Evidence Handoff Template",
+    "summary": "Concept-level reusable template for carrying one TraceMap static-evidence question with proof path, rule context, limits, and next role.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is an authored public-safe template, not generated handoff output or a new proof source.",
+      "Missing private-only scan context, reduced coverage, weak evidence, or absent validation remains a visible limitation or stop condition."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, real organization ownership, complete coverage, AI impact analysis, LLM analysis, autonomous review, generated handoff feature, or replacement of human review.",
+      "No raw artifacts, source excerpts, database text, configuration values, credentials, workstation paths, repository locations, scan folders, command output, hidden validation detail, private sample names, or personal owner names are public handoff-template material."
     ]
   },
   {
@@ -200,6 +251,23 @@
     "nonClaims": [
       "No runtime behavior, production usage, deployment state, endpoint performance, release approval, or release safety proof.",
       "No AI impact analysis, LLM calls, embeddings, vector databases, or prompt-based classification in core TraceMap."
+    ]
+  },
+  {
+    "path": "/limitations/reduced-coverage/",
+    "title": "Reduced Coverage Playbook",
+    "summary": "Concept-level playbook for labeling partial static evidence, preserving coverage labels, and routing owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "limitations",
+    "preferredProofPath": "/limitations/",
+    "limitations": [
+      "The playbook is guidance for labeling reduced coverage and owner handoff, not scanner output or reducer output.",
+      "Coverage labels, evidence tiers, limitations, proof links, and stop conditions must remain attached before wording is repeated."
+    ],
+    "nonClaims": [
+      "No absence-of-impact proof, clean-repo claim under reduced analysis, runtime behavior proof, production traffic proof, endpoint performance proof, outage cause proof, release approval, release safety, operational safety, or complete coverage proof.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt-based classification, autonomous approval, replacement of human review, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values."
     ]
   },
   {
@@ -424,6 +492,58 @@
     ]
   },
   {
+    "path": "/questions/objections/",
+    "title": "Stakeholder Objection Guide",
+    "summary": "Concept-level guide that turns skeptical stakeholder objections into public-safe evidence checks, stop conditions, limitations, and owner handoffs.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The guide is an objection-to-evidence handoff over existing public routes, not a new proof source or release workflow.",
+      "Rows must keep the safe answer, evidence check, stop condition, owner handoff, limitation, non-claim, supporting route, and public claim level attached."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete coverage, release approval, autonomous approval, or absence-of-impact proof.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public objection-guide material."
+    ]
+  },
+  {
+    "path": "/decisions/evidence-record/",
+    "title": "Evidence Decision Record",
+    "summary": "Concept-level template for documenting a human owner decision after TraceMap evidence review while preserving proof path, limitation, follow-up, and residual risk.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is a record template over existing public-safe evidence surfaces, not a new proof source, workflow engine, or authority system.",
+      "Every record must keep the proof path, rule ID or family, evidence tier, coverage label, limitation, non-claim, follow-up owner, and residual risk attached."
+    ],
+    "nonClaims": [
+      "No autonomous decision, approval workflow, release approval, release safety, operational safety, runtime proof, production proof, endpoint performance proof, outage cause, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, or prompt classification.",
+      "No replacement of tests, code review, source review, runtime observability, telemetry, release process, service-owner review, governance, or human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public record material."
+    ]
+  },
+  {
+    "path": "/owners/follow-up/",
+    "title": "Owner Follow-Up Map",
+    "summary": "Concept-level map for routing static-evidence questions to human owner categories while preserving proof paths, limitations, handoff wording, and stop conditions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The map routes questions to owner categories, not real teams, people, approval chains, on-call rotations, service catalogs, database stewardship, or production ownership records.",
+      "Every row must keep the static evidence trigger, what TraceMap can and cannot show, proof path, limitation, handoff wording, and stop condition attached."
+    ],
+    "nonClaims": [
+      "No real org ownership claim, production ownership proof, runtime behavior, production traffic, endpoint performance, release approval, release safety, operational safety, complete coverage, or replacement of human judgment.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, automated ownership detection, automated release approval, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public owner follow-up material."
+    ]
+  },
+  {
     "path": "/legacy-evidence/",
     "title": "Legacy Evidence Story",
     "summary": "Concept claim ledger for hidden legacy-adjacent static evidence themes, promotion gates, and public-safe boundaries.",
@@ -594,6 +714,24 @@
     ]
   },
   {
+    "path": "/test-planning/",
+    "title": "Test Planning Handoff",
+    "summary": "Concept-level handoff for turning TraceMap deterministic static evidence into human-owned test-planning questions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route translates static evidence into test-planning questions; it is not a generated test workflow, validation result, or release gate.",
+      "Every question must keep proof path, rule context, evidence tier, coverage label, changed surface, limitation, next owner, validation evidence, and non-claim attached."
+    ],
+    "nonClaims": [
+      "No generated tests, test sufficiency, runtime behavior, production traffic, endpoint performance, release safety, release approval, complete coverage, AI impact analysis, LLM analysis, embeddings, vector database analysis, prompt classification, or replacement of QA proof.",
+      "No replacement of tests, source review, runtime observability, telemetry, logs, traces, APM, service-owner judgment, database-owner judgment, release-owner judgment, security review, compliance review, or human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public handoff material."
+    ]
+  },
+  {
     "path": "/static-vs-runtime/",
     "title": "Static Evidence Vs Runtime Telemetry",
     "summary": "Concept-level comparison of TraceMap deterministic static repository evidence with runtime telemetry and observability questions.",
@@ -609,6 +747,23 @@
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete product coverage, incident root cause, service ownership, production dependency understanding, or test sufficiency proof.",
       "No replacement for logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.",
       "No AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis."
+    ]
+  },
+  {
+    "path": "/manager-packet/",
+    "title": "Manager Packet",
+    "summary": "Demo-level manager-facing packet explaining deterministic static evidence, rule IDs, coverage labels, generated summaries, gaps, and limitations.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/demo/proof-upgrades/",
+    "limitations": [
+      "The page summarizes public demo evidence from checked-in samples and public-safe routes.",
+      "Manager-facing summaries must keep proof paths, coverage labels, generated summary status, gaps, and limitations visible."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, incident root cause, release approval, operational safety, or complete coverage proof.",
+      "No AI impact analysis, LLM analysis, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public manager-packet material."
     ]
   },
   {
@@ -648,7 +803,7 @@
   {
     "path": "/review-room/",
     "title": "Evidence Review Room",
-    "summary": "Concept-level meeting agenda for deciding what static dependency evidence is known, partial, or missing without claiming runtime proof.",
+    "summary": "Concept-level evidence-review room orientation for deciding what static dependency evidence is known, partial, or missing without claiming runtime proof.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "use-case",
@@ -660,6 +815,57 @@
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
       "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, generated scan directories, AI impact analysis, LLM analysis, or complete product coverage claim."
+    ]
+  },
+  {
+    "path": "/review-room/agenda/",
+    "title": "Evidence Review Meeting Agenda",
+    "summary": "Concept-level meeting agenda for checking TraceMap proof paths, evidence tiers, coverage labels, limitations, gaps, owners, and decision-record handoff.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is a human meeting agenda over existing public-safe static evidence surfaces, not meeting automation or a new proof source.",
+      "The agenda preserves review questions, proof paths, rule context, evidence tiers, coverage labels, limitations, gaps, owners, validation evidence category, and non-claims without upgrading missing evidence."
+    ],
+    "nonClaims": [
+      "No meeting automation, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, automated impact analysis, or replacement of human judgment or governance.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, credential-like values, connection strings, tokens, or keys are public agenda material."
+    ]
+  },
+  {
+    "path": "/release-review-boundary/",
+    "title": "Release Review Boundary",
+    "summary": "Concept-level handoff for what deterministic static evidence can contribute during release review while release-control decisions remain owner-owned.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "This is a static-evidence release-review handoff, not a release gate, approval system, runtime workflow, deploy audit, validation proof, manager packet, or objection guide.",
+      "Static repository evidence can orient questions and gaps but cannot replace release owners, release controls, tests, source review, service-owner judgment, runtime observability, or human judgment."
+    ],
+    "nonClaims": [
+      "No release approval, release safety, operational safety, production proof, runtime behavior proof, endpoint performance proof, deployment success proof, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement of release controls.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public release-boundary material."
+    ]
+  },
+  {
+    "path": "/language/change-risk/",
+    "title": "Change-Risk Language Guide",
+    "summary": "Concept-level wording guide for choosing bounded public language around deterministic static change evidence, reduced coverage, owner handoffs, and stop conditions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The guide teaches public-safe wording and cannot upgrade static evidence into stronger product, runtime, release, or safety conclusions.",
+      "Evidence-bearing scanner facts, reducer findings, rule catalog entries, coverage labels, and documented limitations remain the source of support."
+    ],
+    "nonClaims": [
+      "No impact proof, absence-of-impact proof, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, complete coverage, AI impact analysis, LLM analysis, autonomous approval, or replacement of human judgment.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public language-guide material."
     ]
   },
   {
@@ -677,6 +883,23 @@
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
       "No raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, real internal reviewer identities, owner identities, or internal review dates are published."
+    ]
+  },
+  {
+    "path": "/review-claim-checklist/drill/",
+    "title": "Claim Review Drill",
+    "summary": "Concept-level practice drill for checking whether a public claim has a proof path, rule family, evidence tier, coverage label, limitation, non-claim, and public-safe status before it is repeated.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/review-claim-checklist/",
+    "limitations": [
+      "The drill uses authored sample rows and an answer key; it is not an automated grader, approval workflow, product proof, or generated evidence artifact.",
+      "Correct drill answers control reuse of sample sentences and do not upgrade scanner, reducer, runtime, release, or coverage claims."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, automated grading, or replacement of human review.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public drill material."
     ]
   },
   {

@@ -87,7 +87,8 @@ public sealed record CombinedSurfaceProjectionRow(
     IReadOnlyList<string>? LegacyDataRedactions = null,
     bool LegacyDataDisplayClearance = false,
     string? LegacyDataClaimLevelContextId = null,
-    string? LegacyDataExtractorVersion = null);
+    string? LegacyDataExtractorVersion = null,
+    string? SurfaceSubtype = null);
 
 public static class CombinedSurfaceProjection
 {
@@ -280,7 +281,8 @@ public static class CombinedSurfaceProjection
             LegacyDataRedactions: descriptor.Redactions,
             LegacyDataDisplayClearance: descriptor.DisplayClearance,
             LegacyDataClaimLevelContextId: descriptor.ClaimLevelContextId,
-            LegacyDataExtractorVersion: descriptor.ExtractorVersion);
+            LegacyDataExtractorVersion: descriptor.ExtractorVersion,
+            SurfaceSubtype: "data-model");
     }
 
     private static string? SurfaceKind(CombinedSurfaceFactInput fact)

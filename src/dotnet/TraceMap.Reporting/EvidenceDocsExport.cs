@@ -328,7 +328,7 @@ public static class EvidenceDocsExporter
             throw new InvalidOperationException("InputSchemaUnsupported: docs-export requires a TraceMap index with usable source or fact evidence.");
         }
 
-        chunks = SortChunks(chunks).ToList();
+        chunks = AddNavigationLinks(SortChunks(chunks), formats).ToList();
         var limitations = BuildManifestLimitations(chunks, selectedFamilies);
         var manifest = BuildManifest(
             options,
@@ -1539,9 +1539,14 @@ public static class EvidenceDocsExporter
         {
             files["README.md"] = SummaryMarkdown("readme", manifest, chunks);
             files["index.md"] = SummaryMarkdown("index", manifest, chunks);
+            foreach (var familyGroup in chunks.GroupBy(chunk => chunk.ChunkFamily, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                files[$"chunks/{familyGroup.Key}/index.md"] = FamilyIndexMarkdown(manifest.ClaimLevel, familyGroup.Key, familyGroup.ToArray());
+            }
+
             foreach (var chunk in chunks)
             {
-                files[$"chunks/{chunk.ChunkFamily}/{Slug(chunk.ChunkId)}.md"] = ChunkMarkdown(chunk);
+                files[ChunkPath(chunk)] = ChunkMarkdown(chunk);
             }
         }
 
@@ -1590,7 +1595,16 @@ public static class EvidenceDocsExporter
         body.AppendLine("| --- | --- |");
         foreach (var count in manifest.ChunkCounts.OrderBy(count => count.Key, StringComparer.Ordinal))
         {
-            body.AppendLine($"| `{EscapeInline(count.Key)}` | `{count.Count}` |");
+            body.AppendLine($"| [`{EscapeInline(count.Key)}`](chunks/{EscapeInline(count.Key)}/index.md) | `{count.Count}` |");
+        }
+
+        body.AppendLine();
+        body.AppendLine("## Navigation");
+        body.AppendLine();
+        body.AppendLine("- [Chunk index](index.md)");
+        foreach (var family in chunks.Select(chunk => chunk.ChunkFamily).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+        {
+            body.AppendLine($"- [{EscapeText(TitleForFamily(family))} chunks](chunks/{EscapeInline(family)}/index.md)");
         }
 
         body.AppendLine();
@@ -1601,12 +1615,47 @@ public static class EvidenceDocsExporter
         return frontmatter + body;
     }
 
+    private static string FamilyIndexMarkdown(string claimLevel, string family, IReadOnlyList<EvidenceDocChunk> chunks)
+    {
+        var sourceLabels = chunks.SelectMany(chunk => chunk.SourceRefs).Select(source => source.SourceLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var builder = new StringBuilder();
+        builder.Append(SummaryFrontmatter($"{family}-index", claimLevel, sourceLabels, ""));
+        builder.AppendLine($"# {EscapeHeading(TitleForFamily(family))} Chunks");
+        builder.AppendLine();
+        builder.AppendLine("[All docs](../../index.md)");
+        builder.AppendLine();
+        builder.AppendLine("| Field | Value |");
+        builder.AppendLine("| --- | --- |");
+        builder.AppendLine($"| Chunk family | `{EscapeInline(family)}` |");
+        builder.AppendLine($"| Chunks | `{chunks.Count}` |");
+        builder.AppendLine($"| Claim level | `{EscapeInline(claimLevel)}` |");
+        builder.AppendLine();
+        builder.AppendLine("| Chunk | Claim kind | Question families | Rule IDs | Evidence tiers |");
+        builder.AppendLine("| --- | --- | --- | --- | --- |");
+        foreach (var chunk in chunks.OrderBy(chunk => chunk.SortKey, StringComparer.Ordinal).ThenBy(chunk => chunk.ChunkId, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"| [{EscapeText(chunk.Title)}]({EscapeInline(Path.GetFileName(ChunkPath(chunk)))}) | `{EscapeInline(chunk.Claim.Kind)}` | `{EscapeInline(string.Join(", ", chunk.QuestionFamilies))}` | `{EscapeInline(string.Join(", ", chunk.RuleIds))}` | `{EscapeInline(string.Join(", ", chunk.EvidenceTiers))}` |");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("This index is navigation metadata over deterministic static evidence. It does not add new evidence or prove runtime behavior.");
+        return builder.ToString();
+    }
+
     private static string ChunkMarkdown(EvidenceDocChunk chunk)
     {
         var sourceLabels = chunk.SourceRefs.Select(source => source.SourceLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var builder = new StringBuilder();
         builder.Append(ChunkFrontmatter(chunk, sourceLabels, ""));
         builder.AppendLine($"# {EscapeHeading(chunk.Title)}");
+        builder.AppendLine();
+        builder.AppendLine("## Navigation");
+        builder.AppendLine();
+        foreach (var link in chunk.Links.OrderBy(link => link.LinkId, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- [{EscapeText(link.Label)}]({EscapeInline(RelativeChunkLink(chunk, link.Target))})");
+        }
+
         builder.AppendLine();
         builder.AppendLine($"## {EscapeHeading(chunk.SectionTitle)}");
         builder.AppendLine();
@@ -1663,6 +1712,73 @@ public static class EvidenceDocsExporter
         }
 
         return builder.ToString();
+    }
+
+    private static IReadOnlyList<EvidenceDocChunk> AddNavigationLinks(IReadOnlyList<EvidenceDocChunk> chunks, IReadOnlyList<string> formats)
+    {
+        var markdownAvailable = formats.Contains("markdown", StringComparer.Ordinal);
+        return chunks
+            .Select(chunk => chunk with
+            {
+                Links = NavigationLinksFor(chunk, markdownAvailable)
+            })
+            .ToArray();
+    }
+
+    private static IReadOnlyList<EvidenceDocLink> NavigationLinksFor(EvidenceDocChunk chunk, bool markdownAvailable)
+    {
+        if (!markdownAvailable)
+        {
+            return [];
+        }
+
+        return
+        [
+            new EvidenceDocLink("chunk-markdown", "Chunk Markdown", ChunkPath(chunk)),
+            new EvidenceDocLink("docs-index", "All Evidence Docs", "index.md"),
+            new EvidenceDocLink("family-index", $"{TitleForFamily(chunk.ChunkFamily)} Index", $"chunks/{chunk.ChunkFamily}/index.md")
+        ];
+    }
+
+    private static string ChunkPath(EvidenceDocChunk chunk)
+    {
+        return $"chunks/{chunk.ChunkFamily}/{Slug(chunk.ChunkId)}.md";
+    }
+
+    private static string RelativeChunkLink(EvidenceDocChunk chunk, string target)
+    {
+        var currentDirectory = Path.GetDirectoryName(ChunkPath(chunk))?.Replace('\\', '/') ?? string.Empty;
+        var normalizedTarget = target.Replace('\\', '/');
+        if (string.IsNullOrWhiteSpace(currentDirectory))
+        {
+            return normalizedTarget;
+        }
+
+        var targetDirectory = Path.GetDirectoryName(normalizedTarget)?.Replace('\\', '/') ?? string.Empty;
+        var targetFile = Path.GetFileName(normalizedTarget);
+        if (string.Equals(currentDirectory, targetDirectory, StringComparison.Ordinal))
+        {
+            return string.IsNullOrWhiteSpace(targetFile) ? "." : targetFile;
+        }
+
+        var currentParts = currentDirectory.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var targetParts = normalizedTarget.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var common = 0;
+        while (common < currentParts.Length
+               && common < targetParts.Length
+               && string.Equals(currentParts[common], targetParts[common], StringComparison.Ordinal))
+        {
+            common++;
+        }
+
+        var relative = new List<string>();
+        for (var index = common; index < currentParts.Length; index++)
+        {
+            relative.Add("..");
+        }
+
+        relative.AddRange(targetParts.Skip(common));
+        return relative.Count == 0 ? "." : string.Join('/', relative);
     }
 
     private static string WithMarkdownHash(string content)

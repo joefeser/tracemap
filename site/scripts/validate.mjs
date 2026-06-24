@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
+import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
 import {
   validateDiscoveryDist,
   validateDiscoveryNotInSitemap,
@@ -13,8 +14,13 @@ import {
 import { validateDeployAuditDist } from "./deploy-audit.mjs";
 import { validateDemoEvidenceTrailDist } from "./demo-evidence-trail.mjs";
 import { validateDemoRunbookDist } from "./demo-runbook.mjs";
+import { validateEvidenceHandoffTemplateDist } from "./evidence-handoff-template.mjs";
+import { validateEvidenceDecisionRecordDist } from "./evidence-decision-record.mjs";
+import { validateEvidenceGapRegisterDist } from "./evidence-gap-register.mjs";
 import { validateEndpointReviewDist } from "./endpoint-review.mjs";
+import { validateEvidencePacketExamplesDist } from "./evidence-packet-examples.mjs";
 import { validateChangeReviewDist } from "./change-review.mjs";
+import { validateClaimReviewDrillDist } from "./claim-review-drill.mjs";
 import { validateGlossaryDist } from "./glossary.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
 import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff.mjs";
@@ -23,18 +29,24 @@ import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
 import { validateManagerDemoScriptDist } from "./manager-demo-script.mjs";
 import { validateManagerFaqDist } from "./manager-faq.mjs";
+import { validateOwnerFollowupMapDist } from "./owner-followup-map.mjs";
 import { validateProofPathFaqDist } from "./proof-path-faq.mjs";
 import { validateProofPathTourDist } from "./proof-path-tour.mjs";
 import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
+import { validateReducedCoveragePlaybookDist } from "./reduced-coverage-playbook.mjs";
+import { validateReviewMeetingAgendaDist } from "./review-meeting-agenda.mjs";
 import { validateReviewerQuickstartDist } from "./reviewer-quickstart.mjs";
 import { validateReviewPacketAssemblyDist } from "./review-packet-assembly.mjs";
 import { validateReviewClaimChecklistDist } from "./review-claim-checklist.mjs";
+import { validateReleaseReviewBoundaryDist } from "./release-review-boundary.mjs";
 import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
+import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
 import { validateStakeholderQuestionIndexDist } from "./stakeholder-question-index.mjs";
 import { validateTeamEvidenceHandoffDist } from "./team-evidence-handoff.mjs";
+import { validateTestPlanningHandoffDist } from "./test-planning-handoff.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -88,8 +100,14 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoEvidenceTrailDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoRunbookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateChangeRiskLanguageGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateEvidenceHandoffTemplateDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateEvidenceDecisionRecordDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateEvidenceGapRegisterDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEndpointReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateEvidencePacketExamplesDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateChangeReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateClaimReviewDrillDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateGlossaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateBlogProofPathSeriesDist({ baseUrl: normalizedBaseUrl, dist, errors, root: resolve(root, "src") });
@@ -98,18 +116,24 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerDemoScriptDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateOwnerFollowupMapDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathTourDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReducedCoveragePlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReviewMeetingAgendaDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewerQuickstartDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewPacketAssemblyDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewClaimChecklistDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReleaseReviewBoundaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateRoadmapClaimLedgerDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderQuestionIndexDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateTeamEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateTestPlanningHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
 
   await validateTopNavigation({ dist, errors, htmlFiles });

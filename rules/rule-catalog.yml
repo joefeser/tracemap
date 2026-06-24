@@ -604,10 +604,12 @@ rules:
     emits:
       - property-flow edge row
       - property-flow root-to-graph gap
+      - route-flow no-property-context gap
     limitations:
       - Derived edges are bounded static composition and do not prove runtime mutation, callback execution, dependency-injection target selection, reflection behavior, serializer configuration, branch feasibility, or SQL execution.
       - Syntax-only and same-name edges are review-tier unless a stronger rule-backed source fact supports the hop.
       - Missing edges are analysis gaps under reduced coverage, not proof that no lineage exists.
+      - Route-flow context is additive only when tied to the selected property through rule-backed value-origin, payload, model-binding, assignment, mapping, or equivalent property-specific evidence.
 
   - id: property-flow.path.v1
     name: Property flow static path classification
@@ -1336,14 +1338,15 @@ rules:
   - id: legacy.data.generated-link.v1
     name: Legacy data generated-code linkage
     description: Links DBML, EDMX, and typed DataSet metadata descriptors to checked-in generated files or compiler-resolved generated symbols when deterministic evidence exists.
-    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    evidenceTier: Tier2Structural
     emits:
       - LegacyDataGeneratedCodeLinked
       - AnalysisGap
     limitations:
       - Generated-code linkage is static evidence and does not prove generated files are fresh, runtime code paths execute, query execution occurs, or database access happens.
       - Global short-name matching is not allowed; ambiguous or missing generated-code candidates are gaps.
-      - Safe reducer-facing properties include linkKind, symbolRole, typeName, generatedCodeFileName, supportingFactIds, metadataPath, and hash variants for unsafe identifiers.
+      - Safe reducer-facing properties include linkKind, symbolRole, metadataFormat, stableModelKey, typeName, generatedCodeFileName, sourceMetadataFactId, supportingFactIds, coverageLabel, limitations, and hash variants for unsafe identifiers.
+      - Explicit generated-file links are Tier2Structural; scoped syntax fallback rows are Tier3SyntaxOrTextual; gaps such as missing or ambiguous generated code are Tier4Unknown; future compiler-resolved semantic links require a documented implementation update.
       - Linkage tier is recorded separately and does not upgrade the descriptor tier of the metadata evidence.
 
   - id: legacy.data.model.identity.v1
@@ -1418,9 +1421,10 @@ rules:
       - Existing generated-code linkage remains under legacy.data.generated-link.v1 unless a model-normalized link needs this distinct rule ID.
       - Linkage is static repository evidence and does not prove generated files are fresh, runtime code paths execute, database access occurs, query execution occurs, deployment, provider compatibility, or production usage.
       - Global short-name matching is not allowed; semantic links require scoped compiler-resolved symbols, structural links require scoped metadata/file evidence, and syntax fallback remains reduced coverage.
+      - Syntax fallback links only ordinary namespace-qualified type names; nested generic or provider-specific type identity syntax remains unsupported unless future semantic resolution proves it.
       - Ambiguous, stale, missing, duplicate, or reduced-coverage generated-code candidates are gaps rather than arbitrary links.
       - Linkage tier is recorded separately and does not upgrade descriptor facts above their descriptor tier ceiling.
-      - Safe properties include linkKind, symbolRole, metadataFormat, stableModelKey, generatedCodeFileName, supportingFactIds, coverageLabel, and hash variants for unsafe identifiers; source snippets, raw paths, URLs, remotes, config values, and secrets are omitted.
+      - Safe properties include linkKind, symbolRole, metadataFormat, stableModelKey, mappedTypeName, sourceMetadataFactId, generatedCodeFileName, supportingFactIds, coverageLabel, limitations, and hash variants for unsafe identifiers; source snippets, raw paths, URLs, remotes, config values, and secrets are omitted.
 
   - id: legacy.data.model.surface.v1
     name: Legacy data model surface projection
@@ -2316,6 +2320,7 @@ rules:
       - StrongStaticRouteFlow and NoRouteFlowEvidence require full route-flow coverage, known commit SHA, verified source identity, compatible extractor availability, and no blocking gaps.
       - NeedsReviewStaticRouteFlow is required for syntax-only, textual, dynamic URL, fallback, ambiguous, implementation-candidate, generated-code uncertain, high fan-out, or truncated evidence.
       - UnknownAnalysisGap is required when selector matching, schema, extractor availability, source identity, commit SHA, reduced coverage, or caps prevent a clean conclusion.
+      - Classification filtering applies to flow, logic, dependency-surface, and non-blocking gap rows; matched entry evidence remains visible as query context, and blocking coverage/schema/identity gaps are preserved.
       - The v1 high-fan-out threshold is 10 or more candidates, or more than one candidate for generic terminal keys status, id, name, value, result, or response. This conservative threshold requires future calibration against redacted validation data.
       - This rule stamps the overall summary classification; it does not classify business impact or runtime behavior.
 
@@ -2376,8 +2381,13 @@ rules:
     emits:
       - route-flow-report.md
       - route-flow-report.json
+      - touchedFiles route-flow JSON section
+      - touchedSymbols route-flow JSON section
+      - contextGroups route-flow JSON section
     limitations:
       - The report envelope is a deterministic view over existing combined-index evidence and does not mutate the combined index.
+      - Touched file and symbol sections are additive report summaries derived from cited entry, flow, logic, dependency-surface, and gap rows; they do not add new scanner evidence or prove runtime execution.
+      - Context groups are additive report summaries over already-selected route-flow rows; they do not add traversal evidence or prove runtime execution, dependency-injection target selection, branch feasibility, SQL execution, or production use.
       - Markdown and JSON must use static-evidence wording and must not say impacted, executed, called at runtime, authorized, used in production, proves DI target, query runs, or business impact.
       - Directory outputs write both Markdown and JSON; file outputs default to Markdown unless JSON format is requested.
 

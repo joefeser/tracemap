@@ -1,6 +1,6 @@
 # Site TraceMap Tools Evidence Packet Examples Tasks
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -34,72 +34,72 @@ implementation, or validation work is complete.
 
 ## Future Implementation Phase
 
-- [ ] Confirm this spec is `ready-for-implementation` before changing site
+- [x] Confirm this spec is `ready-for-implementation` before changing site
   source.
-- [ ] Choose final placement from `/packets/examples/`,
+- [x] Choose final placement from `/packets/examples/`,
   `/examples/evidence-packets/`, a section on `/packets/`, or a section on
   `/packets/assembly/`.
-- [ ] Verify the selected standalone route or section anchor does not collide
+- [x] Verify the selected standalone route or section anchor does not collide
   with an existing public route or anchor.
-- [ ] Record the final placement and rejected alternatives in
+- [x] Record the final placement and rejected alternatives in
   `implementation-state.md`.
-- [ ] Add the concept-level page or section using existing static site layout,
+- [x] Add the concept-level page or section using existing static site layout,
   metadata, accessibility, and navigation patterns.
-- [ ] Include `Public claim level: concept` and
+- [x] Include `Public claim level: concept` and
   `No public conclusion without evidence` on the rendered page or section.
-- [ ] Label examples as `synthetic public-safe example` unless backed by
+- [x] Label examples as `synthetic public-safe example` unless backed by
   checked-in public demo artifacts.
-- [ ] Add the four required examples: demo-backed packet, reduced-coverage
+- [x] Add the four required examples: demo-backed packet, reduced-coverage
   packet, gap-labeled packet, and stop-condition packet.
-- [ ] Include the required fields on every example: claim label, public claim
+- [x] Include the required fields on every example: claim label, public claim
   level, proof path, rule ID or rule family, evidence tier, coverage label,
   synthetic public-safe path/span, commit or extractor placeholder, limitation,
   non-claim, next owner, and validation evidence.
-- [ ] Render stop-condition blocked fields with explicit blocked markers
+- [x] Render stop-condition blocked fields with explicit blocked markers
   rather than omitting required field rows.
-- [ ] Use public-safe roles or review processes for next owner fields; do not
+- [x] Use public-safe roles or review processes for next owner fields; do not
   use named people, private individuals, or internal team names.
-- [ ] Use only the TraceMap evidence tier vocabulary: `Tier1Semantic`,
+- [x] Use only the TraceMap evidence tier vocabulary: `Tier1Semantic`,
   `Tier2Structural`, `Tier3SyntaxOrTextual`, and `Tier4Unknown`.
-- [ ] Keep reduced, partial, syntax-only, unknown, gap, private-only, stopped,
+- [x] Keep reduced, partial, syntax-only, unknown, gap, private-only, stopped,
   and demo-only coverage labels visible and do not normalize them into
   stronger wording.
-- [ ] Use only public-safe synthetic paths, spans, commit placeholders,
+- [x] Use only public-safe synthetic paths, spans, commit placeholders,
   extractor placeholders, and validation summaries unless checked-in public
   demo evidence supports a real value.
-- [ ] Add explicit non-claims for runtime behavior, production traffic,
+- [x] Add explicit non-claims for runtime behavior, production traffic,
   endpoint performance, outage cause, release approval, release safety,
   operational safety, complete coverage, AI impact analysis, LLM analysis,
   autonomous approval, autonomous review, and replacement of human review.
-- [ ] Avoid blame language around vendors, consultants, teams, maintainers,
+- [x] Avoid blame language around vendors, consultants, teams, maintainers,
   authors, or code quality.
-- [ ] Distinguish the examples surface from `/packets/`,
+- [x] Distinguish the examples surface from `/packets/`,
   `/packets/assembly/`, `/examples/scan-packet/`, `/demo/result/`,
   `/proof-source-catalog/`, and `/review-claim-checklist/`.
-- [ ] Link to neighboring routes when they exist and record substitutions,
+- [x] Link to neighboring routes when they exist and record substitutions,
   omissions, or deferred links for adjacent routes that do not exist at
   implementation time.
-- [ ] Add standalone route metadata, discovery metadata, and sitemap metadata
+- [x] Add standalone route metadata, discovery metadata, and sitemap metadata
   if implemented as a standalone route.
-- [ ] Record the selected discovery `hintCategory` and justification in
+- [x] Record the selected discovery `hintCategory` and justification in
   `implementation-state.md` if the implementation uses a fallback value.
-- [ ] Record section-anchor and sitemap notes if implemented as a section.
-- [ ] Add focused validation for example schema, labels, required links,
+- [x] Record section-anchor and sitemap notes if implemented as a section.
+- [x] Add focused validation for example schema, labels, required links,
   metadata, discovery/sitemap metadata if standalone, forbidden claims,
   private/raw material, synthetic labeling, and word count bounds.
-- [ ] Validate rendered text, decoded HTML, raw HTML attributes, metadata,
+- [x] Validate rendered text, decoded HTML, raw HTML attributes, metadata,
   discovery metadata, tests, and fixtures for forbidden raw facts, SQLite,
   analyzer logs, source snippets, SQL, config values, secrets, local paths,
   raw remotes, generated scan directories, private sample names, raw command
   output, hidden validation details, credential-like values, and customer-like
   names.
-- [ ] Run `git diff --check` after implementation.
-- [ ] Run `./scripts/check-private-paths.sh` after implementation.
-- [ ] Run `npm test` from `site/` after implementation.
-- [ ] Run `npm run validate` from `site/` after implementation.
-- [ ] Run `npm run build` from `site/` after implementation.
-- [ ] Run desktop and mobile browser sanity checks for layout or interaction
+- [x] Run `git diff --check` after implementation.
+- [x] Run `./scripts/check-private-paths.sh` after implementation.
+- [x] Run `npm test` from `site/` after implementation.
+- [x] Run `npm run validate` from `site/` after implementation.
+- [x] Run `npm run build` from `site/` after implementation.
+- [x] Run desktop and mobile browser sanity checks for layout or interaction
   changes.
-- [ ] Update `implementation-state.md` with route decisions, validation
+- [x] Update `implementation-state.md` with route decisions, validation
   results, review findings, claim-boundary decisions, oddities, unresolved
   gaps, and follow-up items.

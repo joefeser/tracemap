@@ -60,6 +60,8 @@ README.md
 limitations, rule IDs, and a deterministic baseline of evidence rows readable
 without JavaScript. JavaScript is local-only progressive enhancement over safe
 rendered table fields.
+The no-JavaScript evidence-row baseline renders the first 200 deterministic
+rows; the full safe row set is available in `data/explorer-data.json`.
 
 The follow-up rendering slice also includes:
 
@@ -68,8 +70,18 @@ The follow-up rendering slice also includes:
   and redactions;
 - a `Safety & Redactions` table showing safe categories, actions, locations,
   and counts for redacted, hashed, category-only, or omitted values;
+- richer `Gaps`, `Limitations`, `Rules`, and `Evidence Rows` tables that show
+  scopes, support IDs, descriptions, related sections, artifact IDs, source
+  IDs, coverage labels, and limitation fields where available;
+- observed evidence rule IDs from `facts.ndjson` in the rules table when a
+  compatible full rule catalog artifact is not provided, with a visible
+  `explorer.render.catalog-unavailable.v1` gap;
 - matching `sectionStatuses` and `redactions` data in `data/explorer-data.json`
   so downloadable data is no less redacted than the visible UI.
+
+Section status rows use the same semantic order in HTML and JSON: overview,
+sources, artifacts, evidence rows, surfaces, paths, reducer results, rules,
+then redactions.
 
 First-slice rows such as `not-rendered-in-current-slice` and `not-provided`
 are explorer compatibility labels only. They do not prove runtime behavior,
@@ -134,8 +146,12 @@ partial or unavailable:
 - static surfaces and paths are counted but not rendered from SQLite;
 - reducer-backed results are shown as not provided unless a future compatible
   reducer artifact reader is added;
-- rule catalog rendering is limited to built-in explorer rule stubs and
-  observed rule IDs in evidence rows.
+- rule catalog rendering uses a compatible `rule-catalog.yml` or
+  `rules/rule-catalog.yml` artifact when provided, and otherwise falls back to
+  built-in explorer rule stubs plus observed rule IDs in evidence rows. When
+  full catalog metadata is unavailable for an observed rule, that rule remains
+  intentionally marked partial and does not strengthen the underlying evidence
+  tier or limitation language.
 
 Those gaps are explicit so absence is not confused with credible evidence that
 no source behavior exists.
