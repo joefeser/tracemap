@@ -43,6 +43,11 @@ surface and must record the contributor-only placement decision in this
 spec's `implementation-state.md`. Public-facing implementations must visibly
 render `Public claim level: concept`.
 
+Because `/docs/` is a public site route in this repository, any guardrails page
+linked from `/docs/` is public-facing and must use concept-level public-safe
+wording. A strictly hidden contributor-only guardrails page must not be linked
+from public `/docs/`.
+
 ## Claim Boundaries
 
 - The future page or section shall visibly say `Public claim level: concept`
@@ -101,8 +106,8 @@ Acceptance criteria:
 
 - The implementation evaluates all candidate placements:
   `/site-claim-guardrails/`, `/docs/site-claim-guardrails/`, a section on
-  `/review-claim-checklist/`, or a contributor-only docs page linked from
-  `/docs/`.
+  `/review-claim-checklist/`, or a contributor-facing docs page linked from
+  public `/docs/` with concept-level wording.
 - The implementation records the selected placement, rejected alternatives,
   and short reasons in this spec's `implementation-state.md`.
 - Public-facing standalone or section implementations visibly render
@@ -113,6 +118,9 @@ Acceptance criteria:
   when it is excluded from public discovery, sitemap metadata, external-facing
   route output, and public navigation; the hidden decision and its rationale
   are recorded in `implementation-state.md`.
+- A candidate contributor-facing page linked from public `/docs/` is treated
+  as public-facing concept guidance, not hidden output. A hidden
+  contributor-only placement must not be linked from public `/docs/`.
 - If implemented as a standalone public route, the route is added to sitemap
   metadata, discovery metadata, canonical metadata, title, description, and
   Open Graph metadata using concept-level wording.
@@ -366,8 +374,8 @@ Acceptance criteria:
 
 - Validation checks the chosen route or section output exists.
 - Validation checks visible `Public claim level: concept` for public-facing
-  output, or a recorded contributor-only hidden rationale when the output is
-  not public-facing.
+  output, including any page linked from public `/docs/`, or a recorded
+  contributor-only hidden rationale when the output is not public-facing.
 - Validation checks visible `No public conclusion without evidence`.
 - Validation checks every required section and stable anchor.
 - Validation checks every required guardrail row: shipped, demo, concept,
@@ -384,6 +392,8 @@ Acceptance criteria:
   concept-level when a public standalone route is chosen.
 - Validation checks contributor-only output is not present in public sitemap
   or discovery metadata when hidden contributor-only placement is chosen.
+- Validation checks hidden contributor-only output is not linked from public
+  `/docs/`.
 - Validation checks the page or section is absent from primary navigation, or
   that an information-architecture note justifying inclusion is recorded in
   `implementation-state.md`.

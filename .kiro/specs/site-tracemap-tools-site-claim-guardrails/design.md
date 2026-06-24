@@ -28,9 +28,10 @@ Candidate placements:
   family and the content should sit with contributor-facing documentation.
 - Section on `/review-claim-checklist/`: allowed only if the guardrails can
   fit without crowding the canonical claim-review ritual.
-- Contributor-only docs page linked from `/docs/`: allowed only if the surface
-  is excluded from public sitemap and discovery output and uses
-  `Public claim level: hidden`.
+- Contributor-facing docs page linked from `/docs/`: allowed as public-facing
+  concept guidance because `/docs/` is public in this repository. A strictly
+  hidden contributor-only page must not be linked from public `/docs/` and
+  must be excluded from public sitemap, discovery output, and navigation.
 
 Public-facing implementations should use `Public claim level: concept` because
 the surface explains claim discipline rather than proving product behavior. If
@@ -58,7 +59,9 @@ record the scoped anchor map in `implementation-state.md`.
 7. Downgrade and hidden rules: present the required guardrail table.
 8. Validation expectations: describe future route, link, metadata, forbidden
    wording, private/raw material, word-count, and browser-sanity validation.
-9. Review handoff: define next states and owner handoff language.
+9. Review handoff: define bounded next states (`repeat with proof`,
+   `downgrade before repeating`, `owner follow-up needed`, `do not repeat`,
+   `internal only`, and `hidden`) and owner handoff language.
 
 Required anchors:
 
@@ -155,6 +158,10 @@ Future implementation should add focused validation that checks:
   concept-level;
 - contributor-only hidden output is absent from public sitemap and discovery
   metadata;
+- hidden contributor-only output is not linked from public `/docs/`;
+- the page or section is absent from primary navigation, or an
+  information-architecture note justifying inclusion is recorded in
+  `implementation-state.md`;
 - forbidden product capability, runtime proof, release approval, release
   safety, operational safety, complete coverage, AI/LLM analysis, and
   replacement-of-human-review claims are absent outside explicit rejected,
