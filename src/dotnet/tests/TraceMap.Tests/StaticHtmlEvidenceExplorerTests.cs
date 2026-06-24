@@ -204,12 +204,13 @@ public sealed class StaticHtmlEvidenceExplorerTests
               - id: {{RuleIds.CSharpSyntaxDeclarations}}
                 name: C# syntax declarations:
                 description: Documents declarations discovered from deterministic C# syntax evidence.
-                evidenceTier: Tier2Structural or Tier4Unknown
+                evidenceTier: Tier2Structural
                 emits:
                   - TypeDeclared
                 limitations:
                   - Syntax evidence does not prove runtime execution.
                   - Semantic binding may be unavailable under reduced coverage.
+                  - Analysis gaps use Tier4Unknown in separate evidence rows.
                   - SELECT table extraction only claims visible top-level FROM/JOIN identifiers.
             """);
 
@@ -225,7 +226,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             rule.RuleId == RuleIds.CSharpSyntaxDeclarations
             && rule.Title == "C# syntax declarations:"
             && rule.Description.Contains("deterministic C# syntax evidence", StringComparison.Ordinal)
-            && rule.EvidenceTier == "Tier2Structural or Tier4Unknown"
+            && rule.EvidenceTier == "Tier2Structural"
             && rule.Limitations.Contains("Syntax evidence does not prove runtime execution.")
             && rule.RelatedSections.Contains("evidence-rows"));
 

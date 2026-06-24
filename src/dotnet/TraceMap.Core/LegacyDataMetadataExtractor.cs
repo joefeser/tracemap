@@ -67,9 +67,10 @@ public static class LegacyDataMetadataExtractor
         }
 
         AddGeneratedCodeLinks(manifest, facts, generatedCandidates);
-        if (HasMappedTypeSyntaxLinkCandidates(facts))
+        var mappedTypeNames = MappedTypeSyntaxLinkCandidateNames(facts);
+        if (mappedTypeNames.Count > 0)
         {
-            var csharpTypeDeclarations = LoadCSharpTypeDeclarations(repoPath, manifest, inventory, facts);
+            var csharpTypeDeclarations = LoadCSharpTypeDeclarations(repoPath, manifest, inventory, facts, mappedTypeNames);
             AddMappedTypeSyntaxLinks(manifest, facts, csharpTypeDeclarations);
         }
 
@@ -1230,8 +1231,10 @@ public static class LegacyDataMetadataExtractor
         foreach (var fact in mappedClassFacts)
         {
             var mappedTypeName = fact.Properties.GetValueOrDefault("mappedTypeName");
+            var lookupTypeName = CSharpTypeLookupName(mappedTypeName);
             if (string.IsNullOrWhiteSpace(mappedTypeName)
-                || !csharpTypeDeclarations.TryGetValue(mappedTypeName, out var declarations)
+                || string.IsNullOrWhiteSpace(lookupTypeName)
+                || !csharpTypeDeclarations.TryGetValue(lookupTypeName, out var declarations)
                 || declarations.Count == 0)
             {
                 AddGap(manifest, facts, fact.Evidence.FilePath, RuleIds.LegacyDataModelGeneratedLink, "MissingGeneratedCode", "NHibernate mapped class did not match a checked-in C# type declaration.", null, fact.Evidence.StartLine);
@@ -1273,13 +1276,16 @@ public static class LegacyDataMetadataExtractor
         }
     }
 
-    private static bool HasMappedTypeSyntaxLinkCandidates(IEnumerable<CodeFact> facts)
+    private static IReadOnlySet<string> MappedTypeSyntaxLinkCandidateNames(IEnumerable<CodeFact> facts)
     {
-        return facts.Any(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+        return new SortedSet<string>(facts
+            .Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate
             && fact.FactType == FactTypes.LegacyDataEntityDeclared
             && string.Equals(fact.Properties.GetValueOrDefault("metadataFormat"), "nhibernate-hbm", StringComparison.Ordinal)
             && fact.Properties.TryGetValue("mappedTypeName", out var mappedTypeName)
-            && IsQualifiedTypeName(mappedTypeName));
+            && IsQualifiedTypeName(mappedTypeName))
+            .Select(fact => fact.Properties["mappedTypeName"]),
+            StringComparer.Ordinal);
     }
 
     private static IReadOnlyList<GeneratedCandidate> LoadGeneratedCandidates(
@@ -1332,11 +1338,13 @@ public static class LegacyDataMetadataExtractor
         string repoPath,
         ScanManifest manifest,
         IReadOnlyList<FileInventoryItem> inventory,
-        List<CodeFact> facts)
+        List<CodeFact> facts,
+        IReadOnlySet<string> mappedTypeNames)
     {
         var declarations = new SortedDictionary<string, List<CSharpTypeDeclaration>>(StringComparer.Ordinal);
         foreach (var item in inventory
             .Where(item => item.Kind is "CSharp" or "WebFormsCodeBehind" or "WinFormsDesigner")
+            .Where(item => IsLikelyMappedTypeDeclarationFile(item.RelativePath, mappedTypeNames))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
             if (item.SizeBytes > MaxGeneratedDesignerBytes)
@@ -1387,6 +1395,58 @@ public static class LegacyDataMetadataExtractor
                 .ThenBy(declaration => declaration.Line)
                 .ToArray(),
             StringComparer.Ordinal);
+    }
+
+    private static bool IsLikelyMappedTypeDeclarationFile(string relativePath, IReadOnlySet<string> mappedTypeNames)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(relativePath);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        foreach (var mappedTypeName in mappedTypeNames)
+        {
+            foreach (var candidate in MappedTypeFileNameCandidates(mappedTypeName))
+            {
+                if (string.Equals(fileName, candidate, StringComparison.Ordinal)
+                    || fileName.StartsWith(candidate + ".", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<string> MappedTypeFileNameCandidates(string mappedTypeName)
+    {
+        var typeName = mappedTypeName.Split(',', 2, StringSplitOptions.TrimEntries)[0];
+        var parts = typeName
+            .Split(new[] { '.', '+' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(part => part.Length > 0)
+            .ToArray();
+        if (parts.Length == 0)
+        {
+            yield break;
+        }
+
+        yield return parts[^1];
+        if (typeName.Contains('+', StringComparison.Ordinal) && parts.Length > 1)
+        {
+            yield return parts[^2];
+        }
+    }
+
+    private static string? CSharpTypeLookupName(string? mappedTypeName)
+    {
+        if (string.IsNullOrWhiteSpace(mappedTypeName))
+        {
+            return null;
+        }
+
+        return mappedTypeName.Trim().Replace('+', '.');
     }
 
     private static bool TryLoadMetadataDocument(
@@ -2044,21 +2104,22 @@ public static class LegacyDataMetadataExtractor
 
     private static string FullTypeName(TypeDeclarationSyntax type)
     {
-        var parts = new Stack<string>();
+        var parts = new List<string>();
         for (SyntaxNode? current = type; current is not null; current = current.Parent)
         {
             switch (current)
             {
                 case TypeDeclarationSyntax typeDeclaration:
-                    parts.Push(typeDeclaration.Identifier.ValueText);
+                    parts.Add(typeDeclaration.Identifier.ValueText);
                     break;
                 case BaseNamespaceDeclarationSyntax namespaceDeclaration:
                     // Name.ToString() keeps the full dotted namespace segment for block-scoped and file-scoped namespaces.
-                    parts.Push(namespaceDeclaration.Name.ToString());
+                    parts.Add(namespaceDeclaration.Name.ToString());
                     break;
             }
         }
 
+        parts.Reverse();
         return string.Join(".", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
