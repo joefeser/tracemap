@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: implementation-pr1-second-ack-patch-ready-to-push
-Readiness: product-slice-implemented-validated-and-under-ack-review
+Status: implementation-pr2-cycle-gap-ready-for-pr
+Readiness: focused-cycle-slice-implemented-validated-and-reviewed
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -477,9 +477,9 @@ Focused validation after the local ACK patch:
 ### Follow-Ups
 
 - Complete the remaining Task 5 direct-call tests: no direct call under full
-  coverage, no direct call under reduced coverage, cycles, and deterministic
-  ordering. This is the remaining Task 5 PR-1 backlog after the duplicate-root
-  sub-slice.
+  coverage, no direct call under reduced coverage, and deterministic ordering.
+  This is the remaining Task 5 PR-1 backlog after the duplicate-root and
+  cycle-gap sub-slices.
   - No direct call under full coverage: existing
     `Route_flow_emits_no_route_flow_evidence_only_after_clean_bridge_checks`
     covers the clean bridge/no downstream evidence shape; additional
@@ -487,9 +487,11 @@ Focused validation after the local ACK patch:
     follow-up.
   - No direct call under reduced coverage: deferred to the next Task 5
     follow-up because this PR touched duplicate-root selector ambiguity only.
-  - Cycles: deferred to the next Task 5 follow-up; live traversal is already
-    cycle-safe in code, but this final-spec task remains unchecked until a
-    duplicate-root/direct-call-specific regression is added.
+  - Cycles: covered in the takeover cycle-gap slice. Source-local service-call
+    cycles now emit a deterministic `TraversalBounds` gap, suppress inherited
+    clean `NoRouteFlowEvidence` path gaps when blocking endpoint-composition
+    gaps are present, and downgrade the route-flow summary to
+    `UnknownAnalysisGap`.
   - Deterministic ordering: existing route-flow smoke and primary route-flow
     test cover byte-stable repeated output, but duplicate-root-specific row/gap
     permutation coverage remains a Task 5 follow-up.
@@ -503,7 +505,140 @@ Focused validation after the local ACK patch:
   private-path guard plus explicit route-flow artifact scan.
 - Continue Task 6/7 follow-ups for candidate continuation and unjoinable
   service/data/query/dependency/value-origin attachment precision.
+- For Task 7 projection/attachment precision, cap or batch large SQL parameter
+  lists used when reading argument-pair and fact-symbol projection rows so
+  large selected route-flow graphs do not exceed SQLite parameter limits.
 - Run the ACK PR loop before merge readiness is claimed.
+
+## Product Implementation PR 2 Takeover
+
+Branch: `codex/implement-route-flow-service-data-composition-final`
+Base: `origin/dev` at `1e9c56602d18a9e62f4523a66314d3755553b4fa`
+
+Takeover notes:
+
+- Reused the existing implementation worktree and branch.
+- Fetched latest `origin/dev`; the previous duplicate-root slice was already
+  merged as PR #318, so the branch fast-forwarded to current `origin/dev`.
+- Left generated `.agent-control/tmp/` output untracked and unstaged.
+- Selected the smallest remaining Task 5 cycle-gap slice rather than broadening
+  into candidate continuation, attachment precision, scanner extraction, site
+  work, or rule-catalog changes.
+
+### Cycle-Gap Scope
+
+- Endpoint route-flow traversal now records skipped source-local cycle edges
+  when a method cannot expand without revisiting a node already in the current
+  static path.
+- The cycle gap reuses `TraversalBounds` under
+  `combined.route-flow.gap.v1`, carries Tier4/ReducedCoverage, keeps safe file
+  span evidence from the skipped cycle edge, and caps supporting fact IDs at the
+  existing route-flow bounded-evidence limit.
+- Inherited path-level `NoRouteFlowEvidence` gaps are filtered when endpoint
+  composition has blocking gaps, so a known cycle/coverage gap is not rendered
+  beside a clean absence claim.
+- Added a synthetic regression proving deterministic repeated gap ID,
+  rule/evidence/coverage fields, service-file span evidence, no completed flow
+  rows, no clean no-evidence gap, and summary downgrade to
+  `UnknownAnalysisGap`.
+
+### Validation Log For PR 2
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+  passed, 35 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NuGet
+  vulnerability warnings.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` NuGet vulnerability warnings.
+- First `dotnet test src/dotnet/TraceMap.sln` run had one unrelated
+  diagnostic test miss for `NuGetRestoreFailed` in generated artifact text.
+  The single failing diagnostic test passed in isolation, and the full solution
+  rerun passed, 636 tests, with the same existing NuGet warnings.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- After the Kiro B1 patch, focused route-flow tests passed again, 35 tests,
+  with the same existing NuGet warnings.
+- Final post-Kiro-patch `dotnet build src/dotnet/TraceMap.sln`: passed with
+  the same existing `SQLitePCLRaw.lib.e_sqlite3` NuGet warnings.
+- Final post-Kiro-patch `dotnet test src/dotnet/TraceMap.sln`: passed, 636
+  tests, with the same existing NuGet warnings.
+- Final post-Kiro-patch `./scripts/check-private-paths.sh`: passed.
+- Final post-Kiro-patch `git diff --check`: passed.
+- `./scripts/demo-public.sh /tmp/tracemap-route-flow-pr2-demo-20260624`:
+  passed with the same existing NuGet warnings while building the .NET tools.
+- Explicit route-flow smoke over the refreshed public endpoint combined index
+  passed:
+  `dotnet run --no-build --project src/dotnet/TraceMap.Cli -- route-flow --index <temporary-public-demo-output>/combined/endpoint-stack.sqlite --route "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out <temporary-public-demo-output>/reports/route-flow/endpoint-to-sql`.
+  It produced `UnknownAnalysisGap`, `ReducedCoverage`, 3 entry evidence rows,
+  8 static flow rows, 5 business/data logic rows, 4 dependency surfaces, and
+  43 gaps.
+- Targeted safety scan of the refreshed route-flow smoke artifacts found no raw
+  local workspace path, raw SQL wildcard, private connection-string sample,
+  password token, raw URL, raw GitHub remote, private feed, secret-token,
+  query-token, or connection-string key matches.
+- PR creation and ACK loop are pending in this takeover pass.
+
+### Kiro Implementation Review For PR 2
+
+Initial Sonnet implementation review:
+
+```bash
+node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
+```
+
+- Result: wrapper exit code 0, reduced coverage because Kiro reported denied
+  tool access.
+- Artifact:
+  `.tmp/kiro-reviews/route-flow-service-data-composition-final/2026-06-24T050158-646Z-implementation-claude-sonnet-4.6.clean.md`
+- Session: `38454468-69de-4cad-963d-042fcd53de03`.
+- Medium+/blocking findings patched or dispositioned:
+  - Patched B1 by changing bounded duplicate-root supporting fact selection to
+    keep the first distinct fact IDs from deterministic root order and sort
+    only the emitted bounded set. Added a regression assertion that the 20
+    emitted duplicate-root supporting fact IDs come from the canonical first 20
+    route facts, not the lexicographically smallest 20 IDs.
+  - Dispositioned B2 as not correct for the live combined graph: the current
+    method symbol node can retain caller-file evidence from the incoming call
+    fact, while the skipped cycle edge carries the precise service-file span
+    where the cycle edge was observed. Keeping the gap affected row on the
+    current node and the file span on the skipped edge gives more precise
+    evidence provenance for this slice. The regression asserts the service edge
+    span.
+- Non-blocking findings recorded as follow-ups unless a future PR selects that
+  scope: `NoRouteFlowEvidence` and probable-route `--exit-code` boundary tests,
+  redaction citation precision, large projection SQL parameter caps, and
+  `combined_symbol_relationships` schema-gap coverage.
+
+Bounded Sonnet re-review after the B1 patch:
+
+```bash
+node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
+```
+
+- Result: wrapper exit code 0, reduced coverage because Kiro reported denied
+  tool access.
+- Artifact:
+  `.tmp/kiro-reviews/route-flow-service-data-composition-final/2026-06-24T050642-522Z-re-review-claude-sonnet-4.6.clean.md`
+- Session: `01719e6f-c797-4027-9546-af5a71ee1ff4`.
+- Findings:
+  - Product-code readiness was accepted for the cycle-gap slice.
+  - Remaining blockers were process closure items: record post-patch full
+    validation and record the re-review result. Both are now recorded above.
+  - Non-blocking notes were to preserve the cycle/no-evidence filtering
+    design decision and large projection SQL parameter caps as follow-ups.
+
+### Oddities / Design Decisions For PR 2
+
+- Cycle gaps use `TraversalBounds` under `combined.route-flow.gap.v1`; no new
+  gap code or rule namespace was added.
+- For skipped cycle edges, the gap keeps the affected row on the method node
+  where traversal stopped, but uses the skipped cycle edge file span because
+  the live combined method node can retain caller-file evidence from the
+  incoming call fact. This keeps the rendered gap span on the observed cycle
+  edge.
+- Path-level clean `NoRouteFlowEvidence` gaps are filtered when endpoint
+  composition emits blocking gaps such as `TraversalBounds`, `MissingCallEdge`,
+  or `DataSurfaceAttachmentMissing`, so the report does not render a clean
+  absence claim beside a known coverage/composition gap.
 
 ## Follow-Up Notes
 

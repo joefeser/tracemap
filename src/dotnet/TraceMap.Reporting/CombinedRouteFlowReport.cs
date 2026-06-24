@@ -366,10 +366,11 @@ public static class CombinedRouteFlowReporter
         var sourceIdentityGaps = SourceIdentityGaps(sources).ToList();
         var endpointMissingRouteRoot = endpointComposition.Gaps.Any(gap => gap.GapKind == "MissingRouteRoot");
         var endpointCompositionHasPaths = endpointComposition.Paths.Count > 0;
+        var endpointCompositionHasBlockingGaps = endpointComposition.Gaps.Any(IsNoEvidenceBlockingCompositionGap);
         var pathGaps = pathReport.Gaps
             .Select(FromPathGap)
             .Where(gap => !endpointMissingRouteRoot || gap.GapKind != "SelectorNoMatch")
-            .Where(gap => !endpointCompositionHasPaths || gap.GapKind != "NoRouteFlowEvidence");
+            .Where(gap => !(endpointCompositionHasPaths || endpointCompositionHasBlockingGaps) || gap.GapKind != "NoRouteFlowEvidence");
         var gaps = pathGaps
             .Concat(schemaGaps)
             .Concat(sourceIdentityGaps)
@@ -987,18 +988,29 @@ public static class CombinedRouteFlowReporter
             }
 
             var expanded = false;
+            var skippedCycleEdges = new List<CombinedPathEdge>();
             foreach (var edge in endpointOutgoing.GetValueOrDefault(current.NodeId, []))
             {
                 if (!IsEndpointTraversableEdge(edge, current, state.Nodes[0])
                     || !nodesById.TryGetValue(edge.ToNodeId, out var target)
-                    || !EndpointSourcesCompatible(current, target)
-                    || state.Nodes.Any(node => node.NodeId == target.NodeId))
+                    || !EndpointSourcesCompatible(current, target))
                 {
+                    continue;
+                }
+
+                if (state.Nodes.Any(node => node.NodeId == target.NodeId))
+                {
+                    skippedCycleEdges.Add(edge);
                     continue;
                 }
 
                 expanded = true;
                 queue.Enqueue(new EndpointTraversalState([.. state.Nodes, target], [.. state.Edges, edge]));
+            }
+
+            if (!expanded && skippedCycleEdges.Count > 0)
+            {
+                gaps.Add(TraversalCycleGap(current, skippedCycleEdges));
             }
 
             var candidateEdges = implementationCandidatesByInterface.GetValueOrDefault(current.NodeId, [])
@@ -1180,7 +1192,8 @@ public static class CombinedRouteFlowReporter
 
     private static string[] BoundedSortedDistinctValues(IEnumerable<string?> values, int limit, out int nonEmptyValueCount)
     {
-        var selected = new SortedSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var selected = new List<string>();
         nonEmptyValueCount = 0;
         foreach (var value in values)
         {
@@ -1190,20 +1203,15 @@ public static class CombinedRouteFlowReporter
             }
 
             nonEmptyValueCount++;
-            selected.Add(value);
-            if (selected.Count <= limit)
+            if (selected.Count >= limit || !seen.Add(value))
             {
                 continue;
             }
 
-            var largest = selected.Max;
-            if (largest is not null)
-            {
-                selected.Remove(largest);
-            }
+            selected.Add(value);
         }
 
-        return selected.ToArray();
+        return selected.OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
     private static string HashAmbiguousRootSet(
@@ -1630,6 +1638,38 @@ public static class CombinedRouteFlowReporter
             CombinedReportHelpers.SafePath(node.FilePath),
             node.StartLine,
             node.EndLine);
+    }
+
+    private static RouteFlowGap TraversalCycleGap(CombinedPathNode node, IReadOnlyList<CombinedPathEdge> skippedCycleEdges)
+    {
+        var supportingFactIds = skippedCycleEdges
+            .SelectMany(edge => edge.SupportingFactIds)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(AmbiguitySupportingFactIdLimit)
+            .ToArray();
+        var edgeIds = skippedCycleEdges
+            .Select(edge => edge.EdgeId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var firstEdge = skippedCycleEdges
+            .OrderBy(EndpointEdgeSortKey, StringComparer.Ordinal)
+            .First();
+        return new RouteFlowGap(
+            $"gap:endpoint-composition:TraversalBounds:{CombinedReportHelpers.Hash($"cycle:{node.NodeId}:{string.Join("|", edgeIds)}", 16)}",
+            "TraversalBounds",
+            "Endpoint route-flow traversal skipped cycle edges before reaching a terminal surface; returned rows are partial.",
+            GapRuleId,
+            EvidenceTiers.Tier4Unknown,
+            "ReducedCoverage",
+            SafeLabel(node.SourceLabel),
+            node.NodeId,
+            supportingFactIds,
+            ["Traversal cycle detection prevents infinite static expansion and caps clean absence conclusions."],
+            CombinedReportHelpers.SafePath(firstEdge.FilePath),
+            firstEdge.StartLine,
+            firstEdge.EndLine);
     }
 
     private static IEnumerable<CombinedPath> FilterPathsForSelectorSide(IReadOnlyList<CombinedPath> paths, string? routeSelector, string? clientSelector)
