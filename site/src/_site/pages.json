@@ -293,5 +293,10 @@
     "path": "/review-claim-checklist/",
     "changefreq": "monthly",
     "priority": "0.7"
+  },
+  {
+    "path": "/review-claim-checklist/drill/",
+    "changefreq": "monthly",
+    "priority": "0.6"
   }
 ]

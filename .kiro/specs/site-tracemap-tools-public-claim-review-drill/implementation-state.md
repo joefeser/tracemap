@@ -1,6 +1,6 @@
 # Site TraceMap Tools Public Claim Review Drill Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -8,24 +8,24 @@ Public claim level: concept
 
 Spec branch: `codex/spec-site-public-claim-review-drill`
 
-Implementation branch: future implementation branch not started.
+Implementation branch: `codex/impl-site-public-claim-review-drill`
 
 Base: `origin/dev`
 
 Target PR base: `dev`
 
-Worktree: isolated spec worktree for this packet; local absolute path
-intentionally omitted from checked-in spec notes.
+Worktree: isolated implementation worktree; local absolute path intentionally
+omitted from checked-in spec notes.
 
-Scope: spec-only public-site planning for a future claim review drill. Site
-source, generated output, scanner code, reducer code, existing specs,
-validation scripts, runtime telemetry, review automation, and AI/LLM behavior
-remain out of scope for this phase.
+Scope: public-site implementation for the claim review drill. Changes are
+limited to `site/src/`, site validation/test scripts, and this spec-local
+bookkeeping. Generated output, scanner code, reducer code, runtime telemetry,
+review automation behavior, and AI/LLM behavior remain out of scope.
 
 ## Current State
 
-This packet defines a future concept-level public drill page or section. No
-implementation has started. Required files:
+This packet now has a concept-level public drill implemented as a standalone
+route at `/review-claim-checklist/drill/`. Required spec files remain:
 
 - `requirements.md`
 - `design.md`
@@ -33,43 +33,54 @@ implementation has started. Required files:
 - `implementation-state.md`
 - `review-packet.md`
 
-Current readiness is `ready-for-implementation`. Medium or higher Kiro review
-findings were patched or explicitly dispositioned, re-review was attempted
-where feasible, and local spec validations passed.
-
-`Status` remains `not-started` during this spec-only phase. A future
-implementation phase may update it only when implementation work starts and
-records the change here.
+Current readiness remains `ready-for-implementation`; implementation work is
+complete locally pending PR review-loop outcome.
 
 ## Claim-Level Decision
 
 Selected public claim level: `concept`.
 
-Rationale: the future surface is a learning/checklist drill with authored
+Rationale: the implemented surface is a learning/checklist drill with authored
 sample rows and an answer key. It does not publish a new evidence artifact,
 scanner finding, reducer result, demo result, runtime observation, release
 decision, operational safety conclusion, or shipped workflow.
 
-## Route and Placement Guidance
+## Route and Placement Decision
 
-Candidate placements:
+Final route: `/review-claim-checklist/drill/`.
 
-- `/review-claim-checklist/drill/`: recommended default because the drill is a
-  practice companion to the public claim checklist.
-- `/claims/review-drill/`: allowed if a future claims route family exists.
-- Section on `/review-claim-checklist/`: allowed if the drill remains compact.
-- Section on `/proof-paths/tour/`: allowed if the exercise is framed as
-  proof-path reading practice.
+Selected because the drill is a practice companion to the canonical
+`/review-claim-checklist/` ritual. It needs seven rows plus an answer key,
+which would crowd the checklist if embedded as a section.
 
-Final route or placement: not selected in this spec-only phase.
+Rejected alternatives:
 
-Future implementation must record selected placement, rejected alternatives,
-route status for adjacent links, metadata decisions, and any substitutions or
-deferrals here before marking implementation complete.
+- `/claims/review-drill/`: rejected because no broader public claims route
+  family exists in the current site.
+- Section on `/review-claim-checklist/`: rejected because the checklist should
+  remain the canonical real-claim decision ritual, not a long practice set.
+- Section on `/proof-paths/tour/`: rejected because this implementation asks
+  whether sample claims can be repeated; the tour remains a proof-path reading
+  flow.
+
+Navigation decision: the route is not in primary navigation. It is discoverable
+through the checklist, proof-path tour, proof-path FAQ, objections guide,
+packet examples, language guide, sitemap, and discovery metadata.
+
+Adjacent route status:
+
+- `/review-claim-checklist/`: present; linked as the canonical real-claim
+  checklist.
+- `/proof-paths/tour/`: present; linked as the guided proof-path reading flow.
+- `/proof-paths/faq/`: present; linked as proof-path question-and-answer
+  context.
+- `/questions/objections/`: present; linked as stakeholder concern handling.
+- `/packets/examples/`: present; linked as packet reading examples.
+- `/language/change-risk/`: present; linked as wording guidance.
 
 ## Scope Decisions
 
-- Create a future public claim review drill, not an automated grader.
+- Created a public claim review drill, not an automated grader.
 - Require visible `Public claim level: concept`.
 - Require visible `No public conclusion without evidence`.
 - Require sections for drill setup, sample public-safe claims, evidence
@@ -133,62 +144,75 @@ Readiness upgraded to `ready-for-implementation`: 2026-06-22, after Medium or
 higher review findings were patched or dispositioned and final spec validation
 passed.
 
-## Validation
-
-Spec-phase validation planned:
-
-- `git diff --check`
-- `./scripts/check-private-paths.sh`
-
-Future implementation validation must include:
-
-- focused validator for required drill rows and row fields;
-- focused validator for answer-key outcomes;
-- focused validator for visible concept claim level and shared principle;
-- focused validator for required links and recorded substitutions;
-- focused validator for standalone route metadata, sitemap metadata, and
-  discovery metadata if standalone;
-- focused validator for forbidden automated-grading, runtime, release,
-  safety, operational, absence-of-impact, complete-coverage, AI/LLM, and
-  human-review-replacement claims;
-- focused validator for private/raw material exposure;
-- focused validator for no blame language;
-- focused validator for rendered body word count between 500 and 1800 words;
-- `npm test`, `npm run validate`, and `npm run build` from `site/`;
-- desktop and mobile browser sanity checks after layout or interaction
-  changes;
-- `git diff --check`;
-- `./scripts/check-private-paths.sh`.
+## Spec Validation
 
 Completed spec-phase validation on 2026-06-22:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 
+## Implementation Validation
+
+Completed implementation validation:
+
+- `npm test` from `site/`: passed.
+- `npm run validate` from `site/`: passed; validated 65 HTML files, 2219
+  internal references, 64 sitemap URLs, 1 legacy story safety target, and 13
+  legacy modernization evidence-map rows.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- Desktop browser sanity: passed on `/review-claim-checklist/drill/`; title,
+  seven drill rows, seven answer-key rows, and no obvious overflow were
+  verified. A desktop viewport screenshot was captured during local QA.
+- Mobile browser sanity: passed with a 390 by 844 viewport via DOM layout
+  checks; seven drill rows, seven answer-key rows, no unsanctioned overflow,
+  and an auto-scrolling table wrapper were verified. Mobile screenshot capture
+  timed out twice in the browser tool, so the mobile visual check used DOM
+  dimensions and overflow state instead of a screenshot.
+
+Focused validation added:
+
+- required route, sitemap, discovery, and metadata fields;
+- visible `Public claim level: concept` and `No public conclusion without
+  evidence`;
+- required sections;
+- all seven drill row scenarios;
+- row field completeness;
+- discrete evidence field enumeration;
+- expected claim-level vocabulary;
+- answer-key outcome vocabulary and scenario-to-outcome mapping;
+- adjacent route links and inbound links;
+- forbidden raw/private proof links and private text;
+- forbidden positioning and blame language;
+- rendered word count between 500 and 1800 words.
+
 ## PR Loop Outcome
 
-PR: https://github.com/joefeser/tracemap/pull/298
+PR: https://github.com/joefeser/tracemap/pull/307
 
 Required final command after ready PR creation and the requested wait:
 
 ```bash
-agent-control pr-loop --repo joefeser/tracemap --pr 298 --base dev --require-codex-review --quiet --json
+agent-control pr-loop --repo joefeser/tracemap --pr 307 --base dev --require-codex-review --quiet --json
 ```
 
-Checked-in PR-loop history:
+PR-loop outcome on head `f4508a6c881672802bbdc0ef076bf2317e71f0e2`:
 
-- Initial run on head `3ef030d2a0d30adbd2524acbb93b085487ef3c03` stopped
-  with `actionable_findings` / `UNRESOLVED_REVIEW_THREADS` for a Gemini inline
-  finding about the no-blame advisory phrase set.
-- Follow-up commit `1011c2976e9f35a16ee9919346613c092b6e52a1` removed
-  `failed` from that advisory phrase set and reran `git diff --check` plus
-  `./scripts/check-private-paths.sh`.
-- PR-loop run on head `1011c2976e9f35a16ee9919346613c092b6e52a1` stopped with
-  `actionable_findings` / `ACTIONABLE_BOT_FINDINGS` for stale PR-loop
-  bookkeeping in this file and pending checks.
-- This state-note update addresses the stale PR-loop bookkeeping finding. The
-  authoritative final merge gate is the latest `agent-control pr-loop` output
-  after this commit is pushed, not this static note.
+- Decision: `human_decision_required`.
+- Stop reason: `REVIEW_FINDINGS_DISPOSITIONED`.
+- Review freshness posture: `owner_override_ready`.
+- Mechanical gates: clean merge state, no unresolved review threads, no
+  pending checks, no failed checks, no active required-reviewer request locks,
+  Qodo actionable finding dispositioned with fixing commit and validation
+  evidence.
+- Residual risk: `medium`, because Codex reviewed older head `26f3f98ec4` and
+  the current head contains the post-review validator fix commit.
+- Human next action: owner may merge this exact head by accepting stale
+  required-review risk, wait, or request a fresh Codex review.
+
+If this implementation-state update becomes the latest PR head, rerun the
+required PR-loop command and use that newer output as the final authority.
 
 ## Oddities
 
@@ -198,10 +222,10 @@ Checked-in PR-loop history:
   unsafe-example, boundary, limitation, or non-claim regions.
 - The supported demo-level row can teach a demo-backed shape without upgrading
   the drill page itself above concept level.
-- The 500 to 1800 rendered-word validation bound may be tight for seven rows
-  with seven row fields. Future implementation should use compact field labels
-  and concise row text, but must not trim required sections, row scenarios, or
-  row fields to satisfy the word-count ceiling.
+- The implemented page is 1329 rendered words, within the required 500 to 1800
+  word range while preserving seven rows and seven row fields.
+- Mobile screenshot capture timed out in the browser tool, but mobile DOM
+  layout checks passed after setting the viewport to 390 by 844.
 - The conditional dual-model-unavailable review task was not triggered because
   both requested models ran through `scripts/kiro-review.mjs`; each run had
   reduced coverage due to Kiro denied write-tool access, and that limitation
@@ -209,7 +233,8 @@ Checked-in PR-loop history:
 
 ## Follow-ups
 
-- Push this bookkeeping follow-up commit.
-- Rerun the required PR loop command on the new head.
-- Wait for or address any current checks or review findings reported by that
-  latest PR-loop run.
+- Ready PR to `dev` created as #307.
+- Wait 3 minutes from the latest pushed head, then run the required PR loop
+  command.
+- Patch only if the PR-loop JSON grants authority; otherwise report the typed
+  stop state and residual risk.
