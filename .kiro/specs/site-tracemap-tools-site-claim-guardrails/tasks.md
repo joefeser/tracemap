@@ -21,7 +21,7 @@ the change is recorded in `implementation-state.md`.
 - [x] Run Kiro spec review with `claude-sonnet-4.6` or record the exact
   unavailable-tool/model error in `implementation-state.md`. Reduced-coverage
   review ran; findings patched or dispositioned in `implementation-state.md`.
-- [ ] If both `claude-opus-4.8` and `claude-sonnet-4.6` are unavailable,
+- [x] If both `claude-opus-4.8` and `claude-sonnet-4.6` are unavailable,
   record the exact errors, run the review with the best available model, and
   record the substitution and rationale in `implementation-state.md`. Do not
   skip review entirely unless the review harness itself is unavailable. N/A:
