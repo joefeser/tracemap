@@ -358,6 +358,124 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_emits_selector_gap_for_duplicate_route_roots_without_claiming_clean_flow()
+    {
+        using var temp = new TempDirectory();
+        var firstIndex = Path.Combine(temp.Path, "server-a.sqlite");
+        var secondIndex = Path.Combine(temp.Path, "server-b.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var first = Manifest("server-a", "tracemap-milestone15");
+        var second = Manifest("server-b", "tracemap-milestone15");
+        var firstController = "ServerA.OrdersController.Get(System.Int32)";
+        var firstRepository = "ServerA.OrderRepository.Query(System.Int32)";
+        var secondController = "ServerB.OrdersController.Get(System.Int32)";
+        var secondRepository = "ServerB.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(firstIndex, first, [
+            RouteFact(first, "GET", "/api/orders/{id}", "/api/orders/{}", firstController, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(first, firstController, firstRepository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(first, firstRepository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        SqliteIndexWriter.Write(secondIndex, second, [
+            RouteFact(second, "GET", "/api/orders/{id}", "/api/orders/{}", secondController, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(second, secondController, secondRepository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(second, secondRepository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([firstIndex, secondIndex], combinedPath, ["server-a", "server-b"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var ambiguityGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.Equal("combined.route-flow.selector.v1", ambiguityGap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, ambiguityGap.EvidenceTier);
+        Assert.Equal("ReducedCoverage", ambiguityGap.Coverage);
+        Assert.NotEmpty(ambiguityGap.SupportingFactIds);
+        Assert.NotNull(ambiguityGap.AffectedRowId);
+        Assert.Contains("multiple endpoint roots", ambiguityGap.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(first.CommitSha, ambiguityGap.CommitSha);
+        Assert.Equal("csharp", ambiguityGap.ExtractorName);
+        Assert.Equal(first.ScannerVersion, ambiguityGap.ExtractorVersion);
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root" && row.Evidence.SourceLabel == "server-a");
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root" && row.Evidence.SourceLabel == "server-b");
+        Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(firstController, StringComparison.Ordinal));
+        Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(secondController, StringComparison.Ordinal));
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.NotNull(result.Report.Query.SelectorTrace);
+        Assert.Equal("ReducedCoverage", result.Report.Query.SelectorTrace!.Coverage);
+
+        var narrowed = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-narrowed"),
+            Route: "GET /api/orders/{id}",
+            FromSource: "server-b",
+            ToSurface: "sql-query"));
+
+        Assert.DoesNotContain(narrowed.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.Contains(narrowed.Report.FlowRows, row => row.SourceSymbol.Contains(secondController, StringComparison.Ordinal));
+        Assert.DoesNotContain(narrowed.Report.FlowRows, row => row.SourceSymbol.Contains(firstController, StringComparison.Ordinal));
+
+        var noTerminal = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-no-terminal"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "wcf-operation"));
+
+        var noTerminalAmbiguityGap = Assert.Single(noTerminal.Report.Gaps, gap => gap.GapId == ambiguityGap.GapId);
+        Assert.Equal(ambiguityGap.GapId, noTerminalAmbiguityGap.GapId);
+        Assert.Equal(first.CommitSha, noTerminalAmbiguityGap.CommitSha);
+        Assert.Equal(first.ScannerVersion, noTerminalAmbiguityGap.ExtractorVersion);
+        Assert.Contains(noTerminal.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, noTerminal.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_caps_duplicate_route_root_gap_supporting_facts()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var routeFacts = Enumerable.Range(0, 25)
+            .Select(index => RouteFact(
+                server,
+                "GET",
+                "/api/orders/{id}",
+                "/api/orders/{}",
+                $"Server.OrdersController{index:00}.Get(System.Int32)",
+                $"Controllers/OrdersController{index:00}.cs",
+                10 + index,
+                EvidenceTiers.Tier1Semantic))
+            .ToArray();
+
+        SqliteIndexWriter.Write(serverIndex, server, routeFacts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var ambiguityGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch" && gap.RuleId == "combined.route-flow.selector.v1");
+        var repeatedAmbiguityGap = Assert.Single(repeated.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch" && gap.RuleId == "combined.route-flow.selector.v1");
+        Assert.Equal(20, ambiguityGap.SupportingFactIds.Count);
+        Assert.Equal(ambiguityGap.GapId, repeatedAmbiguityGap.GapId);
+        Assert.Contains(ambiguityGap.Limitations, limitation => limitation.Contains("capped at 20 of 25", StringComparison.Ordinal));
+        Assert.DoesNotContain(ambiguityGap.SupportingFactIds, string.IsNullOrWhiteSpace);
+    }
+
+    [Fact]
     public async Task Route_flow_emits_missing_method_symbol_bridge_for_route_roots_without_source_local_handler_symbol()
     {
         using var temp = new TempDirectory();
@@ -486,6 +604,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query"
             && surface.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MissingImplementationBridge");
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.NotEqual(RouteFlowClassifications.ProbableStaticRouteFlow, result.Report.Summary.Classification);
     }
 
     [Fact]
@@ -650,6 +770,45 @@ public sealed class CombinedRouteFlowTests
             && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
         Assert.NotEqual(RouteFlowClassifications.ProbableStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_caps_tier3_downstream_service_edge_even_with_strong_route_root()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14, EvidenceTiers.Tier1Semantic),
+            CallFact(server, service, repository, "Services/OrderService.cs", 21, EvidenceTiers.Tier3SyntaxOrTextual),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
+            && row.SourceSymbol.Contains(controller, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(service, StringComparison.Ordinal) == true
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
+            && row.SourceSymbol.Contains(service, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(repository, StringComparison.Ordinal) == true
+            && row.Evidence.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && row.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query"
+            && surface.Classification == RouteFlowClassifications.NeedsReviewStaticRouteFlow);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
     }
 
     [Fact]
@@ -1025,6 +1184,27 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("Classification:", output.ToString());
         Assert.DoesNotContain(temp.Path, output.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
+    public async Task Route_flow_cli_validation_error_takes_precedence_over_exit_code_mapping()
+    {
+        using var temp = new TempDirectory();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync([
+            "route-flow",
+            "--out", Path.Combine(temp.Path, "route-flow"),
+            "--route", "GET /api/orders/{id}",
+            "--exit-code"
+        ], output, error);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal(string.Empty, output.ToString());
+        Assert.Contains("route-flow requires --index", error.ToString());
+        Assert.DoesNotContain("Classification:", output.ToString());
+        Assert.DoesNotContain(temp.Path, error.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
