@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap evidence review meeting agenda for checking proof paths, evidence tiers, gaps, owners, limitations, and decision-record handoff."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Evidence Review Meeting Agenda | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/review-room/agenda/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Review Meeting Agenda">
+    <meta
+      property="og:description"
+      content="A bounded agenda for human review meetings that inspect static proof paths, capture evidence gaps, assign next owners, and preserve non-claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/review-room/agenda/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Evidence review meeting agenda</p>
+        <h1>Run the meeting from the question to the handoff.</h1>
+        <p class="hero-subhead">
+          This agenda gives engineers, reviewers, architects, managers, release
+          reviewers, and owners a compact script for inspecting deterministic
+          static evidence before repeating a public-facing conclusion.
+        </p>
+        <p class="hero-note" data-review-agenda-boundary="non-claims">
+          Public claim level: concept. No public conclusion without evidence.
+          The agenda is a human meeting aid for static evidence review, not
+          meeting automation, release approval, runtime proof, production
+          traffic proof, endpoint performance proof, absence-of-impact proof,
+          complete coverage, AI analysis, LLM analysis, or a replacement for
+          human judgment or governance.
+        </p>
+        <nav class="hero-actions" aria-label="Review meeting agenda links">
+          <a class="button primary" href="#agenda">Open agenda</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/validation/">Validation</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="before-the-meeting">
+        <div>
+          <p class="section-kicker">Before the meeting</p>
+          <h2>Start with the question before any claim is repeated.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Frame the question</strong><span>Name the bounded review question, the repeated wording under review, and the audience that needs the answer.</span></div>
+          <div><strong>Prepare the proof path</strong><span>Bring public-safe <a href="/proof-paths/">proof paths</a>, or mark the proof path as missing before discussion begins.</span></div>
+          <div><strong>Bring evidence metadata</strong><span>Attach rule ID or rule family, evidence tier, coverage label, limitation, and public-safe provenance when available.</span></div>
+          <div><strong>Pre-mark gaps</strong><span>Private-only, unavailable, unknown, reduced, or syntax-only material starts as a gap, not as support for stronger wording.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="agenda" aria-labelledby="agenda-heading">
+        <div class="section-header">
+          <p class="section-kicker">Agenda</p>
+          <h2 id="agenda-heading">Eight rows keep the review attached to evidence.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-review-agenda-table>
+            <caption>
+              Required meeting rows. Each row carries a purpose, evidence
+              input, and stop or handoff output so unsupported wording is
+              removed, downgraded, or assigned before notes are shared.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Agenda row</th>
+                <th scope="col">Meeting purpose</th>
+                <th scope="col">Evidence input</th>
+                <th scope="col">Stop or handoff output</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-review-agenda-row="question framing">
+                <th scope="row" data-field="agenda row">question framing</th>
+                <td data-field="meeting purpose">State the review question before any claim is repeated.</td>
+                <td data-field="evidence input">Bounded question, intended audience, and draft wording under review.</td>
+                <td data-field="stop or handoff output">One question, plus wording to remove, downgrade, or route to another owner.</td>
+              </tr>
+              <tr data-review-agenda-row="proof path check">
+                <th scope="row" data-field="agenda row">proof path check</th>
+                <td data-field="meeting purpose">Confirm where public-safe evidence can be inspected.</td>
+                <td data-field="evidence input">Candidate proof-path links, public-safe provenance, or private-review status.</td>
+                <td data-field="stop or handoff output">Proof path link, private-review note, or missing-proof gap.</td>
+              </tr>
+              <tr data-review-agenda-row="evidence tier/coverage check">
+                <th scope="row" data-field="agenda row">evidence tier/coverage check</th>
+                <td data-field="meeting purpose">Pair the cited tier with the coverage label.</td>
+                <td data-field="evidence input"><code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code> with a coverage label.</td>
+                <td data-field="stop or handoff output">Tier and coverage label retained without upgrade.</td>
+              </tr>
+              <tr data-review-agenda-row="limitation check">
+                <th scope="row" data-field="agenda row">limitation check</th>
+                <td data-field="meeting purpose">Attach what the static evidence cannot prove.</td>
+                <td data-field="evidence input">Rule ID or rule family, limitation note, coverage label, and evidence tier.</td>
+                <td data-field="stop or handoff output">Limitation kept beside the meeting note or public wording.</td>
+              </tr>
+              <tr data-review-agenda-row="gap register check">
+                <th scope="row" data-field="agenda row">gap register check</th>
+                <td data-field="meeting purpose">Capture unknown, reduced, unavailable, or private-only evidence.</td>
+                <td data-field="evidence input">Gap state, review question, proof route status, and owner type.</td>
+                <td data-field="stop or handoff output">Gap entry with question, limitation, and next owner.</td>
+              </tr>
+              <tr data-review-agenda-row="owner follow-up">
+                <th scope="row" data-field="agenda row">owner follow-up</th>
+                <td data-field="meeting purpose">Assign the next owner for unresolved review work.</td>
+                <td data-field="evidence input">Open gaps, unresolved questions, and needed evidence category.</td>
+                <td data-field="stop or handoff output">Role-based owner and requested follow-up.</td>
+              </tr>
+              <tr data-review-agenda-row="decision record">
+                <th scope="row" data-field="agenda row">decision record</th>
+                <td data-field="meeting purpose">Prepare bounded handoff notes.</td>
+                <td data-field="evidence input">Question, evidence state, validation evidence category, limitations, gaps, owners, and non-claims.</td>
+                <td data-field="stop or handoff output">Decision-record ingredients preserved with limitations and without stronger claims.</td>
+              </tr>
+              <tr data-review-agenda-row="closeout">
+                <th scope="row" data-field="agenda row">closeout</th>
+                <td data-field="meeting purpose">Review notes before they leave the room.</td>
+                <td data-field="evidence input">Draft notes, unsupported wording, open gaps, and owner assignments.</td>
+                <td data-field="stop or handoff output">Unsupported claims removed, downgraded, or assigned to a non-static owner.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="evidence-checks">
+        <div>
+          <p class="section-kicker">Evidence checks</p>
+          <h2>Do not repeat evidence until the rule and limitation travel with it.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>proof path</code><span>Present, missing, private-review only, or unavailable.</span></div>
+          <div><code>rule ID or rule family</code><span>Required before evidence is repeated as meeting support.</span></div>
+          <div><code>evidence tier</code><span>Use only <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</span></div>
+          <div><code>coverage label</code><span>Carry reduced, unknown, unavailable, syntax-only, or private-only coverage into the note.</span></div>
+          <div><code>limitation</code><span>State what static evidence cannot answer and point to <a href="/validation/">validation</a> and <a href="/limitations/">limitations</a> when needed.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="gap-capture">
+        <div>
+          <p class="section-kicker">Gap capture</p>
+          <h2>Gaps become follow-up rows, not quiet upgrades.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Record the missing proof</strong><span>Use the <a href="/evidence/gaps/">gap register</a> pattern when a proof path, validation evidence category, or public-safe summary is absent.</span></div>
+          <div><strong>Name the evidence state</strong><span>Reduced, unknown, unavailable, syntax-only, and private-only coverage stays visible.</span></div>
+          <div><strong>Keep wording bounded</strong><span>Unsupported runtime, release, safety, production, performance, absence-of-impact, coverage, AI/LLM, or governance wording is moved into a stop condition.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="owner-assignment">
+        <div>
+          <p class="section-kicker">Owner assignment</p>
+          <h2>Assign the next question to a role, not a private name.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>source owner</code><span>Reviews code meaning, contract shape, or framework context outside public copy.</span></div>
+          <div><code>test owner</code><span>Supplies test or validation evidence when static evidence is insufficient.</span></div>
+          <div><code>runtime owner</code><span>Handles observability, traffic, and operational questions outside the static meeting note.</span></div>
+          <div><code>release reviewer</code><span>Handles release-process decisions outside TraceMap's static evidence boundary.</span></div>
+          <div><code>evidence owner</code><span>Prepares public-safe proof paths, limitations, and handoff wording.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="decision-record-handoff">
+        <div>
+          <p class="section-kicker">Decision record handoff</p>
+          <h2>Hand off the boundary, not a stronger answer.</h2>
+        </div>
+        <p>
+          The handoff should preserve the bounded question, static evidence
+          state, validation evidence category, rule ID or rule family, proof
+          path, evidence tier, coverage label, limitation, gap rows, next
+          owners, and non-claims. Use the
+          <a href="/decisions/evidence-record/">decision record</a> when the
+          meeting needs a durable result, and the
+          <a href="/handoff/template/">handoff template</a> when the next owner
+          needs portable fields.
+        </p>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-review-agenda-boundary="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Stop, downgrade, move private, or assign an owner when a boundary appears.</h2>
+        </div>
+        <ul>
+          <li>Stop when a proof path is missing or cannot be inspected publicly.</li>
+          <li>Stop when evidence is private-only, raw, source-like, configuration-like, credential-like, or not approved for public summary.</li>
+          <li>Stop when coverage is unknown or reduced without a visible label.</li>
+          <li>Stop before unsupported runtime, release, safety, production, endpoint performance, absence-of-impact, or complete-coverage wording.</li>
+          <li>Stop before AI analysis, LLM analysis, prompt classification, or governance-replacement wording.</li>
+          <li>Stop when no next owner is assigned for an unresolved gap.</li>
+          <li>Stop when wording blames a vendor, consultant, team, owner, reviewer, or codebase instead of naming the evidence state.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-review-agenda-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The agenda keeps static evidence separate from decisions it cannot make.</h2>
+        </div>
+        <ul>
+          <li>The agenda is not meeting automation, an approval workflow, release approval, release safety proof, operational safety proof, runtime proof, production traffic proof, endpoint performance proof, absence-of-impact proof, or complete coverage proof.</li>
+          <li>The agenda is not AI analysis, LLM analysis, embeddings, vector database reasoning, prompt-based classification, or automated impact analysis.</li>
+          <li>The agenda does not replace tests, code review, source review, runtime observability, release review, owner confirmation, human judgment, or governance.</li>
+          <li>Public notes should not include raw artifact material, local-only identifiers, private samples, hidden validation detail, credentials, or source snippets.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="adjacent-surfaces">
+        <div>
+          <p class="section-kicker">Adjacent surfaces</p>
+          <h2>Use the agenda for the meeting, then send each output to the right page.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/review-room/">review room</a></strong><span>The review room is the broader orientation; this agenda is the step-by-step meeting script.</span></div>
+          <div><strong><a href="/reviewer-quickstart/">reviewer quickstart</a></strong><span>Quickstart is onboarding and first-review orientation; this agenda is a reusable meeting runbook.</span></div>
+          <div><strong><a href="/packets/assembly/">packet assembly</a></strong><span>Packet assembly gathers public-safe ingredients; this agenda runs the meeting over those ingredients.</span></div>
+          <div><strong><a href="/handoff/template/">handoff template</a></strong><span>The template is a portable field structure; this agenda creates the meeting outputs that may fill it.</span></div>
+          <div><strong><a href="/owners/follow-up/">owner follow-up</a></strong><span>Owner follow-up tracks post-meeting responsibility; this agenda assigns the role and question.</span></div>
+          <div><strong><a href="/decisions/evidence-record/">decision record</a></strong><span>The decision record preserves the bounded result; this agenda prepares the handoff.</span></div>
+          <div><strong><a href="/demo/manager-script/">manager demo script</a></strong><span>The demo script is a bounded presentation aid; this agenda is a real evidence-review meeting concept.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Evidence review meeting agenda links
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/evidence/">evidence vocabulary</a>,
+        <a href="/validation/">validation limits</a>,
+        <a href="/limitations/">limitations</a>,
+        <a href="/packets/assembly/">packet assembly</a>,
+        <a href="/owners/follow-up/">owner follow-up</a>,
+        and
+        <a href="/decisions/evidence-record/">decision record</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
