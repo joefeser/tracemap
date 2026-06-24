@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -272,6 +273,8 @@ public static class CombinedRouteFlowReporter
     private const string RedactionRuleId = "combined.route-flow.redaction.v1";
     private const string ReportRuleId = "combined.route-flow.report.v1";
     private const int MarkdownRowLimit = 200;
+    private const int AmbiguitySupportingFactIdLimit = 20;
+    private const int AmbiguityLargeRootNoticeThreshold = 50;
 
     private static readonly HashSet<string> AllowedClassifications = new(StringComparer.Ordinal)
     {
@@ -1134,24 +1137,29 @@ public static class CombinedRouteFlowReporter
             return [];
         }
 
-        var supportingFactIds = roots
-            .Select(root => root.CombinedFactId)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value!)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(value => value, StringComparer.Ordinal)
-            .ToArray();
-        var rootIds = roots
-            .Select(root => root.NodeId)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(value => value, StringComparer.Ordinal)
-            .ToArray();
+        var supportingFactIds = BoundedSortedDistinctValues(
+            roots.Select(root => root.CombinedFactId),
+            AmbiguitySupportingFactIdLimit,
+            out var supportingFactReferenceCount);
         var firstRoot = roots[0];
         scannerVersionBySourceIndexId.TryGetValue(firstRoot.SourceIndexId, out var extractorVersion);
+        var limitations = new List<string>
+        {
+            "Duplicate route roots make selector ownership ambiguous and do not prove runtime routing, traffic, or handler selection."
+        };
+        if (supportingFactReferenceCount > supportingFactIds.Length)
+        {
+            limitations.Add($"Supporting fact IDs are capped at {AmbiguitySupportingFactIdLimit} of {supportingFactReferenceCount} non-empty fact references; use source filters to narrow the selector.");
+        }
+
+        if (roots.Count > AmbiguityLargeRootNoticeThreshold)
+        {
+            limitations.Add($"Ambiguity spans {roots.Count} endpoint roots; the stable gap identity hashes the full deterministic root sequence without emitting every root ID.");
+        }
 
         return [
             new RouteFlowGap(
-                $"gap:endpoint-composition:SelectorNoMatch:{CombinedReportHelpers.Hash($"{requiredNodeKind ?? "endpoint"}:{method}:{pathKey}:{string.Join("|", rootIds)}", 16)}",
+                $"gap:endpoint-composition:SelectorNoMatch:{HashAmbiguousRootSet(requiredNodeKind, method, pathKey, roots, 16)}",
                 "SelectorNoMatch",
                 "Route-flow selector matched multiple endpoint roots; downstream rows remain static review context until the root is narrowed.",
                 SelectorRuleId,
@@ -1160,7 +1168,7 @@ public static class CombinedRouteFlowReporter
                 SafeLabel(firstRoot.SourceLabel),
                 firstRoot.NodeId,
                 supportingFactIds,
-                ["Duplicate route roots make selector ownership ambiguous and do not prove runtime routing, traffic, or handler selection."],
+                limitations,
                 CombinedReportHelpers.SafePath(firstRoot.FilePath),
                 firstRoot.StartLine,
                 firstRoot.EndLine,
@@ -1168,6 +1176,67 @@ public static class CombinedRouteFlowReporter
                 ExtractorName(firstRoot.RuleId),
                 SafeSelector(extractorVersion) ?? "unknown")
         ];
+    }
+
+    private static string[] BoundedSortedDistinctValues(IEnumerable<string?> values, int limit, out int nonEmptyValueCount)
+    {
+        var selected = new SortedSet<string>(StringComparer.Ordinal);
+        nonEmptyValueCount = 0;
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            nonEmptyValueCount++;
+            selected.Add(value);
+            if (selected.Count <= limit)
+            {
+                continue;
+            }
+
+            var largest = selected.Max;
+            if (largest is not null)
+            {
+                selected.Remove(largest);
+            }
+        }
+
+        return selected.ToArray();
+    }
+
+    private static string HashAmbiguousRootSet(
+        string? requiredNodeKind,
+        string method,
+        string pathKey,
+        IReadOnlyList<CombinedPathNode> roots,
+        int length)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var separator = new byte[] { 0 };
+        AppendHashValue(hash, separator, requiredNodeKind ?? "endpoint");
+        AppendHashValue(hash, separator, method);
+        AppendHashValue(hash, separator, pathKey);
+        AppendHashValue(hash, separator, roots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var root in roots)
+        {
+            AppendHashValue(hash, separator, root.NodeId);
+        }
+
+        var bytes = hash.GetHashAndReset();
+        var text = Convert.ToHexString(bytes).ToLowerInvariant();
+        return text[..Math.Min(length, text.Length)];
+    }
+
+    private static void AppendHashValue(IncrementalHash hash, byte[] separator, string? value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(value));
+        }
+
+        hash.AppendData(separator);
     }
 
     private static IReadOnlyDictionary<string, CombinedPathEdge[]> BuildParameterForwardSeedEdgesByMethodNodeId(

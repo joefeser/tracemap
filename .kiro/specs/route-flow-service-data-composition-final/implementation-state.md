@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: implementation-pr1-ack-patch-ready-to-push
+Status: implementation-pr1-second-ack-patch-ready-to-push
 Readiness: product-slice-implemented-validated-and-under-ack-review
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
@@ -325,11 +325,11 @@ of allowing duplicate roots to look like a clean strong route-flow conclusion.
   NuGet warnings.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
-- `./scripts/demo-public.sh /tmp/tracemap-route-flow-final-demo`: passed.
-  Generated artifacts stayed under `/tmp`.
+- `./scripts/demo-public.sh <temporary-public-demo-output>`: passed.
+  Generated artifacts stayed under a temporary output directory.
 - Explicit public-safe route-flow smoke over the generated endpoint combined
   index passed:
-  `dotnet run --no-build --project src/dotnet/TraceMap.Cli -- route-flow --index /tmp/tracemap-route-flow-final-demo/combined/endpoint-stack.sqlite --route "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out /tmp/tracemap-route-flow-final-demo/reports/route-flow/endpoint-to-sql`.
+  `dotnet run --no-build --project src/dotnet/TraceMap.Cli -- route-flow --index <temporary-public-demo-output>/combined/endpoint-stack.sqlite --route "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out <temporary-public-demo-output>/reports/route-flow/endpoint-to-sql`.
   It produced `route-flow-report.md` and `route-flow-report.json` with
   `reportType = "route-flow"`, `version = "1.0"`, static rows, dependency
   surfaces, and reduced-coverage gaps.
@@ -418,11 +418,26 @@ ACK-authorized findings patched in the follow-up commit:
   duplicate-root root commit, extractor name, and extractor version into emitted
   evidence.
 
+After the first follow-up commit was pushed, ACK reported one additional
+actionable Qodo top-level finding about unbounded ambiguity-gap allocations.
+The second local ACK patch:
+
+- caps duplicate-root gap `SupportingFactIds` at 20 using a bounded sorted
+  prefix, matching existing route-flow gap payload conventions;
+- replaces the gap-ID `string.Join` over all ambiguous root IDs with an
+  incremental SHA-256 hash over the deterministic root sequence;
+- adds a truncation limitation that reports the cap and non-empty supporting
+  fact reference count;
+- adds a regression fixture with 25 duplicate route roots proving the cap and
+  stable repeated gap ID.
+
 Focused validation after the local ACK patch:
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
   passed, 33 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NuGet
   vulnerability warnings.
+- After the second ACK patch, the same focused command passed, 34 tests, with
+  the same existing NuGet warnings.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing
   `SQLitePCLRaw.lib.e_sqlite3` NuGet warnings.
 - First post-ACK `dotnet test src/dotnet/TraceMap.sln` run had one unrelated
@@ -431,7 +446,7 @@ Focused validation after the local ACK patch:
   passed, 634 tests, with the same existing NuGet warnings.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
-- `./scripts/demo-public.sh /tmp/tracemap-route-flow-final-demo-ack`: passed.
+- `./scripts/demo-public.sh <temporary-public-demo-output>`: passed.
 - Explicit route-flow smoke over the refreshed public endpoint combined index
   passed and produced `UnknownAnalysisGap`, `ReducedCoverage`, 3 entry evidence
   rows, 8 static flow rows, 5 business/data logic rows, 4 dependency surfaces,
@@ -439,6 +454,16 @@ Focused validation after the local ACK patch:
 - Targeted safety scan of the refreshed route-flow smoke artifacts found no
   raw local workspace path, raw SQL wildcard, private connection-string sample,
   password token, raw URL, raw GitHub remote, or private feed/token matches.
+- After the second ACK patch, `dotnet build src/dotnet/TraceMap.sln` passed,
+  `dotnet test src/dotnet/TraceMap.sln` passed with 635 tests,
+  `./scripts/check-private-paths.sh` passed, and `git diff --check` passed.
+- The explicit route-flow smoke was rerun against the refreshed temporary
+  public demo endpoint combined index and again produced `UnknownAnalysisGap`,
+  `ReducedCoverage`, 3 entry evidence
+  rows, 8 static flow rows, 5 business/data logic rows, 4 dependency surfaces,
+  and 45 gaps. A targeted artifact scan again found no raw local path, raw SQL
+  wildcard, private connection-string sample, password token, raw URL, raw
+  GitHub remote, or private feed/token matches.
 
 ### Oddities
 
