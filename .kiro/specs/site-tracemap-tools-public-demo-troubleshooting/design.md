@@ -238,7 +238,10 @@ Future implementation should add focused validation that checks:
 - Bounded anchor text for adjacent-route links.
 - Absence of public-facing checks that point visitors to internal spec
   artifacts such as `implementation-state.md`, `tasks.md`, `.kiro/specs/`, or
-  other non-public author material.
+  other non-public author material. Relative path validation for directory
+  segments such as `.kiro` and `specs` must split candidate paths into
+  segments and check individual segment matches rather than using string
+  containment or slash-wrapped substring matching.
 - Standalone route metadata, sitemap metadata, and discovery metadata if
   standalone.
 - Section host metadata and anchor uniqueness if implemented as a section.

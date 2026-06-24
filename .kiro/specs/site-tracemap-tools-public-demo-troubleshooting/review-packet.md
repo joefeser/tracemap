@@ -50,7 +50,7 @@ Please inspect:
 ## Required Review Focus
 
 - Is the packet clearly spec-only?
-- Are `Status: not-started`, `Readiness: spec-review`, and
+- Are `Status: not-started`, `Readiness: ready-for-implementation`, and
   `Public claim level: concept` present and consistent before review?
 - Does the future page require visible `Public claim level: concept` and
   visible `No public conclusion without evidence`?

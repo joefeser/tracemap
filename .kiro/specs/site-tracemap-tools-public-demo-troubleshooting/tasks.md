@@ -171,7 +171,10 @@ code, or existing specs.
   bounded anchor text.
 - [ ] Add focused validation that no public row directs visitors to internal
   spec artifacts such as `implementation-state.md`, `tasks.md`,
-  `.kiro/specs/`, or other non-public author material.
+  `.kiro/specs/`, or other non-public author material. Relative path
+  validation for directory segments such as `.kiro` and `specs` must split
+  candidate paths into segments and check individual segment matches rather
+  than using string containment or slash-wrapped substring matching.
 - [ ] Add focused validation for standalone metadata, sitemap metadata, and
   discovery metadata if a standalone route is chosen.
 - [ ] Add focused validation for section host metadata, duplicate IDs, and
