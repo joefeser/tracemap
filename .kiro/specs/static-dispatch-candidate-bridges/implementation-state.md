@@ -151,3 +151,24 @@ appropriate.
   spec PR.
 - Use the PR loop after PR creation and record the terminal ACK decision in the
   final handoff.
+
+## PR Review Loop Notes
+
+- Initial ACK run with installed `agent-control` returned
+  `environment_blocked` / `LOCAL_BUILD_STALE`.
+- Fallback through `<agent-control-kit checkout>` using
+  `npm run dev -- pr-loop ...` crashed with
+  `ReferenceError: withRunArtifactsReadback is not defined`.
+- Ran `npm run build` in `agent-control-kit` to refresh `dist`, then reran the
+  installed `agent-control pr-loop`.
+- ACK posted/observed the required Codex review request and initially returned
+  `nextAction = wait_for_required_reviewers`; no review findings were patched
+  until the follow-up status snapshot showed Codex and Qodo had both returned
+  and `patchAuthorized = true`.
+- Patched authorized review findings:
+  - aligned stable ID inputs between requirements and design;
+  - aligned deterministic sort keys between requirements and design;
+  - changed route-flow row kind from provisional `interface-bridge` to existing
+    `interface-implementation-candidate`;
+  - clarified that `WeakerCandidate` requires relationship-backed evidence and
+    does not permit registration-only candidates.

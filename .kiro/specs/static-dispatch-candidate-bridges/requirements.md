@@ -68,10 +68,10 @@ static possibilities from runtime certainty.
    evidence THEN TraceMap SHALL assign internal derivation state
    `SymbolBackedCandidate` when it is fully symbol-backed but still not
    runtime-proven.
-2. WHEN a candidate depends on syntax-only, Tier3, name-only, fallback,
-   ambiguous, high-fan-out, generic, type-level-only, reduced-coverage, or
-   registration-only context THEN TraceMap SHALL assign internal derivation
-   state `WeakerCandidate`.
+2. WHEN a relationship-backed candidate depends on syntax-only, Tier3,
+   name-only, fallback, ambiguous, high-fan-out, generic, type-level-only,
+   reduced-coverage, or DI registration context THEN TraceMap SHALL assign
+   internal derivation state `WeakerCandidate`.
 3. WHEN candidate derivation cannot be completed because evidence is missing,
    unsupported, schema-incompatible, truncated, or reduced THEN TraceMap SHALL
    assign internal derivation state `CandidateGap` and SHALL emit
@@ -248,8 +248,10 @@ across repeated runs.
 
 1. WHEN candidates are derived THEN stable IDs SHALL be context-separated and
    include safe source identity, call edge ID, target abstraction symbol ID,
-   candidate symbol ID, relationship fact IDs, DI registration fact IDs when
-   present, rule ID, and a versioned algorithm ID.
+   safe source label, source index ID, call edge ID, target abstraction symbol
+   ID, candidate member symbol ID, candidate type symbol ID, sorted
+   relationship fact IDs, sorted DI registration fact IDs when present, bridge
+   kind, rule ID, and a versioned algorithm ID.
 2. WHEN stable IDs cannot be constructed without unsafe or volatile values THEN
    TraceMap SHALL hash only verified safe components and assign the row
    `WeakerCandidate` or emit an identity gap.
@@ -261,9 +263,9 @@ across repeated runs.
    subset can be extracted and verified.
 4. WHEN candidates are sorted THEN ordering SHALL be deterministic:
    evidence-tier strength, registration-context before relationship-only,
-   member-level before type-level, source label, containing type display name,
-   member display name, file path, start line, end line, stable symbol ID, and
-   candidate ID.
+   member-level before type-level, bridge kind, source label, containing type
+   display name, member display name, file path, start line, end line, stable
+   symbol ID, and candidate ID.
 5. WHEN multiple candidates exist THEN TraceMap SHALL preserve the candidate
    count, omitted count, cap value, and cap reason in JSON and Markdown summary
    metadata where the consumer exposes candidate rows.
