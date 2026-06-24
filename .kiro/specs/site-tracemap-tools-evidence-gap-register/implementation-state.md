@@ -1,6 +1,6 @@
 # Site TraceMap Tools Evidence Gap Register Implementation State
 
-Status: not-started
+Status: implemented-pending-pr-loop
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -15,20 +15,27 @@ Target PR base: `dev`
 Worktree: dedicated isolated spec worktree; local absolute path intentionally
 omitted from checked-in spec notes.
 
-Scope: create a spec-only public-site Kiro packet under
+Implementation branch: `codex/impl-site-evidence-gap-register`
+
+Implementation base: `origin/dev`
+
+Implementation target: `dev`
+
+Scope: implement the public-site evidence gap register and focused validation
+for the ready-for-implementation packet under
 `.kiro/specs/site-tracemap-tools-evidence-gap-register/`. Site source,
-generated output, scanner code, reducer code, and existing specs are out of
-scope for this branch.
+validators, tests, and this spec bookkeeping are in scope. Generated output,
+scanner code, reducer code, and unrelated specs are out of scope.
 
 ## Current State
 
-Spec packet reviewed and ready for future implementation. No site
-implementation exists in this phase.
+Implementation started on the dedicated implementation branch. The spec packet
+was reviewed and ready for implementation before site source changes began.
 
 Readiness is `ready-for-implementation` after Kiro review findings at Medium
 or higher were patched or explicitly dispositioned. The `Readiness` header in
-all five packet files moved to `ready-for-implementation`; `Status` remains
-`not-started` until future site implementation begins.
+all five packet files moved to `ready-for-implementation`; implementation work
+now advances `Status` to `implemented-pending-pr-loop`.
 
 ## Claim-Level Decision
 
@@ -41,14 +48,73 @@ confirm operational safety, prove absence of impact, or replace human review.
 
 ## Placement Decision
 
-Future implementation must choose among `/evidence/gaps/`, `/coverage/gaps/`,
-a section on `/limitations/reduced-coverage/`, a section on
-`/reviewer-quickstart/`, or a recorded equivalent if site information
-architecture has changed.
+Selected placement: standalone route `/evidence/gaps/`.
 
-No placement is selected in this spec-only phase. The future implementation
-must record the selected route or section, rejected alternatives, and adjacent
-surface distinctions before editing site source.
+Rationale: the site already has an `/evidence/` family, and a gap register is
+an evidence-recording surface rather than a coverage playbook or reviewer
+workflow step. A standalone route keeps the row matrix scannable, gives the
+page its own concept-level metadata and sitemap entry, and avoids crowding the
+existing reduced-coverage and reviewer quickstart pages.
+
+Rejected alternatives:
+
+- `/coverage/gaps/`: rejected because it would create a new top-level family
+  for one concept page while `/evidence/` already exists.
+- Section on `/limitations/reduced-coverage/`: rejected because reduced
+  coverage explains coverage labels, while this register records row-level
+  follow-up items across missing, stale, private-only, validation, and owner
+  question gaps.
+- Section on `/reviewer-quickstart/`: rejected because the register is a
+  reusable reference for owners, reviewers, implementers, and managers, not
+  only a first-pass reviewer workflow step.
+
+The register is distinct from adjacent surfaces:
+
+- `/limitations/reduced-coverage/`: reduced coverage labels and playbook;
+  the register records the follow-up row after reduced or missing evidence is
+  found.
+- `/limitations/`: canonical boundaries and non-claims; the register applies
+  those boundaries to one gap row.
+- `/validation/`: validation checks and evidence quality; the register names
+  the validation route still needed.
+- `/questions/objections/`: stakeholder objection answers; the register
+  records follow-up items instead of persuasion copy.
+- `/owners/follow-up/`: owner handoff workflow; the register supplies the
+  row that can be handed off.
+- `/decisions/evidence-record/`: human decision record after evidence review;
+  the register records missing or insufficient proof before a decision can
+  repeat stronger public wording.
+- `/review-claim-checklist/`: repeat-or-hold claim check; the register
+  provides the hold, downgrade, or follow-up input.
+
+Adjacent route inventory before site edits:
+
+- `/limitations/reduced-coverage/`: present; linked directly.
+- `/limitations/`: present; linked directly.
+- `/validation/`: present; linked directly.
+- `/questions/objections/`: present; linked directly.
+- `/owners/follow-up/`: present; linked directly.
+- `/decisions/evidence-record/`: present; linked directly.
+- `/review-claim-checklist/`: present; linked directly.
+
+No adjacent route substitutions, omissions, or deferrals are needed.
+
+Navigation decision: keep `/evidence/gaps/` out of primary navigation because
+the top nav already points to the Evidence family. Add contextual inbound
+links from evidence and related gap/coverage surfaces where they improve
+discovery without bloating primary navigation.
+
+Rejected-pattern marker: use `data-evidence-gap-boundary="rejected-patterns"`
+for unsafe wording examples. Non-claim and raw-material boundary copy may use
+`data-evidence-gap-boundary="non-claims"` or
+`data-evidence-gap-boundary="raw-material-boundary"`.
+
+Discovery artifacts for validation: standalone route metadata is represented
+by HTML title, description, canonical URL, and Open Graph tags; sitemap
+metadata is represented by `site/src/_site/pages.json` and generated
+`sitemap.xml`; discovery metadata and bot-oriented summaries are represented
+by `site/src/_site/discovery.json` and generated `routes-index.json` and
+`llms.txt`.
 
 ## Review Commands
 
@@ -314,6 +380,69 @@ Before opening the spec PR:
 - `./scripts/check-private-paths.sh`: passed on 2026-06-24 with private path
   guard success.
 
+## Implementation Validation
+
+Implementation validation on `codex/impl-site-evidence-gap-register`:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `cd site && npm test`: passed, 477 tests after reviewer-fix coverage was
+  added.
+- `cd site && npm run validate`: passed; built static site and validated 66
+  HTML files, 2260 internal references, 65 sitemap URLs, 1 legacy story safety
+  target, and 13 legacy modernization evidence-map rows.
+- `cd site && npm run build`: passed.
+- Browser sanity: passed on `/evidence/gaps/` at desktop 1440x1000 and mobile
+  390x844 against the generated site. Desktop had no body overflow and the
+  table was visible within the page. Mobile had no body overflow, preserved
+  required sections and row labels, and kept the wide evidence table inside
+  its horizontal scroll wrapper.
+
+Generated `site/dist/` output was produced for validation only and remains
+ignored by git.
+
+## PR Loop Outcome
+
+PR: `https://github.com/joefeser/tracemap/pull/317`
+
+Initial PR loop requested required Codex review and waited for the configured
+Codex/Qodo batch. After Codex and Qodo returned, the loop authorized patching
+combined findings. Patched findings:
+
+- Qodo private/raw scan bypass in `site/scripts/evidence-gap-register.mjs`.
+- Codex visible-body word-count validation issue in
+  `site/scripts/evidence-gap-register.mjs`.
+- Gemini unclosed boundary-region stripping issue in
+  `site/scripts/evidence-gap-register.mjs`.
+- Gemini proof-route query/hash normalization issue in
+  `site/scripts/evidence-gap-register.mjs`.
+
+Validation after patching:
+
+- `cd site && npm test`: passed, 477 tests.
+- `cd site && npm run validate`: passed.
+- `cd site && npm run build`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
+PR loop after the reviewer-fix commit returned:
+
+- Decision: `merge_ready`.
+- Stop reason: `NONE`.
+- Head: `4cc31c1eef7ada30d007bbf35b99b906902e749f`.
+- Checks: no pending or failed checks.
+- Review threads: 0 unresolved.
+- Actionable findings: none.
+- Residual risk: medium, because Codex reviewed
+  `02e9a3984719e005ca9ff27d829aa24f799f2c92` and the current reviewed head
+  was `4cc31c1eef7ada30d007bbf35b99b906902e749f`; no stale actionable Codex
+  findings were found, and required review was satisfied by configured
+  `trustedCodeReview` quorum.
+
+This checked-in state note is bookkeeping. If it creates a docs/spec-only
+post-review head, final readiness should be reported from the final PR-loop
+JSON for the exact current head rather than repeatedly updating this note.
+
 Future implementation validation expectations are defined in
 `requirements.md`, `design.md`, and `tasks.md`. They include required rows,
 required links, metadata, discovery/sitemap metadata if standalone, forbidden
@@ -333,11 +462,17 @@ browser sanity.
 - `Readiness: ready-for-implementation` was set only after Medium or higher
   findings from all review passes were patched or explicitly dispositioned and
   the gate disposition was recorded above.
+- The focused validator accepts bounded unsafe examples only inside
+  `data-evidence-gap-boundary="rejected-patterns"` and strips non-claim
+  boundary regions before checking for live public claims. This lets the page
+  teach rejected wording without turning it into metadata, summaries, or live
+  claims.
+- `docs-index.json` is not listed as a discovery artifact for this route
+  because the existing discovery generator does not treat ordinary site pages
+  as docs-index entries. The route is covered by sitemap, `routes-index.json`,
+  `llms.txt`, HTML metadata, and Open Graph metadata.
 
 ## Follow-Up Items
 
-- Future implementation must select placement and record rejected alternatives.
-- Future implementation must verify which adjacent routes exist and record any
-  substitutions, omissions, or deferrals.
-- Future implementation must add focused validators before marking site work
-  complete.
+- No implementation follow-up is currently known. Final merge authority is the
+  latest PR-loop JSON for the exact current head.
