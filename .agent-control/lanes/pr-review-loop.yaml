@@ -12,7 +12,21 @@ lane:
 # agent-control lane config key; not an inter-agent coordination packet payload.
 prLoopPacket:
   reviewFreshnessPolicy:
-    maxFreshReviewFixCycles: 1
+    maxFreshReviewFixCycles: 2
+    # Repo-specific risky files. Overrides the ACK hard-coded defaults which
+    # are scoped to ACK's own TypeScript source and are wrong for a C#/.NET repo.
+    # These are files where a stale Codex review genuinely requires fresh eyes.
+    riskyFileGlobs:
+      - .github/workflows/**
+      - scripts/**
+      - src/dotnet/TraceMap.Core/Analyzers/**
+      - src/dotnet/TraceMap.Core/Extractors/**
+      - src/dotnet/TraceMap.Core/**/*Auth*
+      - src/dotnet/TraceMap.Core/**/*Security*
+      - src/dotnet/TraceMap.Core/**/*Permission*
+      - src/dotnet/TraceMap.Core/**/*Merge*
+      - site/scripts/validate.mjs
+      - site/scripts/validate.ts
   reviewQuorum:
     enabled: true
     groups:
