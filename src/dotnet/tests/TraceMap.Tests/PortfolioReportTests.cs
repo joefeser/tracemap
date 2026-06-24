@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using TraceMap.Cli;
 using TraceMap.Combine;
@@ -178,6 +179,98 @@ public sealed class PortfolioReportTests
         Assert.True(result.Report.Summary.Truncated);
         Assert.Equal(PortfolioReportStatuses.Truncated, result.Report.SourceCoverage.Status);
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Section == "sourceCoverage");
+    }
+
+    [Fact]
+    public async Task Portfolio_projects_legacy_data_model_surface_metadata_without_raw_descriptor_values()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "legacy.sqlite");
+        var outDir = Path.Combine(temp.Path, "portfolio");
+        var scan = Manifest("legacy", ScannerVersions.TraceMap, "git-legacy");
+        SqliteIndexWriter.Write(indexPath, scan, [
+            LegacyDataModelFact(
+                scan,
+                "ldm:nhibernate-private-entity",
+                "reduced",
+                "formula-redacted;filter-redacted;query-redacted;PrivateCustomer;TenantSecrets;syntheticsecret;select CardNumber from Vault.Customers")
+        ]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("legacy", indexPath)
+        ], outDir));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces.Rows, row => row.SurfaceKind == "legacy-data");
+        Assert.True(HasMetadata(surface, "surfaceSubtype", "data-model"));
+        Assert.True(HasMetadata(surface, "legacyDataMetadataFormat", "nhibernate-hbm"));
+        Assert.True(HasMetadata(surface, "legacyDataDescriptorRole", "conceptual"));
+        Assert.True(HasMetadata(surface, "legacyDataCoverageLabel", "reduced"));
+        Assert.Contains(surface.Metadata, pair =>
+            pair.Key == "legacyDataLimitations"
+            && pair.Value.Contains("formula-redacted", StringComparison.Ordinal)
+            && pair.Value.Contains("filter-redacted", StringComparison.Ordinal)
+            && pair.Value.Contains("query-redacted", StringComparison.Ordinal)
+            && pair.Value.Contains("limitation-hash:", StringComparison.Ordinal));
+        Assert.DoesNotContain(surface.Metadata, pair => pair.Key == "legacyDataStableModelKey");
+        Assert.Contains(surface.Metadata, pair => pair.Key == "legacyDataStableModelKeyHash" && !string.IsNullOrWhiteSpace(pair.Value));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.json"));
+        Assert.Contains("limitation-hash:", json, StringComparison.Ordinal);
+        foreach (var output in new[] { markdown, json })
+        {
+            Assert.Contains("surfaceSubtype", output, StringComparison.Ordinal);
+            Assert.Contains("data-model", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("select CardNumber", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Vault.Customers", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("tenant_id = 42", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("private.example", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Server=prod-db", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("synthetic-secret", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("git@github.com:private", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("C:\\private", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("TenantSecrets", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("PrivateCustomer", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("syntheticsecret", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("ldm:nhibernate-private-entity", output, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Portfolio_shared_legacy_data_surfaces_use_hash_identity()
+    {
+        using var temp = new TempDirectory();
+        var firstIndex = Path.Combine(temp.Path, "first.sqlite");
+        var secondIndex = Path.Combine(temp.Path, "second.sqlite");
+        var outDir = Path.Combine(temp.Path, "portfolio");
+        var first = Manifest("legacy-one", ScannerVersions.TraceMap, "git-legacy-one");
+        var second = Manifest("legacy-two", ScannerVersions.TraceMap, "git-legacy-two");
+        SqliteIndexWriter.Write(firstIndex, first, [
+            LegacyDataModelFact(first, "ldm:shared-portfolio-model", "full", "formula-redacted")
+        ]);
+        SqliteIndexWriter.Write(secondIndex, second, [
+            LegacyDataModelFact(second, "ldm:shared-portfolio-model", "full", "formula-redacted")
+        ]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("legacy-one", firstIndex),
+            new PortfolioInputSpec("legacy-two", secondIndex)
+        ], outDir));
+
+        var shared = Assert.Single(result.Report.SharedSurfaces.Rows, row => row.SurfaceKind == "legacy-data");
+        Assert.Equal(2, shared.SourceLabels.Count);
+        Assert.Contains(shared.Metadata, pair => pair.Key == "groupKeyHash" && !string.IsNullOrWhiteSpace(pair.Value));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.json"));
+        Assert.Contains("Shared Portfolio Surfaces", markdown, StringComparison.Ordinal);
+        Assert.Contains("sharedSurfaces", json, StringComparison.Ordinal);
+        foreach (var output in new[] { markdown, json })
+        {
+            Assert.DoesNotContain("ldm:shared-portfolio-model", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("PrivateCustomer", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("TenantSecrets", output, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -478,6 +571,92 @@ public sealed class PortfolioReportTests
     }
 
     [Fact]
+    public async Task Portfolio_comparison_tracks_legacy_data_model_changes_by_safe_identity()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var outDir = Path.Combine(temp.Path, "comparison");
+        var beforeScan = Manifest("legacy", ScannerVersions.TraceMap, "git-legacy");
+        var afterScan = Manifest("legacy", ScannerVersions.TraceMap, "git-legacy");
+        SqliteIndexWriter.Write(beforeIndex, beforeScan, [
+            LegacyDataModelFact(beforeScan, "ldm:portfolio-model", "reduced", "formula-redacted")
+        ]);
+        SqliteIndexWriter.Write(afterIndex, afterScan, [
+            LegacyDataModelFact(afterScan, "ldm:portfolio-model", "reduced", "formula-redacted;query-redacted;connection:prod-db;select CardNumber from Vault.Customers")
+        ]);
+        await WriteManifestAsync(beforeManifest, [("legacy", beforeIndex)]);
+        await WriteManifestAsync(afterManifest, [("legacy", afterIndex)]);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions(
+            [],
+            outDir,
+            BeforeManifestPath: beforeManifest,
+            AfterManifestPath: afterManifest));
+
+        var row = Assert.Single(result.Report.PortfolioDiff.Rows, diff => diff.ChangeKind == "ChangedSurfaceEvidence");
+        Assert.Equal(PortfolioReportClassifications.ReviewRecommended, row.Classification);
+        Assert.True(HasMetadata(row, "surfaceKind", "legacy-data"));
+        Assert.True(HasMetadata(row, "surfaceSubtype", "data-model"));
+        Assert.True(HasMetadata(row, "legacyDataMetadataFormat", "nhibernate-hbm"));
+        Assert.True(HasMetadata(row, "legacyDataCoverageLabel", "reduced"));
+        Assert.Contains(row.Metadata, pair => pair.Key == "legacyDataStableModelKeyHash" && !string.IsNullOrWhiteSpace(pair.Value));
+        Assert.Contains(row.Metadata, pair =>
+            pair.Key == "legacyDataLimitations"
+            && pair.Value.Contains("formula-redacted", StringComparison.Ordinal)
+            && pair.Value.Contains("query-redacted", StringComparison.Ordinal)
+            && pair.Value.Contains("limitation-hash:", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Report.PortfolioDiff.Rows, diff => diff.ChangeKind is "AddedSurfaceEvidence" or "RemovedSurfaceEvidence");
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "portfolio-report.json"));
+        Assert.Contains("limitation-hash:", json, StringComparison.Ordinal);
+        foreach (var output in new[] { markdown, json })
+        {
+            Assert.Contains("ChangedSurfaceEvidence", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("connection:prod-db", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("select CardNumber", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Vault.Customers", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Server=prod-db", output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("PrivateCustomer", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("ldm:portfolio-model", output, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Portfolio_legacy_data_diff_identity_uses_fallback_hash_when_keys_are_missing()
+    {
+        var first = LegacyDataSurfaceForIdentityFallback("fact-a");
+        var second = LegacyDataSurfaceForIdentityFallback("fact-b");
+
+        var firstMetadata = SurfaceDiffIdentityMetadataForTest(first);
+        var secondMetadata = SurfaceDiffIdentityMetadataForTest(second);
+        var firstFallback = Assert.Single(firstMetadata, pair => pair.Key == "identityFallbackHash").Value;
+        var secondFallback = Assert.Single(secondMetadata, pair => pair.Key == "identityFallbackHash").Value;
+
+        Assert.False(string.IsNullOrWhiteSpace(firstFallback));
+        Assert.False(string.IsNullOrWhiteSpace(secondFallback));
+        Assert.NotEqual(firstFallback, secondFallback);
+        Assert.DoesNotContain(firstMetadata, pair => pair.Key is "legacyDataStableModelKeyHash" or "legacyDataDisplayNameHash");
+    }
+
+    [Fact]
+    public void Portfolio_legacy_data_diff_identity_includes_model_kind_with_display_hash_keys()
+    {
+        var entity = LegacyDataSurfaceForIdentityFallback("fact-a", modelKind: "entity", displayNameHash: "same-display-hash");
+        var column = LegacyDataSurfaceForIdentityFallback("fact-b", modelKind: "column", displayNameHash: "same-display-hash");
+
+        var entityMetadata = SurfaceDiffIdentityMetadataForTest(entity);
+        var columnMetadata = SurfaceDiffIdentityMetadataForTest(column);
+
+        Assert.Contains(entityMetadata, pair => pair.Key == "legacyDataModelKind" && pair.Value == "entity");
+        Assert.Contains(columnMetadata, pair => pair.Key == "legacyDataModelKind" && pair.Value == "column");
+        Assert.NotEqual(JoinedMetadataForTest(entityMetadata), JoinedMetadataForTest(columnMetadata));
+    }
+
+    [Fact]
     public async Task Portfolio_comparison_requested_deferred_context_gaps_are_in_top_level_rollup()
     {
         using var temp = new TempDirectory();
@@ -647,6 +826,82 @@ public sealed class PortfolioReportTests
             });
     }
 
+    private static CodeFact LegacyDataModelFact(ScanManifest manifest, string stableModelKey, string coverageLabel, string limitations)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataOrmNHibernate,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("Mappings/EntityModel.hbm.xml", 8, 16, null, "test", "test/1.0"),
+            targetSymbol: "PrivateCustomer",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["connectionString"] = "Server=prod-db;Password=synthetic-secret",
+                ["containerHash"] = "tenant-secrets-hash",
+                ["containerName"] = "TenantSecrets",
+                ["coverageLabel"] = coverageLabel,
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = "PrivateCustomer",
+                ["displayNameHash"] = FactFactory.Hash("PrivateCustomer", 32),
+                ["displayNameRedaction"] = "hashed-unsafe-identifier",
+                ["filter"] = "tenant_id = 42",
+                ["filterHash"] = "filter-hash",
+                ["formula"] = "select CardNumber from Vault.Customers",
+                ["formulaHash"] = "formula-hash",
+                ["limitations"] = limitations,
+                ["localPath"] = "C:\\private\\customer",
+                ["metadataFormat"] = "nhibernate-hbm",
+                ["metadataHash"] = "metadata-hash",
+                ["metadataKind"] = "NHibernateHbm",
+                ["modelKind"] = "entity",
+                ["providerUrl"] = "https://private.example/nhibernate",
+                ["query"] = "select CardNumber from Vault.Customers where tenant_id = 42",
+                ["queryHash"] = "query-hash",
+                ["remote"] = "git@github.com:private/customer.git",
+                ["stableModelKey"] = stableModelKey
+            });
+    }
+
+    private static CombinedDependencySurfaceRow LegacyDataSurfaceForIdentityFallback(
+        string factId,
+        string? modelKind = null,
+        string? displayNameHash = null)
+    {
+        return new CombinedDependencySurfaceRow(
+            SurfaceKind: "legacy-data",
+            DisplayName: "unknown-legacy-data",
+            SourceIndexId: "source",
+            SourceLabel: "source",
+            ScanId: "scan",
+            CommitSha: "commit",
+            CombinedFactId: factId,
+            OriginalFactId: factId,
+            FactType: FactTypes.LegacyDataEntityDeclared,
+            RuleId: RuleIds.LegacyDataOrmNHibernate,
+            EvidenceTier: EvidenceTiers.Tier2Structural,
+            FilePath: "Mappings/EntityModel.hbm.xml",
+            StartLine: 8,
+            EndLine: 16,
+            HttpMethod: null,
+            NormalizedPathKey: null,
+            OperationName: null,
+            TableName: null,
+            ColumnNames: null,
+            SourceKind: null,
+            ShapeHash: null,
+            TextHash: null,
+            TextLength: null,
+            PackageName: null,
+            Version: null,
+            ConfigKey: null,
+            LegacyDataMetadataFormat: "nhibernate-hbm",
+            LegacyDataModelKind: modelKind,
+            LegacyDataDescriptorRole: "conceptual",
+            LegacyDataDisplayNameHash: displayNameHash,
+            SurfaceSubtype: "data-model");
+    }
+
     private static CodeFact ConfigFact(ScanManifest manifest, string file, string key, string value)
     {
         return FactFactory.Create(
@@ -758,5 +1013,26 @@ public sealed class PortfolioReportTests
     private static bool HasMetadata(PortfolioDiffRow row, string key, string value)
     {
         return row.Metadata.Any(pair => pair.Key == key && pair.Value == value);
+    }
+
+    private static bool HasMetadata(PortfolioSurfaceRow row, string key, string value)
+    {
+        return row.Metadata.Any(pair => pair.Key == key && pair.Value == value);
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> SurfaceDiffIdentityMetadataForTest(CombinedDependencySurfaceRow surface)
+    {
+        var method = typeof(PortfolioReporter).GetMethod(
+            "SurfaceDiffIdentityMetadata",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+        return Assert.IsAssignableFrom<IReadOnlyList<KeyValuePair<string, string>>>(
+            method.Invoke(null, [surface]));
+    }
+
+    private static string JoinedMetadataForTest(IReadOnlyList<KeyValuePair<string, string>> metadata)
+    {
+        return string.Join(";", metadata.Select(pair => $"{pair.Key}={pair.Value}"));
     }
 }
