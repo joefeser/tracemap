@@ -208,6 +208,7 @@ public static class StaticHtmlEvidenceExplorer
     private const string SourceId = "source:scan-output";
     private const int EvidenceRowNoScriptLimit = 200;
     private const int MaxRuleCatalogTextLength = 360;
+    private const long MaxRuleCatalogBytes = 1_048_576;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -453,7 +454,8 @@ public static class StaticHtmlEvidenceExplorer
 
         await AddOptionalArtifactAsync(inputDirectory, "index.sqlite", "sqlite-index", "SQLite index", "index.sqlite.v1", safetyProfile, artifacts, gaps, cancellationToken);
         await AddOptionalArtifactAsync(inputDirectory, "report.md", "markdown-report", "Markdown report", "report.md.v1", safetyProfile, artifacts, gaps, cancellationToken);
-        var catalogRules = await AddRuleCatalogArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, redactions, cancellationToken);
+        var catalogLoad = await AddRuleCatalogArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, redactions, cancellationToken);
+        var catalogRules = catalogLoad.Entries;
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
 
         limitations.Add(CreateLimitation(
@@ -489,11 +491,11 @@ public static class StaticHtmlEvidenceExplorer
             .Select(rule => rule.RuleId)
             .ToHashSet(StringComparer.Ordinal);
         var observedRulesWithoutCatalog = observedRuleIds
-            .Where(ruleId => catalogRules.Count == 0 || !catalogRuleIds.Contains(ruleId))
+            .Where(ruleId => !catalogRuleIds.Contains(ruleId))
             .ToArray();
-        if (observedRulesWithoutCatalog.Length > 0)
+        if (observedRulesWithoutCatalog.Length > 0 && (!catalogLoad.FilePresent || catalogRules.Count > 0))
         {
-            var catalogProvided = catalogRules.Count > 0;
+            var catalogProvided = catalogLoad.FilePresent;
             gaps.Add(CreateGap(
                 catalogProvided ? "rule-catalog-observed-entry-unavailable" : "rule-catalog-unavailable",
                 CatalogUnavailableRuleId,
@@ -533,6 +535,8 @@ public static class StaticHtmlEvidenceExplorer
             evidenceRows,
             gaps.OrderBy(gap => gap.RuleId, StringComparer.Ordinal).ThenBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
             limitations.OrderBy(limitation => limitation.RuleId, StringComparer.Ordinal).ThenBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
+            catalogLoad.FilePresent,
+            catalogRules.Count > 0,
             rules,
             redactionRows);
     }
@@ -737,7 +741,7 @@ public static class StaticHtmlEvidenceExplorer
         }
     }
 
-    private static async Task<IReadOnlyList<RuleCatalogEntry>> AddRuleCatalogArtifactAsync(
+    private static async Task<RuleCatalogLoadResult> AddRuleCatalogArtifactAsync(
         string inputDirectory,
         string safetyProfile,
         List<ExplorerInputArtifact> artifacts,
@@ -755,10 +759,12 @@ public static class StaticHtmlEvidenceExplorer
             .ToArray();
         if (candidates.Length == 0)
         {
-            return [];
+            return new RuleCatalogLoadResult(false, []);
         }
 
         var path = candidates[0];
+        var fileInfo = new FileInfo(path);
+        var tooLarge = fileInfo.Length > MaxRuleCatalogBytes;
         artifacts.Add(new ExplorerInputArtifact(
             "artifact:rule-catalog",
             "rule-catalog",
@@ -770,10 +776,23 @@ public static class StaticHtmlEvidenceExplorer
             [SourceId],
             [],
             [],
-            "supported"));
+            tooLarge ? "unsupported" : "supported"));
 
-        var text = await File.ReadAllTextAsync(path, cancellationToken);
-        var entries = ParseRuleCatalog(text, redactions);
+        if (tooLarge)
+        {
+            gaps.Add(CreateGap(
+                "rule-catalog-too-large",
+                UnsupportedSchemaRuleId,
+                "artifact-too-large",
+                "artifact:rule-catalog",
+                "rules",
+                "PartialAnalysis",
+                $"A rule catalog artifact was provided but exceeded the explorer's {MaxRuleCatalogBytes} byte catalog reader limit, so compatible rule rows were not rendered.",
+                ["artifact:rule-catalog"]));
+            return new RuleCatalogLoadResult(true, []);
+        }
+
+        var entries = await ParseRuleCatalogAsync(path, redactions, cancellationToken);
         if (entries.Count == 0)
         {
             gaps.Add(CreateGap(
@@ -787,7 +806,7 @@ public static class StaticHtmlEvidenceExplorer
                 ["artifact:rule-catalog"]));
         }
 
-        return entries;
+        return new RuleCatalogLoadResult(true, entries);
     }
 
     private static ExplorerSource BuildSource(
@@ -916,6 +935,12 @@ public static class StaticHtmlEvidenceExplorer
             .ToHashSet(StringComparer.Ordinal);
         foreach (var catalogRule in catalogRules)
         {
+            if (catalogRule.RuleId.StartsWith("explorer.", StringComparison.Ordinal)
+                && rules.ContainsKey(catalogRule.RuleId))
+            {
+                continue;
+            }
+
             rules[catalogRule.RuleId] = new ExplorerRule(
                 catalogRule.RuleId,
                 catalogRule.Title,
@@ -1010,7 +1035,8 @@ public static class StaticHtmlEvidenceExplorer
         var factsProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "facts-ndjson");
         var sqliteProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "sqlite-index");
         var reportProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "markdown-report");
-        var ruleCatalogProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "rule-catalog");
+        var ruleCatalogProvided = context.CatalogFilePresent;
+        var compatibleRuleCatalogLoaded = context.CatalogRulesLoaded;
         var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
         var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
         var evidenceRowsStatus = factsProvided
@@ -1087,8 +1113,10 @@ public static class StaticHtmlEvidenceExplorer
                 "Rules",
                 ruleCatalogProvided ? SectionStatusFromGaps(context.Gaps, "rules", true) : "built-in-stubs",
                 coverageLabel,
-                ruleCatalogProvided
+                compatibleRuleCatalogLoaded
                     ? "Rules include compatible rule catalog rows plus built-in explorer rules and observed fallback rows for any uncataloged evidence rule IDs."
+                    : ruleCatalogProvided
+                    ? "A rule catalog artifact was provided, but no compatible rule rows were loaded; rules use built-in explorer rules and observed fallback rows."
                     : "The explorer renders built-in explorer rules and observed rule IDs; no compatible full rule catalog artifact was provided.",
                 ruleCatalogProvided ? ["artifact:rule-catalog"] : context.Rules.Select(rule => rule.RuleId).ToArray()),
             SectionStatus(
@@ -1337,9 +1365,10 @@ public static class StaticHtmlEvidenceExplorer
         return EvidenceTiers.Tier4Unknown;
     }
 
-    private static IReadOnlyList<RuleCatalogEntry> ParseRuleCatalog(
-        string text,
-        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions)
+    private static async Task<IReadOnlyList<RuleCatalogEntry>> ParseRuleCatalogAsync(
+        string path,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions,
+        CancellationToken cancellationToken)
     {
         var entries = new List<RuleCatalogEntry>();
         string? id = null;
@@ -1369,7 +1398,9 @@ public static class StaticHtmlEvidenceExplorer
                     .ToArray()));
         }
 
-        foreach (var rawLine in text.ReplaceLineEndings("\n").Split('\n'))
+        await using var stream = File.OpenRead(path);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        while (await reader.ReadLineAsync(cancellationToken) is { } rawLine)
         {
             var line = rawLine.TrimEnd();
             var trimmed = line.TrimStart();
@@ -2117,8 +2148,14 @@ public static class StaticHtmlEvidenceExplorer
         IReadOnlyList<ExplorerEvidenceRow> EvidenceRows,
         IReadOnlyList<ExplorerGap> Gaps,
         IReadOnlyList<ExplorerLimitation> Limitations,
+        bool CatalogFilePresent,
+        bool CatalogRulesLoaded,
         IReadOnlyList<ExplorerRule> Rules,
         IReadOnlyList<ExplorerRedaction> Redactions);
+
+    private sealed record RuleCatalogLoadResult(
+        bool FilePresent,
+        IReadOnlyList<RuleCatalogEntry> Entries);
 
     private sealed record RuleCatalogEntry(
         string RuleId,

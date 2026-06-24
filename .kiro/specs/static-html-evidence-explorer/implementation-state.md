@@ -457,10 +457,15 @@ Scope completed:
 - Patched ACK review findings by preserving catalog evidence-tier expressions,
   using a static compiled SQL safety regex, and tightening YAML list-context
   detection so scalar values ending in `:` are not mistaken for list keys.
+- Patched follow-up Qodo findings by bounding and streaming rule catalog reads,
+  distinguishing present-but-unsupported catalogs from missing catalogs in
+  rules diagnostics, and preventing external catalog entries from overriding
+  reserved `explorer.*` built-in rule definitions.
 - Added focused tests for compatible catalog rendering, rules section status,
   artifact rows, catalog-unavailable suppression, and unsafe catalog text
   redaction, including raw SQL and stack-trace safety cases, tier expressions,
-  and colon-suffixed scalar values.
+  colon-suffixed scalar values, oversized catalogs, unsupported present
+  catalogs, and reserved explorer rule collision handling.
 
 Scope intentionally deferred:
 
@@ -474,13 +479,13 @@ Validation status:
 
 - Focused explorer tests passed:
   `dotnet test src/dotnet/TraceMap.sln --filter StaticHtmlEvidenceExplorerTests`
-  with 19 passing tests. Existing `SQLitePCLRaw.lib.e_sqlite3` advisory
+  with 22 passing tests. Existing `SQLitePCLRaw.lib.e_sqlite3` advisory
   warnings were reported by restore/build.
 - Required .NET build passed:
   `dotnet build src/dotnet/TraceMap.sln` with 0 errors and existing
   `SQLitePCLRaw.lib.e_sqlite3` advisory warnings.
 - Required .NET tests passed:
-  `dotnet test src/dotnet/TraceMap.sln` with 628 passing tests.
+  `dotnet test src/dotnet/TraceMap.sln` with 631 passing tests.
 - Private-path guard passed:
   `./scripts/check-private-paths.sh`.
 - Whitespace check passed:
@@ -515,4 +520,5 @@ Kiro implementation review status:
 PR status:
 
 - PR URL: https://github.com/joefeser/tracemap/pull/308
-- PR-loop result: ACK findings patched locally; rerun pending after push.
+- PR-loop result: follow-up Qodo findings patched locally; rerun pending after
+  validation and push.
