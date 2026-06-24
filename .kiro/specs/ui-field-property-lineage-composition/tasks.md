@@ -23,7 +23,7 @@ Readiness: ready-for-implementation
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Run any existing spec lint/check if present, or record that none exists.
 - [x] Confirm the committed diff is limited to this spec folder.
-- [ ] Open a ready PR into `dev`.
+- [x] Open a ready PR into `dev`.
 - [ ] Run ACK PR loop and record the final decision/stop reason.
 
 ## Recommended Implementation Slices

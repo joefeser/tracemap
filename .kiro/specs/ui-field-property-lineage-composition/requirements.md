@@ -79,8 +79,11 @@ or model property.
    directives, pipes, bracket notation, unresolved external templates,
    template-variable ambiguity, `ViewBag`, `ViewData`, dynamic Razor models,
    partial/editor-template ambiguity, generated Razor uncertainty, or custom tag
-   helpers without static model identity THEN TraceMap SHALL emit a gap or cap
-   the hop at `NeedsReviewLineage`.
+   helpers without static model identity THEN TraceMap SHALL emit a gap and
+   SHALL NOT create a lineage hop across that dynamic boundary. If separate
+   weak-but-present property-specific evidence exists outside that dynamic
+   boundary, that separate evidence MAY be reported as `NeedsReviewLineage`
+   under Requirement 5.
 5. WHEN server-only model-binding facts exist without a supporting UI binding
    or form-target root THEN they SHALL NOT satisfy `field:`, `control:`, or
    `binding:` selectors.
@@ -232,7 +235,11 @@ gap, and report row to be evidence-backed and machine-readable.
 4. Classification SHALL remain in the documented property-flow vocabulary:
    `StrongStaticLineage`, `ProbableStaticLineage`, `NeedsReviewLineage`,
    `UnknownAnalysisGap`, `NoLineageEvidence`, `SelectorNoMatch`, and
-   `TruncatedByLimit`, unless a future versioned spec changes it.
+   `TruncatedByLimit`, plus `ObservedDemoContext` for optional observed
+   evidence metadata rows only, unless a future versioned spec changes it.
+   `ObservedDemoContext` SHALL NOT classify roots, edges, paths, summary
+   results, absence conclusions, route-flow joins, or impact findings and SHALL
+   NOT upgrade any static classification.
 5. `StrongStaticLineage` SHALL require a complete static trail with semantic or
    equivalent strong evidence, property-specific bridges, known source identity,
    known commit SHA, compatible schema, no blocking gaps, and full relevant
