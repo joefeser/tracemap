@@ -1,33 +1,34 @@
 # Site TraceMap Tools Reduced Coverage Playbook Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
-Spec branch: `codex/spec-site-reduced-coverage-playbook`
+Implementation branch: `codex/impl-site-reduced-coverage-playbook`
 
 Base: `origin/dev`
 
 Target PR base: `dev`
 
-Worktree: dedicated isolated spec worktree; local absolute path intentionally
-omitted from checked-in spec notes.
+Worktree: dedicated isolated implementation worktree; local absolute path
+intentionally omitted from checked-in spec notes.
 
-Scope: spec-only public-site planning packet for a future reduced coverage
-playbook page or section. Site source, generated output, scanner code, reducer
-code, validation scripts, existing specs, and generated artifacts remain out
-of scope for this branch.
+Scope: implement the public-site reduced coverage playbook. Static site
+source, sitemap metadata, discovery metadata, focused validators, focused
+tests, and this spec packet were in scope. Generated `site/dist/` and
+`site/output/` remain generated output and were not edited by hand.
 
 ## Current State
 
-The spec packet is ready for future implementation. No site implementation
-exists in this branch.
+The reduced coverage playbook is implemented as a standalone public route at
+`/limitations/reduced-coverage/`.
 
-Readiness is `ready-for-implementation` because the requested Kiro reviews
-were run, Medium or higher findings were patched or explicitly dispositioned,
-and spec-branch validation passed.
+The page includes visible `Public claim level: concept` and `No public
+conclusion without evidence` copy, the required reduced-coverage matrix,
+safe/unsafe wording sections, next-evidence guidance, owner handoff, stop
+conditions, non-claims, and adjacent-surface distinctions.
 
 ## Claim-Level Decision
 
@@ -43,65 +44,65 @@ Do not upgrade the future surface to `demo` unless a future spec amendment
 records checked-in public-safe demo evidence for the exact claims, rows, and
 proof links without publishing raw or private material.
 
-## Route And Placement Guidance
+## Route And Placement Decision
 
-Candidate placements:
+Selected route: `/limitations/reduced-coverage/`
 
-- `/coverage/reduced/`: recommended when a coverage route family is available
-  or planned.
-- `/limitations/reduced-coverage/`: recommended when the site wants the page
-  close to limitation and non-claim boundaries.
-- Section on `/limitations/`: allowed when the content can remain compact and
-  the row matrix does not crowd the canonical limitations surface.
-- Section on `/validation/`: allowed when the implementation treats reduced
-  coverage mainly as interpretation guidance after validation checks.
+Rationale: reduced coverage is primarily a limitation and non-claim handling
+state, so the page belongs near the existing limitations family. The existing
+`/limitations/` and `/validation/` pages are compact canonical surfaces; adding
+the full eight-row matrix and action guidance as a section would crowd those
+pages and blur their purpose. The site does not currently have a `/coverage/`
+route family, so `/coverage/reduced/` would introduce a new top-level family
+for one concept-level page.
 
-Final route or placement: not selected in this spec-only branch.
+Rejected alternatives:
 
-The future implementation must record the selected placement, rejected
-alternatives, link decisions, metadata decisions, validation results, and any
-absent or moved adjacent route targets in this file before closing the
-implementation phase.
+- `/coverage/reduced/`: rejected because no coverage route family exists yet,
+  and creating one route for this concept page would be a larger information
+  architecture choice.
+- Section on `/limitations/`: rejected because `/limitations/` should remain
+  the canonical boundary and non-claim surface.
+- Section on `/validation/`: rejected because `/validation/` should remain the
+  check and validation surface rather than a row-by-row handoff playbook.
+- Replacing `/static-vs-runtime/`, `/questions/objections/`,
+  `/proof-paths/faq/`, or `/review-claim-checklist/`: rejected because those
+  routes answer adjacent but different reader questions.
 
-## Scope Decisions
+Navigation decision: the route is not added to primary navigation. A bounded
+inbound link was added from `/limitations/`, and the page links to adjacent
+surfaces with descriptive anchor text.
 
-- Create a spec-only Kiro packet under this spec directory only.
+Adjacent route status: all adjacent public routes named by the spec exist and
+are linked: `/limitations/`, `/validation/`, `/static-vs-runtime/`,
+`/questions/objections/`, `/proof-paths/faq/`, and
+`/review-claim-checklist/`. No proof/validation row links are deferred,
+substituted, or omitted.
+
+## Implemented Scope Decisions
+
 - Preserve visible `Public claim level: concept`.
 - Preserve visible `No public conclusion without evidence`.
-- Require sections for what reduced coverage means, how to label it, safe
-  conclusions, unsafe conclusions, next evidence to collect, owner handoff,
-  stop conditions, and non-claims.
-- Require rows for build/load failure, syntax fallback, missing semantic
-  evidence, unsupported framework surface, missing generated artifact,
-  private-only support, stale commit context, and unknown evidence tier.
-- Require each row to include coverage label, evidence tier, evidence
-  available, what cannot be concluded, next owner, safe wording, stop
-  condition, and proof/validation link.
-- Distinguish the playbook from `/limitations/`, `/validation/`,
-  `/static-vs-runtime/`, `/questions/objections/`, `/proof-paths/faq/`, and
-  `/review-claim-checklist/`.
-- Forbid absence-of-impact proof, clean-repo claim under failed or reduced
-  analysis, runtime proof, release approval or safety, operational safety,
-  complete coverage, AI/LLM analysis, prompt-based classification, embedding
-  search, vector database analysis, and replacement of human review.
-- Forbid public raw facts, SQLite, analyzer logs, source snippets, SQL,
-  config values, secrets, local paths, raw remotes, generated scan
-  directories, private sample names, command output, hidden validation
-  details, and credential-like values.
-- Avoid blame language in the future page, metadata, examples, validation
-  messages, and review-packet references.
-- Keep `implementation-state.md` free of local absolute paths, raw repository
-  remotes, credential-like values, private sample names, command output with
-  private context, and hidden validation details. Record only public-safe
-  route decisions, substitutions, deferral notes, review outcomes, and
-  follow-up items.
-- Require implementation validation for required rows, required links,
-  metadata, discovery/sitemap metadata if standalone, forbidden claims,
-  private/raw material, word count bounds, and desktop/mobile browser sanity
-  when layout or interaction changes are made.
-- Require proof/validation link validation to reject empty or placeholder row
-  links unless a target is explicitly recorded as deferred, substituted, or
-  omitted in this file.
+- Implement the required sections for what reduced coverage means, how to
+  label it, safe conclusions, unsafe conclusions, next evidence to collect,
+  owner handoff, stop conditions, and non-claims.
+- Implement the required rows for build/load failure, syntax fallback, missing
+  semantic evidence, unsupported framework surface, missing generated
+  artifact, private-only support, stale commit context, and unknown evidence
+  tier.
+- Include coverage label, evidence tier, evidence available, what cannot be
+  concluded, next owner, safe wording, stop condition, and proof/validation
+  link in every required row.
+- Use only the evidence tier vocabulary `Tier1Semantic`, `Tier2Structural`,
+  `Tier3SyntaxOrTextual`, and `Tier4Unknown`.
+- Use the closed supplementary marker vocabulary `unavailable`,
+  `private-only`, and `stale`.
+- Bound unsafe examples with `data-reduced-coverage-boundary`.
+- Keep public copy free of raw facts, raw SQLite content, analyzer logs, raw
+  source snippets, raw SQL, config values, secrets, local paths, raw remotes,
+  generated scan directories, private sample names, raw command output, hidden
+  validation details, and credential-like values except inside non-claim
+  boundary copy that says those materials are not public material.
 
 ## Review Commands
 
@@ -153,37 +154,74 @@ bias for compact host pages.
 
 Medium or higher findings remaining after patch disposition: none known.
 
-## Validation Plan
+## Validation Results
 
-Spec branch validation before PR:
+Implementation validation before PR:
 
-- `git diff --check`: passed on 2026-06-22.
-- `./scripts/check-private-paths.sh`: passed on 2026-06-22 with
-  `Private path guard passed.`
+- Focused test: `node --test site/scripts/reduced-coverage-playbook.test.mjs`
+  passed on 2026-06-23.
+- Site tests: `npm test` from `site/` passed on 2026-06-23.
+- Site validation: `npm run validate` from `site/` passed on 2026-06-23 and
+  validated 64 HTML files, 2177 internal references, and 63 sitemap URLs.
+- Site build: `npm run build` from `site/` passed on 2026-06-23.
+- Browser sanity: desktop 1440x1000 and mobile 390x844 checks passed on
+  2026-06-23 for `/limitations/reduced-coverage/`. The route rendered the
+  title, H1, concept label, matrix, and hero links; no document-level
+  horizontal overflow was detected; the matrix scrolls inside its wrapper on
+  mobile.
+- `git diff --check`: passed on 2026-06-23.
+- `./scripts/check-private-paths.sh`: passed on 2026-06-23 with private path
+  guard success.
+- Review-fix validation after PR-loop actionable findings: focused test,
+  `npm test`, `npm run validate`, `npm run build`, `git diff --check`, and
+  `./scripts/check-private-paths.sh` passed on 2026-06-23.
 
-Future implementation validation:
+Focused validation added:
 
-- Focused validator or focused tests for required visible text, required
-  sections, required rows, required row fields, required links, metadata,
-  route discovery or section-host metadata, forbidden claims, forbidden
-  private/raw material, word count bounds, and unsafe-wording context.
-- `npm test` from `site/`
-- `npm run validate` from `site/`
-- `npm run build` from `site/`
-- Desktop and mobile browser sanity checks when route, layout, or interaction
-  changes are made.
-- `git diff --check`
-- `./scripts/check-private-paths.sh`
+- Visible concept label and shared principle.
+- Required sections, required rows, and required row fields.
+- Evidence tier vocabulary and supplementary marker vocabulary.
+- Required row proof/validation links and allowed public-safe targets.
+- Standalone route metadata, sitemap entry, and discovery route metadata.
+- Adjacent surface distinctions and bounded anchor text.
+- Forbidden live claims, private/raw material, hard private strings, blame
+  language, unsafe wording context, bounded rejected-pattern regions, and word
+  count bounds.
+- Inbound link from `/limitations/`.
+
+## PR Loop
+
+Initial PR-loop command for PR 306 returned `actionable_findings` with
+`UNRESOLVED_REVIEW_THREADS`. Required reviewer batching first held patching
+while Codex was still unsettled. After Codex returned, the loop reported the
+required batch terminal for Codex and Qodo with `patchAuthorized: true`.
+
+Patched combined reviewer findings:
+
+- Decoded/boundary-stripped HTML is now scanned for forbidden claim and raw
+  material patterns, so encoded attributes are covered.
+- Attribute helpers now distinguish real `id`/`href` attributes from
+  `data-id`/`data-href`.
+- Tagged-element extraction now tracks nested tags of the same name for
+  boundary-region extraction.
+
+Final PR-loop result: pending after review-fix push.
 
 ## Oddities
 
 - The required scenario label `build/load failure` is intentionally retained
-  because it is the scanner state readers recognize. Future copy should keep
-  the row neutral and avoid assigning the state to a person, team, service, or
-  reviewer.
-- The playbook intentionally overlaps with limitations, validation, proof
-  paths, and claim-checklist vocabulary. It must remain the action surface for
-  reduced coverage rather than becoming those broader references.
+  because it is the scanner state readers recognize. The implemented row keeps
+  the surrounding wording neutral and avoids assigning the state to a person,
+  team, service, customer, or reviewer.
+- The validator strips the required reduced-coverage matrix and explicit
+  boundary sections before scanning for forbidden live claims. The matrix is
+  then validated structurally so required "what cannot be concluded" and stop
+  condition wording remains present without being mistaken for an affirmative
+  claim.
+- The implementation accidentally began in the original checkout because the
+  patch tool was rooted there. The exact patch was transferred to the isolated
+  worktree, and the accidental original-checkout edits were reversed. Existing
+  unrelated local artifacts in the original checkout were not touched.
 
 ## Follow-Ups
 
@@ -191,3 +229,6 @@ Future implementation validation:
   required PR loop command.
 - Patch PR-loop actionable findings only after ACK grants authority through
   returned reviewers, typed timeout, quorum, or another typed state.
+- Record the final PR-loop decision and stop reason in the final implementation
+  handoff. If a post-review bookkeeping commit is needed, rerun the PR loop on
+  the new head before reporting readiness.

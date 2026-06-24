@@ -170,6 +170,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/limitations/reduced-coverage/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/demo/",
     "changefreq": "monthly",
     "priority": "0.8"
@@ -245,6 +250,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/handoff/template/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/reviewer-quickstart/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -275,8 +285,18 @@
     "priority": "0.7"
   },
   {
+    "path": "/language/change-risk/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/review-claim-checklist/",
     "changefreq": "monthly",
     "priority": "0.7"
+  },
+  {
+    "path": "/review-claim-checklist/drill/",
+    "changefreq": "monthly",
+    "priority": "0.6"
   }
 ]

@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Reflection;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -7,6 +8,58 @@ namespace TraceMap.Tests;
 
 public sealed class LegacyDataMetadataExtractorTests
 {
+    [Fact]
+    public void Legacy_data_model_identity_preserves_unknown_coverage()
+    {
+        var properties = ApplyLegacyDataModelIdentity("Customer", "unknown");
+
+        Assert.Equal("unknown", properties["coverageLabel"]);
+    }
+
+    [Fact]
+    public void Legacy_data_model_identity_treats_null_coverage_as_unknown()
+    {
+        var properties = ApplyLegacyDataModelIdentity("Customer", null);
+
+        Assert.Equal("unknown", properties["coverageLabel"]);
+    }
+
+    [Fact]
+    public void Legacy_data_model_identity_uses_shared_safe_identifier_rules()
+    {
+        var properties = ApplyLegacyDataModelIdentity("my-entity", "full");
+
+        Assert.False(properties.ContainsKey("displayName"));
+        Assert.True(properties.ContainsKey("displayNameHash"));
+        Assert.Equal("hashed-unsafe-identifier", properties["displayNameRedaction"]);
+    }
+
+    [Fact]
+    public void Scan_hashes_hyphenated_legacy_data_names_with_shared_identifier_rules()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Hyphenated.dbml"), """
+            <Database Name="LegacyDb" Class="LegacyContext" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="dbo.Customers" Member="Customers">
+                <Type Name="my-entity">
+                  <Column Name="CustomerId" Member="CustomerId" />
+                </Type>
+              </Table>
+            </Database>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var entity = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.LegacyDataEntityDeclared
+            && fact.Properties.GetValueOrDefault("modelKind") == "entity"
+            && fact.Properties.GetValueOrDefault("descriptorRole") == "conceptual");
+        Assert.False(entity.Properties.ContainsKey("entityName"));
+        Assert.True(entity.Properties.ContainsKey("entityHash"));
+        Assert.False(entity.Properties.ContainsKey("displayName"));
+        Assert.True(entity.Properties.ContainsKey("displayNameHash"));
+    }
+
     [Fact]
     public void Scan_extracts_dbml_metadata_and_generated_designer_link()
     {
@@ -1580,7 +1633,7 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
-            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmQueryMetadata");
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape");
 
         Assert.DoesNotContain("ApiSecret", report);
         Assert.DoesNotContain("TenantSecret", report);
@@ -1620,5 +1673,34 @@ public sealed class LegacyDataMetadataExtractorTests
         await using var command = connection.CreateCommand();
         command.CommandText = "select group_concat(properties_json, char(10)) from facts;";
         return (string?)await command.ExecuteScalarAsync() ?? string.Empty;
+    }
+
+    private static SortedDictionary<string, string> ApplyLegacyDataModelIdentity(string displayName, string? coverageLabel)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var coreAssembly = typeof(ScanEngine).Assembly;
+        var descriptorType = coreAssembly.GetType("TraceMap.Core.LegacyDataModelIdentityDescriptor", throwOnError: true)!;
+        var identityType = coreAssembly.GetType("TraceMap.Core.LegacyDataModelIdentity", throwOnError: true)!;
+        var descriptor = Activator.CreateInstance(
+            descriptorType,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            args:
+            [
+                "dbml",
+                "entity",
+                "conceptual",
+                "Models/Store.dbml",
+                "Customer",
+                displayName,
+                null,
+                null,
+                null,
+                coverageLabel
+            ],
+            culture: null)!;
+        var apply = identityType.GetMethod("Apply", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!;
+        apply.Invoke(null, [properties, descriptor]);
+        return properties;
     }
 }
