@@ -19,6 +19,7 @@ import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { evidenceDecisionRecordRoute } from "./evidence-decision-record.mjs";
+import { evidenceGapRegisterRoute } from "./evidence-gap-register.mjs";
 import { evidenceHandoffTemplateRoute } from "./evidence-handoff-template.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
 import { evidencePacketExamplesRoute } from "./evidence-packet-examples.mjs";
@@ -182,6 +183,7 @@ async function createDistFixture({
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       evidenceDecisionRecordRoute,
+      evidenceGapRegisterRoute,
       evidenceHandoffTemplateRoute,
       endpointReviewRoute,
       changeReviewRoute,
@@ -234,6 +236,7 @@ async function createDistFixture({
     demoEvidenceTrailRoute,
     demoRunbookRoute,
     evidenceDecisionRecordRoute,
+    evidenceGapRegisterRoute,
     evidenceHandoffTemplateRoute,
     managerDemoScriptRoute,
     endpointReviewRoute,
@@ -296,6 +299,7 @@ async function createDistFixture({
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
   await writeDiscoveryFiles(dist);
   await writeEvidenceDecisionRecordImplementationState(root);
+  await writeEvidenceGapRegisterImplementationState(root);
 
   return root;
 }
@@ -319,6 +323,37 @@ Rejected alternatives:
 - section on \`/packets/assembly/\` because the packet assembly checklist stays separate.
 
 This decision-after-evidence record is not a claim checklist, manager packet, objection guide, proof-path tour, release gate, runtime workflow, approval workflow, or autonomous decision system.
+`,
+    "utf8"
+  );
+}
+
+async function writeEvidenceGapRegisterImplementationState(root) {
+  const statePath = join(
+    root,
+    ".kiro",
+    "specs",
+    "site-tracemap-tools-evidence-gap-register",
+    "implementation-state.md"
+  );
+  await mkdir(join(statePath, ".."), { recursive: true });
+  await writeFile(
+    statePath,
+    `Selected placement: standalone route \`/evidence/gaps/\`
+
+Rejected alternatives:
+
+- \`/coverage/gaps/\`
+
+Adjacent route inventory before site edits:
+
+- \`/limitations/reduced-coverage/\`: present; linked directly.
+
+Rejected-pattern marker: use \`data-evidence-gap-boundary="rejected-patterns"\`
+
+No adjacent route substitutions, omissions, or deferrals are needed.
+
+Discovery artifacts for validation: sitemap, routes-index, and llms.txt.
 `,
     "utf8"
   );
@@ -353,6 +388,10 @@ async function fixturePageHtml(route, path) {
     return readFile(new URL("../src/decisions/evidence-record/index.html", import.meta.url), "utf8");
   }
 
+  if (route === evidenceGapRegisterRoute) {
+    return readFile(new URL("../src/evidence/gaps/index.html", import.meta.url), "utf8");
+  }
+
   if (route === evidenceHandoffTemplateRoute) {
     return readFile(new URL("../src/handoff/template/index.html", import.meta.url), "utf8");
   }
@@ -371,6 +410,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === changeRiskLanguageGuideRoute) {
     return readFile(new URL("../src/language/change-risk/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === "/evidence/") {
+    return readFile(new URL("../src/evidence/index.html", import.meta.url), "utf8");
   }
 
   if (route === glossaryRoute) {
@@ -612,6 +655,23 @@ async function writeDiscoveryFiles(dist) {
           "No autonomous decision, approval workflow, release approval, release safety, operational safety, runtime proof, production proof, endpoint performance proof, outage cause, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, or prompt classification.",
           "No replacement of tests, code review, source review, runtime observability, telemetry, release process, service-owner review, governance, or human judgment.",
           "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public record material."
+        ]
+      },
+      {
+        path: evidenceGapRegisterRoute,
+        title: "Evidence Gap Register",
+        summary: "Concept-level register for recording missing, reduced, stale, private-only, unsupported, unknown, validation, and owner-question evidence gaps as bounded follow-up rows.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/review-claim-checklist/",
+        limitations: [
+          "The register records follow-up rows and stop conditions; it is not scanner output, reducer output, validation success, or a public proof source.",
+          "Gap rows must keep what evidence exists, what cannot be concluded, next owner, proof or validation route, safe wording, and stop condition attached."
+        ],
+        nonClaims: [
+          "No absence-of-impact proof, runtime behavior proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release readiness, operational certainty, clean-repo status, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous approval, or replacement of human review.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public gap-register material."
         ]
       },
       {
