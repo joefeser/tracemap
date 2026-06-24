@@ -34,6 +34,7 @@ import { validateProofPathFaqDist } from "./proof-path-faq.mjs";
 import { validateProofPathTourDist } from "./proof-path-tour.mjs";
 import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
 import { validateReducedCoveragePlaybookDist } from "./reduced-coverage-playbook.mjs";
+import { validateReviewMeetingAgendaDist } from "./review-meeting-agenda.mjs";
 import { validateReviewerQuickstartDist } from "./reviewer-quickstart.mjs";
 import { validateReviewPacketAssemblyDist } from "./review-packet-assembly.mjs";
 import { validateReviewClaimChecklistDist } from "./review-claim-checklist.mjs";
@@ -120,6 +121,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateProofPathTourDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReducedCoveragePlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReviewMeetingAgendaDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewerQuickstartDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewPacketAssemblyDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewClaimChecklistDist({ baseUrl: normalizedBaseUrl, dist, errors });
