@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 
 import {
   decodeHtmlEntities,
@@ -569,10 +569,7 @@ async function validateDiscoveryOutputs({ dist, errors }) {
 }
 
 async function validateImplementationState({ dist, errors }) {
-  const candidatePaths = [
-    resolve(dist, "..", "..", implementationStateArtifact),
-    resolve(dist, "..", implementationStateArtifact)
-  ];
+  const candidatePaths = implementationStateCandidatePaths(dist);
   const statePath = await firstExistingFile(candidatePaths);
   if (!statePath) {
     errors.push(withEvidence("Review meeting agenda implementation-state.md is missing.", implementationStateArtifact));
@@ -593,6 +590,18 @@ async function validateImplementationState({ dist, errors }) {
       errors.push(withEvidence(`Review meeting agenda implementation-state is missing phrase: ${phrase}`, implementationStateArtifact));
     }
   }
+}
+
+function implementationStateCandidatePaths(dist) {
+  const siteDistCandidate = resolve(dist, "..", "..", implementationStateArtifact);
+  if (basename(dirname(dist)) === "site") {
+    return [siteDistCandidate];
+  }
+
+  return [
+    siteDistCandidate,
+    resolve(dist, "..", implementationStateArtifact)
+  ];
 }
 
 async function firstExistingFile(paths) {
@@ -651,6 +660,10 @@ function findElementEnd(html, start, tagName) {
   let firstTagLength = 0;
 
   while ((match = tagPattern.exec(html))) {
+    if (isInsideHtmlComment(html, match.index ?? 0)) {
+      continue;
+    }
+
     if (firstTagLength === 0) {
       firstTagLength = match[0].length;
     }
@@ -666,6 +679,16 @@ function findElementEnd(html, start, tagName) {
   }
 
   return start + firstTagLength;
+}
+
+function isInsideHtmlComment(html, index) {
+  const lastCommentOpen = html.lastIndexOf("<!--", index);
+  if (lastCommentOpen === -1) {
+    return false;
+  }
+
+  const lastCommentClose = html.lastIndexOf("-->", index);
+  return lastCommentClose < lastCommentOpen;
 }
 
 function extractTaggedElements(html, tagName, attributeName) {
