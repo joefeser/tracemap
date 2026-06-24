@@ -42,8 +42,8 @@ Review focus:
   `/reviewer-quickstart/`?
 - Does the spec distinguish the future surface from `/review-room/`,
   `/reviewer-quickstart/`, `/packets/assembly/`, `/handoff/template/`,
-  `/owners/follow-up/`, `/decisions/evidence-record/`, and
-  `/manager-demo-script/`?
+  `/owners/follow-up/`, `/decisions/evidence-record/`, and the verified
+  manager demo or presentation route when one resolves in generated output?
 - Does the spec require sections for `Before the meeting`, `Agenda`,
   `Evidence checks`, `Gap capture`, `Owner assignment`,
   `Decision record handoff`, `Stop conditions`, and `Non-claims`?
