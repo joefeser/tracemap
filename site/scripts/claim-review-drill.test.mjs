@@ -103,6 +103,17 @@ test("validateClaimReviewDrillDist rejects raw proof links and private text", as
   assert.match(errors.join("\n"), /contains forbidden private text: \/Users\//);
 });
 
+test("validateClaimReviewDrillDist rejects raw proof references outside anchor hrefs", async (t) => {
+  const root = await createManagedDrillFixture(t, {
+    drillHtml: drillPage('<iframe src="/logs/analyzer.log"></iframe>')
+  });
+  const errors = [];
+
+  await validateClaimReviewDrillDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /links to forbidden raw proof artifact: \/logs\/analyzer\.log/);
+});
+
 test("validateClaimReviewDrillDist reports missing adjacent and inbound links", async (t) => {
   const root = await createManagedDrillFixture(t, {
     drillHtml: drillPage().replace('href="/proof-paths/faq/"', 'data-href="/proof-paths/faq/"'),
@@ -125,6 +136,28 @@ test("validateClaimReviewDrillDist rejects forbidden positioning outside boundar
   await validateClaimReviewDrillDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /forbidden AI, release, or production positioning/);
+});
+
+test("validateClaimReviewDrillDist rejects proof-claim wording with intervening words", async (t) => {
+  const root = await createManagedDrillFixture(t, {
+    drillHtml: drillPage('<p>TraceMap proves the sample endpoint stayed fast in production traffic.</p>')
+  });
+  const errors = [];
+
+  await validateClaimReviewDrillDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /affirmative runtime, release, safety, or complete-coverage proof wording/);
+});
+
+test("validateClaimReviewDrillDist allows negated proof wording with intervening words", async (t) => {
+  const root = await createManagedDrillFixture(t, {
+    drillHtml: drillPage("<p>This drill cannot fully prove runtime behavior.</p>")
+  });
+  const errors = [];
+
+  await validateClaimReviewDrillDist({ dist: join(root, "dist"), errors });
+
+  assert.doesNotMatch(errors.join("\n"), /affirmative runtime, release, safety, or complete-coverage proof wording/);
 });
 
 async function createManagedDrillFixture(t, options = {}) {
