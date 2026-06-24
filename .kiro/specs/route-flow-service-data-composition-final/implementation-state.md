@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: implementation-pr1-ready-for-pr-loop
-Readiness: product-slice-implemented-and-validated
+Status: implementation-pr1-ack-patch-ready-to-push
+Readiness: product-slice-implemented-validated-and-under-ack-review
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -17,8 +17,10 @@ stitch into service methods, continue through review-tier implementation
 candidates where rule-backed static evidence allows, and render data/query/
 dependency/value-origin rows or narrower gaps with evidence provenance.
 
-No product code, site files, generated outputs, rule catalog entries, or sample
-artifacts are changed by this branch.
+The product implementation PR for this spec currently changes route-flow
+reporting code, focused route-flow tests, and this spec state/task tracking.
+No site files, generated outputs, rule catalog entries, scanner extraction
+logic, LLM/vector/prompt logic, or sample artifacts are changed by this branch.
 
 ## Source Material Reviewed
 
@@ -397,6 +399,46 @@ node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final -
   - recorded the `NoRouteFlowEvidence` `--exit-code` follow-up below;
   - no further Kiro re-review was run because this was the second bounded
     re-review cycle and no product-code safety blocker remained.
+
+### ACK PR Loop Review
+
+Initial ACK PR loop for PR #318 waited for the required Codex/Qodo batch before
+authorizing patches. After both required reviewers returned, ACK reported
+`actionable_findings` with three unresolved review threads and
+`patchAuthorized=true`.
+
+ACK-authorized findings patched in the follow-up commit:
+
+- preserved duplicate endpoint-root ambiguity gaps on the no-terminal early
+  return path instead of dropping them when the selected terminal surface has no
+  reachable nodes;
+- removed redundant resorting inside duplicate-root gap generation by relying
+  on the already sorted route-root list;
+- added optional commit/extractor metadata to `RouteFlowGap` and threaded the
+  duplicate-root root commit, extractor name, and extractor version into emitted
+  evidence.
+
+Focused validation after the local ACK patch:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+  passed, 33 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NuGet
+  vulnerability warnings.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` NuGet warnings.
+- First post-ACK `dotnet test src/dotnet/TraceMap.sln` run had one unrelated
+  diagnostic test miss for `NuGetRestoreFailed` in generated artifact text.
+  The single failing test then passed in isolation, and a full solution rerun
+  passed, 634 tests, with the same existing NuGet warnings.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- `./scripts/demo-public.sh /tmp/tracemap-route-flow-final-demo-ack`: passed.
+- Explicit route-flow smoke over the refreshed public endpoint combined index
+  passed and produced `UnknownAnalysisGap`, `ReducedCoverage`, 3 entry evidence
+  rows, 8 static flow rows, 5 business/data logic rows, 4 dependency surfaces,
+  and 45 gaps.
+- Targeted safety scan of the refreshed route-flow smoke artifacts found no
+  raw local workspace path, raw SQL wildcard, private connection-string sample,
+  password token, raw URL, raw GitHub remote, or private feed/token matches.
 
 ### Oddities
 

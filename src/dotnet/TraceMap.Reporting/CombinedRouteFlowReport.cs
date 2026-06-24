@@ -238,7 +238,13 @@ public sealed record RouteFlowGap(
     IReadOnlyList<string> Limitations,
     string? FilePath = null,
     int? StartLine = null,
-    int? EndLine = null);
+    int? EndLine = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CommitSha = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? ExtractorName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? ExtractorVersion = null);
 
 public static class RouteFlowClassifications
 {
@@ -875,7 +881,10 @@ public static class CombinedRouteFlowReporter
             return new EndpointCompositionResult([], [], false);
         }
 
-        var rootAmbiguityGaps = EndpointRootAmbiguityGaps(requiredNodeKind, parsed.Method, parsed.PathKey, roots);
+        var scannerVersionBySourceIndexId = inventory.Sources
+            .GroupBy(source => source.SourceIndexId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(source => source.Label, StringComparer.Ordinal).First().ScannerVersion, StringComparer.Ordinal);
+        var rootAmbiguityGaps = EndpointRootAmbiguityGaps(requiredNodeKind, parsed.Method, parsed.PathKey, roots, scannerVersionBySourceIndexId);
         var nodesById = inventory.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         var outgoing = inventory.Edges
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
@@ -897,7 +906,14 @@ public static class CombinedRouteFlowReporter
         {
             return new EndpointCompositionResult(
                 [],
-                TerminalSurfaceMissingGaps(roots, outgoing, callLikeEdgesByFromNodeId, nodesById),
+                rootAmbiguityGaps
+                    .Concat(TerminalSurfaceMissingGaps(roots, outgoing, callLikeEdgesByFromNodeId, nodesById))
+                    .GroupBy(gap => gap.GapId, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
+                    .ThenBy(gap => gap.SourceLabel, StringComparer.Ordinal)
+                    .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+                    .ToArray(),
                 false);
         }
 
@@ -1110,7 +1126,8 @@ public static class CombinedRouteFlowReporter
         string? requiredNodeKind,
         string method,
         string pathKey,
-        IReadOnlyList<CombinedPathNode> roots)
+        IReadOnlyList<CombinedPathNode> roots,
+        IReadOnlyDictionary<string, string> scannerVersionBySourceIndexId)
     {
         if (roots.Count <= 1)
         {
@@ -1129,13 +1146,8 @@ public static class CombinedRouteFlowReporter
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
-        var firstRoot = roots
-            .OrderBy(root => root.SourceLabel, StringComparer.Ordinal)
-            .ThenBy(root => root.NodeKind, StringComparer.Ordinal)
-            .ThenBy(root => root.FilePath, StringComparer.Ordinal)
-            .ThenBy(root => root.StartLine ?? 0)
-            .ThenBy(root => root.NodeId, StringComparer.Ordinal)
-            .First();
+        var firstRoot = roots[0];
+        scannerVersionBySourceIndexId.TryGetValue(firstRoot.SourceIndexId, out var extractorVersion);
 
         return [
             new RouteFlowGap(
@@ -1151,7 +1163,10 @@ public static class CombinedRouteFlowReporter
                 ["Duplicate route roots make selector ownership ambiguous and do not prove runtime routing, traffic, or handler selection."],
                 CombinedReportHelpers.SafePath(firstRoot.FilePath),
                 firstRoot.StartLine,
-                firstRoot.EndLine)
+                firstRoot.EndLine,
+                SafeCommitSha(firstRoot.CommitSha),
+                ExtractorName(firstRoot.RuleId),
+                SafeSelector(extractorVersion) ?? "unknown")
         ];
     }
 
@@ -2989,12 +3004,12 @@ public static class CombinedRouteFlowReporter
             gap.RuleId,
             gap.EvidenceTier,
             gap.SourceLabel ?? "unknown",
-            SafeCommitSha(commitSha),
+            SafeCommitSha(gap.CommitSha ?? commitSha),
             gap.FilePath,
             gap.StartLine,
             gap.EndLine,
-            "route-flow",
-            Version,
+            gap.ExtractorName ?? "route-flow",
+            gap.ExtractorVersion ?? Version,
             gap.SupportingFactIds,
             [],
             [gap.RuleId],

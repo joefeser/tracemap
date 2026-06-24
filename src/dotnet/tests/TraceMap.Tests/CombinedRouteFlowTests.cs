@@ -396,6 +396,9 @@ public sealed class CombinedRouteFlowTests
         Assert.NotEmpty(ambiguityGap.SupportingFactIds);
         Assert.NotNull(ambiguityGap.AffectedRowId);
         Assert.Contains("multiple endpoint roots", ambiguityGap.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(first.CommitSha, ambiguityGap.CommitSha);
+        Assert.Equal("csharp", ambiguityGap.ExtractorName);
+        Assert.Equal(first.ScannerVersion, ambiguityGap.ExtractorVersion);
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root" && row.Evidence.SourceLabel == "server-a");
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root" && row.Evidence.SourceLabel == "server-b");
         Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(firstController, StringComparison.Ordinal));
@@ -416,6 +419,19 @@ public sealed class CombinedRouteFlowTests
         Assert.DoesNotContain(narrowed.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
         Assert.Contains(narrowed.Report.FlowRows, row => row.SourceSymbol.Contains(secondController, StringComparison.Ordinal));
         Assert.DoesNotContain(narrowed.Report.FlowRows, row => row.SourceSymbol.Contains(firstController, StringComparison.Ordinal));
+
+        var noTerminal = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-no-terminal"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "wcf-operation"));
+
+        var noTerminalAmbiguityGap = Assert.Single(noTerminal.Report.Gaps, gap => gap.GapId == ambiguityGap.GapId);
+        Assert.Equal(ambiguityGap.GapId, noTerminalAmbiguityGap.GapId);
+        Assert.Equal(first.CommitSha, noTerminalAmbiguityGap.CommitSha);
+        Assert.Equal(first.ScannerVersion, noTerminalAmbiguityGap.ExtractorVersion);
+        Assert.Contains(noTerminal.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, noTerminal.Report.Summary.Classification);
     }
 
     [Fact]
