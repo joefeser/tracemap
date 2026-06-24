@@ -77,6 +77,9 @@ already complete on `dev`.
   - [ ] Add tests for direct service calls, no direct call under full coverage,
         no direct call under reduced coverage, duplicate roots, cycles, and
         deterministic ordering.
+    - [x] Add focused cycle coverage proving source-local service-call cycles
+          emit a deterministic `TraversalBounds` gap, suppress clean
+          no-evidence claims, and downgrade the report.
 
 - [ ] 6. Harden implementation-candidate continuation. Requirements: 3, 5.
       Suggested boundary: PR 2.
