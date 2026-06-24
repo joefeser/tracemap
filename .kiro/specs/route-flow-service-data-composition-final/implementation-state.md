@@ -575,7 +575,9 @@ Takeover notes:
   local workspace path, raw SQL wildcard, private connection-string sample,
   password token, raw URL, raw GitHub remote, private feed, secret-token,
   query-token, or connection-string key matches.
-- PR creation and ACK loop are pending in this takeover pass.
+- PR #320 opened against `dev` from
+  `codex/implement-route-flow-service-data-composition-final`.
+- ACK loop is pending in this takeover pass.
 
 ### Kiro Implementation Review For PR 2
 
