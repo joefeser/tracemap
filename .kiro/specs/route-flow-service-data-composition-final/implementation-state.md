@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: implementation-pr2-cycle-gap-ack-patch-ready-to-push
+Status: implementation-pr2-cycle-gap-second-ack-patch-ready-to-push
 Readiness: focused-cycle-slice-implemented-reviewed-ack-patched-and-validated
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
@@ -606,6 +606,29 @@ Takeover notes:
   dependency surfaces, and 43 gaps.
 - Post-ACK targeted safety scan of the refreshed route-flow smoke artifacts
   found no raw local workspace path, raw SQL wildcard, private
+  connection-string sample, password token, raw URL, raw GitHub remote, private
+  feed, secret-token, query-token, or connection-string key matches.
+- After the first ACK patch was pushed, ACK reported one remaining actionable
+  Qodo top-level finding about unbounded `string.Join` allocation in the cycle
+  gap ID hash.
+- Second ACK-authorized patch replaced the joined edge-ID hash input with
+  incremental SHA-256 hashing over the deterministic edge ID sequence and edge
+  count.
+- Focused validation after the second ACK patch:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`
+  passed, 36 tests, with the same existing NuGet warnings.
+- Post-second-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with the same
+  existing NuGet warnings.
+- Post-second-ACK `dotnet test src/dotnet/TraceMap.sln`: passed, 637 tests,
+  with the same existing NuGet warnings.
+- Post-second-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-second-ACK `git diff --check`: passed.
+- Post-second-ACK explicit route-flow smoke over the refreshed public endpoint
+  combined index passed and produced `UnknownAnalysisGap`, `ReducedCoverage`, 3
+  entry evidence rows, 8 static flow rows, 5 business/data logic rows, 4
+  dependency surfaces, and 43 gaps.
+- Post-second-ACK targeted safety scan of the refreshed route-flow smoke
+  artifacts found no raw local workspace path, raw SQL wildcard, private
   connection-string sample, password token, raw URL, raw GitHub remote, private
   feed, secret-token, query-token, or connection-string key matches.
 - Push and ACK rerun are pending in this takeover pass.
