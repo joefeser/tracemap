@@ -1,7 +1,7 @@
 # Site TraceMap Tools Evidence Handoff Template Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 These tasks are checked only after the corresponding spec, review, future site

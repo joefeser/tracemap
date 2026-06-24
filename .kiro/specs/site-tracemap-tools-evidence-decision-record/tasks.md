@@ -1,7 +1,7 @@
 # Site TraceMap Tools Evidence Decision Record Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 This packet now includes the public-site implementation. Site source and

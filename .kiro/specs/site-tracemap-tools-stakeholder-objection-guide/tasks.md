@@ -1,7 +1,7 @@
 # Site TraceMap Tools Stakeholder Objection Guide Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 This is a spec-only packet. Do not implement site source, scanner code,
