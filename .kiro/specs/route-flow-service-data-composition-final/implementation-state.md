@@ -169,7 +169,7 @@ node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final -
 - Session: `993d3ffa-0eb8-4b58-8a4c-0bf983293a95`.
 - Result: no blocking findings. The review said the spec is ready to merge as
   is and suggested two optional clarifications. Both were patched:
-  - Task 4 now explicitly audits `route-flow-endpoint-composition` ownership.
+  - Task 4 now explicitly audits requested predecessor spec ownership.
   - Follow-up notes now explain that `static-dispatch-candidate-bridges` is a
     conditional reference and may not exist on the implementation base.
 
@@ -220,8 +220,8 @@ but it is intentionally deferred because this branch is spec-only.
     list;
   - fixed a split Markdown code span for
     `route-centered-endpoint-trace-completeness`;
-  - added `route-flow-endpoint-composition` to the relationship table and
-    non-reopen list so the Task 4 audit reference is intentional.
+  - changed the Task 4 audit reference to requested predecessor specs so it
+    does not introduce an extra ownership dependency.
 - Post-patch validation: `git diff --check`, `./scripts/check-private-paths.sh`,
   and the targeted safety scan passed.
 

@@ -54,9 +54,9 @@ already-shipped route-flow features.
 5. This spec SHALL NOT reopen completed work from
    `route-flow-service-data-composition-next`,
    `route-centered-endpoint-trace-completeness`,
-   `route-centered-static-flow-report`, `route-flow-endpoint-composition`, or
-   `route-flow-endpoint-stitching` except to add focused regression coverage or
-   patch a live gap found during the audit.
+   `route-centered-static-flow-report`, or `route-flow-endpoint-stitching`
+   except to add focused regression coverage or patch a live gap found during
+   the audit.
 6. If live audit shows a listed task is already complete, the implementer SHALL
    record the evidence in `implementation-state.md`, mark only the corresponding
    task checkbox, and choose the next smallest unchecked task.
