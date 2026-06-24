@@ -1,7 +1,7 @@
 # Site TraceMap Tools Reduced Coverage Playbook Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 These tasks track a spec-only packet now and a future implementation phase.

@@ -1,7 +1,7 @@
 # Site TraceMap Tools Review Meeting Agenda Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: implementation tasks are checked only after the matching site

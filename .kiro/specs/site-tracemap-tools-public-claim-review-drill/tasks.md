@@ -1,17 +1,10 @@
 # Site TraceMap Tools Public Claim Review Drill Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
-These tasks track a spec-only public-site phase. Keep future implementation
-tasks unchecked in this packet. Do not edit `site/src`, generated output,
-scanner code, reducer code, validation scripts, or existing specs in this
-phase.
-
-`Status` remains `not-started` for this spec-only packet. A future
-implementation may move it only when implementation work actually starts and
-the change is recorded in `implementation-state.md`.
+These tasks track the implemented public claim review drill route.
 
 ## Spec Review Tasks
 
@@ -19,11 +12,13 @@ the change is recorded in `implementation-state.md`.
   unavailable-tool/model error in `implementation-state.md`.
 - [x] Run Kiro spec review with `claude-sonnet-4.6` or record the exact
   unavailable-tool/model error in `implementation-state.md`.
-- [ ] If both `claude-opus-4.8` and `claude-sonnet-4.6` are unavailable,
+- [x] If both `claude-opus-4.8` and `claude-sonnet-4.6` are unavailable,
   record the exact errors, run the review with the best available model, and
   record the substitution and rationale in `implementation-state.md`. Do not
   skip the review entirely; the readiness gate requires at least one completed
   review unless the review harness itself is unavailable.
+  Note: not applicable for this packet; both requested models ran and their
+  reduced-coverage outcomes are recorded in `implementation-state.md`.
 - [x] Patch Medium or higher spec findings and rerun re-review where feasible.
   Note: targeted and final confirmation re-reviews ran on 2026-06-22 with
   reduced coverage because Kiro reported denied write-tool access; their clean
@@ -34,7 +29,7 @@ the change is recorded in `implementation-state.md`.
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
 
-## Future Implementation Tasks
+## Implementation Tasks
 
 - [x] Confirm or update this spec-local `implementation-state.md` with branch,
   route choice, scope decisions, review results, validation plan, and initial

@@ -1,7 +1,7 @@
 # Implementation State
 
-Status: implemented-pr-loop-clean
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Last verified: 2026-06-21
 Branch: codex/impl-site-review-packet-assembly
 Worktree: isolated implementation worktree; local absolute path omitted from tracked spec

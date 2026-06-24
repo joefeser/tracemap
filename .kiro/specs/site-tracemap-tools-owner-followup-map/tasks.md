@@ -1,7 +1,7 @@
 # Site TraceMap Tools Owner Follow-Up Map Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: this is a spec-only packet. Do not start implementation tasks
