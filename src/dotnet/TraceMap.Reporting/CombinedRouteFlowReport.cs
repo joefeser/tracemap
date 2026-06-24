@@ -1652,16 +1652,11 @@ public static class CombinedRouteFlowReporter
             .OrderBy(value => value, StringComparer.Ordinal)
             .Take(AmbiguitySupportingFactIdLimit)
             .ToArray();
-        var edgeIds = skippedCycleEdges
-            .Select(edge => edge.EdgeId)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(value => value, StringComparer.Ordinal)
-            .ToArray();
         var firstEdge = skippedCycleEdges
             .OrderBy(EndpointEdgeSortKey, StringComparer.Ordinal)
             .First();
         return new RouteFlowGap(
-            $"gap:endpoint-composition:TraversalBounds:{CombinedReportHelpers.Hash($"cycle:{node.NodeId}:{string.Join("|", edgeIds)}", 16)}",
+            $"gap:endpoint-composition:TraversalBounds:{HashTraversalCycleEdges(node.NodeId, skippedCycleEdges, 16)}",
             "TraversalBounds",
             "Endpoint route-flow traversal skipped cycle edges before reaching a terminal surface; returned rows are partial.",
             GapRuleId,
@@ -1679,6 +1674,28 @@ public static class CombinedRouteFlowReporter
             scannerVersionBySourceIndexId.TryGetValue(node.SourceIndexId, out var extractorVersion)
                 ? SafeSelector(extractorVersion) ?? "unknown"
                 : "unknown");
+    }
+
+    private static string HashTraversalCycleEdges(string nodeId, IReadOnlyList<CombinedPathEdge> skippedCycleEdges, int length)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var separator = new byte[] { 0 };
+        var edgeIds = skippedCycleEdges
+            .Select(edge => edge.EdgeId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        AppendHashValue(hash, separator, "cycle");
+        AppendHashValue(hash, separator, nodeId);
+        AppendHashValue(hash, separator, edgeIds.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var edgeId in edgeIds)
+        {
+            AppendHashValue(hash, separator, edgeId);
+        }
+
+        var bytes = hash.GetHashAndReset();
+        var text = Convert.ToHexString(bytes).ToLowerInvariant();
+        return text[..Math.Min(length, text.Length)];
     }
 
     private static IEnumerable<CombinedPath> FilterPathsForSelectorSide(IReadOnlyList<CombinedPath> paths, string? routeSelector, string? clientSelector)
