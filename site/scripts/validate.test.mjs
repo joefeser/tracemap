@@ -41,6 +41,7 @@ import {
 import { proofPathFaqRoute } from "./proof-path-faq.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
+import { reducedCoveragePlaybookRoute } from "./reduced-coverage-playbook.mjs";
 import { reviewerQuickstartRoute } from "./reviewer-quickstart.mjs";
 import { reviewPacketAssemblyRoute } from "./review-packet-assembly.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
@@ -201,6 +202,7 @@ async function createDistFixture({
       proofPathFaqRoute,
       proofPathTourRoute,
       proofSourceCatalogRoute,
+      reducedCoveragePlaybookRoute,
       reviewerQuickstartRoute,
       evidencePacketExamplesRoute,
       reviewPacketAssemblyRoute,
@@ -252,6 +254,7 @@ async function createDistFixture({
     proofPathFaqRoute,
     proofPathTourRoute,
     proofSourceCatalogRoute,
+    reducedCoveragePlaybookRoute,
     reviewerQuickstartRoute,
     "/manager-packet/",
     "/packets/",
@@ -411,6 +414,10 @@ async function fixturePageHtml(route, path) {
     return proofSourceCatalogPage();
   }
 
+  if (route === reducedCoveragePlaybookRoute) {
+    return readFile(new URL("../src/limitations/reduced-coverage/index.html", import.meta.url), "utf8");
+  }
+
   if (route === reviewerQuickstartRoute) {
     return reviewerQuickstartPage();
   }
@@ -456,7 +463,7 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/limitations/" ? `<a href="${reducedCoveragePlaybookRoute}">Reduced coverage playbook</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
   );
 }
 
@@ -856,6 +863,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture proof source catalog limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: reducedCoveragePlaybookRoute,
+        title: "Reduced Coverage Playbook",
+        summary: "Concept-level playbook for labeling partial static evidence, preserving coverage labels, and routing owner follow-up.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "limitations",
+        preferredProofPath: "/limitations/",
+        limitations: [
+          "The playbook is guidance for labeling reduced coverage and owner handoff, not scanner output or reducer output.",
+          "Coverage labels, evidence tiers, limitations, proof links, and stop conditions must remain attached before wording is repeated."
+        ],
+        nonClaims: [
+          "No absence-of-impact proof, clean-repo claim under reduced analysis, runtime behavior proof, production traffic proof, endpoint performance proof, outage cause proof, release approval, release safety, operational safety, or complete coverage proof.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt-based classification, autonomous approval, replacement of human review, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values."
+        ]
       },
       {
         path: reviewerQuickstartRoute,
