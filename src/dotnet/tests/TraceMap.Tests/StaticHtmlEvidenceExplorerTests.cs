@@ -106,12 +106,277 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains("not-rendered-in-current-slice", html);
         Assert.Contains(StaticHtmlEvidenceExplorer.SectionStatusRuleId, html);
         Assert.DoesNotContain("complete analysis", html, StringComparison.OrdinalIgnoreCase);
+        var overviewIndex = SectionRowIndex(html, "Evidence Overview");
+        var sourcesIndex = SectionRowIndex(html, "Sources");
+        var artifactsIndex = SectionRowIndex(html, "Artifacts");
+        var evidenceRowsIndex = SectionRowIndex(html, "Evidence Rows");
+        Assert.True(overviewIndex < sourcesIndex);
+        Assert.True(sourcesIndex < artifactsIndex);
+        Assert.True(artifactsIndex < evidenceRowsIndex);
 
         var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
         Assert.Contains("\"sectionStatuses\"", dataJson);
         Assert.Contains("\"not-rendered-in-current-slice\"", dataJson);
         Assert.DoesNotContain("C:\\sample-root", dataJson);
         Assert.DoesNotContain("git@example.com:internal/example-repo.git", dataJson);
+        using var document = JsonDocument.Parse(dataJson);
+        var sectionIds = document.RootElement.GetProperty("sectionStatuses")
+            .EnumerateArray()
+            .Select(row => row.GetProperty("sectionId").GetString() ?? string.Empty)
+            .ToArray();
+        Assert.Equal(
+            [
+                "overview",
+                "sources",
+                "artifacts",
+                "evidence-rows",
+                "surfaces",
+                "paths",
+                "reducer-results",
+                "rules",
+                "redactions"
+            ],
+            sectionIds);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_renders_richer_rule_gap_limitation_and_evidence_metadata()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("3"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.CatalogUnavailableRuleId
+            && gap.GapKind == "catalog-unavailable"
+            && gap.AffectedSection == "rules"
+            && gap.SupportIds.Contains(RuleIds.CSharpSyntaxDeclarations));
+        Assert.Contains(result.Data.Rules, rule =>
+            rule.RuleId == RuleIds.CSharpSyntaxDeclarations
+            && rule.Title == "Observed evidence rule"
+            && rule.RelatedSections.Contains("evidence-rows")
+            && rule.Limitations.Any(limitation => limitation.Contains("partial", StringComparison.OrdinalIgnoreCase)));
+
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("<th>Scope</th>", html);
+        Assert.Contains("<th>Support IDs</th>", html);
+        Assert.Contains("<th>Description</th>", html);
+        Assert.Contains("<th>Artifact ID</th>", html);
+        Assert.Contains("<th>Source ID</th>", html);
+        Assert.Contains("<th>Coverage</th>", html);
+        Assert.Contains(RuleIds.CSharpSyntaxDeclarations, html);
+        Assert.Contains("Observed evidence rule", html);
+        Assert.Contains("artifact:facts-ndjson", html);
+        Assert.Contains("source:scan-output", html);
+
+        var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
+        using var document = JsonDocument.Parse(dataJson);
+        var rules = document.RootElement.GetProperty("rules").EnumerateArray().ToArray();
+        var ruleIds = rules.Select(rule => rule.GetProperty("ruleId").GetString()).ToArray();
+        Assert.Equal(ruleIds.OrderBy(ruleId => ruleId, StringComparer.Ordinal), ruleIds);
+        Assert.Contains(rules, rule =>
+            rule.GetProperty("ruleId").GetString() == RuleIds.CSharpSyntaxDeclarations
+            && rule.GetProperty("description").GetString()!.Contains("facts.ndjson", StringComparison.Ordinal));
+
+        var evidenceRows = document.RootElement.GetProperty("evidenceRows").EnumerateArray().ToArray();
+        Assert.Contains(evidenceRows, row =>
+            row.GetProperty("artifactId").GetString() == "artifact:facts-ndjson"
+            && row.GetProperty("sourceId").GetString() == "source:scan-output"
+            && row.GetProperty("coverageLabel").GetString() == "Failed");
+        Assert.DoesNotContain("C:\\sample-root", dataJson);
+        Assert.DoesNotContain("git@example.com:internal/example-repo.git", dataJson);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_renders_compatible_rule_catalog_rows_when_provided()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("4"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), $$"""
+            rules:
+              - id: {{RuleIds.CSharpSyntaxDeclarations}}
+                name: C# syntax declarations:
+                description: Documents declarations discovered from deterministic C# syntax evidence.
+                evidenceTier: Tier2Structural
+                emits:
+                  - TypeDeclared
+                limitations:
+                  - Syntax evidence does not prove runtime execution.
+                  - Semantic binding may be unavailable under reduced coverage.
+                  - Analysis gaps use Tier4Unknown in separate evidence rows.
+                  - SELECT table extraction only claims visible top-level FROM/JOIN identifiers.
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Manifest.Inputs, artifact =>
+            artifact.ArtifactKind == "rule-catalog"
+            && artifact.Compatibility == "supported");
+        Assert.DoesNotContain(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.CatalogUnavailableRuleId
+            && gap.GapKind == "catalog-unavailable");
+        Assert.Contains(result.Data.Rules, rule =>
+            rule.RuleId == RuleIds.CSharpSyntaxDeclarations
+            && rule.Title == "C# syntax declarations:"
+            && rule.Description.Contains("deterministic C# syntax evidence", StringComparison.Ordinal)
+            && rule.EvidenceTier == "Tier2Structural"
+            && rule.Limitations.Contains("Syntax evidence does not prove runtime execution.")
+            && rule.RelatedSections.Contains("evidence-rows"));
+
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("C# syntax declarations:", html);
+        Assert.Contains("Rule catalog", html);
+        Assert.Contains("Rules include compatible rule catalog rows", html);
+        Assert.Contains("SELECT table extraction only claims visible top-level FROM/JOIN identifiers.", html);
+
+        var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
+        using var document = JsonDocument.Parse(dataJson);
+        var rulesStatus = document.RootElement.GetProperty("sectionStatuses")
+            .EnumerateArray()
+            .Single(row => row.GetProperty("sectionId").GetString() == "rules");
+        Assert.Equal("available", rulesStatus.GetProperty("status").GetString());
+        Assert.Contains(document.RootElement.GetProperty("artifacts").EnumerateArray(), artifact =>
+            artifact.GetProperty("artifactKind").GetString() == "rule-catalog");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_marks_present_unsupported_rule_catalog_without_no_catalog_gap()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("b"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), """
+            rules:
+              - name: Missing ID
+                description: This catalog row is intentionally unsupported.
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Manifest.Inputs, artifact =>
+            artifact.ArtifactKind == "rule-catalog"
+            && artifact.Compatibility == "supported");
+        Assert.Contains(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId
+            && gap.GapKind == "unsupported-schema"
+            && gap.AffectedSection == "rules");
+        Assert.DoesNotContain(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.CatalogUnavailableRuleId
+            && gap.GapKind == "catalog-unavailable");
+        Assert.Contains(result.Data.SectionStatuses, row =>
+            row.SectionId == "rules"
+            && row.Status == "partial"
+            && row.Message.Contains("provided, but no compatible rule rows were loaded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_marks_oversized_rule_catalog_without_reading_rows()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("c"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), new string('#', 1_048_577));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Manifest.Inputs, artifact =>
+            artifact.ArtifactKind == "rule-catalog"
+            && artifact.Compatibility == "unsupported");
+        Assert.Contains(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId
+            && gap.GapKind == "artifact-too-large"
+            && gap.AffectedSection == "rules");
+        Assert.DoesNotContain(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.CatalogUnavailableRuleId
+            && gap.GapKind == "catalog-unavailable");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_does_not_let_catalog_override_reserved_explorer_rules()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("d"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), $$"""
+            rules:
+              - id: {{StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId}}
+                name: Replaced unsafe rule
+                description: External catalog text must not replace reserved explorer rule stubs.
+                evidenceTier: Tier1Semantic
+                limitations:
+                  - Catalog limitations are also ignored for reserved explorer rules.
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Data.Rules, rule =>
+            rule.RuleId == StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId
+            && rule.Title == "Explorer unsafe generated value rejected"
+            && !rule.Description.Contains("External catalog text", StringComparison.Ordinal)
+            && !rule.Limitations.Contains("Catalog limitations are also ignored for reserved explorer rules."));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_hashes_unsafe_rule_catalog_text()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("e"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), $$"""
+            rules:
+              - id: {{RuleIds.CSharpSyntaxDeclarations}}
+                name: C# syntax declarations
+                description: Server=prod;Password=secret
+                evidenceTier: Tier3SyntaxOrTextual
+                limitations:
+                  - git@example.com:internal/example-repo.git
+                  - SELECT * FROM Users WHERE PasswordHash IS NOT NULL
+                  - System.NullReferenceException at Sample.Widget.Handle
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "rule-catalog.description"
+            && redaction.Category == "secret-like-value");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "rule-catalog.limitations"
+            && redaction.Category == "raw-remote-or-url");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "rule-catalog.limitations"
+            && redaction.Category == "raw-sql");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "rule-catalog.limitations"
+            && redaction.Category == "stack-trace");
+
+        var generated = string.Join("\n", Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .Select(File.ReadAllText));
+        Assert.DoesNotContain("Server=prod;Password=secret", generated);
+        Assert.DoesNotContain("git@example.com:internal/example-repo.git", generated);
+        Assert.DoesNotContain("SELECT * FROM Users", generated);
+        Assert.DoesNotContain("System.NullReferenceException", generated);
+        Assert.Contains("rule-catalog.description-hash:", generated);
+        Assert.Contains("rule-catalog.limitations-hash:", generated);
     }
 
     [Fact]
@@ -136,6 +401,16 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains(StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId, pathFailure.Message);
         Assert.Contains("data/explorer-data.json", pathFailure.Message);
         Assert.DoesNotContain(unsafeLocalPath, pathFailure.Message);
+
+        var sshRemote = "git@example.com:internal/example-repo.git";
+        var sshFailure = Assert.Throws<InvalidOperationException>(() =>
+            StaticHtmlEvidenceExplorer.ValidateGeneratedFilesForSafety(new Dictionary<string, string>
+            {
+                ["data/explorer-data.json"] = $$"""{"remote":"{{sshRemote}}"}"""
+            }));
+        Assert.Contains(StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId, sshFailure.Message);
+        Assert.Contains("data/explorer-data.json", sshFailure.Message);
+        Assert.DoesNotContain(sshRemote, sshFailure.Message);
 
         StaticHtmlEvidenceExplorer.ValidateGeneratedFilesForSafety(new Dictionary<string, string>
         {
@@ -487,5 +762,12 @@ public sealed class StaticHtmlEvidenceExplorerTests
     private static string FortyCharCommit(string character)
     {
         return string.Concat(Enumerable.Repeat(character, 40));
+    }
+
+    private static int SectionRowIndex(string html, string label)
+    {
+        var index = html.IndexOf($"<tr><th scope=\"row\">{label}</th>", StringComparison.Ordinal);
+        Assert.True(index >= 0, $"Expected section status row for {label}.");
+        return index;
     }
 }

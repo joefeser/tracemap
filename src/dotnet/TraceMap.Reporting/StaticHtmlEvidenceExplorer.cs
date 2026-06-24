@@ -207,6 +207,8 @@ public static class StaticHtmlEvidenceExplorer
     private const string HiddenLocal = "hidden-local";
     private const string SourceId = "source:scan-output";
     private const int EvidenceRowNoScriptLimit = 200;
+    private const int MaxRuleCatalogTextLength = 360;
+    private const long MaxRuleCatalogBytes = 1_048_576;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -217,6 +219,9 @@ public static class StaticHtmlEvidenceExplorer
     };
 
     private static readonly Regex CommitShaPattern = new("^[0-9a-fA-F]{7,64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex SqlPattern = new(
+        @"\b(select\s+(\*|[\w\[\]"".]+(?:\s*,\s*[\w\[\]"".]+)*)\s+from|insert\s+into|update\s+[\w\[\]"".]+\s+set|delete\s+from|merge\s+into)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static async Task<StaticHtmlEvidenceExplorerResult> GenerateAsync(
         StaticHtmlEvidenceExplorerOptions options,
@@ -449,6 +454,8 @@ public static class StaticHtmlEvidenceExplorer
 
         await AddOptionalArtifactAsync(inputDirectory, "index.sqlite", "sqlite-index", "SQLite index", "index.sqlite.v1", safetyProfile, artifacts, gaps, cancellationToken);
         await AddOptionalArtifactAsync(inputDirectory, "report.md", "markdown-report", "Markdown report", "report.md.v1", safetyProfile, artifacts, gaps, cancellationToken);
+        var catalogLoad = await AddRuleCatalogArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, redactions, cancellationToken);
+        var catalogRules = catalogLoad.Entries;
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
 
         limitations.Add(CreateLimitation(
@@ -473,6 +480,36 @@ public static class StaticHtmlEvidenceExplorer
                 []));
         }
 
+        var builtInRuleIds = BuiltInExplorerRules().Select(rule => rule.RuleId).ToHashSet(StringComparer.Ordinal);
+        var observedRuleIds = evidenceRows
+            .Select(row => row.RuleId)
+            .Where(ruleId => !builtInRuleIds.Contains(ruleId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(ruleId => ruleId, StringComparer.Ordinal)
+            .ToArray();
+        var catalogRuleIds = catalogRules
+            .Select(rule => rule.RuleId)
+            .ToHashSet(StringComparer.Ordinal);
+        var observedRulesWithoutCatalog = observedRuleIds
+            .Where(ruleId => !catalogRuleIds.Contains(ruleId))
+            .ToArray();
+        if (observedRulesWithoutCatalog.Length > 0 && (!catalogLoad.FilePresent || catalogRules.Count > 0))
+        {
+            var catalogProvided = catalogLoad.FilePresent;
+            gaps.Add(CreateGap(
+                catalogProvided ? "rule-catalog-observed-entry-unavailable" : "rule-catalog-unavailable",
+                CatalogUnavailableRuleId,
+                catalogProvided ? "catalog-entry-unavailable" : "catalog-unavailable",
+                "artifact:facts-ndjson",
+                "rules",
+                coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                catalogProvided
+                    ? "facts.ndjson references rule IDs that are not present in the compatible rule catalog artifact; those observed rules remain partial."
+                    : "facts.ndjson references rule IDs that are rendered with observed metadata only because no compatible rule catalog artifact was provided.",
+                observedRulesWithoutCatalog));
+        }
+
+        var rules = BuildExplorerRules(evidenceRows, catalogRules);
         var source = BuildSource(manifest, safetyProfile, artifacts, gaps, limitations, redactions, coverageLabels);
         var redactionRows = redactions
             .OrderBy(pair => pair.Key.RuleId, StringComparer.Ordinal)
@@ -498,7 +535,9 @@ public static class StaticHtmlEvidenceExplorer
             evidenceRows,
             gaps.OrderBy(gap => gap.RuleId, StringComparer.Ordinal).ThenBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
             limitations.OrderBy(limitation => limitation.RuleId, StringComparer.Ordinal).ThenBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
-            ExplorerRules(),
+            catalogLoad.FilePresent,
+            catalogRules.Count > 0,
+            rules,
             redactionRows);
     }
 
@@ -702,6 +741,74 @@ public static class StaticHtmlEvidenceExplorer
         }
     }
 
+    private static async Task<RuleCatalogLoadResult> AddRuleCatalogArtifactAsync(
+        string inputDirectory,
+        string safetyProfile,
+        List<ExplorerInputArtifact> artifacts,
+        List<ExplorerGap> gaps,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions,
+        CancellationToken cancellationToken)
+    {
+        var candidates = new[]
+            {
+                Path.Combine(inputDirectory, "rule-catalog.yml"),
+                Path.Combine(inputDirectory, "rules", "rule-catalog.yml")
+            }
+            .Where(File.Exists)
+            .OrderBy(path => Path.GetRelativePath(inputDirectory, path).Replace('\\', '/'), StringComparer.Ordinal)
+            .ToArray();
+        if (candidates.Length == 0)
+        {
+            return new RuleCatalogLoadResult(false, []);
+        }
+
+        var path = candidates[0];
+        var fileInfo = new FileInfo(path);
+        var tooLarge = fileInfo.Length > MaxRuleCatalogBytes;
+        artifacts.Add(new ExplorerInputArtifact(
+            "artifact:rule-catalog",
+            "rule-catalog",
+            "Rule catalog",
+            await HashFileAsync(path, cancellationToken),
+            "rule-catalog.yml.v1",
+            ClaimLevelForSafetyProfile(safetyProfile),
+            [],
+            [SourceId],
+            [],
+            [],
+            tooLarge ? "unsupported" : "supported"));
+
+        if (tooLarge)
+        {
+            gaps.Add(CreateGap(
+                "rule-catalog-too-large",
+                UnsupportedSchemaRuleId,
+                "artifact-too-large",
+                "artifact:rule-catalog",
+                "rules",
+                "PartialAnalysis",
+                $"A rule catalog artifact was provided but exceeded the explorer's {MaxRuleCatalogBytes} byte catalog reader limit, so compatible rule rows were not rendered.",
+                ["artifact:rule-catalog"]));
+            return new RuleCatalogLoadResult(true, []);
+        }
+
+        var entries = await ParseRuleCatalogAsync(path, redactions, cancellationToken);
+        if (entries.Count == 0)
+        {
+            gaps.Add(CreateGap(
+                "rule-catalog-empty-or-unsupported",
+                UnsupportedSchemaRuleId,
+                "unsupported-schema",
+                "artifact:rule-catalog",
+                "rules",
+                "PartialAnalysis",
+                "A rule catalog artifact was provided but did not contain compatible rule rows for the explorer's conservative catalog reader.",
+                ["artifact:rule-catalog"]));
+        }
+
+        return new RuleCatalogLoadResult(true, entries);
+    }
+
     private static ExplorerSource BuildSource(
         ScanManifest? manifest,
         string safetyProfile,
@@ -819,7 +926,82 @@ public static class StaticHtmlEvidenceExplorer
             .ToArray());
     }
 
-    private static IReadOnlyList<ExplorerRule> ExplorerRules()
+    private static IReadOnlyList<ExplorerRule> BuildExplorerRules(IReadOnlyList<ExplorerEvidenceRow> evidenceRows, IReadOnlyList<RuleCatalogEntry> catalogRules)
+    {
+        var builtInRules = BuiltInExplorerRules();
+        var rules = builtInRules.ToDictionary(rule => rule.RuleId, StringComparer.Ordinal);
+        var observedRuleIds = evidenceRows
+            .Select(row => row.RuleId)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var catalogRule in catalogRules)
+        {
+            if (catalogRule.RuleId.StartsWith("explorer.", StringComparison.Ordinal)
+                && rules.ContainsKey(catalogRule.RuleId))
+            {
+                continue;
+            }
+
+            rules[catalogRule.RuleId] = new ExplorerRule(
+                catalogRule.RuleId,
+                catalogRule.Title,
+                catalogRule.Description,
+                catalogRule.EvidenceTier,
+                catalogRule.Limitations.Count == 0
+                    ? [
+                        "The compatible rule catalog did not provide limitations for this rule; treat the rendered metadata as partial."
+                    ]
+                    : catalogRule.Limitations,
+                RelatedSectionsForCatalogRule(catalogRule.RuleId, observedRuleIds));
+        }
+
+        var observedRules = evidenceRows
+            .GroupBy(row => row.RuleId, StringComparer.Ordinal)
+            .Where(group => !rules.ContainsKey(group.Key))
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => new ExplorerRule(
+                group.Key,
+                "Observed evidence rule",
+                "Rule ID observed in safe evidence rows from facts.ndjson. Full rule catalog metadata was not provided in this explorer slice.",
+                ObservedEvidenceTier(group.Select(row => row.EvidenceTier)),
+                [
+                    "Observed rule rows preserve safe evidence-row rule IDs only.",
+                    "Without a compatible rule catalog artifact, title, description, and limitations are partial and must not strengthen the underlying evidence."
+                ],
+                ["evidence-rows", "rules"]))
+            .ToArray();
+        foreach (var observedRule in observedRules)
+        {
+            rules[observedRule.RuleId] = observedRule;
+        }
+
+        return rules.Values
+            .OrderBy(rule => rule.RuleId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> RelatedSectionsForCatalogRule(string ruleId, IReadOnlySet<string> observedRuleIds)
+    {
+        var sections = new SortedSet<string>(StringComparer.Ordinal)
+        {
+            "rules"
+        };
+        if (observedRuleIds.Contains(ruleId))
+        {
+            sections.Add("evidence-rows");
+        }
+
+        if (ruleId.StartsWith("explorer.render.", StringComparison.Ordinal)
+            || ruleId.StartsWith("explorer.input.", StringComparison.Ordinal)
+            || ruleId.StartsWith("explorer.validation.", StringComparison.Ordinal))
+        {
+            sections.Add("gaps");
+            sections.Add("limitations");
+        }
+
+        return sections.ToArray();
+    }
+
+    private static IReadOnlyList<ExplorerRule> BuiltInExplorerRules()
     {
         return
         [
@@ -838,11 +1020,23 @@ public static class StaticHtmlEvidenceExplorer
         ];
     }
 
+    private static string ObservedEvidenceTier(IEnumerable<string> tiers)
+    {
+        var distinct = tiers
+            .Where(tier => tier is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier2Structural or EvidenceTiers.Tier3SyntaxOrTextual or EvidenceTiers.Tier4Unknown)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(tier => tier, StringComparer.Ordinal)
+            .ToArray();
+        return distinct.Length == 1 ? distinct[0] : Tier4Unknown;
+    }
+
     private static IReadOnlyList<ExplorerSectionStatus> BuildSectionStatuses(ExplorerBuildContext context)
     {
         var factsProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "facts-ndjson");
         var sqliteProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "sqlite-index");
         var reportProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "markdown-report");
+        var ruleCatalogProvided = context.CatalogFilePresent;
+        var compatibleRuleCatalogLoaded = context.CatalogRulesLoaded;
         var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
         var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
         var evidenceRowsStatus = factsProvided
@@ -917,10 +1111,14 @@ public static class StaticHtmlEvidenceExplorer
             SectionStatus(
                 "rules",
                 "Rules",
-                "built-in-stubs",
+                ruleCatalogProvided ? SectionStatusFromGaps(context.Gaps, "rules", true) : "built-in-stubs",
                 coverageLabel,
-                "The explorer renders built-in explorer rules and observed rule IDs; compatible full rule catalog artifact loading is deferred.",
-                context.Rules.Select(rule => rule.RuleId).ToArray()),
+                compatibleRuleCatalogLoaded
+                    ? "Rules include compatible rule catalog rows plus built-in explorer rules and observed fallback rows for any uncataloged evidence rule IDs."
+                    : ruleCatalogProvided
+                    ? "A rule catalog artifact was provided, but no compatible rule rows were loaded; rules use built-in explorer rules and observed fallback rows."
+                    : "The explorer renders built-in explorer rules and observed rule IDs; no compatible full rule catalog artifact was provided.",
+                ruleCatalogProvided ? ["artifact:rule-catalog"] : context.Rules.Select(rule => rule.RuleId).ToArray()),
             SectionStatus(
                 "redactions",
                 "Safety & Redactions",
@@ -929,12 +1127,10 @@ public static class StaticHtmlEvidenceExplorer
                 context.Redactions.Count == 0
                     ? "No redaction rows were recorded for the compatible first-slice inputs."
                     : "Unsafe values were redacted, hashed, categorized, or omitted before visible UI and embedded data were written.",
-                context.Redactions.Select(redaction => redaction.RedactionId).ToArray())
+                ["data/explorer-data.json", "data/explorer-manifest.json"])
         };
 
-        return rows
-            .OrderBy(row => row.SectionId, StringComparer.Ordinal)
-            .ToArray();
+        return rows.ToArray();
     }
 
     private static ExplorerSectionStatus SectionStatus(
@@ -1169,6 +1365,166 @@ public static class StaticHtmlEvidenceExplorer
         return EvidenceTiers.Tier4Unknown;
     }
 
+    private static async Task<IReadOnlyList<RuleCatalogEntry>> ParseRuleCatalogAsync(
+        string path,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions,
+        CancellationToken cancellationToken)
+    {
+        var entries = new List<RuleCatalogEntry>();
+        string? id = null;
+        string? title = null;
+        string? description = null;
+        string? evidenceTier = null;
+        var limitations = new List<string>();
+        string? listContext = null;
+
+        void Flush()
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return;
+            }
+
+            entries.Add(new RuleCatalogEntry(
+                SafeRuleCatalogRuleId(id, redactions),
+                SafeRuleCatalogText(title, "rule-catalog.name", redactions),
+                SafeRuleCatalogText(description, "rule-catalog.description", redactions),
+                SafeRuleCatalogEvidenceTier(evidenceTier, redactions),
+                limitations
+                    .Select(value => SafeRuleCatalogText(value, "rule-catalog.limitations", redactions))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray()));
+        }
+
+        await using var stream = File.OpenRead(path);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        while (await reader.ReadLineAsync(cancellationToken) is { } rawLine)
+        {
+            var line = rawLine.TrimEnd();
+            var trimmed = line.TrimStart();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#'))
+            {
+                continue;
+            }
+
+            if (trimmed.StartsWith("- id:", StringComparison.Ordinal))
+            {
+                Flush();
+                id = UnquoteYamlScalar(trimmed["- id:".Length..]);
+                title = null;
+                description = null;
+                evidenceTier = null;
+                limitations.Clear();
+                listContext = null;
+                continue;
+            }
+
+            if (id is null)
+            {
+                continue;
+            }
+
+            var listSeparator = trimmed.IndexOf(':', StringComparison.Ordinal);
+            if (listSeparator > 0
+                && listSeparator == trimmed.Length - 1
+                && !trimmed.StartsWith("-", StringComparison.Ordinal))
+            {
+                listContext = trimmed[..listSeparator].Trim();
+                continue;
+            }
+
+            if (trimmed.StartsWith("- ", StringComparison.Ordinal))
+            {
+                if (listContext == "limitations")
+                {
+                    limitations.Add(UnquoteYamlScalar(trimmed[2..]));
+                }
+
+                continue;
+            }
+
+            var separator = trimmed.IndexOf(':', StringComparison.Ordinal);
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            var key = trimmed[..separator].Trim();
+            var value = UnquoteYamlScalar(trimmed[(separator + 1)..]);
+            listContext = null;
+            switch (key)
+            {
+                case "name":
+                    title = value;
+                    break;
+                case "description":
+                    description = value;
+                    break;
+                case "evidenceTier":
+                    evidenceTier = value;
+                    break;
+            }
+        }
+
+        Flush();
+        return entries
+            .GroupBy(entry => entry.RuleId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(entry => entry.RuleId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string SafeRuleCatalogRuleId(
+        string? value,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions)
+    {
+        if (!string.IsNullOrWhiteSpace(value) && Regex.IsMatch(value, "^[A-Za-z0-9_.:-]+$", RegexOptions.CultureInvariant))
+        {
+            return value.Trim();
+        }
+
+        var safe = SafeClosedText(value, "rule-id", redactions);
+        return safe == "unknown" ? "rule-id:unknown" : safe;
+    }
+
+    private static string SafeRuleCatalogText(
+        string? value,
+        string location,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions)
+    {
+        var safe = SafeClosedText(value, location, redactions);
+        if (safe.Length <= MaxRuleCatalogTextLength)
+        {
+            return safe;
+        }
+
+        return $"{safe[..MaxRuleCatalogTextLength]} [truncated-safe-text-hash:{Hash(safe, 12)}]";
+    }
+
+    private static string SafeRuleCatalogEvidenceTier(
+        string? value,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? Tier4Unknown
+            : SafeRuleCatalogText(value, "rule-catalog.evidenceTier", redactions);
+    }
+
+    private static string UnquoteYamlScalar(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length >= 2
+            && ((trimmed[0] == '"' && trimmed[^1] == '"')
+                || (trimmed[0] == '\'' && trimmed[^1] == '\'')))
+        {
+            return trimmed[1..^1];
+        }
+
+        return trimmed;
+    }
+
     private static void AddRedaction(
         Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions,
         string ruleId,
@@ -1235,6 +1591,7 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
         builder.AppendLine("  <meta name=\"tracemap-generated\" content=\"true\">");
         builder.AppendLine("  <title>TraceMap Local Evidence Explorer</title>");
+        // Empty data URI favicon keeps the generated explorer self-contained without embedding remote assets.
         builder.AppendLine("  <link rel=\"icon\" href=\"data:,\">");
         builder.AppendLine("  <link rel=\"stylesheet\" href=\"assets/explorer.css\">");
         builder.AppendLine("</head>");
@@ -1352,14 +1709,15 @@ public static class StaticHtmlEvidenceExplorer
     {
         builder.AppendLine("    <section id=\"gaps\" aria-labelledby=\"gaps-heading\">");
         builder.AppendLine("      <h2 id=\"gaps-heading\">Gaps</h2>");
-        builder.AppendLine("      <table><caption>Rule-backed analysis and generation gaps</caption><thead><tr><th>Gap</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Section</th><th>Coverage</th><th>Message</th></tr></thead><tbody>");
+        builder.AppendLine("      <table><caption>Rule-backed analysis and generation gaps</caption><thead><tr><th>Gap</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Scope</th><th>Section</th><th>Coverage</th><th>Support IDs</th><th>Message</th></tr></thead><tbody>");
         foreach (var gap in gaps)
         {
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(gap.GapId)}</th><td>{Html(gap.RuleId)}</td><td>{Html(gap.EvidenceTier)}</td><td>{Html(gap.GapKind)}</td><td>{Html(gap.AffectedSection)}</td><td>{Html(gap.CoverageLabel)}</td><td>{Html(gap.Message)}</td></tr>");
+            var supportIds = Html(string.Join(", ", gap.SupportIds));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(gap.GapId)}</th><td>{Html(gap.RuleId)}</td><td>{Html(gap.EvidenceTier)}</td><td>{Html(gap.GapKind)}</td><td>{Html(gap.Scope)}</td><td>{Html(gap.AffectedSection)}</td><td>{Html(gap.CoverageLabel)}</td><td>{supportIds}</td><td>{Html(gap.Message)}</td></tr>");
         }
         if (gaps.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"7\">No explorer generation gaps were emitted for the supported first-slice inputs.</td></tr>");
+            builder.AppendLine("        <tr><td colspan=\"9\">No explorer generation gaps were emitted for the supported first-slice inputs.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1369,14 +1727,15 @@ public static class StaticHtmlEvidenceExplorer
     {
         builder.AppendLine("    <section id=\"limitations\" aria-labelledby=\"limitations-heading\">");
         builder.AppendLine("      <h2 id=\"limitations-heading\">Limitations</h2>");
-        builder.AppendLine("      <table><caption>Rule-backed limitations</caption><thead><tr><th>Limitation</th><th>Rule ID</th><th>Kind</th><th>Section</th><th>Claim effect</th><th>Message</th></tr></thead><tbody>");
+        builder.AppendLine("      <table><caption>Rule-backed limitations</caption><thead><tr><th>Limitation</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Scope</th><th>Section</th><th>Claim effect</th><th>Support IDs</th><th>Message</th></tr></thead><tbody>");
         foreach (var limitation in limitations)
         {
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(limitation.LimitationId)}</th><td>{Html(limitation.RuleId)}</td><td>{Html(limitation.LimitationKind)}</td><td>{Html(limitation.AffectedSection)}</td><td>{Html(limitation.ClaimEffect)}</td><td>{Html(limitation.Message)}</td></tr>");
+            var supportIds = Html(string.Join(", ", limitation.SupportIds));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(limitation.LimitationId)}</th><td>{Html(limitation.RuleId)}</td><td>{Html(limitation.EvidenceTier)}</td><td>{Html(limitation.LimitationKind)}</td><td>{Html(limitation.Scope)}</td><td>{Html(limitation.AffectedSection)}</td><td>{Html(limitation.ClaimEffect)}</td><td>{supportIds}</td><td>{Html(limitation.Message)}</td></tr>");
         }
         if (limitations.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"6\">No additional explorer limitations beyond visible gaps and rule catalog limitations.</td></tr>");
+            builder.AppendLine("        <tr><td colspan=\"9\">No additional explorer limitations beyond visible gaps and rule catalog limitations.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1403,11 +1762,12 @@ public static class StaticHtmlEvidenceExplorer
     {
         builder.AppendLine("    <section id=\"rules\" aria-labelledby=\"rules-heading\">");
         builder.AppendLine("      <h2 id=\"rules-heading\">Rules</h2>");
-        builder.AppendLine("      <table><caption>Explorer rule catalog stubs</caption><thead><tr><th>Rule ID</th><th>Title</th><th>Tier</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table><caption>Explorer rule catalog stubs and observed evidence rule IDs</caption><thead><tr><th>Rule ID</th><th>Title</th><th>Description</th><th>Tier</th><th>Related sections</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var rule in rules.OrderBy(rule => rule.RuleId, StringComparer.Ordinal))
         {
             var limitations = Html(string.Join(" ", rule.Limitations));
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(rule.RuleId)}</th><td>{Html(rule.Title)}</td><td>{Html(rule.EvidenceTier)}</td><td>{limitations}</td></tr>");
+            var relatedSections = Html(string.Join(", ", rule.RelatedSections));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(rule.RuleId)}</th><td>{Html(rule.Title)}</td><td>{Html(rule.Description)}</td><td>{Html(rule.EvidenceTier)}</td><td>{relatedSections}</td><td>{limitations}</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1421,21 +1781,22 @@ public static class StaticHtmlEvidenceExplorer
         {
             builder.AppendLine($"      <p>The no-JavaScript baseline renders the first {EvidenceRowNoScriptLimit} deterministic rows out of {rows.Count}. The full safe row set is available in data/explorer-data.json.</p>");
         }
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th></tr></thead><tbody>");
+        builder.AppendLine("      <table data-filterable=\"true\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Artifact ID</th><th>Source ID</th><th>Coverage</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var row in rows.Take(EvidenceRowNoScriptLimit))
         {
             var span = row.FilePath is null ? "n/a" : $"{row.FilePath}:{row.StartLine}-{row.EndLine}";
             var snippetHash = Html(row.SnippetHash ?? "n/a");
             var extractorVersion = Html(row.ExtractorVersion ?? "unknown");
             var commitSha = Html(row.CommitSha ?? "partial");
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td></tr>");
+            var limitations = Html(string.Join(", ", row.Limitations));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{Html(row.ArtifactId)}</td><td>{Html(row.SourceId ?? "unknown")}</td><td>{Html(row.CoverageLabel ?? "UnknownCoverage")}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td><td>{limitations}</td></tr>");
         }
         if (rows.Count == 0)
         {
             var message = factStreamProvided
                 ? "No static evidence rows were found in the provided fact stream under the current coverage."
                 : "Evidence rows are unavailable because no compatible fact stream was provided.";
-            builder.AppendLine($"        <tr><td colspan=\"9\">{Html(message)}</td></tr>");
+            builder.AppendLine($"        <tr><td colspan=\"13\">{Html(message)}</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1739,6 +2100,16 @@ public static class StaticHtmlEvidenceExplorer
             return "raw-remote-or-url";
         }
 
+        if (Regex.IsMatch(value, @"(?i)\b[A-Za-z0-9._%+-]+@[A-Za-z0-9._-]+:[^\s""'<>]+", RegexOptions.CultureInvariant))
+        {
+            return "raw-remote-or-url";
+        }
+
+        if (SqlPattern.IsMatch(value))
+        {
+            return "raw-sql";
+        }
+
         if (Regex.IsMatch(value, @"(?i)(password|secret|api[_-]?key|token)\s*[:=]", RegexOptions.CultureInvariant))
         {
             return "secret-like-value";
@@ -1752,6 +2123,11 @@ public static class StaticHtmlEvidenceExplorer
         if (value.Contains('?', StringComparison.Ordinal) && (value.Contains('/', StringComparison.Ordinal) || value.Contains('&', StringComparison.Ordinal)))
         {
             return "query-string";
+        }
+
+        if (value.Contains("System.", StringComparison.Ordinal) && value.Contains("Exception", StringComparison.Ordinal))
+        {
+            return "stack-trace";
         }
 
         return null;
@@ -1772,6 +2148,19 @@ public static class StaticHtmlEvidenceExplorer
         IReadOnlyList<ExplorerEvidenceRow> EvidenceRows,
         IReadOnlyList<ExplorerGap> Gaps,
         IReadOnlyList<ExplorerLimitation> Limitations,
+        bool CatalogFilePresent,
+        bool CatalogRulesLoaded,
         IReadOnlyList<ExplorerRule> Rules,
         IReadOnlyList<ExplorerRedaction> Redactions);
+
+    private sealed record RuleCatalogLoadResult(
+        bool FilePresent,
+        IReadOnlyList<RuleCatalogEntry> Entries);
+
+    private sealed record RuleCatalogEntry(
+        string RuleId,
+        string Title,
+        string Description,
+        string EvidenceTier,
+        IReadOnlyList<string> Limitations);
 }

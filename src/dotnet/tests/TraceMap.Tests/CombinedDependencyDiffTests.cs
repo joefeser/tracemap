@@ -70,6 +70,39 @@ public sealed class CombinedDependencyDiffTests
     }
 
     [Fact]
+    public async Task Diff_accepts_legacy_data_surface_filter_with_data_model_subtype()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeIndex = Path.Combine(temp.Path, "before-api.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after-api.sqlite");
+        var outDir = Path.Combine(temp.Path, "diff");
+        var manifest = Manifest("api", "tracemap-milestone15");
+
+        SqliteIndexWriter.Write(beforeIndex, manifest, []);
+        SqliteIndexWriter.Write(afterIndex, manifest, [
+            LegacyDataEntityFact(manifest, "Customer|Ledger", "Models/Store.dbml", 21)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeIndex], beforeCombined, ["api"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterIndex], afterCombined, ["api"]));
+
+        var result = await CombinedDependencyDiffer.WriteAsync(new CombinedDependencyDiffOptions(
+            beforeCombined,
+            afterCombined,
+            outDir,
+            Surface: "legacy-data"));
+
+        var surface = Assert.Single(result.Report.SurfaceDiffs);
+        Assert.Equal(CombinedDependencyDiffClassifications.Added, surface.Classification);
+        Assert.Contains(surface.After!.SafeMetadata, pair => pair.Key == "surfaceKind" && pair.Value == "legacy-data");
+        Assert.Contains(surface.After!.SafeMetadata, pair => pair.Key == "surfaceSubtype" && pair.Value == "data-model");
+
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "diff-report.json"));
+        Assert.DoesNotContain("Customer|Ledger", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Diff_rejects_paths_scope_without_include_paths_and_bad_endpoint_selector()
     {
         using var temp = new TempDirectory();
@@ -638,6 +671,29 @@ public sealed class CombinedDependencyDiffTests
             {
                 ["textHash"] = "text-only-hash",
                 ["textLength"] = "42"
+            });
+    }
+
+    private static CodeFact LegacyDataEntityFact(ScanManifest manifest, string displayName, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: displayName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced",
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = displayName,
+                ["displayNameHash"] = "customer-ledger-hash",
+                ["metadataFormat"] = "dbml",
+                ["metadataHash"] = "metadata-hash",
+                ["metadataKind"] = "Dbml",
+                ["modelKind"] = "entity",
+                ["stableModelKey"] = "ldm:diff-model-key"
             });
     }
 

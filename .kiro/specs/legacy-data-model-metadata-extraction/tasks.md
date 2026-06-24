@@ -128,31 +128,64 @@
         entity/table facts.
 
 - [ ] 6. Harden generated-code and mapped-symbol linkage. Requirements: 4, 5, 8.
+  - Partial: slice 6 completes NHibernate scoped syntax fallback only; semantic
+        symbol resolution, broader generated-output families, and downstream
+        integrations remain future work.
   - [ ] Resolve generated data model symbols semantically when project load
         succeeds.
   - [ ] Add structural fallback for explicit generated output, custom tool, and
         scoped metadata file links.
+    - [x] Completed in slice 7: hardened existing DBML/EDMX/typed DataSet
+          explicit generated-designer links so they carry sourceMetadataFactId,
+          supportingFactIds, stableModelKey, symbolRole, coverageLabel, and
+          limitations without changing descriptor rule ownership.
+    - [ ] Deferred: custom tool outputs and broader project-file generated
+          output declarations beyond existing descriptor-scoped generated
+          designer hints.
   - [ ] Add scoped syntax fallback for partial classes, DataSet row/table/adapter
         types, context types, and ORM mapped classes.
+    - [x] Completed in slice 6: scoped syntax fallback for NHibernate mapped
+          classes when the mapping provides a fully qualified type name through
+          the `class` name or root/class namespace plus class name.
+    - [x] Completed in slice 7: hardened existing DBML/EDMX/typed DataSet
+          generated-designer scoped syntax fallback so duplicate short-name
+          declarations inside a candidate designer file produce ambiguity gaps
+          instead of arbitrary links.
+    - [ ] Deferred: DataSet row/table/adapter types, context types, custom tool
+          generated outputs, and compiler-semantic symbol resolution.
   - [ ] Emit gaps for missing generated code, duplicate candidates, ambiguous
         partial classes, and stale generated-code hints.
+    - [x] Completed in slice 6: duplicate C# declarations for an NHibernate
+          mapped type emit `AmbiguousGeneratedCodeLink` under
+          `legacy.data.model.generated-link.v1`; global short-name matching is
+          intentionally not used.
+    - [x] Completed in slice 7: duplicate DBML/EDMX/typed DataSet generated
+          designer type declarations emit `AmbiguousGeneratedCodeLink`, and
+          missing/ambiguous descriptor-scoped generated file gaps anchor to the
+          source descriptor span.
+    - [ ] Deferred: missing generated code, stale generated-code hints, and
+          broader ambiguous generated-output families.
   - [ ] Prove `Tier1Semantic` links do not upgrade descriptor facts above their
         descriptor tier ceiling.
+    - [x] Completed in slice 6: syntax-only mapped class links are capped at
+          `Tier3SyntaxOrTextual`, while source NHibernate descriptor facts
+          remain `Tier2Structural`.
 
 - [ ] 7. Project model-enriched `legacy-data` dependency surfaces. Requirements: 5, 6, 8.
-  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
-        being marked complete until a future slice adds end-to-end privacy tests
-        proving unsafe NHibernate formula/filter/query/config values do not
-        appear in combined reports, portfolio output, graph export, or vault
-        export.
-  - [ ] Add a safe surface projection for entity, storage object, column,
+  - [ ] Partially implemented across the reporting-integration and
+        surface-subtype slices. This task remains blocked from being marked
+        complete until future slices add end-to-end privacy tests proving unsafe
+        NHibernate formula/filter/query/config values do not appear in graph
+        export, vault export, portfolio output, or any newly supported
+        downstream workflow.
+  - [x] Add a safe surface projection for entity, storage object, column,
         relationship, adapter, routine, and mapped-type descriptors.
-  - [ ] Reuse the existing `legacy-data` surface kind with
+  - [x] Reuse the existing `legacy-data` surface kind with
         `surfaceSubtype = data-model`; do not introduce a parallel
         `legacy-data-model` kind in MVP.
-  - [ ] Preserve source labels, scan IDs, commit SHAs, rule IDs, evidence tiers,
+  - [x] Preserve source labels, scan IDs, commit SHAs, rule IDs, evidence tiers,
         file spans, supporting fact IDs, and limitations.
-  - [ ] Exclude `AnalysisGap` facts under `legacy.data.*` rule IDs from terminal
+  - [x] Exclude `AnalysisGap` facts under `legacy.data.*` rule IDs from terminal
         surface projection; render them only as gaps, caveats, or limitations.
   - [ ] Exclude already-derived projection rows from prefix-based legacy data
         fact projection to prevent duplicate surfaces.
@@ -161,22 +194,44 @@
   - [ ] Add tests for surface projection, duplicate surface gaps, selector
         behavior, gap exclusion, no-double-projection, backward compatibility
         for existing `legacy-data` surfaces, and report redaction.
+    - [x] Completed in slice 8: combined dependency report, dependency path,
+          route-flow, reverse, diff, and vault JSON/Markdown/export tests prove
+          projected descriptor rows expose or preserve
+          `surfaceSubtype = data-model` while retaining hash-only display and
+          `AnalysisGap` exclusion.
+    - [x] Completed in slice 9: graph/vault export redaction regression proves
+          NHibernate formula, filter, query, config/provider-like values,
+          remotes, local paths, and unsafe descriptor labels do not appear in
+          `graph.json` or generated vault Markdown.
+    - [ ] Deferred: persisted derived-row no-double-projection tests, broader
+          selector downgrade behavior, portfolio privacy, and broader
+          end-to-end NHibernate unsafe-value redaction outside graph/vault.
   - [ ] Include a gap-exclusion regression for a pre-existing source rule such
         as `legacy.data.dbml.v1`, not only new old ORM gaps.
+    - [x] Completed in earlier projection coverage and asserted in combined
+          report/path tests with DBML gap facts.
   - [ ] Add graph/vault projection tests proving NHibernate formula, filter, and
         query redaction survives through surface projection and export.
+    - [x] Completed in slice 9 for vault export and its machine graph:
+          descriptor limitations now flow through path inventory nodes and
+          generated vault output omits raw formula/filter/query/config-like
+          values while preserving rule IDs, tiers, spans, and limitation codes.
+    - [x] Completed in slice 10 for portfolio inventory output: projected
+          `legacy-data` model surfaces now expose `surfaceSubtype = data-model`
+          and safe descriptor metadata as closed labels, IDs, or hashes while
+          hashing unsafe limitation strings and stable model keys.
 
 - [ ] 8. Integrate with combined reports, paths, reverse, impact, release-review, and portfolio. Requirements: 5, 6, 8.
-  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
-        being marked complete until selector behavior, availability-gap
-        behavior, no-double-count behavior, and downstream privacy redaction
-        tests exist for the workflows that consume model-enriched legacy-data
-        surfaces.
-  - [ ] Teach combined reports to render safe model-enriched `legacy-data` surfaces or
+  - [ ] Partially implemented across reporting-integration and slice 8. This
+        task is blocked from being marked complete until selector behavior,
+        availability-gap behavior, no-double-count behavior, and downstream
+        privacy redaction tests exist for every workflow that consumes
+        model-enriched legacy-data surfaces.
+  - [x] Teach combined reports to render safe model-enriched `legacy-data` surfaces or
         emit explicit availability gaps.
-  - [ ] Teach path and reverse queries to select model surfaces only from stable
+  - [x] Teach path and reverse queries to select model surfaces only from stable
         identities.
-  - [ ] Update hardcoded surface allow-lists and user-facing "must be one of"
+  - [x] Update hardcoded surface allow-lists and user-facing "must be one of"
         messages in reverse and diff command validators if `legacy-data` is
         selectable there.
   - [ ] Teach diff, impact, release-review, and portfolio readers to consume or
@@ -194,9 +249,14 @@
         safe defaults or availability gaps for unrecognized future model
         metadata, not exceptions.
   - [ ] Keep "impact" wording static and evidence-backed.
+  - [x] Completed in slice 10: portfolio before/after surface comparison uses
+        safe legacy-data model identity fields so limitation changes remain
+        `ChangedSurfaceEvidence` instead of noisy add/remove rows, and reduced
+        legacy-data coverage stays review-tier.
 
 - [ ] 9. Integrate with evidence graph and vault export. Requirements: 6, 7, 8.
-  - [ ] Not started in the NHibernate extraction MVP. This task is blocked from
+  - [ ] Partially implemented across the surface-subtype and graph/vault
+        redaction slices. This task remains blocked from
         being marked complete until graph/vault export tests prove raw SQL-like
         formula/filter/query text, connection strings, URLs, remotes, local
         paths, and private labels remain absent.
@@ -208,6 +268,11 @@
   - [ ] Add tests for redaction and graph/vault schema compatibility.
   - [ ] Add vault export tests proving connection strings, raw SQL-like formula
         or filter text, URLs, remotes, local paths, and private labels are absent.
+    - [x] Completed in slice 9: added a vault export regression over a combined
+          index with NHibernate descriptor evidence carrying unsafe raw
+          formula/filter/query/config/provider-like properties. The test proves
+          those values are absent from `graph.json` and generated Markdown while
+          safe limitation labels survive.
 
 - [ ] 10. Update docs and validation guidance. Requirements: 8.
   - [x] Update `docs/ACCEPTANCE.md` for new data model identity, ORM descriptor,

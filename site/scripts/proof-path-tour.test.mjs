@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { createDiscoveryOutputs } from "./discovery.mjs";
+import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
 import {
   proofPathTourRequiredLinks,
   proofPathTourRoute,
@@ -240,7 +241,7 @@ async function createProofPathTourFixture({
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-proof-path-tour-test-"));
   const dist = join(root, "dist");
-  const routes = new Set([proofPathTourRoute, ...proofPathTourRequiredLinks]);
+  const routes = new Set([proofPathTourRoute, ...proofPathTourRequiredLinks, claimReviewDrillRoute]);
 
   for (const route of routes) {
     const path = route === "/" ? dist : join(dist, route.replace(/^\/|\/$/g, ""));

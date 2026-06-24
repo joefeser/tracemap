@@ -10,6 +10,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/evidence/gaps/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/glossary/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -50,6 +55,21 @@
     "priority": "0.7"
   },
   {
+    "path": "/questions/objections/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/decisions/evidence-record/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/owners/follow-up/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/adoption/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -86,6 +106,11 @@
   },
   {
     "path": "/team-evidence-handoff/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/test-planning/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
@@ -146,6 +171,11 @@
   },
   {
     "path": "/limitations/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/limitations/reduced-coverage/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
@@ -215,7 +245,17 @@
     "priority": "0.8"
   },
   {
+    "path": "/packets/examples/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/packets/assembly/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/handoff/template/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
@@ -245,8 +285,28 @@
     "priority": "0.7"
   },
   {
+    "path": "/review-room/agenda/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/release-review-boundary/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/language/change-risk/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/review-claim-checklist/",
     "changefreq": "monthly",
     "priority": "0.7"
+  },
+  {
+    "path": "/review-claim-checklist/drill/",
+    "changefreq": "monthly",
+    "priority": "0.6"
   }
 ]

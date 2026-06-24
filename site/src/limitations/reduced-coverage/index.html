@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap playbook for labeling reduced coverage, preserving evidence boundaries, and handing off the next public-safe proof question."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Reduced Coverage Playbook | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/limitations/reduced-coverage/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Reduced Coverage Playbook">
+    <meta
+      property="og:description"
+      content="How to label partial static evidence, keep coverage limits visible, and route owner follow-up without upgrading the claim."
+    >
+    <meta property="og:url" content="https://tracemap.tools/limitations/reduced-coverage/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Reduced coverage playbook</p>
+        <h1>When evidence is partial, keep the label attached.</h1>
+        <p class="hero-subhead">
+          Reduced coverage is an evidence state and a handoff trigger. It tells
+          readers what TraceMap could still inspect, which proof path is
+          incomplete, which owner role should collect the next evidence, and
+          where the public statement must stop.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This playbook teaches labeling and owner handoff; it is not a scanner
+          result, reducer result, runtime proof, release gate, or approval flow.
+        </p>
+        <nav class="hero-actions" aria-label="Reduced coverage playbook links">
+          <a class="button primary" href="#reduced-coverage-matrix">Open matrix</a>
+          <a class="button secondary" href="/limitations/">Limitations and non-claims</a>
+          <a class="button secondary" href="/validation/">Validation checks</a>
+          <a class="button secondary" href="/review-claim-checklist/">Review claim checklist</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="what-reduced-coverage-means">
+        <div>
+          <p class="section-kicker">Meaning</p>
+          <h2>Reduced coverage names a boundary, not a conclusion.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Partial evidence can still help review</strong><span>Rule IDs, evidence tiers, coverage labels, limitations, commit context, extractor-version context, and public-safe proof links can route follow-up when they stay visible.</span></div>
+          <div><strong>Fallback evidence stays labeled</strong><span>Syntax fallback, structure matches, config scans, project files, and public-safe gap summaries are review input until semantic or owner evidence is collected.</span></div>
+          <div><strong>Missing proof is preserved</strong><span>Unknown, unavailable, private-only, stale, future-only, and analysis-gap labels must not be normalized into stronger wording.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="how-to-label-it">
+        <div>
+          <p class="section-kicker">Labeling</p>
+          <h2>Carry the reduced label beside the sentence.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>coverage label</code><span>Use the visible reduced, partial, syntax fallback, unknown, unavailable, private-only, stale, future-only, or analysis-gap label from the cited surface.</span></div>
+          <div><code>evidence tier</code><span>Use only <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>; private-only or unavailable source evidence uses <code>Tier4Unknown</code> with that marker.</span></div>
+          <div><code>proof context</code><span>Attach rule ID or rule family, public-safe source context, extractor-version context, limitation, what cannot be concluded, next owner role, safe wording, and stop condition.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="reduced-coverage-matrix" aria-labelledby="reduced-coverage-matrix-heading">
+        <div class="section-header">
+          <p class="section-kicker">Matrix</p>
+          <h2 id="reduced-coverage-matrix-heading">Use the row that matches the evidence gap.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-reduced-coverage-matrix>
+            <caption>
+              Required reduced-coverage rows. Each row is synthetic guidance
+              for public wording and points only to public-safe proof or
+              validation surfaces.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Scenario</th>
+                <th scope="col">Coverage label</th>
+                <th scope="col">Evidence tier</th>
+                <th scope="col">Evidence available</th>
+                <th scope="col">What cannot be concluded</th>
+                <th scope="col">Next owner</th>
+                <th scope="col">Safe wording</th>
+                <th scope="col">Stop condition</th>
+                <th scope="col">Proof/validation link</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="row-build-load-failure" data-reduced-coverage-row="build/load failure">
+                <th scope="row" data-field="scenario">build/load failure</th>
+                <td data-field="coverage label">reduced build/load coverage</td>
+                <td data-field="evidence tier"><code>Tier3SyntaxOrTextual</code> or <code>Tier4Unknown</code> <code>unavailable</code></td>
+                <td data-field="evidence available">Syntax fallback, config/project scan, public-safe gap summary, or analyzer-summary category when present.</td>
+                <td data-field="what cannot be concluded">Clean-repo claim, complete analysis, compiler-resolved conclusion, or absence-of-impact proof.</td>
+                <td data-field="next owner">Build/tooling owner or scanner owner.</td>
+                <td data-field="safe wording">Coverage is reduced because build/load evidence is unavailable; use syntax and gap evidence as review input only.</td>
+                <td data-field="stop condition">Stop before clean-repo, complete-coverage, release-safety, or current approval wording.</td>
+                <td data-field="proof/validation link"><a href="/validation/">Validation checks</a></td>
+              </tr>
+              <tr id="row-syntax-fallback" data-reduced-coverage-row="syntax fallback">
+                <th scope="row" data-field="scenario">syntax fallback</th>
+                <td data-field="coverage label">syntax fallback coverage</td>
+                <td data-field="evidence tier"><code>Tier3SyntaxOrTextual</code></td>
+                <td data-field="evidence available">Syntax-only references, textual matches, line spans, rule family, and gap label.</td>
+                <td data-field="what cannot be concluded">Compiler-resolved symbol conclusion, call graph certainty, or complete dependency path.</td>
+                <td data-field="next owner">Scanner owner or reviewer.</td>
+                <td data-field="safe wording">Syntax fallback found a static reference that needs semantic or owner review.</td>
+                <td data-field="stop condition">Stop before semantic, runtime, or impact conclusions.</td>
+                <td data-field="proof/validation link"><a href="/proof-paths/faq/">Proof path FAQ</a></td>
+              </tr>
+              <tr id="row-missing-semantic-evidence" data-reduced-coverage-row="missing semantic evidence">
+                <th scope="row" data-field="scenario">missing semantic evidence</th>
+                <td data-field="coverage label">missing semantic coverage</td>
+                <td data-field="evidence tier"><code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code> <code>unavailable</code></td>
+                <td data-field="evidence available">Structural or syntax evidence, unresolved symbol note, and limitation.</td>
+                <td data-field="what cannot be concluded"><code>Tier1Semantic</code> conclusion, compiler-resolved ownership, or complete path.</td>
+                <td data-field="next owner">Scanner owner or build/tooling owner.</td>
+                <td data-field="safe wording">Semantic evidence is missing, so the claim stays reduced and needs owner follow-up.</td>
+                <td data-field="stop condition">Stop before upgrading to <code>Tier1Semantic</code> or removing the limitation.</td>
+                <td data-field="proof/validation link"><a href="/limitations/">Limitations and non-claims</a></td>
+              </tr>
+              <tr id="row-unsupported-framework-surface" data-reduced-coverage-row="unsupported framework surface">
+                <th scope="row" data-field="scenario">unsupported framework surface</th>
+                <td data-field="coverage label">framework surface coverage gap</td>
+                <td data-field="evidence tier"><code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code></td>
+                <td data-field="evidence available">Known framework limitation, structural clue, or public-safe support note.</td>
+                <td data-field="what cannot be concluded">Complete framework coverage, route completeness, or runtime behavior.</td>
+                <td data-field="next owner">Framework owner or scanner owner.</td>
+                <td data-field="safe wording">This framework surface is outside current public proof, so the row is a coverage gap.</td>
+                <td data-field="stop condition">Stop before complete-framework or complete-route wording.</td>
+                <td data-field="proof/validation link"><a href="/limitations/">Limitations and non-claims</a></td>
+              </tr>
+              <tr id="row-missing-generated-artifact" data-reduced-coverage-row="missing generated artifact">
+                <th scope="row" data-field="scenario">missing generated artifact</th>
+                <td data-field="coverage label">public proof artifact unavailable</td>
+                <td data-field="evidence tier"><code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code> <code>unavailable</code></td>
+                <td data-field="evidence available">Source-side evidence summary, scan-manifest family, or recorded artifact gap.</td>
+                <td data-field="what cannot be concluded">Public proof-link claim, reproducible public demo evidence, or complete artifact set.</td>
+                <td data-field="next owner">Artifact publisher or site owner.</td>
+                <td data-field="safe wording">The public-safe artifact is unavailable, so the claim needs a replacement proof link or must stay internal.</td>
+                <td data-field="stop condition">Stop before linking, publishing, or repeating the claim publicly.</td>
+                <td data-field="proof/validation link"><a href="/proof-paths/faq/">Proof path FAQ</a></td>
+              </tr>
+              <tr id="row-private-only-support" data-reduced-coverage-row="private-only support">
+                <th scope="row" data-field="scenario">private-only support</th>
+                <td data-field="coverage label">private-only coverage</td>
+                <td data-field="evidence tier"><code>Tier4Unknown</code> <code>private-only</code></td>
+                <td data-field="evidence available">Internal evidence category, public-safe limitation, and owner note.</td>
+                <td data-field="what cannot be concluded">Public proof, customer-specific conclusion, or public demo support.</td>
+                <td data-field="next owner">Site owner or reviewer.</td>
+                <td data-field="safe wording">Evidence may support internal follow-up, but public wording needs a public-safe summary first.</td>
+                <td data-field="stop condition">Stop before publishing private/raw details or public proof wording.</td>
+                <td data-field="proof/validation link"><a href="/review-claim-checklist/">Review claim checklist</a></td>
+              </tr>
+              <tr id="row-stale-commit-context" data-reduced-coverage-row="stale commit context">
+                <th scope="row" data-field="scenario">stale commit context</th>
+                <td data-field="coverage label">stale source context</td>
+                <td data-field="evidence tier"><code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code> <code>stale</code></td>
+                <td data-field="evidence available">Previous commit summary, branch label, and public-safe age note.</td>
+                <td data-field="what cannot be concluded">Current-head behavior, current release status, or current proof path.</td>
+                <td data-field="next owner">Reviewer or source owner.</td>
+                <td data-field="safe wording">This evidence belongs to an older source context and needs current-context confirmation.</td>
+                <td data-field="stop condition">Stop before current-head, current-release, or current-proof wording.</td>
+                <td data-field="proof/validation link"><a href="/validation/">Validation checks</a></td>
+              </tr>
+              <tr id="row-unknown-evidence-tier" data-reduced-coverage-row="unknown evidence tier">
+                <th scope="row" data-field="scenario">unknown evidence tier</th>
+                <td data-field="coverage label">unknown tier</td>
+                <td data-field="evidence tier"><code>Tier4Unknown</code></td>
+                <td data-field="evidence available">Gap label, rule family, available artifact summary, and limitation.</td>
+                <td data-field="what cannot be concluded">Stronger evidence tier, semantic certainty, or complete coverage.</td>
+                <td data-field="next owner">Reviewer or scanner owner.</td>
+                <td data-field="safe wording">The tier is unknown, so the statement must stay downgraded until evidence is classified.</td>
+                <td data-field="stop condition">Stop before tier upgrade or conclusion by confidence, repetition, or reviewer seniority.</td>
+                <td data-field="proof/validation link"><a href="/limitations/">Limitations and non-claims</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="safe-conclusions">
+        <div>
+          <p class="section-kicker">Safe conclusions</p>
+          <h2>Say what the reduced evidence can support.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Review input</strong><span>Coverage is reduced, so this is review input and the next proof question stays open.</span></div>
+          <div><strong>Static reference</strong><span>Syntax fallback found a static reference that needs semantic or owner review.</span></div>
+          <div><strong>Missing artifact</strong><span>The proof path is incomplete because public-safe artifact output is unavailable.</span></div>
+          <div><strong>Private-only evidence</strong><span>Private-only evidence can support internal follow-up, but public wording waits for a public-safe summary.</span></div>
+          <div><strong>Stale context</strong><span>The source context is stale, so current-head wording must wait.</span></div>
+          <div><strong>Unknown tier</strong><span>The tier is unknown, so the claim should be downgraded or held.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="unsafe-conclusions" data-reduced-coverage-boundary="rejected-patterns">
+        <div>
+          <p class="section-kicker">Unsafe conclusions</p>
+          <h2>Reject patterns that upgrade a gap into a claim.</h2>
+        </div>
+        <ul>
+          <li><strong>Rejected pattern:</strong> reduced coverage proves there is no impact.</li>
+          <li><strong>Rejected pattern:</strong> a failed or reduced analysis is a clean repo.</li>
+          <li><strong>Rejected pattern:</strong> syntax fallback proves runtime behavior or compiler-resolved impact.</li>
+          <li><strong>Rejected pattern:</strong> the release is approved, certified, guaranteed, or safe because no public proof was found.</li>
+          <li><strong>Rejected pattern:</strong> operational safety, complete coverage, AI impact analysis, LLM analysis, prompt-based classification, embedding search, vector database analysis, autonomous approval, or replacement of human review is provided here.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="next-evidence-to-collect">
+        <div>
+          <p class="section-kicker">Next evidence</p>
+          <h2>Collect the public-safe proof target named by the row.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>build/load failure</code><span>Collect a build/load diagnostics summary or keep syntax fallback and analysis-gap labels attached.</span></div>
+          <div><code>syntax fallback</code><span>Collect semantic-load results, owner review notes, or a public-safe syntax fallback report.</span></div>
+          <div><code>missing semantic evidence</code><span>Collect unresolved-symbol context, project-load status, or a scanner limitation update.</span></div>
+          <div><code>unsupported framework surface</code><span>Collect a framework support note or rule catalog limitation before repeating framework wording.</span></div>
+          <div><code>missing generated artifact</code><span>Publish a generated public-safe report or choose a replacement proof path.</span></div>
+          <div><code>private-only support</code><span>Create a public-safe summary or keep the claim internal.</span></div>
+          <div><code>stale commit context</code><span>Collect current source context before using current-head or release wording.</span></div>
+          <div><code>unknown evidence tier</code><span>Reconcile the evidence tier or hold the conclusion at <code>Tier4Unknown</code>.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="owner-handoff" data-reduced-coverage-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Owner handoff</p>
+          <h2>Transfer the evidence question, not approval.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Current label</strong><span>State the row label, coverage label, and evidence tier exactly as the public-safe surface shows them.</span></div>
+          <div><strong>Evidence available</strong><span>Name the public-safe evidence category and the missing evidence without quoting raw artifacts or private detail.</span></div>
+          <div><strong>Requested next action</strong><span>Ask the scanner owner, reviewer, build/tooling owner, framework owner, artifact publisher, site owner, or source owner to collect the next public-safe proof target.</span></div>
+          <div><strong>Stop condition</strong><span>Keep the claim downgraded, held, or internal until the proof target exists and the non-claim still travels with it.</span></div>
+          <div><strong>Non-claim</strong><span>The handoff does not approve a release, prove runtime behavior, assign blame, or replace human review.</span></div>
+        </div>
+      </section>
+
+      <section class="section callout-section">
+        <h2>Use the evidence gap register when the reduced label needs a row.</h2>
+        <p>
+          The <a href="/evidence/gaps/">evidence gap register</a> records the
+          follow-up fields for reduced coverage, missing proof paths,
+          private-only support, stale source context, unsupported framework
+          surfaces, validation gaps, and owner questions without upgrading the
+          public claim.
+        </p>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-reduced-coverage-boundary="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Stop before the wording outruns the evidence.</h2>
+        </div>
+        <ul>
+          <li>Stop when the proof link is missing, unavailable, private-only, stale, or not public-safe.</li>
+          <li>Stop when the statement drops the coverage label, evidence tier, rule ID or rule family, limitation, or owner follow-up.</li>
+          <li>Stop when a reader asks for runtime behavior, production traffic, endpoint performance, outage cause, release approval, operational safety, or complete coverage.</li>
+          <li>Stop when the next step requires source owner review, build/tooling repair, framework support work, artifact publication, or current source context.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-reduced-coverage-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>This playbook does not publish raw proof or close the gap.</h2>
+        </div>
+        <ul>
+          <li>No absence-of-impact proof, clean-repo claim under failed or reduced analysis, runtime proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release safety, operational safety, or complete coverage proof.</li>
+          <li>No AI impact analysis, LLM analysis, prompt-based classification, embedding search, vector database analysis, autonomous approval, or replacement of tests, source review, runtime observability, service owner review, or human review.</li>
+          <li>No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public material.</li>
+          <li>Artifact families such as fact streams, SQLite indexes, analyzer logs, scan manifests, reports, rule catalog entries, commit metadata, coverage labels, and limitations need public-safe summaries before public linking.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="adjacent-surfaces">
+        <div>
+          <p class="section-kicker">Adjacent surfaces</p>
+          <h2>This page answers what to do after coverage is reduced.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/limitations/">Limitations and non-claims</a></strong><span>Canonical boundary definitions; this playbook is the reduced-coverage action surface.</span></div>
+          <div><strong><a href="/validation/">Validation checks</a></strong><span>Check-result orientation; this playbook handles decisions after reduced coverage appears.</span></div>
+          <div><strong><a href="/static-vs-runtime/">Static versus runtime boundaries</a></strong><span>Runtime question routing; this playbook stays with static evidence labels and handoff.</span></div>
+          <div><strong><a href="/questions/objections/">Stakeholder objection guide</a></strong><span>Broad objection answers; this playbook gives row-level wording, owner, and stop conditions.</span></div>
+          <div><strong><a href="/proof-paths/faq/">Proof path FAQ</a></strong><span>Proof-path explanation; this playbook supplies the reduced-coverage scenario matrix.</span></div>
+          <div><strong><a href="/review-claim-checklist/">Review claim checklist</a></strong><span>Claim repetition ritual; this playbook feeds checklist decisions when coverage is reduced.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Related boundaries:
+        <a href="/limitations/">limitations and non-claims</a>,
+        <a href="/validation/">validation checks</a>,
+        <a href="/proof-paths/faq/">proof path FAQ</a>
+        and
+        <a href="/review-claim-checklist/">review claim checklist</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

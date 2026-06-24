@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level TraceMap practice drill for checking whether a public claim has a proof path, evidence tier, coverage label, limitation, and non-claim before it is repeated."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Claim Review Drill | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/review-claim-checklist/drill/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Claim Review Drill">
+    <meta
+      property="og:description"
+      content="Practice keeping public TraceMap claims attached to proof paths, rule families, evidence tiers, coverage labels, limitations, and non-claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/review-claim-checklist/drill/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Claim review drill</p>
+        <h1>Practice the proof check before repeating a claim.</h1>
+        <p class="hero-subhead">
+          This short drill gives readers authored public-safe sample claims,
+          proof fields to inspect, and an answer key for bounded reuse.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This is a learning exercise, not an automated grader, approval
+          workflow, release gate, runtime proof, or replacement for human
+          review.
+        </p>
+        <nav class="hero-actions" aria-label="Claim review drill links">
+          <a class="button primary" href="#sample-public-safe-claims">Start the drill</a>
+          <a class="button secondary" href="/review-claim-checklist/">Canonical checklist</a>
+          <a class="button secondary" href="/proof-paths/tour/">Proof-path tour</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="drill-setup">
+        <div>
+          <p class="section-kicker">Drill setup</p>
+          <h2>Read the claim, then inspect the evidence fields.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>What to practice</strong><span>Decide whether the sentence can be repeated, downgraded, held for owner follow-up, kept internal, or not repeated.</span></div>
+          <div><strong>What stays outside the drill</strong><span>The answer key does not prove software behavior, approve releases, score claims, or certify coverage.</span></div>
+          <div><strong>What counts as support</strong><span>Use only public-safe proof paths, rule IDs or rule families, evidence tiers, coverage labels, limitations, non-claims, source context, and public/private status.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="sample-public-safe-claims" aria-labelledby="sample-public-safe-claims-heading">
+        <div class="section-header">
+          <p class="section-kicker">Sample public-safe claims</p>
+          <h2 id="sample-public-safe-claims-heading">Seven practice rows, one bounded outcome each.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <caption>
+              Authored drill rows. They are not internal review records,
+              customer examples, raw artifacts, or hidden validation details.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Scenario</th>
+                <th scope="col">Claim text</th>
+                <th scope="col">Expected claim level</th>
+                <th scope="col">Proof path needed</th>
+                <th scope="col">Evidence fields to check</th>
+                <th scope="col">Limitation or non-claim</th>
+                <th scope="col">Correct outcome</th>
+                <th scope="col">Next action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-drill-row data-drill-scenario="supported demo-level claim" data-expected-claim-level="demo" data-correct-outcome="repeat with proof">
+                <td data-row-field="scenario">supported demo-level claim</td>
+                <td data-row-field="claim text"><strong>A public demo route shows partial static evidence labels beside each sample claim.</strong></td>
+                <td data-row-field="expected claim level"><code>demo</code></td>
+                <td data-row-field="proof path needed"><a href="/demo/evidence-trail/">Public demo evidence trail</a> or a public-safe summary that keeps the limitation attached.</td>
+                <td data-row-field="evidence fields to check">
+                  <span data-evidence-field="proof path">Proof path: public demo evidence trail.</span>
+                  <span data-evidence-field="rule ID or rule family">Rule family: public-demo-summary.</span>
+                  <span data-evidence-field="evidence tier">Evidence tier: <code>Tier2Structural</code>.</span>
+                  <span data-evidence-field="coverage label">Coverage label: <code>PartialAnalysis</code>.</span>
+                  <span data-evidence-field="limitation">Limitation: demo sample scope.</span>
+                  <span data-evidence-field="non-claim">Non-claim: not product-wide coverage.</span>
+                  <span data-evidence-field="source context">Source context: checked-in public demo.</span>
+                  <span data-evidence-field="public/private status">Public/private status: public-safe.</span>
+                </td>
+                <td data-row-field="limitation or non-claim">Repeat only with the demo proof path, partial label, and non-claim attached.</td>
+                <td data-row-field="correct outcome"><code>repeat with proof</code></td>
+                <td data-row-field="next action">Quote the narrower sentence and keep the proof link next to it.</td>
+              </tr>
+              <tr data-drill-row data-drill-scenario="concept-only claim" data-expected-claim-level="concept" data-correct-outcome="downgrade before repeating">
+                <td data-row-field="scenario">concept-only claim</td>
+                <td data-row-field="claim text"><strong>The checklist ships a claim-approval workflow for public summaries.</strong></td>
+                <td data-row-field="expected claim level"><code>concept</code></td>
+                <td data-row-field="proof path needed"><a href="/review-claim-checklist/">Review claim checklist</a> as concept guidance, not product behavior.</td>
+                <td data-row-field="evidence fields to check">
+                  <span data-evidence-field="proof path">Proof path: checklist page.</span>
+                  <span data-evidence-field="rule ID or rule family">Rule family: claim-review-guidance.</span>
+                  <span data-evidence-field="evidence tier">Evidence tier: <code>Tier3SyntaxOrTextual</code>.</span>
+                  <span data-evidence-field="coverage label">Coverage label: <code>concept</code>.</span>
+                  <span data-evidence-field="limitation">Limitation: authored guidance.</span>
+                  <span data-evidence-field="non-claim">Non-claim: not shipped approval behavior.</span>
+                  <span data-evidence-field="source context">Source context: public concept page.</span>
+                  <span data-evidence-field="public/private status">Public/private status: public-safe.</span>
+                </td>
+                <td data-row-field="limitation or non-claim">The draft wording overstates concept guidance as shipped behavior.</td>
+                <td data-row-field="correct outcome"><code>downgrade before repeating</code></td>
+                <td data-row-field="next action">Rewrite as concept-level practice guidance before reuse.</td>
+              </tr>
+              <tr data-drill-row data-drill-scenario="reduced-coverage claim" data-expected-claim-level="demo" data-correct-outcome="owner follow-up needed">
+                <td data-row-field="scenario">reduced-coverage claim</td>
+                <td data-row-field="claim text"><strong>The demo evidence covers every sample route without analysis gaps.</strong></td>
+                <td data-row-field="expected claim level"><code>demo</code></td>
+                <td data-row-field="proof path needed"><a href="/limitations/reduced-coverage/">Reduced coverage playbook</a> plus the cited demo summary.</td>
+                <td data-row-field="evidence fields to check">
+                  <span data-evidence-field="proof path">Proof path: reduced coverage page.</span>
+                  <span data-evidence-field="rule ID or rule family">Rule family: coverage-label-boundary.</span>
+                  <span data-evidence-field="evidence tier">Evidence tier: <code>Tier4Unknown</code>.</span>
+                  <span data-evidence-field="coverage label">Coverage label: <code>ReducedCoverage</code>.</span>
+                  <span data-evidence-field="limitation">Limitation: gaps stay visible.</span>
+                  <span data-evidence-field="non-claim">Non-claim: no absence-of-gap conclusion.</span>
+                  <span data-evidence-field="source context">Source context: public limitation guidance.</span>
+                  <span data-evidence-field="public/private status">Public/private status: public-safe.</span>
+                </td>
+                <td data-row-field="limitation or non-claim">Reduced coverage cannot support the stronger coverage sentence.</td>
+                <td data-row-field="correct outcome"><code>owner follow-up needed</code></td>
+                <td data-row-field="next action">Ask for a narrower public-safe summary or keep the reduced label attached.</td>
+              </tr>
+              <tr data-drill-row data-drill-scenario="unsafe runtime claim" data-expected-claim-level="shipped" data-correct-outcome="do not repeat">
+                <td data-row-field="scenario">unsafe runtime claim</td>
+                <td data-row-field="claim text"><strong>TraceMap proves the sample endpoint stayed fast in production traffic.</strong></td>
+                <td data-row-field="expected claim level"><code>shipped</code></td>
+                <td data-row-field="proof path needed"><a href="/static-vs-runtime/">Static versus runtime boundary</a>.</td>
+                <td data-row-field="evidence fields to check">
+                  <span data-evidence-field="proof path">Proof path: static/runtime boundary.</span>
+                  <span data-evidence-field="rule ID or rule family">Rule family: static-runtime-boundary.</span>
+                  <span data-evidence-field="evidence tier">Evidence tier: <code>Tier4Unknown</code>.</span>
+                  <span data-evidence-field="coverage label">Coverage label: <code>not-supported</code>.</span>
+                  <span data-evidence-field="limitation">Limitation: static evidence only.</span>
+                  <span data-evidence-field="non-claim">Non-claim: no runtime or performance proof.</span>
+                  <span data-evidence-field="source context">Source context: public boundary page.</span>
+                  <span data-evidence-field="public/private status">Public/private status: public-safe boundary only.</span>
+                </td>
+                <td data-row-field="limitation or non-claim">Static repository evidence does not prove production traffic, endpoint performance, or outage cause.</td>
+                <td data-row-field="correct outcome"><code>do not repeat</code></td>
+                <td data-row-field="next action">Replace with a static-evidence sentence or route runtime questions to runtime owners.</td>
+              </tr>
+              <tr data-drill-row data-drill-scenario="unsafe release claim" data-expected-claim-level="shipped" data-correct-outcome="do not repeat">
+                <td data-row-field="scenario">unsafe release claim</td>
+                <td data-row-field="claim text"><strong>The static evidence checklist approves the release as operationally safe.</strong></td>
+                <td data-row-field="expected claim level"><code>shipped</code></td>
+                <td data-row-field="proof path needed"><a href="/release-review-boundary/">Release review boundary</a>.</td>
+                <td data-row-field="evidence fields to check">
+                  <span data-evidence-field="proof path">Proof path: release boundary page.</span>
+                  <span data-evidence-field="rule ID or rule family">Rule family: release-boundary.</span>
+                  <span data-evidence-field="evidence tier">Evidence tier: <code>Tier4Unknown</code>.</span>
+                  <span data-evidence-field="coverage label">Coverage label: <code>not-supported</code>.</span>
+                  <span data-evidence-field="limitation">Limitation: release owners decide release state.</span>
+                  <span data-evidence-field="non-claim">Non-claim: no release approval or safety proof.</span>
+                  <span data-evidence-field="source context">Source context: public boundary page.</span>
+                  <span data-evidence-field="public/private status">Public/private status: public-safe boundary only.</span>
+                </td>
+                <td data-row-field="limitation or non-claim">A static checklist cannot replace release controls, owner judgment, or operational checks.</td>
+                <td data-row-field="correct outcome"><code>do not repeat</code></td>
+                <td data-row-field="next action">Remove the approval wording and hand release questions to release owners.</td>
+              </tr>
+              <tr data-drill-row data-drill-scenario="private-evidence-only claim" data-expected-claim-level="hidden" data-correct-outcome="internal only">
+                <td data-row-field="scenario">private-evidence-only claim</td>
+                <td data-row-field="claim text"><strong>An internal scan note supports the sample dependency claim.</strong></td>
+                <td data-row-field="expected claim level"><code>hidden</code></td>
+                <td data-row-field="proof path needed">A public-safe summary, if an owner creates one.</td>
+                <td data-row-field="evidence fields to check">
+                  <span data-evidence-field="proof path">Proof path: no public-safe path yet.</span>
+                  <span data-evidence-field="rule ID or rule family">Rule family: private-scan-summary.</span>
+                  <span data-evidence-field="evidence tier">Evidence tier: <code>Tier3SyntaxOrTextual</code>.</span>
+                  <span data-evidence-field="coverage label">Coverage label: <code>internal-only</code>.</span>
+                  <span data-evidence-field="limitation">Limitation: private-only support.</span>
+                  <span data-evidence-field="non-claim">Non-claim: not public evidence.</span>
+                  <span data-evidence-field="source context">Source context: hidden working material.</span>
+                  <span data-evidence-field="public/private status">Public/private status: private.</span>
+                </td>
+                <td data-row-field="limitation or non-claim">Private-only evidence is not a public proof path.</td>
+                <td data-row-field="correct outcome"><code>internal only</code></td>
+                <td data-row-field="next action">Keep it internal or ask an owner for a reviewed public-safe summary.</td>
+              </tr>
+              <tr data-drill-row data-drill-scenario="missing-proof claim" data-expected-claim-level="concept" data-correct-outcome="do not repeat">
+                <td data-row-field="scenario">missing-proof claim</td>
+                <td data-row-field="claim text"><strong>TraceMap can repeat this public claim because reviewers remember seeing support.</strong></td>
+                <td data-row-field="expected claim level"><code>concept</code></td>
+                <td data-row-field="proof path needed">A public-safe proof path with rule context, tier, coverage label, limitation, and non-claim.</td>
+                <td data-row-field="evidence fields to check">
+                  <span data-evidence-field="proof path">Proof path: missing.</span>
+                  <span data-evidence-field="rule ID or rule family">Rule family: missing.</span>
+                  <span data-evidence-field="evidence tier">Evidence tier: <code>Tier4Unknown</code>.</span>
+                  <span data-evidence-field="coverage label">Coverage label: <code>unknown</code>.</span>
+                  <span data-evidence-field="limitation">Limitation: no public support.</span>
+                  <span data-evidence-field="non-claim">Non-claim: memory is not evidence.</span>
+                  <span data-evidence-field="source context">Source context: unavailable.</span>
+                  <span data-evidence-field="public/private status">Public/private status: unavailable.</span>
+                </td>
+                <td data-row-field="limitation or non-claim">Confidence, seniority, repetition, and pressure cannot fill the proof gap.</td>
+                <td data-row-field="correct outcome"><code>do not repeat</code></td>
+                <td data-row-field="next action">Stop the sentence until a public-safe proof path exists.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="evidence-checklist">
+        <div>
+          <p class="section-kicker">Evidence checklist</p>
+          <h2>Inspect the same fields every time.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>proof path</code><span>Public-safe page, summary, report, sanctioned demo artifact, rule catalog page, or review-packet surface.</span></div>
+          <div><code>rule ID or rule family</code><span>Specific public-safe rule ID when available; otherwise a rule family with its limitation.</span></div>
+          <div><code>evidence tier</code><span>One of <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</span></div>
+          <div><code>coverage label</code><span>Transcribed from the cited support, including reduced, partial, unknown, unavailable, or future-only labels.</span></div>
+          <div><code>limitation</code><span>What the evidence cannot support.</span></div>
+          <div><code>non-claim</code><span>What the reader must not infer from the row.</span></div>
+          <div><code>source context</code><span>Main, checked-in public demo, public documentation, future-only, hidden, or local-only status.</span></div>
+          <div><code>public/private status</code><span>Whether the support can be cited publicly or must stay internal.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="answer-key" aria-labelledby="answer-key-heading">
+        <div class="section-header">
+          <p class="section-kicker">Answer key</p>
+          <h2 id="answer-key-heading">The outcome controls reuse; it does not upgrade proof.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <thead>
+              <tr>
+                <th scope="col">Scenario</th>
+                <th scope="col">Correct outcome</th>
+                <th scope="col">Next action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-answer-key-row data-answer-scenario="supported demo-level claim" data-answer-outcome="repeat with proof"><td>supported demo-level claim</td><td><code>repeat with proof</code></td><td>Repeat only the bounded demo sentence with proof attached.</td></tr>
+              <tr data-answer-key-row data-answer-scenario="concept-only claim" data-answer-outcome="downgrade before repeating"><td>concept-only claim</td><td><code>downgrade before repeating</code></td><td>Rewrite as concept guidance.</td></tr>
+              <tr data-answer-key-row data-answer-scenario="reduced-coverage claim" data-answer-outcome="owner follow-up needed"><td>reduced-coverage claim</td><td><code>owner follow-up needed</code></td><td>Narrow the sentence or ask for public-safe support.</td></tr>
+              <tr data-answer-key-row data-answer-scenario="unsafe runtime claim" data-answer-outcome="do not repeat"><td>unsafe runtime claim</td><td><code>do not repeat</code></td><td>Remove runtime, traffic, performance, and outage-cause wording.</td></tr>
+              <tr data-answer-key-row data-answer-scenario="unsafe release claim" data-answer-outcome="do not repeat"><td>unsafe release claim</td><td><code>do not repeat</code></td><td>Remove release approval and safety wording.</td></tr>
+              <tr data-answer-key-row data-answer-scenario="private-evidence-only claim" data-answer-outcome="internal only"><td>private-evidence-only claim</td><td><code>internal only</code></td><td>Keep private support internal until a reviewed public-safe summary exists.</td></tr>
+              <tr data-answer-key-row data-answer-scenario="missing-proof claim" data-answer-outcome="do not repeat"><td>missing-proof claim</td><td><code>do not repeat</code></td><td>Stop until proof vocabulary exists.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="unsafe-answer-examples">
+        <div>
+          <p class="section-kicker">Unsafe answer examples</p>
+          <h2>Rejected patterns are not TraceMap claims.</h2>
+        </div>
+        <ul>
+          <li>Do not answer that a static row proves runtime behavior, production traffic, endpoint performance, or outage cause.</li>
+          <li>Do not answer that a checklist approves a release, proves release safety, proves operational safety, or replaces release controls.</li>
+          <li>Do not answer that missing evidence is filled by confidence, seniority, repetition, or schedule pressure.</li>
+          <li>Do not answer that private-only support can be cited publicly before a reviewed summary exists.</li>
+          <li>Do not answer that the drill is AI/LLM analysis, autonomous grading, or a substitute for human review.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Stop when the evidence boundary breaks.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>No proof path</strong><span>Do not repeat the claim until a public-safe support path exists.</span></div>
+          <div><strong>No rule ID or rule family</strong><span>Ask for owner follow-up rather than inventing a rule.</span></div>
+          <div><strong>Missing tier or coverage label</strong><span>Keep the claim internal or downgrade it until the evidence strength and coverage state are visible.</span></div>
+          <div><strong>Private-only support</strong><span>Use internal follow-up until the owner provides a public-safe summary.</span></div>
+          <div><strong>Runtime, release, or safety wording</strong><span>Route those questions to the responsible owners and remove the public TraceMap claim.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The drill teaches review discipline, not new proof.</h2>
+        </div>
+        <ul>
+          <li>This page does not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+          <li>The drill does not prove runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, absence of impact, complete coverage, AI impact analysis, LLM analysis, or replacement of human review.</li>
+          <li>A correct answer is a reuse decision for the sample sentence, not proof that the underlying software is shipped, demo-backed, safe, approved, complete, or impact-free.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="adjacent-surfaces">
+        <div>
+          <p class="section-kicker">Adjacent surfaces</p>
+          <h2>This drill is a practice companion.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/review-claim-checklist/">Review claim checklist</a></strong><span>Canonical decision ritual for real claims.</span></div>
+          <div><strong><a href="/proof-paths/tour/">Proof-path tour</a></strong><span>Guided reading flow for one proof path.</span></div>
+          <div><strong><a href="/proof-paths/faq/">Proof-path FAQ</a></strong><span>Question-and-answer context for proof-path edge cases.</span></div>
+          <div><strong><a href="/questions/objections/">Objection guide</a></strong><span>Stakeholder concern handling, not a drill.</span></div>
+          <div><strong><a href="/packets/examples/">Packet examples</a></strong><span>Concrete public-safe packet shapes, not this seven-row exercise.</span></div>
+          <div><strong><a href="/language/change-risk/">Change-risk language</a></strong><span>Wording guidance for bounded static-evidence language.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Claim review drill links back to the
+        <a href="/review-claim-checklist/">canonical checklist</a>,
+        <a href="/proof-paths/tour/">proof-path tour</a>,
+        and
+        <a href="/language/change-risk/">change-risk language guide</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

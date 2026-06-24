@@ -143,8 +143,10 @@ selectors and caps:
 - `--route` as a server-route alias over normalized method/path entry evidence;
 - `--client-call` as a client-call alias over normalized method/path entry
   evidence;
-- `--classification` as a row filter that keeps rows matching the requested
-  classification and recomputes the overall summary from the remaining rows;
+- `--classification` as a row filter that keeps flow, logic, dependency-surface,
+  and non-blocking gap rows matching the requested classification, preserves
+  matched entry evidence as query context, preserves blocking coverage/schema/
+  identity gaps, and recomputes the overall summary from the remaining rows;
 - `--max-logic-rows` for business/data context rows;
 - `--max-gaps` for report gap rows.
 
@@ -276,6 +278,8 @@ public sealed record RouteFlowReport(
     IReadOnlyList<RouteFlowRow> FlowRows,
     IReadOnlyList<RouteFlowLogicRow> LogicRows,
     IReadOnlyList<RouteFlowDependencySurface> DependencySurfaces,
+    IReadOnlyList<RouteFlowTouchedFile> TouchedFiles,
+    IReadOnlyList<RouteFlowTouchedSymbol> TouchedSymbols,
     IReadOnlyList<RouteFlowGap> Gaps,
     IReadOnlyList<string> Limitations);
 ```
@@ -291,6 +295,12 @@ version = "1.0"
 identical in v1. The top-level field exists for consistency with other combined
 reports; the summary field exists for consumers that read only the summary
 object.
+
+`TouchedFiles` and `TouchedSymbols` are additive v1 report summaries derived
+from cited entry, flow, logic, dependency-surface, and gap rows. They do not add
+new scanner evidence and must carry the report-envelope rule plus supporting
+row rule IDs, evidence tiers, source labels, commit SHA, file spans, and
+limitations where available.
 
 ### Query
 

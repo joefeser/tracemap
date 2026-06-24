@@ -92,6 +92,6 @@ internal static partial class LegacyDataSafeValues
         return UnsafeSubstrings.Any(fragment => value.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     }
 
-    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_.$]*$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_.$+]*$", RegexOptions.CultureInvariant)]
     private static partial Regex SafeIdentifierPattern();
 }

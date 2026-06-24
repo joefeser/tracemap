@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap evidence gap register for recording missing, reduced, stale, private-only, unsupported, unknown, validation, and owner-question follow-up."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Evidence Gap Register | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/evidence/gaps/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Evidence Gap Register">
+    <meta
+      property="og:description"
+      content="How to record an evidence gap as a bounded public-safe follow-up item without upgrading the claim."
+    >
+    <meta property="og:url" content="https://tracemap.tools/evidence/gaps/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/" aria-current="page">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Evidence gap register</p>
+        <h1>Record the gap before the claim grows.</h1>
+        <p class="hero-subhead">
+          An evidence gap row preserves what TraceMap or a reviewer can show,
+          what cannot be concluded, and who owns the next public-safe proof or
+          validation step.
+        </p>
+        <p class="hero-note" data-evidence-gap-boundary="non-claims">
+          Public claim level: concept. No public conclusion without evidence.
+          A gap row is a bounded follow-up item, not proof that impact is
+          absent, runtime behavior is known, release is ready, or coverage is
+          complete.
+        </p>
+        <nav class="hero-actions" aria-label="Evidence gap register links">
+          <a class="button primary" href="#example-gap-rows">Open gap rows</a>
+          <a class="button secondary" href="/limitations/reduced-coverage/">Reduced coverage</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="when-a-gap-is-useful">
+        <div>
+          <p class="section-kicker">When to use it</p>
+          <h2>A gap is useful when it keeps uncertainty actionable.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Evidence exists, but it is not enough</strong><span>Keep the rule family, tier, coverage label, public-safe context, and limitation visible instead of smoothing the gap into stronger wording.</span></div>
+          <div><strong>The next proof route is known</strong><span>Point the row to validation, limitations, owner follow-up, claim review, or another public-safe route that can collect or explain the missing evidence.</span></div>
+          <div><strong>The sentence needs a stop sign</strong><span>Use the row to hold, downgrade, keep internal, or hand off a claim before it implies proof that the available evidence cannot support.</span></div>
+          <div><strong>The audience needs a durable note</strong><span>A register row gives future readers the same boundary the original reviewer saw: the useful evidence, the missing proof route, the role that can supply the next answer, and the exact wording that must wait. That makes the gap portable across a review packet, a manager summary, or an owner handoff without changing it into a stronger claim, and easy to audit during later review.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="gap-register-fields">
+        <div>
+          <p class="section-kicker">Fields</p>
+          <h2>Every row carries the same boundary.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>gap label</code><span>Neutral name for the missing, reduced, stale, unsupported, unknown, validation, private-only, or owner-question state.</span></div>
+          <div><code>what evidence exists</code><span>The public-safe evidence category, not a source excerpt, local artifact, command transcript, or private detail.</span></div>
+          <div><code>what cannot be concluded</code><span>The stronger claim that must remain unavailable from this row.</span></div>
+          <div><code>public claim level</code><span>Use <code>concept</code> for these register rows unless a separate evidence-backed decision upgrades a future surface.</span></div>
+          <div><code>next owner</code><span>A public role category that can collect proof, validation, or a decision record.</span></div>
+          <div><code>proof/validation route</code><span>An existing public-safe route that explains the next check, limitation, handoff, or claim-review step.</span></div>
+          <div><code>safe wording</code><span>A bounded sentence that keeps the label attached.</span></div>
+          <div><code>stop condition</code><span>The point where public wording must hold, downgrade, stay internal, or move to owner follow-up.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="example-gap-rows" aria-labelledby="example-gap-rows-heading">
+        <div class="section-header">
+          <p class="section-kicker">Example gap rows</p>
+          <h2 id="example-gap-rows-heading">Use the row that matches the missing proof state.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-evidence-gap-register>
+            <caption>
+              Required evidence gap rows. Rows are illustrative public-safe
+              examples; each one keeps the claim level at concept and points
+              to a public route for follow-up.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Gap label</th>
+                <th scope="col">What evidence exists</th>
+                <th scope="col">What cannot be concluded</th>
+                <th scope="col">Public claim level</th>
+                <th scope="col">Next owner</th>
+                <th scope="col">Proof/validation route</th>
+                <th scope="col">Safe wording</th>
+                <th scope="col">Stop condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="gap-missing-proof-path" data-evidence-gap-row="missing proof path">
+                <th scope="row" data-field="gap label">missing proof path</th>
+                <td data-field="what evidence exists">A public-safe summary says a claim needs proof, but the supporting route or artifact is absent or not ready for public use.</td>
+                <td data-field="what cannot be concluded">Public proof, repeatable proof-link support, demo-backed wording, or absence of impact; an unavailable proof path cannot support a public proof-link claim.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="next owner">site owner or reviewer</td>
+                <td data-field="proof/validation route"><a href="/validation/">Validation</a> and <a href="/review-claim-checklist/">review claim checklist</a></td>
+                <td data-field="safe wording">Record this as a missing proof path and collect a public-safe proof route before repeating the claim.</td>
+                <td data-field="stop condition">Stop before publishing proof-link wording or treating the claim as supported.</td>
+              </tr>
+              <tr id="gap-reduced-coverage" data-evidence-gap-row="reduced coverage">
+                <th scope="row" data-field="gap label">reduced coverage</th>
+                <td data-field="what evidence exists">Scan or review context carries a reduced, partial, fallback, unsupported, or unavailable coverage label.</td>
+                <td data-field="what cannot be concluded">Clean repo, complete coverage, release readiness, operational certainty, runtime behavior, or no impact; reduced coverage cannot support clean, complete, release-ready, or absence-of-impact wording.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="next owner">scanner owner or reviewer</td>
+                <td data-field="proof/validation route"><a href="/limitations/reduced-coverage/">Reduced coverage playbook</a></td>
+                <td data-field="safe wording">Coverage is reduced, so keep the label attached and use the row as review input only.</td>
+                <td data-field="stop condition">Stop before removing the limitation or upgrading the conclusion.</td>
+              </tr>
+              <tr id="gap-tier4unknown" data-evidence-gap-row="Tier4Unknown">
+                <th scope="row" data-field="gap label">Tier4Unknown</th>
+                <td data-field="what evidence exists">Evidence exists only as an unknown tier, unresolved gap, unavailable source, or unclassified support note.</td>
+                <td data-field="what cannot be concluded"><code>Tier1Semantic</code>, <code>Tier2Structural</code>, or <code>Tier3SyntaxOrTextual</code> certainty; semantic proof; complete proof; unknown evidence cannot be upgraded by confidence, repetition, reviewer seniority, or pressure.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="next owner">reviewer or scanner owner</td>
+                <td data-field="proof/validation route"><a href="/limitations/">Limitations</a> and <a href="/validation/">validation</a></td>
+                <td data-field="safe wording">The evidence tier is Tier4Unknown, so keep the statement downgraded until evidence is classified.</td>
+                <td data-field="stop condition">Stop before upgrading the tier or repeating a stronger claim.</td>
+              </tr>
+              <tr id="gap-private-only-support" data-evidence-gap-row="private-only support">
+                <th scope="row" data-field="gap label">private-only support</th>
+                <td data-field="what evidence exists">Internal evidence may exist, but a public-safe summary, public route, or reusable proof wording is not available.</td>
+                <td data-field="what cannot be concluded">Public proof, public demo support, customer-specific conclusion, or publishable detail; private-only evidence cannot be cited as public proof until summarized through a public-safe route.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="next owner">site owner or evidence owner</td>
+                <td data-field="proof/validation route"><a href="/review-claim-checklist/">Review claim checklist</a></td>
+                <td data-field="safe wording">Treat private-only support as internal follow-up until a public-safe summary exists.</td>
+                <td data-field="stop condition">Stop before publishing private material or citing it as public proof.</td>
+              </tr>
+              <tr id="gap-stale-commit" data-evidence-gap-row="stale commit">
+                <th scope="row" data-field="gap label">stale commit</th>
+                <td data-field="what evidence exists">Evidence belongs to an older source context, previous commit, older branch state, or outdated public summary.</td>
+                <td data-field="what cannot be concluded">Current-head proof, current-release wording, current source behavior, or current validation status; stale source context cannot support current-head, current-release, or current-proof wording.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="next owner">reviewer or source owner</td>
+                <td data-field="proof/validation route"><a href="/validation/">Validation</a></td>
+                <td data-field="safe wording">The source context is stale, so current wording needs current-context confirmation.</td>
+                <td data-field="stop condition">Stop before current-head, current-release, or current-proof wording.</td>
+              </tr>
+              <tr id="gap-unsupported-framework-surface" data-evidence-gap-row="unsupported framework surface">
+                <th scope="row" data-field="gap label">unsupported framework surface</th>
+                <td data-field="what evidence exists">A framework, route style, file type, adapter surface, or project pattern is outside public support or only structurally recognized.</td>
+                <td data-field="what cannot be concluded">Complete framework coverage, complete route coverage, runtime behavior, or semantic certainty; unsupported framework evidence cannot support complete framework or route coverage.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="next owner">framework owner or scanner owner</td>
+                <td data-field="proof/validation route"><a href="/limitations/">Limitations</a> and <a href="/limitations/reduced-coverage/">reduced coverage</a></td>
+                <td data-field="safe wording">Record the framework surface as unsupported and route it to owner or scanner follow-up.</td>
+                <td data-field="stop condition">Stop before complete-framework, complete-route, or runtime wording.</td>
+              </tr>
+              <tr id="gap-missing-validation-evidence" data-evidence-gap-row="missing validation evidence">
+                <th scope="row" data-field="gap label">missing validation evidence</th>
+                <td data-field="what evidence exists">A claim, row, or route lacks public-safe validation evidence, focused test evidence, build evidence, or browser sanity evidence.</td>
+                <td data-field="what cannot be concluded">Validation passed, demo backed, implementation ready, release ready, or proof complete; absent validation cannot support validation-passed, demo-backed, or implementation-ready wording.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="next owner">implementation owner or reviewer</td>
+                <td data-field="proof/validation route"><a href="/validation/">Validation</a></td>
+                <td data-field="safe wording">Hold the claim until required validation evidence is present or explicitly deferred; internal validation plans are next steps, not public proof routes.</td>
+                <td data-field="stop condition">Stop before marking the implementation or claim ready.</td>
+              </tr>
+              <tr id="gap-unresolved-owner-question" data-evidence-gap-row="unresolved owner question">
+                <th scope="row" data-field="gap label">unresolved owner question</th>
+                <td data-field="what evidence exists">The evidence points to a question that requires a service, framework, source, artifact, reviewer, or site owner response.</td>
+                <td data-field="what cannot be concluded">Owner agreement, absence of impact, operational certainty, release approval, or resolved risk; an unanswered owner question cannot be converted into an assumption of safety or no impact.</td>
+                <td data-field="public claim level">concept</td>
+                <td data-field="next owner">public role category, such as source owner or evidence owner</td>
+                <td data-field="proof/validation route"><a href="/owners/follow-up/">Owner follow-up</a> and <a href="/decisions/evidence-record/">evidence decision record</a></td>
+                <td data-field="safe wording">Carry the owner question forward with the evidence and stop condition attached.</td>
+                <td data-field="stop condition">Stop before converting an unanswered question into an assumption.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="stop-conditions" data-evidence-gap-boundary="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Stop before the row becomes a conclusion.</h2>
+        </div>
+        <ul>
+          <li>Stop when the proof path is missing, unavailable, private-only, or stale.</li>
+          <li>Stop when coverage is reduced, partial, syntax-only, unsupported, unknown, or marked <code>Tier4Unknown</code>.</li>
+          <li>Stop when validation evidence is absent, hidden, or not public-safe.</li>
+          <li>Stop when the next owner has not answered a question needed for the public claim.</li>
+          <li>Stop before wording implies runtime proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, operational certainty, complete coverage, clean-repo status, AI impact analysis, or absence of impact.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="next-owner-handoff">
+        <div>
+          <p class="section-kicker">Next-owner handoff</p>
+          <h2>Transfer the evidence question with its boundary.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Use role categories</strong><span>Site owner, reviewer, scanner owner, framework owner, source owner, artifact publisher, implementation owner, and evidence owner are public-safe owner labels.</span></div>
+          <div><strong>Ask for the next evidence</strong><span>Name the missing proof, validation, public-safe summary, or owner answer that would let a future reviewer repeat or downgrade the claim.</span></div>
+          <div><strong>Keep private context out</strong><span>Use public-safe summaries and route links instead of private names, sample identities, source details, or local output locations.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="safe-wording">
+        <div>
+          <p class="section-kicker">Safe wording</p>
+          <h2>Keep the label and next route in the sentence.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>missing proof path</code><span>Record this as a missing proof path until a public-safe proof route exists.</span></div>
+          <div><code>reduced coverage</code><span>Coverage is reduced, so this is review input, not a final conclusion.</span></div>
+          <div><code>Tier4Unknown</code><span>The evidence tier is Tier4Unknown and cannot support a stronger public claim yet.</span></div>
+          <div><code>private-only</code><span>Private-only support needs a public-safe summary before public citation.</span></div>
+          <div><code>stale</code><span>The source context is stale and needs current-context confirmation.</span></div>
+          <div><code>unsupported framework surface</code><span>The framework surface is unsupported, so complete framework coverage is not available from this evidence.</span></div>
+          <div><code>missing validation evidence</code><span>Validation evidence is missing, so hold readiness wording.</span></div>
+          <div><code>unresolved owner question</code><span>The owner question remains open and should travel with the stop condition.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="unsafe-wording" data-evidence-gap-boundary="rejected-patterns">
+        <div>
+          <p class="section-kicker">Unsafe wording</p>
+          <h2>Rejected patterns stay inside this boundary.</h2>
+        </div>
+        <ul>
+          <li>Rejected pattern: the missing proof path proves there is no impact.</li>
+          <li>Rejected pattern: reduced coverage means the repository is clean.</li>
+          <li>Rejected pattern: Tier4Unknown is enough because reviewers are confident.</li>
+          <li>Rejected pattern: private evidence proves the public claim.</li>
+          <li>Rejected pattern: stale evidence supports the current release.</li>
+          <li>Rejected pattern: unsupported framework coverage is complete.</li>
+          <li>Rejected pattern: missing validation evidence is acceptable for readiness.</li>
+          <li>Rejected pattern: the unresolved owner question can be treated as approval.</li>
+          <li>Rejected pattern: the register proves production traffic, runtime behavior, endpoint performance, outage cause, operational certainty, or release readiness.</li>
+          <li>Rejected pattern: the register is AI or LLM impact analysis, embedding search, vector database analysis, prompt classification, or a replacement for human review.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-evidence-gap-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The register records follow-up; it does not create proof.</h2>
+        </div>
+        <ul>
+          <li>It does not run TraceMap, create facts, emit reducer findings, validate a build, approve a release, settle owner questions, assign fault, or replace tests, source review, runtime observability, release controls, or human judgment.</li>
+          <li>It does not prove absence of impact, runtime behavior, production traffic, endpoint performance, outage cause, operational certainty, release readiness, clean-repo status, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, or prompt classification.</li>
+          <li data-evidence-gap-boundary="raw-material-boundary">It does not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" id="adjacent-surfaces">
+        <div>
+          <p class="section-kicker">Adjacent surfaces</p>
+          <h2>Use the neighboring page for the neighboring job.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/limitations/reduced-coverage/">Reduced coverage playbook</a>
+          <a href="/limitations/">Limitations and non-claims</a>
+          <a href="/validation/">Validation evidence</a>
+          <a href="/questions/objections/">Stakeholder objection guide</a>
+          <a href="/owners/follow-up/">Owner follow-up map</a>
+          <a href="/decisions/evidence-record/">Evidence decision record</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/evidence/">Evidence model</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Evidence gaps connect the
+        <a href="/evidence/">evidence model</a>,
+        <a href="/limitations/reduced-coverage/">reduced coverage playbook</a>,
+        and
+        <a href="/owners/follow-up/">owner follow-up map</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

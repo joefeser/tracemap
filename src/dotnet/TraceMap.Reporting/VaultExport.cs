@@ -102,7 +102,8 @@ public sealed record VaultGraphNode(
     string? ScannerVersion = null,
     string? RepositoryIdentityHash = null,
     IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null,
-    string? NavigationCategory = null);
+    string? NavigationCategory = null,
+    string? SurfaceSubtype = null);
 
 public sealed record VaultGraphEdge(
     string Id,
@@ -213,6 +214,8 @@ public static class VaultExporter
             "hidden",
             "demo-safe",
             "public-safe",
+            "legacy-data",
+            "data-model",
             "local-path",
             "raw-remote-or-url",
             "raw-sql",
@@ -474,7 +477,8 @@ public static class VaultExporter
                     $"{DirectoryForNodeKind(nodeKind)}/{Slug(nodeId)}.md",
                     null,
                     null,
-                    EvidenceLocations(pathNode)));
+                    EvidenceLocations(pathNode),
+                    SurfaceSubtype: NormalizeSurfaceSubtype(pathNode)));
                 originalNodeClaims[nodeId] = sourceClaim;
 
                 if (pathNode.NodeKind == "symbol" && sourceClaim == "hidden")
@@ -1207,6 +1211,16 @@ public static class VaultExporter
         body.AppendLine("| --- | --- |");
         body.AppendLine($"| Node ID | {Cell(node.Id)} |");
         body.AppendLine($"| Kind | {Cell(node.Kind)} |");
+        if (!string.IsNullOrWhiteSpace(node.SurfaceKind))
+        {
+            body.AppendLine($"| Surface kind | {Cell(node.SurfaceKind)} |");
+        }
+
+        if (!string.IsNullOrWhiteSpace(node.SurfaceSubtype))
+        {
+            body.AppendLine($"| Surface subtype | {Cell(node.SurfaceSubtype)} |");
+        }
+
         body.AppendLine($"| Claim level | {Cell(node.ClaimLevel)} |");
         body.AppendLine($"| Rule IDs | {Cell(string.Join(", ", node.RuleIds))} |");
         body.AppendLine($"| Evidence tiers | {Cell(string.Join(", ", node.EvidenceTiers))} |");
@@ -2273,6 +2287,14 @@ public static class VaultExporter
             return false;
         }
 
+        var surfaceSubtype = NormalizeSurfaceSubtype(node);
+        string? safeSurfaceSubtype = null;
+        if (!string.IsNullOrWhiteSpace(surfaceSubtype)
+            && !TryIdentityComponent(claimLevel, VaultValueContext.ClosedVocabulary, surfaceSubtype, "surface-subtype", out safeSurfaceSubtype, out rejectedCategory))
+        {
+            return false;
+        }
+
         var endpointComponent = node.NodeKind is "endpoint" && claimLevel != "hidden"
             ? $"{node.HttpMethod} {node.NormalizedPathKey}"
             : $"internal-node:{Hash(node.NodeId, 16)}";
@@ -2289,14 +2311,22 @@ public static class VaultExporter
             return false;
         }
 
-        identity = string.Join('\u001f',
+        var components = new List<string>
+        {
             "node/evidence/v1",
             safeSourceNodeId,
             safeNodeKind,
             safeSurfaceKind,
             safeRuleId,
             safeEndpointComponent,
-            safeEvidenceComponent);
+            safeEvidenceComponent
+        };
+        if (!string.IsNullOrWhiteSpace(safeSurfaceSubtype))
+        {
+            components.Insert(4, $"subtype:{safeSurfaceSubtype}");
+        }
+
+        identity = string.Join('\u001f', components);
         return true;
     }
 
@@ -2428,6 +2458,16 @@ public static class VaultExporter
         return string.IsNullOrWhiteSpace(node.SurfaceKind) ? null : node.SurfaceKind;
     }
 
+    private static string? NormalizeSurfaceSubtype(CombinedPathNode node)
+    {
+        if (NormalizeNodeKind(node) != "surface")
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(node.SurfaceSubtype) ? null : node.SurfaceSubtype.Trim();
+    }
+
     private static string NormalizeEdgeKind(string value)
     {
         return value switch
@@ -2506,7 +2546,7 @@ public static class VaultExporter
 
     private static IReadOnlyList<string> NodeLimitations(CombinedPathNode node, string sourceClaim)
     {
-        var limitations = new List<string>();
+        var limitations = new SortedSet<string>(SafeNodeLimitationCodes(node.Limitations), StringComparer.Ordinal);
         if (sourceClaim == "hidden")
         {
             limitations.Add("Display values are category-labeled because the source identity is hidden.");
@@ -2517,7 +2557,30 @@ public static class VaultExporter
             limitations.Add("Evidence tier is unknown; do not upgrade the conclusion from graph presence.");
         }
 
-        return limitations.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        return limitations.ToArray();
+    }
+
+    private static IReadOnlyList<string> SafeNodeLimitationCodes(IReadOnlyList<string>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return [];
+        }
+
+        return values
+            .Select(value => value?.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => IsSafeNodeLimitationCode(value!) ? value! : $"unsafe-limitation-code-hash-{Hash(value!, 16)}")
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsSafeNodeLimitationCode(string value)
+    {
+        return value.Length <= 96
+            && Regex.IsMatch(value, "^[a-z][a-z0-9-]{0,95}$", RegexOptions.CultureInvariant)
+            && UnsafeCategory(value) is null;
     }
 
     private static IReadOnlyList<string> EdgeLimitations(CombinedPathEdge edge)
@@ -2623,6 +2686,7 @@ public static class VaultExporter
             .. node.EvidenceTiers.Select(tier => $"tracemap/tier/{Slug(tier)}"),
             .. node.Coverage.Select(coverage => $"tracemap/coverage/{Slug(coverage)}"),
             .. string.IsNullOrWhiteSpace(node.SurfaceKind) ? [] : new[] { $"tracemap/surface/{Slug(node.SurfaceKind)}" },
+            .. string.IsNullOrWhiteSpace(node.SurfaceSubtype) ? [] : new[] { $"tracemap/surface-subtype/{Slug(node.SurfaceSubtype)}" },
             .. node.Kind == "gap" ? new[] { "tracemap/review/gap" } : [],
             .. node.EvidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown) || node.Coverage.Any(IsWeakCoverageLabel)
                 ? new[] { "tracemap/review/needs-review" }
@@ -2671,7 +2735,8 @@ public static class VaultExporter
         }
 
         AddAlias(values, 5, node.SurfaceKind);
-        AddAlias(values, 6, node.Kind);
+        AddAlias(values, 6, node.SurfaceSubtype);
+        AddAlias(values, 7, node.Kind);
         return values
             .GroupBy(value => value.Value, StringComparer.Ordinal)
             .Select(group => group.OrderBy(value => value.Category).First())

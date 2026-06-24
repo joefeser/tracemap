@@ -482,6 +482,7 @@ public sealed class CombinedReverseQueryTests
 
         var surface = Assert.Single(result.Report.SelectedSurfaces);
         Assert.Equal("legacy-data", surface.SurfaceKind);
+        Assert.Equal("data-model", surface.Metadata["surfaceSubtype"]);
         Assert.StartsWith("entity:hash:", surface.DisplayName, StringComparison.Ordinal);
         Assert.DoesNotContain("Customer|Ledger", surface.DisplayName, StringComparison.Ordinal);
         Assert.Contains(result.Report.Paths, path => path.Nodes.Any(node => node.SurfaceKind == "legacy-data"));
@@ -489,6 +490,7 @@ public sealed class CombinedReverseQueryTests
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.json"));
         Assert.Contains("legacy-data", markdown);
+        Assert.Contains("\"surfaceSubtype\": \"data-model\"", json);
         Assert.DoesNotContain("Customer|Ledger", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("Customer|Ledger", json, StringComparison.Ordinal);
     }

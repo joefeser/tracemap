@@ -252,15 +252,23 @@ The .NET adapter emits legacy data metadata facts for checked-in DBML, EDMX, typ
 | Fact type | Purpose | Safe matching keys |
 | --- | --- | --- |
 | `LegacyDataMetadataDeclared` | Inventories parseable legacy data metadata documents and generated-designer candidates. | `metadataKind`, `metadataFormat`, `metadataHash`, `inventoryKind`, `path` |
-| `LegacyDataEntityDeclared` | Records static conceptual/generated entity, context, DataSet, row, or TableAdapter descriptors. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `entityName`, `typeName`, hash variants |
+| `LegacyDataEntityDeclared` | Records static conceptual/generated entity, context, DataSet, row, or TableAdapter descriptors. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `entityName`, `typeName`, `mappedTypeName`, hash variants |
 | `LegacyDataStorageObjectDeclared` | Records static table, view, routine, DataTable, or storage entity-set descriptors. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `storageObjectKind`, `storageObjectName`, `tableName`, hash variants |
 | `LegacyDataColumnDeclared` | Records static property/field/column descriptors from metadata. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `ownerName`, `propertyName`, `fieldName`, `columnName`, hash variants |
 | `LegacyDataMappingDeclared` | Records unambiguous descriptor-to-descriptor mappings such as entity-table, property-column, DBML/EDMX associations, and typed DataSet relations. | `metadataKind`, `metadataFormat`, `modelKind`, `descriptorRole`, `stableModelKey`, `mappingKind`, `modelRelationshipKind`, `modelRelationshipRuleId`, `relationshipEndpointCoverage`, `sourceEndpointName`, `targetEndpointName`, `entityName`, `tableName`, `propertyName`, `columnName`, hash variants |
 | `LegacyDataProviderConfigDeclared` | Records safe provider, connection-name, provider factory, and EF provider metadata without raw values. | `configKind`, `connectionName`, `providerName`, `connectionNameHash`, `providerNameHash`, `valueHash` |
-| `LegacyDataGeneratedCodeLinked` | Links metadata descriptors to generated files or compiler-resolved symbols when deterministic. | `linkKind`, `symbolRole`, `typeName`, `generatedCodeFileName`, `supportingFactIds` |
+| `LegacyDataGeneratedCodeLinked` | Links metadata descriptors to generated files, scoped syntax declarations, or compiler-resolved symbols when deterministic. | `linkKind`, `symbolRole`, `metadataFormat`, `stableModelKey`, `mappedTypeName`, `typeName`, `generatedCodeFileName`, `sourceMetadataFactId`, `supportingFactIds`, `coverageLabel`, `limitations` |
 | `AnalysisGap` under `legacy.data.orm.unsupported.v1` | Records recognized unsupported old ORM descriptor families without parsing or inventing model facts. | `descriptorFamily`, `descriptorSignal`, `classification`, `coverage`, `unsupportedLegacyOrmDescriptor`, `runtimeProof` |
 
 Model identity properties such as `modelIdentityRuleId`, `modelIdentityEvidenceTier`, `sourceMetadataFactId`, `displayName`, `displayNameHash`, `containerName`, `containerHash`, and `coverageLabel` are additive metadata on the source facts; they do not re-emit DBML, EDMX, or typed DataSet descriptors under a second rule ID. These facts are static design-time metadata evidence. DBML, EDMX, typed DataSet, TableAdapter, and config descriptor facts are capped at `Tier2Structural`; generated-code links may be `Tier1Semantic` only when compiler-resolved symbol evidence is available, and that link does not upgrade descriptor facts. Raw SQL, connection strings, config values, namespace URIs, provider secrets, URLs, local paths, remotes, source snippets, and secret-looking values must be hashed or omitted. Metadata facts must not emit `DatabaseColumnMapping` without code-level mapping evidence owned by another rule.
+
+Combined report, path, and route-flow readers project terminal legacy data model descriptors as the existing `legacy-data` surface kind with `surfaceSubtype = data-model`. The subtype is report/export metadata only; selectors continue to use `legacy-data`, and `AnalysisGap` facts under `legacy.data.*` rules remain gaps or caveats rather than terminal surfaces.
+
+Projected `legacy-data` path nodes may carry an optional `limitations` list of
+stable descriptor limitation codes such as `formula-redacted`,
+`filter-redacted`, or `query-redacted`. These codes are output metadata for
+report/export consumers; they must not include raw SQL, config values, provider
+URLs, remotes, local paths, source snippets, or private labels.
 
 ## Symbol Identity
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -12,11 +12,17 @@ import {
   blogProofPathRequiredLinks,
   blogProofPathSeriesRoute
 } from "./blog-proof-path-series.mjs";
+import { changeRiskLanguageGuideRoute } from "./change-risk-language-guide.mjs";
+import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
+import { evidenceDecisionRecordRoute } from "./evidence-decision-record.mjs";
+import { evidenceGapRegisterRoute } from "./evidence-gap-register.mjs";
+import { evidenceHandoffTemplateRoute } from "./evidence-handoff-template.mjs";
 import { endpointReviewRoute } from "./endpoint-review.mjs";
+import { evidencePacketExamplesRoute } from "./evidence-packet-examples.mjs";
 import { changeReviewRoute } from "./change-review.mjs";
 import { glossaryRoute } from "./glossary.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
@@ -30,21 +36,33 @@ import {
   managerDemoScriptRoute
 } from "./manager-demo-script.mjs";
 import { managerFaqRoute } from "./manager-faq.mjs";
+import {
+  ownerFollowupMapRequiredLinks,
+  ownerFollowupMapRoute
+} from "./owner-followup-map.mjs";
 import { proofPathFaqRoute } from "./proof-path-faq.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
+import { reducedCoveragePlaybookRoute } from "./reduced-coverage-playbook.mjs";
 import { reviewerQuickstartRoute } from "./reviewer-quickstart.mjs";
 import { reviewPacketAssemblyRoute } from "./review-packet-assembly.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
+import { releaseReviewBoundaryRoute } from "./release-review-boundary.mjs";
+import { reviewMeetingAgendaRoute } from "./review-meeting-agenda.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import {
+  stakeholderObjectionGuideRoute,
+  validateStakeholderObjectionGuideDist
+} from "./stakeholder-objection-guide.mjs";
 import { stakeholderQuestionIndexRoute } from "./stakeholder-question-index.mjs";
 import {
   teamEvidenceHandoffRequiredLinks,
   teamEvidenceHandoffRoute
 } from "./team-evidence-handoff.mjs";
+import { testPlanningHandoffRoute } from "./test-planning-handoff.mjs";
 import { validateDist } from "./validate.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
@@ -130,6 +148,30 @@ test("validateDist requires robots sitemap directive", async () => {
   );
 });
 
+test("validateStakeholderObjectionGuideDist reports missing supporting routes", async () => {
+  const root = await createDistFixture();
+  const dist = join(root, "dist");
+  const errors = [];
+
+  await rm(join(dist, "static-vs-runtime"), { recursive: true, force: true });
+  await validateStakeholderObjectionGuideDist({ dist, errors });
+
+  assert.match(errors.join("\n"), /Stakeholder objection guide references missing supporting route: \/static-vs-runtime\//);
+});
+
+test("validateStakeholderObjectionGuideDist rejects hard private leaks inside bounded rows", async () => {
+  const root = await createDistFixture();
+  const pagePath = join(root, "dist", "questions", "objections", "index.html");
+  const hardLeak = ["/", "Users", "/private"].join("");
+  const html = await readFile(pagePath, "utf8");
+  const errors = [];
+
+  await writeFile(pagePath, html.replace("raw facts", hardLeak), "utf8");
+  await validateStakeholderObjectionGuideDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /Stakeholder objection guide contains forbidden private or credential-like text/);
+});
+
 async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
@@ -141,28 +183,42 @@ async function createDistFixture({
       blogProofPathSeriesRoute,
       demoEvidenceTrailRoute,
       demoRunbookRoute,
+      evidenceDecisionRecordRoute,
+      evidenceGapRegisterRoute,
+      evidenceHandoffTemplateRoute,
       endpointReviewRoute,
       changeReviewRoute,
+      changeRiskLanguageGuideRoute,
       "/evidence/",
+      "/examples/scan-packet/",
       glossaryRoute,
       incidentCallRoute,
       incidentEvidenceHandoffRoute,
       ...incidentEvidenceHandoffRequiredLinks,
       teamEvidenceHandoffRoute,
       ...teamEvidenceHandoffRequiredLinks,
+      testPlanningHandoffRoute,
       managerBriefRoute,
       managerDemoScriptRoute,
       managerFaqRoute,
+      ownerFollowupMapRoute,
+      ...ownerFollowupMapRequiredLinks,
       proofPathFaqRoute,
       proofPathTourRoute,
       proofSourceCatalogRoute,
+      reducedCoveragePlaybookRoute,
       reviewerQuickstartRoute,
+      evidencePacketExamplesRoute,
       reviewPacketAssemblyRoute,
+      claimReviewDrillRoute,
       reviewClaimChecklistRoute,
+      releaseReviewBoundaryRoute,
+      reviewMeetingAgendaRoute,
       reviewRoomRoute,
       roadmapClaimLedgerRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
+      stakeholderObjectionGuideRoute,
       stakeholderQuestionIndexRoute
     ])
   ].map((route) => `https://tracemap.tools${route}`)
@@ -181,31 +237,45 @@ async function createDistFixture({
     "/demo/proof-assets/",
     demoEvidenceTrailRoute,
     demoRunbookRoute,
+    evidenceDecisionRecordRoute,
+    evidenceGapRegisterRoute,
+    evidenceHandoffTemplateRoute,
     managerDemoScriptRoute,
     endpointReviewRoute,
     changeReviewRoute,
+    changeRiskLanguageGuideRoute,
     "/evidence/",
     "/examples/",
+    "/examples/scan-packet/",
     incidentCallRoute,
     incidentEvidenceHandoffRoute,
     teamEvidenceHandoffRoute,
+    testPlanningHandoffRoute,
     "/legacy-modernization/evidence-map/",
     "/legacy-validation/",
     glossaryRoute,
     managerBriefRoute,
     managerFaqRoute,
+    ownerFollowupMapRoute,
+    ...ownerFollowupMapRequiredLinks,
     proofPathFaqRoute,
     proofPathTourRoute,
     proofSourceCatalogRoute,
+    reducedCoveragePlaybookRoute,
     reviewerQuickstartRoute,
     "/manager-packet/",
     "/packets/",
+    evidencePacketExamplesRoute,
     reviewPacketAssemblyRoute,
+    claimReviewDrillRoute,
     reviewClaimChecklistRoute,
+    releaseReviewBoundaryRoute,
+    reviewMeetingAgendaRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
     "/use-cases/",
     "/outputs/",
@@ -231,8 +301,91 @@ async function createDistFixture({
   await writeFile(join(dist, "robots.txt"), robots, "utf8");
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
   await writeDiscoveryFiles(dist);
+  await writeEvidenceDecisionRecordImplementationState(root);
+  await writeEvidenceGapRegisterImplementationState(root);
+  await writeReviewMeetingAgendaImplementationState(root);
 
   return root;
+}
+
+async function writeEvidenceDecisionRecordImplementationState(root) {
+  const statePath = join(
+    root,
+    ".kiro",
+    "specs",
+    "site-tracemap-tools-evidence-decision-record",
+    "implementation-state.md"
+  );
+  await mkdir(join(statePath, ".."), { recursive: true });
+  await writeFile(
+    statePath,
+    `Selected placement: \`/decisions/evidence-record/\`
+
+Rejected alternatives:
+- \`/review-room/decision-record/\` because this route is a standalone decision-after-evidence record.
+- section on \`/review-room/\` because the review-room agenda stays separate.
+- section on \`/packets/assembly/\` because the packet assembly checklist stays separate.
+
+This decision-after-evidence record is not a claim checklist, manager packet, objection guide, proof-path tour, release gate, runtime workflow, approval workflow, or autonomous decision system.
+`,
+    "utf8"
+  );
+}
+
+async function writeEvidenceGapRegisterImplementationState(root) {
+  const statePath = join(
+    root,
+    ".kiro",
+    "specs",
+    "site-tracemap-tools-evidence-gap-register",
+    "implementation-state.md"
+  );
+  await mkdir(join(statePath, ".."), { recursive: true });
+  await writeFile(
+    statePath,
+    `Selected placement: standalone route \`/evidence/gaps/\`
+
+Rejected alternatives:
+
+- \`/coverage/gaps/\`
+
+Adjacent route inventory before site edits:
+
+- \`/limitations/reduced-coverage/\`: present; linked directly.
+
+Rejected-pattern marker: use \`data-evidence-gap-boundary="rejected-patterns"\`
+
+No adjacent route substitutions, omissions, or deferrals are needed.
+
+Discovery artifacts for validation: sitemap, routes-index, and llms.txt.
+`,
+    "utf8"
+  );
+}
+
+async function writeReviewMeetingAgendaImplementationState(root) {
+  const statePath = join(
+    root,
+    ".kiro",
+    "specs",
+    "site-tracemap-tools-review-meeting-agenda",
+    "implementation-state.md"
+  );
+  await mkdir(join(statePath, ".."), { recursive: true });
+  await writeFile(
+    statePath,
+    `Selected placement: \`/review-room/agenda/\`
+
+Rejected alternative: \`/meetings/evidence-review/\`
+Rejected alternative: section on \`/review-room/\`
+Rejected alternative: section on \`/reviewer-quickstart/\`
+
+Primary navigation remains unchanged.
+Word-count bounds: 700 to 1500 rendered main-content words
+Manual public-safety reviewer signoff: completed by implementation owner
+`,
+    "utf8"
+  );
 }
 
 async function fixturePageHtml(route, path) {
@@ -260,6 +413,18 @@ async function fixturePageHtml(route, path) {
     return demoRunbookPage();
   }
 
+  if (route === evidenceDecisionRecordRoute) {
+    return readFile(new URL("../src/decisions/evidence-record/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === evidenceGapRegisterRoute) {
+    return readFile(new URL("../src/evidence/gaps/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === evidenceHandoffTemplateRoute) {
+    return readFile(new URL("../src/handoff/template/index.html", import.meta.url), "utf8");
+  }
+
   if (route === managerDemoScriptRoute) {
     return managerDemoScriptPage();
   }
@@ -270,6 +435,14 @@ async function fixturePageHtml(route, path) {
 
   if (route === changeReviewRoute) {
     return changeReviewPage();
+  }
+
+  if (route === changeRiskLanguageGuideRoute) {
+    return readFile(new URL("../src/language/change-risk/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === "/evidence/") {
+    return readFile(new URL("../src/evidence/index.html", import.meta.url), "utf8");
   }
 
   if (route === glossaryRoute) {
@@ -285,7 +458,11 @@ async function fixturePageHtml(route, path) {
   }
 
   if (route === teamEvidenceHandoffRoute) {
-    return teamEvidenceHandoffPage();
+    return readFile(new URL("../src/team-evidence-handoff/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === testPlanningHandoffRoute) {
+    return readFile(new URL("../src/test-planning/index.html", import.meta.url), "utf8");
   }
 
   if (route === managerBriefRoute) {
@@ -294,6 +471,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === managerFaqRoute) {
     return managerFaqPage();
+  }
+
+  if (route === ownerFollowupMapRoute) {
+    return readFile(new URL("../src/owners/follow-up/index.html", import.meta.url), "utf8");
   }
 
   if (route === proofPathTourRoute) {
@@ -308,20 +489,40 @@ async function fixturePageHtml(route, path) {
     return proofSourceCatalogPage();
   }
 
+  if (route === reducedCoveragePlaybookRoute) {
+    return readFile(new URL("../src/limitations/reduced-coverage/index.html", import.meta.url), "utf8");
+  }
+
   if (route === reviewerQuickstartRoute) {
     return reviewerQuickstartPage();
   }
 
   if (route === reviewPacketAssemblyRoute) {
-    return reviewPacketAssemblyPage();
+    return readFile(new URL("../src/packets/assembly/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === evidencePacketExamplesRoute) {
+    return readFile(new URL("../src/packets/examples/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === claimReviewDrillRoute) {
+    return readFile(new URL("../src/review-claim-checklist/drill/index.html", import.meta.url), "utf8");
   }
 
   if (route === reviewClaimChecklistRoute) {
-    return reviewClaimChecklistPage();
+    return readFile(new URL("../src/review-claim-checklist/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === releaseReviewBoundaryRoute) {
+    return readFile(new URL("../src/release-review-boundary/index.html", import.meta.url), "utf8");
   }
 
   if (route === reviewRoomRoute) {
     return reviewRoomPage();
+  }
+
+  if (route === reviewMeetingAgendaRoute) {
+    return readFile(new URL("../src/review-room/agenda/index.html", import.meta.url), "utf8");
   }
 
   if (route === roadmapClaimLedgerRoute) {
@@ -336,12 +537,16 @@ async function fixturePageHtml(route, path) {
     return staticVsRuntimePage();
   }
 
+  if (route === stakeholderObjectionGuideRoute) {
+    return stakeholderObjectionGuidePage();
+  }
+
   if (route === stakeholderQuestionIndexRoute) {
     return stakeholderQuestionIndexPage();
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/limitations/" ? `<a href="${reducedCoveragePlaybookRoute}">Reduced coverage playbook</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
   );
 }
 
@@ -468,6 +673,69 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
+        path: "/evidence/",
+        title: "Evidence Model",
+        summary: "Fixture evidence model route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture evidence model limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: evidenceDecisionRecordRoute,
+        title: "Evidence Decision Record",
+        summary: "Concept-level template for documenting a human owner decision after TraceMap evidence review while preserving proof path, limitation, follow-up, and residual risk.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route is a record template over existing public-safe evidence surfaces, not a new proof source, workflow engine, or authority system.",
+          "Every record must keep the proof path, rule ID or family, evidence tier, coverage label, limitation, non-claim, follow-up owner, and residual risk attached."
+        ],
+        nonClaims: [
+          "No autonomous decision, approval workflow, release approval, release safety, operational safety, runtime proof, production proof, endpoint performance proof, outage cause, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, or prompt classification.",
+          "No replacement of tests, code review, source review, runtime observability, telemetry, release process, service-owner review, governance, or human judgment.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public record material."
+        ]
+      },
+      {
+        path: evidenceGapRegisterRoute,
+        title: "Evidence Gap Register",
+        summary: "Concept-level register for recording missing, reduced, stale, private-only, unsupported, unknown, validation, and owner-question evidence gaps as bounded follow-up rows.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/review-claim-checklist/",
+        limitations: [
+          "The register records follow-up rows and stop conditions; it is not scanner output, reducer output, validation success, or a public proof source.",
+          "Gap rows must keep what evidence exists, what cannot be concluded, next owner, proof or validation route, safe wording, and stop condition attached."
+        ],
+        nonClaims: [
+          "No absence-of-impact proof, runtime behavior proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release readiness, operational certainty, clean-repo status, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous approval, or replacement of human review.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public gap-register material."
+        ]
+      },
+      {
+        path: evidenceHandoffTemplateRoute,
+        title: "Evidence Handoff Template",
+        summary: "Concept-level reusable template for carrying one TraceMap static-evidence question with proof path, rule context, limits, and next role.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route is an authored public-safe template, not generated handoff output or a new proof source.",
+          "Missing private-only scan context, reduced coverage, weak evidence, or absent validation remains a visible limitation or stop condition."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, real organization ownership, complete coverage, AI impact analysis, LLM analysis, autonomous review, generated handoff feature, or replacement of human review.",
+          "No raw artifacts, source excerpts, database text, configuration values, credentials, workstation paths, repository locations, scan folders, command output, hidden validation detail, private sample names, or personal owner names are public handoff-template material."
+        ]
+      },
+      {
         path: endpointReviewRoute,
         title: "Endpoint Review Playbook",
         summary: "Fixture endpoint review playbook route for validation.",
@@ -493,6 +761,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
           "No release approval proof, raw facts, raw SQLite, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, facts.ndjson, index.sqlite, report.md, scan-manifest.json, or logs/analyzer.log are published."
+        ]
+      },
+      {
+        path: changeRiskLanguageGuideRoute,
+        title: "Change-Risk Language Guide",
+        summary: "Concept-level wording guide for choosing bounded public language around deterministic static change evidence, reduced coverage, owner handoffs, and stop conditions.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The guide teaches public-safe wording and cannot upgrade static evidence into stronger product, runtime, release, or safety conclusions.",
+          "Evidence-bearing scanner facts, reducer findings, rule catalog entries, coverage labels, and documented limitations remain the source of support."
+        ],
+        nonClaims: [
+          "No impact proof, absence-of-impact proof, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, complete coverage, AI impact analysis, LLM analysis, autonomous approval, or replacement of human judgment.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public language-guide material."
         ]
       },
       {
@@ -548,6 +833,19 @@ async function writeDiscoveryFiles(dist) {
         ]
       },
       {
+        path: testPlanningHandoffRoute,
+        title: "Test Planning Handoff",
+        summary: "Concept-level handoff for turning TraceMap deterministic static evidence into human-owned test-planning questions.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["The fixture route translates static evidence into test-planning questions without acting as a validation result or release gate."],
+        nonClaims: [
+          "No generated tests, test sufficiency, runtime behavior, production traffic, endpoint performance, release safety, release approval, complete coverage, AI impact analysis, LLM analysis, or replacement of QA proof."
+        ]
+      },
+      {
         path: managerBriefRoute,
         title: "Manager Brief",
         summary: "Fixture manager brief route for validation.",
@@ -568,6 +866,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture manager FAQ limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: ownerFollowupMapRoute,
+        title: "Owner Follow-Up Map",
+        summary: "Concept-level map for routing static-evidence questions to human owner categories while preserving proof paths, limitations, handoff wording, and stop conditions.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The map routes questions to owner categories, not real teams, people, approval chains, on-call rotations, service catalogs, database stewardship, or production ownership records.",
+          "Every row must keep the static evidence trigger, what TraceMap can and cannot show, proof path, limitation, handoff wording, and stop condition attached."
+        ],
+        nonClaims: [
+          "No real org ownership claim, production ownership proof, runtime behavior, production traffic, endpoint performance, release approval, release safety, operational safety, complete coverage, or replacement of human judgment.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, automated ownership detection, automated release approval, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public owner follow-up material."
+        ]
       },
       {
         path: proofPathTourRoute,
@@ -615,6 +930,30 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
+        path: "/examples/scan-packet/",
+        title: "Scan Packet Example",
+        summary: "Fixture scan packet example route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture scan packet example limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: evidencePacketExamplesRoute,
+        title: "Evidence Packet Examples",
+        summary: "Concept-level gallery of synthetic public-safe packet shapes showing claims, proof paths, tiers, coverage labels, limitations, non-claims, owners, and validation evidence.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/packets/",
+        limitations: ["The fixture route teaches synthetic public-safe packet shapes, not real customer, private repository, production, or raw artifact evidence."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, autonomous approval, autonomous review, or replacement of human review."
+        ]
+      },
+      {
         path: "/manager-packet/",
         title: "Manager Packet",
         summary: "Fixture manager packet route for validation.",
@@ -635,6 +974,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture proof source catalog limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: reducedCoveragePlaybookRoute,
+        title: "Reduced Coverage Playbook",
+        summary: "Concept-level playbook for labeling partial static evidence, preserving coverage labels, and routing owner follow-up.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "limitations",
+        preferredProofPath: "/limitations/",
+        limitations: [
+          "The playbook is guidance for labeling reduced coverage and owner handoff, not scanner output or reducer output.",
+          "Coverage labels, evidence tiers, limitations, proof links, and stop conditions must remain attached before wording is repeated."
+        ],
+        nonClaims: [
+          "No absence-of-impact proof, clean-repo claim under reduced analysis, runtime behavior proof, production traffic proof, endpoint performance proof, outage cause proof, release approval, release safety, operational safety, or complete coverage proof.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt-based classification, autonomous approval, replacement of human review, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values."
+        ]
       },
       {
         path: reviewerQuickstartRoute,
@@ -674,6 +1030,37 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: ["No runtime behavior, production usage, AI impact analysis, or LLM analysis proof."]
       },
       {
+        path: claimReviewDrillRoute,
+        title: "Claim Review Drill",
+        summary: "Concept-level practice drill for checking whether a public claim has proof vocabulary before it is repeated.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/review-claim-checklist/",
+        limitations: ["The fixture drill remains bounded to authored practice rows and does not create new proof."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, automated grading, or replacement of human review.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public drill material."
+        ]
+      },
+      {
+        path: releaseReviewBoundaryRoute,
+        title: "Release Review Boundary",
+        summary: "Concept-level handoff for deterministic static evidence during release review while release-control decisions remain owner-owned.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "This is a static-evidence release-review handoff, not a release gate, approval system, runtime workflow, deploy audit, validation proof, manager packet, or objection guide.",
+          "Static repository evidence can orient questions and gaps but cannot replace release owners, release controls, tests, source review, service-owner judgment, runtime observability, or human judgment."
+        ],
+        nonClaims: [
+          "No release approval, release safety, operational safety, production proof, runtime behavior proof, endpoint performance proof, deployment success proof, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement of release controls.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public release-boundary material."
+        ]
+      },
+      {
         path: reviewRoomRoute,
         title: "Review Room",
         summary: "Fixture review room route for validation.",
@@ -683,6 +1070,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture review room limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: reviewMeetingAgendaRoute,
+        title: "Evidence Review Meeting Agenda",
+        summary: "Concept-level meeting agenda for checking TraceMap proof paths, evidence tiers, coverage labels, limitations, gaps, owners, and decision-record handoff.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route is a human meeting agenda over existing public-safe static evidence surfaces, not meeting automation or a new proof source.",
+          "The agenda preserves review questions, proof paths, rule context, evidence tiers, coverage labels, limitations, gaps, owners, validation evidence category, and non-claims without upgrading missing evidence."
+        ],
+        nonClaims: [
+          "No meeting automation, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, automated impact analysis, or replacement of human judgment or governance.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, credential-like values, connection strings, tokens, or keys are public agenda material."
+        ]
       },
       {
         path: roadmapClaimLedgerRoute,
@@ -718,6 +1122,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete product coverage, incident root cause, service ownership, production dependency understanding, or test sufficiency proof.",
           "No AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis."
+        ]
+      },
+      {
+        path: stakeholderObjectionGuideRoute,
+        title: "Stakeholder Objection Guide",
+        summary: "Concept-level guide that turns skeptical stakeholder objections into public-safe evidence checks, stop conditions, limitations, and owner handoffs.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The guide is an objection-to-evidence handoff over existing public routes, not a new proof source or release workflow.",
+          "Rows must keep the safe answer, evidence check, stop condition, owner handoff, limitation, non-claim, supporting route, and public claim level attached."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete coverage, release approval, autonomous approval, or absence-of-impact proof.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public objection-guide material."
         ]
       },
       {
@@ -843,6 +1264,10 @@ async function glossaryPage() {
 
 async function stakeholderQuestionIndexPage() {
   return readFile(new URL("../src/questions/index.html", import.meta.url), "utf8");
+}
+
+async function stakeholderObjectionGuidePage() {
+  return readFile(new URL("../src/questions/objections/index.html", import.meta.url), "utf8");
 }
 
 function incidentCallPage() {
@@ -1137,6 +1562,7 @@ function changeReviewPage() {
     <p>Public claim level: concept</p>
     <p>No public conclusion without evidence</p>
     <p>A change review brief is a bounded static-evidence packet for a PR, release, or change-review conversation.</p>
+    <a href="${releaseReviewBoundaryRoute}">Release review boundary</a>
     <p>Engineers Code reviewers Architects and managers Release reviewers and agents</p>
     <meta property="og:type" content="article">
     <section id="change-context">
@@ -1224,7 +1650,9 @@ function managerFaqPage() {
     <a href="/manager-brief/">Manager brief</a>
     <a href="/manager-packet/">Manager packet</a>
     <a href="/review-room/">Review room</a>
+    <a href="${evidenceDecisionRecordRoute}">Evidence decision record</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
+    <a href="${changeRiskLanguageGuideRoute}">Change-risk language guide</a>
     <a href="/limitations/">Limitations</a>
     <a href="/validation/">Validation</a>
     <a href="/proof-paths/">Proof paths</a>
@@ -1249,8 +1677,11 @@ function reviewRoomPage() {
     <a href="/incident-call/">Incident call</a>
     <a href="/use-cases/incident-review/">Incident review</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
+    <a href="${releaseReviewBoundaryRoute}">Release review boundary</a>
+    <a href="${evidenceDecisionRecordRoute}">Evidence decision record</a>
     <a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>
     <a href="${reviewerQuickstartRoute}">Reviewer quickstart</a>
+    <a href="${reviewMeetingAgendaRoute}">Evidence review meeting agenda</a>
     <p>${filler}</p>
   `);
 }
@@ -1281,6 +1712,7 @@ function reviewClaimChecklistPage() {
     <meta property="og:type" content="article">
     <a href="/review-room/">Review-room agenda</a>
     <a href="/manager-faq/">Manager FAQ</a>
+    <a href="${changeRiskLanguageGuideRoute}">Change-risk language guide</a>
     <a href="/proof-paths/">Proof path index</a>
     <a href="/roadmap/#claim-ledger">Claim ledger</a>
     <section id="claim-row-template">

@@ -349,3 +349,176 @@ Follow-ups still intentionally deferred:
   tests, and browser accessibility/no-JavaScript validation.
 - Broader hostname and Unix absolute path classification beyond the existing
   generated-output safety validator categories.
+
+## Implementation Follow-Up Slice: Richer Rule, Gap, And Evidence Metadata
+
+Branch: `codex/implement-static-html-explorer-followup`
+Base: `origin/dev`
+Selected slice: narrow PR 3 continuation for richer local explorer rendering
+using already-supported `scan-manifest.json` and `facts.ndjson` data.
+
+Scope completed:
+
+- Rendered gap rows with source/artifact scope and support IDs in addition to
+  rule ID, tier, kind, affected section, coverage label, and message.
+- Rendered limitation rows with evidence tier, source/artifact scope, support
+  IDs, and claim effect.
+- Rendered rule rows with description and related sections.
+- Added observed evidence rule IDs from `facts.ndjson` to the rules table when
+  the rule is not one of the built-in explorer rules.
+- Emitted a visible `explorer.render.catalog-unavailable.v1` gap when observed
+  fact rule IDs are rendered without a compatible full rule catalog artifact.
+- Rendered evidence rows with artifact ID, source ID, coverage label, and
+  limitation fields in both no-JavaScript HTML and `explorer-data.json`.
+- Added a focused regression test covering HTML/JSON parity, observed rule
+  ordering, catalog-unavailable gaps, support IDs, and safety redaction.
+
+Scope intentionally deferred:
+
+- Full rule catalog artifact loading.
+- Surface, path, reducer-backed row readers.
+- Search/filter expansion beyond the existing safe evidence-row filter.
+- Browser accessibility and public/demo fixture parity expansion.
+
+Validation status:
+
+- Focused explorer tests passed:
+  `dotnet test src/dotnet/TraceMap.sln --filter StaticHtmlEvidenceExplorerTests`
+  with 17 passing tests. Existing `SQLitePCLRaw.lib.e_sqlite3` advisory
+  warnings were reported by restore/build.
+- Required .NET build passed:
+  `dotnet build src/dotnet/TraceMap.sln` with 0 errors and existing
+  `SQLitePCLRaw.lib.e_sqlite3` advisory warnings.
+- Required .NET tests passed:
+  `dotnet test src/dotnet/TraceMap.sln` with 595 passing tests.
+- Private-path guard passed:
+  `./scripts/check-private-paths.sh`.
+- Whitespace check passed:
+  `git diff --check`.
+- Sample smoke passed:
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>/scan`
+  followed by
+  `dotnet run --project src/dotnet/TraceMap.Cli -- explorer generate --input <tmp>/scan --out <tmp>/explorer`.
+  The smoke verified the explorer wrote `index.html` and
+  `data/explorer-data.json` and included observed rules, catalog-unavailable
+  gaps, support IDs, artifact IDs, and source IDs.
+
+Kiro implementation review status:
+
+- Initial implementation review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifacts:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-22T030712-950Z-implementation-claude-sonnet-4.6.*`.
+  Patched blocking findings for SSH-style remote detection in the generated
+  output validator and semantic section-status ordering shared by HTML and
+  `explorer-data.json`. Also annotated the deferred claim-level conflict task.
+- First re-review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifacts:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-22T031205-091Z-re-review-claude-sonnet-4.6.*`.
+  Findings: no blockers. Patched low-cost non-blocking suggestions for the
+  empty local `data:,` favicon comment, redaction section status support IDs,
+  and documentation of the 200-row no-JavaScript evidence-row baseline.
+
+PR status:
+
+- Ready PR URL: https://github.com/joefeser/tracemap/pull/277
+- PR-loop result: pending.
+
+## Implementation Follow-Up Slice: Compatible Rule Catalog Rows
+
+Branch: `codex/implement-static-html-evidence-explorer-pr2`
+Base: `origin/dev` at `5c630b69`
+Selected slice: narrow PR 3 continuation for rendering compatible
+`rule-catalog.yml` metadata in the local static HTML explorer rules section.
+
+Scope completed:
+
+- Added a conservative rule catalog reader for `rule-catalog.yml` and
+  `rules/rule-catalog.yml` input artifacts.
+- Added a supported `rule-catalog` artifact row with content hash and stable
+  artifact ID when a compatible catalog is provided.
+- Rendered catalog title, description, evidence tier, limitations, and related
+  sections for compatible rules while preserving built-in explorer rules.
+- Kept observed-rule fallback rows for evidence rule IDs missing from the
+  provided catalog, with a visible `explorer.render.catalog-unavailable.v1`
+  gap for missing observed catalog entries.
+- Suppressed the catalog-unavailable gap when observed evidence rule IDs are
+  fully represented by the provided catalog artifact.
+- Routed catalog text through the existing generated-output safety path so raw
+  remotes, local paths, secrets, URLs, and config-like values are hashed or
+  omitted before HTML/JSON output.
+- Patched Kiro review safety findings by adding statement-like raw SQL and
+  stack-trace classification for generated explorer output and catalog text,
+  while preserving safe explanatory rule-catalog prose such as SQL extraction
+  limitations.
+- Patched ACK review findings by preserving catalog evidence-tier expressions,
+  using a static compiled SQL safety regex, and tightening YAML list-context
+  detection so scalar values ending in `:` are not mistaken for list keys.
+- Patched follow-up Qodo findings by bounding and streaming rule catalog reads,
+  distinguishing present-but-unsupported catalogs from missing catalogs in
+  rules diagnostics, and preventing external catalog entries from overriding
+  reserved `explorer.*` built-in rule definitions.
+- Added focused tests for compatible catalog rendering, rules section status,
+  artifact rows, catalog-unavailable suppression, and unsafe catalog text
+  redaction, including raw SQL and stack-trace safety cases, tier expressions,
+  colon-suffixed scalar values, oversized catalogs, unsupported present
+  catalogs, and reserved explorer rule collision handling.
+
+Scope intentionally deferred:
+
+- Surface, path, and reducer-backed artifact readers.
+- Full YAML feature support beyond the repository-owned rule catalog subset
+  needed for `id`, `name`, `description`, `evidenceTier`, and `limitations`.
+- Search/filter expansion beyond the existing safe evidence-row filter.
+- Browser accessibility and public/demo fixture parity expansion.
+
+Validation status:
+
+- Focused explorer tests passed:
+  `dotnet test src/dotnet/TraceMap.sln --filter StaticHtmlEvidenceExplorerTests`
+  with 22 passing tests. Existing `SQLitePCLRaw.lib.e_sqlite3` advisory
+  warnings were reported by restore/build.
+- Required .NET build passed:
+  `dotnet build src/dotnet/TraceMap.sln` with 0 errors and existing
+  `SQLitePCLRaw.lib.e_sqlite3` advisory warnings.
+- Required .NET tests passed:
+  `dotnet test src/dotnet/TraceMap.sln` with 631 passing tests.
+- Private-path guard passed:
+  `./scripts/check-private-paths.sh`.
+- Whitespace check passed:
+  `git diff --check`.
+- Sample smoke passed:
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>/scan`
+  followed by copying `rules/rule-catalog.yml` to the scan output and running
+  `dotnet run --project src/dotnet/TraceMap.Cli -- explorer generate --input <tmp>/scan --out <tmp>/explorer`.
+  The smoke verified `index.html`, `data/explorer-data.json`, a supported
+  `rule-catalog` artifact row, available rules section status, catalog-backed
+  `csharp.syntax.declarations.v1` metadata, and absence of a
+  `catalog-unavailable` gap when observed rules are represented by the catalog.
+
+Kiro implementation review status:
+
+- Initial implementation review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with full coverage.
+  Artifact:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-24T021548-984Z-implementation-claude-sonnet-4.6.clean.md`.
+  Patched blocking findings for raw-SQL and stack-trace safety parity through
+  the rule catalog rendering path.
+- First re-review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifact:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-24T022315-724Z-re-review-claude-sonnet-4.6.clean.md`.
+  Result: no blocking issues. Non-blocking follow-ups remain for richer YAML
+  scalar support, duplicate catalog rule diagnostics, hidden-local catalog
+  coverage, and unknown catalog evidence-tier coverage.
+
+PR status:
+
+- PR URL: https://github.com/joefeser/tracemap/pull/308
+- PR-loop result: follow-up Qodo findings patched locally; rerun pending after
+  validation and push.
