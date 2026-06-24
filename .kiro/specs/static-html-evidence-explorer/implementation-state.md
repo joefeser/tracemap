@@ -426,3 +426,89 @@ PR status:
 
 - Ready PR URL: https://github.com/joefeser/tracemap/pull/277
 - PR-loop result: pending.
+
+## Implementation Follow-Up Slice: Compatible Rule Catalog Rows
+
+Branch: `codex/implement-static-html-evidence-explorer-pr2`
+Base: `origin/dev` at `5c630b69`
+Selected slice: narrow PR 3 continuation for rendering compatible
+`rule-catalog.yml` metadata in the local static HTML explorer rules section.
+
+Scope completed:
+
+- Added a conservative rule catalog reader for `rule-catalog.yml` and
+  `rules/rule-catalog.yml` input artifacts.
+- Added a supported `rule-catalog` artifact row with content hash and stable
+  artifact ID when a compatible catalog is provided.
+- Rendered catalog title, description, evidence tier, limitations, and related
+  sections for compatible rules while preserving built-in explorer rules.
+- Kept observed-rule fallback rows for evidence rule IDs missing from the
+  provided catalog, with a visible `explorer.render.catalog-unavailable.v1`
+  gap for missing observed catalog entries.
+- Suppressed the catalog-unavailable gap when observed evidence rule IDs are
+  fully represented by the provided catalog artifact.
+- Routed catalog text through the existing generated-output safety path so raw
+  remotes, local paths, secrets, URLs, and config-like values are hashed or
+  omitted before HTML/JSON output.
+- Patched Kiro review safety findings by adding statement-like raw SQL and
+  stack-trace classification for generated explorer output and catalog text,
+  while preserving safe explanatory rule-catalog prose such as SQL extraction
+  limitations.
+- Added focused tests for compatible catalog rendering, rules section status,
+  artifact rows, catalog-unavailable suppression, and unsafe catalog text
+  redaction, including raw SQL and stack-trace safety cases.
+
+Scope intentionally deferred:
+
+- Surface, path, and reducer-backed artifact readers.
+- Full YAML feature support beyond the repository-owned rule catalog subset
+  needed for `id`, `name`, `description`, `evidenceTier`, and `limitations`.
+- Search/filter expansion beyond the existing safe evidence-row filter.
+- Browser accessibility and public/demo fixture parity expansion.
+
+Validation status:
+
+- Focused explorer tests passed:
+  `dotnet test src/dotnet/TraceMap.sln --filter StaticHtmlEvidenceExplorerTests`
+  with 19 passing tests. Existing `SQLitePCLRaw.lib.e_sqlite3` advisory
+  warnings were reported by restore/build.
+- Required .NET build passed:
+  `dotnet build src/dotnet/TraceMap.sln` with 0 errors and existing
+  `SQLitePCLRaw.lib.e_sqlite3` advisory warnings.
+- Required .NET tests passed:
+  `dotnet test src/dotnet/TraceMap.sln` with 628 passing tests.
+- Private-path guard passed:
+  `./scripts/check-private-paths.sh`.
+- Whitespace check passed:
+  `git diff --check`.
+- Sample smoke passed:
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out <tmp>/scan`
+  followed by copying `rules/rule-catalog.yml` to the scan output and running
+  `dotnet run --project src/dotnet/TraceMap.Cli -- explorer generate --input <tmp>/scan --out <tmp>/explorer`.
+  The smoke verified `index.html`, `data/explorer-data.json`, a supported
+  `rule-catalog` artifact row, available rules section status, catalog-backed
+  `csharp.syntax.declarations.v1` metadata, and absence of a
+  `catalog-unavailable` gap when observed rules are represented by the catalog.
+
+Kiro implementation review status:
+
+- Initial implementation review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind implementation --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with full coverage.
+  Artifact:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-24T021548-984Z-implementation-claude-sonnet-4.6.clean.md`.
+  Patched blocking findings for raw-SQL and stack-trace safety parity through
+  the rule catalog rendering path.
+- First re-review:
+  `node scripts/kiro-review.mjs --phase static-html-evidence-explorer --kind re-review --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
+  exited 0 with reduced coverage because Kiro reported denied tool access.
+  Artifact:
+  `.tmp/kiro-reviews/static-html-evidence-explorer/2026-06-24T022315-724Z-re-review-claude-sonnet-4.6.clean.md`.
+  Result: no blocking issues. Non-blocking follow-ups remain for richer YAML
+  scalar support, duplicate catalog rule diagnostics, hidden-local catalog
+  coverage, and unknown catalog evidence-tier coverage.
+
+PR status:
+
+- PR URL: pending.
+- PR-loop result: pending.

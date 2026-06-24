@@ -146,10 +146,12 @@ partial or unavailable:
 - static surfaces and paths are counted but not rendered from SQLite;
 - reducer-backed results are shown as not provided unless a future compatible
   reducer artifact reader is added;
-- rule catalog rendering is limited to built-in explorer rule stubs and
-  observed rule IDs in evidence rows. When a full compatible rule catalog is
-  unavailable, observed rules are intentionally marked partial and do not
-  strengthen the underlying evidence tier or limitation language.
+- rule catalog rendering uses a compatible `rule-catalog.yml` or
+  `rules/rule-catalog.yml` artifact when provided, and otherwise falls back to
+  built-in explorer rule stubs plus observed rule IDs in evidence rows. When
+  full catalog metadata is unavailable for an observed rule, that rule remains
+  intentionally marked partial and does not strengthen the underlying evidence
+  tier or limitation language.
 
 Those gaps are explicit so absence is not confused with credible evidence that
 no source behavior exists.

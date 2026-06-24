@@ -192,6 +192,110 @@ public sealed class StaticHtmlEvidenceExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_generate_renders_compatible_rule_catalog_rows_when_provided()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("4"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), $$"""
+            rules:
+              - id: {{RuleIds.CSharpSyntaxDeclarations}}
+                name: C# syntax declarations
+                description: Documents declarations discovered from deterministic C# syntax evidence.
+                evidenceTier: Tier3SyntaxOrTextual
+                emits:
+                  - TypeDeclared
+                limitations:
+                  - Syntax evidence does not prove runtime execution.
+                  - Semantic binding may be unavailable under reduced coverage.
+                  - SELECT table extraction only claims visible top-level FROM/JOIN identifiers.
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Manifest.Inputs, artifact =>
+            artifact.ArtifactKind == "rule-catalog"
+            && artifact.Compatibility == "supported");
+        Assert.DoesNotContain(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.CatalogUnavailableRuleId
+            && gap.GapKind == "catalog-unavailable");
+        Assert.Contains(result.Data.Rules, rule =>
+            rule.RuleId == RuleIds.CSharpSyntaxDeclarations
+            && rule.Title == "C# syntax declarations"
+            && rule.Description.Contains("deterministic C# syntax evidence", StringComparison.Ordinal)
+            && rule.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && rule.Limitations.Contains("Syntax evidence does not prove runtime execution.")
+            && rule.RelatedSections.Contains("evidence-rows"));
+
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("C# syntax declarations", html);
+        Assert.Contains("Rule catalog", html);
+        Assert.Contains("Rules include compatible rule catalog rows", html);
+        Assert.Contains("SELECT table extraction only claims visible top-level FROM/JOIN identifiers.", html);
+
+        var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
+        using var document = JsonDocument.Parse(dataJson);
+        var rulesStatus = document.RootElement.GetProperty("sectionStatuses")
+            .EnumerateArray()
+            .Single(row => row.GetProperty("sectionId").GetString() == "rules");
+        Assert.Equal("available", rulesStatus.GetProperty("status").GetString());
+        Assert.Contains(document.RootElement.GetProperty("artifacts").EnumerateArray(), artifact =>
+            artifact.GetProperty("artifactKind").GetString() == "rule-catalog");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_hashes_unsafe_rule_catalog_text()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("e"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), $$"""
+            rules:
+              - id: {{RuleIds.CSharpSyntaxDeclarations}}
+                name: C# syntax declarations
+                description: Server=prod;Password=secret
+                evidenceTier: Tier3SyntaxOrTextual
+                limitations:
+                  - git@example.com:internal/example-repo.git
+                  - SELECT * FROM Users WHERE PasswordHash IS NOT NULL
+                  - System.NullReferenceException at Sample.Widget.Handle
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "rule-catalog.description"
+            && redaction.Category == "secret-like-value");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "rule-catalog.limitations"
+            && redaction.Category == "raw-remote-or-url");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "rule-catalog.limitations"
+            && redaction.Category == "raw-sql");
+        Assert.Contains(result.Manifest.Redactions, redaction =>
+            redaction.RuleId == StaticHtmlEvidenceExplorer.RedactedDisplayValueRuleId
+            && redaction.Location == "rule-catalog.limitations"
+            && redaction.Category == "stack-trace");
+
+        var generated = string.Join("\n", Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .Select(File.ReadAllText));
+        Assert.DoesNotContain("Server=prod;Password=secret", generated);
+        Assert.DoesNotContain("git@example.com:internal/example-repo.git", generated);
+        Assert.DoesNotContain("SELECT * FROM Users", generated);
+        Assert.DoesNotContain("System.NullReferenceException", generated);
+        Assert.Contains("rule-catalog.description-hash:", generated);
+        Assert.Contains("rule-catalog.limitations-hash:", generated);
+    }
+
+    [Fact]
     public void Explorer_generated_string_validator_rejects_remote_references_without_printing_raw_value()
     {
         var failure = Assert.Throws<InvalidOperationException>(() =>
