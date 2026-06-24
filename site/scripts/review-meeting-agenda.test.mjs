@@ -89,6 +89,21 @@ test("validateReviewMeetingAgendaDist rejects forbidden positive claims outside 
   assert.match(errors.join("\n"), /forbidden positive claim outside bounded contexts/);
 });
 
+test("validateReviewMeetingAgendaDist rejects forbidden metadata claims", async (t) => {
+  const root = await createManagedReviewMeetingAgendaFixture(t, {
+    pageHtml: (await canonicalPage()).replace(
+      "Concept-level TraceMap evidence review meeting agenda for checking proof paths, evidence tiers, gaps, owners, limitations, and decision-record handoff.",
+      "TraceMap proves runtime behavior and says the release is safe."
+    )
+  });
+  const errors = [];
+
+  await validateReviewMeetingAgendaDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden positive claim outside bounded contexts/);
+  assert.match(errors.join("\n"), /unsupported certainty language/);
+});
+
 test("validateReviewMeetingAgendaDist permits bounded non-claim wording", async (t) => {
   const root = await createManagedReviewMeetingAgendaFixture(t, {
     pageHtml: (await canonicalPage()).replace(
